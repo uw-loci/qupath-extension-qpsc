@@ -9,7 +9,7 @@ Configure the full autofocus system in an easy-to-use tabbed GUI. The editor exp
 all three sections of the v2 autofocus schema:
 
 - **Tab 1 -- Per-Objective Parameters:** per-objective hardware tuning (search range,
-  step count, sweep drift check, AF scheduling grid, safety-net multipliers).
+  step count, sweep autofocus, AF scheduling grid, safety-net multipliers).
 - **Tab 2 -- Strategies:** the strategy library (named validity+score recipes like
   `dense_texture`, `sparse_signal`, `dark_field`, `manual_only`).
 - **Tab 3 -- Modality Bindings:** which strategy each modality uses, with optional
@@ -60,9 +60,9 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#how-af-position-selection-works) for the full
 | n_steps | Spinner | 5-20 | Number of Z positions to sample during autofocus |
 | search_range_um | Spinner | 10-50 | Total Z range to search in micrometers |
 
-### Sweep Drift Check
+### Sweep Autofocus
 
-The Sweep Drift Check section configures a periodic Z sweep that monitors focus drift during acquisition.
+The Sweep Autofocus section configures a periodic Z sweep that monitors focus drift during acquisition.
 
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
@@ -80,7 +80,7 @@ The Sweep Drift Check section configures a periodic Z sweep that monitors focus 
 | `brenner_gradient` | Brenner gradient-based focus measure. |
 | `p98_p2` | Difference between 98th and 2nd intensity percentiles. |
 
-**Test Sweep Drift Check** button: runs a single sweep at the current position so you can verify parameters before acquisition.
+**Test Sweep Autofocus** button: runs a single sweep at the current position so you can verify parameters before acquisition.
 
 ### Test Streaming Autofocus
 
@@ -143,8 +143,8 @@ per-acquisition via the autofocus dropdown in the acquisition wizard.
    a. Select the objective from the dropdown.
    b. Adjust **n_tiles** (AF scheduling density). Watch **af_min_distance** update live.
    c. Tune safety-net multipliers if needed for warped or fragmented samples.
-   d. Adjust **n_steps**, **search_range_um**, and sweep drift check parameters.
-   e. Click **Test Sweep Drift Check** to verify at the current position.
+   d. Adjust **n_steps**, **search_range_um**, and sweep autofocus parameters.
+   e. Click **Test Sweep Autofocus** to verify at the current position.
 3. **Tab 2 (Strategies):** Review the strategy library. For most users the defaults
    (`dense_texture`, `sparse_signal`, `dark_field`, `manual_only`) are sufficient.
    Expand a strategy card to view or tweak its validity parameters.

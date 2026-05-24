@@ -413,7 +413,7 @@ public class LiveViewerWindow {
      * can retry via the Live toggle. The previous version skipped the UI
      * update when {@link MicroscopeController#startContinuousAcquisition()}
      * threw, leaving the focus buttons stuck disabled with no feedback --
-     * observed after the Editor's Test Sweep Drift Check on PPM 40x
+     * observed after the Editor's Test Sweep Autofocus on PPM 40x
      * 2026-05-04.
      */
     public static void restartStreaming() {

@@ -379,7 +379,7 @@ Response formats:
 
 Streaming autofocus scan. Used by the Live Viewer's **Autofocus**
 button. Streams frames during continuous Z motion and fits the focus
-curve, replacing the stepped Sweep Drift Check on calibrated hardware.
+curve, replacing the stepped Sweep Autofocus on calibrated hardware.
 
 Payload flags (text, terminated by `ENDOFSTR`):
 

@@ -1129,7 +1129,7 @@ public class AutofocusEditorWorkflow {
         acquisitionGrid.setVgap(8);
         acquisitionGrid.setPadding(new Insets(5));
 
-        Label nTilesLabel = new Label("n_tiles:");
+        Label nTilesLabel = new Label("Run AF every (tiles):");
         Spinner<Integer> nTilesSpinner = new Spinner<>(1, 50, 5, 1);
         nTilesSpinner.setEditable(true);
         nTilesSpinner.setPrefWidth(100);
@@ -1148,11 +1148,11 @@ public class AutofocusEditorWorkflow {
                         + "  -- the minimum spacing between planned AF positions.\n\n"
                         + "Typical: 5 tiles (good balance)\n"
                         + "Use 1-3 for tilted or curved samples"));
-        Label nTilesDesc = new Label("(Autofocus every N tiles; also sets af_min_distance)");
+        Label nTilesDesc = new Label("(Autofocus every N tiles; also sets af_min_distance)  (YAML: n_tiles)");
         nTilesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         // Gap index multiplier: safety-net force-AF threshold in scan-order space
-        Label gapIndexLabel = new Label("gap_index_multiplier:");
+        Label gapIndexLabel = new Label("Index gap multiplier:");
         // Range was (1, 10) -- too tight for low-frequency safety nets
         // on long acquisitions. Operators with 200+ tile grids
         // legitimately want gap_index_multiplier in the 10-30 range
@@ -1182,7 +1182,7 @@ public class AutofocusEditorWorkflow {
         gapIndexDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         // Gap spatial multiplier: safety-net force-AF threshold in physical distance
-        Label gapSpatialLabel = new Label("gap_spatial_multiplier:");
+        Label gapSpatialLabel = new Label("Spatial gap multiplier:");
         TextField gapSpatialField = new TextField("2.0");
         gapSpatialField.setPrefWidth(100);
         gapSpatialField.setTooltip(new Tooltip("Safety net: forces an extra autofocus when the current tile is\n"
@@ -1204,7 +1204,7 @@ public class AutofocusEditorWorkflow {
 
         // Read-only derived display: af_min_distance and effective gap thresholds
         // Values update live as n_tiles / multipliers change.
-        Label derivedLabel = new Label("af_min_distance (derived):");
+        Label derivedLabel = new Label("Min AF distance (derived):");
         Label derivedValue = new Label();
         derivedValue.setStyle("-fx-font-size: 11px; -fx-text-fill: #444; -fx-font-style: italic;");
         derivedValue.setTooltip(
@@ -1240,7 +1240,7 @@ public class AutofocusEditorWorkflow {
         tissueGrid.setVgap(8);
         tissueGrid.setPadding(new Insets(5));
 
-        Label textureThresholdLabel = new Label("texture_threshold:");
+        Label textureThresholdLabel = new Label("Texture threshold:");
         TextField textureThresholdField = new TextField("0.005");
         textureThresholdField.setPrefWidth(100);
         textureThresholdField.setTooltip(new Tooltip("Minimum texture variance required for tissue detection.\n"
@@ -1254,10 +1254,11 @@ public class AutofocusEditorWorkflow {
                 + "  + Rejects blurry or empty areas\n"
                 + "  - May skip smooth but valid tissue\n\n"
                 + "Typical: 0.005 for smooth tissue, 0.010-0.015 for textured"));
-        Label textureThresholdDesc = new Label("(Min texture variance, typical: 0.005-0.030)");
+        Label textureThresholdDesc =
+                new Label("(Min texture variance, typical: 0.005-0.030)  (YAML: texture_threshold)");
         textureThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        Label tissueAreaThresholdLabel = new Label("tissue_area_threshold:");
+        Label tissueAreaThresholdLabel = new Label("Tissue area threshold:");
         TextField tissueAreaThresholdField = new TextField("0.2");
         tissueAreaThresholdField.setPrefWidth(100);
         tissueAreaThresholdField.setTooltip(new Tooltip("Minimum fraction of image that must contain tissue.\n"
@@ -1271,7 +1272,8 @@ public class AutofocusEditorWorkflow {
                 + "  + More reliable autofocus targets\n"
                 + "  - May skip valid tissue at edges\n\n"
                 + "Typical: 0.2 (20% coverage)"));
-        Label tissueAreaThresholdDesc = new Label("(Min tissue coverage fraction, typical: 0.05-0.30)");
+        Label tissueAreaThresholdDesc =
+                new Label("(Min tissue coverage fraction, typical: 0.05-0.30)  (YAML: tissue_area_threshold)");
         tissueAreaThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         tissueGrid.add(textureThresholdLabel, 0, 0);
@@ -1282,15 +1284,15 @@ public class AutofocusEditorWorkflow {
         tissueGrid.add(tissueAreaThresholdField, 1, 1);
         tissueGrid.add(tissueAreaThresholdDesc, 2, 1);
 
-        // Add score_metric to tissue/shared grid (used by both standard AF and sweep drift check)
+        // Add score_metric to tissue/shared grid (used by both standard AF and sweep autofocus)
         // Items + grouping sourced from focus_metrics_manifest.yml so the
         // dropdown matches the runtime registry. The configDir is the
         // active microscope's config directory, which is also where a
         // per-scope manifest override (if any) would live.
         FocusMetricsManifest manifest = FocusMetricsManifest.get(configDir.toPath());
-        Label scoreMetricLabel = new Label("score_metric:");
+        Label scoreMetricLabel = new Label("Score metric:");
         ComboBox<String> scoreMetricCombo = buildScoreMetricCombo("laplacian_variance", manifest);
-        scoreMetricCombo.setTooltip(new Tooltip("Focus metric used by standard AF + sweep drift check.\n"
+        scoreMetricCombo.setTooltip(new Tooltip("Focus metric used by standard AF + sweep autofocus.\n"
                 + "Click 'Help me pick' for the manifest's per-metric guide."));
         Button scoreMetricHelp = new Button("Help me pick");
         scoreMetricHelp.setOnAction(e -> showMetricHelpDialog(manifest));
@@ -1313,7 +1315,7 @@ public class AutofocusEditorWorkflow {
         // primary's peak validation fails. Default ON; turning it off
         // writes p98_p2_fallback_enabled: false into the YAML so the
         // server skips the fallback path for this objective.
-        Label p98FallbackLabel = new Label("p98_p2 fallback:");
+        Label p98FallbackLabel = new Label("Backup metric fallback:");
         CheckBox p98FallbackCheck = new CheckBox("Use p98_p2 if primary peak fails");
         p98FallbackCheck.setSelected(true);
         p98FallbackCheck.setTooltip(new Tooltip("Standard-AF safety net. p98_p2 is always computed alongside\n"
@@ -1323,7 +1325,8 @@ public class AutofocusEditorWorkflow {
                 + "drift / saturation). Disable only if your primary metric\n"
                 + "is well-tuned and you'd rather see the failure than\n"
                 + "accept a histogram-spread fallback."));
-        Label p98FallbackDesc = new Label("(falls back to p98_p2 when primary peak validation fails)");
+        Label p98FallbackDesc =
+                new Label("(falls back to p98_p2 when primary peak validation fails)  (YAML: p98_p2_fallback_enabled)");
         p98FallbackDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
         tissueGrid.add(p98FallbackLabel, 0, 3);
         tissueGrid.add(p98FallbackCheck, 1, 3);
@@ -1338,7 +1341,7 @@ public class AutofocusEditorWorkflow {
         standardGrid.setVgap(8);
         standardGrid.setPadding(new Insets(5));
 
-        Label nStepsLabel = new Label("n_steps:");
+        Label nStepsLabel = new Label("Z samples:");
         Spinner<Integer> nStepsSpinner = new Spinner<>(1, 100, 9, 1);
         nStepsSpinner.setEditable(true);
         nStepsSpinner.setPrefWidth(100);
@@ -1352,10 +1355,10 @@ public class AutofocusEditorWorkflow {
                         + "  + Adequate for thin, flat samples\n"
                         + "  - May miss optimal focus on thick samples\n\n"
                         + "Typical: 9-15 steps"));
-        Label nStepsDesc = new Label("(Number of Z positions to sample)");
+        Label nStepsDesc = new Label("(Number of Z positions to sample)  (YAML: n_steps)");
         nStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        Label searchRangeLabel = new Label("search_range_um:");
+        Label searchRangeLabel = new Label("Search range (um):");
         TextField searchRangeField = new TextField("15.0");
         searchRangeField.setPrefWidth(100);
         searchRangeField.setTooltip(
@@ -1368,10 +1371,10 @@ public class AutofocusEditorWorkflow {
                         + "  + Works well when stage is pre-leveled\n"
                         + "  - May fail if sample is very tilted\n\n"
                         + "Typical: 15-25um for most samples"));
-        Label searchRangeDesc = new Label("(Total Z range in micrometers)");
+        Label searchRangeDesc = new Label("(Total Z range in micrometers)  (YAML: search_range_um)");
         searchRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        Label interpStrengthLabel = new Label("interp_strength:");
+        Label interpStrengthLabel = new Label("Interpolation density:");
         Spinner<Integer> interpStrengthSpinner = new Spinner<>(10, 1000, 100, 10);
         interpStrengthSpinner.setEditable(true);
         interpStrengthSpinner.setPrefWidth(100);
@@ -1385,10 +1388,10 @@ public class AutofocusEditorWorkflow {
                         + "  + Usually sufficient for most samples\n\n"
                         + "Typical: 100 (good default)\n"
                         + "Increase to 150-200 if autofocus is inconsistent"));
-        Label interpStrengthDesc = new Label("(Interpolation density factor)");
+        Label interpStrengthDesc = new Label("(Interpolation density factor)  (YAML: interp_strength)");
         interpStrengthDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        Label interpKindLabel = new Label("interp_kind:");
+        Label interpKindLabel = new Label("Interpolation method:");
         ComboBox<String> interpKindCombo = new ComboBox<>();
         interpKindCombo.getItems().addAll("linear", "quadratic", "cubic");
         interpKindCombo.setValue("quadratic");
@@ -1405,18 +1408,20 @@ public class AutofocusEditorWorkflow {
                 + "  - Can be sensitive to noise\n"
                 + "  - May overfit sparse data\n\n"
                 + "Typical: quadratic for most applications"));
-        Label interpKindDesc = new Label("(Interpolation method)");
+        Label interpKindDesc = new Label("(Interpolation method)  (YAML: interp_kind)");
         interpKindDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        // Add standard autofocus fields to grid
-        // Note: score_metric is now in the shared section above
-        standardGrid.add(nStepsLabel, 0, 0);
-        standardGrid.add(nStepsSpinner, 1, 0);
-        standardGrid.add(nStepsDesc, 2, 0);
+        // Add standard autofocus fields to grid. Range first, then sample
+        // count -- matches the Sweep Autofocus section below so the two
+        // panes read the same way ("how big a window, how finely do I
+        // sample it"). score_metric is in the shared section above.
+        standardGrid.add(searchRangeLabel, 0, 0);
+        standardGrid.add(searchRangeField, 1, 0);
+        standardGrid.add(searchRangeDesc, 2, 0);
 
-        standardGrid.add(searchRangeLabel, 0, 1);
-        standardGrid.add(searchRangeField, 1, 1);
-        standardGrid.add(searchRangeDesc, 2, 1);
+        standardGrid.add(nStepsLabel, 0, 1);
+        standardGrid.add(nStepsSpinner, 1, 1);
+        standardGrid.add(nStepsDesc, 2, 1);
 
         standardGrid.add(interpStrengthLabel, 0, 2);
         standardGrid.add(interpStrengthSpinner, 1, 2);
@@ -1432,10 +1437,10 @@ public class AutofocusEditorWorkflow {
         sweepGrid.setVgap(8);
         sweepGrid.setPadding(new Insets(5));
 
-        Label sweepRangeLabel = new Label("sweep_range_um:");
+        Label sweepRangeLabel = new Label("Sweep range (um):");
         TextField sweepRangeField = new TextField("10.0");
         sweepRangeField.setPrefWidth(100);
-        sweepRangeField.setTooltip(new Tooltip("Total Z range for the sweep drift check.\n"
+        sweepRangeField.setTooltip(new Tooltip("Total Z range for the sweep autofocus.\n"
                 + "The sweep samples positions from -range/2 to +range/2\n"
                 + "around the current Z position.\n\n"
                 + "Larger range (15-20um):\n"
@@ -1447,14 +1452,14 @@ public class AutofocusEditorWorkflow {
                 + "  + Higher precision within range\n"
                 + "  - May miss large drift events\n\n"
                 + "Typical: 10um (+/-5um) for most samples"));
-        Label sweepRangeDesc = new Label("(Total Z range in um, centered on current position)");
+        Label sweepRangeDesc = new Label("(Total Z range in um, centered on current position)  (YAML: sweep_range_um)");
         sweepRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
-        Label sweepNStepsLabel = new Label("sweep_n_steps:");
+        Label sweepNStepsLabel = new Label("Z samples:");
         Spinner<Integer> sweepNStepsSpinner = new Spinner<>(3, 20, 6, 1);
         sweepNStepsSpinner.setEditable(true);
         sweepNStepsSpinner.setPrefWidth(100);
-        sweepNStepsSpinner.setTooltip(new Tooltip("Number of Z positions sampled during sweep drift check.\n\n"
+        sweepNStepsSpinner.setTooltip(new Tooltip("Number of Z positions sampled during sweep autofocus.\n\n"
                 + "More steps (8-12):\n"
                 + "  + Better peak resolution\n"
                 + "  + More reliable on noisy samples\n"
@@ -1464,14 +1469,14 @@ public class AutofocusEditorWorkflow {
                 + "  + Adequate for typical drift\n"
                 + "  - Coarser peak detection\n\n"
                 + "Typical: 6 steps (~3s total)"));
-        Label sweepNStepsDesc = new Label("(Number of Z positions to sample)");
+        Label sweepNStepsDesc = new Label("(Number of Z positions to sample)  (YAML: sweep_n_steps)");
         sweepNStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         sweepGrid.add(sweepRangeLabel, 0, 0);
         sweepGrid.add(sweepRangeField, 1, 0);
         sweepGrid.add(sweepRangeDesc, 2, 0);
 
-        Label edgeRetriesLabel = new Label("edge_retries:");
+        Label edgeRetriesLabel = new Label("Edge retries:");
         Spinner<Integer> edgeRetriesSpinner = new Spinner<>(0, 5, 2, 1);
         edgeRetriesSpinner.setEditable(true);
         edgeRetriesSpinner.setPrefWidth(100);
@@ -1487,7 +1492,7 @@ public class AutofocusEditorWorkflow {
                         + "going from 2 to 4 adds 2+ minutes.\n"
                         + "Values above 3 rarely help -- if focus is that\n"
                         + "far away, the starting Z estimate is wrong."));
-        Label edgeRetriesDesc = new Label("(Extra attempts on boundary peaks, 0-5)");
+        Label edgeRetriesDesc = new Label("(Extra attempts on boundary peaks, 0-5)  (YAML: edge_retries)");
         edgeRetriesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         sweepGrid.add(sweepNStepsLabel, 0, 1);
@@ -1738,8 +1743,8 @@ public class AutofocusEditorWorkflow {
             }
         });
 
-        // "Test Sweep Drift Check" button - will be placed inside sweep section
-        Button testSweepButton = new Button("Test Sweep Drift Check");
+        // "Test Sweep Autofocus" button - will be placed inside sweep section
+        Button testSweepButton = new Button("Test Sweep Autofocus");
         testSweepButton.setOnAction(e -> {
             try {
                 // First, save current UI state to working settings
@@ -1760,7 +1765,7 @@ public class AutofocusEditorWorkflow {
 
                 // Save to file first so test uses current settings
                 saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
-                statusLabel.setText("Settings saved - running sweep drift check test...");
+                statusLabel.setText("Settings saved - running sweep autofocus test...");
                 statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
                 logger.info("Autofocus settings saved before sweep test");
 
@@ -1783,8 +1788,8 @@ public class AutofocusEditorWorkflow {
                 logger.error("Failed to save autofocus settings before test", ex);
                 Dialogs.showErrorMessage("Save Error", "Failed to save settings before test: " + ex.getMessage());
             } catch (Exception ex) {
-                logger.error("Failed to start sweep drift check test", ex);
-                Dialogs.showErrorMessage("Test Error", "Failed to start sweep drift check test: " + ex.getMessage());
+                logger.error("Failed to start sweep autofocus test", ex);
+                Dialogs.showErrorMessage("Test Error", "Failed to start sweep autofocus test: " + ex.getMessage());
             }
         });
 
@@ -1794,10 +1799,10 @@ public class AutofocusEditorWorkflow {
         TitledPane standardPane = new TitledPane("Standard Autofocus (Symmetric Z-Sweep)", standardContent);
         standardPane.setCollapsible(false);
 
-        // Create Sweep Drift Check TitledPane with test button inside
+        // Create Sweep Autofocus TitledPane with test button inside
         VBox sweepContent = new VBox(8);
         sweepContent.getChildren().addAll(sweepGrid, testSweepButton);
-        TitledPane sweepPane = new TitledPane("Sweep Drift Check (In-Acquisition Focus Correction)", sweepContent);
+        TitledPane sweepPane = new TitledPane("Sweep Autofocus (In-Acquisition Focus Correction)", sweepContent);
         sweepPane.setCollapsible(false);
 
         // ===== STREAMING AUTOFOCUS SECTION =====
@@ -2681,7 +2686,7 @@ public class AutofocusEditorWorkflow {
         bindingOverrideGrid.setManaged(anyOv);
         final String SENTINEL = "(use strategy default)";
 
-        Label scoreOvLabel = new Label("score_metric override:");
+        Label scoreOvLabel = new Label("Score metric override:");
         ComboBox<String> scoreOvCombo = new ComboBox<>();
         scoreOvCombo.getItems().add(SENTINEL);
         for (FocusMetricsManifest.MetricSpec ms : bindingManifest.metricsForDropdown()) {
@@ -2756,7 +2761,7 @@ public class AutofocusEditorWorkflow {
         bindingOverrideGrid.add(scoreOvCombo, 1, 0);
         bindingOverrideGrid.add(scoreOvWarn, 2, 0);
 
-        Label failOvLabel = new Label("on_failure override:");
+        Label failOvLabel = new Label("On-failure override:");
         ComboBox<String> failOvCombo = new ComboBox<>();
         failOvCombo.getItems().add(SENTINEL);
         failOvCombo.getItems().addAll(ON_FAILURE_MODES);
@@ -3215,7 +3220,7 @@ public class AutofocusEditorWorkflow {
         sb.append("===========================\n\n");
         sb.append(String.format("Manual focus (ground truth): Z = %s um\n\n", groundTruth));
         sb.append(String.format(
-                "Phase 1 - Sweep Drift Check %s\n" + "  Sweep found: Z = %s um (delta: %s um)\n\n",
+                "Phase 1 - Sweep Autofocus %s\n" + "  Sweep found: Z = %s um (delta: %s um)\n\n",
                 sweepStatus, sweepZ, sweepDelta));
         sb.append(String.format(
                 "Phase 2 - Recovery from %s um defocus %s\n" + "  Autofocus recovered: Z = %s um (delta: %s um)\n\n",

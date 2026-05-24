@@ -57,7 +57,7 @@ public class TestAutofocusWorkflow {
     }
 
     /**
-     * Main entry point for sweep drift check test workflow.
+     * Main entry point for sweep autofocus test workflow.
      * Uses default output path and reads objective from config.
      */
     public static void runSweep() {
@@ -195,7 +195,7 @@ public class TestAutofocusWorkflow {
                 // Show confirmation dialog
                 String dialogTitle = isAdaptive ? "Test Adaptive Autofocus" : "Test Standard Autofocus";
                 String algorithmDesc = isAdaptive
-                        ? "The microscope will perform a sweep drift check (same algorithm used during acquisitions)."
+                        ? "The microscope will perform a sweep autofocus (same algorithm used during acquisitions)."
                         : "The microscope will perform a symmetric Z-sweep centered on current position.";
 
                 boolean proceed = Dialogs.showConfirmDialog(

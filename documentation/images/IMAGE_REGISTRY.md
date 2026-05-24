@@ -11,7 +11,7 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-03-25 | NEEDS UPDATE (AF validate button, disable AF checkbox added) |
 | `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-03-25 | NEEDS UPDATE (separate acq/stitch timers) |
 | `Docs_AnnotationAcquisition.png` | `ui/ExistingImageAcquisitionController.java` | -- | NEEDS UPDATE (WB mode moved to hardware section, Quick Start link) |
-| `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | -- | NEEDS UPDATE (sweep drift check section, validate button) |
+| `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | -- | NEEDS UPDATE (Sweep Autofocus section renamed, validate button, human-readable labels) |
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
 | `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | -- | NEEDS UPDATE (Advice button, stays open during acq) |
 | `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | -- | NEEDS UPDATE (WB mode in hardware section, Quick Start link, pixel size warning) |

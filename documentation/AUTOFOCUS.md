@@ -13,7 +13,7 @@ During a tiled acquisition, the sample's focal plane can shift due to slide tilt
 | Strategy | When Used | Speed | Accuracy |
 |----------|-----------|-------|----------|
 | [Standard Autofocus](#standard-autofocus) | First tissue position per annotation | ~55s | High (full Z search) |
-| [Sweep Drift Check](#sweep-drift-check) | Subsequent AF positions during tiling | ~9s | Good (narrow Z range) |
+| [Sweep Autofocus](#sweep-autofocus) | Subsequent AF positions during tiling | ~9s | Good (narrow Z range) |
 | [Z-Focus Tilt Model](#z-focus-tilt-prediction) | Between annotations | Instant | Approximate (guides AF search center) |
 
 Additionally, the [Live Viewer](tools/live-viewer.md) provides an interactive **Autofocus** button (primary, uses streaming scan when available) with **Sweep Focus** as a fallback that appears only when Autofocus is unavailable.
@@ -45,7 +45,7 @@ Within each annotation's tile grid, autofocus runs at selected tile positions:
 At each AF position:
 
 1. **Tissue detection** -- A test image is snapped and checked for sufficient tissue content (texture and area thresholds). Blank or near-blank tiles are skipped and AF is deferred to the next suitable tile.
-2. **Focus measurement** -- Either Standard AF (first position) or Sweep Drift Check (subsequent positions) runs to find optimal Z.
+2. **Focus measurement** -- Either Standard AF (first position) or Sweep Autofocus (subsequent positions) runs to find optimal Z.
 3. **Quality validation** -- The focus curve is checked for a clear peak. If validation fails, a [manual focus dialog](#manual-focus-fallback) may appear.
 
 ### 4. WSI Tissue Scoring (Existing Image Workflow)
@@ -101,9 +101,9 @@ If validation fails on both the primary and fallback metrics, autofocus reports 
 
 ---
 
-## Sweep Drift Check
+## Sweep Autofocus
 
-After the first tissue position uses standard AF, subsequent positions use a faster **sweep drift check** to correct for small Z drift between tiles:
+After the first tissue position uses standard AF, subsequent positions use a faster **sweep autofocus** to correct for small Z drift between tiles:
 
 - Sweeps a narrow Z range (configured via `sweep_range_um`, default 6-10um)
 - Uses fewer steps (`sweep_n_steps`, default 6-10)
@@ -124,7 +124,7 @@ The [Live Viewer](tools/live-viewer.md) contains a single **Autofocus** button t
 
 ### Streaming Autofocus
 
-Streaming autofocus uses continuous-Z scanning. Unlike the stepped Sweep Drift Check above, it does not stop and snap at each Z position. Instead it:
+Streaming autofocus uses continuous-Z scanning. Unlike the stepped Sweep Autofocus above, it does not stop and snap at each Z position. Instead it:
 
 1. Drops the stage speed property (`MaxSpeed` on Prior, `Velocity` on ASI/Marzhauser, etc.) to a slow value
 2. Starts the camera in continuous sequence acquisition
@@ -413,7 +413,7 @@ These hints name the likely cause and suggest fixes. Common hints:
 - Lower `tissue_area_threshold` (try 0.05 for sparse tissue)
 - Check that the test image exposure is appropriate (not too dark or too bright)
 
-### Sweep drift check shows "score range < 2%"
+### Sweep autofocus shows "score range < 2%"
 - The focus metric cannot discriminate focus in the narrow sweep range
 - This is normal for very flat, featureless regions -- the system keeps the current Z and continues
 - If it happens on tissue, try a different `score_metric` or increase `sweep_range_um`
