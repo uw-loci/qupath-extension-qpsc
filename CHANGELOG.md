@@ -9,6 +9,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**MicroManager MDA export**
+- Every QPSC acquisition now auto-writes a MicroManager-loadable file set into each region folder: `MDA_<region>.txt` (a JSON-serialized `SequenceSettings`), `MDA_<region>.pos` (a `PositionList`), and `MDA_NOTES.txt` (provenance + caveats). The MDA files can be loaded directly into MM 2.0 -- MDA window for the settings, Stage Position List window for the positions -- to re-acquire the same channels/Z/positions in MicroManager (useful for laser-scanning modalities that QPSC doesn't drive directly).
+- "Save as MicroManager MDA..." button on the existing-image and bounding-box acquisition dialogs for export-only runs (no QPSC acquisition kicked off).
+- PPM exports are positions-only (no MM ConfigGroup equivalent for polarization angles); `MDA_NOTES.txt` documents the mismatch. Autofocus is marked off in the MDA file because QPSC's per-tile streaming AF doesn't map to MM's per-position AutofocusManager. New `mm_stage_devices:` YAML block lets you pin the MM device labels for XY/Z stages (falls back to `"XYStage"` / `"ZStage"` with a warn-log when omitted).
+
+**Multi-dimensional progress panel**
+- A new panel beneath the acquisition progress bar shows the active plan summary (tiles | channels | Z | T | total) and live per-axis counters (Channel: FITC, Z 3/9, Tile 47/84) inferred client-side from the running tile index via `LiveDimensionDecomposer`. A hidden time-lapse progress bar lights up when timepoints > 1. Drift sentinel collapses the per-axis labels to an italic notice if the inferred state ever drifts from server reality; the aggregate bar continues unaffected.
+
 **Stitch MicroManager Folder**
 - Standalone workflow for stitching MicroManager 2.0 OME-TIFF tile folders without a QuPath project. Reads tile positions from MMStack `*_metadata.txt` sidecars, auto-detects pixel size from metadata or TIFF resolution tags, and outputs a single stitched OME-TIFF or OME-ZARR. Preserves channel names, exposure, and MicroManager acquisition metadata in a `.mm-metadata.json` sidecar. Access via Extensions > QP Scope > Utilities > Stitch MicroManager Folder...
 
@@ -43,6 +51,21 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Make Project Portable**
 - Now deletes the raw individual tile images (the per-mode acquisition folders alongside `SlideImages`) by default after swapping ZARR-backed entries to TIFF, since those tiles are only needed to re-stitch. A **Keep individual tile images** checkbox preserves them. The dialog shows the tile count and size, warns that the deletions are permanent, and asks for confirmation before doing any work. Acquisition metadata files inside the tile folders are preserved -- only raw tile images are removed.
 - **ZARR handling selector**: the dialog now offers three independent ZARR actions instead of always converting. *Convert ZARR to OME-TIFF* (default) converts ZARR files that have no `.ome.tif` yet on the spot (via `StitchingHelper.convertSingleZarrToTiff`) instead of leaving them stuck as `MISSING` -- this fixes the case where re-stitch recovery in OME_ZARR mode produced ZARR images that Make Portable could not act on, blocking the whole operation. *Zip ZARR to .ome.zarr.zip archive* zips each `.ome.zarr` directory to a sibling archive and deletes the directory (the archives must be extracted back to `.ome.zarr` before the project is reopened -- QuPath cannot read a zipped ZARR; the dialog and confirmation warn about this). *Leave ZARR untouched* skips ZARR entirely, so the tile-deletion checkbox can be used on its own to only clean up raw tiles. The warning text and the **Make Portable** button enablement now follow the selected options rather than being all-or-nothing on whether every TIFF already exists.
+
+### Changed
+
+**Sweep Autofocus (renamed from "Sweep Drift Check")**
+- The acquisition-time focus correction is now called **Sweep Autofocus** everywhere -- TitledPane, **Test Sweep Autofocus** button, status messages, tooltips, log lines, all developer + user docs. Lab members switching between the Live Viewer's autofocus controls and the Autofocus Editor were confused by two different names for the same algorithm.
+- The Live Viewer's **Sweep** button now invokes the server-side `TESTADAF` path (same as the Editor's Test button) instead of running its own Java-side step-and-snap loop. This removes the hardcoded `NUM_STEPS=30` that silently overrode YAML `sweep_n_steps`, eliminates the pause/resume-per-step frame-timing race, and unifies the focus metric implementation with the rest of the system. Cancellation during Sweep is no longer supported (TESTADAF has no abort channel); the button reads "Sweeping..." and disables for the ~5-10 s run. The deleted `SweepFocusController` source is preserved in `claude-reports/design/2026-05-24_sweep-focus-controller-removal.md` with notes on which of its safety nets could be ported server-side if equivalent failure modes appear on TESTADAF.
+
+**Autofocus range dropdown: "Auto" -> "Config"**
+- The Live Viewer toolbar's focus-range dropdown's "Auto" option is now labeled **Config** to make it explicit that it pulls `sweep_range_um` from the autofocus YAML. The explicit um values continue to override the YAML for **Streaming AF only**; **Sweep Autofocus** always reads from the YAML regardless of the dropdown. Stale "Auto" picks from older builds migrate to "Config" on next open.
+
+**Autofocus Editor labels**
+- Snake_case parameter names in the dialog are replaced with human-readable labels (`Z samples`, `Search range (um)`, `Texture threshold`, `Score metric`, etc.); the YAML key is shown in the existing gray description line as `(YAML: foo_bar)` so YAML editors and log readers still find it. The Standard Autofocus section now reads "Search range first, then Z samples" to match the Sweep Autofocus section's order ("how big a window, how finely do I sample it").
+
+**Z-Stack / Time-Lapse dialog: modality + profile + channel picker**
+- The dialog now has a shared **Setup** pane above the tabs with Modality / Profile / Channel dropdowns. On **Start**, the dialog calls `applyProfile(profile)` (full mode switch: PMT safety, ConfigGroup presets, detector switch, illumination, intensity, mode positions) and -- for channel-based modalities -- `applyChannel(profile, channelId)` before the existing Z-stack / time-lapse run. Replaces the previous hardcoded `"brightfield"` modality and `null` objective/detector wire arguments. **This fixes the brightfield dynamic-range issue**: with a real BF profile applied, the YAML's exposure / lamp intensity / condenser aperture settings reach the hardware before any tiles are captured. Channel row is hidden for modalities with no channels (BF, PPM). Selections persist across dialog re-opens. Empty `acquisition_profiles` config disables the controls with an inline notice rather than throwing.
 
 ### Fixed
 
