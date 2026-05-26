@@ -638,6 +638,16 @@ public class QPPreferenceDialog {
         return stageInvertedYProperty.get();
     }
 
+    /** Setter used by the stage direction calibration dialog. */
+    public static void setStageInvertedX(boolean inverted) {
+        stageInvertedXProperty.set(inverted);
+    }
+
+    /** Setter used by the stage direction calibration dialog. */
+    public static void setStageInvertedY(boolean inverted) {
+        stageInvertedYProperty.set(inverted);
+    }
+
     /**
      * Returns the composite {@link StagePolarity} derived from the per-axis
      * boolean preferences. This is the preferred way to access stage polarity

@@ -675,6 +675,20 @@ public class StageControlPanel extends VBox {
         centroidRow.setAlignment(Pos.CENTER_LEFT);
         VBox centroidSection = new VBox(4, centroidRow, availableLabel, alignmentListView);
 
+        // Re-runnable calibration for stage polarity + camera orientation. Opens the same
+        // dialog the Setup Wizard uses, so the arrow buttons / joystick / click-to-center
+        // can be re-tuned without restarting QuPath or hand-editing preferences.
+        Button calibrateDirectionsBtn = new Button("Calibrate Directions...");
+        Tooltip calibrateTooltip = new Tooltip(
+                "Jog the stage and confirm which way the image pans to back-solve the correct\n"
+                        + "stage polarity and camera orientation preferences.");
+        calibrateTooltip.setShowDelay(Duration.millis(300));
+        Tooltip.install(calibrateDirectionsBtn, calibrateTooltip);
+        calibrateDirectionsBtn.setOnAction(e -> qupath.ext.qpsc.ui.StageDirectionCalibrationDialog.show(
+                calibrateDirectionsBtn.getScene() == null ? null : calibrateDirectionsBtn.getScene().getWindow()));
+        HBox calibrateRow = new HBox(6, calibrateDirectionsBtn);
+        calibrateRow.setAlignment(Pos.CENTER_LEFT);
+
         navigateContent
                 .getChildren()
                 .addAll(
@@ -684,6 +698,7 @@ public class StageControlPanel extends VBox {
                         new Separator(),
                         navSection,
                         navXyStatus,
+                        calibrateRow,
                         new Separator(),
                         moveToLabel,
                         moveXyRow,

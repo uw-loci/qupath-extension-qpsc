@@ -177,6 +177,42 @@ The save sites record the frame they operated in:
 
 The loaded transform is used in its saved frame — no baking applied. The workflow's open entry (determined by `validateAndFlipIfNeeded`) is the same entry the save site wrote from, so the frames match by construction.
 
+## Stage / camera direction calibration (Calibrate Directions tool)
+
+`StageDirectionCalibrationDialog` (`ui/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing `Inverted X/Y stage` + `Camera orientation`. It runs in two places:
+
+- **Setup Wizard**, as `StageCalibrationStep` (`ui/setupwizard/StageCalibrationStep.java`), inserted between `StageStep` and `ProbeStageAfStep`.
+- **Live Viewer**, as the **Calibrate Directions...** button below the arrow grid in the Navigate tab (`ui/liveviewer/StageControlPanel.java`).
+
+### How it works
+
+1. Captures the current stage `(x, y)` so it can restore it on close.
+2. Issues `MicroscopeController.moveStageXY(curX + step, curY)` (the same code path the arrow buttons use), then asks the user which of Left / Right / Up / Down the image appeared to pan in.
+3. Repeats for `+Y`.
+4. Back-solves `(StagePolarity, CameraOrientation)` and writes both via `QPPreferenceDialog.setStageInvertedX/Y` and `setCameraOrientationProperty`.
+
+### Back-solve canonicalization
+
+For a given observed (xPan, yPan) pair there are usually **multiple** equivalent `(StagePolarity, CameraOrientation)` combinations — e.g. `(INVERT_Y, FLIP_H)` and `(INVERT_XY, NORMAL)` produce identical arrow-button, joystick, click-to-center, and stitcher-flip behaviour. The dialog walks the candidate space in this order and returns the first match:
+
+- Orientations: `NORMAL` → `FLIP_H` → `FLIP_V` → `ROT_180` → `ROT_90_CW` → `ROT_90_CCW` → `TRANSPOSE` → `ANTI_TRANSPOSE`
+- Polarities: `NORMAL` → `INVERT_Y` → `INVERT_X` → `INVERT_XY`
+
+So an axis-aligned observation always resolves to a `CameraOrientation.NORMAL` answer with whatever polarity matches; only true 90°/270° rotations of the observed axes pull the canonical answer into the rotated orientations. The Manual override panel in the dialog lets users pick a specific equivalent combination if their hardware notes (e.g. "OWS3 has a FLIP_H optical path") call for a particular convention.
+
+The back-solve predicts each candidate's image-pan with the inverse of `StageImageTransform.screenPanDeltaToMmDelta`:
+
+```
+sampleDelta = stagePolarity.mmToSampleDelta(mmDx, mmDy)
+screenPan   = cameraOrientation.sampleToDisplay(sampleDelta)
+```
+
+A degenerate observation (both axes pan in the same direction, or both pan diagonally) is impossible and surfaces an error inviting the user to re-test with a larger step.
+
+### Z direction is deferred
+
+There is no `stageInvertedZ` preference today, and the calibration tool does not touch Z. See `claude-reports/TODO_LIST.md` for the work needed to add it (new preference, threading through `ZFocusPredictionModel` and the Live Viewer Z spinner, a Z test in the dialog, and a documented convention for which physical direction `+Z` means on this rig).
+
 ## SIFT Alignment with Per-Detector Flip
 
 When refining stage position via SIFT feature matching, the WSI region must be oriented to match the microscope's live view. The WSI region is read from the open project entry — post-Step-B that is the unflipped base, so the entry's `FLIP_X/FLIP_Y` metadata is `0/0` for new projects. The detector's optical flip still matters: if the camera mirrors the image, SIFT has to flip the WSI region the same way to make the features comparable. Hence the XOR (legacy projects with non-zero per-entry flip metadata also resolve correctly):
