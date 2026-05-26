@@ -29,6 +29,29 @@ Acquire flat-field correction images for improved image quality. Background imag
 | Output Folder | Directory Picker | - | Where to save background images |
 | Use Per-Channel WB | CheckBox | OFF | Use per-channel white balance calibration (JAI cameras) |
 
+### Exposure mode (Brightfield + PPM on monochrome cameras)
+
+For brightfield and PPM on a **monochrome** camera, the dialog shows a three-radio "Exposure mode:" selector. The three controls in this section (Acquisition Profile, Starting Exposure, Target Intensity) are independent levers, and the mode you pick spells out which one drives the saved background:
+
+| Mode | Lamp + record | Starting exposure | Target intensity | Notes |
+|---|---|---|---|---|
+| **Use profile exposure** (default for BF) | Profile sets lamp + records the binding | **Read from profile** (field disabled) | **Off** (field disabled) | No adaptive adjustment. The server applies the profile's `illumination_intensity` and uses the profile's declared `exposure_ms`. The simplest, most reproducible mode. |
+| **Target intensity (adaptive)** (default for PPM monochrome) | **No profile binding.** Hardware is assumed already set via the Live Viewer Camera tab. | Server seeds the adaptive loop here | Required (positive value) | The server iterates exposure until the median pixel reaches the target. No profile is written into the saved `background_settings.yml`. Acquisition won't tie this background to any profile. |
+| **Override profile with target** | Profile sets lamp + records the binding | Server seeds the adaptive loop here | Required (positive value) | Both levers active. The resulting exposure is whatever the adaptive loop converges to, **not** the profile's nominal `exposure_ms`. The saved YAML records `profile.exposure_overridden: true` so downstream code can flag the mismatch. You'll get a confirmation dialog at Start. |
+
+Default picks per modality:
+
+- **Brightfield (monochrome)** -- starts in **Use profile exposure**.
+- **PPM (monochrome)** -- starts in **Target intensity (adaptive)** to preserve the existing adaptive behavior PPM relied on before this selector existed.
+
+The selector is **hidden** for:
+
+- **RGB (JAI) cameras**, where target-intensity is not exposed and white-balance mode drives exposure semantics instead.
+- **PPM with WB Simple or Per-angle** -- per-angle exposures live in the WB calibration; editing them here would split background and acquisition exposures.
+- **Fluorescence / widefield IF** -- per-channel exposures come from the selected profile's channel table; the channel grid in the dialog is read-only and the per-channel lamp/exposure values are authoritative.
+
+Choices persist per modality family (`qpscBgExposureMode.brightfield`, `qpscBgExposureMode.ppm`).
+
 ### Angle Configuration (Multi-Angle Modalities)
 
 For multi-angle modalities like PPM, configure each angle:
@@ -59,17 +82,19 @@ The **unused-channel rule** applies: a channel is collected only if it has a pos
 3. Select the modality, objective, and detector matching your acquisition setup
 4. Choose the output folder for background images
 5. (Optional) Select an acquisition profile if the modality has multiple profiles
-6. Configure target intensities for each angle (if angle-based modality) or verify channel coverage (if fluorescence)
-7. Click **Start** to begin collection
+6. For monochrome BF / PPM, pick an **Exposure mode** (see above). For fluorescence, verify the per-channel table; for RGB BF / PPM, the WB-mode setting drives behavior.
+7. If the chosen exposure mode requires it, fill in starting exposure and/or target intensity
+8. Click **Start** to begin collection
 
 ### For Angle-Based Modalities (PPM, Brightfield)
 
-For each configured angle:
+For each configured angle, behavior depends on the exposure mode:
 
-1. The system captures a test image
-2. Exposure is automatically adjusted to reach the target intensity
-3. The final background image is saved with metadata
-4. The process repeats for all configured angles
+- **Use profile exposure** -- the server applies the profile's exposure and snaps. No adaptive iteration.
+- **Target intensity (adaptive)** -- the server iterates exposure from the starting value until median pixel reaches the target.
+- **Override profile with target** -- same as adaptive, but the saved background is tagged to the profile (with `profile.exposure_overridden: true`).
+
+The final background image is saved with metadata; the process repeats for all configured angles.
 
 ### For Channel-Based Modalities (Fluorescence)
 

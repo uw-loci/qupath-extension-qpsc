@@ -27,6 +27,7 @@ import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.modality.ppm.RotationManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -69,6 +70,19 @@ public class BackgroundCollectionController {
     private HBox profileRow;
     private Label lampIntensityLabel;
     private HBox lampRow;
+    // Exposure-mode selector: visible only for monochrome BF / PPM with profiles.
+    // Lets the user say which lever drives the BG exposure - profile, adaptive
+    // target, or both (with a warning the resulting exposure won't match the
+    // profile's nominal value).
+    private ToggleGroup bgExposureModeGroup;
+    private RadioButton modeProfileRadio;
+    private RadioButton modeTargetRadio;
+    private RadioButton modeOverrideRadio;
+    private VBox bgExposureModeBox;
+    private Label bgExposureModeAdvisory;
+    // Lock to keep the radio listener from re-applying mode state while we are
+    // programmatically restoring the saved selection during refresh.
+    private boolean restoringModeSelection = false;
 
     /**
      * Shows the background collection dialog and returns the result.
@@ -112,6 +126,19 @@ public class BackgroundCollectionController {
 
                 // Create UI - wrap content in ScrollPane to handle variable height
                 VBox content = createDialogContent();
+
+                // Install the ModalityState -> combo sync listener now that we
+                // have the Dialog handle (so we can detach on close).
+                ModalityState modalityState = ModalityState.getInstance();
+                javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+                    if (newV != null
+                            && !newV.equals(modalityComboBox.getValue())
+                            && modalityComboBox.getItems().contains(newV)) {
+                        modalityComboBox.setValue(newV);
+                    }
+                };
+                modalityState.modalityProperty().addListener(stateListener);
+                dialog.setOnHidden(ev -> modalityState.modalityProperty().removeListener(stateListener));
                 ScrollPane scrollPane = new ScrollPane(content);
                 scrollPane.setFitToWidth(true);
                 scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
@@ -140,6 +167,7 @@ public class BackgroundCollectionController {
                     if (newVal != null) {
                         updateObjectiveSelection(newVal);
                         updateProfileAndLampRow();
+                        updateExposureModeSelectorVisibility();
                         // Only update exposure controls if both modality and objective are selected
                         if (objectiveComboBox.getValue() != null) {
                             updateExposureControlsWithBackground(newVal, objectiveComboBox.getValue());
@@ -149,6 +177,7 @@ public class BackgroundCollectionController {
                         objectiveComboBox.getItems().clear();
                         objectiveComboBox.setDisable(true);
                         clearExposureControls();
+                        updateExposureModeSelectorVisibility();
                     }
                 });
 
@@ -159,6 +188,7 @@ public class BackgroundCollectionController {
                             && !outputPathField.getText().trim().isEmpty();
                     okButton.setDisable(!isValid);
                     updateProfileAndLampRow();
+                    updateExposureModeSelectorVisibility();
                     // Update exposure controls when objective changes (if modality is also selected)
                     if (newVal != null && modalityComboBox.getValue() != null) {
                         updateExposureControlsWithBackground(modalityComboBox.getValue(), newVal);
@@ -176,11 +206,13 @@ public class BackgroundCollectionController {
                     }
                     // Camera-type (JAI vs mono) is detector-specific, so re-evaluate
                     // both the WB controls and target-intensity visibility plus the
-                    // exposure pane (which is hidden for RGB+WB-on).
+                    // exposure pane (which is hidden for RGB+WB-on) and the
+                    // exposure-mode selector (RGB hides it entirely).
                     loadTargetIntensityFromConfig();
                     updateTargetIntensityVisibility();
                     updateWbControlsVisibility();
                     updateExposurePaneVisibility();
+                    updateExposureModeSelectorVisibility();
                     if (modalityComboBox.getValue() != null && objectiveComboBox.getValue() != null) {
                         updateExposureControlsWithBackground(modalityComboBox.getValue(), objectiveComboBox.getValue());
                     }
@@ -237,6 +269,16 @@ public class BackgroundCollectionController {
                     BackgroundCollectionResult result = createResult();
                     if (result == null) return;
 
+                    // Mode C (OVERRIDE) confirmation: the adaptive target will
+                    // overwrite the profile's nominal exposure for this BG. The
+                    // resulting background will be tagged to the profile but its
+                    // exposure will not match the profile - flag it explicitly.
+                    if (PersistentPreferences.BG_EXPOSURE_MODE_OVERRIDE.equals(result.exposureMode())) {
+                        if (!confirmOverrideMode(result.profileKey(), result.targetIntensity())) {
+                            return;
+                        }
+                    }
+
                     // Remember the output path for next time
                     saveOutputPath(result.outputPath());
 
@@ -261,7 +303,8 @@ public class BackgroundCollectionController {
                                                 result.outputPath(),
                                                 result.wbMode(),
                                                 result.targetIntensity(),
-                                                result.profileKey());
+                                                result.profileKey(),
+                                                result.exposureMode());
                             })
                             .thenRun(() -> {
                                 Platform.runLater(() -> {
@@ -347,20 +390,28 @@ public class BackgroundCollectionController {
         }
         modalityComboBox.setPromptText("Select modality...");
 
-        // Pre-select last-used modality (e.g. from wizard)
-        String lastModality = PersistentPreferences.getLastModality();
-        logger.info(
-                "Background dialog: lastModality from preferences = '{}', comboBox items = {}",
-                lastModality,
-                modalityComboBox.getItems());
-        if (lastModality != null
-                && !lastModality.isEmpty()
-                && modalityComboBox.getItems().contains(lastModality)) {
-            modalityComboBox.setValue(lastModality);
-            logger.info("Background dialog: pre-selected modality '{}'", lastModality);
+        // Pre-select from the central state so this dialog agrees with the
+        // wizard / Camera tab / other open surfaces.
+        ModalityState modalityState = ModalityState.getInstance();
+        String fromState = modalityState.getModality();
+        if (fromState != null
+                && !fromState.isEmpty()
+                && modalityComboBox.getItems().contains(fromState)) {
+            modalityComboBox.setValue(fromState);
+            logger.info("Background dialog: pre-selected modality '{}' from ModalityState", fromState);
         } else {
-            logger.warn("Background dialog: could not pre-select modality '{}' (not in items list)", lastModality);
+            logger.warn("Background dialog: could not pre-select modality '{}' (not in items list)", fromState);
         }
+        // Push every change to the central state (drives hardware via the
+        // actuator + fans out to other open dialogs). The existing
+        // valueProperty listener further down handles local UI updates.
+        modalityComboBox.valueProperty().addListener((obs, oldV, newV) -> {
+            if (newV != null) modalityState.setModality(newV);
+        });
+        // External changes keep this combo in sync. The reverse listener is
+        // installed in showDialogInternal() so it can be detached on dialog
+        // close via dialog.setOnHidden -- this builder method has no access
+        // to the Dialog handle.
 
         modalityPane.add(modalityLabel, 0, 0);
         modalityPane.add(modalityComboBox, 1, 0);
@@ -534,6 +585,10 @@ public class BackgroundCollectionController {
         // and breaks WB / acquisition exposure parity).
         exposurePaneRoot = new VBox(8, exposureLabel, backgroundValidationLabel, exposureControlsPane);
 
+        // Three-mode exposure selector (built once; visibility refreshed on
+        // modality / detector / WB-mode change).
+        bgExposureModeBox = buildExposureModeBox();
+
         content.getChildren()
                 .addAll(
                         instructionLabel,
@@ -544,6 +599,7 @@ public class BackgroundCollectionController {
                         wbModeRow,
                         wbValidityPanel,
                         targetIntensityRow,
+                        bgExposureModeBox,
                         new Separator(),
                         exposurePaneRoot);
 
@@ -551,8 +607,243 @@ public class BackgroundCollectionController {
         // are now resolved.
         updateExposurePaneVisibility();
         updateProfileAndLampRow();
+        updateExposureModeSelectorVisibility();
+        applyExposureMode();
 
         return content;
+    }
+
+    /**
+     * Builds the exposure-mode selector. Three radios with a small explanatory
+     * advisory label. Hidden by default; {@link #updateExposureModeSelectorVisibility()}
+     * decides when it appears.
+     */
+    private VBox buildExposureModeBox() {
+        bgExposureModeAdvisory = new Label();
+        bgExposureModeAdvisory.setWrapText(true);
+        bgExposureModeAdvisory.setStyle("-fx-font-style: italic; -fx-font-size: 11px; -fx-text-fill: gray;");
+
+        bgExposureModeGroup = new ToggleGroup();
+        modeProfileRadio = new RadioButton("Use profile exposure");
+        modeProfileRadio.setToggleGroup(bgExposureModeGroup);
+        modeProfileRadio.setUserData(PersistentPreferences.BG_EXPOSURE_MODE_PROFILE);
+        modeProfileRadio.setTooltip(new Tooltip("Profile drives lamp intensity and exposure. "
+                + "No adaptive adjustment; the starting-exposure field is ignored."));
+
+        modeTargetRadio = new RadioButton("Target intensity (adaptive)");
+        modeTargetRadio.setToggleGroup(bgExposureModeGroup);
+        modeTargetRadio.setUserData(PersistentPreferences.BG_EXPOSURE_MODE_TARGET);
+        modeTargetRadio.setTooltip(new Tooltip("Adaptive exposure. The server iterates from the starting "
+                + "exposure until the median pixel reaches the target intensity. "
+                + "No profile is bound to this background; set hardware via the "
+                + "Live Viewer Camera tab before collecting."));
+
+        modeOverrideRadio = new RadioButton("Override profile with target");
+        modeOverrideRadio.setToggleGroup(bgExposureModeGroup);
+        modeOverrideRadio.setUserData(PersistentPreferences.BG_EXPOSURE_MODE_OVERRIDE);
+        modeOverrideRadio.setTooltip(new Tooltip("Profile binding (lamp + record) plus adaptive target. "
+                + "The resulting exposure overwrites the profile's nominal value "
+                + "for this background; you will be asked to confirm at Start."));
+
+        Label header = new Label("Exposure mode:");
+        header.setStyle("-fx-font-weight: bold;");
+
+        VBox box = new VBox(4, header, modeProfileRadio, modeTargetRadio, modeOverrideRadio, bgExposureModeAdvisory);
+        box.setPadding(new Insets(4, 0, 4, 0));
+        box.setVisible(false);
+        box.setManaged(false);
+
+        // Persist on change; re-apply field-enable state on change.
+        bgExposureModeGroup.selectedToggleProperty().addListener((obs, oldT, newT) -> {
+            if (restoringModeSelection) {
+                return;
+            }
+            String family = currentExposureFamily();
+            if (family != null && newT != null) {
+                PersistentPreferences.setBgExposureMode(family, (String) newT.getUserData());
+            }
+            applyExposureMode();
+        });
+        return box;
+    }
+
+    /**
+     * Returns the modality family this dialog should track for the exposure-mode
+     * pref: "brightfield" for BF, "ppm" for PPM, or null when the selector does
+     * not apply (FL profile-driven, RGB cameras, unknown modalities).
+     */
+    private String currentExposureFamily() {
+        String modality = modalityComboBox != null ? modalityComboBox.getValue() : null;
+        if (modality == null) {
+            return null;
+        }
+        if (isRgbCamera()) {
+            return null;
+        }
+        if ("ppm".equalsIgnoreCase(modality)) {
+            return PersistentPreferences.BG_EXPOSURE_FAMILY_PPM;
+        }
+        if ("brightfield".equalsIgnoreCase(modality)) {
+            return PersistentPreferences.BG_EXPOSURE_FAMILY_BRIGHTFIELD;
+        }
+        return null;
+    }
+
+    /**
+     * Returns the currently selected exposure mode, or
+     * {@link PersistentPreferences#BG_EXPOSURE_MODE_PROFILE} if no radio is
+     * selected (cold start).
+     */
+    private String currentExposureMode() {
+        if (bgExposureModeGroup == null) {
+            return PersistentPreferences.BG_EXPOSURE_MODE_PROFILE;
+        }
+        Toggle selected = bgExposureModeGroup.getSelectedToggle();
+        if (selected == null) {
+            return PersistentPreferences.BG_EXPOSURE_MODE_PROFILE;
+        }
+        return (String) selected.getUserData();
+    }
+
+    /**
+     * Show the exposure-mode selector when:
+     *   - the modality is BF or PPM, AND
+     *   - the camera is monochrome (RGB paths are driven by WB / no target), AND
+     *   - the modality declares acquisition profiles (so "profile" is a thing).
+     * Otherwise hide it -- the existing modality-specific behavior takes over.
+     * Also restores the saved per-family radio selection.
+     */
+    private void updateExposureModeSelectorVisibility() {
+        if (bgExposureModeBox == null) {
+            return;
+        }
+        String family = currentExposureFamily();
+        boolean hasProfiles = profileRow != null && profileRow.isVisible();
+        boolean show = family != null && hasProfiles;
+        bgExposureModeBox.setVisible(show);
+        bgExposureModeBox.setManaged(show);
+        if (!show) {
+            return;
+        }
+        // Restore saved selection without firing apply (we'll call it once below).
+        String savedMode = PersistentPreferences.getBgExposureMode(family);
+        restoringModeSelection = true;
+        try {
+            if (PersistentPreferences.BG_EXPOSURE_MODE_TARGET.equals(savedMode)) {
+                modeTargetRadio.setSelected(true);
+            } else if (PersistentPreferences.BG_EXPOSURE_MODE_OVERRIDE.equals(savedMode)) {
+                modeOverrideRadio.setSelected(true);
+            } else {
+                modeProfileRadio.setSelected(true);
+            }
+        } finally {
+            restoringModeSelection = false;
+        }
+        bgExposureModeAdvisory.setText("Profile: lamp + exposure from the selected profile, no adaptation. "
+                + "Target: starting exposure + target drive adaptive exposure (no profile binding; "
+                + "set hardware via the Live Viewer Camera tab first). "
+                + "Override: profile is recorded, but the adaptive target overrides its exposure.");
+        applyExposureMode();
+    }
+
+    /**
+     * Enable/disable the profile, starting-exposure, and target-intensity fields
+     * according to the selected mode. The selector itself controls only the
+     * field-enable state; the underlying socket payload is built in
+     * {@link #createResult()} based on the mode.
+     */
+    private void applyExposureMode() {
+        if (bgExposureModeBox == null || !bgExposureModeBox.isVisible()) {
+            // Selector hidden -- leave everything in its default enabled state.
+            setExposureFieldsEnabled(true);
+            setTargetIntensityEnabled(true);
+            setProfileComboEnabled(true);
+            return;
+        }
+        String mode = currentExposureMode();
+        switch (mode) {
+            case PersistentPreferences.BG_EXPOSURE_MODE_TARGET -> {
+                setProfileComboEnabled(false);
+                setExposureFieldsEnabled(true);
+                setTargetIntensityEnabled(true);
+            }
+            case PersistentPreferences.BG_EXPOSURE_MODE_OVERRIDE -> {
+                setProfileComboEnabled(true);
+                setExposureFieldsEnabled(true);
+                setTargetIntensityEnabled(true);
+            }
+            case PersistentPreferences.BG_EXPOSURE_MODE_PROFILE -> {
+                setProfileComboEnabled(true);
+                setExposureFieldsEnabled(false);
+                setTargetIntensityEnabled(false);
+            }
+            default -> {
+                setProfileComboEnabled(true);
+                setExposureFieldsEnabled(true);
+                setTargetIntensityEnabled(true);
+            }
+        }
+    }
+
+    private void setProfileComboEnabled(boolean enabled) {
+        if (profileComboBox != null) {
+            profileComboBox.setDisable(!enabled);
+        }
+    }
+
+    private void setExposureFieldsEnabled(boolean enabled) {
+        for (TextField f : exposureFields) {
+            f.setDisable(!enabled);
+        }
+        for (TextField f : angleFields) {
+            f.setDisable(!enabled);
+        }
+    }
+
+    private void setTargetIntensityEnabled(boolean enabled) {
+        if (targetIntensityField != null) {
+            targetIntensityField.setDisable(!enabled);
+        }
+    }
+
+    /**
+     * Confirmation dialog for Mode C (Override). Returns true if the user
+     * chose to proceed.
+     */
+    private boolean confirmOverrideMode(String profileKey, double targetIntensity) {
+        Double nominal = null;
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            Map<String, Object> exps = mgr.getModalityExposures(
+                    modalityComboBox.getValue(),
+                    objectiveComboBox.getValue(),
+                    detectorComboBox != null ? detectorComboBox.getValue() : null);
+            if (exps != null) {
+                Object single = exps.get("single");
+                if (single instanceof Number n) {
+                    nominal = n.doubleValue();
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Could not look up profile nominal exposure: {}", e.getMessage());
+        }
+        String nominalText = nominal != null ? String.format("%.1f ms", nominal) : "the profile's value";
+        Alert alert = new Alert(
+                Alert.AlertType.CONFIRMATION,
+                String.format(
+                        "Profile \"%s\" declares %s exposure; adaptive target %.0f "
+                                + "will overwrite that for this background. The saved "
+                                + "background will be tagged to the profile but its "
+                                + "exposure will not match the profile's nominal value.%n%n"
+                                + "Continue?",
+                        profileKey, nominalText, targetIntensity),
+                ButtonType.OK,
+                ButtonType.CANCEL);
+        alert.setTitle("Override profile exposure");
+        alert.setHeaderText("Override profile exposure with adaptive target");
+        Optional<ButtonType> r = alert.showAndWait();
+        return r.isPresent() && r.get() == ButtonType.OK;
     }
 
     /**
@@ -736,6 +1027,8 @@ public class BackgroundCollectionController {
 
                             exposureControlsPane.getChildren().addAll(expRow, note);
                             logger.debug("Single-exposure control added for non-rotation modality");
+                            // Re-apply enable state from the exposure-mode selector.
+                            applyExposureMode();
                             return;
                         }
 
@@ -853,6 +1146,9 @@ public class BackgroundCollectionController {
                         // Add the grid to the exposure controls pane
                         exposureControlsPane.getChildren().add(exposureGrid);
                         logger.debug("Exposure controls added to dialog");
+                        // Rebuilt fields default to enabled; the mode selector may
+                        // require them disabled (Mode B / profile-only). Re-apply.
+                        applyExposureMode();
                     });
                 })
                 .exceptionally(ex -> {
@@ -1402,6 +1698,55 @@ public class BackgroundCollectionController {
 
             String profileKey = profileComboBox != null ? profileComboBox.getValue() : null;
 
+            // Translate the exposure-mode selector into the actual socket payload.
+            // When the selector is hidden (FL profile-driven, RGB cameras), the
+            // existing behavior is preserved by passing exposureMode == null and
+            // honoring whatever combination of profile/target the dialog produced.
+            String exposureMode = null;
+            String effectiveProfileKey = profileKey;
+            double effectiveTarget = targetIntensity;
+            if (bgExposureModeBox != null && bgExposureModeBox.isVisible()) {
+                exposureMode = currentExposureMode();
+                switch (exposureMode) {
+                    case PersistentPreferences.BG_EXPOSURE_MODE_TARGET -> {
+                        // Adaptive only; no profile binding. Hardware was set via LV.
+                        effectiveProfileKey = null;
+                        if (effectiveTarget <= 0) {
+                            Dialogs.showErrorMessage(
+                                    "Target intensity required",
+                                    "Target-intensity mode requires a positive target "
+                                            + "value. Either enter one or switch to "
+                                            + "\"Use profile exposure\".");
+                            return null;
+                        }
+                    }
+                    case PersistentPreferences.BG_EXPOSURE_MODE_PROFILE -> {
+                        // Profile drives lamp + exposure; no adaptive adjustment.
+                        effectiveTarget = 0;
+                        if (effectiveProfileKey == null || effectiveProfileKey.isBlank()) {
+                            Dialogs.showErrorMessage(
+                                    "Profile required",
+                                    "Profile mode requires an acquisition profile. "
+                                            + "Pick one in the Acquisition Profile dropdown.");
+                            return null;
+                        }
+                    }
+                    case PersistentPreferences.BG_EXPOSURE_MODE_OVERRIDE -> {
+                        if (effectiveProfileKey == null || effectiveProfileKey.isBlank() || effectiveTarget <= 0) {
+                            Dialogs.showErrorMessage(
+                                    "Override mode requires both",
+                                    "Override mode needs both an acquisition profile "
+                                            + "and a positive target intensity. Either "
+                                            + "fill both, or switch modes.");
+                            return null;
+                        }
+                    }
+                    default -> {
+                        // Unknown mode -- preserve legacy behavior.
+                    }
+                }
+            }
+
             return new BackgroundCollectionResult(
                     modality,
                     objective,
@@ -1410,8 +1755,9 @@ public class BackgroundCollectionController {
                     outputPath,
                     usePerAngleWB,
                     wbMode,
-                    targetIntensity,
-                    profileKey);
+                    effectiveTarget,
+                    effectiveProfileKey,
+                    exposureMode);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);

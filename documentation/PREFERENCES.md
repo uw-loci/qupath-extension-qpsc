@@ -780,6 +780,23 @@ There is no in-app reset button specific to these keys. They live in QuPath's st
 
 ---
 
+## Background Collection Exposure Mode (Persistent Preferences)
+
+The Background Collection dialog's three-radio "Exposure mode" selector (visible for brightfield and PPM on monochrome cameras) stores the user's pick per modality family so the next opening of the dialog restores it. These keys are backed by the same `PathPrefs` mechanism as the loop-order block above.
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `qpscBgExposureMode.brightfield` | String | `"PROFILE"` | Exposure mode for monochrome BF. Values: `"PROFILE"` (use the selected profile's exposure, no adaptive adjustment), `"TARGET"` (adaptive: server iterates from starting exposure to hit the target intensity; no profile binding), `"OVERRIDE"` (profile bound, but adaptive target overwrites the profile's nominal exposure -- confirmation required at Start). |
+| `qpscBgExposureMode.ppm` | String | `"TARGET"` | Exposure mode for monochrome PPM. Same values as the brightfield key. PPM defaults to adaptive to preserve the existing behavior PPM monochrome relied on before this selector existed. |
+
+The selector is hidden for RGB cameras (where WB mode drives exposure semantics), for PPM with WB Simple / Per-angle (where exposures live in the WB calibration), and for fluorescence modalities (where per-channel exposures come from the selected profile's channel table). On those paths the keys are not read.
+
+### Resetting
+
+No in-app reset; delete the `qpscBgExposureMode.brightfield` and `qpscBgExposureMode.ppm` entries from QuPath's user-preferences XML (same path as the loop-order keys above) and restart QuPath. Both families fall back to their per-modality defaults.
+
+---
+
 ## Channel Picker (Persistent Preferences)
 
 Preferences persisted by the multi-channel acquisition UI (`WidefieldChannelBoundingBoxUI`). These keys do **not** appear in QuPath's Preferences panel -- they are stored as dynamic string preferences under the QPSC extension's `dynamic` Java Preferences node and are written whenever the user ticks a checkbox or edits an exposure spinner in the channel picker. They are listed here for developers, for debugging, and for users who want to reset the picker to a clean state.

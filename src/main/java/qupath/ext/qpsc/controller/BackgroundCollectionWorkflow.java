@@ -22,6 +22,7 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BackgroundCollectionController;
@@ -82,7 +83,8 @@ public class BackgroundCollectionWorkflow {
                                             result.outputPath(),
                                             result.wbMode(),
                                             result.targetIntensity(),
-                                            result.profileKey());
+                                            result.profileKey(),
+                                            result.exposureMode());
                                 })
                                 .exceptionally(ex -> {
                                     logger.error("Background acquisition failed", ex);
@@ -118,9 +120,18 @@ public class BackgroundCollectionWorkflow {
             String outputPath,
             String wbMode,
             double targetIntensity,
-            String profileKey) {
+            String profileKey,
+            String exposureMode) {
         executeBackgroundAcquisition(
-                modality, objective, detector, angleExposures, outputPath, wbMode, targetIntensity, profileKey);
+                modality,
+                objective,
+                detector,
+                angleExposures,
+                outputPath,
+                wbMode,
+                targetIntensity,
+                profileKey,
+                exposureMode);
     }
 
     /**
@@ -141,14 +152,17 @@ public class BackgroundCollectionWorkflow {
             String outputPath,
             String wbMode,
             double targetIntensity,
-            String profileKey) {
+            String profileKey,
+            String exposureMode) {
         logger.info(
-                "Executing background acquisition for modality '{}' with {} angles, wbMode={}, detector={}, profile={}",
+                "Executing background acquisition for modality '{}' with {} angles, "
+                        + "wbMode={}, detector={}, profile={}, exposureMode={}",
                 modality,
                 angleExposures.size(),
                 wbMode,
                 detector,
-                profileKey);
+                profileKey,
+                exposureMode);
 
         // Block if MicroManager's pixel size disagrees with the chosen objective. The output
         // folder structure encodes the objective magnification; a mismatch would file the
@@ -214,10 +228,20 @@ public class BackgroundCollectionWorkflow {
 
             // Resolve the acquisition profile so the server applies (and reports)
             // the right lamp intensity. If the caller passed one, trust it;
-            // otherwise derive it from modality + objective.
-            String effectiveProfileKey = (profileKey != null && !profileKey.isBlank())
-                    ? profileKey
-                    : configManager.resolveProfileKey(modality, objective);
+            // otherwise derive it from modality + objective -- but only when the
+            // caller did not explicitly opt out via TARGET mode. In TARGET mode
+            // the user said "no profile binding; hardware was set via the LV
+            // Camera tab", so auto-resolving here would silently re-bind the
+            // background to a profile.
+            boolean targetModeNoProfile = PersistentPreferences.BG_EXPOSURE_MODE_TARGET.equalsIgnoreCase(exposureMode);
+            String effectiveProfileKey;
+            if (profileKey != null && !profileKey.isBlank()) {
+                effectiveProfileKey = profileKey;
+            } else if (targetModeNoProfile) {
+                effectiveProfileKey = null;
+            } else {
+                effectiveProfileKey = configManager.resolveProfileKey(modality, objective);
+            }
             Double profileIllumination = effectiveProfileKey != null
                     ? configManager.getProfileIlluminationIntensity(effectiveProfileKey)
                     : null;
@@ -322,7 +346,8 @@ public class BackgroundCollectionWorkflow {
                     resolvedProfile,
                     profileIllumination,
                     bgResult.appliedLampIntensity(),
-                    bgResult.lampDeviceLabel());
+                    bgResult.lampDeviceLabel(),
+                    exposureMode);
 
             // Update the modality's background_correction config to enabled=true
             // and base_folder set to the user's output path. This ensures the
@@ -562,7 +587,8 @@ public class BackgroundCollectionWorkflow {
             boolean usePerAngleWhiteBalance,
             String wbMode,
             double targetIntensity,
-            String profileKey) {}
+            String profileKey,
+            String exposureMode) {}
 
     /**
      * Updates the imageprocessing YAML to enable background correction for the
@@ -671,7 +697,8 @@ public class BackgroundCollectionWorkflow {
             String profileKey,
             Double profileIlluminationIntensity,
             Double appliedLampIntensity,
-            String lampDeviceLabel)
+            String lampDeviceLabel,
+            String exposureMode)
             throws IOException {
 
         java.io.File settingsFile = new java.io.File(outputPath, "background_settings.yml");
@@ -745,6 +772,12 @@ public class BackgroundCollectionWorkflow {
             profile.put("key", profileKey);
             if (profileIlluminationIntensity != null) {
                 profile.put("illumination_intensity", profileIlluminationIntensity);
+            }
+            // Flag Mode C (Override): the saved exposure was driven by an
+            // adaptive target rather than the profile's nominal value, so
+            // downstream code can warn or de-trust the profile-implied exposure.
+            if (PersistentPreferences.BG_EXPOSURE_MODE_OVERRIDE.equalsIgnoreCase(exposureMode)) {
+                profile.put("exposure_overridden", true);
             }
             yamlData.put("profile", profile);
         }
