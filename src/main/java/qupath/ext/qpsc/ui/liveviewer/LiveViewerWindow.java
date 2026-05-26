@@ -796,9 +796,22 @@ public class LiveViewerWindow {
         liveToggleButton.setOnAction(e -> toggleLiveMode());
 
         autofocusButton = new Button("Autofocus");
-        autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+        autofocusButton.setTooltip(
+                new Tooltip(STREAMING_AF_TOOLTIP + "\n\nRight-click: open Autofocus Configuration."));
         autofocusButton.setDisable(true);
         autofocusButton.setOnAction(e -> handleAutofocus());
+        // Right-click opens the Autofocus Configuration editor without
+        // disturbing the current focus state. Uses MOUSE_CLICKED rather than
+        // contextMenuRequested so the editor opens even when the button is
+        // disabled (e.g. between live frames or during cancel pending) -- the
+        // user often wants to switch methods exactly when the button is greyed
+        // out for an unrelated reason.
+        autofocusButton.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
+            if (e.getButton() == javafx.scene.input.MouseButton.SECONDARY) {
+                e.consume();
+                AutofocusEditorWorkflow.run();
+            }
+        });
 
         focusRangeCombo = new ComboBox<>();
         // Options are repopulated per-objective via updateFocusRangeOptions();
