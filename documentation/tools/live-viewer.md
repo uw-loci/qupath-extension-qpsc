@@ -115,6 +115,17 @@ The histogram shows a 256-bin luminance distribution updated in real time. Per-c
 
 The Navigate tab combines movement controls and direct position entry in a single panel.
 
+**Movement Gate:**
+
+Stage movement is disabled while Live View is OFF. When this occurs:
+- A yellow/orange banner appears at the top of the Navigate tab: "Movement disabled - Live View is Off"
+- An orange indicator dot appears on the Navigate tab header
+- Arrow buttons, joystick, and Z controls are greyed out
+- Direct position entry fields still accept typed input but do not execute moves
+- The Mark Z button remains enabled (it does not move the stage)
+
+This safety gate ensures you can see the stage move before issuing commands.
+
 **Movement Controls:**
 
 | Option | Type | Description |
@@ -124,7 +135,12 @@ The Navigate tab combines movement controls and direct position entry in a singl
 | Arrow Buttons | Buttons | Up/Down/Left/Right for precise single-step movement |
 | Double-Step Arrows | Buttons | Outer arrow buttons for 2x step size movement |
 | Sample Movement | CheckBox | Enable "sample perspective" movement (direction inversion for intuitive control) |
-| Z Controls | Spinner + Buttons | Z position display with up/down buttons. Scroll on the Z field or Move Z button to stream Z continuously — the stage ramps smoothly through intermediate focus planes, tracking the wheel like a physical focus knob. |
+| Z Focus (Vertical Bar Widget) | Visual Control | Two-bar Z navigation widget with focus-metric trace overlay: |
+| — Coarse Bar | Vertical Bar | Wide bar covering the full stage Z range (or a saved subset). Drag the thumb up/down to move Z across the whole accessible range. Edit the range limits via the ellipsis (...) button. |
+| — Fine Bar | Vertical Bar | Narrow bar centered on the current Z with a configurable half-width (default ±20 um). Provides precision control near the current focus plane. Recenter the window via the ellipsis (...) button to adjust the half-width. |
+| — Focus Trace | Line Graph | Sideways curve on the right side of the fine bar showing the Brenner gradient (focus-quality metric) sampled during live streaming. The trace is location-specific; it clears automatically when you move the stage more than 1 um in XY. Higher curve values = sharper focus. Useful for spotting slight focus drift. |
+| — AF Tic Marks | Markers | Vertical tick marks on the right edge of each bar marking recent autofocus or Mark Z positions. Newest tics are fully opaque; older ones fade. The ring buffer holds the three most recent marks. |
+| — Mark Z Button | Button | Record the current polled Z position as a new tic on both bars. Stays enabled when Live View is off. Useful for tracking Z positions during manual focus tuning. |
 | Polarizer Controls | Spinner | Rotation angle control (PPM modality only) |
 | **Calibrate Directions...** | Button | Opens an interactive dialog that jogs the stage in +X and +Y, asks which way the image appeared to pan, and solves for the camera orientation (optical flip/rotation) under your current stage polarity setting. Non-blocking: saves your original position and restores it when closing. The same calibration dialog is available in the Setup Wizard as an optional step. Note: stage polarity is treated as a hardware-wiring fact and is not changed by this tool — use the MicroManager-script procedure in [PREFERENCES.md](../PREFERENCES.md#inverted-x-stage) to verify polarity if needed. See that same section for the coordinate frame details. |
 
