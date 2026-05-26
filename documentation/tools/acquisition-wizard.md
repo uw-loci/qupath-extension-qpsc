@@ -31,7 +31,7 @@ Dropdown selectors for the current hardware setup:
 
 | Selector | Description |
 |----------|-------------|
-| Modality | The imaging modality (e.g., "ppm" for polarized light microscopy). Populated from the YAML config. |
+| Modality | The imaging modality (e.g., "ppm" for polarized light microscopy). Populated from the YAML config. **Modality changes sync across all open dialogs** (Live Viewer Camera tab, Background Collection, Sample Setup, etc.), so selecting a modality here updates all other open dialogs' selectors automatically and drives the hardware via APPLYPR (filter cube, lamp, condenser, etc.). |
 | Objective | The objective lens to use (e.g., "20x"). Filtered by the selected modality. The initial selection auto-detects the currently mounted optics by querying Micro-Manager's reported pixel size and matching it against the active config (via the shared `ObjectiveSelector` component). Falls back to the last-used objective preference, then the first entry in the list. Catches operators who swap objectives between sessions without going through the wizard. |
 | Detector | The camera/detector to use. Filtered by the selected modality and objective. |
 
