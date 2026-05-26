@@ -172,6 +172,11 @@ public class StageControlPanel extends VBox {
     private javafx.scene.shape.Circle navigateTabIndicator;
     private ReadOnlyBooleanProperty liveActiveProperty;
     private final SimpleBooleanProperty internalLiveActive = new SimpleBooleanProperty(true);
+    // Drives the Go-to-Centroid disable state independently of the Live View
+    // gate. initializeCentroidButton sets this based on image / alignment
+    // availability; the button's disableProperty is bound to the OR of this
+    // and the movement gate, so direct setDisable() is forbidden.
+    private final SimpleBooleanProperty centroidUnavailable = new SimpleBooleanProperty(false);
     // Last XY position at which the focus trace was sampled. The trace is
     // cleared once the user moves more than FOCUS_TRACE_XY_RESET_UM from this
     // reference, so the trace stays valid for one site at a time.
@@ -3199,7 +3204,10 @@ public class StageControlPanel extends VBox {
         leftBtn2x.disableProperty().bind(moveDisabled);
         rightBtn2x.disableProperty().bind(moveDisabled);
         joystick.disableProperty().bind(moveDisabled);
-        goToCentroidBtn.disableProperty().bind(moveDisabled);
+        // Go-to-Centroid stays disabled when either movement is gated OR no
+        // valid alignment / selected object exists (the latter is set by
+        // initializeCentroidButton via centroidUnavailable).
+        goToCentroidBtn.disableProperty().bind(moveDisabled.or(centroidUnavailable));
         movementDisabledBanner.visibleProperty().bind(moveDisabled);
         movementDisabledBanner.managedProperty().bind(moveDisabled);
         navigateTabIndicator.visibleProperty().bind(moveDisabled);
@@ -3838,8 +3846,10 @@ public class StageControlPanel extends VBox {
     }
 
     private void initializeCentroidButton() {
-        // Reset state so this method is safe to re-call on image change
-        goToCentroidBtn.setDisable(false);
+        // Reset state so this method is safe to re-call on image change.
+        // disableProperty is bound to (moveDisabled OR centroidUnavailable);
+        // drive availability through the property instead of calling setDisable.
+        centroidUnavailable.set(false);
         centroidStatus.setText("");
         availableLabel.setVisible(false);
         availableLabel.setManaged(false);
@@ -3924,7 +3934,7 @@ public class StageControlPanel extends VBox {
             } else if (hasXYOffset) {
                 centroidStatus.setText("Sub-image: offset-based navigation");
             } else {
-                goToCentroidBtn.setDisable(true);
+                centroidUnavailable.set(true);
 
                 String currentImageName = gui != null && gui.getImageData() != null
                         ? QPProjectFunctions.getActualImageFileName(gui.getImageData())
