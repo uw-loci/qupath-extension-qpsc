@@ -9,7 +9,6 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.StageDirectionCalibrationDialog;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 
@@ -48,8 +47,9 @@ public class StageCalibrationStep implements WizardStep {
         statusLabel.setWrapText(true);
 
         Button runButton = new Button("Run calibration...");
-        runButton.setOnAction(e -> StageDirectionCalibrationDialog.show(runButton.getScene().getWindow())
-                .thenAccept(result -> javafx.application.Platform.runLater(this::refreshDisplay)));
+        runButton.setOnAction(
+                e -> StageDirectionCalibrationDialog.show(runButton.getScene().getWindow())
+                        .thenAccept(result -> javafx.application.Platform.runLater(this::refreshDisplay)));
 
         Button skipButton = new Button("Keep current values");
         skipButton.setOnAction(e -> {
@@ -65,8 +65,7 @@ public class StageCalibrationStep implements WizardStep {
         currentTransform.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
         refreshDisplay();
 
-        content.getChildren()
-                .addAll(intro, actionRow, statusLabel, new Label("Current transform:"), currentTransform);
+        content.getChildren().addAll(intro, actionRow, statusLabel, new Label("Current transform:"), currentTransform);
     }
 
     private void refreshDisplay() {
@@ -101,7 +100,6 @@ public class StageCalibrationStep implements WizardStep {
 
     @Override
     public void onLeave() {
-        logger.debug("StageCalibrationStep: current transform on leave: {}",
-                StageImageTransform.current());
+        logger.debug("StageCalibrationStep: current transform on leave: {}", StageImageTransform.current());
     }
 }

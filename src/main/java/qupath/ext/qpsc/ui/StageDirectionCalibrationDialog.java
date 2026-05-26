@@ -182,12 +182,11 @@ public final class StageDirectionCalibrationDialog {
 
     private void showIntroPhase(CompletableFuture<CalibrationResult> future) {
         phaseHeader.setText("Stage direction calibration");
-        phaseInstructions.setText(
-                "This will move the stage by a small step in +X and then +Y. After each move, "
-                        + "watch the Live Viewer and report which way the image appeared to move. "
-                        + "The dialog will back-solve the matching stage polarity and camera "
-                        + "orientation. The stage will be returned to its current position when "
-                        + "the dialog closes.");
+        phaseInstructions.setText("This will move the stage by a small step in +X and then +Y. After each move, "
+                + "watch the Live Viewer and report which way the image appeared to move. "
+                + "The dialog will back-solve the matching stage polarity and camera "
+                + "orientation. The stage will be returned to its current position when "
+                + "the dialog closes.");
 
         stepSpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(
                 MIN_STEP_UM, MAX_STEP_UM, DEFAULT_STEP_UM, STEP_INCREMENT_UM));
@@ -285,7 +284,8 @@ public final class StageDirectionCalibrationDialog {
         phaseHeader.setText("Step " + stepNum + " of 2: which way did the image move?");
         phaseInstructions.setText(String.format(
                 "Look at the Live Viewer. After the %s move, the image content appeared to "
-                        + "pan in which direction?", axisName));
+                        + "pan in which direction?",
+                axisName));
 
         ToggleGroup group = new ToggleGroup();
         RadioButton leftBtn = new RadioButton("Left");
@@ -343,17 +343,17 @@ public final class StageDirectionCalibrationDialog {
         }
 
         phaseHeader.setText("Calibration result");
-        phaseInstructions.setText("Apply to write these values to your preferences, or use "
-                + "Manual override to pick different ones.");
+        phaseInstructions.setText(
+                "Apply to write these values to your preferences, or use " + "Manual override to pick different ones.");
 
-        TextArea previewDesc = new TextArea(new StageImageTransform(solved.polarity(), solved.orientation()).describe());
+        TextArea previewDesc =
+                new TextArea(new StageImageTransform(solved.polarity(), solved.orientation()).describe());
         previewDesc.setEditable(false);
         previewDesc.setPrefRowCount(5);
         previewDesc.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
 
         Label observedLabel = new Label(String.format(
-                "Observed: +X -> %s, +Y -> %s%n"
-                        + "Recommended: stage = %s, camera = %s",
+                "Observed: +X -> %s, +Y -> %s%n" + "Recommended: stage = %s, camera = %s",
                 xObserved, yObserved, solved.polarity(), solved.orientation()));
         observedLabel.setWrapText(true);
 
@@ -378,7 +378,8 @@ public final class StageDirectionCalibrationDialog {
 
         manualPolarityCombo = new ComboBox<>();
         manualPolarityCombo.getItems().setAll(StagePolarity.values());
-        manualPolarityCombo.setValue(solved == null ? QPPreferenceDialog.getStagePolarityProperty() : solved.polarity());
+        manualPolarityCombo.setValue(
+                solved == null ? QPPreferenceDialog.getStagePolarityProperty() : solved.polarity());
 
         manualOrientationCombo = new ComboBox<>();
         manualOrientationCombo.getItems().setAll(CameraOrientation.values());
@@ -389,9 +390,8 @@ public final class StageDirectionCalibrationDialog {
         preview.setEditable(false);
         preview.setPrefRowCount(5);
         preview.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
-        Runnable refreshPreview = () -> preview.setText(new StageImageTransform(
-                        manualPolarityCombo.getValue(), manualOrientationCombo.getValue())
-                .describe());
+        Runnable refreshPreview = () -> preview.setText(
+                new StageImageTransform(manualPolarityCombo.getValue(), manualOrientationCombo.getValue()).describe());
         refreshPreview.run();
         manualPolarityCombo.valueProperty().addListener((obs, was, now) -> refreshPreview.run());
         manualOrientationCombo.valueProperty().addListener((obs, was, now) -> refreshPreview.run());
@@ -421,11 +421,13 @@ public final class StageDirectionCalibrationDialog {
             QPPreferenceDialog.setStageInvertedX(result.polarity().invertX);
             QPPreferenceDialog.setStageInvertedY(result.polarity().invertY);
             QPPreferenceDialog.setCameraOrientationProperty(result.orientation());
-            logger.info("Stage direction calibration applied: {}",
+            logger.info(
+                    "Stage direction calibration applied: {}",
                     new StageImageTransform(result.polarity(), result.orientation()).describe());
         } catch (Exception ex) {
             logger.error("Failed to persist calibration result", ex);
-            Alert alert = new Alert(Alert.AlertType.ERROR,
+            Alert alert = new Alert(
+                    Alert.AlertType.ERROR,
                     "Could not save calibration to preferences:\n" + ex.getMessage(),
                     ButtonType.OK);
             UIFunctions.showAlertOverParent(alert, stage);
@@ -459,8 +461,11 @@ public final class StageDirectionCalibrationDialog {
                     try {
                         MicroscopeController.getInstance().moveStageXY(startX, startY);
                     } catch (Exception ex) {
-                        logger.warn("Failed to restore stage to start position ({}, {}): {}",
-                                startX, startY, ex.toString());
+                        logger.warn(
+                                "Failed to restore stage to start position ({}, {}): {}",
+                                startX,
+                                startY,
+                                ex.toString());
                     } finally {
                         Platform.runLater(then);
                     }
@@ -491,10 +496,7 @@ public final class StageDirectionCalibrationDialog {
     };
 
     private static final StagePolarity[] POLARITY_PREFERENCE = {
-        StagePolarity.NORMAL,
-        StagePolarity.INVERT_Y,
-        StagePolarity.INVERT_X,
-        StagePolarity.INVERT_XY,
+        StagePolarity.NORMAL, StagePolarity.INVERT_Y, StagePolarity.INVERT_X, StagePolarity.INVERT_XY,
     };
 
     /**
