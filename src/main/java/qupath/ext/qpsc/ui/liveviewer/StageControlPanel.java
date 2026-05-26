@@ -465,11 +465,6 @@ public class StageControlPanel extends VBox {
         Button moveZBtn = new Button("Move Z");
         moveZBtn.setStyle("-fx-font-size: 10px;");
 
-        Label zStepLabel = new Label("step:");
-        zStepLabel.setStyle("-fx-font-size: 10px;");
-        Label zUmLabel = new Label("um");
-        zUmLabel.setStyle("-fx-font-size: 10px;");
-
         Button zHelpBtn = new Button("?");
         zHelpBtn.setStyle("-fx-font-size: 9px; -fx-min-width: 18px; -fx-min-height: 18px; -fx-padding: 0;");
         Tooltip zHelpTooltip =
@@ -685,7 +680,9 @@ public class StageControlPanel extends VBox {
         HBox moveXyRow = new HBox(4, xLabel, xField, yLabel, yField, moveXYBtn);
         moveXyRow.setAlignment(Pos.CENTER_LEFT);
 
-        HBox moveZRow = new HBox(4, zLabel, zField, moveZBtn, zStepLabel, zStepField, zUmLabel, zHelpBtn);
+        // Step controls live with the ZBarPanel's right-side button column now;
+        // the move-to-position Z row stays compact with just the typed-target trio.
+        HBox moveZRow = new HBox(4, zLabel, zField, moveZBtn);
         moveZRow.setAlignment(Pos.CENTER_LEFT);
 
         HBox moveRRow = new HBox(4, rLabel, rField, moveRBtn);
@@ -734,7 +731,17 @@ public class StageControlPanel extends VBox {
                 () -> mgr.getStageLimit("z", "high"),
                 this::streamZTo,
                 this::markZ,
-                movementDisabled);
+                movementDisabled,
+                event -> handleZScroll(event, zStepField));
+
+        // Relocate the Z step controls from the move-to-position row into the
+        // ZBarPanel's right-side column (under Mark Z / Max Z Focus). The step
+        // size is shared: scrolling on the bars uses this same field.
+        Label zStepHere = new Label("Step (um):");
+        zStepHere.setStyle("-fx-font-size: 10px;");
+        HBox stepRow = new HBox(4, zStepHere, zStepField, zHelpBtn);
+        stepRow.setAlignment(Pos.CENTER);
+        zBarPanel.getControlsColumn().getChildren().add(stepRow);
 
         Label zBarLabel = new Label("Z Focus");
         zBarLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");

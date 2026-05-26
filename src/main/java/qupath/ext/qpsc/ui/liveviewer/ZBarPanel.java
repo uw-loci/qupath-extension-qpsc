@@ -6,7 +6,9 @@ import java.util.function.DoubleSupplier;
 import javafx.application.Platform;
 import javafx.beans.binding.BooleanBinding;
 import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleDoubleProperty;
+import javafx.event.EventHandler;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
@@ -19,6 +21,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.input.MouseEvent;
+import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
@@ -77,6 +80,8 @@ public class ZBarPanel extends HBox {
 
     private final Runnable afHistoryListener;
     private final Runnable focusTraceListener;
+    private final SimpleBooleanProperty focusTraceEmpty = new SimpleBooleanProperty(true);
+    private VBox controlsCol;
 
     /**
      * @param scannerKey       per-scope key used to persist coarse/fine ranges
@@ -90,6 +95,9 @@ public class ZBarPanel extends HBox {
      * @param movementDisabled binding that is true when stage movement should
      *                         be blocked (e.g. Live View off); disables drag
      *                         + range editors but not Mark Z
+     * @param scrollHandler    optional scroll-wheel handler installed on both
+     *                         bar canvases so mousewheel scrolling on a bar
+     *                         feeds the host's existing Z streaming. May be null.
      */
     public ZBarPanel(
             String scannerKey,
@@ -97,7 +105,8 @@ public class ZBarPanel extends HBox {
             DoubleSupplier stageZMaxSupplier,
             DoubleConsumer streamZ,
             Runnable markZ,
-            BooleanBinding movementDisabled) {
+            BooleanBinding movementDisabled,
+            EventHandler<ScrollEvent> scrollHandler) {
         this.scannerKey = scannerKey;
         this.stageZMinSupplier = stageZMinSupplier;
         this.stageZMaxSupplier = stageZMaxSupplier;
@@ -121,9 +130,20 @@ public class ZBarPanel extends HBox {
 
         // Persistent listeners (retained refs so we can detach in dispose())
         afHistoryListener = this::redrawAll;
-        focusTraceListener = this::redrawTrace;
+        focusTraceListener = () -> {
+            focusTraceEmpty.set(focusTrace.isEmpty());
+            redrawTrace();
+        };
         AfHistoryService.addListener(afHistoryListener);
         focusTrace.addListener(focusTraceListener);
+
+        // Install scroll handler on both bar canvases so mousewheel scrolling
+        // on a bar feeds the host's existing Z streaming. The handler reads the
+        // shared zStepField for step size, so this just works through the host.
+        if (scrollHandler != null) {
+            coarseBar.canvas.setOnScroll(scrollHandler);
+            fineBar.canvas.setOnScroll(scrollHandler);
+        }
 
         // Recenter fine bar + redraw on Z updates
         currentZ.addListener((obs, oldV, newV) -> {
@@ -196,13 +216,29 @@ public class ZBarPanel extends HBox {
         fineCol.setAlignment(Pos.TOP_LEFT);
 
         Button markZBtn = new Button("Mark Z");
+        markZBtn.setMaxWidth(Double.MAX_VALUE);
         markZBtn.setTooltip(new javafx.scene.control.Tooltip(
                 "Record the current Z as a tic on both bars. Stays enabled when Live View is off."));
         markZBtn.setOnAction(e -> {
             if (markZ != null) markZ.run();
         });
-        VBox controlsCol = new VBox(8, markZBtn);
+
+        Button maxZFocusBtn = new Button("Max Z Focus");
+        maxZFocusBtn.setMaxWidth(Double.MAX_VALUE);
+        maxZFocusBtn.setTooltip(new javafx.scene.control.Tooltip(
+                "Move Z to the position of the highest recorded focus metric in the current trace."
+                        + " Greyed out when no trace samples are present."));
+        maxZFocusBtn.setOnAction(e -> {
+            Double argmaxZ = findFocusArgmaxZ();
+            if (argmaxZ == null) return;
+            if (streamZ != null) streamZ.accept(argmaxZ);
+        });
+        // Disabled while movement is gated OR no focus samples have landed yet
+        maxZFocusBtn.disableProperty().bind(movementDisabled.or(focusTraceEmpty));
+
+        controlsCol = new VBox(6, markZBtn, maxZFocusBtn);
         controlsCol.setAlignment(Pos.TOP_CENTER);
+        controlsCol.setFillWidth(true);
         controlsCol.setPadding(new Insets(20, 4, 0, 4));
 
         setSpacing(8);
@@ -234,6 +270,33 @@ public class ZBarPanel extends HBox {
     public void dispose() {
         AfHistoryService.removeListener(afHistoryListener);
         focusTrace.removeListener(focusTraceListener);
+    }
+
+    /**
+     * The right-side controls VBox (Mark Z + Max Z Focus). Exposed so the host
+     * panel can append related controls (e.g. the Z step field) below the
+     * buttons without having to thread them through the constructor.
+     */
+    public VBox getControlsColumn() {
+        return controlsCol;
+    }
+
+    /**
+     * Returns the Z position of the largest focus-metric sample in the current
+     * trace, or null if the trace is empty.
+     */
+    private Double findFocusArgmaxZ() {
+        List<double[]> samples = focusTrace.snapshot();
+        if (samples.isEmpty()) return null;
+        double bestZ = samples.get(0)[0];
+        double bestMetric = samples.get(0)[1];
+        for (double[] s : samples) {
+            if (s[1] > bestMetric) {
+                bestMetric = s[1];
+                bestZ = s[0];
+            }
+        }
+        return bestZ;
     }
 
     private void redrawAll() {
