@@ -4,6 +4,7 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import java.util.function.BiConsumer;
 import javafx.application.Platform;
 import javafx.embed.swing.SwingFXUtils;
@@ -96,6 +97,9 @@ public class StageMapCanvas extends StackPane {
     private ImageView acquisitionOverlayView;
     private List<AcquisitionThumbnail> acquisitionThumbnails = new ArrayList<>();
     private boolean acquisitionOverlayVisible = false;
+    /** null = no filter (paint all loaded thumbnails); otherwise only paint thumbnails whose imageName is in this set. */
+    private Set<String> visibleAcquisitionImages = null;
+
     private static final double ACQUISITION_OVERLAY_OPACITY = 0.7;
 
     // ========== Macro Overlay Layer ==========
@@ -1100,10 +1104,23 @@ public class StageMapCanvas extends StackPane {
     /** Clears all acquisition thumbnails and hides the overlay. */
     public void clearAcquisitionOverlay() {
         acquisitionThumbnails.clear();
+        visibleAcquisitionImages = null;
         acquisitionOverlayVisible = false;
         acquisitionOverlayView.setVisible(false);
         acquisitionOverlayView.setImage(null);
         logger.info("Acquisition overlay cleared");
+    }
+
+    /**
+     * Restrict which acquisition thumbnails are painted. Pass {@code null} to
+     * clear the filter (paint all). Pass an empty set to hide every thumbnail
+     * while keeping the loaded data in place.
+     */
+    public void setVisibleAcquisitionImages(Set<String> imageNames) {
+        this.visibleAcquisitionImages = imageNames;
+        if (acquisitionOverlayVisible) {
+            compositeAndDisplayAcquisitions();
+        }
     }
 
     /**
@@ -1116,10 +1133,22 @@ public class StageMapCanvas extends StackPane {
             return;
         }
 
-        // Determine union stage-space bounding box of all thumbnails
+        // Filter to visible-set if one was specified.
+        List<AcquisitionThumbnail> visible = new ArrayList<>();
+        for (AcquisitionThumbnail t : acquisitionThumbnails) {
+            if (visibleAcquisitionImages == null || visibleAcquisitionImages.contains(t.imageName)) {
+                visible.add(t);
+            }
+        }
+        if (visible.isEmpty()) {
+            acquisitionOverlayView.setVisible(false);
+            return;
+        }
+
+        // Determine union stage-space bounding box of all visible thumbnails
         double allMinX = Double.MAX_VALUE, allMinY = Double.MAX_VALUE;
         double allMaxX = -Double.MAX_VALUE, allMaxY = -Double.MAX_VALUE;
-        for (AcquisitionThumbnail t : acquisitionThumbnails) {
+        for (AcquisitionThumbnail t : visible) {
             allMinX = Math.min(allMinX, t.stageMinX);
             allMinY = Math.min(allMinY, t.stageMinY);
             allMaxX = Math.max(allMaxX, t.stageMaxX);
@@ -1147,7 +1176,7 @@ public class StageMapCanvas extends StackPane {
         g.setRenderingHint(
                 java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
 
-        for (AcquisitionThumbnail t : acquisitionThumbnails) {
+        for (AcquisitionThumbnail t : visible) {
             double[] tA = stageToScreen(t.stageMinX, t.stageMinY);
             double[] tB = stageToScreen(t.stageMaxX, t.stageMaxY);
             if (tA == null || tB == null) continue;

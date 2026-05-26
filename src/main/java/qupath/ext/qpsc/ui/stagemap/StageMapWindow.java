@@ -4,9 +4,11 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.ArrayList;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.TimeUnit;
@@ -17,6 +19,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.*;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -97,6 +100,9 @@ public class StageMapWindow {
     // ========== Macro Overlay State ==========
     private CheckBox macroOverlayCheckbox;
     private CheckBox showAcquisitionsCheckbox;
+    /** Per-image visibility dropdown (one CheckMenuItem per loaded acquisition). */
+    private MenuButton acquisitionVisibilityMenu;
+
     private BufferedImage currentMacroImage = null;
     private AffineTransform currentMacroTransform = null;
     private String currentMacroSampleName = null;
@@ -729,6 +735,7 @@ public class StageMapWindow {
                         Platform.runLater(() -> {
                             canvas.setAcquisitionThumbnails(finalThumbs);
                             canvas.setAcquisitionOverlayVisible(true);
+                            populateAcquisitionVisibilityMenu(finalThumbs);
                             statusLabel.setText(finalCount + " acquisitions loaded");
                             statusLabel.setStyle("-fx-text-fill: #6b6;");
                         });
@@ -799,9 +806,11 @@ public class StageMapWindow {
         targetLabel = new Label("");
         targetLabel.setStyle("-fx-text-fill: #7ab; -fx-font-family: monospace;");
 
-        // Acquisition overlay controls
+        // Acquisition overlay controls. Explicit text-fill is required: without it,
+        // JavaFX's default checkbox label color is near-black, which disappears
+        // against the dark stage-map background in dark mode.
         showAcquisitionsCheckbox = new CheckBox("Show Acquisitions");
-        showAcquisitionsCheckbox.setStyle("-fx-font-size: 10;");
+        showAcquisitionsCheckbox.setStyle("-fx-text-fill: #ccc; -fx-font-size: 10;");
         showAcquisitionsCheckbox.setTooltip(new Tooltip("Paint thumbnails of acquired images at their\n"
                 + "stage positions. Scans all project images with\n"
                 + "alignment transforms and renders a translucent\n"
@@ -816,12 +825,34 @@ public class StageMapWindow {
             }
         });
 
+        // Per-image visibility dropdown: one CheckMenuItem per loaded thumbnail.
+        // Right-click on the button surface offers Select All / Select None.
+        acquisitionVisibilityMenu = new MenuButton("Images");
+        acquisitionVisibilityMenu.setStyle("-fx-font-size: 10; -fx-padding: 1 4;");
+        acquisitionVisibilityMenu.setTooltip(new Tooltip(
+                "Toggle visibility of individual acquired images.\n" + "Right-click for Select All / Select None."));
+        acquisitionVisibilityMenu.setDisable(true);
+        ContextMenu visibilityCtx = new ContextMenu();
+        MenuItem selectAllItem = new MenuItem("Select All");
+        selectAllItem.setOnAction(e -> setAllVisibilityChecks(true));
+        MenuItem selectNoneItem = new MenuItem("Select None");
+        selectNoneItem.setOnAction(e -> setAllVisibilityChecks(false));
+        visibilityCtx.getItems().addAll(selectAllItem, selectNoneItem);
+        acquisitionVisibilityMenu.addEventHandler(javafx.scene.input.MouseEvent.MOUSE_PRESSED, e -> {
+            if (e.getButton() == MouseButton.SECONDARY) {
+                visibilityCtx.show(acquisitionVisibilityMenu, e.getScreenX(), e.getScreenY());
+                e.consume();
+            }
+        });
+
         Button clearAcqButton = new Button("Clear");
         clearAcqButton.setStyle("-fx-font-size: 10; -fx-padding: 1 4;");
         clearAcqButton.setTooltip(new Tooltip("Clear the acquisition overlay"));
         clearAcqButton.setOnAction(e -> {
             canvas.clearAcquisitionOverlay();
             showAcquisitionsCheckbox.setSelected(false);
+            acquisitionVisibilityMenu.getItems().clear();
+            acquisitionVisibilityMenu.setDisable(true);
         });
 
         Region spacer = new Region();
@@ -836,11 +867,62 @@ public class StageMapWindow {
                         positionLabel,
                         targetLabel,
                         showAcquisitionsCheckbox,
+                        acquisitionVisibilityMenu,
                         clearAcqButton,
                         spacer,
                         movementWarningLabel,
                         statusLabel);
         return bottomBar;
+    }
+
+    /**
+     * Toggle every CheckMenuItem in the acquisition visibility menu. Used by the
+     * right-click Select All / Select None affordance on the dropdown.
+     */
+    private void setAllVisibilityChecks(boolean selected) {
+        for (MenuItem mi : acquisitionVisibilityMenu.getItems()) {
+            if (mi instanceof CheckMenuItem cmi) cmi.setSelected(selected);
+        }
+        publishVisibilityToCanvas();
+    }
+
+    /**
+     * Rebuild the per-image visibility menu from the freshly-loaded thumbnails.
+     * Defaults all entries to selected so existing behaviour (everything visible)
+     * is preserved on first load.
+     */
+    private void populateAcquisitionVisibilityMenu(List<StageMapCanvas.AcquisitionThumbnail> thumbnails) {
+        acquisitionVisibilityMenu.getItems().clear();
+        if (thumbnails == null || thumbnails.isEmpty()) {
+            acquisitionVisibilityMenu.setDisable(true);
+            return;
+        }
+        for (StageMapCanvas.AcquisitionThumbnail t : thumbnails) {
+            CheckMenuItem item = new CheckMenuItem(t.imageName);
+            item.setSelected(true);
+            item.selectedProperty().addListener((obs, was, now) -> publishVisibilityToCanvas());
+            acquisitionVisibilityMenu.getItems().add(item);
+        }
+        acquisitionVisibilityMenu.setDisable(false);
+        // Push the (all-selected) initial state so the canvas filter is in sync.
+        publishVisibilityToCanvas();
+    }
+
+    /**
+     * Push the current per-image visibility selection from the dropdown to the
+     * canvas. Empty selection hides everything; full selection clears the filter
+     * (null = "no filter, show all").
+     */
+    private void publishVisibilityToCanvas() {
+        Set<String> visible = new LinkedHashSet<>();
+        int total = 0;
+        for (MenuItem mi : acquisitionVisibilityMenu.getItems()) {
+            if (mi instanceof CheckMenuItem cmi) {
+                total++;
+                if (cmi.isSelected()) visible.add(cmi.getText());
+            }
+        }
+        canvas.setVisibleAcquisitionImages(visible.size() == total ? null : visible);
     }
 
     private void loadInsertConfigurations() {

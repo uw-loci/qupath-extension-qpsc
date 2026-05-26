@@ -151,6 +151,22 @@ public final class PropagationManagerDialog {
                         + "copies on the targets will be removed first so you don't get overlapping "
                         + "duplicates with slightly different shapes."));
 
+        // -- Skip-partial toggle (forward only) ----------------------------
+        // When set, an annotation is propagated only if it lies entirely
+        // within the sub-acquisition footprint; partially-overlapping
+        // annotations are dropped instead of being clipped to image bounds.
+        // Useful when sub-acquisitions target specific objects and the user
+        // doesn't want nearby objects sneaking in as clipped fragments.
+        CheckBox excludePartialCheck = new CheckBox("Skip annotations that don't fit fully inside the sub-image");
+        excludePartialCheck.setSelected(false);
+        excludePartialCheck.setTooltip(
+                new Tooltip("Forward propagation only. When checked, only annotations whose transformed bounding box "
+                        + "lies entirely within a sub-image are copied; annotations that merely overlap "
+                        + "the sub-image (and would otherwise be clipped to its bounds) are skipped. "
+                        + "Use this to limit propagation to the targeted annotation for each sub-acquisition "
+                        + "and exclude nearby objects."));
+        excludePartialCheck.disableProperty().bind(backBtn.selectedProperty());
+
         // -- SIFT refinement toggle + reference selectors ------------------
         CheckBox siftRefineCheck = new CheckBox("Refine with SIFT after propagation (slow)");
         siftRefineCheck.setSelected(PersistentPreferences.isPropSiftEnabled());
@@ -465,6 +481,7 @@ public final class PropagationManagerDialog {
                 backBtn,
                 autoCreateCheck,
                 replaceExistingCheck,
+                excludePartialCheck,
                 siftRefineCheck,
                 refKeyCombo,
                 refValueCombo,
@@ -495,6 +512,7 @@ public final class PropagationManagerDialog {
                 new Separator(),
                 autoCreateCheck,
                 replaceExistingCheck,
+                excludePartialCheck,
                 siftRow,
                 refSelectorRow,
                 classLabel,
@@ -529,6 +547,7 @@ public final class PropagationManagerDialog {
             RadioButton backBtn,
             CheckBox autoCreateCheck,
             CheckBox replaceExistingCheck,
+            CheckBox excludePartialCheck,
             CheckBox siftRefineCheck,
             ComboBox<String> refKeyCombo,
             ComboBox<String> refValueCombo,
@@ -561,6 +580,7 @@ public final class PropagationManagerDialog {
                 .collect(Collectors.toSet());
         boolean autoCreate = autoCreateCheck.isSelected();
         boolean replaceExisting = replaceExistingCheck.isSelected();
+        boolean excludePartial = excludePartialCheck.isSelected();
         boolean siftRefine = siftRefineCheck.isSelected();
         String refKey = refKeyCombo.getValue();
         String refValue = refValueCombo.getValue();
@@ -806,7 +826,8 @@ public final class PropagationManagerDialog {
                                                         baseWidth,
                                                         baseHeight,
                                                         sourceObjects,
-                                                        sub);
+                                                        sub,
+                                                        excludePartial);
                                         int count = newObjs.size();
                                         groupTotal += count;
                                         if (count > 0) {

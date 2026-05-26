@@ -373,6 +373,26 @@ public class ForwardPropagationWorkflow {
             List<PathObject> sourceObjects,
             ProjectImageEntry<BufferedImage> subEntry)
             throws Exception {
+        return propagateForwardAndCapture(
+                baseToStage, alignFlipX, alignFlipY, baseWidth, baseHeight, sourceObjects, subEntry, false);
+    }
+
+    /**
+     * Overload accepting {@code excludePartial}: when true, only annotations
+     * whose transformed bounding box lies fully inside the sub-image are
+     * propagated; annotations that merely overlap are dropped instead of
+     * clipped. Wired to the propagation dialog's "skip partials" checkbox.
+     */
+    public static List<PathObject> propagateForwardAndCapture(
+            AffineTransform baseToStage,
+            boolean alignFlipX,
+            boolean alignFlipY,
+            int baseWidth,
+            int baseHeight,
+            List<PathObject> sourceObjects,
+            ProjectImageEntry<BufferedImage> subEntry,
+            boolean excludePartial)
+            throws Exception {
         ImageData<BufferedImage> subData = subEntry.readImageData();
         PathObjectHierarchy subHierarchy = subData.getHierarchy();
         double subPixelSize = subData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
@@ -403,7 +423,7 @@ public class ForwardPropagationWorkflow {
             AffineTransform alignFlip = createFlip(alignFlipX, alignFlipY, baseWidth, baseHeight);
             combined.concatenate(alignFlip);
         }
-        List<PathObject> propagated = transformAndClip(sourceObjects, combined, subWidth, subHeight);
+        List<PathObject> propagated = transformAndClip(sourceObjects, combined, subWidth, subHeight, excludePartial);
         if (!propagated.isEmpty()) {
             subHierarchy.addObjects(propagated);
             subEntry.saveImageData(subData);
@@ -1214,6 +1234,19 @@ public class ForwardPropagationWorkflow {
      */
     public static List<PathObject> transformAndClip(
             List<PathObject> objects, AffineTransform transform, int imgWidth, int imgHeight) {
+        return transformAndClip(objects, transform, imgWidth, imgHeight, false);
+    }
+
+    /**
+     * Overload that can skip the partial-overlap clip branch. When
+     * {@code excludePartial} is true, an object is included only if its
+     * transformed bounding box lies fully inside the image -- partial-overlap
+     * annotations are dropped instead of clipped. Used by the propagation
+     * dialog's "Skip partially-contained objects" option so users can limit
+     * propagation to the annotations actually targeted by a sub-acquisition.
+     */
+    public static List<PathObject> transformAndClip(
+            List<PathObject> objects, AffineTransform transform, int imgWidth, int imgHeight, boolean excludePartial) {
         List<PathObject> result = new ArrayList<>();
 
         // Image bounds as a JTS geometry for intersection
@@ -1242,6 +1275,14 @@ public class ForwardPropagationWorkflow {
 
                 if (fullyContained) {
                     result.add(transformed);
+                    continue;
+                }
+
+                // Caller asked to skip anything that isn't fully inside the target.
+                if (excludePartial) {
+                    logger.debug(
+                            "Skipping partially-contained annotation '{}' (excludePartial=true)",
+                            obj.getDisplayedName());
                     continue;
                 }
 
