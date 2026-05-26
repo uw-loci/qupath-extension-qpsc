@@ -101,13 +101,13 @@ Hardware stage wiring polarity for the X axis. When enabled, MicroManager's `+X`
 This is a pure hardware property — it does NOT describe how the image appears on screen. For image orientation, use [Camera orientation](#camera-orientation) instead.
 
 **How to diagnose:**
-Use the **Calibrate Directions** tool — Live Viewer → Navigate tab → `Calibrate Directions...` (also available as a Setup Wizard step). It jogs the stage in `+X` and `+Y`, asks which way the image appeared to pan, and back-solves the correct `Inverted X/Y stage` + `Camera orientation` combination. The dialog writes both preferences for you and restores the original stage position when it closes.
+This is a hardware-wiring property and must be verified by direct observation of the stage carrier, not by looking at the image. Issue `core.setXYPosition(core.getXPosition() + 100, core.getYPosition())` from a MicroManager script and watch which direction the physical stage actually moves. If positive commands move the carrier in the lab `-X` direction, enable this setting.
 
-For a manual hardware check (advanced): issue `core.setXYPosition(core.getXPosition() + 100, core.getYPosition())` from a MicroManager script and observe which direction the physical stage actually moves.
+The **Calibrate Directions** tool (Live Viewer → Navigate tab → `Calibrate Directions...`, also a Setup Wizard step) **does not change this preference** -- it solves for `Camera orientation` under your current polarity. If the calibration tool reports "no camera orientation matches," that is a signal that polarity may be wrong; re-run the MicroManager-script check above.
 
 **When to Enable:**
-- The Calibrate Directions tool wrote it (or you've manually verified the wiring).
-- Do NOT enable this as a workaround for arrow buttons or stitched tiles looking flipped — that's a camera orientation issue; use the [Camera orientation](#camera-orientation) setting instead.
+- You've verified via the hardware check above that positive X commands move the stage the wrong way.
+- Do NOT enable this as a workaround for arrow buttons or stitched tiles looking flipped — that's a camera orientation issue; use the [Camera orientation](#camera-orientation) setting (or the Calibrate Directions tool) instead.
 
 ---
 
@@ -125,10 +125,10 @@ Hardware stage wiring polarity for the Y axis. When enabled, MicroManager's `+Y`
 As with the X polarity, this describes the stage wiring, NOT the image orientation on screen. For image orientation, use [Camera orientation](#camera-orientation) instead.
 
 **How to diagnose:**
-Same as X — prefer the **Calibrate Directions** tool (Live Viewer → Navigate tab → `Calibrate Directions...` or the Setup Wizard step). The manual MM-script check is a fallback for advanced users.
+Same hardware check as X — set a new Y position via MM script and observe the physical stage direction. The **Calibrate Directions** tool does not change this preference.
 
 **When to Enable:**
-- The Calibrate Directions tool wrote it (or you've manually verified the wiring).
+- You've verified via the hardware check that positive Y commands move the stage the wrong way.
 - Default is ON because many common stages (e.g. Nikon Ti2) ship with this wiring convention.
 
 ---
@@ -173,7 +173,7 @@ Rotation / transpose cases (supported by Live Viewer controls but **not** by the
 
 **How to Configure:**
 
-**Easy path:** Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the image panned, back-solves the canonical `(Inverted X/Y stage, Camera orientation)` pair, and writes both preferences for you. Manual override lets you pick a different equivalent combination if your hardware notes specify a particular convention. **Note:** for a given net behaviour there are multiple equivalent settings (e.g. `INVERT_Y + FLIP_H` and `INVERT_XY + NORMAL` produce identical arrow/joystick/stitcher behaviour); the tool prefers the simplest orientation. If you want a specific combination for documentation reasons, use the Manual override.
+**Easy path:** Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the image panned, and solves for the `Camera orientation` that matches under your current `Inverted X/Y stage` polarity. It writes only `Camera orientation` -- polarity is treated as a hardware-wiring fact (see the [Inverted X/Y stage](#inverted-x-stage) sections above) and must be verified separately by direct stage observation. If the tool reports "no camera orientation matches," that is a signal your polarity may be wrong; verify via the MicroManager-script check before retrying. Manual override is available for users who need to edit both at once.
 
 **Manual procedure (fallback):**
 

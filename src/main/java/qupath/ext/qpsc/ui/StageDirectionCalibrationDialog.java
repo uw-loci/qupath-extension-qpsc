@@ -32,12 +32,18 @@ import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.StagePolarity;
 
 /**
- * Interactive "jog and confirm" calibration for stage polarity and camera orientation.
+ * Interactive "jog and confirm" calibration for camera orientation.
  *
  * <p>Physically moves the stage by a small XY delta, asks the user which way the image
- * appeared to pan, and back-solves the canonical {@link StagePolarity} + {@link CameraOrientation}
- * pair that reproduces the observed mapping. Replaces the manual trial-and-error procedure
- * documented in {@code documentation/PREFERENCES.md}.
+ * appeared to pan, and solves for the {@link CameraOrientation} that reproduces the
+ * observation under the user's <em>current</em> {@link StagePolarity}. Polarity is treated
+ * as a hardware-wiring fact set once during stage configuration and is not changed by this
+ * tool -- the codebase deliberately keeps polarity (read directly by tile traversal in
+ * {@code TilingUtilities}, by alignment math in {@code MicroscopeAlignmentWorkflow}, etc.)
+ * separate from optical flip/rotation (read via {@link StageImageTransform}). Conflating the
+ * two was a documented bug class pre-2026-05 (see {@code COORDINATE_TRANSFORMS.md} "Flip vs
+ * Inversion"). The Manual override panel still lets advanced users edit both if their
+ * hardware notes call for it.
  *
  * <p>Launched from two places: the Setup Wizard ({@code StageCalibrationStep}) for first-time
  * installs, and a "Calibrate Directions" button in the Live Viewer's Navigate tab for ad-hoc
@@ -76,14 +82,6 @@ public final class StageDirectionCalibrationDialog {
             this.sx = sx;
             this.sy = sy;
         }
-    }
-
-    private enum Phase {
-        INTRO,
-        AWAITING_X_ANSWER,
-        AWAITING_Y_ANSWER,
-        RESULT,
-        MANUAL_OVERRIDE
     }
 
     private StageDirectionCalibrationDialog() {}
@@ -181,12 +179,14 @@ public final class StageDirectionCalibrationDialog {
     // ----- Phase: intro -----
 
     private void showIntroPhase(CompletableFuture<CalibrationResult> future) {
-        phaseHeader.setText("Stage direction calibration");
+        phaseHeader.setText("Camera orientation calibration");
         phaseInstructions.setText("This will move the stage by a small step in +X and then +Y. After each move, "
                 + "watch the Live Viewer and report which way the image appeared to move. "
-                + "The dialog will back-solve the matching stage polarity and camera "
-                + "orientation. The stage will be returned to its current position when "
-                + "the dialog closes.");
+                + "The dialog solves for your camera orientation (optical flip/rotation) "
+                + "under your current stage polarity setting -- it does NOT change polarity, "
+                + "because polarity is a hardware-wiring fact read by tile traversal and "
+                + "alignment math independently. The stage will be returned to its starting "
+                + "position when the dialog closes.");
 
         stepSpinner = new Spinner<>(new SpinnerValueFactory.DoubleSpinnerValueFactory(
                 MIN_STEP_UM, MAX_STEP_UM, DEFAULT_STEP_UM, STEP_INCREMENT_UM));
@@ -197,13 +197,18 @@ public final class StageDirectionCalibrationDialog {
         HBox stepRow = new HBox(8, stepLabel, stepSpinner);
         stepRow.setAlignment(Pos.CENTER_LEFT);
 
+        Label polarityLabel = new Label(String.format(
+                "Assumed stage polarity: %s (unchanged by this calibration)",
+                QPPreferenceDialog.getStagePolarityProperty()));
+        polarityLabel.setStyle("-fx-font-style: italic;");
+
         Label currentLabel = new Label("Current transform:");
         TextArea currentDesc = new TextArea(StageImageTransform.current().describe());
         currentDesc.setEditable(false);
         currentDesc.setPrefRowCount(5);
         currentDesc.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
 
-        phaseContent.getChildren().setAll(stepRow, currentLabel, currentDesc);
+        phaseContent.getChildren().setAll(stepRow, polarityLabel, currentLabel, currentDesc);
 
         primaryButton.setText("Begin");
         primaryButton.setDisable(false);
@@ -322,13 +327,17 @@ public final class StageDirectionCalibrationDialog {
     // ----- Phase: result -----
 
     private void showResultPhase(CompletableFuture<CalibrationResult> future) {
-        solved = backSolve(xObserved, yObserved);
+        StagePolarity currentPolarity = QPPreferenceDialog.getStagePolarityProperty();
+        solved = backSolve(xObserved, yObserved, currentPolarity);
         if (solved == null) {
-            phaseHeader.setText("Calibration could not be solved");
-            phaseInstructions.setText("The two answers you gave are not physically possible. The "
-                    + "image cannot pan in the same direction for both +X and +Y, or in two "
-                    + "diagonal directions simultaneously. Try again with a larger step or look "
-                    + "more carefully at the Live Viewer.");
+            phaseHeader.setText("No camera orientation matches");
+            phaseInstructions.setText("No camera orientation can reproduce both observations under "
+                    + "your current stage polarity (" + currentPolarity + "). This usually means "
+                    + "either (a) the answers were inconsistent (re-test with a larger step), or "
+                    + "(b) your stage polarity is wrong -- positive X or Y commands physically "
+                    + "move the stage carrier in the opposite direction of what the polarity claims. "
+                    + "Use Manual override to set polarity + orientation directly, or verify polarity "
+                    + "via the manual MicroManager-script check documented in PREFERENCES.md.");
             phaseContent.getChildren().clear();
             primaryButton.setText("Re-test");
             primaryButton.setDisable(false);
@@ -337,14 +346,17 @@ public final class StageDirectionCalibrationDialog {
                 yObserved = null;
                 showIntroPhase(future);
             });
-            secondaryButton.setVisible(false);
-            secondaryButton.setManaged(false);
+            secondaryButton.setText("Manual override");
+            secondaryButton.setVisible(true);
+            secondaryButton.setManaged(true);
+            secondaryButton.setOnAction(e -> showManualOverridePhase(future));
             return;
         }
 
-        phaseHeader.setText("Calibration result");
-        phaseInstructions.setText(
-                "Apply to write these values to your preferences, or use " + "Manual override to pick different ones.");
+        phaseHeader.setText("Camera orientation result");
+        phaseInstructions.setText("Apply to write the camera orientation to your preferences. "
+                + "Stage polarity is left unchanged. Use Manual override if you need to edit "
+                + "both polarity and orientation together.");
 
         TextArea previewDesc =
                 new TextArea(new StageImageTransform(solved.polarity(), solved.orientation()).describe());
@@ -353,7 +365,7 @@ public final class StageDirectionCalibrationDialog {
         previewDesc.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
 
         Label observedLabel = new Label(String.format(
-                "Observed: +X -> %s, +Y -> %s%n" + "Recommended: stage = %s, camera = %s",
+                "Observed: +X -> %s, +Y -> %s%n" + "Polarity (unchanged): %s%n" + "Camera orientation: %s",
                 xObserved, yObserved, solved.polarity(), solved.orientation()));
         observedLabel.setWrapText(true);
 
@@ -374,7 +386,10 @@ public final class StageDirectionCalibrationDialog {
     private void showManualOverridePhase(CompletableFuture<CalibrationResult> future) {
         phaseHeader.setText("Manual override");
         phaseInstructions.setText("Pick the stage polarity and camera orientation you want to "
-                + "save. The preview below shows the resulting screen <-> stage sign math.");
+                + "save. Polarity is a hardware-wiring fact -- only change it if you have verified "
+                + "via direct stage observation (e.g. via the MicroManager-script procedure in "
+                + "PREFERENCES.md) that positive commands move the stage carrier the wrong way. "
+                + "The preview below shows the resulting screen <-> stage sign math.");
 
         manualPolarityCombo = new ComboBox<>();
         manualPolarityCombo.getItems().setAll(StagePolarity.values());
@@ -411,7 +426,14 @@ public final class StageDirectionCalibrationDialog {
         secondaryButton.setText("Back");
         secondaryButton.setVisible(true);
         secondaryButton.setManaged(true);
-        secondaryButton.setOnAction(e -> showResultPhase(future));
+        secondaryButton.setOnAction(e -> {
+            if (solved == null) {
+                // Came from the no-match path; go back to intro instead of result.
+                showIntroPhase(future);
+            } else {
+                showResultPhase(future);
+            }
+        });
     }
 
     // ----- Apply / close -----
@@ -478,11 +500,10 @@ public final class StageDirectionCalibrationDialog {
     // ----- Back-solve -----
 
     /**
-     * Order matters: the back-solve walks this list and returns the first matching combination,
-     * so axis-aligned orientations come before rotations and {@link CameraOrientation#NORMAL}
-     * comes first overall. This produces the canonical answer when multiple
-     * (polarity, orientation) pairs reproduce the same observation -- the "simplest" explanation
-     * wins.
+     * Walked in this order so the first match wins. {@link CameraOrientation#NORMAL} comes
+     * first so a scope whose net optical path is already aligned with the sample frame returns
+     * NORMAL; the axis-aligned flips come next; the axis-swapping rotations come last (those
+     * are only reachable when the user reports panX vertical and panY horizontal).
      */
     private static final CameraOrientation[] ORIENTATION_PREFERENCE = {
         CameraOrientation.NORMAL,
@@ -495,28 +516,31 @@ public final class StageDirectionCalibrationDialog {
         CameraOrientation.ANTI_TRANSPOSE,
     };
 
-    private static final StagePolarity[] POLARITY_PREFERENCE = {
-        StagePolarity.NORMAL, StagePolarity.INVERT_Y, StagePolarity.INVERT_X, StagePolarity.INVERT_XY,
-    };
-
     /**
-     * Given the observed image-pan directions for stage commands {@code mmDelta=(+1, 0)} and
-     * {@code (0, +1)}, return the canonical {@link CalibrationResult} that reproduces them, or
-     * {@code null} if no combination matches (degenerate input, e.g. both axes pan the same way).
+     * Solve for the {@link CameraOrientation} that, under the given {@link StagePolarity},
+     * reproduces the observed image-pan directions for stage commands {@code mmDelta=(+1, 0)}
+     * and {@code (0, +1)}. Polarity is treated as fixed input -- it is intentionally NOT
+     * searched, so the resulting {@link CalibrationResult}'s polarity always equals
+     * {@code polarity}.
+     *
+     * <p>Returns {@code null} when no orientation matches. With a valid perpendicular
+     * observation and any polarity, exactly one orientation matches; a null return therefore
+     * indicates either an inconsistent observation pair (both axes panning the same direction)
+     * or that the user's polarity is wrong (the stage carrier actually moves opposite to what
+     * the polarity claims, so the observed pan can't be reached by any orientation under this
+     * polarity).
      *
      * <p>Visible for unit testing.
      */
-    public static CalibrationResult backSolve(Direction xObserved, Direction yObserved) {
-        if (xObserved == null || yObserved == null) {
+    public static CalibrationResult backSolve(Direction xObserved, Direction yObserved, StagePolarity polarity) {
+        if (xObserved == null || yObserved == null || polarity == null) {
             return null;
         }
         for (CameraOrientation co : ORIENTATION_PREFERENCE) {
-            for (StagePolarity sp : POLARITY_PREFERENCE) {
-                double[] xPredicted = predictedImagePan(sp, co, 1, 0);
-                double[] yPredicted = predictedImagePan(sp, co, 0, 1);
-                if (matches(xPredicted, xObserved) && matches(yPredicted, yObserved)) {
-                    return new CalibrationResult(sp, co);
-                }
+            double[] xPredicted = predictedImagePan(polarity, co, 1, 0);
+            double[] yPredicted = predictedImagePan(polarity, co, 0, 1);
+            if (matches(xPredicted, xObserved) && matches(yPredicted, yObserved)) {
+                return new CalibrationResult(polarity, co);
             }
         }
         return null;

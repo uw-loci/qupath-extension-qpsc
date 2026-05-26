@@ -177,37 +177,50 @@ The save sites record the frame they operated in:
 
 The loaded transform is used in its saved frame — no baking applied. The workflow's open entry (determined by `validateAndFlipIfNeeded`) is the same entry the save site wrote from, so the frames match by construction.
 
-## Stage / camera direction calibration (Calibrate Directions tool)
+## Camera-orientation calibration (Calibrate Directions tool)
 
-`StageDirectionCalibrationDialog` (`ui/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing `Inverted X/Y stage` + `Camera orientation`. It runs in two places:
+`StageDirectionCalibrationDialog` (`ui/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing `Camera orientation`. It runs in two places:
 
 - **Setup Wizard**, as `StageCalibrationStep` (`ui/setupwizard/StageCalibrationStep.java`), inserted between `StageStep` and `ProbeStageAfStep`.
 - **Live Viewer**, as the **Calibrate Directions...** button below the arrow grid in the Navigate tab (`ui/liveviewer/StageControlPanel.java`).
+
+### Polarity is NOT solved for -- this is deliberate
+
+`StagePolarity` and `CameraOrientation` are intentionally separate in this codebase (see "Flip vs Inversion" above). Six call sites read `getStagePolarityProperty()` directly without composing with `CameraOrientation`:
+
+- `utilities/TilingUtilities.java` (tile grid traversal direction)
+- `controller/BoundedAcquisitionWorkflow.java`
+- `controller/MicroscopeAlignmentWorkflow.java` (two call sites)
+- `controller/workflow/ManualAlignmentPath.java`
+- `ui/stagemap/StageInsertRegistry.java`
+
+For these paths, picking a polarity that is *mathematically equivalent through `StageImageTransform`* but doesn't match the actual hardware wiring silently shifts tile positions and alignment math. So the calibration tool treats polarity as a **hardware-wiring fact** set once during stage configuration (verified by direct stage observation, e.g. the MicroManager-script check in `PREFERENCES.md`) and only solves for `CameraOrientation`. The Manual override panel still exposes both for power users.
 
 ### How it works
 
 1. Captures the current stage `(x, y)` so it can restore it on close.
 2. Issues `MicroscopeController.moveStageXY(curX + step, curY)` (the same code path the arrow buttons use), then asks the user which of Left / Right / Up / Down the image appeared to pan in.
 3. Repeats for `+Y`.
-4. Back-solves `(StagePolarity, CameraOrientation)` and writes both via `QPPreferenceDialog.setStageInvertedX/Y` and `setCameraOrientationProperty`.
+4. Calls `backSolve(xObserved, yObserved, currentPolarity)` -- walks the 8 `CameraOrientation` values and returns the unique one whose composite with the user's current `StagePolarity` reproduces both observations.
+5. Writes the result via `QPPreferenceDialog.setStageInvertedX/Y` (unchanged from current values) and `setCameraOrientationProperty(orientation)`.
 
-### Back-solve canonicalization
+### Predicting image pan
 
-For a given observed (xPan, yPan) pair there are usually **multiple** equivalent `(StagePolarity, CameraOrientation)` combinations — e.g. `(INVERT_Y, FLIP_H)` and `(INVERT_XY, NORMAL)` produce identical arrow-button, joystick, click-to-center, and stitcher-flip behaviour. The dialog walks the candidate space in this order and returns the first match:
-
-- Orientations: `NORMAL` → `FLIP_H` → `FLIP_V` → `ROT_180` → `ROT_90_CW` → `ROT_90_CCW` → `TRANSPOSE` → `ANTI_TRANSPOSE`
-- Polarities: `NORMAL` → `INVERT_Y` → `INVERT_X` → `INVERT_XY`
-
-So an axis-aligned observation always resolves to a `CameraOrientation.NORMAL` answer with whatever polarity matches; only true 90°/270° rotations of the observed axes pull the canonical answer into the rotated orientations. The Manual override panel in the dialog lets users pick a specific equivalent combination if their hardware notes (e.g. "OWS3 has a FLIP_H optical path") call for a particular convention.
-
-The back-solve predicts each candidate's image-pan with the inverse of `StageImageTransform.screenPanDeltaToMmDelta`:
+The back-solve predicts each candidate orientation's image-pan with the inverse of `StageImageTransform.screenPanDeltaToMmDelta`:
 
 ```
 sampleDelta = stagePolarity.mmToSampleDelta(mmDx, mmDy)
 screenPan   = cameraOrientation.sampleToDisplay(sampleDelta)
 ```
 
-A degenerate observation (both axes pan in the same direction, or both pan diagonally) is impossible and surfaces an error inviting the user to re-test with a larger step.
+### Failure modes
+
+With a fixed polarity, the 8 `CameraOrientation` values span 8 distinct (xPan, yPan) outcome pairs. A `null` return from `backSolve` therefore means one of:
+
+1. **Inconsistent observations** -- the user picked answers that aren't physically possible (both axes panning the same direction, or both diagonal). The dialog asks them to re-test.
+2. **Wrong stage polarity** -- positive stage commands physically move the carrier opposite to what the polarity claims, so no orientation under this polarity can reproduce the observed pans. The dialog flags this explicitly and points the user at the manual hardware check in `PREFERENCES.md`, plus offers Manual override.
+
+The dialog distinguishes these two cases in its UI copy but cannot tell them apart programmatically -- both produce the same "no orientation matches" outcome.
 
 ### Z direction is deferred
 
