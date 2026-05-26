@@ -811,16 +811,24 @@ public class StageMapWindow {
         // against the dark stage-map background in dark mode.
         showAcquisitionsCheckbox = new CheckBox("Show Acquisitions");
         showAcquisitionsCheckbox.setStyle("-fx-text-fill: #ccc; -fx-font-size: 10;");
-        showAcquisitionsCheckbox.setTooltip(new Tooltip("Paint thumbnails of acquired images at their\n"
-                + "stage positions. Scans all project images with\n"
-                + "alignment transforms and renders a translucent\n"
-                + "overlay showing acquisition coverage."));
+        showAcquisitionsCheckbox.setTooltip(new Tooltip("Show / hide the acquisition overlay.\n"
+                + "First check scans the project for per-slide alignments\n"
+                + "and paints a translucent thumbnail at each acquired\n"
+                + "image's stage position. Unchecking hides the overlay\n"
+                + "but keeps the cached thumbnails and the Images list\n"
+                + "so re-checking is instant. Use Clear to drop the cache\n"
+                + "and force a fresh project rescan next time."));
         showAcquisitionsCheckbox.selectedProperty().addListener((obs, oldVal, newVal) -> {
             if (Boolean.TRUE.equals(newVal)) {
-                logger.info("Show Acquisitions toggled ON -- scanning project for per-slide alignments");
-                loadAndPaintAcquisitions();
+                if (canvas.hasLoadedAcquisitionThumbnails()) {
+                    logger.info("Show Acquisitions toggled ON -- re-showing cached overlay (no rescan)");
+                    canvas.setAcquisitionOverlayVisible(true);
+                } else {
+                    logger.info("Show Acquisitions toggled ON -- scanning project for per-slide alignments");
+                    loadAndPaintAcquisitions();
+                }
             } else {
-                logger.info("Show Acquisitions toggled OFF -- hiding overlay");
+                logger.info("Show Acquisitions toggled OFF -- hiding overlay (cache retained)");
                 canvas.setAcquisitionOverlayVisible(false);
             }
         });
@@ -847,7 +855,12 @@ public class StageMapWindow {
 
         Button clearAcqButton = new Button("Clear");
         clearAcqButton.setStyle("-fx-font-size: 10; -fx-padding: 1 4;");
-        clearAcqButton.setTooltip(new Tooltip("Clear the acquisition overlay"));
+        clearAcqButton.setTooltip(new Tooltip("Drop the cached acquisition thumbnails and Images list.\n"
+                + "Unlike unchecking Show Acquisitions (which just hides\n"
+                + "the overlay and keeps the cache), Clear frees memory\n"
+                + "and forces a fresh project rescan the next time you\n"
+                + "re-enable Show Acquisitions. Use this after acquiring\n"
+                + "new images that should appear in the overlay."));
         clearAcqButton.setOnAction(e -> {
             canvas.clearAcquisitionOverlay();
             showAcquisitionsCheckbox.setSelected(false);

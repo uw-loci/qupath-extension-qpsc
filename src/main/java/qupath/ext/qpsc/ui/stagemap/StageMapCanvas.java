@@ -1091,6 +1091,11 @@ public class StageMapCanvas extends StackPane {
         }
     }
 
+    /** True when at least one acquisition thumbnail is cached (overlay may be hidden). */
+    public boolean hasLoadedAcquisitionThumbnails() {
+        return !acquisitionThumbnails.isEmpty();
+    }
+
     /** Shows or hides the acquisition overlay. */
     public void setAcquisitionOverlayVisible(boolean visible) {
         this.acquisitionOverlayVisible = visible;
