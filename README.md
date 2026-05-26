@@ -73,6 +73,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ### Calibration & Camera Tools
 
+- **Calibrate Directions**: Interactive stage direction calibration by jogging and observing the Live Viewer. Available in the Setup Wizard (optional step) and as a button in the Live Viewer Navigate tab. Jogs the stage in +X and +Y, asks which way the image appeared to pan, and back-solves the correct stage polarity and camera orientation preferences.
 - **White Balance Calibration**: Per-channel R/G/B exposure calibration for JAI 3-CCD prism cameras with 4 WB modes (Off, Camera AWB, Simple, Per-angle)
 - **WB Comparison Test**: Side-by-side comparison of white balance modes to select the best option for your sample
 - **Camera Control**: Card-based dialog for viewing and testing camera exposure/gain settings per angle
