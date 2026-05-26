@@ -488,9 +488,8 @@ public class MakePortableWorkflow {
 
     private static void updateSummary(Label label, List<ZarrEntry> entries, ZarrAction action) {
         if (entries.isEmpty()) {
-            label.setText(
-                    "No ZARR-backed images found, but raw tile folders are still present. "
-                            + "These can be cleaned up below.");
+            label.setText("No ZARR-backed images found, but raw tile folders are still present. "
+                    + "These can be cleaned up below.");
             return;
         }
 

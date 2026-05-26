@@ -246,9 +246,12 @@ Standalone stitching utility for tile folders acquired with MicroManager 2.0. Un
 
 Cleans up a project's ZARR-backed images and raw tile folders so the project is easy to copy off the acquisition workstation. ZARR images can arise from the OME_TIFF_VIA_ZARR output format (writes fast to ZARR, queues automatic background conversion to OME-TIFF) or from **Re-stitch Tiles** recovery run in OME_ZARR / OME_TIFF_VIA_ZARR mode.
 
-The dialog lists every ZARR-backed image with its OME-TIFF status (`READY`, `CONVERTING...`, or `MISSING`) and offers two independent choices.
+The tool works in two scenarios:
 
-**ZARR handling** (choose one):
+- **With ZARR entries:** Lists every ZARR-backed image with its OME-TIFF status (`READY`, `CONVERTING...`, or `MISSING`), offers ZARR conversion/archival options, and allows tile cleanup.
+- **Without ZARR entries (tiles only):** If a project has already been fully converted to OME-TIFF, the tool still surfaces any remaining raw tile folders for cleanup. The dialog simplifies to show only the tile-cleanup option.
+
+**ZARR handling** (when ZARR entries are present; choose one):
 
 | Choice | What it does |
 |---|---|
@@ -256,7 +259,7 @@ The dialog lists every ZARR-backed image with its OME-TIFF status (`READY`, `CON
 | **Zip ZARR to .ome.zarr.zip archive** | Zips each `.ome.zarr` directory into a sibling `.ome.zarr.zip` and deletes the directory. Use this when conversion is too slow or you want a lossless single-file archive. **Important:** QuPath's image reader cannot open a zipped ZARR -- you must extract each `.ome.zarr.zip` back to a `.ome.zarr` directory before reopening the project. The archive expands in place, so the project entry works again once extracted. |
 | **Leave ZARR untouched** | Does not touch the ZARR files at all. Combine with tile deletion to *only* clean up raw tiles. |
 
-**Tile images:** A **Keep individual tile images** checkbox (unchecked by default) controls whether the raw, un-stitched per-mode acquisition tile folders are deleted. This is independent of the ZARR choice -- e.g. *Leave ZARR untouched* + delete tiles cleans up only the raw tiles. The dialog shows the tile count and total size.
+**Tile images:** A **Keep individual tile images** checkbox (unchecked by default) controls whether the raw, un-stitched per-mode acquisition tile folders are deleted. This is independent of the ZARR choice -- e.g. *Leave ZARR untouched* + delete tiles cleans up only the raw tiles, or run the tool on a fully-converted project to delete tiles with no ZARR conversion involved. The dialog shows the tile count and total size.
 
 **What Gets Preserved:**
 
@@ -269,6 +272,7 @@ Individual tiles are only needed if you plan to **re-stitch** the acquisition. T
 
 - You've acquired images using the OME_TIFF_VIA_ZARR output format and want the ZARR files removed
 - You want to archive or share a project with minimal file size (only single-file OME-TIFFs, no ZARR directories or raw tiles)
+- Your project has already been fully converted to OME-TIFF but raw tile folders remain (the tool can clean those up independently)
 - You're copying the project from the acquisition workstation to storage or a shared server
 
 ---
