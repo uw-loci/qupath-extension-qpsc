@@ -189,15 +189,32 @@ public class SampleSetupController {
             detectorBox.setTooltip(new Tooltip("Camera or detector for image capture.\n"
                     + "Available detectors depend on the selected modality and objective."));
 
-            // Set last used modality if available
-            String lastModality = PersistentPreferences.getLastModality();
-            if (!lastModality.isEmpty() && modalities.contains(lastModality)) {
-                modalityBox.setValue(lastModality);
-                logger.debug("Set modality to last used: {}", lastModality);
+            // Initial modality from the central state so the dialog agrees
+            // with any other open surface (Live Viewer Camera tab, Wizard, ...).
+            var modalityState = qupath.ext.qpsc.state.ModalityState.getInstance();
+            String fromState = modalityState.getModality();
+            if (fromState != null && !fromState.isEmpty() && modalities.contains(fromState)) {
+                modalityBox.setValue(fromState);
+                logger.debug("Set modality from ModalityState: {}", fromState);
             } else if (!modalities.isEmpty()) {
-                // Default to first if no saved preference or saved one not in list
+                // Default to first if state has no value or it's not in this scope's list
                 modalityBox.setValue(modalities.iterator().next());
             }
+            // External changes keep this combo in sync; combo changes flow back
+            // to the central state via the listener block below.
+            javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+                if (newV != null
+                        && !newV.equals(modalityBox.getValue())
+                        && modalityBox.getItems().contains(newV)) {
+                    modalityBox.setValue(newV);
+                }
+            };
+            modalityState.modalityProperty().addListener(stateListener);
+            modalityBox.sceneProperty().addListener((s, oldScene, newScene) -> {
+                if (newScene == null) {
+                    modalityState.modalityProperty().removeListener(stateListener);
+                }
+            });
 
             // Update objectives when modality changes
             modalityBox.valueProperty().addListener((obs, oldModality, newModality) -> {
@@ -447,7 +464,8 @@ public class SampleSetupController {
 
                     // ALWAYS save sample name preference (for all workflows)
                     PersistentPreferences.setLastSampleName(name);
-                    PersistentPreferences.setLastModality(mod);
+                    // Modality routes through ModalityState (canonical owner).
+                    qupath.ext.qpsc.state.ModalityState.getInstance().setModality(mod);
                     PersistentPreferences.setLastObjective(obj);
                     PersistentPreferences.setLastDetector(det);
 
@@ -471,7 +489,8 @@ public class SampleSetupController {
 
                     // ALWAYS save preferences (for all workflows)
                     PersistentPreferences.setLastSampleName(name);
-                    PersistentPreferences.setLastModality(mod);
+                    // Modality routes through ModalityState (canonical owner).
+                    qupath.ext.qpsc.state.ModalityState.getInstance().setModality(mod);
                     PersistentPreferences.setLastObjective(obj);
                     PersistentPreferences.setLastDetector(det);
                     // DO NOT save projects folder - it comes from QPPreferenceDialog

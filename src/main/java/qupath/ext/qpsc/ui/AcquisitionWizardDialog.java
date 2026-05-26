@@ -571,23 +571,42 @@ public class AcquisitionWizardDialog {
         Set<String> modalities = CalibrationChecker.getAvailableModalities();
         modalityCombo.setItems(FXCollections.observableArrayList(modalities));
         if (!modalities.isEmpty()) {
-            // Try to restore last-used modality
-            String lastModality = PersistentPreferences.getLastModality();
-            if (!lastModality.isEmpty() && modalities.contains(lastModality)) {
-                modalityCombo.setValue(lastModality);
+            // Initial value comes from the central state so the wizard agrees
+            // with any other open dialog / the Live Viewer Camera tab.
+            String fromState = qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+            if (fromState != null && modalities.contains(fromState)) {
+                modalityCombo.setValue(fromState);
             } else {
                 modalityCombo.getSelectionModel().selectFirst();
             }
             onModalityChanged();
         }
+        // External changes (Camera tab, Background Collection, etc.) keep this
+        // combo in sync; rebuilding objectives + refreshing statuses happens
+        // via the modalityCombo.setOnAction path.
+        var state = qupath.ext.qpsc.state.ModalityState.getInstance();
+        javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+            if (newV != null
+                    && !newV.equals(modalityCombo.getValue())
+                    && modalityCombo.getItems().contains(newV)) {
+                modalityCombo.setValue(newV);
+            }
+        };
+        state.modalityProperty().addListener(stateListener);
+        // Append (not replace) the existing setOnHidden handler so the
+        // activeInstance cleanup at line ~231 still fires.
+        wizardStage.addEventHandler(
+                javafx.stage.WindowEvent.WINDOW_HIDDEN,
+                ev -> state.modalityProperty().removeListener(stateListener));
     }
 
     private void onModalityChanged() {
         String modality = modalityCombo.getValue();
         if (modality == null) return;
 
-        // Save current selection
-        PersistentPreferences.setLastModality(modality);
+        // Central state owns persistence + cross-dialog broadcast + hardware
+        // driving via ModalityActuator. Idempotent on identity-set.
+        qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
 
         Set<String> objectives = CalibrationChecker.getAvailableObjectives();
         objectiveCombo.setItems(FXCollections.observableArrayList(objectives));
@@ -1214,7 +1233,9 @@ public class AcquisitionWizardDialog {
         String objective = getSelectedObjective();
         String detector = getSelectedDetector();
         if (modality != null && !modality.isEmpty()) {
-            PersistentPreferences.setLastModality(modality);
+            // Central state owns modality persistence -- this also fans the
+            // value out to any other open dialogs (no-op if equal).
+            qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
         }
         if (objective != null && !objective.isEmpty()) {
             PersistentPreferences.setLastObjective(objective);

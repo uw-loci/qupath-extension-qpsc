@@ -1169,14 +1169,31 @@ public class ExistingImageAcquisitionController {
         }
 
         private void initializeHardwareSelections() {
-            String lastModality = PersistentPreferences.getLastModality();
+            var modalityState = qupath.ext.qpsc.state.ModalityState.getInstance();
+            String fromState = modalityState.getModality();
             Set<String> modalities = configManager.getSection("modalities").keySet();
 
-            if (!lastModality.isEmpty() && modalities.contains(lastModality)) {
-                modalityBox.setValue(lastModality);
+            if (fromState != null && !fromState.isEmpty() && modalities.contains(fromState)) {
+                modalityBox.setValue(fromState);
             } else if (!modalities.isEmpty()) {
                 modalityBox.setValue(modalities.iterator().next());
             }
+            modalityBox.valueProperty().addListener((obs, oldV, newV) -> {
+                if (newV != null) modalityState.setModality(newV);
+            });
+            javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+                if (newV != null
+                        && !newV.equals(modalityBox.getValue())
+                        && modalityBox.getItems().contains(newV)) {
+                    modalityBox.setValue(newV);
+                }
+            };
+            modalityState.modalityProperty().addListener(stateListener);
+            modalityBox.sceneProperty().addListener((s, oldScene, newScene) -> {
+                if (newScene == null) {
+                    modalityState.modalityProperty().removeListener(stateListener);
+                }
+            });
         }
 
         private void updateObjectivesForModality(String modality) {
@@ -2187,9 +2204,10 @@ public class ExistingImageAcquisitionController {
                             globalObjective);
                 }
 
-                // Save preferences
+                // Save preferences. Modality routes through ModalityState
+                // so the central state stays canonical.
                 PersistentPreferences.setLastSampleName(sampleName);
-                PersistentPreferences.setLastModality(modality);
+                qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
                 PersistentPreferences.setLastObjective(objective);
                 PersistentPreferences.setLastDetector(detector);
 

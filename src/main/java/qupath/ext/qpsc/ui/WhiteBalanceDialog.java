@@ -723,8 +723,8 @@ public class WhiteBalanceDialog {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath != null && !configPath.isEmpty()) {
                 MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-                // Use wizard's last-selected modality if available, default to "ppm"
-                String modality = PersistentPreferences.getLastModality();
+                // Use the central modality state; default to "ppm" when empty.
+                String modality = qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
                 if (modality == null || modality.isEmpty()) {
                     modality = "ppm";
                 }

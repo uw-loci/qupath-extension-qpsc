@@ -1160,6 +1160,16 @@ Quick fixes for the most common multi-channel failure modes. For the full refere
 
 **Fix:** Open the acquisition log and search for warnings around `stitchChannelDirectories` that mention the missing channel id. Common root causes: no tiles were written for that channel (filter wheel timed out, server dropped the channel mid-acquisition), the `TileConfiguration.txt` references a missing tile, or the channel subdirectory is empty. The raw per-tile TIFFs under `{projectsFolder}/{sample}/<profile>/{annotation}/{channel_id}/` survive stitch failures, so you can re-run stitching with [Stitching Recovery](WORKFLOWS.md#utility-tools) once the underlying issue is fixed.
 
+#### Q: The Acquisition Wizard, Background Collection dialog, and Live Viewer Camera tab show different modalities
+
+**A:** They no longer can -- as of 2026-05-25 a central `ModalityState` is the single source of truth. Changing modality in any of the 8 linked dialogs (Acquisition Wizard, Background Collection, Sample Setup, Unified Acquisition, Existing Image Acquisition, Single Point Acquisition, Stack/Time-Lapse, Live Viewer Camera tab) propagates to all open dialogs AND fires `APPLYPR` to drive the hardware (filter cube, lamp / LED, condenser) -- so the "selected modality" everywhere always equals the physical hardware state.
+
+Two combos are intentionally NOT linked:
+- **Camera Control > Profile filter** -- a display filter to narrow the visible profile table; changing it does not touch hardware or other dialogs.
+- **Setup Wizard > Modality** (config-time) -- runs before the scope is connected; not a runtime selector.
+
+If you see a stale modality somewhere, it is a bug -- report it with which dialog disagreed and what was open at the time.
+
 #### Q: Switching modality leaves my sample out of focus (e.g. brightfield -> fluorescence on the same detector)
 
 **A:** The optical path shifts the focal plane when you switch modality even on the same detector -- filter cubes, LED-vs-lamp illumination, and condenser changes all move focus. Without calibrated parfocality the stage Z does not move when you switch modalities, so the new path starts out of focus.

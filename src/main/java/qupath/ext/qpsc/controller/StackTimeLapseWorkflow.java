@@ -449,18 +449,36 @@ public class StackTimeLapseWorkflow {
             setup.channelCombo.setDisable(true);
             return;
         }
-        String preferred = PersistentPreferences.getStackTimeLapseModality();
+        // Initial value from the central modality state so Z-Stack /
+        // Time-Lapse agrees with other open dialogs.
+        var modalityState = qupath.ext.qpsc.state.ModalityState.getInstance();
+        String preferred = modalityState.getModality();
         if (preferred != null && !preferred.isBlank() && modalities.contains(preferred)) {
             setup.modalityCombo.setValue(preferred);
         } else {
             setup.modalityCombo.setValue(setup.modalityCombo.getItems().get(0));
         }
+        // External changes (Wizard, Camera tab, etc.) keep this combo in sync.
+        javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+            if (newV != null
+                    && !newV.equals(setup.modalityCombo.getValue())
+                    && setup.modalityCombo.getItems().contains(newV)) {
+                setup.modalityCombo.setValue(newV);
+            }
+        };
+        modalityState.modalityProperty().addListener(stateListener);
+        setup.modalityCombo.sceneProperty().addListener((s, oldScene, newScene) -> {
+            if (newScene == null) {
+                modalityState.modalityProperty().removeListener(stateListener);
+            }
+        });
     }
 
     private static void wireSetupListeners(SetupState setup) {
         setup.modalityCombo.valueProperty().addListener((obs, oldM, newM) -> {
             if (setup.rebuilding) return;
-            PersistentPreferences.setStackTimeLapseModality(newM);
+            // Central state owns persistence + cross-dialog broadcast.
+            if (newM != null) qupath.ext.qpsc.state.ModalityState.getInstance().setModality(newM);
             rebuildProfileCombo(setup);
             rebuildChannelRow(setup);
         });

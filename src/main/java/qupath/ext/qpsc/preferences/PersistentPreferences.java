@@ -1643,20 +1643,14 @@ public class PersistentPreferences {
     // hardware state (objective, detector, filter, illumination, exposure)
     // via APPLYPR + APPLYCH before each one-shot Z-stack or time-lapse run.
 
-    private static final StringProperty stackTimeLapseModalityProperty =
-            PathPrefs.createPersistentPreference("qpscStackTimeLapseModality", "");
+    // Modality now lives in ModalityState (shared across all 8 acquisition
+    // dialogs). The legacy qpscStackTimeLapseModality preference key is left in
+    // the user's prefs file as harmless inert data; no Java code reads or
+    // writes it any more.
     private static final StringProperty stackTimeLapseProfileProperty =
             PathPrefs.createPersistentPreference("qpscStackTimeLapseProfile", "");
     private static final StringProperty stackTimeLapseChannelProperty =
             PathPrefs.createPersistentPreference("qpscStackTimeLapseChannel", "");
-
-    public static String getStackTimeLapseModality() {
-        return stackTimeLapseModalityProperty.get();
-    }
-
-    public static void setStackTimeLapseModality(String v) {
-        stackTimeLapseModalityProperty.set(v == null ? "" : v);
-    }
 
     public static String getStackTimeLapseProfile() {
         return stackTimeLapseProfileProperty.get();
@@ -1758,6 +1752,68 @@ public class PersistentPreferences {
 
     public static void setLastBackgroundOutputPath(String path) {
         lastBackgroundOutputPath.set(path != null ? path : "");
+    }
+
+    // --- Background-collection exposure-mode selector ---
+    // Stored per-modality-family so brightfield and PPM remember their picks
+    // independently. Values: {"PROFILE", "TARGET", "OVERRIDE"}.
+    //   PROFILE  - read exposure from the selected acquisition profile;
+    //              no adaptive adjustment.
+    //   TARGET   - adaptive exposure: server iterates from a starting
+    //              exposure until median pixel hits the target intensity.
+    //              No profile is bound; hardware is assumed set via the
+    //              Live Viewer Camera tab.
+    //   OVERRIDE - profile is selected (lamp + record) but adaptive target
+    //              overwrites the profile's nominal exposure; user warned.
+    // Defaults: BF starts in PROFILE (the user's expected behavior, since
+    // BF profiles carry exposure_ms); PPM starts in TARGET (preserves the
+    // existing adaptive behavior PPM monochrome relied on).
+    public static final String BG_EXPOSURE_MODE_PROFILE = "PROFILE";
+
+    public static final String BG_EXPOSURE_MODE_TARGET = "TARGET";
+
+    public static final String BG_EXPOSURE_MODE_OVERRIDE = "OVERRIDE";
+
+    public static final String BG_EXPOSURE_FAMILY_BRIGHTFIELD = "brightfield";
+
+    public static final String BG_EXPOSURE_FAMILY_PPM = "ppm";
+
+    private static final StringProperty bgExposureModeBrightfieldProperty =
+            PathPrefs.createPersistentPreference("qpscBgExposureMode.brightfield", BG_EXPOSURE_MODE_PROFILE);
+    private static final StringProperty bgExposureModePpmProperty =
+            PathPrefs.createPersistentPreference("qpscBgExposureMode.ppm", BG_EXPOSURE_MODE_TARGET);
+
+    /**
+     * Returns the saved exposure-mode pick for the given modality family
+     * ({@code "brightfield"} or {@code "ppm"}). Unknown families fall back
+     * to {@link #BG_EXPOSURE_MODE_PROFILE}.
+     */
+    public static String getBgExposureMode(String modalityFamily) {
+        String raw;
+        if (BG_EXPOSURE_FAMILY_BRIGHTFIELD.equalsIgnoreCase(modalityFamily)) {
+            raw = bgExposureModeBrightfieldProperty.get();
+        } else if (BG_EXPOSURE_FAMILY_PPM.equalsIgnoreCase(modalityFamily)) {
+            raw = bgExposureModePpmProperty.get();
+        } else {
+            return BG_EXPOSURE_MODE_PROFILE;
+        }
+        if (BG_EXPOSURE_MODE_PROFILE.equals(raw)
+                || BG_EXPOSURE_MODE_TARGET.equals(raw)
+                || BG_EXPOSURE_MODE_OVERRIDE.equals(raw)) {
+            return raw;
+        }
+        return BG_EXPOSURE_MODE_PROFILE;
+    }
+
+    public static void setBgExposureMode(String modalityFamily, String value) {
+        if (value == null) {
+            value = BG_EXPOSURE_MODE_PROFILE;
+        }
+        if (BG_EXPOSURE_FAMILY_BRIGHTFIELD.equalsIgnoreCase(modalityFamily)) {
+            bgExposureModeBrightfieldProperty.set(value);
+        } else if (BG_EXPOSURE_FAMILY_PPM.equalsIgnoreCase(modalityFamily)) {
+            bgExposureModePpmProperty.set(value);
+        }
     }
 
     // ================== SINGLE-SNAP MODALITY EXPOSURE ==================

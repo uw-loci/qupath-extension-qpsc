@@ -319,6 +319,34 @@ graph TB
     HC -->|"compute histogram"| FX
 ```
 
+### state/ -- Cross-controller observable state
+
+The `state/` package holds singletons that own observable state shared across
+multiple UI surfaces. They expose JavaFX `ReadOnly*Property` for one-way binding
+(combos / labels listen) and `set*()` mutators (combo change handlers call).
+
+| Component | Owns | Bound by |
+|-----------|------|----------|
+| `ModalityState` | currently-selected modality (string) | The 8 modality combos (Acquisition Wizard, Background Collection, Sample Setup, Unified Acquisition, Existing Image, Single Point, Stack/Time-Lapse, Live Viewer Camera tab) + `LiveViewerWindow` title |
+
+`ModalityState` is paired with a process-lifetime service
+`ModalityActuator` (in `service/`) that listens to the state property and
+drives the hardware (APPLYPR + parfocality Z delta) on every effective
+change. This means changing modality in any of the 8 linked combos updates
+all the others, persists to `PersistentPreferences`, and applies the
+hardware change -- the user's "selected modality" always equals the
+hardware state. Two combos are intentionally NOT linked: Camera Control's
+profile-filter (a display filter, not a selector) and the Setup Wizard's
+config-time combo (runs before the scope is configured).
+
+The pattern (singleton owning a `ReadOnlyProperty` + a paired actuator that
+turns property changes into hardware actions) is reusable. When a future
+piece of shared UI state appears -- active objective, detector, exposure
+profile -- a sibling class can follow the same shape: bootstrap from
+`PersistentPreferences`, expose a read-only property, validate on read
+against the active config, and let an actuator subscribe for any
+hardware-driving side effects.
+
 ## Design Patterns
 
 | Pattern | Usage | Benefit |
@@ -326,6 +354,7 @@ graph TB
 | **Strategy + Registry** | `ModalityHandler` + `ModalityRegistry` | New modalities without core changes |
 | **Fluent Builder** | `AcquisitionCommandBuilder` | Readable command construction |
 | **Singleton** | Controller, ConfigManager, LiveViewer | Shared state with controlled init |
+| **Observable State** | `ModalityState` + `ModalityActuator` | Cross-controller broadcast without bus framework |
 | **Async/Future** | `CompletableFuture` throughout | Non-blocking UI |
 | **Observer** | `NotificationService` | Decoupled event handling |
 | **Command** | Socket protocol | Decouples QuPath from server implementation |

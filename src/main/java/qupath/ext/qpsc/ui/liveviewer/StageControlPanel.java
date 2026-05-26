@@ -797,12 +797,6 @@ public class StageControlPanel extends VBox {
     private VBox cameraModContent; // Swapped when modality changes
     private volatile String currentCameraModality; // Current modality for preset refresh
 
-    // Profile key APPLYPR was last sent for in this panel. Used to compute the
-    // parfocality Z delta when the user changes modality -- delta is
-    // offset(new) - offset(old) and only applied when both profiles share an
-    // objective. Null until the first applyProfileForModality call lands.
-    private volatile String lastAppliedProfile;
-
     /**
      * Returns the modality currently selected in the Camera tab, or
      * {@code null} if none has been chosen yet. Thread-safe -- the
@@ -997,7 +991,9 @@ public class StageControlPanel extends VBox {
         hwGrid.add(refreshHardwareBtn, 2, 0, 1, 2);
         GridPane.setMargin(refreshHardwareBtn, new Insets(0, 0, 0, 6));
 
-        // Modality dropdown
+        // Modality dropdown -- backed by ModalityState so changes here
+        // propagate to other open dialogs (Wizard, Background Collection,
+        // etc.) and drive the hardware via ModalityActuator.
         ComboBox<String> modalityCombo = new ComboBox<>();
         try {
             var modalities = mgr.getAvailableModalities();
@@ -1006,7 +1002,15 @@ public class StageControlPanel extends VBox {
             logger.debug("Could not load modalities: {}", e.getMessage());
         }
         if (modalityCombo.getItems().isEmpty()) modalityCombo.getItems().add("ppm");
-        modalityCombo.setValue(modalityCombo.getItems().get(0));
+        // Bootstrap from the central state when its value is one of the
+        // declared modalities; otherwise fall back to the first item.
+        String initialFromState =
+                qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+        if (initialFromState != null && modalityCombo.getItems().contains(initialFromState)) {
+            modalityCombo.setValue(initialFromState);
+        } else {
+            modalityCombo.setValue(modalityCombo.getItems().get(0));
+        }
         modalityCombo.setMaxWidth(Double.MAX_VALUE);
         modalityCombo.setStyle("-fx-font-size: 10px;");
 
@@ -1060,22 +1064,58 @@ public class StageControlPanel extends VBox {
                         fullControlBtn,
                         fovOverlayBtn);
 
-        // Populate initial content and wire dropdown
+        // Populate initial content + wire dropdown through ModalityState.
+        // Selection here -> ModalityState.setModality (which fans out to
+        // every other linked combo + ModalityActuator drives APPLYPR).
+        // External changes from other surfaces (Wizard etc.) arrive via the
+        // property listener below, which keeps this combo in sync + rebuilds
+        // the per-modality content panel.
         currentCameraModality = modalityCombo.getValue();
         rebuildCameraModContent(currentCameraModality);
+        var modalityState = qupath.ext.qpsc.state.ModalityState.getInstance();
+        // Ensure the actuator is constructed -- it subscribes to ModalityState
+        // on first getInstance() so APPLYPR fires for changes from any UI.
+        qupath.ext.qpsc.service.ModalityActuator.ensureRegistered();
+        // Status messages from the actuator land on the Camera tab status label.
+        Runnable actuatorUnsub = qupath.ext.qpsc.service.ModalityActuator.getInstance()
+                .addStatusListener(status -> {
+                    cameraStatusLabel.setText(status.text());
+                    String color =
+                            switch (status.phase()) {
+                                case SWITCHING -> "#666";
+                                case SUCCEEDED -> "green";
+                                case FAILED -> "red";
+                            };
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + color + ";");
+                });
+        // External modality changes (Wizard, Background Collection, etc.) keep
+        // this combo + its content panel in sync.
+        javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+            if (newV != null && !newV.equals(modalityCombo.getValue())) {
+                modalityCombo.setValue(newV);
+            }
+            currentCameraModality = newV;
+            if (newV != null) rebuildCameraModContent(newV);
+            if (onModalityChanged != null) onModalityChanged.run();
+        };
+        modalityState.modalityProperty().addListener(stateListener);
         modalityCombo.setOnAction(e -> {
             cameraStatusLabel.setText("");
             currentCameraModality = modalityCombo.getValue();
-            rebuildCameraModContent(currentCameraModality);
-            // Drive the hardware to the new modality: filter cube,
-            // illumination teardown of the previously-active source,
-            // and selection of this modality's illumination as the
-            // server's active _illumination. Without this, the dropdown
-            // only updates UI and the lamp / cube of the previous
-            // modality keeps emitting -- corrupting any live exposure
-            // estimates the user makes from this tab.
-            applyProfileForModality(currentCameraModality);
-            if (onModalityChanged != null) onModalityChanged.run();
+            // Set on the central state; the stateListener above handles
+            // rebuilding the per-modality content panel + the actuator
+            // handles APPLYPR. setModality is idempotent so this does not
+            // double-fire when the combo update came from the listener.
+            modalityState.setModality(currentCameraModality);
+        });
+        // Lifecycle: StageControlPanel lives for the Live Viewer's life. When
+        // the Live Viewer scene is unset, drop our listeners so the panel can
+        // be GC'd cleanly.
+        cameraContent.sceneProperty().addListener((obs, oldScene, newScene) -> {
+            if (newScene == null) {
+                modalityState.modalityProperty().removeListener(stateListener);
+                actuatorUnsub.run();
+            }
         });
 
         // Wrap in a ScrollPane so the Fluorescence modality (per-channel
@@ -2395,112 +2435,6 @@ public class StageControlPanel extends VBox {
             return Integer.toString((int) v);
         }
         return Double.toString(v);
-    }
-
-    private void applyProfileForModality(String modality) {
-        final String profileToApply = findFirstMatchingProfile(modality);
-        if (profileToApply == null) {
-            logger.debug("Modality switch to '{}': no matching profile, skipping APPLYPR", modality);
-            return;
-        }
-        final String previousProfile = lastAppliedProfile;
-        cameraStatusLabel.setText("Switching to " + profileToApply + "...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
-        Thread t = new Thread(
-                () -> {
-                    try {
-                        MicroscopeController mc = MicroscopeController.getInstance();
-                        if (mc == null || !mc.isConnected()) return;
-                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(profileToApply));
-                        // Apply parfocality offset AFTER APPLYPR so the user sees the
-                        // illumination switch even if Z motion is skipped (no calibration,
-                        // cross-objective, etc.). Same-objective only.
-                        applyParfocalityDeltaIfApplicable(previousProfile, profileToApply);
-                        lastAppliedProfile = profileToApply;
-                        Platform.runLater(() -> {
-                            cameraStatusLabel.setText("Switched to " + profileToApply);
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
-                            rebuildCameraModContent(modality);
-                        });
-                        logger.info("Modality switch -> APPLYPR({})", profileToApply);
-                    } catch (Exception ex) {
-                        logger.error("Modality switch APPLYPR({}) failed: {}", profileToApply, ex.getMessage());
-                        Platform.runLater(() -> {
-                            cameraStatusLabel.setText("Switch failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
-                        });
-                    }
-                },
-                "Modality-Switch");
-        t.setDaemon(true);
-        t.start();
-    }
-
-    /**
-     * Shifts the stage Z by the parfocality delta between two profiles when the
-     * user switches modality. Skipped when (a) either profile lacks a calibrated
-     * offset, (b) the two profiles belong to different objectives (cross-objective
-     * is a turret-swap concern, not parfocality), or (c) the delta is below the
-     * stage's resolution noise floor.
-     *
-     * <p>No-op + INFO log on the first switch of a session (previousProfile is null)
-     * and whenever either prerequisite is missing -- the user can still calibrate
-     * by capturing each profile's Z manually via the calibration dialog.
-     */
-    private void applyParfocalityDeltaIfApplicable(String previousProfile, String newProfile) {
-        if (previousProfile == null || previousProfile.equals(newProfile)) {
-            return;
-        }
-        try {
-            Double oldOffset = mgr.getProfileParfocalOffset(previousProfile);
-            Double newOffset = mgr.getProfileParfocalOffset(newProfile);
-            if (oldOffset == null || newOffset == null) {
-                logger.info(
-                        "Parfocality: skipping Z delta {} -> {} (offsets: {} -> {})",
-                        previousProfile,
-                        newProfile,
-                        oldOffset,
-                        newOffset);
-                return;
-            }
-            String oldObj = mgr.getProfileObjective(previousProfile);
-            String newObj = mgr.getProfileObjective(newProfile);
-            if (oldObj == null || newObj == null || !oldObj.equals(newObj)) {
-                logger.info(
-                        "Parfocality: skipping Z delta {} -> {} (cross-objective: {} -> {})",
-                        previousProfile,
-                        newProfile,
-                        oldObj,
-                        newObj);
-                return;
-            }
-            double delta = newOffset - oldOffset;
-            if (Math.abs(delta) < 0.05) {
-                logger.info(
-                        "Parfocality: delta {} um below threshold ({} -> {})",
-                        String.format("%.3f", delta),
-                        previousProfile,
-                        newProfile);
-                return;
-            }
-            MicroscopeController mc = MicroscopeController.getInstance();
-            double currentZ = mc.getStagePositionZ();
-            double targetZ = currentZ + delta;
-            mc.moveStageZ(targetZ);
-            logger.info(
-                    "Parfocality: applied Z delta {} -> {} ({} um, {} -> {})",
-                    previousProfile,
-                    newProfile,
-                    String.format("%+.2f", delta),
-                    String.format("%.2f", currentZ),
-                    String.format("%.2f", targetZ));
-        } catch (Exception ex) {
-            logger.warn(
-                    "Parfocality: Z delta application failed {} -> {}: {}",
-                    previousProfile,
-                    newProfile,
-                    ex.getMessage());
-        }
     }
 
     /**

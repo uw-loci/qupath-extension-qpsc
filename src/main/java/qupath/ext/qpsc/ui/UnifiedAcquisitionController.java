@@ -1304,15 +1304,38 @@ public class UnifiedAcquisitionController {
         }
 
         private void initializeHardwareSelections() {
-            // Set last used modality
-            String lastModality = PersistentPreferences.getLastModality();
+            // Initial modality from the central state so this dialog agrees
+            // with the wizard / Camera tab / other open surfaces.
+            var modalityState = qupath.ext.qpsc.state.ModalityState.getInstance();
+            String fromState = modalityState.getModality();
             Set<String> modalities = configManager.getSection("modalities").keySet();
 
-            if (!lastModality.isEmpty() && modalities.contains(lastModality)) {
-                modalityBox.setValue(lastModality);
+            if (fromState != null && !fromState.isEmpty() && modalities.contains(fromState)) {
+                modalityBox.setValue(fromState);
             } else if (!modalities.isEmpty()) {
                 modalityBox.setValue(modalities.iterator().next());
             }
+            // Push every change to the central state.
+            modalityBox.valueProperty().addListener((obs, oldV, newV) -> {
+                if (newV != null) modalityState.setModality(newV);
+            });
+            // Mirror external changes (Camera tab, Wizard, etc.) back into the combo.
+            javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+                if (newV != null
+                        && !newV.equals(modalityBox.getValue())
+                        && modalityBox.getItems().contains(newV)) {
+                    modalityBox.setValue(newV);
+                }
+            };
+            modalityState.modalityProperty().addListener(stateListener);
+            // Lifecycle: drop the listener when the dialog stage hides. The
+            // stage is the modalityBox's containing window; resolve lazily so
+            // we don't depend on construction order.
+            modalityBox.sceneProperty().addListener((s, oldScene, newScene) -> {
+                if (newScene == null) {
+                    modalityState.modalityProperty().removeListener(stateListener);
+                }
+            });
         }
 
         private void updateObjectivesForModality(String modality) {
@@ -2172,9 +2195,11 @@ public class UnifiedAcquisitionController {
                             globalObjective);
                 }
 
-                // Save preferences
+                // Save preferences. Modality goes through ModalityState so
+                // the central state stays the source of truth + other open
+                // dialogs see the value.
                 PersistentPreferences.setLastSampleName(sampleName);
-                PersistentPreferences.setLastModality(modality);
+                qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
                 PersistentPreferences.setLastObjective(objective);
                 PersistentPreferences.setLastDetector(detector);
                 PersistentPreferences.setBoundingBoxString(String.format("%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));

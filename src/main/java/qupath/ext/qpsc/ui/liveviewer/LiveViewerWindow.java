@@ -52,6 +52,7 @@ import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -105,6 +106,10 @@ public class LiveViewerWindow {
     private StageControlPanel stageControlPanel;
     private ScrollPane stageScrollPane;
     private ToggleButton stageControlToggle;
+
+    /** Detached in {@link #stopAndDispose()} to avoid leaking on Live Viewer close. */
+    private javafx.beans.value.ChangeListener<String> modalityTitleListener;
+
     private final ContrastSettings contrastSettings = new ContrastSettings();
 
     // Sweep autofocus now runs entirely server-side via TESTADAF
@@ -957,6 +962,11 @@ public class LiveViewerWindow {
         });
         stageControlPanel.setOnModalityChanged(this::updateWindowTitle);
         stageControlPanel.setOnFovOverlayToggle(this::toggleFovOverlay);
+        // Title also updates when modality changes from any other surface
+        // (Wizard, Background Collection, etc.) via the central state. Listener
+        // detached in stopAndDispose() to avoid leaking a closed window.
+        modalityTitleListener = (obs, oldV, newV) -> javafx.application.Platform.runLater(this::updateWindowTitle);
+        ModalityState.getInstance().modalityProperty().addListener(modalityTitleListener);
 
         // Reflect the modality + objective magnification detected at construction
         // in the window title (e.g. "Live Viewer (Brightfield) (10x)").
@@ -2232,6 +2242,13 @@ public class LiveViewerWindow {
     private void stopAndDispose() {
         polling = false;
         logger.info("Stopping live viewer...");
+
+        // Detach the central-state title listener so a closed window doesn't
+        // retain a reference and keep getting modality updates.
+        if (modalityTitleListener != null) {
+            ModalityState.getInstance().modalityProperty().removeListener(modalityTitleListener);
+            modalityTitleListener = null;
+        }
 
         // Stop polling threads
         if (framePoller != null) {

@@ -27,6 +27,7 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.OutputFormat;
+import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -100,14 +101,15 @@ public class SinglePointAcquisitionController {
             }
 
             ComboBox<String> modalityCombo = new ComboBox<>();
+            var modalityState = ModalityState.getInstance();
             try {
                 MicroscopeConfigManager mgr =
                         MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
                 Set<String> modalities = mgr.getAvailableModalities();
                 modalityCombo.setItems(FXCollections.observableArrayList(modalities));
-                String lastModality = PersistentPreferences.getLastModality();
-                if (!lastModality.isEmpty() && modalities.contains(lastModality)) {
-                    modalityCombo.setValue(lastModality);
+                String fromState = modalityState.getModality();
+                if (fromState != null && !fromState.isEmpty() && modalities.contains(fromState)) {
+                    modalityCombo.setValue(fromState);
                 } else if (!modalities.isEmpty()) {
                     modalityCombo.setValue(modalities.iterator().next());
                 }
@@ -116,6 +118,23 @@ public class SinglePointAcquisitionController {
                 modalityCombo.setValue("brightfield");
                 logger.warn("Could not load modalities from config: {}", e.getMessage());
             }
+            // Bind to central modality state.
+            modalityCombo.valueProperty().addListener((obs, oldV, newV) -> {
+                if (newV != null) modalityState.setModality(newV);
+            });
+            javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
+                if (newV != null
+                        && !newV.equals(modalityCombo.getValue())
+                        && modalityCombo.getItems().contains(newV)) {
+                    modalityCombo.setValue(newV);
+                }
+            };
+            modalityState.modalityProperty().addListener(stateListener);
+            modalityCombo.sceneProperty().addListener((s, oldScene, newScene) -> {
+                if (newScene == null) {
+                    modalityState.modalityProperty().removeListener(stateListener);
+                }
+            });
 
             GridPane setupGrid = new GridPane();
             setupGrid.setHgap(8);
