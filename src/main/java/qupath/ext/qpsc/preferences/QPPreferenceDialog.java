@@ -683,6 +683,25 @@ public class QPPreferenceDialog {
         }
     }
 
+    /**
+     * Observable view of the stage X inversion preference. Use this to attach
+     * a change listener that needs to react when the stage polarity is edited
+     * (e.g. by the Calibrate Directions tool or the prefs dialog).
+     */
+    public static BooleanProperty stageInvertedXObservable() {
+        return stageInvertedXProperty;
+    }
+
+    /** Observable view of the stage Y inversion preference for change listeners. */
+    public static BooleanProperty stageInvertedYObservable() {
+        return stageInvertedYProperty;
+    }
+
+    /** Observable view of the camera orientation preference for change listeners. */
+    public static StringProperty cameraOrientationObservable() {
+        return cameraOrientationProperty;
+    }
+
     public static String getMicroscopeServerHost() {
         return microscopeServerHostProperty.get();
     }

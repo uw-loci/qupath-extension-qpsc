@@ -36,6 +36,7 @@ import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
@@ -434,13 +435,15 @@ public class StageMapWindow {
                 + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-border-radius: 2; "
                 + "-fx-padding: 2 4;");
         applyFlipsCheckbox.setTooltip(new Tooltip("Flip the Stage Map to match the Live Viewer orientation.\n\n"
-                + "When checked:\n"
-                + "  - Map and overlay are flipped to match what you see\n"
-                + "    through the eyepiece / Live Viewer\n"
-                + "  - Double-click coordinates are transformed to match\n"
-                + "  - Use this when the map appears mirrored relative\n"
-                + "    to the Live Viewer\n\n"
-                + "Reads flip settings from scanner configuration."));
+                + "Default state composes two hardware properties:\n"
+                + "  - Active scope's Stage Polarity + Camera Orientation\n"
+                + "    (same composition the stitcher uses)\n"
+                + "  - The macro overlay's per-scanner flipMacroX/Y from\n"
+                + "    the source picked in the Source dropdown\n"
+                + "XOR'd per-axis so the whole map -- including the macro\n"
+                + "overlay -- ends up oriented like the Live Viewer.\n\n"
+                + "Independent of which project image is open. Toggleable\n"
+                + "if you want to compare against the un-flipped view."));
 
         // Initial checked state -- pulled from open entry metadata if any. Preset dropdown
         // is not yet populated at this point in construction, so the dropdown leg of
@@ -1141,19 +1144,7 @@ public class StageMapWindow {
                 source,
                 activePreset != null ? activePreset.getName() : "(none)");
 
-        boolean[] axes = resolveCurrentFlipAxes();
-        boolean shouldFlip = axes[0] || axes[1];
-        if (applyFlipsCheckbox != null) {
-            suppressFlipCheckboxListener = true;
-            try {
-                applyFlipsCheckbox.setSelected(shouldFlip);
-            } finally {
-                suppressFlipCheckboxListener = false;
-            }
-        }
-        if (canvas != null) {
-            canvas.setFlipsApplied(shouldFlip, axes[0], axes[1]);
-        }
+        syncApplyFlipsFromHardware("source change to '" + source + "'");
         checkMacroOverlayAvailability();
     }
 
@@ -1218,8 +1209,34 @@ public class StageMapWindow {
     /**
      * Apply the initial flip state after the stage is shown.
      * Must be called after stage.show() so the StackPane scale transforms take effect.
+     *
+     * <p>Also attaches change listeners to the underlying StagePolarity /
+     * CameraOrientation prefs so the toggle keeps tracking the hardware
+     * settings if the user edits them mid-session (e.g. via Calibrate
+     * Directions). Listener attachment is one-shot.
      */
     private void applyInitialFlipState() {
+        syncApplyFlipsFromHardware("initial");
+        // One-shot listener attachment; weak references are not needed because
+        // the StageMapWindow is a singleton tied to QuPath's lifetime.
+        QPPreferenceDialog.stageInvertedXObservable()
+                .addListener(
+                        (obs, was, now) -> Platform.runLater(() -> syncApplyFlipsFromHardware("stage polarity X")));
+        QPPreferenceDialog.stageInvertedYObservable()
+                .addListener(
+                        (obs, was, now) -> Platform.runLater(() -> syncApplyFlipsFromHardware("stage polarity Y")));
+        QPPreferenceDialog.cameraOrientationObservable()
+                .addListener(
+                        (obs, was, now) -> Platform.runLater(() -> syncApplyFlipsFromHardware("camera orientation")));
+    }
+
+    /**
+     * Recompute the flip axes from hardware (active scope's polarity + camera
+     * orientation, XOR'd with the active macro preset) and push the result to
+     * the checkbox + canvas. Called on initial show, when the source dropdown
+     * changes, and when StagePolarity / CameraOrientation prefs change.
+     */
+    private void syncApplyFlipsFromHardware(String reason) {
         boolean[] axes = resolveCurrentFlipAxes();
         boolean shouldFlip = axes[0] || axes[1];
         if (applyFlipsCheckbox != null) {
@@ -1232,107 +1249,59 @@ public class StageMapWindow {
         }
         if (canvas != null) {
             canvas.setFlipsApplied(shouldFlip, axes[0], axes[1]);
-            if (shouldFlip) {
-                logger.info("Applied initial flip state: flipX={}, flipY={}", axes[0], axes[1]);
-            }
+            logger.info(
+                    "syncApplyFlipsFromHardware({}): shouldFlip={}, flipX={}, flipY={}",
+                    reason,
+                    shouldFlip,
+                    axes[0],
+                    axes[1]);
         }
     }
 
     /**
      * Resolve the currently-effective {flipX, flipY} for the Stage Map view.
      *
-     * <p>Resolution order:
+     * <p>Composes two fixed hardware-side properties of the active microscope
+     * setup; the open project entry has no influence on the result.
      * <ol>
-     *   <li>{@code flip_x}/{@code flip_y} metadata on the open project entry (recorded truth)</li>
-     *   <li>{@code flipMacroX/Y} on the preset selected in the dropdown</li>
-     *   <li>Default: {@code false}</li>
+     *   <li><b>Camera/stage flip</b> -- the composition of the active scope's
+     *       {@link qupath.ext.qpsc.utilities.StagePolarity} and
+     *       {@link qupath.ext.qpsc.utilities.CameraOrientation}, surfaced via
+     *       {@link StageImageTransform#stitcherFlipFlags()}. This is what the
+     *       stitcher already uses to mirror its output to match Live Viewer.</li>
+     *   <li><b>Macro overlay flip</b> -- if a macro is being shown, its source
+     *       scanner's preset records {@code flipMacroX/Y} (the orientation of
+     *       that scanner's macro relative to the stage). Read from
+     *       {@link #activePreset}, which the user picks in the Source dropdown.
+     *       If no preset is selected (active-scope identity), this contributes
+     *       {@code (false, false)}.</li>
      * </ol>
      *
-     * <p>We intentionally do not try to auto-find a preset by source-scanner here -- that
-     * metadata is unreliable on existing image entries. The user picks the preset in the
-     * dropdown; the toggle responds to that choice.
+     * <p>The two are XOR'd per-axis so that everything on the canvas -- the
+     * insert/slides/crosshair/FOV box AND the macro overlay -- ends up in the
+     * same orientation as the Live Viewer.
      *
      * @return a 2-element array {@code {flipX, flipY}}; never null
      */
     private boolean[] resolveCurrentFlipAxes() {
-        // STEP A of the flip-relocation refactor: per-entry FLIP_X/Y is no longer
-        // consulted for macro rendering. The flip required to render a macro on
-        // a given microscope is a function of the (source_scanner, target_microscope)
-        // preset pair -- not of the image entry, which travels unchanged between
-        // microscopes when the project is moved. Resolution order:
-        //   1. Preset for (entry.SOURCE_MICROSCOPE, activeMicroscope) if it has flip state.
-        //   2. Currently-selected preset in the dropdown (activePreset) if it has flip state.
-        //   3. Default (false, false).
-        try {
-            QuPathGUI gui = QuPathGUI.getInstance();
-            if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
-                @SuppressWarnings("unchecked")
-                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
-                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
-                if (entry != null) {
-                    String sourceScanner = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
-                    if (sourceScanner != null && !sourceScanner.isEmpty()) {
-                        AffineTransformManager.TransformPreset pairPreset = lookupPresetForSourceScanner(sourceScanner);
-                        if (pairPreset != null && pairPreset.hasFlipState()) {
-                            boolean[] axes = {pairPreset.getFlipMacroX(), pairPreset.getFlipMacroY()};
-                            logger.info(
-                                    "resolveCurrentFlipAxes: entry='{}' source_microscope='{}' -> PAIR PRESET wins "
-                                            + "(preset='{}', flip=({}, {}))",
-                                    entry.getImageName(),
-                                    sourceScanner,
-                                    pairPreset.getName(),
-                                    axes[0],
-                                    axes[1]);
-                            return axes;
-                        }
-                        logger.info(
-                                "resolveCurrentFlipAxes: entry='{}' source_microscope='{}' -- no pair preset with flip state; "
-                                        + "falling through to active preset",
-                                entry.getImageName(),
-                                sourceScanner);
-                    } else {
-                        logger.info(
-                                "resolveCurrentFlipAxes: entry='{}' has no source_microscope metadata; falling through to active preset",
-                                entry.getImageName());
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.debug("Failed to look up open image entry for flip resolution: {}", e.getMessage());
-        }
-
+        boolean[] stageFlags = StageImageTransform.current().stitcherFlipFlags();
+        boolean macroFlipX = false;
+        boolean macroFlipY = false;
         if (activePreset != null && activePreset.hasFlipState()) {
-            boolean[] axes = {activePreset.getFlipMacroX(), activePreset.getFlipMacroY()};
-            logger.info(
-                    "resolveCurrentFlipAxes: ACTIVE PRESET wins (preset='{}', flip=({}, {}))",
-                    activePreset.getName(),
-                    axes[0],
-                    axes[1]);
-            return axes;
+            macroFlipX = Boolean.TRUE.equals(activePreset.getFlipMacroX());
+            macroFlipY = Boolean.TRUE.equals(activePreset.getFlipMacroY());
         }
-
+        boolean[] axes = {stageFlags[0] ^ macroFlipX, stageFlags[1] ^ macroFlipY};
         logger.info(
-                "resolveCurrentFlipAxes: no source-scanner pair preset, no active preset -> default (false, false)");
-        return new boolean[] {false, false};
-    }
-
-    /**
-     * Look up the saved preset for the {@code (sourceScanner, activeMicroscope)} pair.
-     * Returns null if no such preset exists or the active microscope cannot be resolved.
-     */
-    private AffineTransformManager.TransformPreset lookupPresetForSourceScanner(String sourceScanner) {
-        try {
-            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (configPath == null || configPath.isEmpty()) return null;
-            MicroscopeConfigManager cfg = MicroscopeConfigManager.getInstance(configPath);
-            String activeMicroscope = cfg.getMicroscopeName();
-            if (activeMicroscope == null || activeMicroscope.isEmpty()) return null;
-            AffineTransformManager mgr = new AffineTransformManager(new File(configPath).getParent());
-            return mgr.getBestPresetForPair(sourceScanner, activeMicroscope);
-        } catch (Exception e) {
-            logger.debug("lookupPresetForSourceScanner('{}') failed: {}", sourceScanner, e.getMessage());
-            return null;
-        }
+                "resolveCurrentFlipAxes: stage/camera=({}, {}) XOR macroPreset='{}'=({}, {}) -> ({}, {})",
+                stageFlags[0],
+                stageFlags[1],
+                activePreset != null ? activePreset.getName() : "(none)",
+                macroFlipX,
+                macroFlipY,
+                axes[0],
+                axes[1]);
+        return axes;
     }
 
     private void startPositionPolling() {
