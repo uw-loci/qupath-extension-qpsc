@@ -75,6 +75,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Live Viewer Z-bar focus trace and navigation grid layout**
+- Focus-metric trace is now drawn inline in the left margin of both coarse and fine bars, anchoring at the track's left edge and extending leftward proportionally to the Brenner gradient metric. This consolidates the trace into the bar canvases rather than rendering it in a separate column, making the panel more compact.
+- Navigation grid (joystick and arrow buttons) now centers correctly in the Navigate tab when the Z Focus widget is widened. The VBox containing the grid now has `fillWidth(false)` so its content respects the tab's `Pos.CENTER` alignment.
+
 **Acquisition Workflow Progress dialog**
 - The Total / Current Annotation / positions progress bars were created with a width but no height, so inside the auto-sized dialog they collapsed to zero and no bar ever rendered. All bars now have an explicit height and display correctly.
 - The dialog is now resizable and grows (never shrinks) to fit its content, so the **Cancel Workflow** button is no longer clipped off the bottom as the dimension panel, completion clock, and stitching list appear during a run.
