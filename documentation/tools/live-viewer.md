@@ -119,7 +119,7 @@ The Navigate tab combines movement controls and direct position entry in a singl
 
 Stage movement is disabled while Live View is OFF. When this occurs:
 - A yellow/orange banner appears at the top of the Navigate tab: "Movement disabled - Live View is Off"
-- An orange indicator dot appears on the Navigate tab header
+- The Navigate tab header text turns orange and bold so the gated state is visible from any tab
 - Arrow buttons, joystick, and Z controls are greyed out
 - Direct position entry fields still accept typed input but do not execute moves
 - The Mark Z button remains enabled (it does not move the stage)
@@ -152,7 +152,7 @@ This safety gate ensures you can see the stage move before issuing commands.
 |--------|------|-------------|
 | X / Y / Z / R Fields | TextField | Enter absolute coordinates (um) or rotation angle to move to |
 | Move Buttons | Button | Move the stage to the entered coordinate for that axis |
-| Go to Centroid | Button | Move the stage to the centroid of the current QuPath annotation. Enabled when the open image has alignment data (sub-image offset metadata, bounding-box stage bounds, or derived alignment). The status text indicates which alignment type is available. |
+| Go to Centroid | Button | Move the stage to the centroid of the current QuPath annotation. Enabled when (1) the open image has alignment data (sub-image offset metadata, bounding-box stage bounds, or derived alignment) AND (2) a PathObject with a non-null ROI is selected. If no selection exists or the selection has no ROI, the button is greyed out. The status text indicates which alignment type is available. |
 
 ### Stage Control - Saved Points Tab
 
