@@ -26,6 +26,13 @@ custom strategy to a scope-specific modality.
 - Microscope configuration YAML loaded with objective definitions
 - At least one objective defined in the configuration
 
+## Accessing the Editor
+
+The Autofocus Configuration Editor can be opened in two ways:
+
+1. **From the menu:** Extensions > QP Scope > Utilities > Autofocus Configuration Editor...
+2. **From the Live Viewer:** Right-click the **Autofocus** button in the Live Viewer's focus controls toolbar. This shortcut is useful when you want to switch autofocus methods while the button is greyed out (e.g. during acquisition or between live frames).
+
 ## Options
 
 ### Live Viewer Autofocus Method
