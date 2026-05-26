@@ -92,14 +92,25 @@ public class MakePortableWorkflow {
         // Scan for ZARR-backed entries
         List<ZarrEntry> zarrEntries = findZarrEntries(project);
 
-        if (zarrEntries.isEmpty()) {
+        // Scan for individual tile folders -- independent of ZARR presence, so
+        // we still surface them when the project has already been converted to
+        // OME-TIFF but the raw tiles were never cleaned up. The sample folder
+        // is the project's parent directory (canonical QPSC layout:
+        // <sampleDir>/<project>.qpproj + <sampleDir>/SlideImages/ +
+        // <sampleDir>/<tile-folders>/), and the project is always open and
+        // saved by the time this menu item runs.
+        Path sampleDir = project.getPath() != null ? project.getPath().getParent() : null;
+        TileScan tileScan = scanTileDirectories(sampleDir);
+
+        if (zarrEntries.isEmpty() && tileScan.tileDirs.isEmpty()) {
             Dialogs.showInfoNotification(
-                    "Make Project Portable", "No ZARR-backed images found. Project is already portable.");
+                    "Make Project Portable",
+                    "No ZARR-backed images or raw tile folders found. Project is already portable.");
             return;
         }
 
         // Show the dialog
-        showPortabilityDialog(gui, project, zarrEntries);
+        showPortabilityDialog(gui, project, zarrEntries, tileScan);
     }
 
     // ------------------------------------------------------------------
@@ -229,18 +240,12 @@ public class MakePortableWorkflow {
      * folders (e.g. {@code ppm_10x_1}) that sit alongside {@code SlideImages}
      * and hold the raw, un-stitched tile images.
      *
-     * <p>The sample folder is derived from a ZARR entry's path:
-     * {@code <sampleDir>/SlideImages/<name>.ome.zarr}. A tile directory is any
-     * direct child of the sample folder other than {@code SlideImages} and the
-     * QuPath {@code data} directory that contains at least one raw tile image.
+     * <p>A tile directory is any direct child of {@code sampleDir} other than
+     * {@code SlideImages} and the QuPath {@code data} directory that contains
+     * at least one raw tile image.
      */
-    private static TileScan scanTileDirectories(List<ZarrEntry> entries) {
+    private static TileScan scanTileDirectories(Path sampleDir) {
         List<Path> tileDirs = new ArrayList<>();
-        if (entries.isEmpty()) return new TileScan(tileDirs, 0, 0);
-
-        Path slideImagesDir = entries.get(0).zarrPath.getParent();
-        if (slideImagesDir == null) return new TileScan(tileDirs, 0, 0);
-        Path sampleDir = slideImagesDir.getParent();
         if (sampleDir == null || !Files.isDirectory(sampleDir)) return new TileScan(tileDirs, 0, 0);
 
         long totalCount = 0;
@@ -306,9 +311,10 @@ public class MakePortableWorkflow {
     // Dialog
     // ------------------------------------------------------------------
 
-    private static void showPortabilityDialog(QuPathGUI gui, Project<BufferedImage> project, List<ZarrEntry> entries) {
+    private static void showPortabilityDialog(
+            QuPathGUI gui, Project<BufferedImage> project, List<ZarrEntry> entries, TileScan tileScan) {
 
-        TileScan tileScan = scanTileDirectories(entries);
+        boolean hasZarr = !entries.isEmpty();
         boolean hasTiles = !tileScan.tileDirs.isEmpty();
 
         Stage dialog = new Stage();
@@ -321,7 +327,7 @@ public class MakePortableWorkflow {
         // Summary label
         Label summaryLabel = new Label();
 
-        // Entry list
+        // Entry list (rendered only when there are ZARR entries to show)
         VBox entryList = new VBox(4);
         for (ZarrEntry ze : entries) {
             Label entryLabel = new Label();
@@ -333,10 +339,12 @@ public class MakePortableWorkflow {
         scrollPane.setPrefHeight(150);
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
-        // ZARR handling selector
+        // ZARR handling selector. When there are no ZARR entries the combo is
+        // omitted from the layout and the action is pinned to LEAVE so the rest
+        // of the flow operates as a pure tile cleanup.
         ComboBox<ZarrAction> zarrActionCombo = new ComboBox<>();
         zarrActionCombo.getItems().addAll(ZarrAction.values());
-        zarrActionCombo.setValue(ZarrAction.CONVERT_TIFF);
+        zarrActionCombo.setValue(hasZarr ? ZarrAction.CONVERT_TIFF : ZarrAction.LEAVE);
         HBox zarrActionBox = new HBox(8, new Label("ZARR handling:"), zarrActionCombo);
         zarrActionBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
@@ -435,19 +443,35 @@ public class MakePortableWorkflow {
 
         HBox buttons = new HBox(10, refreshBtn, makePortableBtn, closeBtn);
 
-        root.getChildren()
-                .addAll(
-                        summaryLabel,
-                        scrollPane,
-                        zarrActionBox,
-                        keepTilesCheckbox,
-                        tileInfoLabel,
-                        warningLabel,
-                        progressBar,
-                        statusLabel,
-                        buttons);
+        // Skip ZARR-only widgets (per-entry list and action combo) when the
+        // project has nothing to convert; Refresh is also only meaningful in
+        // the ZARR-present flow.
+        if (hasZarr) {
+            root.getChildren()
+                    .addAll(
+                            summaryLabel,
+                            scrollPane,
+                            zarrActionBox,
+                            keepTilesCheckbox,
+                            tileInfoLabel,
+                            warningLabel,
+                            progressBar,
+                            statusLabel,
+                            buttons);
+        } else {
+            refreshBtn.setDisable(true);
+            root.getChildren()
+                    .addAll(
+                            summaryLabel,
+                            keepTilesCheckbox,
+                            tileInfoLabel,
+                            warningLabel,
+                            progressBar,
+                            statusLabel,
+                            buttons);
+        }
 
-        dialog.setScene(new Scene(root, 580, 540));
+        dialog.setScene(new Scene(root, 580, hasZarr ? 540 : 360));
         dialog.show();
     }
 
@@ -463,6 +487,13 @@ public class MakePortableWorkflow {
     }
 
     private static void updateSummary(Label label, List<ZarrEntry> entries, ZarrAction action) {
+        if (entries.isEmpty()) {
+            label.setText(
+                    "No ZARR-backed images found, but raw tile folders are still present. "
+                            + "These can be cleaned up below.");
+            return;
+        }
+
         long ready = entries.stream().filter(e -> e.status == TiffStatus.READY).count();
         long converting =
                 entries.stream().filter(e -> e.status == TiffStatus.CONVERTING).count();
@@ -686,7 +717,7 @@ public class MakePortableWorkflow {
             }
 
             String freedStr = formatBytes(freed);
-            String summary = portabilityResultMessage(action, s, f, freedStr, willDeleteTiles);
+            String summary = portabilityResultMessage(action, s, f, freedStr, willDeleteTiles, !entries.isEmpty());
             statusLabel.setText(summary);
             if (f == 0) {
                 Dialogs.showInfoNotification("Make Project Portable", summary);
@@ -703,7 +734,12 @@ public class MakePortableWorkflow {
 
     /** Compose the human-readable result line for the completed operation. */
     private static String portabilityResultMessage(
-            ZarrAction action, int succeeded, int failed, String freedStr, boolean deletedTiles) {
+            ZarrAction action,
+            int succeeded,
+            int failed,
+            String freedStr,
+            boolean deletedTiles,
+            boolean hadZarrEntries) {
         String tilePart = deletedTiles ? " Tile images deleted." : "";
         return switch (action) {
             case CONVERT_TIFF ->
@@ -725,7 +761,9 @@ public class MakePortableWorkflow {
                                 succeeded, failed, freedStr, tilePart);
             default ->
                 deletedTiles
-                        ? String.format("Tile cleanup complete: %s freed. ZARR files left untouched.", freedStr)
+                        ? hadZarrEntries
+                                ? String.format("Tile cleanup complete: %s freed. ZARR files left untouched.", freedStr)
+                                : String.format("Project is now portable. Tile cleanup freed %s.", freedStr)
                         : "Nothing to do.";
         };
     }
