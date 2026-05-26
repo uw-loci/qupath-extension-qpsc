@@ -81,7 +81,7 @@ Interactively calibrate which way the stage moves the image by jogging and obser
 
 - **Run calibration...** button opens the stage direction calibration dialog (same dialog available later via Live Viewer → Navigate tab → **Calibrate Directions...**)
 - **Keep current values** button skips this step with no changes
-- **How it works**: The dialog jogs the stage by a small step in +X then +Y, asks you to report which direction the image appeared to pan, and back-solves the correct `Inverted X/Y stage` + `Camera orientation` preferences
+- **How it works**: The dialog jogs the stage by a small step in +X then +Y, asks you to report which direction the image appeared to pan, and solves for the `Camera orientation` (optical flip/rotation) that matches under your current `Inverted X/Y stage` polarity setting. Polarity is treated as a hardware-wiring fact and is not changed by this tool
 - This step is **optional and requires a connected microscope**. If you haven't configured the server yet, skip it — you can re-run the calibration anytime from the Live Viewer's Calibrate Directions button
 - The stage position is saved at the start and restored when the dialog closes
 

@@ -126,7 +126,7 @@ The Navigate tab combines movement controls and direct position entry in a singl
 | Sample Movement | CheckBox | Enable "sample perspective" movement (direction inversion for intuitive control) |
 | Z Controls | Spinner + Buttons | Z position display with up/down buttons. Scroll on the Z field or Move Z button to stream Z continuously — the stage ramps smoothly through intermediate focus planes, tracking the wheel like a physical focus knob. |
 | Polarizer Controls | Spinner | Rotation angle control (PPM modality only) |
-| **Calibrate Directions...** | Button | Opens an interactive dialog that jogs the stage in +X and +Y, asks which way the image appeared to pan, and back-solves the correct stage polarity and camera orientation preferences. Non-blocking: saves your original position and restores it when closing. The same calibration dialog is available in the Setup Wizard as an optional step. See [PREFERENCES.md](../PREFERENCES.md#inverted-x-stage) for the coordinate frame details. |
+| **Calibrate Directions...** | Button | Opens an interactive dialog that jogs the stage in +X and +Y, asks which way the image appeared to pan, and solves for the camera orientation (optical flip/rotation) under your current stage polarity setting. Non-blocking: saves your original position and restores it when closing. The same calibration dialog is available in the Setup Wizard as an optional step. Note: stage polarity is treated as a hardware-wiring fact and is not changed by this tool — use the MicroManager-script procedure in [PREFERENCES.md](../PREFERENCES.md#inverted-x-stage) to verify polarity if needed. See that same section for the coordinate frame details. |
 
 **Move to Position:**
 
