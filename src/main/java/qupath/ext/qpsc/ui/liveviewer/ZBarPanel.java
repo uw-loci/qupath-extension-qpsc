@@ -449,7 +449,7 @@ public class ZBarPanel extends HBox {
     }
 
     // ===================================================================
-    // Inner ZBar — one vertical bar (coarse or fine) with its own Canvas
+    // Inner ZBar -- one vertical bar (coarse or fine) with its own Canvas
     // ===================================================================
     private final class ZBar {
         final boolean coarse;

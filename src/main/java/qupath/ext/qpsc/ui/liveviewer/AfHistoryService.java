@@ -11,7 +11,7 @@ import javafx.application.Platform;
  * Static ring buffer of recent autofocus / Mark Z positions for the Live Viewer
  * Z-bar overlay.
  *
- * <p>Capacity is 3 — the oldest tic is evicted on the fourth push, so any given
+ * <p>Capacity is 3 -- the oldest tic is evicted on the fourth push, so any given
  * tic is visible during the next three AF/Mark events and disappears on the
  * fourth. Not persisted across sessions.
  *

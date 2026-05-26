@@ -3456,7 +3456,7 @@ public class StageControlPanel extends VBox {
     }
 
     /**
-     * Returns true when Live View is off — the policy is that the user must be
+     * Returns true when Live View is off -- the policy is that the user must be
      * able to see the stage before any movement is dispatched. The Navigate
      * tab's banner and orange tab-header dot signal this state visibly; this
      * gate is defense-in-depth for entry points that don't route through a

@@ -19,7 +19,7 @@ import javafx.application.Platform;
  * larger than the configured threshold (see {@code StageControlPanel}).
  *
  * <p>The model tracks a running metric min/max for autoscaling. Min/max are
- * not recomputed on bin overwrite — the autoscale may briefly stay wider than
+ * not recomputed on bin overwrite -- the autoscale may briefly stay wider than
  * the current data after rapid changes, which is acceptable for visualization.
  */
 public final class FocusTraceModel {
