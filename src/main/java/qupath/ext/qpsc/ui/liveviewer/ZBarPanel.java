@@ -147,11 +147,15 @@ public class ZBarPanel extends HBox {
             if (newV == null) return;
             double v = newV.doubleValue();
             if (Double.isNaN(v)) return;
-            // Recenter fine bar when current Z drifts outside the visible window
-            // (and the user isn't actively dragging it).
+            // Fine bar has a comfort zone -- the central portion of its window
+            // where Z polls don't trigger a recenter. Recenter triggers when Z
+            // enters the outer 20% of the window (10% each side). Smaller
+            // hysteresis than the original 10%-outer, so coarse drags pull the
+            // fine view along quickly while sub-um Z polls still don't jitter.
+            // No recenter while the fine bar is being dragged.
             if (!fineBar.dragging) {
                 double half = fineHalfWidth.get();
-                if (v < fineBar.zMin + 0.1 * half || v > fineBar.zMax - 0.1 * half) {
+                if (v < fineBar.zMin + 0.2 * half || v > fineBar.zMax - 0.2 * half) {
                     fineBar.zMin = v - half;
                     fineBar.zMax = v + half;
                 }

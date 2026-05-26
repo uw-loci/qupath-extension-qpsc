@@ -1956,6 +1956,7 @@ public class PersistentPreferences {
     public static void setZBarCoarseRange(String scanner, double min, double max) {
         if (scanner == null || scanner.isEmpty()) return;
         DYNAMIC_PREFS.put("ZBarCoarseRange:" + scanner, min + "," + max);
+        flushDynamicPrefs();
     }
 
     /**
@@ -1976,5 +1977,24 @@ public class PersistentPreferences {
     public static void setZBarFineHalfWidth(String scanner, double halfWidthUm) {
         if (scanner == null || scanner.isEmpty()) return;
         DYNAMIC_PREFS.put("ZBarFineHalfWidth:" + scanner, Double.toString(halfWidthUm));
+        flushDynamicPrefs();
+    }
+
+    /**
+     * Force the dynamic-prefs node to flush to its backing store. Without this,
+     * a {@code Preferences.put()} may live only in memory and be lost when the
+     * JVM exits -- particularly observed on Windows (registry-backed prefs).
+     * Used by the Z-bar setters above; other dynamic-prefs callers (camera
+     * presets, etc.) may want the same treatment if they show similar symptoms.
+     */
+    private static void flushDynamicPrefs() {
+        try {
+            DYNAMIC_PREFS.flush();
+        } catch (java.util.prefs.BackingStoreException ex) {
+            // Best-effort persistence: log at debug since the in-memory value
+            // still works for the current session.
+            org.slf4j.LoggerFactory.getLogger(PersistentPreferences.class)
+                    .debug("Dynamic prefs flush failed: {}", ex.getMessage());
+        }
     }
 }
