@@ -63,11 +63,9 @@ public class ZBarPanel extends HBox {
     private static final double COARSE_BAR_WIDTH = 28;
     private static final double FINE_BAR_WIDTH = 14;
     private static final double BAR_HEIGHT = 240;
-    private static final double TRACE_WIDTH = 38;
 
     private final ZBar coarseBar;
     private final ZBar fineBar;
-    private final Canvas traceCanvas;
     private final FocusTraceModel focusTrace = new FocusTraceModel();
     private final DoubleProperty currentZ = new SimpleDoubleProperty(Double.NaN);
     private final DoubleProperty fineHalfWidth = new SimpleDoubleProperty(DEFAULT_FINE_HALF_WIDTH_UM);
@@ -126,13 +124,12 @@ public class ZBarPanel extends HBox {
 
         coarseBar = new ZBar(true, COARSE_BAR_WIDTH, BAR_HEIGHT, streamZ);
         fineBar = new ZBar(false, FINE_BAR_WIDTH, BAR_HEIGHT, streamZ);
-        traceCanvas = new Canvas(TRACE_WIDTH, BAR_HEIGHT);
 
         // Persistent listeners (retained refs so we can detach in dispose())
         afHistoryListener = this::redrawAll;
         focusTraceListener = () -> {
             focusTraceEmpty.set(focusTrace.isEmpty());
-            redrawTrace();
+            redrawAll();
         };
         AfHistoryService.addListener(afHistoryListener);
         focusTrace.addListener(focusTraceListener);
@@ -211,8 +208,7 @@ public class ZBarPanel extends HBox {
 
         VBox coarseCol = new VBox(2, coarseHeader, coarseBar.canvas);
         coarseCol.setAlignment(Pos.TOP_LEFT);
-        HBox fineWithTrace = new HBox(0, fineBar.canvas, traceCanvas);
-        VBox fineCol = new VBox(2, fineHeader, fineWithTrace);
+        VBox fineCol = new VBox(2, fineHeader, fineBar.canvas);
         fineCol.setAlignment(Pos.TOP_LEFT);
 
         Button markZBtn = new Button("Mark Z");
@@ -241,10 +237,12 @@ public class ZBarPanel extends HBox {
         controlsCol = new VBox(6, markZBtn, maxZFocusBtn);
         controlsCol.setAlignment(Pos.TOP_CENTER);
         controlsCol.setFillWidth(true);
-        // Min width keeps the column from being squeezed by the parent HBox so
-        // "Max Z Focus" and the appended step row don't get truncated to "Max ..."
-        controlsCol.setMinWidth(115);
-        controlsCol.setPrefWidth(115);
+        // Min width keeps "Max Z Focus" from truncating to "Max Z Foc...".
+        // Width was tighter before; freeing the separate trace column let us
+        // pull the buttons in but the longest button label still drives the
+        // floor. Use the button's pref text width as the floor.
+        controlsCol.setMinWidth(95);
+        controlsCol.setPrefWidth(95);
         controlsCol.setPadding(new Insets(20, 4, 0, 4));
 
         setSpacing(8);
@@ -308,58 +306,6 @@ public class ZBarPanel extends HBox {
     private void redrawAll() {
         coarseBar.redraw();
         fineBar.redraw();
-        redrawTrace();
-    }
-
-    private void redrawTrace() {
-        GraphicsContext g = traceCanvas.getGraphicsContext2D();
-        g.clearRect(0, 0, traceCanvas.getWidth(), traceCanvas.getHeight());
-        if (focusTrace.isEmpty()) return;
-        List<double[]> samples = focusTrace.snapshot();
-        double min = focusTrace.getRunningMin();
-        double max = focusTrace.getRunningMax();
-        double span = max - min;
-        if (span <= 0) return;
-        double w = traceCanvas.getWidth();
-        double h = traceCanvas.getHeight();
-        double zMin = fineBar.zMin;
-        double zMax = fineBar.zMax;
-        double zSpan = zMax - zMin;
-        if (zSpan <= 0) return;
-
-        g.setFill(Color.rgb(255, 165, 0, 0.18));
-        g.setStroke(Color.rgb(255, 140, 0, 0.85));
-        g.setLineWidth(1.0);
-        // Draw as a polyline with a filled underlay
-        double[] xs = new double[samples.size()];
-        double[] ys = new double[samples.size()];
-        int n = 0;
-        for (double[] s : samples) {
-            double z = s[0];
-            if (z < zMin || z > zMax) continue;
-            double norm = (s[1] - min) / span;
-            xs[n] = norm * (w - 2) + 1;
-            ys[n] = h - (z - zMin) / zSpan * h;
-            n++;
-        }
-        if (n < 1) return;
-        // Underlay polygon: line + bottom + back to origin
-        double[] polyX = new double[n + 2];
-        double[] polyY = new double[n + 2];
-        for (int i = 0; i < n; i++) {
-            polyX[i] = xs[i];
-            polyY[i] = ys[i];
-        }
-        polyX[n] = 0;
-        polyY[n] = ys[n - 1];
-        polyX[n + 1] = 0;
-        polyY[n + 1] = ys[0];
-        g.fillPolygon(polyX, polyY, n + 2);
-        if (n >= 2) {
-            g.strokePolyline(xs, ys, n);
-        } else {
-            g.fillOval(xs[0] - 1.5, ys[0] - 1.5, 3, 3);
-        }
     }
 
     private Button makeEllipsisButton(Runnable onClick) {
@@ -530,6 +476,50 @@ public class ZBarPanel extends HBox {
             if (streamZ != null) streamZ.accept(z);
         }
 
+        /**
+         * Draws the focus-metric trace into the left-margin area of this bar.
+         * The curve anchors at {@code tx} (track's left edge) and extends
+         * leftward by an amount proportional to the normalized metric value.
+         * Drawn semi-transparent so the numeric labels (rendered after) remain
+         * readable on top.
+         */
+        void drawFocusTrace(GraphicsContext g, double tx) {
+            if (focusTrace.isEmpty()) return;
+            List<double[]> samples = focusTrace.snapshot();
+            double mMin = focusTrace.getRunningMin();
+            double mMax = focusTrace.getRunningMax();
+            double mSpan = mMax - mMin;
+            if (mSpan <= 0) return;
+            double traceMaxWidth = tx - 2; // reserve 2 px gutter on the far left
+            double[] xs = new double[samples.size()];
+            double[] ys = new double[samples.size()];
+            int n = 0;
+            for (double[] s : samples) {
+                double zS = s[0];
+                if (zS < zMin || zS > zMax) continue;
+                double norm = (s[1] - mMin) / mSpan;
+                xs[n] = tx - norm * traceMaxWidth;
+                ys[n] = yForZ(zS);
+                n++;
+            }
+            if (n < 1) return;
+            g.setFill(Color.rgb(255, 140, 0, 0.20));
+            g.setStroke(Color.rgb(255, 130, 0, 0.65));
+            g.setLineWidth(1.0);
+            double[] polyX = new double[n + 2];
+            double[] polyY = new double[n + 2];
+            for (int i = 0; i < n; i++) {
+                polyX[i] = xs[i];
+                polyY[i] = ys[i];
+            }
+            polyX[n] = tx;
+            polyY[n] = ys[n - 1];
+            polyX[n + 1] = tx;
+            polyY[n + 1] = ys[0];
+            g.fillPolygon(polyX, polyY, n + 2);
+            if (n >= 2) g.strokePolyline(xs, ys, n);
+        }
+
         void redraw() {
             GraphicsContext g = canvas.getGraphicsContext2D();
             double cw = canvas.getWidth();
@@ -578,6 +568,13 @@ public class ZBarPanel extends HBox {
             g.setStroke(Color.rgb(20, 20, 20, 0.6));
             g.setLineWidth(0.5);
             g.strokeRect(tx, ty, tw, th);
+
+            // Focus-metric trace, drawn UNDER the numeric labels in the left
+            // margin. The curve anchors at the track's left edge and extends
+            // leftward in proportion to the normalized Brenner metric. Both
+            // bars show the trace, scaled to their own Z range -- the coarse
+            // bar gives the big-picture peak, the fine bar the local shape.
+            drawFocusTrace(g, tx);
 
             // Tick labels on the LEFT
             g.setFill(Color.rgb(50, 50, 50));

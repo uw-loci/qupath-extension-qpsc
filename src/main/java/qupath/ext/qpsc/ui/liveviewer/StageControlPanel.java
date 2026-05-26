@@ -672,6 +672,13 @@ public class StageControlPanel extends VBox {
 
         VBox navSection = new VBox(4, navGrid, keyboardHint);
         navSection.setAlignment(Pos.CENTER);
+        // fillWidth defaults to true on VBox, which lets navGrid stretch to the
+        // VBox's full width. When the Z Focus widget below widened the
+        // navigateContent VBox, the stretched navGrid drifted right because its
+        // own Pos.CENTER content alignment had no extra space to play with.
+        // Disable fillWidth so navGrid takes its preferred size and navSection's
+        // Pos.CENTER actually centers it. Same applies to keyboardHint.
+        navSection.setFillWidth(false);
 
         // XY status shown below navigation grid
         Label navXyStatus = new Label();
