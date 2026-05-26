@@ -217,6 +217,7 @@ public class ZBarPanel extends HBox {
 
         Button markZBtn = new Button("Mark Z");
         markZBtn.setMaxWidth(Double.MAX_VALUE);
+        markZBtn.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
         markZBtn.setTooltip(new javafx.scene.control.Tooltip(
                 "Record the current Z as a tic on both bars. Stays enabled when Live View is off."));
         markZBtn.setOnAction(e -> {
@@ -225,6 +226,7 @@ public class ZBarPanel extends HBox {
 
         Button maxZFocusBtn = new Button("Max Z Focus");
         maxZFocusBtn.setMaxWidth(Double.MAX_VALUE);
+        maxZFocusBtn.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
         maxZFocusBtn.setTooltip(new javafx.scene.control.Tooltip(
                 "Move Z to the position of the highest recorded focus metric in the current trace."
                         + " Greyed out when no trace samples are present."));
@@ -239,6 +241,10 @@ public class ZBarPanel extends HBox {
         controlsCol = new VBox(6, markZBtn, maxZFocusBtn);
         controlsCol.setAlignment(Pos.TOP_CENTER);
         controlsCol.setFillWidth(true);
+        // Min width keeps the column from being squeezed by the parent HBox so
+        // "Max Z Focus" and the appended step row don't get truncated to "Max ..."
+        controlsCol.setMinWidth(115);
+        controlsCol.setPrefWidth(115);
         controlsCol.setPadding(new Insets(20, 4, 0, 4));
 
         setSpacing(8);

@@ -741,12 +741,16 @@ public class StageControlPanel extends VBox {
 
         // Relocate the Z step controls from the move-to-position row into the
         // ZBarPanel's right-side column (under Mark Z / Max Z Focus). The step
-        // size is shared: scrolling on the bars uses this same field.
+        // size is shared: scrolling on the bars uses this same field. Stacked
+        // vertically -- the column is too narrow for label + field + help on
+        // one line without truncation.
         Label zStepHere = new Label("Step (um):");
         zStepHere.setStyle("-fx-font-size: 10px;");
-        HBox stepRow = new HBox(4, zStepHere, zStepField, zHelpBtn);
-        stepRow.setAlignment(Pos.CENTER);
-        zBarPanel.getControlsColumn().getChildren().add(stepRow);
+        HBox stepFieldRow = new HBox(4, zStepField, zHelpBtn);
+        stepFieldRow.setAlignment(Pos.CENTER_LEFT);
+        VBox stepBlock = new VBox(2, zStepHere, stepFieldRow);
+        stepBlock.setAlignment(Pos.CENTER_LEFT);
+        zBarPanel.getControlsColumn().getChildren().add(stepBlock);
 
         Label zBarLabel = new Label("Z Focus");
         zBarLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
