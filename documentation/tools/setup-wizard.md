@@ -35,7 +35,7 @@ These files are required before any acquisition workflow can run.
 
 - QuPath with QPSC extension installed
 - Knowledge of your microscope hardware (objectives, detectors, stage limits)
-- Optional: microscope server running (for connection test in Step 6)
+- Optional: microscope server running (for connection test in Step 7)
 
 ---
 
@@ -75,7 +75,17 @@ Define stage limits and select the stage hardware:
 - **Stage Limits**: Min/Max for X, Y, Z axes (micrometers)
 - Spinners with configurable ranges
 
-### Step 5: Modalities
+### Step 5: Stage Calibration (Optional)
+
+Interactively calibrate which way the stage moves the image by jogging and observing:
+
+- **Run calibration...** button opens the stage direction calibration dialog (same dialog available later via Live Viewer → Navigate tab → **Calibrate Directions...**)
+- **Keep current values** button skips this step with no changes
+- **How it works**: The dialog jogs the stage by a small step in +X then +Y, asks you to report which direction the image appeared to pan, and back-solves the correct `Inverted X/Y stage` + `Camera orientation` preferences
+- This step is **optional and requires a connected microscope**. If you haven't configured the server yet, skip it — you can re-run the calibration anytime from the Live Viewer's Calibrate Directions button
+- The stage position is saved at the start and restored when the dialog closes
+
+### Step 6: Modalities
 
 Configure imaging modalities available on this microscope:
 
@@ -113,7 +123,7 @@ The multiphoton panel collects the essential hardware settings for laser scannin
 
 > **Note:** Some advanced multiphoton settings (digital shutter IO states, NI DAQ property names, mode positions, XY offsets between modalities) are not collected by the wizard. These are configured by editing the YAML file directly. See [Laser Scanning Quick Start](../QUICKSTART-LSM.md) for the complete YAML reference.
 
-### Step 6: Server Connection (Optional)
+### Step 7: Server Connection (Optional)
 
 Configure the microscope control server:
 
@@ -122,7 +132,7 @@ Configure the microscope control server:
 - **Test Connection**: Background TCP connection test with pass/fail feedback
 - This step is optional -- you can skip it and configure server settings later in Preferences
 
-### Step 7: Review & Save
+### Step 8: Review & Save
 
 Review all configured values before saving:
 
