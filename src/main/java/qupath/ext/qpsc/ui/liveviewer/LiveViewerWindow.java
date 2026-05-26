@@ -955,6 +955,7 @@ public class LiveViewerWindow {
 
         // Stage control panel (on right side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
+        stageControlPanel.setLiveActiveProperty(liveActiveProperty);
         stageControlPanel.setOnHardwareChanged(() -> {
             updateFovLabel();
             updateFocusRangeOptions();
@@ -1255,6 +1256,13 @@ public class LiveViewerWindow {
                     String z0 = result.get("initial_z");
                     String z1 = result.get("final_z");
                     String dz = result.get("z_shift");
+                    // Record AF result on the Z-bar tic history
+                    if (z1 != null) {
+                        try {
+                            AfHistoryService.add(Double.parseDouble(z1));
+                        } catch (NumberFormatException ignored) {
+                        }
+                    }
                     Platform.runLater(() -> updateStatusHeld(
                             String.format("Sweep Autofocus complete: Z shifted %s um (%s -> %s)", dz, z0, z1)));
                 });
@@ -1382,6 +1390,23 @@ public class LiveViewerWindow {
                     if (stageControlPanel != null) {
                         stageControlPanel.refreshPositions();
                     }
+                    // Streaming AF success leaves the stage at the chosen focus
+                    // plane. Record it on the Z-bar tic history. Read Z off the
+                    // FX thread to avoid blocking a socket call here.
+                    if (outcome == RefineFocusController.Outcome.SUCCESS) {
+                        Thread t = new Thread(
+                                () -> {
+                                    try {
+                                        double z = MicroscopeController.getInstance()
+                                                .getStageZFast();
+                                        AfHistoryService.add(z);
+                                    } catch (Exception ignored) {
+                                    }
+                                },
+                                "LiveViewer-AfHistory");
+                        t.setDaemon(true);
+                        t.start();
+                    }
                     autofocusButton.setText("Autofocus");
                     autofocusButton.setStyle("");
                     autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
@@ -1504,6 +1529,20 @@ public class LiveViewerWindow {
                     Platform.runLater(() -> histogramView.updateHistogram(frame));
                 } catch (Exception e) {
                     logger.debug("Histogram update failed: {}", e.getMessage());
+                }
+            });
+
+            // Focus-metric trace: compute per-frame Brenner gradient, pair with
+            // the current polled Z, and push to the ZBarPanel's trace model.
+            // Cleared on > 1 um XY moves by StageControlPanel.onPositionChanged.
+            histExec.submit(() -> {
+                try {
+                    if (stageControlPanel == null || stageControlPanel.getZBarPanel() == null) return;
+                    double metric = qupath.ext.qpsc.utilities.FocusMetricCalculator.brennerGradient(frame);
+                    double z = MicroscopeController.getInstance().getStageZFast();
+                    stageControlPanel.getZBarPanel().getFocusTrace().addSample(z, metric);
+                } catch (Exception e) {
+                    logger.debug("Focus-metric update failed: {}", e.getMessage());
                 }
             });
 

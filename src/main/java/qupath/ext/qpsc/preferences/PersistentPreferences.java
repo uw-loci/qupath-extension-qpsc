@@ -1929,4 +1929,52 @@ public class PersistentPreferences {
             DYNAMIC_PREFS.put(key, value);
         }
     }
+
+    // ================== Z-BAR PANEL (LIVE VIEWER) ==================
+    // Per-scanner ranges for the two-bar Z movement widget in the Live Viewer's
+    // Navigate tab. Stored via the dynamic-prefs API so the scanner key can be
+    // appended at runtime.
+
+    /**
+     * Returns the saved coarse-bar range for the given scanner as {min, max} in
+     * microns, or null if no override has been saved (caller should fall back
+     * to the full stage Z limits).
+     */
+    public static double[] getZBarCoarseRange(String scanner) {
+        if (scanner == null || scanner.isEmpty()) return null;
+        String raw = DYNAMIC_PREFS.get("ZBarCoarseRange:" + scanner, null);
+        if (raw == null) return null;
+        String[] parts = raw.split(",");
+        if (parts.length != 2) return null;
+        try {
+            return new double[] {Double.parseDouble(parts[0]), Double.parseDouble(parts[1])};
+        } catch (NumberFormatException ex) {
+            return null;
+        }
+    }
+
+    public static void setZBarCoarseRange(String scanner, double min, double max) {
+        if (scanner == null || scanner.isEmpty()) return;
+        DYNAMIC_PREFS.put("ZBarCoarseRange:" + scanner, min + "," + max);
+    }
+
+    /**
+     * Returns the saved fine-bar half-width (microns) for the given scanner,
+     * or the supplied default if none has been saved.
+     */
+    public static double getZBarFineHalfWidth(String scanner, double defaultUm) {
+        if (scanner == null || scanner.isEmpty()) return defaultUm;
+        String raw = DYNAMIC_PREFS.get("ZBarFineHalfWidth:" + scanner, null);
+        if (raw == null) return defaultUm;
+        try {
+            return Double.parseDouble(raw);
+        } catch (NumberFormatException ex) {
+            return defaultUm;
+        }
+    }
+
+    public static void setZBarFineHalfWidth(String scanner, double halfWidthUm) {
+        if (scanner == null || scanner.isEmpty()) return;
+        DYNAMIC_PREFS.put("ZBarFineHalfWidth:" + scanner, Double.toString(halfWidthUm));
+    }
 }

@@ -15,6 +15,10 @@ import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
+import javafx.beans.binding.Bindings;
+import javafx.beans.binding.BooleanBinding;
+import javafx.beans.property.ReadOnlyBooleanProperty;
+import javafx.beans.property.SimpleBooleanProperty;
 import javafx.collections.FXCollections;
 import javafx.geometry.HPos;
 import javafx.geometry.Insets;
@@ -160,6 +164,20 @@ public class StageControlPanel extends VBox {
 
     // Position synchronization listener
     private PropertyChangeListener positionListener;
+
+    // Z bar widget + Live View gating
+    private ZBarPanel zBarPanel;
+    private Tab navigateTab;
+    private Label movementDisabledBanner;
+    private javafx.scene.shape.Circle navigateTabIndicator;
+    private ReadOnlyBooleanProperty liveActiveProperty;
+    private final SimpleBooleanProperty internalLiveActive = new SimpleBooleanProperty(true);
+    // Last XY position at which the focus trace was sampled. The trace is
+    // cleared once the user moves more than FOCUS_TRACE_XY_RESET_UM from this
+    // reference, so the trace stays valid for one site at a time.
+    private double lastFocusXyX = Double.NaN;
+    private double lastFocusXyY = Double.NaN;
+    private static final double FOCUS_TRACE_XY_RESET_UM = 1.0;
 
     // Z scroll streaming state -- see handleZScroll / zScrollWorkerLoop.
     /** Standard JavaFX deltaY units per mouse wheel notch on Windows. */
@@ -495,9 +513,24 @@ public class StageControlPanel extends VBox {
         rField.setOnAction(e -> handleMoveR());
 
         // ============ TAB 1: NAVIGATE (Arrows, joystick, step controls, position, centroid) ============
-        Tab navigateTab = new Tab("Navigate");
+        navigateTab = new Tab("Navigate");
+        // Small orange dot on the tab header when Live View is off, signalling
+        // movement is disabled. Visibility is bound in setLiveActiveProperty.
+        navigateTabIndicator = new javafx.scene.shape.Circle(4, javafx.scene.paint.Color.ORANGE);
+        navigateTabIndicator.setStroke(javafx.scene.paint.Color.DARKORANGE);
+        navigateTabIndicator.setVisible(false);
+        navigateTab.setGraphic(navigateTabIndicator);
         VBox navigateContent = new VBox(8);
         navigateContent.setPadding(new Insets(8));
+
+        // Banner shown when Live View is off: movement is gated.
+        movementDisabledBanner = new Label("Movement disabled - Live View is Off");
+        movementDisabledBanner.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #b35900;"
+                + " -fx-background-color: #fff3e0; -fx-padding: 4 8 4 8;"
+                + " -fx-border-color: #ff9933; -fx-border-width: 1;");
+        movementDisabledBanner.setMaxWidth(Double.MAX_VALUE);
+        movementDisabledBanner.setVisible(false);
+        movementDisabledBanner.setManaged(false);
 
         // Step size settings with tooltips
         Label stepLabel = new Label("Step:");
@@ -691,9 +724,25 @@ public class StageControlPanel extends VBox {
         HBox calibrateRow = new HBox(6, calibrateDirectionsBtn);
         calibrateRow.setAlignment(Pos.CENTER_LEFT);
 
+        // Z bar widget (fine + coarse vertical bars, focus-metric trace, Mark Z)
+        String scannerKey = PersistentPreferences.getSelectedScanner();
+        BooleanBinding movementDisabled =
+                Bindings.createBooleanBinding(() -> !internalLiveActive.get(), internalLiveActive);
+        zBarPanel = new ZBarPanel(
+                scannerKey,
+                () -> mgr.getStageLimit("z", "low"),
+                () -> mgr.getStageLimit("z", "high"),
+                this::streamZTo,
+                this::markZ,
+                movementDisabled);
+
+        Label zBarLabel = new Label("Z Focus");
+        zBarLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
+
         navigateContent
                 .getChildren()
                 .addAll(
+                        movementDisabledBanner,
                         stepRow1,
                         stepRow2,
                         fovInfoLabel,
@@ -701,6 +750,9 @@ public class StageControlPanel extends VBox {
                         navSection,
                         navXyStatus,
                         calibrateRow,
+                        new Separator(),
+                        zBarLabel,
+                        zBarPanel,
                         new Separator(),
                         moveToLabel,
                         moveXyRow,
@@ -3128,6 +3180,94 @@ public class StageControlPanel extends VBox {
                     .imageDataProperty()
                     .addListener((obs, oldData, newData) -> Platform.runLater(this::initializeCentroidButton));
         }
+
+        // ---- Live View gating: bind movement-control disable state to !liveActive ----
+        BooleanBinding moveDisabled = internalLiveActive.not();
+        upBtn.disableProperty().bind(moveDisabled);
+        downBtn.disableProperty().bind(moveDisabled);
+        leftBtn.disableProperty().bind(moveDisabled);
+        rightBtn.disableProperty().bind(moveDisabled);
+        upBtn2x.disableProperty().bind(moveDisabled);
+        downBtn2x.disableProperty().bind(moveDisabled);
+        leftBtn2x.disableProperty().bind(moveDisabled);
+        rightBtn2x.disableProperty().bind(moveDisabled);
+        joystick.disableProperty().bind(moveDisabled);
+        goToCentroidBtn.disableProperty().bind(moveDisabled);
+        movementDisabledBanner.visibleProperty().bind(moveDisabled);
+        movementDisabledBanner.managedProperty().bind(moveDisabled);
+        navigateTabIndicator.visibleProperty().bind(moveDisabled);
+    }
+
+    /**
+     * Mirror an external live-active property (e.g. {@link LiveViewerWindow})
+     * into this panel so its movement-control bindings and the focus-trace
+     * reset logic respond reactively.
+     */
+    public void setLiveActiveProperty(ReadOnlyBooleanProperty external) {
+        this.liveActiveProperty = external;
+        if (external == null) {
+            internalLiveActive.set(true);
+            return;
+        }
+        internalLiveActive.set(external.get());
+        external.addListener((obs, oldV, newV) -> internalLiveActive.set(newV != null && newV));
+    }
+
+    /**
+     * Feed a target Z into the existing scroll-worker stream so the Z bars and
+     * any other UI surface can drive the stage with the same continuous-ramp
+     * semantics as the mouse wheel. Idempotent end-of-gesture handling is
+     * provided by {@link #zScrollWorkerLoop}.
+     */
+    void streamZTo(double target) {
+        if (isAcquisitionBlocked()) return;
+        if (!internalLiveActive.get()) return;
+        if (!mgr.isWithinStageBounds(target)) {
+            Platform.runLater(() -> zStatus.setText("Z move out of bounds"));
+            return;
+        }
+        zGestureTarget = target;
+        lastScrollEventMs = System.currentTimeMillis();
+        zScrollInFlight = true;
+        Platform.runLater(() -> {
+            zField.setText(String.format("%.2f", target));
+            zStatus.setText("Moving...");
+        });
+        boolean startWorker;
+        synchronized (zWorkerMutex) {
+            startWorker = !zWorkerRunning;
+            if (startWorker) zWorkerRunning = true;
+        }
+        if (startWorker) {
+            Thread worker = new Thread(this::zScrollWorkerLoop, "StageControl-ZScroll");
+            worker.setDaemon(true);
+            worker.start();
+        }
+    }
+
+    /**
+     * Push the current polled Z onto the AF history ring buffer as a manual
+     * tic. Wired into the Mark Z button on the {@link ZBarPanel}; intentionally
+     * stays enabled when Live View is off because it does not move the stage.
+     */
+    void markZ() {
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        double z = MicroscopeController.getInstance().getStageZFast();
+                        AfHistoryService.add(z);
+                    } catch (Exception ex) {
+                        logger.warn("Mark Z failed: {}", ex.getMessage());
+                    }
+                },
+                "StageControl-MarkZ");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Accessor used by LiveViewerWindow to push focus samples into the bar trace. */
+    public ZBarPanel getZBarPanel() {
+        return zBarPanel;
     }
 
     private void initializeFromHardware() {
@@ -3194,12 +3334,14 @@ public class StageControlPanel extends VBox {
                 // Update joystick tracking
                 double[] current = joystickPosition.get();
                 joystickPosition.set(new double[] {newVal, current[1]});
+                checkFocusTraceXyReset(newVal, current[1]);
             }
             case StagePositionManager.PROP_POS_Y -> {
                 yField.setText(String.format("%.2f", newVal));
                 // Update joystick tracking
                 double[] current = joystickPosition.get();
                 joystickPosition.set(new double[] {current[0], newVal});
+                checkFocusTraceXyReset(current[0], newVal);
             }
             case StagePositionManager.PROP_POS_Z -> {
                 // Suppress poller updates while a scroll gesture is in-flight
@@ -3208,8 +3350,32 @@ public class StageControlPanel extends VBox {
                 if (!zScrollInFlight) {
                     zField.setText(String.format("%.2f", newVal));
                 }
+                if (zBarPanel != null) {
+                    zBarPanel.setCurrentZ(newVal);
+                }
             }
             case StagePositionManager.PROP_POS_R -> rField.setText(String.format("%.2f", newVal));
+        }
+    }
+
+    /**
+     * Clear the Z-bar focus trace if the stage has moved more than
+     * {@link #FOCUS_TRACE_XY_RESET_UM} from the last reference point. The trace
+     * is location-specific; a meaningful XY move invalidates the prior curve.
+     */
+    private void checkFocusTraceXyReset(double x, double y) {
+        if (zBarPanel == null) return;
+        if (Double.isNaN(lastFocusXyX) || Double.isNaN(lastFocusXyY)) {
+            lastFocusXyX = x;
+            lastFocusXyY = y;
+            return;
+        }
+        double dx = x - lastFocusXyX;
+        double dy = y - lastFocusXyY;
+        if (Math.sqrt(dx * dx + dy * dy) > FOCUS_TRACE_XY_RESET_UM) {
+            zBarPanel.getFocusTrace().clear();
+            lastFocusXyX = x;
+            lastFocusXyY = y;
         }
     }
 
@@ -3282,8 +3448,22 @@ public class StageControlPanel extends VBox {
         return false;
     }
 
+    /**
+     * Returns true when Live View is off — the policy is that the user must be
+     * able to see the stage before any movement is dispatched. The Navigate
+     * tab's banner and orange tab-header dot signal this state visibly; this
+     * gate is defense-in-depth for entry points that don't route through a
+     * disabled button (typed-target Enter, scroll wheel, keyboard shortcuts).
+     */
+    private boolean isMovementGatedByLiveView() {
+        if (internalLiveActive.get()) return false;
+        Platform.runLater(() -> zStatus.setText("Live View is Off"));
+        return true;
+    }
+
     private void handleMoveXY() {
         if (isAcquisitionBlocked()) return;
+        if (isMovementGatedByLiveView()) return;
         try {
             double x = Double.parseDouble(xField.getText().replace(",", ""));
             double y = Double.parseDouble(yField.getText().replace(",", ""));
@@ -3324,6 +3504,7 @@ public class StageControlPanel extends VBox {
 
     private void handleMoveZ() {
         if (isAcquisitionBlocked()) return;
+        if (isMovementGatedByLiveView()) return;
         try {
             double z = Double.parseDouble(zField.getText().replace(",", ""));
 
@@ -3362,6 +3543,7 @@ public class StageControlPanel extends VBox {
 
     private void handleMoveR() {
         if (isAcquisitionBlocked()) return;
+        if (isMovementGatedByLiveView()) return;
         try {
             double r = Double.parseDouble(rField.getText().replace(",", ""));
 
@@ -3410,6 +3592,10 @@ public class StageControlPanel extends VBox {
      */
     private void handleZScroll(ScrollEvent event, TextField zStepField) {
         if (isAcquisitionBlocked()) {
+            event.consume();
+            return;
+        }
+        if (isMovementGatedByLiveView()) {
             event.consume();
             return;
         }
@@ -3543,6 +3729,7 @@ public class StageControlPanel extends VBox {
 
     private void handleArrowMove(int xDir, int yDir) {
         if (isAcquisitionBlocked()) return;
+        if (isMovementGatedByLiveView()) return;
         try {
             double step = Double.parseDouble(xyStepField.getText().replace(",", ""));
             double currentX = Double.parseDouble(xField.getText().replace(",", ""));
@@ -3605,6 +3792,7 @@ public class StageControlPanel extends VBox {
 
     private void handleJoystickMove(double deltaX, double deltaY) {
         if (isAcquisitionBlocked()) return;
+        if (isMovementGatedByLiveView()) return;
         try {
             double[] current = joystickPosition.get();
             double currentX = current[0];
@@ -3758,6 +3946,7 @@ public class StageControlPanel extends VBox {
 
     private void handleGoToCentroid() {
         if (isAcquisitionBlocked()) return;
+        if (isMovementGatedByLiveView()) return;
         QuPathGUI gui = QuPathGUI.getInstance();
 
         if (gui == null || gui.getImageData() == null) {
