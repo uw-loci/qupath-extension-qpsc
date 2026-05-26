@@ -724,7 +724,8 @@ public class WhiteBalanceDialog {
             if (configPath != null && !configPath.isEmpty()) {
                 MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
                 // Use the central modality state; default to "ppm" when empty.
-                String modality = qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+                String modality =
+                        qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
                 if (modality == null || modality.isEmpty()) {
                     modality = "ppm";
                 }
