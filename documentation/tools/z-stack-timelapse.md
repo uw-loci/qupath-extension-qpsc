@@ -22,7 +22,7 @@ At the top of the dialog, a **Setup** panel configures the microscope hardware s
 
 | Control | Description |
 |---------|-------------|
-| **Modality** | Select the imaging modality (e.g., Brightfield, PPM, Widefield IF) based on your microscope configuration |
+| **Modality** | Select the imaging modality (e.g., Brightfield, PPM, Widefield IF) based on your microscope configuration. **Modality changes sync across all open dialogs** (Acquisition Wizard, Live Viewer Camera tab, Background Collection, Sample Setup, etc.), so selecting a modality here updates all other open dialogs' selectors automatically and drives the hardware via APPLYPR (filter cube, lamp, condenser, etc.). |
 | **Profile** | Select the acquisition profile, which sets objective, detector, illumination, exposure, and filters for the selected modality |
 | **Channel** (when applicable) | If the modality supports multiple channels, select which channel to acquire. Channel row is hidden for single-channel modalities |
 

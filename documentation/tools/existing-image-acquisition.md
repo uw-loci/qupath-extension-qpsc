@@ -93,7 +93,7 @@ Select All / Deselect All buttons are available for convenience.
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| Modality | ComboBox | From config | Imaging modality (e.g., ppm_20x, bf_10x) |
+| Modality | ComboBox | From config | Imaging modality (e.g., ppm_20x, bf_10x). **Modality changes sync across all open dialogs** (Acquisition Wizard, Live Viewer Camera tab, Background Collection, Sample Setup, etc.), so selecting a modality here updates all other open dialogs' selectors automatically and drives the hardware via APPLYPR (filter cube, lamp, condenser, etc.). |
 | Objective | ComboBox | From config | Objective lens for this modality |
 | Detector | ComboBox | From config | Camera/detector combination |
 | Angle Overrides | Various | - | Modality-specific angle controls (if applicable) |

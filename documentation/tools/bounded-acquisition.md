@@ -29,7 +29,7 @@ Acquire high-resolution images by defining stage coordinates directly. This work
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| Modality | ComboBox | From config | Imaging modality (e.g., ppm_20x, bf_10x) |
+| Modality | ComboBox | From config | Imaging modality (e.g., ppm_20x, bf_10x). **Modality changes sync across all open dialogs** (Acquisition Wizard, Live Viewer Camera tab, Background Collection, Sample Setup, etc.), so selecting a modality here updates all other open dialogs' selectors automatically and drives the hardware via APPLYPR (filter cube, lamp, condenser, etc.). |
 | Objective | ComboBox | From config | Objective lens. List updates based on selected modality. |
 | Detector | ComboBox | From config | Camera/detector. List updates based on selected objective. |
 
