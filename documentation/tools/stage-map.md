@@ -35,6 +35,7 @@ The Stage Map displays several visual indicators:
 | Apply Flips | CheckBox | From config | Flip the Stage Map to match the Live Viewer orientation. Use when the map appears mirrored relative to the Live Viewer. |
 | Overlay Macro | CheckBox | Auto | Overlay the current macro image on the map display. Automatically enabled when a macro image and alignment transform are detected. Requires a Preset to be selected. Also updates when switching between images in the project. |
 | Show Acquisitions | CheckBox | Off | Display an overlay showing the stage bounds of all acquired images in the project. Searches for per-slide alignments (hand-saved or auto-registered from stitched acquisitions) and draws colored rectangles for each acquisition found. Useful for understanding what regions have been previously imaged. |
+| Images | MenuButton | All visible | Dropdown list showing each loaded acquisition image as a checkbox. Toggle individual images on/off to control which ones appear in the acquisitions overlay. Right-click the button for **Select All** / **Select None** shortcuts. Only enabled when acquisitions are loaded. |
 
 ## Workflow
 
@@ -64,6 +65,7 @@ No persistent output. The Stage Map provides a real-time visual display showing:
 - Use this tool alongside the Live Viewer to understand spatial context when navigating
 - If the current position indicator seems wrong, verify stage communication via [Communication Settings](server-connection.md)
 - **Show Acquisitions not displaying coverage?** Check the console log when toggling the checkbox. Acquired images may not display if alignment files are missing or if the project used annotation-based acquisition without alignment registration. The tool searches for three types of alignment records: saved JSON files, auto-registered sub-frame alignments from stitched outputs, and entry-level stage metadata. If none are found, no overlay is drawn.
+- **Too many acquisitions on the overlay?** Use the **Images** dropdown to toggle visibility of individual acquisitions, or right-click the button for quick **Select All / Select None** to manage which images are displayed.
 
 ## See Also
 

@@ -83,6 +83,14 @@ Select which annotation/detection classes to propagate. The class list refreshes
 
 Use the "Refresh Classes" button to rescan after changing image or direction selections.
 
+### Skip Partially-Contained Objects (Forward Only)
+
+When enabled, this option restricts forward propagation to annotations whose transformed bounding box lies **entirely within** the sub-image. Annotations that merely overlap the sub-image are skipped instead of being clipped to its bounds.
+
+| Option | Description |
+|--------|-------------|
+| Skip annotations that don't fit fully inside the sub-image | **Forward propagation only.** When checked, only annotations whose entire bounding box fits within the target sub-image are copied. Annotations that partially overlap the sub-image are dropped. Use this when sub-acquisitions target specific objects and you want to exclude nearby annotations that would otherwise be clipped. This option is disabled when back-propagation is selected. |
+
 ## Workflow
 
 ### Forward Propagation (Typical Use)
