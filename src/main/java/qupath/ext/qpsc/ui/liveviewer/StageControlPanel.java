@@ -169,7 +169,6 @@ public class StageControlPanel extends VBox {
     private ZBarPanel zBarPanel;
     private Tab navigateTab;
     private Label movementDisabledBanner;
-    private javafx.scene.shape.Circle navigateTabIndicator;
     private ReadOnlyBooleanProperty liveActiveProperty;
     private final SimpleBooleanProperty internalLiveActive = new SimpleBooleanProperty(true);
     // Drives the Go-to-Centroid disable state independently of the Live View
@@ -177,6 +176,12 @@ public class StageControlPanel extends VBox {
     // availability; the button's disableProperty is bound to the OR of this
     // and the movement gate, so direct setDisable() is forbidden.
     private final SimpleBooleanProperty centroidUnavailable = new SimpleBooleanProperty(false);
+    // True when the QuPath selection is not a legal target for Go-to-Centroid
+    // (no selection, or selection has no ROI). Updated by a hierarchy
+    // selection listener.
+    private final SimpleBooleanProperty selectionNotLegal = new SimpleBooleanProperty(true);
+    private qupath.lib.objects.hierarchy.PathObjectHierarchy attachedHierarchy;
+    private qupath.lib.objects.hierarchy.events.PathObjectSelectionListener centroidSelectionListener;
     // Last XY position at which the focus trace was sampled. The trace is
     // cleared once the user moves more than FOCUS_TRACE_XY_RESET_UM from this
     // reference, so the trace stays valid for one site at a time.
@@ -514,12 +519,10 @@ public class StageControlPanel extends VBox {
 
         // ============ TAB 1: NAVIGATE (Arrows, joystick, step controls, position, centroid) ============
         navigateTab = new Tab("Navigate");
-        // Small orange dot on the tab header when Live View is off, signalling
-        // movement is disabled. Visibility is bound in setLiveActiveProperty.
-        navigateTabIndicator = new javafx.scene.shape.Circle(4, javafx.scene.paint.Color.ORANGE);
-        navigateTabIndicator.setStroke(javafx.scene.paint.Color.DARKORANGE);
-        navigateTabIndicator.setVisible(false);
-        navigateTab.setGraphic(navigateTabIndicator);
+        // When Live View is off, the tab text turns orange so the user can see
+        // the gate from any tab. The in-tab banner repeats the message in full.
+        // (Previously this used an orange dot graphic, but that pushed the tab
+        // label off-center; styling the text keeps it centered.)
         VBox navigateContent = new VBox(8);
         navigateContent.setPadding(new Insets(8));
 
@@ -548,8 +551,8 @@ public class StageControlPanel extends VBox {
         HBox valueRow = new HBox(4, xyStepField, valueUmLabel);
         valueRow.setAlignment(Pos.CENTER_LEFT);
 
-        Button refreshFovBtn = new Button("R");
-        refreshFovBtn.setStyle("-fx-font-size: 10px; -fx-min-width: 22px; -fx-min-height: 22px; -fx-padding: 1;");
+        Button refreshFovBtn = new Button("Refresh FoV");
+        refreshFovBtn.setStyle("-fx-font-size: 10px;");
         Tooltip.install(refreshFovBtn, new Tooltip(res.getString("stageMovement.fov.refreshTooltip")));
         refreshFovBtn.setOnAction(e -> {
             queryFov();
@@ -762,12 +765,25 @@ public class StageControlPanel extends VBox {
         Label zBarLabel = new Label("Z Focus");
         zBarLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
 
+        // Layout order:
+        //  1. Banner (visible only when Live View is off)
+        //  2. Step controls (FoV combo + Refresh + help)
+        //  3. Sample Movement row
+        //  4. Go to Centroid section -- moved up so users see it first; greyed
+        //     out when no legal annotation is selected.
+        //  5. FoV info text -- pushed below centroidSection so the FoV combo
+        //     dropdown (which expands downward) does not obstruct it.
+        //  6. Navigation grid (joystick / arrows / WASD hint)
+        //  7. Calibrate Directions button
+        //  8. Z Focus widget
+        //  9. Move to Position (typed X / Y / Z / R targets)
         navigateContent
                 .getChildren()
                 .addAll(
                         movementDisabledBanner,
                         stepRow1,
                         stepRow2,
+                        centroidSection,
                         fovInfoLabel,
                         new Separator(),
                         navSection,
@@ -783,9 +799,7 @@ public class StageControlPanel extends VBox {
                         moveZRow,
                         zStatus,
                         moveRRow,
-                        rStatus,
-                        new Separator(),
-                        centroidSection);
+                        rStatus);
         navigateTab.setContent(navigateContent);
 
         // ============ TAB 2: SAVED POINTS (was Tab 3) ============
@@ -3195,13 +3209,19 @@ public class StageControlPanel extends VBox {
         // Go to centroid button
         goToCentroidBtn.setOnAction(e -> handleGoToCentroid());
 
-        // Initialize centroid button state and re-evaluate when image changes
+        // Initialize centroid button state and re-evaluate when image changes.
+        // Image change also re-attaches the QuPath selection listener so the
+        // "legal selection" gate tracks the new image's hierarchy.
         initializeCentroidButton();
+        attachCentroidSelectionListener();
         QuPathGUI guiRef = QuPathGUI.getInstance();
         if (guiRef != null && guiRef.getViewer() != null) {
             guiRef.getViewer()
                     .imageDataProperty()
-                    .addListener((obs, oldData, newData) -> Platform.runLater(this::initializeCentroidButton));
+                    .addListener((obs, oldData, newData) -> Platform.runLater(() -> {
+                        initializeCentroidButton();
+                        attachCentroidSelectionListener();
+                    }));
         }
 
         // ---- Live View gating: bind movement-control disable state to !liveActive ----
@@ -3215,13 +3235,67 @@ public class StageControlPanel extends VBox {
         leftBtn2x.disableProperty().bind(moveDisabled);
         rightBtn2x.disableProperty().bind(moveDisabled);
         joystick.disableProperty().bind(moveDisabled);
-        // Go-to-Centroid stays disabled when either movement is gated OR no
-        // valid alignment / selected object exists (the latter is set by
-        // initializeCentroidButton via centroidUnavailable).
-        goToCentroidBtn.disableProperty().bind(moveDisabled.or(centroidUnavailable));
+        // Go-to-Centroid stays disabled when movement is gated OR no alignment
+        // is available OR no legal annotation is selected. The three pieces
+        // compose so each gate updates independently.
+        goToCentroidBtn
+                .disableProperty()
+                .bind(moveDisabled.or(centroidUnavailable).or(selectionNotLegal));
         movementDisabledBanner.visibleProperty().bind(moveDisabled);
         movementDisabledBanner.managedProperty().bind(moveDisabled);
-        navigateTabIndicator.visibleProperty().bind(moveDisabled);
+
+        // Navigate tab title turns orange when Live View is off so the gated
+        // state is visible from any tab. Tab.setStyle is the cheapest way to
+        // alter the rendered header without a graphic that would push the text
+        // off-center.
+        Runnable applyTabStyle = () -> {
+            if (internalLiveActive.get()) {
+                navigateTab.setStyle("");
+            } else {
+                navigateTab.setStyle("-fx-text-base-color: #b35900; -fx-font-weight: bold;");
+            }
+        };
+        applyTabStyle.run();
+        internalLiveActive.addListener((obs, oldV, newV) -> applyTabStyle.run());
+    }
+
+    /**
+     * Attach (or re-attach on image change) a selection listener that drives
+     * {@link #selectionNotLegal}. A "legal" selection is a PathObject with a
+     * non-null ROI -- we need the ROI for {@code getCentroidX/Y}.
+     */
+    private void attachCentroidSelectionListener() {
+        QuPathGUI gui = QuPathGUI.getInstance();
+        qupath.lib.objects.hierarchy.PathObjectHierarchy h = (gui == null || gui.getImageData() == null)
+                ? null
+                : gui.getImageData().getHierarchy();
+        if (h == attachedHierarchy) {
+            evaluateLegalSelection();
+            return;
+        }
+        if (attachedHierarchy != null && centroidSelectionListener != null) {
+            attachedHierarchy.getSelectionModel().removePathObjectSelectionListener(centroidSelectionListener);
+        }
+        attachedHierarchy = h;
+        if (h == null) {
+            selectionNotLegal.set(true);
+            return;
+        }
+        if (centroidSelectionListener == null) {
+            centroidSelectionListener = (selected, prev, all) -> Platform.runLater(this::evaluateLegalSelection);
+        }
+        h.getSelectionModel().addPathObjectSelectionListener(centroidSelectionListener);
+        evaluateLegalSelection();
+    }
+
+    private void evaluateLegalSelection() {
+        QuPathGUI gui = QuPathGUI.getInstance();
+        if (gui == null || gui.getImageData() == null) {
+            selectionNotLegal.set(true);
+            return;
+        }
+        PathObject sel = gui.getImageData().getHierarchy().getSelectionModel().getSelectedObject();
+        selectionNotLegal.set(sel == null || sel.getROI() == null);
     }
 
     /**
