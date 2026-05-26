@@ -341,10 +341,15 @@ public class StageMapWindow {
 
         sourceComboBox = new ComboBox<>();
         sourceComboBox.setPrefWidth(180);
-        sourceComboBox.setTooltip(new Tooltip("Source scanner that produced the macro image.\n"
-                + "Selecting one resolves to the most recent alignment\n"
-                + "preset for (source -> this microscope) and uses it for\n"
-                + "overlay placement and flip orientation."));
+        sourceComboBox.setTooltip(new Tooltip("Scanner whose macro image to overlay on the Stage Map.\n"
+                + "Auto-syncs to the macro-owning ancestor's source on open\n"
+                + "(e.g. a PPM sub of an Ocus40-macro parent will resolve to\n"
+                + "Ocus40 so the parent's macro is shown).\n\n"
+                + "Picking a value uses the (source -> this microscope) preset\n"
+                + "for macro placement and the Apply Flips macro component.\n\n"
+                + "This dropdown drives macro display only; it does NOT relabel\n"
+                + "the open entry's source_microscope when that metadata is\n"
+                + "already set by the acquisition workflow."));
         sourceComboBox.setOnAction(e -> {
             if (suppressSourceSelectionWrite) {
                 return;
@@ -1052,11 +1057,20 @@ public class StageMapWindow {
     /**
      * Picks the source to show on dropdown init. Priority:
      * <ol>
-     *   <li>{@code source_microscope} on the currently-open project entry</li>
+     *   <li>The macro-owning ancestor's {@code source_microscope} (walks
+     *       {@code base_image} then {@code original_image_id} via
+     *       {@link #resolveMacroSourceForEntry}); falls back to the open
+     *       entry's own {@code source_microscope}</li>
      *   <li>The active microscope (same-scope identity is the natural default)</li>
      *   <li>The persistent default ({@link PersistentPreferences#getSelectedScanner()})</li>
      *   <li>First entry in {@code sources}</li>
      * </ol>
+     *
+     * <p>The ancestor walk matters for derived entries (e.g. a PPM sub-image
+     * acquired against an Ocus40-macro parent): the open entry's own
+     * {@code source_microscope} is PPM, but the macro overlay that should be
+     * shown is the Ocus40 parent's. Mirrors the strategy already used by
+     * {@link #getSampleNameForCurrentImage}.
      */
     private String pickInitialSource(List<String> sources) {
         try {
@@ -1066,7 +1080,7 @@ public class StageMapWindow {
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
                 if (entry != null) {
-                    String fromEntry = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+                    String fromEntry = resolveMacroSourceForEntry(project, entry);
                     if (fromEntry != null && sources.contains(fromEntry)) {
                         return fromEntry;
                     }
@@ -1087,6 +1101,69 @@ public class StageMapWindow {
             return fromPref;
         }
         return sources.isEmpty() ? null : sources.get(0);
+    }
+
+    /**
+     * Resolve which scanner's macro should be displayed for the given entry.
+     * For derived entries (sub-acquisitions, flipped siblings), walks up to
+     * the macro-owning ancestor via {@code base_image} then
+     * {@code original_image_id}, returning that ancestor's
+     * {@code source_microscope}. If no ancestor chain resolves, returns the
+     * entry's own {@code source_microscope}. May return null.
+     *
+     * <p>Note: the result is independent of the open entry's own
+     * {@code source_microscope} when the entry is derived from a different-
+     * scanner parent (e.g. PPM sub of an Ocus40 macro). Callers must not
+     * write the returned value back as the entry's {@code source_microscope}
+     * -- that metadata reflects acquisition origin, not display intent.
+     */
+    private String resolveMacroSourceForEntry(Project<BufferedImage> project, ProjectImageEntry<BufferedImage> entry) {
+        if (project == null || entry == null) return null;
+        // base_image: stable name reference written by acquisition workflows.
+        // The base entry is identified by image name match.
+        String baseImage = ImageMetadataManager.getBaseImage(entry);
+        if (baseImage != null && !baseImage.isEmpty()) {
+            for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+                if (baseImage.equals(e.getImageName()) || baseImage.equals(stripExt(e.getImageName()))) {
+                    String src = e.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+                    if (src != null && !src.isEmpty()) {
+                        logger.info(
+                                "resolveMacroSourceForEntry: entry='{}' -> base_image='{}' -> source_microscope='{}'",
+                                entry.getImageName(),
+                                baseImage,
+                                src);
+                        return src;
+                    }
+                    break;
+                }
+            }
+        }
+        // original_image_id: direct parent for flipped siblings or other
+        // single-step derivations. Resolved by entry ID, not name.
+        String originalId = ImageMetadataManager.getOriginalImageId(entry);
+        if (originalId != null && !originalId.isEmpty()) {
+            for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+                if (originalId.equals(e.getID())) {
+                    String src = e.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+                    if (src != null && !src.isEmpty()) {
+                        logger.info(
+                                "resolveMacroSourceForEntry: entry='{}' -> original_image_id='{}' -> source_microscope='{}'",
+                                entry.getImageName(),
+                                originalId,
+                                src);
+                        return src;
+                    }
+                    break;
+                }
+            }
+        }
+        // Fallback: the entry's own source_microscope (covers the
+        // base-entry case where no ancestor chain exists).
+        return entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+    }
+
+    private static String stripExt(String name) {
+        return name == null ? null : qupath.lib.common.GeneralTools.stripExtension(name);
     }
 
     /**
@@ -1129,9 +1206,29 @@ public class StageMapWindow {
                     Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                     ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
                     if (entry != null) {
-                        entry.getMetadata().put(ImageMetadataManager.SOURCE_MICROSCOPE, source);
-                        project.syncChanges();
-                        logger.info("Stamped source_microscope='{}' on open entry '{}'", source, entry.getImageName());
+                        String existing = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+                        if (existing == null || existing.isEmpty()) {
+                            // Fresh-import path: no acquisition workflow ever set source_microscope,
+                            // so picking from the dropdown is the user's way of marking origin.
+                            entry.getMetadata().put(ImageMetadataManager.SOURCE_MICROSCOPE, source);
+                            project.syncChanges();
+                            logger.info(
+                                    "Stamped source_microscope='{}' on open entry '{}' (was unset)",
+                                    source,
+                                    entry.getImageName());
+                        } else if (!existing.equals(source)) {
+                            // Entry already has an acquisition-set source_microscope. The dropdown
+                            // is now a macro-display picker (it may resolve to an ancestor scanner
+                            // distinct from the entry's own acquisition origin); we must not
+                            // overwrite that origin from here. Re-stamping caused entry-origin
+                            // corruption in the PPM-sub-of-Ocus40-parent case.
+                            logger.info(
+                                    "Source dropdown -> '{}' on entry '{}' (existing source_microscope='{}'); "
+                                            + "leaving metadata untouched (Stage Map dropdown drives macro display only)",
+                                    source,
+                                    entry.getImageName(),
+                                    existing);
+                        }
                     }
                 }
             } catch (Exception e) {
@@ -1149,10 +1246,16 @@ public class StageMapWindow {
     }
 
     /**
-     * Called when the QuPath viewer image changes. Rule 2: if the new entry has
-     * {@code source_microscope} metadata, sync the dropdown to it (without re-writing).
-     * If it doesn't, and we have a persistent default, stamp the default onto the entry
-     * so subsequent reads are deterministic.
+     * Called when the QuPath viewer image changes. Resolves the macro source
+     * for the new entry (walking ancestors via
+     * {@link #resolveMacroSourceForEntry}) and syncs the dropdown to it.
+     * Does <strong>not</strong> rewrite the entry's own
+     * {@code source_microscope} -- the dropdown's job is to pick the macro
+     * overlay's source, not to relabel acquisition origin.
+     *
+     * <p>If the entry has no {@code source_microscope} at all (fresh import),
+     * stamps the active microscope as a sensible default so downstream
+     * workflows that read {@code source_microscope} don't hard-cancel.
      */
     private void onOpenedImageChanged() {
         if (sourceComboBox == null || sourceComboBox.isDisabled()) return;
@@ -1168,37 +1271,40 @@ public class StageMapWindow {
             ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
             if (entry == null) return;
 
-            String fromEntry = entry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            String resolvedMacroSource = resolveMacroSourceForEntry(project, entry);
             List<String> sources = sourceComboBox.getItems();
             String currentDropdown = sourceComboBox.getValue();
             logger.info(
-                    "onOpenedImageChanged: entry='{}' source_microscope='{}' current dropdown='{}' available={}",
+                    "onOpenedImageChanged: entry='{}' resolved-macro-source='{}' current dropdown='{}' available={}",
                     entry.getImageName(),
-                    fromEntry,
+                    resolvedMacroSource,
                     currentDropdown,
                     sources);
 
-            if (fromEntry != null && !fromEntry.isEmpty()) {
-                if (sources.contains(fromEntry) && !fromEntry.equals(sourceComboBox.getValue())) {
+            if (resolvedMacroSource != null && !resolvedMacroSource.isEmpty()) {
+                if (sources.contains(resolvedMacroSource) && !resolvedMacroSource.equals(sourceComboBox.getValue())) {
                     logger.info(
-                            "onOpenedImageChanged: switching dropdown '{}' -> '{}' due to entry's source_microscope",
+                            "onOpenedImageChanged: switching dropdown '{}' -> '{}' (resolved macro source)",
                             currentDropdown,
-                            fromEntry);
-                    applySourceSelection(fromEntry, /* writeMetadata */ false);
+                            resolvedMacroSource);
+                    // writeMetadata=false: never restamp from the macro-source walk. The
+                    // resolved value may come from a parent on a different scanner; writing
+                    // it back would corrupt the open entry's acquisition origin.
+                    applySourceSelection(resolvedMacroSource, /* writeMetadata */ false);
                 }
                 return;
             }
 
-            // No source on the entry -- default to the active microscope (same-scope
-            // identity). Genuine cross-scope must be set explicitly via the dropdown
-            // or the alignment workflow; auto-defaulting to a persistent external
-            // scanner pref is what produced the Ocus40-stamp-on-OWS3-slide bug.
+            // No source resolved anywhere (no ancestor with source_microscope, no own
+            // source_microscope on the entry). Fresh import case: stamp the active
+            // microscope so downstream workflows have a deterministic value to read.
+            // Auto-defaulting to the persistent external scanner pref is intentionally
+            // avoided -- it produced the Ocus40-stamp-on-OWS3-slide bug.
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
             String activeScope = (mgr != null) ? mgr.getMicroscopeName() : null;
             if (activeScope != null && !activeScope.isEmpty() && sources.contains(activeScope)) {
                 logger.info(
-                        "onOpenedImageChanged: entry has no source_microscope; stamping active microscope '{}'",
-                        activeScope);
+                        "onOpenedImageChanged: no resolved macro source; stamping active microscope '{}'", activeScope);
                 applySourceSelection(activeScope, /* writeMetadata */ true);
             }
         } catch (Exception e) {
