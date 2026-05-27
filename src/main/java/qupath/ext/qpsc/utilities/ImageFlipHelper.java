@@ -135,11 +135,22 @@ public final class ImageFlipHelper {
         // microscope (pixels are already in this scope's frame) needs no flip.
         // Belt-and-suspenders against stale source_microscope tags from before
         // the active-microscope-as-source change.
+        //
+        // Skipped when the caller passed explicit flip flags: the caller is
+        // asserting flip state out-of-band (orientation-dialog answer or
+        // preset flipMacroX/Y), and that intent must win. Otherwise a stale
+        // or auto-stamped source_microscope equal to the active scope
+        // silently nullifies a user-requested flip -- the exact failure mode
+        // hit by Microscope Alignment when StageMapWindow.onOpenedImageChanged
+        // auto-stamps the active microscope on a fresh import that actually
+        // came from a different scanner.
         String entrySource = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
         String entryAcquiredOn = openEntry.getMetadata().get(ImageMetadataManager.ACQUIRED_ON_MICROSCOPE);
         MicroscopeConfigManager activeMgr = MicroscopeConfigManager.getInstanceIfAvailable();
         String activeScopeName = (activeMgr != null) ? activeMgr.getMicroscopeName() : null;
-        if (activeScopeName != null
+        boolean callerSuppliedFlip = (explicitFlipX != null && explicitFlipY != null);
+        if (!callerSuppliedFlip
+                && activeScopeName != null
                 && !activeScopeName.isBlank()
                 && (activeScopeName.equals(entrySource) || activeScopeName.equals(entryAcquiredOn))) {
             logger.info(
