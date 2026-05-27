@@ -4,6 +4,8 @@ This document provides an overview of all utilities available in the QPSC extens
 
 ![QP Scope main menu](images/Docs_mainmenu.png)
 
+The **QP Scope** entry in the menu bar shows a coloured dot so it stands out when multiple QuPath extensions are installed. The dot colour and visibility are configured in `Preferences > QuPath Scope > Show menu colour dot` and `Menu dot colour`.
+
 ---
 
 ## Quick Reference

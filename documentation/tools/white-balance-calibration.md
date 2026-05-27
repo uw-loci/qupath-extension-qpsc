@@ -26,11 +26,39 @@ light source, or optical path has changed.
 
 ## Options
 
+Modes are now grouped into colour-coded collapsible sections so the active mode is unambiguous at a glance. Each mode's header band identifies which calibration regime will be written, and only one section needs to be expanded at a time:
+
+| Section | Header colour | What it produces |
+|---|---|---|
+| **Simple (90 deg)** | Blue | Calibrates R/G/B at 90 deg first, then rotates to each remaining angle and re-calibrates using that result as a seed. ~1-2 min for all angles. |
+| **PPM White Balance (4 Angles)** | Distinct accent | Independent calibration at all 4 angles with per-angle target intensities; most accurate. |
+| **Camera AWB (Manual Setup Required)** | Distinct accent | Camera-side auto-WB; only relevant on detectors that expose AWB hooks. |
+| **Advanced Settings** | Neutral | Black level + gain bounds (see table below). |
+
+**Defocus tip (shown inside the Simple panel):** "When you acquire tiles, select the matching WB mode ('Simple (90 deg)') in the Hardware Configuration section." A short defocus-the-reference recommendation lives there too, so calibration is always run on a slightly-defocused clean area to wash out dust/texture artifacts.
+
+Each mode panel also exposes a **"See White Balance documentation for details"** link that jumps to this page, and the dialog has an **Advice** button (top right) for one-glance reminders about reference-slide cleanliness, exposure ranges, and saturation pitfalls.
+
+Common controls (Shared Settings panel, applies to every mode):
+
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
-| Mode | ComboBox | - | **Simple** (calibrates at 90 deg, then all angles; ~1-2 min) or **PPM** (independent calibration at all 4 angles with per-angle targets; most accurate) |
-| Target Intensity | Spinner | 200 | Target grayscale value to achieve per channel |
 | Tolerance | Spinner | 5 | Acceptable deviation from target intensity |
+| Output Folder | Path | From config | Where calibration files are written |
+| Objective / Detector | Read-only labels | From hardware | Confirms which calibration set will be updated |
+
+Mode-specific controls (Simple example):
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| Base Exposure (ms) | Spinner | 20 | Seed exposure for the 90 deg calibration loop |
+| Target Intensity | Spinner | 180 | Target grayscale value to achieve per channel |
+| Small Angle Target | Spinner | -- | Target intensity for the +/- 7 deg angles |
+
+Advanced panel:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
 | Max Analog Gain | Spinner | - | Maximum allowed analog gain setting |
 | Gain Threshold Ratio | Spinner | - | Ratio at which to start using analog gain |
 | Calibrate Black Level | CheckBox | OFF | Also calibrate black level offsets |

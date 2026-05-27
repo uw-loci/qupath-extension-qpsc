@@ -30,10 +30,14 @@ Acquire high-resolution images by defining stage coordinates directly. This work
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | Modality | ComboBox | From config | Imaging modality (e.g., ppm_20x, bf_10x). **Modality changes sync across all open dialogs** (Acquisition Wizard, Live Viewer Camera tab, Background Collection, Sample Setup, etc.), so selecting a modality here updates all other open dialogs' selectors automatically and drives the hardware via APPLYPR (filter cube, lamp, condenser, etc.). |
+| Quick Start (link, next to Modality) | Hyperlink | - | Opens the Acquisition Wizard pre-focused on the current modality so prerequisite checklists (server, white balance, background, alignment, AF) can be run without leaving this dialog. |
 | Objective | ComboBox | From config | Objective lens. List updates based on selected modality. |
 | Detector | ComboBox | From config | Camera/detector. List updates based on selected objective. |
+| WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Lives under Hardware (rather than the Modality-Specific pane) because the choice is camera-specific and the underlying calibration set is loaded the moment the detector changes. |
 
 Only valid hardware combinations are shown via cascading selection.
+
+A pixel-size warning appears at the top of the dialog if the active objective's microscope-config pixel size disagrees with what MicroManager reports for the currently-mounted optics. Acquiring under a mismatch produces tiles with wrong physical dimensions; resolve via the Setup Wizard or by re-running objective-calibration before continuing.
 
 ### Acquisition Region
 
@@ -63,7 +67,6 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 
 | Option | Type | Description |
 |--------|------|-------------|
-| WB Mode | ComboBox | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. |
 | Angle Overrides | Various | Modality-specific options (e.g., PPM angle overrides) |
 | Save as MicroManager MDA... | Button | Export the current bounding-box acquisition setup as a Micro-Manager MDA (Multi-Dimensional Acquisition) file. Requires sample name, projects folder, hardware configuration, and complete bounding-box coordinates. The MDA file can then be run directly in Micro-Manager to re-acquire the same region. |
 

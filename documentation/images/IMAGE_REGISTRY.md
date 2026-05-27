@@ -8,24 +8,24 @@ This file tracks the relationship between documentation screenshots and the Java
 
 | Screenshot | Java Source File(s) | Last Verified | Status |
 |------------|-------------------|---------------|--------|
-| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-03-25 | NEEDS UPDATE (AF validate button, disable AF checkbox added) |
-| `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-03-25 | NEEDS UPDATE (separate acq/stitch timers) |
-| `Docs_AnnotationAcquisition.png` | `ui/ExistingImageAcquisitionController.java` | -- | NEEDS UPDATE (WB mode moved to hardware section, Quick Start link) |
-| `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | -- | NEEDS UPDATE (Sweep Autofocus section renamed, validate button, human-readable labels) |
+| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-05-27 | OK |
+| `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-05-27 | OK |
+| `Docs_AnnotationAcquisition.png` | `ui/ExistingImageAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | 2026-05-27 | OK |
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
-| `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | -- | NEEDS UPDATE (Advice button, stays open during acq) |
-| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | -- | NEEDS UPDATE (WB mode in hardware section, Quick Start link, pixel size warning) |
-| `Docs_CameraControl.png` | `ui/CameraControlController.java` | -- | CHECK |
-| `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | -- | CHECK |
-| `Docs_CommunicationSettings_Alerts.png` | `ui/ServerConnectionController.java` | -- | CHECK |
-| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | -- | NEEDS UPDATE (WB mode in hardware section, Quick Start link) |
-| `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | -- | NEEDS UPDATE (Camera Settings button removed from toolbar, Show Tiles checkbox, Camera tab added) |
-| `Docs_LiveViewer_Position.png` | `ui/liveviewer/StageControlPanel.java` | -- | NEEDS UPDATE (Position tab merged into Navigate, new Camera tab with WB presets) |
-| `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` | -- | CHECK |
+| `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | OK |
+| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_CameraControl.png` | `ui/CameraControlController.java` | 2026-05-27 | OK |
+| `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
+| `Docs_CommunicationSettings_Alerts.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
+| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | 2026-05-27 | OK |
+| `Docs_LiveViewer_Position.png` | `ui/liveviewer/StageControlPanel.java` | 2026-05-27 | OK |
+| `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` | 2026-05-27 | OK |
 | `Docs_MicroscopeAlignment_SelectSourceMicroscope.png` | `ui/MicroscopeSelectionDialog.java` | -- | CHECK |
-| `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | -- | NEEDS UPDATE (Apply Flips checkbox, auto-overlay) |
-| `Docs_WhiteBalanceCalibration.png` | `ui/WhiteBalanceDialog.java` | -- | NEEDS UPDATE (color-coded mode labels, defocus tip, doc links) |
-| `Docs_mainmenu.png` | `SetupScope.java` | -- | NEEDS UPDATE (menu color dot) |
+| `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | 2026-05-27 | OK |
+| `Docs_WhiteBalanceCalibration.png` | `ui/WhiteBalanceDialog.java` | 2026-05-27 | OK |
+| `Docs_mainmenu.png` | `SetupScope.java` | 2026-05-27 | OK |
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |
 
 ## Missing Screenshots (UI exists but no image)

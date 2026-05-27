@@ -23,7 +23,7 @@ when switching between hardware configurations.
 
 ## Wizard Layout
 
-The wizard has three main sections:
+The wizard has four sections, top to bottom: Hardware Configuration, Checklist, Autofocus Override, and Start Acquisition.
 
 ### 1. Hardware Configuration
 
@@ -55,7 +55,16 @@ Four prerequisite steps, each with a status indicator, description, and action b
 - **Red** -- Step has not been completed or is missing.
 - **Gray** -- Step is not applicable for the current hardware configuration.
 
-### 3. Start Acquisition
+### 3. Autofocus Override
+
+A small row below the checklist for ad-hoc autofocus control before starting an acquisition:
+
+| Control | Behavior |
+|---------|---------|
+| **Disable Autofocus** (checkbox) | Skips all autofocus during the next acquisition. Bound to the `Disable All Autofocus` preference, so the choice persists across sessions. Use only when the sample is known to be flat and pre-focused; focus drift will NOT be corrected. The checkbox changes style when active so the warning is visible at a glance. |
+| **Validate AF** (button) | Runs a two-phase test against the currently-focused position: (1) sweep autofocus from your focused position, (2) defocus 80% and run full autofocus recovery. Reports pass/fail per phase. Workflow: navigate to tissue in Live Viewer, manually focus, then click Validate AF. A blinking warning ("Do not interact with the microscope stage position") appears during the test. To change AF settings (search range, step count, score metric), use [Autofocus Configuration Editor](autofocus-editor.md). |
+
+### 4. Start Acquisition
 
 Two large buttons to launch the main acquisition workflows:
 

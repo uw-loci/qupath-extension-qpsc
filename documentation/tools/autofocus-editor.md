@@ -37,12 +37,12 @@ The Autofocus Configuration Editor can be opened in two ways:
 
 ### Live Viewer Autofocus Method
 
-At the top of the dialog, radio buttons let you choose which autofocus method the Live Viewer's **Autofocus** button will run:
+At the top of the dialog, radio buttons under **Live Viewer Autofocus button uses:** let you choose which method the Live Viewer's **Autofocus** button will run. Labels are human-readable so it's clear at a glance what each option does:
 
 | Option | Description |
 |--------|-------------|
-| **Streaming** | Continuous-Z autofocus (fast, ~1 second on PPM). Requires a stage capable of slow continuous motion. May fail on stages without a speed property, with long exposures, or with saturated images. |
-| **Sweep** | Stepped step-and-snap autofocus (slower, ~15-30 seconds, but more compatible). Works on any camera and any stage. Recommended for long exposures or rigs with speed-limited stages. |
+| **Streaming** -- continuous Z scan, fast, needs a stage that can move slowly | Continuous-Z autofocus (~1 second on PPM). Requires a stage with a speed property. May fail with long exposures or saturated images. |
+| **Sweep** -- stepped step-and-snap, slower but works on any stage | Step-and-snap autofocus (~15-30 seconds, more compatible). Works on any camera and any stage. Recommended for long exposures or rigs with speed-limited stages. |
 
 Your choice is stored per QuPath installation, so each microscope rig naturally tracks its preferred method. The Live Viewer dialog always uses the method you select here.
 
@@ -60,7 +60,9 @@ Controls how densely autofocus is scheduled across the tile grid.
 
 See [AUTOFOCUS.md](../AUTOFOCUS.md#how-af-position-selection-works) for the full explanation of how the grid and safety nets interact.
 
-### Standard Autofocus
+### Standard Autofocus (Symmetric Z-Sweep)
+
+This is the step-and-snap autofocus shared by the Live Viewer Sweep button and the acquisition pipeline. (Previously labelled simply "Standard Autofocus".)
 
 | Parameter | Type | Typical Range | Description |
 |-----------|------|---------------|-------------|
@@ -106,9 +108,10 @@ Use this to diagnose noisy metric curves (raise CLAHE / change metric), to verif
 
 | Button | Action |
 |--------|--------|
-| **Write to File** | Save all settings to YAML file |
-| **OK** | Save and close dialog |
-| **Cancel** | Discard unsaved changes |
+| **Write to File** | Save all settings to YAML file. |
+| **Validate Autofocus Settings** | Runs Standard AF at the current Z position against the active settings, then reports pass/fail per phase (focused-position sweep, defocus-and-recover). Useful as a smoke test after editing parameters; surfaces whether the search range and step count are well-matched to the sample without leaving the editor. |
+| **Save and Close** | Save and close dialog. |
+| **Cancel** | Discard unsaved changes. |
 
 ### Tab 2 -- Strategies (v2)
 

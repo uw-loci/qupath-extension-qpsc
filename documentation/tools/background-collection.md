@@ -28,6 +28,25 @@ Acquire flat-field correction images for improved image quality. Background imag
 | Lamp Intensity | Label | From profile | (Read-only) Illumination intensity applied during collection, sourced from the selected acquisition profile. Visible only when the modality has adjustable illumination. Scopes without a lamp (e.g., PPM) do not show this field. |
 | Output Folder | Directory Picker | - | Where to save background images |
 | Use Per-Channel WB | CheckBox | OFF | Use per-channel white balance calibration (JAI cameras) |
+| White Balance Mode | ComboBox | From profile | The WB regime backgrounds will be collected for (Off / Camera AWB / Simple / Per-angle PPM). Drives which set of `background_*.tif` files is written so the right backgrounds are picked up at acquisition time. |
+
+### Background Status Per WB Mode
+
+Below the controls, the dialog shows a live status list of background coverage for each WB mode the active modality supports. Each row is colour-coded:
+
+- **[OK]** -- backgrounds exist and match the active calibration.
+- **[STALE]** -- backgrounds exist but the calibration changed since they were collected; re-run for that mode to refresh.
+- **[MISSING]** -- no backgrounds for that mode yet.
+
+Use this to verify, before clicking **Acquire Backgrounds**, that you only need to recapture the modes that are actually stale or missing.
+
+### Advice Button
+
+The **Advice** button (top right of the dialog header) opens a short guide tailored to the current modality and detector that walks through clean-area selection, sensible exposure choices, and what failure modes to look out for (saturation, vignetting, lamp drift). Use it whenever the dialog appears for an unfamiliar modality.
+
+### Dialog stays open during acquisition
+
+The dialog now stays open while the **Acquire Backgrounds** run is in progress and refreshes the status list when it finishes, so the operator can immediately see what was just collected, queue another mode, or close. (Previously the dialog closed at the moment of capture, which forced the user to reopen it to verify the result.)
 
 ### Exposure mode (Brightfield + PPM on monochrome cameras)
 

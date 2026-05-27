@@ -94,8 +94,10 @@ Select All / Deselect All buttons are available for convenience.
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
 | Modality | ComboBox | From config | Imaging modality (e.g., ppm_20x, bf_10x). **Modality changes sync across all open dialogs** (Acquisition Wizard, Live Viewer Camera tab, Background Collection, Sample Setup, etc.), so selecting a modality here updates all other open dialogs' selectors automatically and drives the hardware via APPLYPR (filter cube, lamp, condenser, etc.). |
+| Quick Start (link, next to Modality) | Hyperlink | - | Opens the Acquisition Wizard pre-focused on the current modality so prerequisite checklists (server, white balance, background, alignment, AF) can be run without leaving the dialog. |
 | Objective | ComboBox | From config | Objective lens for this modality |
 | Detector | ComboBox | From config | Camera/detector combination |
+| WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Listed under hardware (rather than under acquisition options) because the choice is camera-specific and matches the underlying calibration set. |
 | Angle Overrides | Various | - | Modality-specific angle controls (if applicable) |
 
 ## Workflow
