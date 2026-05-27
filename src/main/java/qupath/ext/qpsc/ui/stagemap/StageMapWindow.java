@@ -1057,22 +1057,31 @@ public class StageMapWindow {
     /**
      * Picks the source to show on dropdown init. Priority:
      * <ol>
+     *   <li>The persistent default
+     *       ({@link PersistentPreferences#getSelectedScanner()}) -- the user's
+     *       last explicit pick from a prior session. Wins so the dropdown is
+     *       remembered across sessions.</li>
      *   <li>The macro-owning ancestor's {@code source_microscope} (walks
      *       {@code base_image} then {@code original_image_id} via
      *       {@link #resolveMacroSourceForEntry}); falls back to the open
      *       entry's own {@code source_microscope}</li>
      *   <li>The active microscope (same-scope identity is the natural default)</li>
-     *   <li>The persistent default ({@link PersistentPreferences#getSelectedScanner()})</li>
      *   <li>First entry in {@code sources}</li>
      * </ol>
      *
-     * <p>The ancestor walk matters for derived entries (e.g. a PPM sub-image
-     * acquired against an Ocus40-macro parent): the open entry's own
-     * {@code source_microscope} is PPM, but the macro overlay that should be
-     * shown is the Ocus40 parent's. Mirrors the strategy already used by
-     * {@link #getSampleNameForCurrentImage}.
+     * <p>Reading the persistent default for display is safe; the
+     * Ocus40-stamp-on-OWS3-slide bug was about <i>stamping</i> the
+     * persistent default onto an entry, not about reading it. That stamp
+     * path is now gated on "entry has no existing source_microscope" in
+     * {@link #applySourceSelection}, and {@link #onOpenedImageChanged}
+     * no longer auto-modifies the dropdown at all.
      */
     private String pickInitialSource(List<String> sources) {
+        String fromPref = PersistentPreferences.getSelectedScanner();
+        if (fromPref != null && !fromPref.isEmpty() && sources.contains(fromPref)) {
+            logger.info("pickInitialSource: persistent default '{}' wins", fromPref);
+            return fromPref;
+        }
         try {
             QuPathGUI gui = QuPathGUI.getInstance();
             if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
@@ -1082,23 +1091,20 @@ public class StageMapWindow {
                 if (entry != null) {
                     String fromEntry = resolveMacroSourceForEntry(project, entry);
                     if (fromEntry != null && sources.contains(fromEntry)) {
+                        logger.info(
+                                "pickInitialSource: macro-ancestor walk -> '{}' (no usable persistent default)",
+                                fromEntry);
                         return fromEntry;
                     }
                 }
             }
         } catch (Exception ignored) {
         }
-        // Prefer the active microscope over the persistent scanner pref. The
-        // pref only matters for genuine cross-scope work; auto-defaulting to
-        // it on a native image is what produced the Ocus40-on-OWS3-slide bug.
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
         String activeScope = (mgr != null) ? mgr.getMicroscopeName() : null;
         if (activeScope != null && sources.contains(activeScope)) {
+            logger.info("pickInitialSource: active microscope '{}' wins", activeScope);
             return activeScope;
-        }
-        String fromPref = PersistentPreferences.getSelectedScanner();
-        if (fromPref != null && sources.contains(fromPref)) {
-            return fromPref;
         }
         return sources.isEmpty() ? null : sources.get(0);
     }
@@ -1246,70 +1252,30 @@ public class StageMapWindow {
     }
 
     /**
-     * Called when the QuPath viewer image changes. Resolves the macro source
-     * for the new entry (walking ancestors via
-     * {@link #resolveMacroSourceForEntry}) and syncs the dropdown to it.
-     * Does <strong>not</strong> rewrite the entry's own
-     * {@code source_microscope} -- the dropdown's job is to pick the macro
-     * overlay's source, not to relabel acquisition origin.
+     * Called when the QuPath viewer image changes. No-op for the Source
+     * dropdown: it stays at whatever the user picked (or where
+     * {@link #pickInitialSource} placed it on Stage Map open). Auto-syncing
+     * the dropdown on every image switch made the user's explicit choice
+     * disappear when they switched to a derived entry whose ancestor walk
+     * resolved to a different scanner.
      *
-     * <p>If the entry has no {@code source_microscope} at all (fresh import),
-     * stamps the active microscope as a sensible default so downstream
-     * workflows that read {@code source_microscope} don't hard-cancel.
+     * <p>To view a different macro source after switching images, pick it
+     * manually from the dropdown -- that updates the persistent default so
+     * subsequent sessions remember the choice.
+     *
+     * <p>Fresh-import WSI entries (no {@code source_microscope}) used to be
+     * auto-stamped with the active scope here. That stamp now happens only
+     * via explicit workflows (Microscope Alignment, ExistingImageWorkflow's
+     * source-mismatch dialog) so the Stage Map can't silently corrupt
+     * acquisition-origin metadata. Microscope-acquired images already have
+     * {@code source_microscope} set at acquisition time, so they're
+     * unaffected.
      */
     private void onOpenedImageChanged() {
-        if (sourceComboBox == null || sourceComboBox.isDisabled()) return;
-        // Defense-in-depth: if the dropdown hasn't been populated yet, the
-        // sources.contains(...) checks below would silently fail and we'd
-        // ignore an entry's source_microscope metadata.
-        if (sourceComboBox.getItems().isEmpty()) return;
-        try {
-            QuPathGUI gui = QuPathGUI.getInstance();
-            if (gui == null || gui.getProject() == null || gui.getImageData() == null) return;
-            @SuppressWarnings("unchecked")
-            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
-            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
-            if (entry == null) return;
-
-            String resolvedMacroSource = resolveMacroSourceForEntry(project, entry);
-            List<String> sources = sourceComboBox.getItems();
-            String currentDropdown = sourceComboBox.getValue();
-            logger.info(
-                    "onOpenedImageChanged: entry='{}' resolved-macro-source='{}' current dropdown='{}' available={}",
-                    entry.getImageName(),
-                    resolvedMacroSource,
-                    currentDropdown,
-                    sources);
-
-            if (resolvedMacroSource != null && !resolvedMacroSource.isEmpty()) {
-                if (sources.contains(resolvedMacroSource) && !resolvedMacroSource.equals(sourceComboBox.getValue())) {
-                    logger.info(
-                            "onOpenedImageChanged: switching dropdown '{}' -> '{}' (resolved macro source)",
-                            currentDropdown,
-                            resolvedMacroSource);
-                    // writeMetadata=false: never restamp from the macro-source walk. The
-                    // resolved value may come from a parent on a different scanner; writing
-                    // it back would corrupt the open entry's acquisition origin.
-                    applySourceSelection(resolvedMacroSource, /* writeMetadata */ false);
-                }
-                return;
-            }
-
-            // No source resolved anywhere (no ancestor with source_microscope, no own
-            // source_microscope on the entry). Fresh import case: stamp the active
-            // microscope so downstream workflows have a deterministic value to read.
-            // Auto-defaulting to the persistent external scanner pref is intentionally
-            // avoided -- it produced the Ocus40-stamp-on-OWS3-slide bug.
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            String activeScope = (mgr != null) ? mgr.getMicroscopeName() : null;
-            if (activeScope != null && !activeScope.isEmpty() && sources.contains(activeScope)) {
-                logger.info(
-                        "onOpenedImageChanged: no resolved macro source; stamping active microscope '{}'", activeScope);
-                applySourceSelection(activeScope, /* writeMetadata */ true);
-            }
-        } catch (Exception e) {
-            logger.debug("onOpenedImageChanged: {}", e.getMessage());
-        }
+        // Intentionally a no-op for the dropdown. The image-change listener
+        // still fires (used for macro overlay refresh + movement-warning
+        // updates via separately-wired paths -- see show()).
+        logger.debug("onOpenedImageChanged: Source dropdown auto-sync disabled by design");
     }
 
     /**
