@@ -354,13 +354,26 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Warns when the open entry's {@code source_microscope} disagrees with the
-         * active microscope. Lets the user fix the tag in place (the common case:
-         * the slide is actually native to the active scope but inherited a wrong
-         * scanner tag from a default-fill) or explicitly proceed with cross-scope
-         * alignment.
+         * active microscope. Two scenarios collapse to the same observed state, and
+         * the dialog only fires when the system genuinely cannot tell them apart:
+         *
+         * <ul>
+         *   <li><b>Wrong tag</b> -- the image was acquired on this scope but a stale
+         *       {@code source_microscope} survived (default-fill during import, etc.).
+         *       Detected when {@code acquired_on_microscope == active}: auto-fixed in
+         *       place, no dialog.</li>
+         *   <li><b>Genuine cross-scope</b> -- the macro really did come from a
+         *       different scanner. Detected when {@code acquired_on_microscope} is
+         *       present and differs from {@code active}: proceed silently and use
+         *       the source scanner's alignment preset.</li>
+         *   <li><b>Ambiguous</b> -- {@code acquired_on_microscope} is missing
+         *       (typical for legacy entries imported before that tag existed). The
+         *       dialog asks the user to choose between {@code Fix source} (treat as
+         *       native to active) or {@code Proceed} (cross-scope).</li>
+         * </ul>
          *
          * <p>Returns {@code true} to proceed, {@code false} when the user cancels.
-         * Must be called on the JavaFX thread; the dialog uses {@code showAndWait()}.
+         * Must be called on the JavaFX thread when the dialog branch is taken.
          */
         private boolean checkAndHandleSourceMismatch() {
             if (gui.getProject() == null || gui.getImageData() == null) return true;
@@ -379,20 +392,46 @@ public class ExistingImageWorkflowV2 {
             if (active == null || active.isBlank() || source.equals(active)) return true;
 
             String acquiredOn = entry.getMetadata().get(ImageMetadataManager.ACQUIRED_ON_MICROSCOPE);
-            boolean inconsistentTag = active.equals(acquiredOn);
 
+            // Auto-resolve when acquired_on_microscope decides the question for us.
+            if (acquiredOn != null && !acquiredOn.isBlank()) {
+                if (active.equals(acquiredOn)) {
+                    // Tag is provably wrong -- the image was acquired on the active scope.
+                    entry.getMetadata().put(ImageMetadataManager.SOURCE_MICROSCOPE, active);
+                    try {
+                        project.syncChanges();
+                        logger.info(
+                                "Source mismatch auto-corrected: stamped source_microscope='{}' on '{}' (was '{}', acquired_on='{}')",
+                                active,
+                                entry.getImageName(),
+                                source,
+                                acquiredOn);
+                    } catch (Exception e) {
+                        logger.warn("Source mismatch auto-correction: failed to sync project: {}", e.getMessage());
+                    }
+                    return true;
+                }
+                // Cross-scope is confirmed -- macro came from a different scanner that
+                // also is not the active scope. Proceed using the source scanner's preset.
+                logger.info(
+                        "Source mismatch auto-proceeded cross-scope: source='{}' active='{}' acquired_on='{}'",
+                        source,
+                        active,
+                        acquiredOn);
+                return true;
+            }
+
+            // acquired_on_microscope is missing -- genuinely ambiguous, ask the user.
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             alert.setTitle("Source microscope mismatch");
             alert.setHeaderText(
                     String.format("Image is tagged source='%s', but acquisition is on '%s'.", source, active));
             StringBuilder body = new StringBuilder();
-            if (inconsistentTag) {
-                body.append("acquired_on_microscope='")
-                        .append(acquiredOn)
-                        .append(
-                                "' -- the image was acquired on this scope, so the source tag is inconsistent and should be corrected.\n\n");
-            }
+            body.append("This entry has no acquired_on_microscope tag, so the system cannot tell")
+                    .append(" whether the macro really came from '")
+                    .append(source)
+                    .append("' or whether the source tag is stale from import.\n\n");
             body.append("Fix source to '")
                     .append(active)
                     .append("' -- treat as native (same-scope identity, no flip).\n\n");
