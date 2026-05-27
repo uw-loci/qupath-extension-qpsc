@@ -102,15 +102,22 @@ Select All / Deselect All buttons are available for convenience.
 
 ### Startup Check: Source Microscope Mismatch
 
-When you start this workflow, QPSC checks whether the opened image's `source_microscope` metadata matches the active microscope. If they disagree, a dialog appears with three options:
+When you start this workflow, QPSC checks whether the opened image's `source_microscope` metadata matches the active microscope. If they disagree, the system uses the `acquired_on_microscope` metadata (when present) to decide what to do:
+
+**Silent auto-resolution:** The system can resolve many mismatches without user intervention:
+
+- **Wrong tag detected:** If `acquired_on_microscope` matches the active microscope, the image was acquired on this scope — the `source_microscope` tag is stale from a prior operation. The system silently corrects the tag in place and proceeds without showing a dialog.
+- **Genuine cross-scope detected:** If `acquired_on_microscope` is present but differs from the active microscope, the image truly was acquired on a different scanner. The system silently proceeds using that source scanner's preset for coordinate transformation, no dialog needed.
+
+**Manual decision required:** If `acquired_on_microscope` is missing (typical for entries imported before that metadata existed), the system cannot tell whether the mismatch is a wrong tag or genuine cross-scope. In this ambiguous case, a dialog appears asking you to choose:
 
 | Option | Behavior | When to Use |
 |--------|----------|------------|
-| **Fix source to `<active>`** | Update the image's `source_microscope` tag to the active microscope and treat it as a same-scope, native image (no flip). | The image was actually acquired on this microscope but carries an incorrect external-scanner tag from a previous operation — the most common case. The dialog highlights this when the image's `acquired_on_microscope` metadata matches the active scope. |
+| **Fix source to `<active>`** | Update the image's `source_microscope` tag to the active microscope and treat it as a same-scope, native image (no flip). | The image was actually acquired on this microscope but carries an incorrect external-scanner tag — the most common case. |
 | **Proceed (cross-scope)** | Keep the existing `source_microscope` tag and apply any saved cross-scope alignment (e.g., `Ocus40 -> PPM`). | The image truly was acquired on a different microscope and you want to use the saved cross-scope preset to transform its coordinates. |
 | **Cancel** | Abort the workflow. | You need to investigate or correct the metadata first. |
 
-**When the dialog does NOT appear:** If the image has no `source_microscope` tag, or if its tag already matches the active microscope, the workflow proceeds to Step 1 without prompting.
+**When the dialog does NOT appear:** The dialog is skipped if: (a) the image has no `source_microscope` tag, (b) its tag already matches the active microscope, or (c) the `acquired_on_microscope` tag is present and unambiguous (either matching active or differing from it).
 
 ### Startup Check: Orphaned Flipped Sibling
 
