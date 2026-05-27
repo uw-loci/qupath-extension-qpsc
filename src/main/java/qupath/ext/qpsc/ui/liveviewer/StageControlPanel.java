@@ -774,9 +774,11 @@ public class StageControlPanel extends VBox {
         //  5. FoV info text -- pushed below centroidSection so the FoV combo
         //     dropdown (which expands downward) does not obstruct it.
         //  6. Navigation grid (joystick / arrows / WASD hint)
-        //  7. Calibrate Directions button
-        //  8. Z Focus widget
-        //  9. Move to Position (typed X / Y / Z / R targets)
+        //  7. Z Focus widget
+        //  8. Move to Position (typed X / Y / Z / R targets)
+        //  9. Calibrate Directions button -- bottom of the tab. Re-run is
+        //     occasional (after rewiring or remounting), not part of the
+        //     primary navigation loop, so it sinks to the end out of the way.
         navigateContent
                 .getChildren()
                 .addAll(
@@ -788,7 +790,6 @@ public class StageControlPanel extends VBox {
                         new Separator(),
                         navSection,
                         navXyStatus,
-                        calibrateRow,
                         new Separator(),
                         zBarLabel,
                         zBarPanel,
@@ -799,7 +800,9 @@ public class StageControlPanel extends VBox {
                         moveZRow,
                         zStatus,
                         moveRRow,
-                        rStatus);
+                        rStatus,
+                        new Separator(),
+                        calibrateRow);
         navigateTab.setContent(navigateContent);
 
         // ============ TAB 2: SAVED POINTS (was Tab 3) ============
