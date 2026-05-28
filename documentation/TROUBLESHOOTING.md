@@ -629,6 +629,38 @@ Alternatively, if you are confident the faint signal genuinely requires the high
 
 **A:** Fixed 2026-04-26 (commit `e86ae06`). `AcquisitionManager.monitorAcquisition` was computing `stepsPerPosition` as `max(channels, angles)` and ignoring Z-planes entirely. With FITC + Cy5 + 11 Z-planes the server reported 264 progress increments but Java divided by 2 instead of 22, overshooting the 12-position denominator. Now the multiplier includes `ceil(zRange/zStep) + 1` when Z-stack is enabled, matching the existing logic in `BoundedAcquisitionWorkflow`.
 
+#### Q: "Interval too short for acquisition" dialog blocks my time-lapse
+
+**A:** This blocking validation dialog appears before starting a time-lapse when the configured interval is shorter than the estimated per-timepoint acquisition duration.
+
+**What the dialog shows:**
+
+- Modality, Z planes, timepoints, and configured interval
+- Estimated per-timepoint duration (conservative lower bound)
+- Two options: **Adjust settings** or **Proceed anyway**
+
+**Why this triggers:**
+
+The estimate catches order-of-magnitude misconfigurations:
+- **Single-plane brightfield:** ~0.5 seconds per timepoint
+- **Single-plane PPM (4 angles):** ~1.2 seconds per timepoint  
+- **Multi-plane acquisitions:** (planes) × (angles × 0.25 sec/frame + 0.2 sec/plane overhead)
+
+For example: 21 planes × (4 angles × 0.25 + 0.2) ≈ 25 seconds per timepoint. An interval of 10 seconds would trigger the warning.
+
+**To fix:**
+
+**Option 1 (recommended):** Click **Adjust settings** and:
+- Increase the interval to match or exceed the estimated duration, OR
+- Reduce Z planes by increasing step size, OR
+- Switch to a single-angle modality if 4-angle PPM is not needed
+
+**Option 2:** Click **Proceed anyway** if you understand the tradeoff. The time-lapse will run, but timepoints will overlap and the system cannot keep pace with the interval. After acquisition completes, a post-acquisition warning dialog shows how far behind the run fell.
+
+**Note:** This pre-flight dialog only fires in the **Z-Stack / Time-Lapse single-point dialog** and the standalone **Stack / Time-Lapse** workflow. The bounded multi-tile wizard surfaces slip via a **runtime** "Time-lapse falling behind" modal after the slip is detected mid-acquisition, not pre-flight.
+
+**The warning choice is remembered for this session**, so you won't see it again for the same (modality, planes, interval) combination if you pick "Proceed anyway."
+
 ### Micro-Manager MDA Export
 
 See [UTILITIES.md -- Exporting to Micro-Manager MDA](UTILITIES.md#exporting-to-micro-manager-mda) for the full feature overview.

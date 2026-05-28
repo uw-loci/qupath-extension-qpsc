@@ -62,6 +62,28 @@ The info label shows total acquisition duration.
 
 **Note:** This dialog acquires a single channel per run -- the one picked in Setup. For widefield IF, run the dialog once per channel; for brightfield / PPM, the Channel control is hidden and the profile's settings drive the capture.
 
+### Pre-flight Interval Check
+
+Before acquisition starts, a validation step checks whether the configured per-timepoint interval can accommodate a single timepoint's acquisition. If the interval is shorter than the estimated duration, a blocking dialog appears with two options:
+
+| Button | Action |
+|--------|--------|
+| **Adjust settings** | Cancel and return to the dialog to modify interval, planes, timepoints, or modality |
+| **Proceed anyway** | Acquire despite the warning (choice is remembered for this session) |
+
+**When this triggers:**
+
+The estimate is conservative and intended to catch order-of-magnitude misconfigurations:
+- **Brightfield (single-plane, single-angle):** ~0.5 sec per timepoint
+- **PPM (single-plane, multi-angle):** ~1.2 sec per timepoint
+- **Z-stack (multiple planes):** (planes) × (angles × 0.25 sec/frame + 0.2 sec/plane overhead)
+
+For example, a 21-plane PPM Z-stack with 4 angles requires ~25 seconds per timepoint, so an interval of 10 seconds would trigger the warning.
+
+**What happens if you proceed:**
+
+The time-lapse will run, but each timepoint will overlap the next—the system cannot keep pace with the interval and will log a warning on the server. After acquisition completes, a post-acquisition dialog shows details of how far behind the run fell.
+
 ### Output
 
 Individual TIFF files named `t00000_T<elapsed>s.tif` with metadata including timepoint index and elapsed time.
