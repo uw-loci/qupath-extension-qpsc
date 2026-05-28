@@ -15,6 +15,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.AcquisitionTimingEstimator;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -352,6 +353,22 @@ public class StackTimeLapseWorkflow {
             String output = tOutputField.getText().trim();
             if (output.isEmpty()) {
                 tStatusLabel.setText("Please specify an output folder.");
+                return;
+            }
+
+            // Pre-flight: warn if the interval cannot accommodate one
+            // timepoint's acquisition. Standalone time-lapse is single-plane
+            // but multi-angle modalities (PPM) still need >1 s per timepoint.
+            String preflightModality = configMgr.getProfileModality(setup.getSelectedProfile());
+            boolean proceedTL = AcquisitionTimingEstimator.confirmOrAdjustIfSlipping(
+                    tStartBtn.getScene() != null ? tStartBtn.getScene().getWindow() : null,
+                    preflightModality,
+                    1,
+                    tp,
+                    interval);
+            if (!proceedTL) {
+                tStatusLabel.setText("Adjust the interval or reduce timepoints.");
+                tStatusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
                 return;
             }
 

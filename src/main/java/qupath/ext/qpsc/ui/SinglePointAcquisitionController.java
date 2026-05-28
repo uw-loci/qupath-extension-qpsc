@@ -27,7 +27,11 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.OutputFormat;
+import qupath.ext.qpsc.service.notification.NotificationEvent;
+import qupath.ext.qpsc.service.notification.NotificationPriority;
+import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.state.ModalityState;
+import qupath.ext.qpsc.utilities.AcquisitionTimingEstimator;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -299,6 +303,36 @@ public class SinglePointAcquisitionController {
                     statusLabel.setText(error);
                     statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
                     event.consume();
+                    return;
+                }
+                // Pre-flight: if time-lapse interval is shorter than the
+                // estimated per-timepoint duration, the run will fall behind
+                // schedule and the server logs a warning the user never sees.
+                // Block on a modal so the user gets a real choice instead of a
+                // dismissable runtime notification.
+                if (tEnableCheckbox.isSelected()) {
+                    int planes = 1;
+                    if (zEnableCheckbox.isSelected()) {
+                        double range = zRangeSpinner.getValue();
+                        double step = zStepSpinner.getValue();
+                        if (step > 0) {
+                            planes = (int) Math.floor(range / step) + 1;
+                        }
+                    }
+                    String modality = modalityCombo.getValue() != null ? modalityCombo.getValue() : "brightfield";
+                    boolean proceed = AcquisitionTimingEstimator.confirmOrAdjustIfSlipping(
+                            dialog.getDialogPane().getScene() != null
+                                    ? dialog.getDialogPane().getScene().getWindow()
+                                    : null,
+                            modality,
+                            planes,
+                            tpSpinner.getValue(),
+                            tIntervalSpinner.getValue());
+                    if (!proceed) {
+                        statusLabel.setText("Adjust the interval or reduce planes / timepoints.");
+                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                        event.consume();
+                    }
                 }
             });
 
@@ -450,6 +484,39 @@ public class SinglePointAcquisitionController {
                             }
                             logger.info("Single-point acquisition complete: {}", response);
                         });
+
+                        // Surface any latched "falling behind" warning before
+                        // notifying success. The single-point dispatch uses
+                        // executeChunkedCommand, which holds the socket lock
+                        // for the entire run, so real-time REQTWARN polling
+                        // during the acquisition would deadlock. The server
+                        // keeps the warning latched per-connection until
+                        // acquisition ends, so a completion-time check is
+                        // sufficient to surface the dialog instead of leaving
+                        // the user to inspect server logs.
+                        try {
+                            String warn = mc.getSocketClient().checkTimeLapseWarning();
+                            if (warn != null && !warn.isBlank()) {
+                                logger.warn("Single-point time-lapse fell behind: {}", warn);
+                                final String warnMsg = warn;
+                                Platform.runLater(() -> {
+                                    javafx.scene.control.Alert alert = new javafx.scene.control.Alert(
+                                            javafx.scene.control.Alert.AlertType.WARNING);
+                                    alert.setTitle("Time-lapse fell behind");
+                                    alert.setHeaderText("Acquisition could not keep pace with the requested interval");
+                                    alert.setContentText(warnMsg);
+                                    UIFunctions.showAlertOverParent(alert, null);
+                                });
+                                NotificationService.getInstance()
+                                        .notify(
+                                                "Time-lapse fell behind",
+                                                warnMsg,
+                                                NotificationPriority.HIGH,
+                                                NotificationEvent.ACQUISITION_WARNING);
+                            }
+                        } catch (Exception warnEx) {
+                            logger.debug("Post-acquisition time-lapse warning check failed: {}", warnEx.getMessage());
+                        }
 
                         Platform.runLater(() -> Dialogs.showInfoNotification(
                                 "Single-Point Acquisition", "Acquisition complete. Output: " + outputFolder));
