@@ -401,13 +401,32 @@ public class ExistingImageAcquisitionController {
             dialog.setGraphic(DocumentationHelper.createHelpButton("existingImage"));
             dialog.setResizable(true);
 
-            // Add buttons
+            // Add buttons. "Save MDA..." is a non-closing footer action so
+            // the user can export the MicroManager MDA file set without
+            // committing to a live acquisition. The per-modality panels still
+            // expose the same action, but the modality TitledPane is easy to
+            // overlook when scrolling -- the footer button makes it
+            // unmistakable that MDA export is a first-class exit path.
             ButtonType startType = new ButtonType("Start Acquisition", ButtonBar.ButtonData.OK_DONE);
+            ButtonType saveMdaType = new ButtonType("Save MDA...", ButtonBar.ButtonData.LEFT);
             ButtonType cancelType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
-            dialog.getDialogPane().getButtonTypes().addAll(startType, cancelType);
+            dialog.getDialogPane().getButtonTypes().addAll(saveMdaType, startType, cancelType);
 
             startButton = (Button) dialog.getDialogPane().lookupButton(startType);
             startButton.setDisable(true);
+
+            Button saveMdaButton = (Button) dialog.getDialogPane().lookupButton(saveMdaType);
+            saveMdaButton.setTooltip(new Tooltip("Write Micro-Manager-compatible MDA file sets\n"
+                    + "(MDA_<region>.txt, .pos, NOTES) for each selected annotation\n"
+                    + "without starting acquisition. Useful for handing the planned\n"
+                    + "acquisition to Micro-Manager directly."));
+            saveMdaButton.addEventFilter(javafx.event.ActionEvent.ACTION, evt -> {
+                // Consume the event so the dialog does not close. The user
+                // should still be able to either Cancel or Start Acquisition
+                // after exporting.
+                evt.consume();
+                onSaveMdaFromFooter();
+            });
 
             // Build all sections
             createVariantBanner();
@@ -1457,6 +1476,57 @@ public class ExistingImageAcquisitionController {
                 return MdaExportContext.notReady("Could not prepare MDA export: "
                         + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
             }
+        }
+
+        /**
+         * Footer "Save MDA..." handler. Builds the export context from the
+         * current dialog state and writes MDA files; mirrors the per-modality
+         * panel button so users who never expand the modality TitledPane (or
+         * who scroll past it) still have a discoverable export path. Errors
+         * and "not ready" states surface via the same alerts that
+         * {@link MdaExportAction#exportAndConfirm} uses, re-parented over
+         * this dialog.
+         */
+        private void onSaveMdaFromFooter() {
+            Window parentWindow = dialog.getDialogPane().getScene() != null
+                    ? dialog.getDialogPane().getScene().getWindow()
+                    : null;
+            MdaExportContext ctx;
+            try {
+                ctx = buildMdaExportContext();
+            } catch (RuntimeException ex) {
+                logger.error("MDA export context build failed: {}", ex.getMessage(), ex);
+                Alert err = new Alert(Alert.AlertType.ERROR);
+                err.setTitle("MicroManager MDA Export");
+                err.setHeaderText("Failed to build export context");
+                err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+                UIFunctions.showAlertOverParent(err, parentWindow);
+                return;
+            }
+            if (ctx == null || ctx.hasError()) {
+                Alert info = new Alert(Alert.AlertType.INFORMATION);
+                info.setTitle("MicroManager MDA Export");
+                info.setHeaderText("Not ready to export");
+                info.setContentText(
+                        ctx != null
+                                        && ctx.errorMessage() != null
+                                        && !ctx.errorMessage().isBlank()
+                                ? ctx.errorMessage()
+                                : "Configure modality, objective, detector and annotations before exporting MDA.");
+                UIFunctions.showAlertOverParent(info, parentWindow);
+                return;
+            }
+            CompletableFuture.runAsync(() -> MdaExportAction.exportAndConfirm(
+                            parentWindow,
+                            ctx.sample(),
+                            ctx.cmdBuilder(),
+                            ctx.regions(),
+                            ctx.configManager(),
+                            ctx.channelLibrary()))
+                    .exceptionally(t -> {
+                        logger.error("MDA export task failed unexpectedly: {}", t.getMessage(), t);
+                        return null;
+                    });
         }
 
         /**
