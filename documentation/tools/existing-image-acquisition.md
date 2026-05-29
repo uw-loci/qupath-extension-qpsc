@@ -100,6 +100,21 @@ Select All / Deselect All buttons are available for convenience.
 | WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Listed under hardware (rather than under acquisition options) because the choice is camera-specific and matches the underlying calibration set. |
 | Angle Overrides | Various | - | Modality-specific angle controls (if applicable) |
 
+### MDA Export
+
+After configuring modality, objective, and detector, you may export the planned acquisition as a set of MicroManager MDA files instead of starting acquisition immediately. This is useful when you want to hand off the acquisition plan to Micro-Manager for execution outside of QuPath.
+
+**To export MDA files:**
+
+Click the **"Save MDA..."** button in the dialog footer. The button writes one MDA file set per selected annotation:
+- `MDA_<region>.txt` — acquisition parameters
+- `MDA_<region>.pos` — stage positions
+- `MDA_<region>.NOTES` — metadata
+
+The dialog remains open after export, so you can still Start Acquisition or Cancel as needed.
+
+The same MDA export action is also available in the per-modality hardware configuration panels (in the modality TitledPane), but the footer button provides a more discoverable entry point.
+
 ## Workflow
 
 ### Startup Check: Source Microscope Mismatch
