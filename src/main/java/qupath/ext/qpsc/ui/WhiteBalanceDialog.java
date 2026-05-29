@@ -114,7 +114,7 @@ public class WhiteBalanceDialog {
     private static final DoubleProperty gainAnalogRbMaxProperty =
             PathPrefs.createPersistentPreference("wb.advanced.gainAnalogRbMax", 4.0);
 
-    // Objective selection is tracked globally via PersistentPreferences.getLastObjective().
+    // Objective selection is tracked globally via ObjectiveState.
     // This dialog used to have its own "wb.ppm.objective" shadow preference, but that
     // silently overrode whatever the Acquisition Wizard (or any other dialog) had selected,
     // causing mislabeled calibration slots when the shadow was stale.
@@ -458,7 +458,7 @@ public class WhiteBalanceDialog {
                     toleranceProperty.set(tolerance);
                     cameraProperty.set(camera);
                     if (selectedObjective != null && !selectedObjective.isEmpty()) {
-                        PersistentPreferences.setLastObjective(selectedObjective);
+                        qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(selectedObjective);
                     }
                     PersistentPreferences.setLastDetector(selectedDetector);
 
@@ -747,7 +747,8 @@ public class WhiteBalanceDialog {
                             .orElse(null);
                     String fallbackPref = null;
                     if (defaultObjective == null) {
-                        fallbackPref = PersistentPreferences.getLastObjective();
+                        fallbackPref = qupath.ext.qpsc.state.ObjectiveState.getInstance()
+                                .getObjective();
                         if (fallbackPref != null && !fallbackPref.isEmpty() && objectives.contains(fallbackPref)) {
                             defaultObjective = fallbackPref;
                         }

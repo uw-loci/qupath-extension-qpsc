@@ -317,8 +317,12 @@ public class SampleSetupController {
                     objectiveBox.getItems().clear();
                     objectiveBox.getItems().addAll(objectiveDisplayItems);
 
-                    // Try to restore last used objective
-                    String lastObjective = PersistentPreferences.getLastObjective();
+                    // Try to restore last used objective via the shared state
+                    // (which composes the file-backed pref with any in-session
+                    // change from another open dialog -- Camera tab, Wizard).
+                    String lastObjective =
+                            qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+                    if (lastObjective == null) lastObjective = "";
                     boolean objectiveRestored = false;
                     if (!lastObjective.isEmpty()) {
                         // Try to find matching objective by ID
@@ -466,7 +470,8 @@ public class SampleSetupController {
                     PersistentPreferences.setLastSampleName(name);
                     // Modality routes through ModalityState (canonical owner).
                     qupath.ext.qpsc.state.ModalityState.getInstance().setModality(mod);
-                    PersistentPreferences.setLastObjective(obj);
+                    // Objective routes through ObjectiveState (canonical owner).
+                    qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(obj);
                     PersistentPreferences.setLastDetector(det);
 
                     logger.info(
@@ -491,7 +496,8 @@ public class SampleSetupController {
                     PersistentPreferences.setLastSampleName(name);
                     // Modality routes through ModalityState (canonical owner).
                     qupath.ext.qpsc.state.ModalityState.getInstance().setModality(mod);
-                    PersistentPreferences.setLastObjective(obj);
+                    // Objective routes through ObjectiveState (canonical owner).
+                    qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(obj);
                     PersistentPreferences.setLastDetector(det);
                     // DO NOT save projects folder - it comes from QPPreferenceDialog
 

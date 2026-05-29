@@ -1208,7 +1208,9 @@ public class ExistingImageAcquisitionController {
             objectiveBox.getItems().clear();
             objectiveBox.getItems().addAll(objectiveDisplayItems);
 
-            String lastObjective = PersistentPreferences.getLastObjective();
+            String lastObjective =
+                    qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+            if (lastObjective == null) lastObjective = "";
             boolean restored = false;
             if (!lastObjective.isEmpty()) {
                 for (String displayItem : objectiveDisplayItems) {
@@ -2187,11 +2189,12 @@ public class ExistingImageAcquisitionController {
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 
                 // Drift guard: surface any divergence between the dialog combo and
-                // the global LastObjective preference that may have accumulated
-                // since this dialog opened (e.g. Live Viewer "Refresh from MM",
-                // another dialog's submit). The combo wins (user's explicit choice),
-                // but the warning flags a drift we want to catch early.
-                String globalObjective = PersistentPreferences.getLastObjective();
+                // the global objective state that may have accumulated since this
+                // dialog opened (e.g. Live Viewer Camera tab pick, another dialog's
+                // submit). The combo wins (user's explicit choice), but the warning
+                // flags a drift we want to catch early.
+                String globalObjective =
+                        qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
                 if (objective != null
                         && !objective.isEmpty()
                         && globalObjective != null
@@ -2199,16 +2202,16 @@ public class ExistingImageAcquisitionController {
                         && !globalObjective.equals(objective)) {
                     logger.warn(
                             "Existing image acquisition objective drift: dialog combo='{}' but "
-                                    + "PersistentPreferences.getLastObjective()='{}'. Using dialog value.",
+                                    + "ObjectiveState='{}'. Using dialog value.",
                             objective,
                             globalObjective);
                 }
 
-                // Save preferences. Modality routes through ModalityState
-                // so the central state stays canonical.
+                // Save preferences. Modality + objective route through their
+                // central state singletons so cross-dialog sync stays canonical.
                 PersistentPreferences.setLastSampleName(sampleName);
                 qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
-                PersistentPreferences.setLastObjective(objective);
+                qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(objective);
                 PersistentPreferences.setLastDetector(detector);
 
                 logger.info(

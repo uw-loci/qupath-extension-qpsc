@@ -1024,14 +1024,14 @@ public class StageControlPanel extends VBox {
 
         // "Refresh from Micro-Manager" button: after the user changes
         // objective turret position in MM directly (not via QPSC), the
-        // Camera tab and every downstream dialog that reads
-        // PersistentPreferences.getLastObjective() is still holding the
-        // stale objective from when the Live Viewer first opened. This
-        // button re-runs detectCurrentHardware() (which queries MM's live
-        // pixel size and reverse-matches it against the YAML's objective
-        // table), persists the new objective so the acquisition wizard
-        // picks it up next time it opens, and rebuilds the modality-
-        // specific content so per-objective exposures/gains reload.
+        // Camera tab and every downstream dialog that reads ObjectiveState
+        // is still holding the stale objective from when the Live Viewer
+        // first opened. This button re-runs detectCurrentHardware() (which
+        // queries MM's live pixel size and reverse-matches it against the
+        // YAML's objective table), broadcasts the new objective via
+        // ObjectiveState so any open dialog re-syncs and the next-open
+        // dialog sees it, and rebuilds the modality-specific content so
+        // per-objective exposures/gains reload.
         Button refreshHardwareBtn = new Button("Refresh from MM");
         refreshHardwareBtn.setStyle("-fx-font-size: 10px;");
         refreshHardwareBtn.setTooltip(
@@ -1048,7 +1048,9 @@ public class StageControlPanel extends VBox {
             detValue.setText(shortenId(currentCameraDetectorId));
             detValue.setTooltip(new Tooltip(currentCameraDetectorId));
             if (currentCameraObjectiveId != null && !"Unknown".equals(currentCameraObjectiveId)) {
-                PersistentPreferences.setLastObjective(currentCameraObjectiveId);
+                // Route through ObjectiveState so any open dialog (Wizard,
+                // Existing-Image, Background Collection, etc.) re-syncs.
+                qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(currentCameraObjectiveId);
             }
             // Per-objective exposures / gains / WB presets change with the
             // objective; rebuild the modality panel so the UI reflects the
@@ -1258,7 +1260,8 @@ public class StageControlPanel extends VBox {
                 // Fall back to the last known objective if it's still in the config.
                 // Do NOT guess by picking the first objective -- that silently selects
                 // the wrong hardware when the server isn't connected yet.
-                String lastObj = PersistentPreferences.getLastObjective();
+                String lastObj =
+                        qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
                 if (lastObj != null && !lastObj.isEmpty() && objectives != null && objectives.contains(lastObj))
                     currentCameraObjectiveId = lastObj;
                 if (detectors != null && !detectors.isEmpty())

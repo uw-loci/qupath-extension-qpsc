@@ -1353,8 +1353,10 @@ public class UnifiedAcquisitionController {
             objectiveBox.getItems().clear();
             objectiveBox.getItems().addAll(objectiveDisplayItems);
 
-            // Try to restore last used objective
-            String lastObjective = PersistentPreferences.getLastObjective();
+            // Try to restore last used objective via the shared state
+            String lastObjective =
+                    qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+            if (lastObjective == null) lastObjective = "";
             boolean restored = false;
             if (!lastObjective.isEmpty()) {
                 for (String displayItem : objectiveDisplayItems) {
@@ -2178,11 +2180,12 @@ public class UnifiedAcquisitionController {
                 }
 
                 // Drift guard: surface any divergence between the dialog combo and
-                // the global LastObjective preference that may have accumulated
-                // since this dialog opened (e.g. Live Viewer "Refresh from MM",
-                // another dialog's submit). The combo wins (user's explicit choice),
-                // but the warning flags a drift we want to catch early.
-                String globalObjective = PersistentPreferences.getLastObjective();
+                // the global objective state that may have accumulated since this
+                // dialog opened (e.g. Live Viewer Camera tab pick, another dialog's
+                // submit). The combo wins (user's explicit choice), but the warning
+                // flags a drift we want to catch early.
+                String globalObjective =
+                        qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
                 if (objective != null
                         && !objective.isEmpty()
                         && globalObjective != null
@@ -2190,17 +2193,16 @@ public class UnifiedAcquisitionController {
                         && !globalObjective.equals(objective)) {
                     logger.warn(
                             "Unified acquisition objective drift: dialog combo='{}' but "
-                                    + "PersistentPreferences.getLastObjective()='{}'. Using dialog value.",
+                                    + "ObjectiveState='{}'. Using dialog value.",
                             objective,
                             globalObjective);
                 }
 
-                // Save preferences. Modality goes through ModalityState so
-                // the central state stays the source of truth + other open
-                // dialogs see the value.
+                // Save preferences. Modality + objective go through their
+                // central state singletons so cross-dialog sync stays canonical.
                 PersistentPreferences.setLastSampleName(sampleName);
                 qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
-                PersistentPreferences.setLastObjective(objective);
+                qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(objective);
                 PersistentPreferences.setLastDetector(detector);
                 PersistentPreferences.setBoundingBoxString(String.format("%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));
 

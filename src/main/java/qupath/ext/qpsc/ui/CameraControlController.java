@@ -204,8 +204,9 @@ public class CameraControlController {
 
         // Fall back to last-used preferences if auto-detection didn't work
         if (!autoDetected) {
-            String lastObjective = PersistentPreferences.getLastObjective();
-            if (!lastObjective.isEmpty() && objectives.contains(lastObjective)) {
+            String lastObjective =
+                    qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+            if (lastObjective != null && !lastObjective.isEmpty() && objectives.contains(lastObjective)) {
                 objectiveCombo.setValue(lastObjective);
                 logger.debug("Pre-selected last-used objective: {}", lastObjective);
             } else if (!objectives.isEmpty()) {
@@ -627,10 +628,16 @@ public class CameraControlController {
             }
         });
 
-        // Objective/Detector change listeners - reload values
+        // Objective/Detector change listeners - reload values + broadcast
+        // objective via ObjectiveState so other open dialogs (Acquisition
+        // Wizard, Existing-Image, Background Collection, White Balance) and
+        // the next-open dialogs see the new pick.
         objectiveCombo.setOnAction(e -> {
             String objective = objectiveCombo.getValue();
             String detector = detectorCombo.getValue();
+            if (objective != null) {
+                qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(objective);
+            }
             if (objective != null && detector != null) {
                 reloadAllAnglesFromYAML(
                         mgr,
@@ -643,6 +650,29 @@ public class CameraControlController {
                         expIndividualRb,
                         expUnifiedRb,
                         wbMethodLabel);
+            }
+        });
+        // External changes (Wizard, Existing-Image, etc.) keep this combo in
+        // sync. The setOnAction handler above re-fires when we call setValue,
+        // so the YAML reload is automatic.
+        var objectiveState = qupath.ext.qpsc.state.ObjectiveState.getInstance();
+        javafx.beans.value.ChangeListener<String> objectiveStateListener = (obs, oldV, newV) -> {
+            if (newV != null
+                    && !newV.equals(objectiveCombo.getValue())
+                    && objectiveCombo.getItems().contains(newV)) {
+                objectiveCombo.setValue(newV);
+            }
+        };
+        objectiveState.objectiveProperty().addListener(objectiveStateListener);
+        // Detach the listener when the tab's owning window closes so the
+        // shared state doesn't retain a reference to this combo.
+        javafx.application.Platform.runLater(() -> {
+            javafx.scene.Scene sc = objectiveCombo.getScene();
+            if (sc != null && sc.getWindow() != null) {
+                sc.getWindow()
+                        .addEventHandler(
+                                javafx.stage.WindowEvent.WINDOW_HIDDEN,
+                                ev -> objectiveState.objectiveProperty().removeListener(objectiveStateListener));
             }
         });
         detectorCombo.setOnAction(e -> {

@@ -7,7 +7,6 @@ import javafx.scene.control.ComboBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -22,8 +21,8 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  *       for each (objective, detector) pair until the configured pixel
  *       size matches the value MM reports for the currently mounted
  *       optics).</li>
- *   <li>{@link PersistentPreferences#getLastObjective()} when the
- *       saved value is still in the populated list.</li>
+ *   <li>{@link qupath.ext.qpsc.state.ObjectiveState#getObjective()} when the
+ *       last-broadcast/persisted value is still in the populated list.</li>
  *   <li>First entry in the populated list.</li>
  * </ol>
  *
@@ -107,8 +106,10 @@ public final class ObjectiveSelector {
             return matched;
         }
 
-        // 2. Fall back to last-used preference.
-        String last = PersistentPreferences.getLastObjective();
+        // 2. Fall back to last-used preference (via the shared ObjectiveState
+        //    so any in-session change from another open dialog is honored,
+        //    not just the file-backed PersistentPreferences value).
+        String last = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
         if (last != null && !last.isEmpty() && combo.getItems().contains(last)) {
             combo.setValue(last);
             logger.debug("Pre-selected last-used objective: {}", last);

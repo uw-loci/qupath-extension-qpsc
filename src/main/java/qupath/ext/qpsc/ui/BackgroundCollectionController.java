@@ -248,7 +248,8 @@ public class BackgroundCollectionController {
                         logger.warn(
                                 "Background dialog: no objective was pre-selected "
                                         + "(lastObjective='{}' not found in available objectives)",
-                                PersistentPreferences.getLastObjective());
+                                qupath.ext.qpsc.state.ObjectiveState.getInstance()
+                                        .getObjective());
                     }
                 }
 
@@ -1316,7 +1317,8 @@ public class BackgroundCollectionController {
                         .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
                         .filter(availableObjectives::contains)
                         .orElse(null);
-                String lastObjective = PersistentPreferences.getLastObjective();
+                String lastObjective =
+                        qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
                 if (defaultObjective == null
                         && lastObjective != null
                         && !lastObjective.isEmpty()
@@ -1611,16 +1613,17 @@ public class BackgroundCollectionController {
             // surface it and keep the global in sync with what we're about to send.
             // Root cause of the 2026-04-15 WB/Background mislabel was exactly this
             // class of silent drift between dialog caches and global preferences.
-            String globalObjective = PersistentPreferences.getLastObjective();
+            String globalObjective =
+                    qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
             if (globalObjective != null && !globalObjective.isEmpty() && !globalObjective.equals(objective)) {
                 logger.warn(
                         "Background collection objective drift: dialog combo='{}' but "
-                                + "PersistentPreferences.getLastObjective()='{}'. Using dialog value. "
+                                + "ObjectiveState='{}'. Using dialog value. "
                                 + "If this was unintentional, click Cancel and re-open the dialog.",
                         objective,
                         globalObjective);
             }
-            PersistentPreferences.setLastObjective(objective);
+            qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(objective);
 
             // Validate exposure values and angles
             List<AngleExposure> finalExposures = new ArrayList<>();

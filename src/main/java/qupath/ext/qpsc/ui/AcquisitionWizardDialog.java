@@ -623,6 +623,10 @@ public class AcquisitionWizardDialog {
                     : MicroscopeConfigManager.getInstance(configPath);
             ObjectiveSelector.autoSelect(objectiveCombo, mgr);
             onObjectiveChanged();
+            // External changes (Camera tab, etc.) keep this combo in sync.
+            // Listener is installed once per dialog -- guard against repeat
+            // installs across multiple onModalityChanged() invocations.
+            installObjectiveStateListener();
         } else {
             objectiveCombo.getItems().clear();
             detectorCombo.getItems().clear();
@@ -630,13 +634,33 @@ public class AcquisitionWizardDialog {
         }
     }
 
+    private javafx.beans.value.ChangeListener<String> objectiveStateListener;
+
+    private void installObjectiveStateListener() {
+        if (objectiveStateListener != null) return;
+        var state = qupath.ext.qpsc.state.ObjectiveState.getInstance();
+        objectiveStateListener = (obs, oldV, newV) -> {
+            if (newV != null
+                    && !newV.equals(objectiveCombo.getValue())
+                    && objectiveCombo.getItems().contains(newV)) {
+                objectiveCombo.setValue(newV);
+            }
+        };
+        state.objectiveProperty().addListener(objectiveStateListener);
+        wizardStage.addEventHandler(javafx.stage.WindowEvent.WINDOW_HIDDEN, ev -> {
+            state.objectiveProperty().removeListener(objectiveStateListener);
+            objectiveStateListener = null;
+        });
+    }
+
     private void onObjectiveChanged() {
         String modality = modalityCombo.getValue();
         String objective = objectiveCombo.getValue();
         if (modality == null || objective == null) return;
 
-        // Save current selection
-        PersistentPreferences.setLastObjective(objective);
+        // Central state owns objective persistence -- this also fans the value
+        // out to any other open dialogs (no-op if equal).
+        qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(objective);
 
         Set<String> detectors = CalibrationChecker.getAvailableDetectors();
         detectorCombo.setItems(FXCollections.observableArrayList(detectors));
@@ -1210,12 +1234,12 @@ public class AcquisitionWizardDialog {
      * global preference state immediately before launching a sub-workflow.
      *
      * Sub-dialogs (WhiteBalanceDialog, BackgroundCollectionController, etc.)
-     * read `PersistentPreferences.getLastObjective()` / `getLastModality()` /
-     * `getLastDetector()` at init time to pre-select their own combo boxes.
-     * Between the moment the user opens the Wizard and the moment they click
-     * a sub-workflow button, something else (Live Viewer "Refresh from MM",
-     * another dialog's submit, a stale shadow preference) may have written a
-     * different value into those globals.
+     * read `ModalityState` / `ObjectiveState` / `PersistentPreferences.getLastDetector()`
+     * at init time to pre-select their own combo boxes. Between the moment the
+     * user opens the Wizard and the moment they click a sub-workflow button,
+     * something else (Live Viewer "Refresh from MM", another dialog's submit, a
+     * stale shadow preference) may have written a different value into those
+     * globals.
      *
      * The Wizard's own combo values are the user's *current stated intent*.
      * Reasserting them here guarantees that whatever the Wizard is showing is
@@ -1238,7 +1262,8 @@ public class AcquisitionWizardDialog {
             qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
         }
         if (objective != null && !objective.isEmpty()) {
-            PersistentPreferences.setLastObjective(objective);
+            // Central state owns objective persistence + cross-dialog broadcast.
+            qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(objective);
         }
         if (detector != null && !detector.isEmpty()) {
             PersistentPreferences.setLastDetector(detector);

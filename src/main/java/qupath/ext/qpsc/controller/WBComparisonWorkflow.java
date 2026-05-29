@@ -14,7 +14,6 @@ import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.AcquisitionMonitorService;
@@ -823,9 +822,11 @@ public class WBComparisonWorkflow {
         if (objectives.isEmpty()) {
             throw new RuntimeException("No objectives available for modality: " + modality);
         }
-        // Prefer the user's last-used objective (same pattern as SampleSetupController)
-        String lastObjective = PersistentPreferences.getLastObjective();
-        if (!lastObjective.isEmpty() && objectives.contains(lastObjective)) {
+        // Prefer the user's last-used objective via the shared ObjectiveState
+        // so any in-session change from another open dialog is honored.
+        String lastObjective =
+                qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+        if (lastObjective != null && !lastObjective.isEmpty() && objectives.contains(lastObjective)) {
             return lastObjective;
         }
         // Fall back to sorted order for deterministic selection
