@@ -171,6 +171,8 @@ After all tiles are captured, automatic stitching begins:
 - Temporary tile images (handled per preference settings)
 - Per-slide alignment JSON in `{project}/alignmentFiles/{imageName}_alignment.json`
 
+**Project Entry Grouping:** When acquiring with a modality that uses multiple angles (e.g., PPM 10x with 4 angles) or multiple channels, the resulting entries are grouped together under a single base-image name in the QuPath project sort. For example, a PPM 10x bounded acquisition appears as `bounds_ppm_10x_1` with all 4 angle entries logically grouped together, rather than as 4 separate ungrouped rows. Subsequent acquisitions of the same region use distinct base-image names (`bounds_ppm_10x_2`, etc.) for clear separation in the project.
+
 ## Automatic Stage Alignment
 
 Because you supplied the stage bounds directly, QPSC already knows how every pixel in the stitched image maps to a physical stage position — no manual 3-point alignment is required. When the stitched file is imported, the workflow writes a pixel -> stage affine transform keyed by the stitched image's file name.
