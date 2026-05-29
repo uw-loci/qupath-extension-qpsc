@@ -23,7 +23,7 @@ Displays the current camera name and type (`jai`, `hamamatsu`, `laser_scanning`,
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Objective | ComboBox | Select objective to load its calibration profile |
+| Objective | ComboBox | Select objective to load its calibration profile. **Objective changes sync across all open dialogs** (Acquisition Wizard, Background Collection, Existing-Image Acquisition, etc.), so selecting a new objective here updates all other open dialogs' selectors automatically. |
 | Detector | ComboBox | Select camera/detector for calibration values |
 | Reload from YAML | Button | Restore all values from the YAML calibration file |
 
