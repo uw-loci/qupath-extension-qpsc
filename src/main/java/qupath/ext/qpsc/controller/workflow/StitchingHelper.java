@@ -275,7 +275,8 @@ public class StitchingHelper {
                 stageBoundsY1Um,
                 stageBoundsX2Um,
                 stageBoundsY2Um,
-                sample);
+                sample,
+                modeWithIndex);
         return performStitchingInternal(
                 regionName,
                 sample,
@@ -754,6 +755,12 @@ public class StitchingHelper {
      * Since there's no actual annotation, we create default metadata.
      *
      * @param sampleName The actual sample folder name (from ProjectInfo)
+     * @param modeWithIndex Per-acquisition folder name (e.g. {@code "ppm_10x_1"}).
+     *                      When non-null and parentEntry is also null, the BoundingBox
+     *                      angle/channel entries share a synthesized
+     *                      {@code base_image = <regionName>_<modeWithIndex>} so the
+     *                      QuPath project sort groups one acquisition's N files
+     *                      together. When null the legacy own-name fallback runs.
      */
     private static StitchingMetadata calculateMetadataForRegion(
             String regionName,
@@ -764,7 +771,8 @@ public class StitchingHelper {
             Double stageBoundsY1Um,
             Double stageBoundsX2Um,
             Double stageBoundsY2Um,
-            SampleSetupResult sample) {
+            SampleSetupResult sample,
+            String modeWithIndex) {
 
         // Get parent entry (the current open image) - may be null in Bounded Acquisition
         ProjectImageEntry<BufferedImage> parentEntry = null;
@@ -836,6 +844,20 @@ public class StitchingHelper {
                     e.getMessage());
         }
 
+        // BoundingBox / Bounded acquisitions have no parent entry, so each
+        // angle (or channel) entry would otherwise be its own base_image --
+        // a single PPM acquisition lands as 4 unrelated rows in the project
+        // sort. Synthesize a stable per-acquisition base_image so the N
+        // entries land together. Format: "<regionName>_<modeWithIndex>"
+        // (e.g. "bounds_ppm_10x_1"). modeWithIndex already encodes
+        // modality + objective + acquisition counter, so re-acquiring the
+        // same region yields a distinct base_image ("..._1" vs "..._2").
+        String baseImageOverride = null;
+        if (parentEntry == null && modeWithIndex != null && !modeWithIndex.isEmpty()) {
+            String regionPart = (regionName == null || regionName.isEmpty()) ? "region" : regionName;
+            baseImageOverride = regionPart + "_" + modeWithIndex;
+        }
+
         return new StitchingMetadata(
                 parentEntry,
                 xOffset,
@@ -855,7 +877,8 @@ public class StitchingHelper {
                 fovXUm,
                 fovYUm,
                 detector,
-                sourceMicroscope);
+                sourceMicroscope,
+                baseImageOverride);
     }
 
     /**
@@ -1621,7 +1644,8 @@ public class StitchingHelper {
                                 metadata.imageIndex,
                                 handler,
                                 metadata.detector,
-                                metadata.sourceMicroscope);
+                                metadata.sourceMicroscope,
+                                metadata.baseImageOverride);
                     } else {
                         QPProjectFunctions.addImageToProject(f, project, false, false, handler);
                     }
@@ -1688,7 +1712,8 @@ public class StitchingHelper {
                             metadata.imageIndex,
                             handler,
                             metadata.detector,
-                            metadata.sourceMicroscope);
+                            metadata.sourceMicroscope,
+                            metadata.baseImageOverride);
                 } else {
                     QPProjectFunctions.addImageToProject(mergedFile, project, false, false, handler);
                 }

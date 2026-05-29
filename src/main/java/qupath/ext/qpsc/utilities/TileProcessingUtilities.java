@@ -575,7 +575,9 @@ public class TileProcessingUtilities {
                     // Add to project with metadata if available
                     qupath.lib.projects.ProjectImageEntry<BufferedImage> imported = null;
                     if (finalMetadata != null) {
-                        // Stitched images from microscope don't need flipping - they come with correct orientation
+                        // Stitched images from microscope don't need flipping - they come with correct orientation.
+                        // Pass detector/source/baseImageOverride through so PPM bounding-box angle
+                        // entries land under a single shared base_image (project-sort grouping).
                         imported = QPProjectFunctions.addImageToProjectWithMetadata(
                                 project,
                                 new File(lastProcessedPath),
@@ -590,7 +592,10 @@ public class TileProcessingUtilities {
                                 finalAngleSuffix,
                                 finalAnnotation,
                                 finalIndex,
-                                modalityHandler);
+                                modalityHandler,
+                                finalMetadata.detector,
+                                finalMetadata.sourceMicroscope,
+                                finalMetadata.baseImageOverride);
                     } else {
                         QPProjectFunctions.addImageToProject(
                                 new File(lastProcessedPath), project, false, false, modalityHandler);

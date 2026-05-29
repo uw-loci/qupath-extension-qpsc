@@ -54,6 +54,16 @@ public class StitchingMetadata {
     public final Double fovXUm;
     public final Double fovYUm;
 
+    // Optional base_image override. When set, the import path stamps this
+    // value into the new entry's BASE_IMAGE metadata *before* the
+    // ImageMetadataManager fallback computes one from the entry's own file
+    // name. Lets BoundingBox / Bounded acquisitions group their 4 (or N)
+    // angle entries under a single base_image so the QuPath project sort
+    // shows them as one collection per acquisition. Only consulted when
+    // parentEntry is null (parent-rooted entries always inherit, no
+    // ambiguity to resolve). null = use the inheritance / own-name fallback.
+    public final String baseImageOverride;
+
     /**
      * Full constructor with all metadata fields.
      */
@@ -76,7 +86,8 @@ public class StitchingMetadata {
             Double fovXUm,
             Double fovYUm,
             String detector,
-            String sourceMicroscope) {
+            String sourceMicroscope,
+            String baseImageOverride) {
         this.parentEntry = parentEntry;
         this.xOffset = xOffset;
         this.yOffset = yOffset;
@@ -96,6 +107,54 @@ public class StitchingMetadata {
         this.fovYUm = fovYUm;
         this.detector = detector;
         this.sourceMicroscope = sourceMicroscope;
+        this.baseImageOverride = baseImageOverride;
+    }
+
+    /**
+     * Convenience constructor that omits {@link #baseImageOverride}; legacy
+     * call sites which don't group angle entries pass through here.
+     */
+    public StitchingMetadata(
+            ProjectImageEntry<BufferedImage> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean flipX,
+            boolean flipY,
+            String sampleName,
+            String modality,
+            String objective,
+            String angle,
+            String annotationName,
+            Integer imageIndex,
+            Double stageBoundsX1Um,
+            Double stageBoundsY1Um,
+            Double stageBoundsX2Um,
+            Double stageBoundsY2Um,
+            Double fovXUm,
+            Double fovYUm,
+            String detector,
+            String sourceMicroscope) {
+        this(
+                parentEntry,
+                xOffset,
+                yOffset,
+                flipX,
+                flipY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex,
+                stageBoundsX1Um,
+                stageBoundsY1Um,
+                stageBoundsX2Um,
+                stageBoundsY2Um,
+                fovXUm,
+                fovYUm,
+                detector,
+                sourceMicroscope,
+                null);
     }
 
     /**

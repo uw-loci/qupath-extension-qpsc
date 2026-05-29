@@ -533,6 +533,57 @@ public class QPProjectFunctions {
             String detectorId,
             String sourceMicroscope)
             throws IOException {
+        return addImageToProjectWithMetadata(
+                project,
+                imageFile,
+                parentEntry,
+                xOffset,
+                yOffset,
+                isFlippedX,
+                isFlippedY,
+                sampleName,
+                modality,
+                objective,
+                angle,
+                annotationName,
+                imageIndex,
+                modalityHandler,
+                detectorId,
+                sourceMicroscope,
+                null);
+    }
+
+    /**
+     * Canonical addImageToProjectWithMetadata that also accepts a
+     * {@code baseImageOverride}. When non-null AND {@code parentEntry} is
+     * null, the override is stamped onto the new entry's
+     * {@link ImageMetadataManager#BASE_IMAGE} metadata before
+     * {@link ImageMetadataManager#applyImageMetadata} runs, so its
+     * own-name fallback yields to the caller-supplied value. Lets
+     * BoundingBox / Bounded acquisitions group their N angle/channel
+     * entries under one base_image for project-sort consolidation. When
+     * {@code parentEntry} is non-null the override is ignored -- inherited
+     * base_image semantics win.
+     */
+    public static ProjectImageEntry<BufferedImage> addImageToProjectWithMetadata(
+            Project<BufferedImage> project,
+            File imageFile,
+            ProjectImageEntry<BufferedImage> parentEntry,
+            double xOffset,
+            double yOffset,
+            boolean isFlippedX,
+            boolean isFlippedY,
+            String sampleName,
+            String modality,
+            String objective,
+            String angle,
+            String annotationName,
+            Integer imageIndex,
+            qupath.ext.qpsc.modality.ModalityHandler modalityHandler,
+            String detectorId,
+            String sourceMicroscope,
+            String baseImageOverride)
+            throws IOException {
 
         if (project == null) {
             logger.error("Cannot add image: project is null");
@@ -540,7 +591,7 @@ public class QPProjectFunctions {
         }
 
         logger.debug(
-                "Adding image with metadata: {} (parent={}, offset=({},{}), flipped={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={})",
+                "Adding image with metadata: {} (parent={}, offset=({},{}), flipped={}, sample={}, modality={}, objective={}, angle={}, annotation={}, index={}, baseImageOverride={})",
                 imageFile.getName(),
                 parentEntry != null ? parentEntry.getImageName() : "none",
                 xOffset,
@@ -551,7 +602,8 @@ public class QPProjectFunctions {
                 objective,
                 angle,
                 annotationName,
-                imageIndex);
+                imageIndex,
+                baseImageOverride);
 
         // First add the image using existing logic (preserves original method)
         boolean success = addImageToProject(imageFile, project, isFlippedX, isFlippedY, modalityHandler);
@@ -567,6 +619,16 @@ public class QPProjectFunctions {
                 .orElse(null);
 
         if (newEntry != null) {
+            // Pre-set BASE_IMAGE when the caller wants to override the
+            // own-name fallback (BoundingBox angle/channel grouping). The
+            // applyImageMetadata call below reads existing metadata first
+            // when parentEntry is null, so this seed survives. Skip when a
+            // parent is present -- inherited base_image is authoritative.
+            if (parentEntry == null && baseImageOverride != null && !baseImageOverride.isEmpty()) {
+                newEntry.getMetadata().put(ImageMetadataManager.BASE_IMAGE, baseImageOverride);
+                logger.info("Seeded base_image override '{}' on new entry: {}", baseImageOverride, imageName);
+            }
+
             // Apply comprehensive metadata with all identification fields
             ImageMetadataManager.applyImageMetadata(
                     newEntry,
