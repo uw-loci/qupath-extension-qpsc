@@ -130,6 +130,29 @@ public class SaturationSummaryDialog {
         Label header = new Label("Saturation detected during acquisition");
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
 
+        root.getChildren().add(header);
+
+        // Plain-English explainer for non-microscopists: only shown when the
+        // "Low signal" role appears in the concerning table (PPM low-angle
+        // tiles today). Without this, the combination of dialog title
+        // "Saturation Summary" and row label "Low signal" reads as a
+        // contradiction.
+        boolean hasLowSignal =
+                concerning.stream().anyMatch(t -> t.get("__role") == ModalityHandler.SaturationRole.SIGNAL_LOW);
+        if (hasLowSignal) {
+            Label lowSignalExplainer =
+                    new Label("What 'Low signal' means: saturation showed up on an image the microscope "
+                            + "expected to be nearly dark. For PPM, certain rotation angles block almost "
+                            + "all the light, so any bright pixel there usually points to a hot pixel, dust "
+                            + "on the sensor, or a calibration that has drifted -- not your sample.");
+            lowSignalExplainer.setWrapText(true);
+            lowSignalExplainer.setMaxWidth(Double.MAX_VALUE);
+            lowSignalExplainer.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555; "
+                    + "-fx-background-color: #f4f1e8; -fx-padding: 6 8 6 8; "
+                    + "-fx-border-color: #d8cfb4; -fx-border-width: 0 0 0 3;");
+            root.getChildren().add(lowSignalExplainer);
+        }
+
         // Plain-English banner: count low-signal vs high-signal saturation.
         String bannerText = buildBanner(concerning, expectedBright, summaryText, handler);
         Label banner = new Label(bannerText);
@@ -140,7 +163,7 @@ public class SaturationSummaryDialog {
         Label instruction = new Label("Double-click a row to move stage to that tile (requires microscope connection)");
         instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
 
-        root.getChildren().addAll(header, banner, instruction);
+        root.getChildren().addAll(banner, instruction);
 
         // Top: concerning saturation table (LOW + NORMAL roles)
         if (!concerning.isEmpty()) {
