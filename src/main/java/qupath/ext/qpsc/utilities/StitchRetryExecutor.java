@@ -9,10 +9,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.TimeoutException;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
+import javafx.scene.control.Alert;
 import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
@@ -56,8 +56,11 @@ public final class StitchRetryExecutor {
     /** Upper bound (minutes) on waiting for an abandoned write to release its temp file. */
     private static final long ABANDON_WAIT_MINUTES = 15;
 
-    /** Guards against stacking multiple warn dialogs when stitches fail in parallel. */
-    private static final AtomicBoolean warnDialogVisible = new AtomicBoolean(false);
+    /** Guards against stacking multiple recovery notices when stitches fail in parallel. */
+    private static final AtomicBoolean recoveryDialogVisible = new AtomicBoolean(false);
+
+    /** Vertical gap between the StitchingBlockingDialog and the recovery notice when both are visible. */
+    private static final double DIALOG_GAP_PX = 20.0;
 
     private StitchRetryExecutor() {}
 
@@ -93,7 +96,6 @@ public final class StitchRetryExecutor {
 
         boolean escalates = baseFormat == OutputFormat.OME_TIFF;
         int maxAttempts = escalates ? OME_TIFF_ATTEMPTS + 1 : OME_TIFF_ATTEMPTS;
-        AtomicBoolean switchToZarr = new AtomicBoolean(false);
 
         // Flip flags are set once for the whole sequence: every OME-TIFF attempt
         // uses identical values, so set-once / clear-once avoids a per-attempt
@@ -103,9 +105,10 @@ public final class StitchRetryExecutor {
         try {
             Exception lastFailure = null;
             boolean firstFailureReported = false;
+            int omeTiffAttemptsUsed = 0;
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++) {
-                boolean zarrAttempt = escalates && (attempt > OME_TIFF_ATTEMPTS || switchToZarr.get());
+                boolean zarrAttempt = escalates && attempt > OME_TIFF_ATTEMPTS;
                 OutputFormat format = zarrAttempt ? OutputFormat.OME_TIFF_VIA_ZARR : baseFormat;
                 boolean detectTileErrors = format == OutputFormat.OME_TIFF;
 
@@ -125,10 +128,14 @@ public final class StitchRetryExecutor {
                 if (!failed) {
                     if (zarrAttempt) {
                         logger.info("Stitching '{}' succeeded via the OME_TIFF_VIA_ZARR fallback", label);
+                        reportRecoveryComplete(label, omeTiffAttemptsUsed, interactive);
                     }
                     return outPath;
                 }
 
+                if (!zarrAttempt) {
+                    omeTiffAttemptsUsed = attempt;
+                }
                 lastFailure = thrown != null
                         ? thrown
                         : new IOException(
@@ -151,7 +158,7 @@ public final class StitchRetryExecutor {
                 }
                 if (escalates && !firstFailureReported) {
                     firstFailureReported = true;
-                    reportFirstFailure(label, switchToZarr, interactive);
+                    sendFirstFailureNotification(label);
                 }
             }
             // Reached only by a non-escalating base format that exhausted its retries.
@@ -221,11 +228,14 @@ public final class StitchRetryExecutor {
     }
 
     /**
-     * Sends a push notification and (when interactive) shows a non-blocking
-     * dialog offering to switch the remaining attempts to ZARR. Fired once,
-     * after the first failed OME-TIFF attempt.
+     * Fires the high-priority push notification on the first failed OME-TIFF
+     * attempt. The user-facing summary (with auto-recovery context) is fired
+     * separately by {@link #reportRecoveryComplete} once the ZARR fallback
+     * actually succeeds -- the retry/escalation cadence is faster than a
+     * human can respond, so a mid-flight "switch to ZARR?" prompt was moot
+     * in practice and has been removed.
      */
-    private static void reportFirstFailure(String label, AtomicBoolean switchToZarr, boolean interactive) {
+    private static void sendFirstFailureNotification(String label) {
         try {
             NotificationService.getInstance()
                     .notify(
@@ -237,41 +247,96 @@ public final class StitchRetryExecutor {
         } catch (Exception e) {
             logger.debug("Could not send tile-write-error notification: {}", e.getMessage());
         }
+    }
 
+    /**
+     * Shows a non-blocking post-recovery Alert after the ZARR fallback
+     * succeeds, telling the user what happened and suggesting the
+     * Preferences switch. Raised always-on-top and positioned below the
+     * {@code StitchingBlockingDialog} when that is visible, mirroring the
+     * pattern used by that dialog's own internal warning at
+     * {@code StitchingBlockingDialog:295-310}.
+     *
+     * @param label                  sample / angle label for the message text
+     * @param omeTiffAttemptsUsed    how many OME-TIFF attempts failed before
+     *                               the ZARR escalation
+     * @param interactive            no-op when false (headless / batch path)
+     */
+    private static void reportRecoveryComplete(String label, int omeTiffAttemptsUsed, boolean interactive) {
         if (!interactive) {
             return;
         }
-        if (!warnDialogVisible.compareAndSet(false, true)) {
-            // A warn dialog is already on screen; do not stack another.
+        if (!recoveryDialogVisible.compareAndSet(false, true)) {
+            // A previous recovery notice is still up; coalesce rather than stack.
             return;
         }
         Platform.runLater(() -> {
             try {
-                Dialog<ButtonType> dialog = new Dialog<>();
-                dialog.initModality(Modality.NONE);
-                dialog.setTitle("Stitching tile-write errors");
-                dialog.setHeaderText("Known OME-TIFF writer bug detected while stitching \"" + label + "\"");
-                ButtonType switchZarr = new ButtonType("Switch to ZARR", ButtonBar.ButtonData.OK_DONE);
-                ButtonType keepTiff = new ButtonType("Keep retrying OME-TIFF", ButtonBar.ButtonData.CANCEL_CLOSE);
-                dialog.getDialogPane().getButtonTypes().setAll(switchZarr, keepTiff);
-                dialog.setContentText("Pyramid tile-write errors were detected -- the OME-TIFF output would have "
-                        + "corrupt zoomed-out levels. Stitching is being retried automatically.\n\n"
-                        + "You can switch the next attempt to the more reliable ZARR format (it "
-                        + "still produces a .ome.tif via background conversion), or keep retrying "
-                        + "OME-TIFF. If you do nothing, it falls back to ZARR after "
-                        + OME_TIFF_ATTEMPTS + " OME-TIFF attempts.");
-                dialog.setOnHidden(ev -> {
-                    warnDialogVisible.set(false);
-                    if (dialog.getResult() == switchZarr) {
-                        switchToZarr.set(true);
-                        logger.info("User chose to switch stitching of '{}' to ZARR", label);
+                Alert alert = new Alert(Alert.AlertType.INFORMATION);
+                alert.initModality(Modality.NONE);
+                alert.setTitle("Stitching recovered via ZARR");
+                alert.setHeaderText("Stitching of \"" + label + "\" recovered automatically");
+                String attemptsPhrase = omeTiffAttemptsUsed == 1 ? "1 attempt" : omeTiffAttemptsUsed + " attempts";
+                alert.setContentText("A known OME-TIFF writer bug caused " + attemptsPhrase
+                        + " to fail. Stitching escalated to OME-TIFF-via-ZARR (a different writer "
+                        + "that is not subject to the bug) and produced a usable image. A background "
+                        + "task is converting the ZARR back to .ome.tif.\n\n"
+                        + "If this keeps happening for your slides, consider switching the default "
+                        + "stitching format to OME-TIFF-via-ZARR in Edit -> Preferences -> QPSC.");
+                alert.setResizable(true);
+                alert.setOnHidden(ev -> recoveryDialogVisible.set(false));
+
+                Stage stitchingWindow = findStitchingBlockingWindow();
+                if (stitchingWindow != null) {
+                    alert.initOwner(stitchingWindow);
+                }
+
+                alert.setOnShown(shown -> {
+                    Window alertWindow = alert.getDialogPane().getScene() != null
+                            ? alert.getDialogPane().getScene().getWindow()
+                            : null;
+                    if (alertWindow instanceof Stage alertStage) {
+                        alertStage.setAlwaysOnTop(true);
+                        alertStage.toFront();
+                        if (stitchingWindow != null && stitchingWindow.getWidth() > 0 && alertWindow.getWidth() > 0) {
+                            double parentX = stitchingWindow.getX();
+                            double parentY = stitchingWindow.getY();
+                            double parentW = stitchingWindow.getWidth();
+                            double parentH = stitchingWindow.getHeight();
+                            double alertW = alertWindow.getWidth();
+                            alertStage.setX(parentX + (parentW - alertW) / 2.0);
+                            alertStage.setY(parentY + parentH + DIALOG_GAP_PX);
+                        }
                     }
                 });
-                dialog.show();
+                alert.show();
             } catch (Exception e) {
-                warnDialogVisible.set(false);
-                logger.warn("Could not show tile-write-error dialog: {}", e.getMessage());
+                recoveryDialogVisible.set(false);
+                logger.warn("Could not show stitching recovery notice: {}", e.getMessage());
             }
         });
+    }
+
+    /**
+     * Finds the visible {@code StitchingBlockingDialog} window so the recovery
+     * notice can be positioned relative to it. Returns null if the dialog is
+     * not on screen (e.g. recovery completed after the workflow already
+     * closed it).
+     */
+    private static Stage findStitchingBlockingWindow() {
+        try {
+            return Window.getWindows().stream()
+                    .filter(w -> w instanceof Stage && w.isShowing())
+                    .map(w -> (Stage) w)
+                    .filter(s -> {
+                        String t = s.getTitle();
+                        return t != null && t.startsWith("Stitching in Progress");
+                    })
+                    .findFirst()
+                    .orElse(null);
+        } catch (Exception e) {
+            logger.debug("Could not locate StitchingBlockingDialog window: {}", e.getMessage());
+            return null;
+        }
     }
 }
