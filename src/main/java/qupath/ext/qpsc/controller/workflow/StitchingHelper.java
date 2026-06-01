@@ -950,6 +950,39 @@ public class StitchingHelper {
         String detector = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
         if (detector != null && detector.isEmpty()) detector = null;
 
+        // Camera FOV in stage microns. Required by
+        // autoRegisterBoundsTransformIfAvailable so it can anchor the image's
+        // top/left edge at exactly half a FOV before the annotation (the tile
+        // grid centers the first tile on the annotation top-left). Without it,
+        // auto-register falls back to a symmetric-halfFOV assumption that is
+        // wrong whenever the tile grid overshoots the annotation, putting the
+        // image origin off by the rounding asymmetry -- the half-FOV-Y
+        // Move-to-Centroid error reproduced on PPM 2026-06-01. The
+        // BoundingBox-path builder already resolves this; the sub-image /
+        // annotation path (this method) was missing it and shipped null.
+        Double fovXUm = null;
+        Double fovYUm = null;
+        try {
+            qupath.ext.qpsc.utilities.MicroscopeConfigManager mgr =
+                    qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null && modality != null && objective != null) {
+                double[] fov = mgr.getCameraFOV(modality, objective, detector);
+                if (fov != null && fov.length == 2) {
+                    fovXUm = fov[0];
+                    fovYUm = fov[1];
+                }
+            }
+        } catch (Exception e) {
+            logger.warn(
+                    "Could not resolve camera FOV for sub-image metadata "
+                            + "(modality={}, objective={}, detector={}): {} -- "
+                            + "auto-register will fall back to symmetric half-FOV",
+                    modality,
+                    objective,
+                    detector,
+                    e.getMessage());
+        }
+
         return new StitchingMetadata(
                 parentEntry,
                 offset[0],
@@ -966,8 +999,8 @@ public class StitchingHelper {
                 stageBoundsY1,
                 stageBoundsX2,
                 stageBoundsY2,
-                null,
-                null,
+                fovXUm,
+                fovYUm,
                 detector,
                 sourceMicroscope);
     }
