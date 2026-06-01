@@ -15,15 +15,20 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
 | `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | OK |
 | `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_BoundedAcquisition_TileGrid.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
 | `Docs_CameraControl.png` | `ui/CameraControlController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings_Alerts.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
+| `Docs_CrossInstrumentWorkflow.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
 | `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_ExistingImage_FluorescenceProject.png` | Lab-meeting slide deck (QuPath project view; not a single UI class) | 2026-06-01 | OK |
 | `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | 2026-05-27 | OK |
 | `Docs_LiveViewer_Position.png` | `ui/liveviewer/StageControlPanel.java` | 2026-05-27 | OK |
 | `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` | 2026-05-27 | OK |
 | `Docs_MicroscopeAlignment_SelectSourceMicroscope.png` | `ui/MicroscopeSelectionDialog.java` | -- | CHECK |
 | `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | 2026-05-27 | OK |
+| `Docs_SystemArchitecture.png` | Lab-meeting slide deck (architecture diagram; not a UI class) | 2026-06-01 | OK |
+| `Docs_WorkflowOverview_Desktop.png` | Lab-meeting slide deck (full-desktop composite; multiple UI classes) | 2026-06-01 | OK |
 | `Docs_WhiteBalanceCalibration.png` | `ui/WhiteBalanceDialog.java` | 2026-05-27 | OK |
 | `Docs_mainmenu.png` | `SetupScope.java` | 2026-05-27 | OK |
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |

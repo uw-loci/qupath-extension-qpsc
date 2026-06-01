@@ -9,6 +9,10 @@ Acquire high-resolution images by defining stage coordinates directly. This work
 
 ![Bounded Acquisition dialog](../images/Docs_BoundedAcquisition.png)
 
+QPSC covers the chosen region with a tile grid and acquires every tile, here shown overlaid on detected specimens with labeled annotation boxes:
+
+![Tile grid overlaid on a region, with labeled annotation boxes around individual specimens](../images/Docs_BoundedAcquisition_TileGrid.png)
+
 ## Prerequisites
 
 - Python microscope server running

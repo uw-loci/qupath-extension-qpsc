@@ -7,6 +7,8 @@
 
 Acquire high-resolution images of specific regions annotated on an existing macro/overview image. Annotations drawn in QuPath define the regions to scan, and a coordinate transform maps image positions to physical stage positions. Use this when you have a macro image of your slide and want to acquire targeted regions of interest.
 
+![QuPath project with an existing overview image open: a red annotation around one specimen marks a region selected for high-resolution acquisition, with the project image list at left](../images/Docs_ExistingImage_FluorescenceProject.png)
+
 The acquisition dialog consolidates all options in a single scrollable panel. You may need to scroll to see all options on smaller screens.
 
 ![Existing Image Acquisition dialog -- top section](../images/Docs_ExistingImage_ConsolidatedDialog.png)

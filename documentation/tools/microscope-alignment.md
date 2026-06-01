@@ -7,6 +7,10 @@
 
 Create or update the coordinate transformation between QuPath image coordinates and physical microscope stage positions. This alignment is required for accurate stage positioning when acquiring from existing images. Use this tool the first time you set up a slide/scanner combination, after hardware changes affecting positioning, or when acquired images do not align with annotations.
 
+The figure below shows the end-to-end purpose of alignment: a whole-slide overview with a target annotation in QuPath (a), cross-instrument alignment with QPSC to a second microscope (b, c), and high-resolution re-acquisition of the sub-region on that microscope (d).
+
+![Cross-instrument workflow: whole-slide overview with a target annotation in QuPath, cross-instrument alignment with QPSC, and high-resolution re-acquisition of a sub-region](../images/Docs_CrossInstrumentWorkflow.png)
+
 ![Microscope Alignment source selection dialog](../images/Docs_MicroscopeAlignment_SelectSourceMicroscope.png)
 
 ## Prerequisites

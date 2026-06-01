@@ -15,6 +15,8 @@
 
 The extension connects QuPath to your microscope via [Pycro-Manager](https://pycro-manager.readthedocs.io/) and [Micro-Manager](https://micro-manager.org/), enabling reproducible, high-throughput imaging workflows for digital pathology research.
 
+![System overview: QuPath drives a Pycro-Manager Python server that talks to Micro-Manager, with project metadata, microscope metadata, image tile positions, and stitched images flowing between the layers](documentation/images/Docs_SystemArchitecture.png)
+
 ---
 
 ## Contents
