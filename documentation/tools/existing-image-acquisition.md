@@ -157,10 +157,7 @@ When you start this workflow, QPSC checks whether the opened image is an orphane
 3. Re-run the Existing Image Acquisition workflow on the base.
 4. When convenient, you can delete the orphaned sibling from the project — it is no longer needed.
 
-**When the dialog does NOT appear:** If the image is not a flipped sibling, or if its base's source microscope differs from the active microscope (e.g., a genuine cross-scope sibling like a PPM acquisition on an Ocus40 macro), the workflow proceeds to Step 1 without prompting. Additionally, if an orphaned sibling is opened but any of the following are true, the workflow bypasses the warning and proceeds:
-
-- **Fresh coordinate transform in this session:** A coordinate transform has been created in this session (typically by running Microscope Alignment immediately before on that same sibling). The in-session transform prevents the pixel-size fallback failure this guard was designed to prevent.
-- **Saved alignment preset exists:** A saved alignment preset targeting the active scope exists (typically from a prior MicroscopeAlignmentWorkflow run). Even after a session restart when the in-session transform is null, the presence of a saved preset is evidence that alignment has been done. You can reuse it via the Stage Map source dropdown in the Manual Alignment path without falling back to macro pixel size.
+**When the dialog does NOT appear:** If the image is not a flipped sibling, or if its base's source microscope differs from the active microscope (e.g., a genuine cross-scope sibling like a PPM acquisition on an Ocus40 macro), the workflow proceeds to Step 1 without prompting. Additionally, if an orphaned sibling is opened but a fresh coordinate transform has been created in this session (typically by running Microscope Alignment immediately before on that same sibling), the workflow bypasses the warning and proceeds — the in-session transform prevents the pixel-size fallback failure this guard was designed to prevent.
 
 ### Step 1: Sample Setup
 
