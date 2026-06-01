@@ -17,6 +17,7 @@ import javafx.scene.control.ButtonType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -25,6 +26,7 @@ import qupath.ext.qpsc.utilities.*;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.roi.interfaces.ROI;
 
 /**
@@ -1460,6 +1462,78 @@ public class MicroscopeAlignmentWorkflow {
                 PersistentPreferences.setSelectedScanner(selectedScanner);
             }
             logger.info("Saved transform: {}", transformName);
+
+            // Step 8.25: ALSO write a per-slide alignment JSON for the open entry.
+            // The preset above is keyed (sourceScanner, targetMicroscope) and is the
+            // "general" macro->stage transform. ExistingImageWorkflowV2 looks for a
+            // per-slide JSON in alignmentFiles/<lookupKey>_<scope>_alignment.json on
+            // startup (AlignmentHelper.checkForSlideAlignment) and falls through to
+            // ManualAlignmentPath when none exists -- which then re-prompts the user
+            // for three click-tile alignments, using the SCANNER's macro pixel size
+            // (~81 um/px) instead of the slide's actual calibration, producing the
+            // off-by-125x failure mode the orphaned-sibling guard exists to flag.
+            //
+            // Writing the per-slide JSON here closes that loop. The transform we
+            // persist is fullResToStageTransform -- consumes the OPEN ENTRY's
+            // pixel coords (matches the contract every other macro-path writer
+            // follows: ManualAlignmentPath, ExistingAlignmentPath, and
+            // saveRefinedAlignment all write open-entry-pixel->stage transforms
+            // under the PIXEL_FRAME_MACRO tag; the tag's job is to exclude
+            // PIXEL_FRAME_SUB sub-image transforms, not to assert literal macro
+            // scale). flipMacroX/Y come from the open entry's metadata, matching
+            // the bake-delta read site in AlignmentHelper.checkForSlideAlignment.
+            try {
+                if (gui.getProject() != null && gui.getImageData() != null) {
+                    @SuppressWarnings("unchecked")
+                    Project<java.awt.image.BufferedImage> project =
+                            (Project<java.awt.image.BufferedImage>) gui.getProject();
+                    String rawImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                    String lookupKey = rawImageName != null
+                            ? AlignmentHelper.resolveMacroLookupKey(project, gui.getImageData(), rawImageName)
+                            : null;
+                    if (lookupKey != null) {
+                        ProjectImageEntry<java.awt.image.BufferedImage> openEntry =
+                                project.getEntry(gui.getImageData());
+                        boolean flipMacroX = openEntry != null && ImageMetadataManager.isFlippedX(openEntry);
+                        boolean flipMacroY = openEntry != null && ImageMetadataManager.isFlippedY(openEntry);
+                        String modality = PersistentPreferences.getLastModality();
+                        String objective = qupath.ext.qpsc.state.ObjectiveState.getInstance()
+                                .getObjective();
+                        String detector = PersistentPreferences.getLastDetector();
+                        AffineTransformManager.saveSlideAlignment(
+                                project,
+                                lookupKey,
+                                modality,
+                                fullResToStageTransform,
+                                null,
+                                flipMacroX,
+                                flipMacroY,
+                                AffineTransformManager.PIXEL_FRAME_MACRO,
+                                objective,
+                                detector);
+                        logger.info(
+                                "Saved per-slide alignment for '{}' (modality={}, flipMacroX={}, flipMacroY={}, "
+                                        + "objective={}, detector={}) -- Existing Image Acquisition will load this "
+                                        + "directly without re-prompting for manual alignment",
+                                lookupKey,
+                                modality,
+                                flipMacroX,
+                                flipMacroY,
+                                objective,
+                                detector);
+                    } else {
+                        logger.warn("Skipping per-slide alignment save -- no image name available");
+                    }
+                } else {
+                    logger.warn("Skipping per-slide alignment save -- no project or open image");
+                }
+            } catch (Exception slideEx) {
+                logger.warn(
+                        "Failed to write per-slide alignment alongside preset '{}': {}",
+                        transformName,
+                        slideEx.getMessage(),
+                        slideEx);
+            }
 
             // Step 8.5: Verify the saved preset round-trips correctly. This is the same path
             // the Stage Map will exercise next time it's opened: reload the manager from disk,

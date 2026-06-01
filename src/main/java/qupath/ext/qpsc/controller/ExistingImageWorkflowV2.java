@@ -519,6 +519,31 @@ public class ExistingImageWorkflowV2 {
                 return true;
             }
 
+            // Real-alignment carve-out: when a per-slide alignment JSON already exists
+            // for this image's macro-lookup key, the off-by-125x failure mode this guard
+            // was built for cannot fire -- AlignmentHelper.checkForSlideAlignment will
+            // load that JSON and route through processSlideSpecificAlignment, never
+            // reaching ManualAlignmentPath. MicroscopeAlignmentWorkflow writes this
+            // JSON alongside the saved preset, so the legitimate "I just ran Microscope
+            // Alignment on this sibling" case is unblocked. Truly orphaned siblings
+            // (created in a pre-fix run, no JSON ever written) still get refused.
+            try {
+                String rawImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                String lookupKey = rawImageName != null
+                        ? AlignmentHelper.resolveMacroLookupKey(project, gui.getImageData(), rawImageName)
+                        : null;
+                if (lookupKey != null && AffineTransformManager.loadSlideAlignment(project, lookupKey) != null) {
+                    logger.info(
+                            "Orphaned-sibling guard: allowing '{}' -- per-slide alignment JSON exists "
+                                    + "for lookup key '{}' (real alignment available, off-by-125x cannot fire)",
+                            entry.getImageName(),
+                            lookupKey);
+                    return true;
+                }
+            } catch (Exception e) {
+                logger.debug("Orphaned-sibling guard: per-slide lookup failed: {}", e.getMessage());
+            }
+
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             alert.setTitle("Orphaned flipped sibling");
