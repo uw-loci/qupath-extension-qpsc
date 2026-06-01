@@ -519,6 +519,21 @@ public class ExistingImageWorkflowV2 {
                 return true;
             }
 
+            // Fresh-alignment carve-out: when a transform has been installed in
+            // this session (most commonly by MicroscopeAlignmentWorkflow, which
+            // creates the flipped sibling intentionally and saves a preset for
+            // the active scope), the off-by-125x failure mode this guard was
+            // built for cannot happen -- ManualAlignmentPath won't fall through
+            // to the macro pixel size because a real transform exists. Allow
+            // the workflow to proceed and use that transform.
+            if (MicroscopeController.getInstance().getCurrentTransform() != null) {
+                logger.info(
+                        "Orphaned-sibling guard: allowing '{}' -- fresh in-session transform present "
+                                + "(likely created by MicroscopeAlignmentWorkflow on this sibling)",
+                        entry.getImageName());
+                return true;
+            }
+
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             alert.setTitle("Orphaned flipped sibling");
