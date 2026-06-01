@@ -246,7 +246,7 @@ Standalone stitching utility for tile folders acquired with MicroManager 2.0. Un
 
 ## Make Project Portable
 
-Cleans up a project's ZARR-backed images and raw tile folders so the project is easy to copy off the acquisition workstation. ZARR images can arise from the OME_TIFF_VIA_ZARR output format (writes fast to ZARR, queues automatic background conversion to OME-TIFF) or from **Re-stitch Tiles** recovery run in OME_ZARR / OME_TIFF_VIA_ZARR mode.
+Cleans up a project's ZARR-backed images and raw tile folders so the project is easy to copy off the acquisition workstation. ZARR images arise when stitching uses the **OME_ZARR** output format (either as the acquisition preference or via **Re-stitch Tiles** recovery run in OME_ZARR mode).
 
 The tool works in two scenarios:
 
@@ -272,7 +272,7 @@ Individual tiles are only needed if you plan to **re-stitch** the acquisition. T
 
 **When You Need It:**
 
-- You've acquired images using the OME_TIFF_VIA_ZARR output format and want the ZARR files removed
+- You've acquired images using the OME_ZARR output format and want single-file OME-TIFFs instead
 - You want to archive or share a project with minimal file size (only single-file OME-TIFFs, no ZARR directories or raw tiles)
 - Your project has already been fully converted to OME-TIFF but raw tile folders remain (the tool can clean those up independently)
 - You're copying the project from the acquisition workstation to storage or a shared server

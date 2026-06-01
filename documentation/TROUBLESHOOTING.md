@@ -720,27 +720,15 @@ See [UTILITIES.md -- Exporting to Micro-Manager MDA](UTILITIES.md#exporting-to-m
 2. Look for Python server errors during acquisition (acquisition might have failed silently)
 3. Verify Python server completed acquisition successfully before stitching started
 
-#### Q: Stitching Recovery says "could not be stitched even after retries and the ZARR fallback" - what does this mean?
+#### Q: My older stitched images have black upper pyramid levels - is that still a risk?
 
-**A:** The base (full-resolution) image wrote successfully, but tile writes failed at one or more of the downsampled pyramid levels. When this happens, the Stitching Recovery workflow **automatically retries** the stitching (up to 3 times for OME-TIFF format). If retries fail, the system **automatically escalates to OME_TIFF_VIA_ZARR** format (writes to ZARR, then queues a background conversion to OME-TIFF). If both retry and escalation fail, this error appears.
+**A:** No -- this was fixed by replacing QuPath's `OMEPyramidWriter` with a direct tiled-pyramidal OME-TIFF writer (`DirectTiffOutputWriter` in `qupath-extension-tiles-to-pyramid`).
 
-**Why it happens (root cause):**
-This is a QuPath / OMEPyramidWriter bug, not a disk-space or permissions problem. At pyramid levels whose dimensions are not a clean multiple of the tile size (512 px), the writer's internal tile-iteration count disagrees with the per-level dimensions stored in the underlying TiffWriter. Tiles get queued past the right or bottom edge, the TiffWriter rejects them with `FormatException: X:1024 must be < 854` (or similar), and the writer occasionally NPEs on `this.initialized` when multiple resolution levels' tile-write workers race. The base level wrote OK, hence "image opens"; the upper levels did not, hence "upper levels are black."
+**The old bug (for context):** at pyramid levels whose dimensions were not a clean multiple of the 512 px tile size, QuPath's writer queued tiles past the right/bottom edge; the underlying TiffWriter rejected them (`FormatException: X:1024 must be < 854` or similar) and *logged* the failure at ERROR without throwing. The full-resolution level wrote fine, so the image opened, but the downsampled levels came out black. Stitched mosaics almost never have clean-multiple dimensions, so this was common. It spawned a tower of workarounds: per-tile error monitoring, automatic retry (3 attempts), and an `OME_TIFF_VIA_ZARR` escalation that stitched to ZARR and converted back to TIFF in the background.
 
-**What you'll see:**
-- **First tile-write error detected:** A high-priority push notification alerts you that tile-write errors occurred and that retries are running. There is no mid-flight prompt asking what to try -- the retry / ZARR-escalation cadence is faster than a human can reasonably respond to, and a prior interactive dialog was almost always already moot by the time it rendered.
-- **After ZARR recovery succeeds:** During normal post-acquisition stitching a non-blocking notice appears (always-on-top, positioned below the "Stitching in Progress" dialog) explaining that the OME-TIFF writer bug was hit, how many attempts failed, and suggesting that if it keeps happening you can switch the default stitching format to OME_TIFF_VIA_ZARR in **Edit > Preferences > QPSC**. Stitching Recovery runs non-interactively and does not show this notice.
-- **Auto-retry:** The system automatically retries the stitching. Tiles are preserved between attempts, so re-tries are cheap.
-- **Auto-escalation:** If OME-TIFF retries all fail, the system automatically switches to OME_TIFF_VIA_ZARR (writes to ZARR, queues background TIFF conversion).
-- **Final failure dialog:** If all retries and escalation fail: "N failed angles could not be stitched even after retries and the ZARR fallback and were NOT imported"
-- **Log (Scripting > Show log)** contains `Error writing Tile: level=N, bounds=(...)` entries from `qupath.lib.images.writers.ome.OMEPyramidWriter`, with cause `FormatException: ... must be <` or `NullPointerException: ... this.initialized is null`
+**Now:** the direct writer drives Bio-Formats with only the safe `Math.min`-clamped tile loop, so partial edge tiles are correct by construction; the bug cannot occur. The error monitor, the retry/escalation logic, and the `OME_TIFF_VIA_ZARR` format have all been removed. The writer also writes straight to its final path (no temp-file rename), which removed the separate Windows "being used by another process" rename failures.
 
-**How to recover:**
-1. The tiles in `TempTiles/` are preserved. Since automatic retry and escalation have already been attempted, re-running Stitching Recovery with a different output format (e.g., **OME-ZARR** if the previous attempt used OME-TIFF) may help if the failure was transient.
-2. If OME-ZARR also fails, the issue may be environmental (e.g., disk space, file permissions, or a corrupted tile set). Check your disk space and verify the tiles folder is readable.
-3. As a last resort, re-acquire the region. The bug is in the OME-TIFF pyramid writer, not the acquisition.
-
-The underlying writer issue is in QuPath core (`qupath.lib.images.writers.ome.OMEPyramidWriter`) and is being tracked there; the recovery workflow's job here is to make sure broken outputs never silently land in the project.
+If you have *old* stitched files with black upper levels from before this fix, re-stitch them with **Extensions > QPSC > Utilities > Re-stitch Tiles** (tiles in `TempTiles/` are preserved).
 
 #### Q: Stitching failed but my tiles were acquired - how do I re-stitch?
 
@@ -752,7 +740,7 @@ The underlying writer issue is in QuPath core (`qupath.lib.images.writers.ome.OM
 2. Go to **Extensions > QPSC > Utilities > Re-stitch Tiles**
 3. Browse to your tile directory (the folder containing angle subdirectories or TileConfiguration.txt)
 4. Verify the pixel size (auto-populated from your microscope config)
-5. Select **Output format**: OME_TIFF (standard), OME_ZARR (faster, directory format), or OME_TIFF_VIA_ZARR (ZARR speed with automatic TIFF conversion)
+5. Select **Output format**: OME_TIFF (standard, single file) or OME_ZARR (faster, directory format)
 6. Select **Compression**: available options are filtered by format. TIFF allows all compression types (LZW, JPEG, J2K, zstd, etc.), while ZARR-based formats are restricted to LZW, ZLIB, Uncompressed, and Default
 7. For **Matching String**: use `"."` to stitch all subdirectories, or a specific angle like `"0.0"`
 8. Click **Stitch & Import**
