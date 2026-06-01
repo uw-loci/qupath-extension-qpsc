@@ -1,8 +1,8 @@
 ---
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
-maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (planned).
-last_synced_commit: 0a5fd6522f4bfce906a8ce5f628796247b6f85a2
+maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
+last_synced_commit: 38f60db5
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
@@ -203,7 +203,9 @@ surfaces, and cross-workflow dependencies. It is optimized for LLM agents.
 5. **When changing a watched file or watched symbol:** update the relevant
    workflow/data surface YAML in the same commit, and bump
    `last_synced_commit` in the frontmatter. The frontmatter is parsed by the
-   pre-push hook (planned) to catch drift.
+   pre-push hook (`tools/check_workflow_map.py`, Phase 5 of
+   `tools/pre-push-checks.sh`) to catch drift. Missing symbols block
+   the push; watched-file drift warns with the offending commit SHAs.
 6. **If you cannot fit a change cleanly into the existing structure,** add
    the surface or workflow with the next free ID and update Section 1 and
    Section 4. Do not retag existing IDs (they leak into git history and
@@ -1207,6 +1209,40 @@ read_by:
   - "Per-workflow background validity gate"
 ```
 
+#### DS23: Background-correction TIFF files
+
+```yaml
+id: DS23
+category: configuration
+storage_kind: file
+location: "<base>/<detector>/<modalityFamily>/<magnification>/<wbMode>/ (angle modes)
+           OR <base>/<detector>/<modalityFamily>/<magnification>/<profileKey>/ (channel modes).
+           <base> = imageprocessing_<scope>.yml -> background_correction.<modality>.base_folder.
+           wbMode is 'off' -> collapses (no wbMode subdir) | 'simple' | 'per_angle' | 'camera_awb'."
+fields:
+  per_angle_tif: "<folder>/<angleName>.tif per rotation angle (PPM-style)"
+  per_channel_tif: "<folder>/<channelId>.tif per channel (fluorescence-style)"
+  manifest: "<folder>/background_settings.yml -- BackgroundSettings: modality, objective, detector, magnification, angle_exposures, wb_mode, profile_key, profile_illumination_intensity, lamp_available, applied_lamp_intensity, lamp_device_label, channel_backgrounds[]"
+written_by:
+  - "W4 BackgroundCollectionWorkflow (server-driven BGACQUIRE)"
+read_by:
+  - "Microscope server during ACQUIRE -- AcquisitionCommandBuilder passes --bg-folder when bgMethod enabled"
+  - "BackgroundSettingsReader.findBackgroundSettings / BackgroundValidityChecker / BackgroundExposureMatch (manifest only)"
+  - "DS22 (loaded form)"
+lifecycle:
+  created_when: "W4 completes successfully"
+  destroyed_when: "manually deleted; not auto-cleaned"
+  overwritten_when: "re-collecting BG for the same (detector, modality, magnification, wbMode/profileKey) tuple"
+invariants:
+  - "Folder structure encodes magnification: a pixel-size mismatch between wizard objective and the magnification subfolder silently files BG for the wrong objective. W4 pre-validates via QPScopeChecks.validateObjectivePixelSize."
+  - "Per-modality monochrome toggle (DS24 pref UseBackgroundCorrectionMono) controls whether mono detector channels apply BG."
+  - "Per-modality-family adaptive mode (DS24 pref qpscBgExposureMode.<family>) chooses PROFILE / TARGET / OVERRIDE exposure strategy."
+related_surfaces:
+  - DS22 (loaded form of the manifest)
+  - DS3 (imageprocessing_<scope>.yml -> background_correction.* config root)
+  - DS19 (autofocus config -- separate, but BG path resolution lives next to it in imageprocessing_<scope>.yml)
+```
+
 #### DS47: PPM calibration files
 
 ```yaml
@@ -1366,11 +1402,15 @@ written_by:
   - "W1 setCurrentTransform after validateAndFlipIfNeeded (MUST be in this order)"
   - "W1 cleanup() sets currentTransform = null (H6)"
   - "W2 implicitly (stage-frame native; no transform set)"
-  - "W3 during refinement"
+  - "W3 during refinement and at end of MicroscopeAlignmentWorkflow.saveGeneralTransform"
   - "W19 LiveViewer stage motion (moveStageXY/Z/R)"
+  - "W19 StageControlPanel direct setCurrentTransform calls -- slide-transform restore + acquired-image alignment (StageControlPanel.java:3974, :4319)"
+  - "W1d ManualAlignmentPath after user accepts manual alignment (ManualAlignmentPath.java:209)"
+  - "W14 SingleTileRefinement on refinement-accepted (only)"
 read_by:
   - "Every workflow that issues stage commands -- onMoveButtonClicked converts via currentTransform"
-  - "W19 LiveViewerWindow Go-To-Centroid"
+  - "W19 LiveViewerWindow Go-To-Centroid (StageControlPanel:3962,4329)"
+  - "W14 StitchingHelper metadata calc at launchStitching (reads MicroscopeController.getCurrentTransform)"
 invariants:
   - "currentTransform MUST be cleared in cleanup() (H6 fix). A stale transform leaks to Live Viewer and the next workflow."
   - "validateAndFlipIfNeeded MUST run BEFORE setCurrentTransform (M11 deferred install)."
@@ -1501,7 +1541,7 @@ written_by:
 read_by:
   - "Every workflow on dialog open"
 invariants:
-  - "Lightweight per-user prefs only. Dialog positions used to live here (8 KB cap caused issues) -- now in DS24a (JSON file). See 2026-05-19 dialog-position-storage refactor."
+  - "Lightweight per-user prefs only. Dialog positions used to live here (8 KB cap caused issues) -- now in DS25a (JSON file). See 2026-05-19 dialog-position-storage refactor."
 ```
 
 #### DS25: QPPreferenceDialog (per-user, structured)
