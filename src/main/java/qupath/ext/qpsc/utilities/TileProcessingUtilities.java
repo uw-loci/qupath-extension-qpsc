@@ -11,6 +11,8 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy;
+import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.model.StitchingMetadata;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -93,7 +95,6 @@ public class TileProcessingUtilities {
      *
      * @throws IOException If stitching fails, file I/O errors occur, or no tiles are found
      *
-     * @see StitchRetryExecutor#run
      * @see QPProjectFunctions#addImageToProject
      * @since 1.0
      */
@@ -172,54 +173,43 @@ public class TileProcessingUtilities {
         }
         final String outputName = resolveDisplayName(earlyMetadata, sampleLabel);
 
-        // Builds a stitching config for a requested output format, so that
-        // StitchRetryExecutor can escalate OME_TIFF to OME_TIFF_VIA_ZARR.
-        StitchRetryExecutor.ConfigFactory configFactory = fmt -> {
-            StitchingConfig c = new StitchingConfig(
-                    "Coordinates in TileConfiguration.txt file",
-                    tileFolder,
-                    stitchedFolder,
-                    compression,
-                    pixelSizeMicrons,
-                    downsample,
-                    matchingString,
-                    1.0, // zSpacingMicrons
-                    fmt);
-            c.setOutputFilename(outputName);
-            return c;
-        };
+        StitchingConfig config = new StitchingConfig(
+                "Coordinates in TileConfiguration.txt file",
+                tileFolder,
+                stitchedFolder,
+                compression,
+                pixelSizeMicrons,
+                downsample,
+                matchingString,
+                1.0, // zSpacingMicrons
+                outputFormat);
+        config.setOutputFilename(outputName);
 
-        // Pass the composite stage/camera transform to the tile-config
-        // stitching strategy via the flip flags. StageImageTransform folds
-        // stage polarity and camera orientation into two booleans; rotation
-        // cases fall back to an approximation and log a warning.
+        // Pass the composite stage/camera transform to the tile-config stitching
+        // strategy via the flip flags. StageImageTransform folds stage polarity and
+        // camera orientation into two booleans; rotation cases fall back to an
+        // approximation and log a warning.
         boolean[] stitcherFlags = StageImageTransform.current().stitcherFlipFlags();
 
-        // Stitch with OMEPyramidWriter tile-write-error detection, retry, and
-        // escalation to OME_TIFF_VIA_ZARR. OMEPyramidWriter logs per-tile
-        // failures without throwing, so a plain exception-only retry would
-        // import a silently-corrupt file (full-res ok, pyramid levels garbled).
+        // The direct OME-TIFF writer cannot silently corrupt pyramid levels and
+        // writes straight to the final path, so the former tile-write-error
+        // detection / retry / OME_TIFF_VIA_ZARR escalation has been removed.
         String outPath;
         try {
-            outPath = StitchRetryExecutor.run(
-                    outputFormat,
-                    configFactory,
-                    stitcherFlags,
-                    () -> cleanupCorruptStitchingOutput(outputDir, existingFiles),
-                    outputName,
-                    true);
+            TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
+            TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
+            outPath = StitchingWorkflow.run(config);
+            if (outPath == null) {
+                throw new IOException("Stitching produced no output");
+            }
         } catch (Exception stitchEx) {
             cleanupCorruptStitchingOutput(outputDir, existingFiles);
             throw new IOException("Stitching failed: " + stitchEx.getMessage(), stitchEx);
+        } finally {
+            TileConfigurationTxtStrategy.flipStitchingX = false;
+            TileConfigurationTxtStrategy.flipStitchingY = false;
         }
         logger.info("Stitching completed. Output: {}", outPath);
-
-        // The retry may have escalated an OME_TIFF request to ZARR. Track the
-        // escalated .ome.zarr outputs so the background ZARR->TIFF conversion
-        // can be queued after the post-stitch rename.
-        final boolean escalatedToZarr =
-                outputFormat == StitchingConfig.OutputFormat.OME_TIFF && outPath.endsWith(".ome.zarr");
-        List<String> escalatedZarrOutputs = new ArrayList<>();
 
         final String lastProcessedPath;
 
@@ -295,10 +285,6 @@ public class TileProcessingUtilities {
                 if (stitchedFile.renameTo(renamed)) {
                     lastPath = renamed.getAbsolutePath();
                     logger.info("Successfully renamed to: {}", baseName);
-                    if (escalatedToZarr) {
-                        escalatedZarrOutputs.add(renamed.getAbsolutePath());
-                    }
-
                     // Note: metadata was already extracted earlier (batchMetadata) for filename generation
 
                     // Import this file to the project, UNLESS the caller passed
@@ -531,10 +517,6 @@ public class TileProcessingUtilities {
                 logger.error("Failed to rename {} to {}", orig.getName(), baseName);
                 // Continue with original path if rename fails
             }
-            if (escalatedToZarr) {
-                escalatedZarrOutputs.add(outPath);
-            }
-
             // Note: metadata was already extracted earlier for filename generation
             // If metadata doesn't have the identification fields, use the extracted values
             final String finalModality = (metadata != null && metadata.modality != null) ? metadata.modality : modality;
@@ -671,19 +653,6 @@ public class TileProcessingUtilities {
                             "Failed to import stitched image:\n" + e.getMessage());
                 }
             });
-        }
-
-        // If the retry escalated OME-TIFF to ZARR, queue the background
-        // ZARR->TIFF conversion so the user still ends up with a .ome.tif.
-        // (When the preference is already a ZARR format, StitchingHelper
-        // queues this itself; escalation happens inside this method so it
-        // would otherwise be missed.)
-        if (escalatedToZarr && !escalatedZarrOutputs.isEmpty()) {
-            logger.info(
-                    "OME-TIFF stitching escalated to ZARR; queuing background ZARR->TIFF conversion ({} file(s))",
-                    escalatedZarrOutputs.size());
-            qupath.ext.qpsc.controller.workflow.StitchingHelper.queueBackgroundZarrToTiffConversion(
-                    escalatedZarrOutputs, compression, outputName);
         }
 
         logger.info("=== Stitching workflow completed ===");

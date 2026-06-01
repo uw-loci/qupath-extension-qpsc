@@ -24,7 +24,6 @@ import javafx.stage.DirectoryChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
-import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -35,7 +34,6 @@ import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.StitchRetryExecutor;
 import qupath.ext.qpsc.utilities.TileFolderInspector;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -159,9 +157,8 @@ public class StitchingRecoveryWorkflow {
         HBox pixelBox = new HBox(8, pixelField, pixelSourceLabel);
         pixelBox.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
-        // Output format -- exposes all three options (OME_TIFF, OME_ZARR,
-        // OME_TIFF_VIA_ZARR). Declared before compression so the format-change
-        // listener can re-filter the compression choices.
+        // Output format -- OME_TIFF or OME_ZARR. Declared before compression so
+        // the format-change listener can re-filter the compression choices.
         Label formatLabel = new Label("Output format:");
         ComboBox<StitchingConfig.OutputFormat> formatCombo = new ComboBox<>();
         formatCombo.getItems().addAll(StitchingConfig.OutputFormat.values());
@@ -455,7 +452,7 @@ public class StitchingRecoveryWorkflow {
 
         AtomicInteger successCount = new AtomicInteger();
         AtomicInteger failureCount = new AtomicInteger();
-        // Collected for the OME_TIFF_VIA_ZARR background conversion at the end.
+        // Collected for the end-of-run summary.
         // Synchronized because angle workers may run in parallel.
         java.util.List<String> successfulOutputs = java.util.Collections.synchronizedList(new java.util.ArrayList<>());
 
@@ -498,48 +495,50 @@ public class StitchingRecoveryWorkflow {
                 logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, totalAngles, angleName);
 
                 try {
-                    // Builds a config for a requested output format. The
-                    // stitcher appends "_<subdirName>" (the angle dir name) so
+                    // The stitcher appends "_<subdirName>" (the angle dir name) so
                     // it produces "<sampleName>_<angle>.<ext>"; the user-pattern
                     // rename happens after the stitch (below). Pushing the full
                     // ImageNameGenerator name in here caused duplication because
                     // the index landed before the appended subdir name.
-                    StitchRetryExecutor.ConfigFactory configFactory = fmt -> {
-                        StitchingConfig config = new StitchingConfig(
-                                "Coordinates in TileConfiguration.txt file",
-                                angleDir.getAbsolutePath(),
-                                fnOutputFolder,
-                                compression,
-                                pixelSize,
-                                1, // downsample
-                                ".", // match everything in this single-angle directory
-                                1.0, // zSpacingMicrons
-                                fmt);
-                        config.outputFilename = ImageNameGenerator.sanitizeForFilename(fnSampleName);
-                        return config;
-                    };
+                    StitchingConfig config = new StitchingConfig(
+                            "Coordinates in TileConfiguration.txt file",
+                            angleDir.getAbsolutePath(),
+                            fnOutputFolder,
+                            compression,
+                            pixelSize,
+                            1, // downsample
+                            ".", // match everything in this single-angle directory
+                            1.0, // zSpacingMicrons
+                            outputFormat);
+                    config.outputFilename = ImageNameGenerator.sanitizeForFilename(fnSampleName);
 
                     // Composite stage/camera transform; must match the
                     // TileProcessingUtilities main-acquisition path so
                     // re-stitching reproduces the original layout.
                     boolean[] stitcherFlags = qupath.ext.qpsc.utilities.StageImageTransform.current()
                             .stitcherFlipFlags();
-
-                    // Between-retry cleanup: remove the angle's partial output
-                    // so a retry's rename-over does not fail on Windows.
                     final String outputStem =
                             ImageNameGenerator.sanitizeForFilename(fnSampleName) + "_" + angleDir.getName();
-                    Runnable cleanup = () -> deleteStitchOutputs(new File(fnOutputFolder), outputStem);
 
-                    // Detect OMEPyramidWriter tile-write errors, retry, and
-                    // escalate to ZARR. Non-interactive: the recovery workflow
-                    // shows its own end-of-run summary, so no per-angle dialog.
-                    String stitchedOutPath = StitchRetryExecutor.run(
-                            outputFormat, configFactory, stitcherFlags, cleanup, angleName, false);
+                    // The direct OME-TIFF writer cannot silently corrupt pyramid
+                    // levels and writes straight to the final path, so the former
+                    // tile-write-error detection / retry / ZARR escalation is gone.
+                    String stitchedOutPath;
+                    try {
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
+                                stitcherFlags[0];
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
+                                stitcherFlags[1];
+                        stitchedOutPath = qupath.ext.basicstitching.workflow.StitchingWorkflow.run(config);
+                    } finally {
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
+                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
+                    }
+                    if (stitchedOutPath == null) {
+                        deleteStitchOutputs(new File(fnOutputFolder), outputStem);
+                        throw new IllegalStateException("Stitching produced no output for " + angleName);
+                    }
 
-                    // run() returns a real path or throws. Escalation may have
-                    // produced a .ome.zarr even when the user picked OME_TIFF,
-                    // so derive the extension from the actual output path.
                     String extension = stitchedOutPath.endsWith(".ome.zarr") ? ".ome.zarr" : ".ome.tif";
                     String desiredName = ImageNameGenerator.generateImageName(
                             fnSampleName,
@@ -609,20 +608,6 @@ public class StitchingRecoveryWorkflow {
         final int finalFailure = failureCount.get();
         logger.info("=== STITCHING RECOVERY COMPLETE: {} succeeded, {} failed ===", finalSuccess, finalFailure);
 
-        // Queue the background ZARR->TIFF conversion for any output that is a
-        // .ome.zarr but whose requested final format is TIFF. Covers both an
-        // OME_TIFF_VIA_ZARR preference and an OME_TIFF stitch that the retry
-        // logic escalated to ZARR. Mirrors the main acquisition path.
-        if (outputFormat.finalFormatIsTiff()) {
-            var zarrOutputs = successfulOutputs.stream()
-                    .filter(p -> p.endsWith(".ome.zarr"))
-                    .collect(java.util.stream.Collectors.toList());
-            if (!zarrOutputs.isEmpty()) {
-                StitchingHelper.queueBackgroundZarrToTiffConversion(
-                        zarrOutputs, compression, "Recovery: " + sampleName);
-            }
-        }
-
         Platform.runLater(() -> {
             if (finalSuccess > 0 && finalFailure == 0) {
                 Dialogs.showInfoNotification(
@@ -633,8 +618,7 @@ public class StitchingRecoveryWorkflow {
                         "Stitching Recovery Partial",
                         String.format(
                                 "%d angle(s) succeeded, %d failed.%n"
-                                        + "Failed angles could not be stitched even after retries "
-                                        + "and the ZARR fallback (check the log for details).",
+                                        + "Failed angles could not be stitched (check the log for details).",
                                 finalSuccess, finalFailure));
             } else {
                 Dialogs.showErrorMessage(

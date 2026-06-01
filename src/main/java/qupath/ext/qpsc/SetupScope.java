@@ -537,8 +537,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         setMenuItemTooltip(
                 makePortableOption,
                 "Swap ZARR-backed images to single-file OME-TIFF for easy copying. "
-                        + "Preserves all annotations, metadata, and image settings. "
-                        + "Requires background TIFF conversion to be complete (OME_TIFF_VIA_ZARR mode).");
+                        + "Preserves all annotations, metadata, and image settings.");
         makePortableOption.setOnAction(e -> MakePortableWorkflow.run(qupath));
 
         // Setup Wizard (always available -- guides first-time configuration)

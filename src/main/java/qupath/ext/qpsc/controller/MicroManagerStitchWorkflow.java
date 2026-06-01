@@ -32,7 +32,6 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
-import qupath.ext.qpsc.utilities.StitchRetryExecutor;
 import qupath.ext.qpsc.utilities.TileFolderInspector;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
@@ -329,33 +328,28 @@ public class MicroManagerStitchWorkflow {
         if (zSpacing <= 0) zSpacing = 1.0;
         final double finalZ = zSpacing;
 
-        StitchRetryExecutor.ConfigFactory configFactory = fmt -> {
-            StitchingConfig cfg = new StitchingConfig(
-                    STRATEGY_NAME,
-                    inFolder,
-                    outFolder,
-                    compression,
-                    pixelSize,
-                    1, // downsample
-                    ".",
-                    finalZ,
-                    fmt);
-            cfg.outputFilename = baseName;
-            return cfg;
-        };
+        StitchingConfig cfg = new StitchingConfig(
+                STRATEGY_NAME, inFolder, outFolder, compression, pixelSize, 1, ".", finalZ, outputFormat);
+        cfg.outputFilename = baseName;
 
-        // Between-retry cleanup: remove any partial output from a prior attempt.
         // The stitcher emits "<baseName>_<sourceFolderName>.<ext>" because the
         // MMStack strategy uses the input folder name as the subdir name.
         String stitcherStem = baseName + "_" + inDir.getName();
-        Runnable cleanup = () -> deleteStitchOutputs(outDir, stitcherStem);
 
         String label = baseName;
         String stitchedOutPath;
+        // The direct OME-TIFF writer cannot silently corrupt pyramid levels and
+        // writes straight to the final path, so no tile-write-error retry / ZARR
+        // escalation is needed. MMStack tiles carry their own positions; no flip.
         try {
-            stitchedOutPath = StitchRetryExecutor.run(
-                    outputFormat, configFactory, new boolean[] {false, false}, cleanup, label, false);
+            qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
+            qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
+            stitchedOutPath = qupath.ext.basicstitching.workflow.StitchingWorkflow.run(cfg);
+            if (stitchedOutPath == null) {
+                throw new IllegalStateException("Stitching produced no output");
+            }
         } catch (Exception ex) {
+            deleteStitchOutputs(outDir, stitcherStem);
             logger.error("Stitch failed for {}: {}", label, ex.getMessage(), ex);
             Platform.runLater(
                     () -> Dialogs.showErrorMessage("Stitching Failed", "Stitch failed (see log): " + ex.getMessage()));

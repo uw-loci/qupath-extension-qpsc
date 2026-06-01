@@ -627,16 +627,6 @@ public class StitchingHelper {
                                 dualProgressDialog.completeStitchingOperation(operationId);
                             }
 
-                            // OME_TIFF_VIA_ZARR: queue background conversion of all
-                            // ZARR outputs to OME-TIFF. The user already has working
-                            // ZARR images in the project; this produces single-file
-                            // TIFFs and swaps them in when done.
-                            if (stitchingConfig.outputFormat() == StitchingConfig.OutputFormat.OME_TIFF_VIA_ZARR
-                                    && !stitchedImages.isEmpty()) {
-                                // Use LZW for TIFF (ZARR compression types don't apply to TIFF)
-                                queueBackgroundZarrToTiffConversion(stitchedImages, "LZW", annotationName);
-                            }
-
                         } catch (Exception e) {
                             logger.error("Stitching failed for {}", targetName, e);
 
@@ -2024,101 +2014,6 @@ public class StitchingHelper {
                 logger.info("No {} directory found in {}", suffixLabel, tileBaseDir);
             }
         }
-    }
-
-    // -----------------------------------------------------------------------
-    // Background ZARR-to-TIFF conversion (OME_TIFF_VIA_ZARR mode)
-    // -----------------------------------------------------------------------
-
-    /**
-     * Queue background conversion of ZARR stitched images to OME-TIFF.
-     *
-     * <p>Runs on a daemon thread so it does not block the user. Each ZARR
-     * directory is opened as an ImageServer and written to OME-TIFF via
-     * {@link PyramidImageWriter}. The TIFF file is placed alongside the ZARR
-     * (same directory, same base name, .ome.tif extension).
-     *
-     * <p>This method does NOT modify the project or delete the ZARR.
-     * The project continues to use the ZARR as the working image.
-     * Use "Make Project Portable" (Extensions > QP Scope > Utilities) to
-     * swap project entries from ZARR to TIFF and clean up intermediates.
-     *
-     * @param zarrPaths   Absolute paths to .ome.zarr directories produced by stitching
-     * @param compression TIFF compression type (e.g. "LZW", "J2K")
-     * @param label       Human-readable label for logging (e.g. annotation name)
-     */
-    public static void queueBackgroundZarrToTiffConversion(List<String> zarrPaths, String compression, String label) {
-
-        List<String> toConvert =
-                zarrPaths.stream().filter(p -> p.endsWith(".ome.zarr")).toList();
-
-        if (toConvert.isEmpty()) {
-            logger.info("No ZARR files to convert for {}", label);
-            return;
-        }
-
-        logger.info("=== Queuing background ZARR -> TIFF conversion for {} ({} files) ===", label, toConvert.size());
-        for (String p : toConvert) {
-            logger.info("  Will convert: {}", p);
-        }
-
-        Thread conversionThread = new Thread(
-                () -> {
-                    int succeeded = 0;
-                    int failed = 0;
-                    long totalStart = System.currentTimeMillis();
-
-                    for (String zarrPath : toConvert) {
-                        try {
-                            boolean ok = convertSingleZarrToTiff(zarrPath, compression);
-                            if (ok) succeeded++;
-                            else failed++;
-                        } catch (Exception e) {
-                            failed++;
-                            logger.error(
-                                    "Background ZARR->TIFF conversion failed for {}: {}", zarrPath, e.getMessage(), e);
-                        }
-                    }
-
-                    long elapsed = (System.currentTimeMillis() - totalStart) / 1000;
-                    logger.info("=== Background ZARR -> TIFF conversion complete for {} ===", label);
-                    logger.info(
-                            "  Converted: {}/{}, failed: {}, elapsed: {}m {}s",
-                            succeeded,
-                            toConvert.size(),
-                            failed,
-                            elapsed / 60,
-                            elapsed % 60);
-
-                    if (failed > 0) {
-                        logger.warn(
-                                "  {} ZARR files had conversion failures. " + "ZARR images remain usable in QuPath.",
-                                failed);
-                    }
-
-                    final int s = succeeded;
-                    final int f = failed;
-                    final long e = elapsed;
-                    Platform.runLater(() -> {
-                        String msg;
-                        if (f == 0) {
-                            msg = String.format(
-                                    "Background TIFF conversion complete: %d files (%dm %ds). "
-                                            + "Use 'Make Project Portable' to finalize.",
-                                    s, e / 60, e % 60);
-                            qupath.fx.dialogs.Dialogs.showInfoNotification("ZARR to TIFF Conversion", msg);
-                        } else {
-                            msg = String.format(
-                                    "Background conversion: %d/%d succeeded, %d failed. " + "Check log for details.",
-                                    s, s + f, f);
-                            UIFunctions.notifyUserOfError(msg, "ZARR to TIFF Conversion");
-                        }
-                    });
-                },
-                "zarr-to-tiff-converter");
-
-        conversionThread.setDaemon(true);
-        conversionThread.start();
     }
 
     /**
