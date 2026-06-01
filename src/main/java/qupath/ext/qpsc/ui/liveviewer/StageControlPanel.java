@@ -3230,6 +3230,16 @@ public class StageControlPanel extends VBox {
                     }));
         }
 
+        // Re-evaluate alignment availability whenever a workflow (e.g.
+        // MicroscopeAlignmentWorkflow) installs a new pixel->stage transform.
+        // Without this, running alignment leaves the Go to Centroid button stuck
+        // on its previous "No alignments available" state until the image is
+        // re-opened, because initializeCentroidButton only fires on imageData
+        // change.
+        MicroscopeController.getInstance()
+                .currentTransformProperty()
+                .addListener((obs, oldT, newT) -> Platform.runLater(this::initializeCentroidButton));
+
         // ---- Live View gating: bind movement-control disable state to !liveActive ----
         BooleanBinding moveDisabled = internalLiveActive.not();
         upBtn.disableProperty().bind(moveDisabled);

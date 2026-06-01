@@ -4,6 +4,9 @@ import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.atomic.AtomicReference;
+import javafx.application.Platform;
+import javafx.beans.property.ReadOnlyObjectProperty;
+import javafx.beans.property.ReadOnlyObjectWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.StagePositionProvider;
@@ -45,8 +48,17 @@ public class MicroscopeController implements StagePositionProvider {
     /** Socket client for server communication */
     private final MicroscopeSocketClient socketClient;
 
-    /** Current affine transform for coordinate conversion */
+    /** Current affine transform for coordinate conversion (thread-safe read for worker threads). */
     private final AtomicReference<AffineTransform> currentTransform = new AtomicReference<>();
+
+    /**
+     * FX-observable mirror of {@link #currentTransform}. UI components (notably
+     * {@link qupath.ext.qpsc.ui.liveviewer.StageControlPanel}'s Go to Centroid
+     * button) listen here to re-evaluate alignment availability when the transform
+     * is set externally by a workflow (e.g. {@link MicroscopeAlignmentWorkflow}).
+     * Updates always fire on the JavaFX Application Thread.
+     */
+    private final ReadOnlyObjectWrapper<AffineTransform> currentTransformProperty = new ReadOnlyObjectWrapper<>();
 
     /** Flag to block user-initiated stage movements during acquisition */
     private volatile boolean acquisitionActive = false;
@@ -474,13 +486,21 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
-     * Sets the current affine transform for coordinate conversion.
+     * Sets the current affine transform for coordinate conversion. Mirrors the
+     * value into {@link #currentTransformProperty} on the FX thread so observers
+     * can react.
      *
      * @param transform The transform to use
      */
     public void setCurrentTransform(AffineTransform transform) {
         this.currentTransform.set(transform);
         logger.info("Updated current transform: {}", transform);
+        Runnable mirror = () -> currentTransformProperty.set(transform);
+        if (Platform.isFxApplicationThread()) {
+            mirror.run();
+        } else {
+            Platform.runLater(mirror);
+        }
     }
 
     /**
@@ -490,6 +510,16 @@ public class MicroscopeController implements StagePositionProvider {
      */
     public AffineTransform getCurrentTransform() {
         return this.currentTransform.get();
+    }
+
+    /**
+     * Returns the FX-observable property mirroring {@link #getCurrentTransform()}.
+     * UI components that need to react to alignment changes (e.g. enabling the
+     * Go to Centroid button after a microscope alignment workflow saves a new
+     * transform) should add a listener here rather than polling.
+     */
+    public ReadOnlyObjectProperty<AffineTransform> currentTransformProperty() {
+        return currentTransformProperty.getReadOnlyProperty();
     }
     /**
      * Gets the current camera field of view in microns.
