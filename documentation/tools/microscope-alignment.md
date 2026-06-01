@@ -138,12 +138,19 @@ After calculating the transform, a quality summary dialog is displayed with pass
 
 If any indicator shows a warning or failure, you must acknowledge the issue before the alignment is saved. This prevents silently saving a poor-quality transform.
 
-Give the transform a descriptive name and save it. Saved transforms are stored in the configuration folder and can be selected in the [Existing Image Acquisition](existing-image-acquisition.md) workflow. Multiple transforms can exist for different conditions.
+Give the transform a descriptive name and save it. The workflow then writes **two** files plus an in-memory transform:
+
+1. A named `TransformPreset` for the `(source scanner, active microscope)` pair, stored in the configuration folder's `saved_transforms.json`. This is the **general** macro→stage transform, reusable for any future slide on this scope pair. The Stage Map source dropdown picks it up automatically.
+2. A **per-slide alignment JSON** for the currently-open slide, stored in `<project>/alignmentFiles/<base>_<scope>_alignment.json`. This is **slide-specific** -- the next [Existing Image Acquisition](existing-image-acquisition.md) on this same slide loads this transform directly and **skips manual alignment**.
+3. The `MicroscopeController.currentTransform` singleton, so the Live Viewer's Go-to-Centroid and click-to-center work immediately for this session.
+
+Multiple presets can coexist for different scope pairs. The per-slide JSON is overwritten each time you re-align the same slide.
 
 ## Output
 
-- A saved coordinate transformation file linking QuPath pixel coordinates to stage positions
-- Transform can be reused across sessions until hardware or slide position changes
+- A saved transform preset (general, reusable for any slide on this scope pair)
+- A per-slide alignment JSON (specific to the slide that was open during alignment; consumed automatically by the next Existing Image Acquisition on that slide)
+- An in-memory transform for the current session (Live Viewer navigation works immediately)
 - Quality metrics for assessing alignment accuracy
 
 ## Understanding Flip and Invert Settings
