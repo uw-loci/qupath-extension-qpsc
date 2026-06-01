@@ -2,6 +2,7 @@ package qupath.ext.qpsc.controller;
 
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -532,6 +533,32 @@ public class ExistingImageWorkflowV2 {
                                 + "(likely created by MicroscopeAlignmentWorkflow on this sibling)",
                         entry.getImageName());
                 return true;
+            }
+
+            // Saved-preset carve-out: after a session restart the in-session
+            // transform is null, but any preset targeting the active scope
+            // (saved by a previous MicroscopeAlignmentWorkflow run for this
+            // pair) is evidence that alignment has been done -- ManualAlignment
+            // Path can pick it up via the Stage Map source dropdown instead of
+            // falling back to macro pixel size. Allow the workflow.
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                if (configPath != null && !configPath.isEmpty()) {
+                    AffineTransformManager xfmMgr = new AffineTransformManager(new File(configPath).getParent());
+                    boolean anyPresetForActive =
+                            xfmMgr.getAllTransforms().stream().anyMatch(t -> active.equals(t.getMicroscope()));
+                    if (anyPresetForActive) {
+                        logger.info(
+                                "Orphaned-sibling guard: allowing '{}' -- saved alignment preset(s) "
+                                        + "exist for active scope '{}' (likely from a prior "
+                                        + "MicroscopeAlignmentWorkflow run on this sibling)",
+                                entry.getImageName(),
+                                active);
+                        return true;
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Orphaned-sibling guard: preset lookup failed: {}", e.getMessage());
             }
 
             javafx.scene.control.Alert alert =
