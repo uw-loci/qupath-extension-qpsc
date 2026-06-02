@@ -2,7 +2,7 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: 38f60db5
+last_synced_commit: 08315b64
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
@@ -143,7 +143,7 @@ watched_symbols:
   - AlignmentHelper.resolveMacroLookupKey
   - StitchingHelper.autoRegisterBoundsTransformIfAvailable
   - StitchingHelper.performAnnotationStitching
-  - StitchingHelper.queueBackgroundZarrToTiffConversion
+  - StitchingHelper.convertSingleZarrToTiff
   - ImageFlipHelper.validateAndFlipIfNeeded
   - ImageFlipHelper.mirrorAnnotationsToSibling
   - ImageFlipHelper.isFlippedSiblingName
@@ -714,7 +714,7 @@ key_invariants:
 id: W14
 class: qupath.ext.qpsc.controller.workflow.StitchingHelper
 file: src/main/java/qupath/ext/qpsc/controller/workflow/StitchingHelper.java
-entry: performAnnotationStitching / performRegionStitching / autoRegisterBoundsTransformIfAvailable / queueBackgroundZarrToTiffConversion
+entry: performAnnotationStitching / performRegionStitching / autoRegisterBoundsTransformIfAvailable / convertSingleZarrToTiff
 category: helper
 reads:
   - DS28 (tile files + TileConfiguration.txt)
@@ -728,7 +728,7 @@ writes:
 key_invariants:
   - "autoRegisterBoundsTransformIfAvailable stamps STAGE_BOUNDS_* on the entry alongside the derived/ JSON so Move-to-Centroid works even if JSON lookup fails."
   - "STITCHER_FLIP_X/Y are recorded so Move-to-Centroid can rebuild pixel->stage from scratch."
-  - "Background ZARR->TIFF conversion is queued (queueBackgroundZarrToTiffConversion), runs after stitching to free Live Viewer."
+  - "Background ZARR->TIFF escalation was removed in the 2026-06-01 stitching refactor (OmePyramidErrorMonitor / StitchRetryExecutor / OME_TIFF_VIA_ZARR deleted); the direct OME-TIFF writer writes the final path so no escalation is needed. convertSingleZarrToTiff is kept only for W15 MakePortableWorkflow."
 ```
 
 ### W15: MakePortableWorkflow
@@ -769,7 +769,7 @@ writes:
   - DS30 (re-stitched image added to current project)
   - DS27 (project sync)
 key_invariants:
-  - "Project-anchored SlideImages folder; rename-after-stitch naming; typed compression/format with OME_TIFF_VIA_ZARR (2026-05-19 polish)."
+  - "Project-anchored SlideImages folder; rename-after-stitch naming; typed compression/format (OME_TIFF_VIA_ZARR dropped in the 2026-06-01 refactor; persisted values fall back to OME_TIFF)."
 ```
 
 ### W17: FlippedDuplicateMigrator (one-shot utility)
@@ -1843,8 +1843,7 @@ storage_kind: file
 location: "<projectDir>/<sampleName>/SlideImages/<annotation>_<modality>_<angle>.ome.tif (or .zarr)"
 formats:
   - OME-TIFF (default)
-  - OME-TIFF via ZARR (background conversion; see W14 queueBackgroundZarrToTiffConversion)
-  - ZARR direct
+  - ZARR direct (convert to OME-TIFF on demand via W15 MakePortableWorkflow / StitchingHelper.convertSingleZarrToTiff)
 written_by:
   - "Stitcher (tiles-to-pyramid) called from W14 StitchingHelper"
   - "W16 StitchingRecoveryWorkflow"
@@ -2004,7 +2003,7 @@ writes DS Y consumed by Consumer Z."
 | W1 setCurrentTransform | DS17 | All subsequent stage commands during this workflow | MUST be AFTER validateAndFlipIfNeeded |
 | W1 saveRefinedAlignment | DS5 (overwrites on accept) | W1 next launch, W12/W13 | Short-circuits for sub-acquisitions (H2/H3) |
 | W3 saveGeneralTransform | DS5 (entry-flip-read for save) | W1 alignment lookup | flipFrameVerified=true post-2026-05-19 |
-| W14 (StitchingHelper.queueBackgroundZarrToTiffConversion) | DS30 (delayed ZARR -> TIFF) | W15 MakePortableWorkflow (after conversion) | Runs in background to free Live Viewer |
+| W15 (StitchingHelper.convertSingleZarrToTiff) | DS30 (ZARR -> OME-TIFF on demand) | W15 MakePortableWorkflow | On-demand conversion only; background escalation removed in 2026-06-01 refactor |
 | W1d ExistingAlignmentPath | DS46 (data bounds classifier .json) | W1d only | Detects signal-bearing region inside macro |
 | W1 routeSubWorkflow | (no DS write) | W1a, W1c, W1d, W1e | isSubAcquisition() MUST be checked before useExistingSlideAlignment |
 | W1 checkAndHandleSourceMismatch | DS9 (SOURCE_MICROSCOPE fix) | W1 subsequent steps | Auto-resolves via acquired_on |
