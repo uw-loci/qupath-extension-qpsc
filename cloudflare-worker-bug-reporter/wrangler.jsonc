@@ -1,0 +1,10 @@
+{
+  // Cloudflare Worker config for the QPSC in-app bug reporter.
+  // One Worker serves all three extensions; the target repo is chosen per
+  // request from an allow-list in src/index.js (see REPOS).
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "qpsc-bug-reporter",
+  "main": "src/index.js",
+  "compatibility_date": "2025-05-01",
+  "observability": { "enabled": true }
+}

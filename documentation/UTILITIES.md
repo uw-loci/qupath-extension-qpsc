@@ -19,6 +19,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
 | [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
 | [Stage Map](tools/stage-map.md) | Visual map with slide positions and macro overlay | Extensions > QP Scope > Stage Map |
+| [Report a Bug...](#report-a-bug) | Submit a bug report directly to the issue tracker | Extensions > QP Scope > Report a Bug... |
 | **Utilities Submenu** | | |
 | Microscope Alignment | Semi-automated alignment between QuPath and microscope | Extensions > QP Scope > Utilities > Microscope Alignment... |
 | [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Utilities > Collect Background Images |
@@ -276,6 +277,31 @@ Individual tiles are only needed if you plan to **re-stitch** the acquisition. T
 - You want to archive or share a project with minimal file size (only single-file OME-TIFFs, no ZARR directories or raw tiles)
 - Your project has already been fully converted to OME-TIFF but raw tile folders remain (the tool can clean those up independently)
 - You're copying the project from the acquisition workstation to storage or a shared server
+
+---
+
+## Report a Bug
+
+Easily submit bug reports directly from QuPath without needing a GitHub account or manually creating an issue.
+
+**How to use:**
+1. Go to **Extensions > QP Scope > Report a Bug...**
+2. Write a description of what went wrong (minimum 20 characters)
+3. Optionally include:
+   - **System info** (OS version, Java version, QuPath version)
+   - **QPSC session log** (activity from the current session)
+   - **QuPath log** (QuPath's own application log)
+   - **Screenshot** (of the QuPath window; you will be shown a preview before sending)
+4. Click **Submit**
+
+Your report will be filed as a GitHub Issue in the QPSC issue tracker with all the information you provided. You don't need a GitHub account, and the issue URL will be shown once submission completes.
+
+**Screenshot note:** The screenshot is not automatically redacted. You will see a mandatory preview dialog before anything is sent — close any sensitive windows first (passwords, personal info, etc.).
+
+**What happens to your data:**
+- Reports are submitted to a Cloudflare Worker that holds a GitHub authentication token server-side (your JAR never contains a token)
+- The Worker files the issue in the public QPSC GitHub repository
+- No data is stored on Cloudflare or any third party beyond GitHub
 
 ---
 

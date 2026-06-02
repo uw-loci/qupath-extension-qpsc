@@ -968,16 +968,16 @@ The following features and improvements are planned for upcoming releases:
 
 ## Getting Help
 
-- **General support and feature requests**: post on the [image.sc forum](https://forum.image.sc/) with the `#qupath` tag and mention `@Mike_Nelson` to flag the topic for my attention
+- **Report a Bug**: Use the built-in **Report a Bug** tool (Extensions > QP Scope > Report a Bug...) to submit bug reports directly to the issue tracker. No GitHub account needed — includes optional system info, logs, and screenshots. See [Report a Bug](documentation/UTILITIES.md#report-a-bug) for details.
 - **Troubleshooting Guide**: [documentation/TROUBLESHOOTING.md](documentation/TROUBLESHOOTING.md) - Comprehensive FAQ and error reference
-- **Bug Reports**: [GitHub Issues](https://github.com/uw-loci/qupath-extension-qpsc/issues)
+- **GitHub Issues**: [GitHub Issues](https://github.com/uw-loci/qupath-extension-qpsc/issues) - Browse, search, and manually create issues
+- **General support and feature requests**: post on the [image.sc forum](https://forum.image.sc/) with the `#qupath` tag and mention `@Mike_Nelson` to flag the topic for my attention
 - **Micro-Manager Help**: [Micro-Manager Documentation](https://micro-manager.org/wiki/Documentation)
 
-When reporting issues, please include:
-1. QuPath version and operating system
-2. Error messages from QuPath console (View > Show Log)
-3. Steps to reproduce the problem
-4. Relevant log excerpts (see [Troubleshooting Guide](documentation/TROUBLESHOOTING.md#log-files-and-diagnostics))
+**When reporting bugs:**
+- Use the built-in **Report a Bug** tool when possible — it automatically includes system info and logs
+- Include clear steps to reproduce the problem
+- Attach relevant log excerpts if needed (see [Troubleshooting Guide](documentation/TROUBLESHOOTING.md#log-files-and-diagnostics))
 
 ---
 

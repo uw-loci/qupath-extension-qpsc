@@ -18,6 +18,7 @@ import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.BugReportDialog;
 import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.FlippedDuplicateMigrator;
@@ -694,6 +695,16 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // 4. Utilities
         extensionMenu.getItems().addAll(new SeparatorMenuItem(), utilitiesMenu);
+
+        // 5. Report a Bug (always available -- files a GitHub issue via the
+        //    Cloudflare Worker; no GitHub account needed from the user)
+        MenuItem reportBugOption = new MenuItem("Report a Bug...");
+        setMenuItemTooltip(
+                reportBugOption,
+                "Send a bug report (description plus optional system info, logs, and a "
+                        + "screenshot) straight to the QPSC issue tracker. No GitHub account required.");
+        reportBugOption.setOnAction(e -> BugReportDialog.show());
+        extensionMenu.getItems().addAll(new SeparatorMenuItem(), reportBugOption);
 
         logger.info("Menu items added for extension: " + EXTENSION_NAME);
     }
