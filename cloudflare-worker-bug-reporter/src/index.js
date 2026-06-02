@@ -22,11 +22,12 @@ const DEFAULT_REPO_KEY = "qpsc";
 // Text artifacts the client may attach. Each becomes a collapsed <details>
 // block in the issue body. Keys here must match the keys the app sends.
 const ARTIFACT_SECTIONS = [
-  { key: "run_log",   label: "session log", lang: "", max: 20000 },
-  { key: "qupath_log", label: "QuPath log", lang: "", max: 12000 },
+  { key: "run_log",    label: "QPSC session log",  lang: "", max: 40000 },
+  { key: "server_log", label: "Python server log", lang: "", max: 20000 },
+  { key: "qupath_log", label: "QuPath log",        lang: "", max: 12000 },
 ];
 
-const MAX_BODY_CHARS = 60000;                      // GitHub issue body cap is 65,536
+const MAX_BODY_CHARS = 64000;                      // GitHub issue body cap is 65,536
 const MAX_SCREENSHOT_B64_CHARS = 4 * 1024 * 1024;  // ~3 MB binary
 const ATTACHMENTS_BRANCH = "bug-attachments";
 

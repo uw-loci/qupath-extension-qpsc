@@ -62,6 +62,7 @@ public class BugReportDialog {
     private final TextArea descriptionArea = new TextArea();
     private final CheckBox chkSysInfo = new CheckBox("Include system info (versions, OS)");
     private final CheckBox chkSessionLog = new CheckBox("Include QPSC session log");
+    private final CheckBox chkServerLog = new CheckBox("Include microscope server log");
     private final CheckBox chkQuPathLog = new CheckBox("Include QuPath log");
     private final CheckBox chkScreenshot = new CheckBox("Include a screenshot of the QuPath window");
     private final Label screenshotWarning =
@@ -110,6 +111,13 @@ public class BugReportDialog {
         chkSysInfo.setSelected(true);
         chkSessionLog.setSelected(true);
 
+        boolean serverLogAvailable = BugReportService.isServerLogAvailable();
+        chkServerLog.setSelected(serverLogAvailable);
+        chkServerLog.setDisable(!serverLogAvailable);
+        if (!serverLogAvailable) {
+            chkServerLog.setText("Include microscope server log (not connected)");
+        }
+
         boolean quPathLogAvailable = BugReportService.isQuPathLogAvailable();
         chkQuPathLog.setSelected(quPathLogAvailable);
         chkQuPathLog.setDisable(!quPathLogAvailable);
@@ -128,7 +136,8 @@ public class BugReportDialog {
             stage.sizeToScene();
         });
 
-        VBox options = new VBox(6, chkSysInfo, chkSessionLog, chkQuPathLog, chkScreenshot, screenshotWarning);
+        VBox options =
+                new VBox(6, chkSysInfo, chkSessionLog, chkServerLog, chkQuPathLog, chkScreenshot, screenshotWarning);
 
         statusLabel.setWrapText(true);
 
@@ -192,8 +201,8 @@ public class BugReportDialog {
         }
 
         String sysinfo = chkSysInfo.isSelected() ? BugReportService.gatherSysInfo() : null;
-        Map<String, String> artifacts =
-                BugReportService.gatherLogArtifacts(chkSessionLog.isSelected(), chkQuPathLog.isSelected());
+        Map<String, String> artifacts = BugReportService.gatherLogArtifacts(
+                chkSessionLog.isSelected(), chkServerLog.isSelected(), chkQuPathLog.isSelected());
 
         BugReport report = new BugReport(description, sysinfo, artifacts, screenshotBase64);
 

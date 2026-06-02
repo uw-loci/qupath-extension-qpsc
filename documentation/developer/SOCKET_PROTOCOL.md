@@ -456,6 +456,13 @@ See `handlers/streaming_focus.py` for the implementation.
 | DISCONNECT | `quitclnt` | none | none (close connection) |
 | GETPXSZ | `getpxsz_` | none | 8 bytes: pixel size double |
 | GETFOV | `getfov__` | none | 16 bytes: FOV X,Y doubles |
+| GETLOG | `getlog__` | none | 4-byte big-endian length + UTF-8 bytes (or 0 for no active log) |
+
+#### GETLOG
+
+Fetches the tail of the Python server's current session log (for bug reports). The server replies with a 4-byte big-endian length followed by that many UTF-8 bytes (already head+tail trimmed server-side, keeping the version banner for provenance plus recent lines where errors typically appear). A length of 0 indicates the server has no active session log.
+
+**Timeout handling:** Pre-GETLOG servers ignore this command and send no reply. Callers MUST apply their own timeout (typically 6 seconds) or the read would block until the socket's default read timeout. This allows forward compatibility when deploying a newer QuPath alongside an older server deployment.
 
 ## Acquisition Lifecycle
 

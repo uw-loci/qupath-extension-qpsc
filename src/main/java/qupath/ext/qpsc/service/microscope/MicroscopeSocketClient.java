@@ -364,7 +364,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
         PRBSAFZ("prbsafz_"),
 
         /** Rapid scan -- fast tiled brightfield acquisition, no AF, no Z */
-        RPDSCAN("rpdscan_");
+        RPDSCAN("rpdscan_"),
+
+        /**
+         * Fetch the tail of the Python server's current session log (for bug
+         * reports). Server replies with a 4-byte big-endian length followed by
+         * that many UTF-8 bytes (head = version banner, plus the recent tail);
+         * length 0 means no active log. Pre-GETLOG servers ignore this command
+         * and send nothing, so callers MUST apply their own timeout.
+         */
+        GETLOG("getlog__");
 
         private final byte[] value;
 
@@ -932,6 +941,48 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     "Server config reload failed: " + responseStr.substring(Math.min(7, responseStr.length())));
         } else {
             throw new IOException("Unexpected RECONFIG response: " + responseStr);
+        }
+    }
+
+    /**
+     * Fetches the tail of the Python server's current session log (for bug
+     * reports). Sends {@link Command#GETLOG} on the primary socket; the server
+     * replies with a 4-byte big-endian length and that many UTF-8 bytes. A
+     * length of 0 means the server has no active session log.
+     *
+     * <p>Pre-GETLOG servers ignore the command and send no reply, so callers
+     * MUST guard this with their own timeout -- the read would otherwise block
+     * until the socket read timeout. Intended to be called off the FX thread.
+     *
+     * @return the server log text (already head+tail trimmed server-side), or
+     *         an empty string if the server has no log
+     * @throws IOException if the socket read/write fails
+     */
+    public String getServerLogTail() throws IOException {
+        synchronized (socketLock) {
+            ensureConnected();
+            try {
+                output.write(Command.GETLOG.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                byte[] lengthBytes = new byte[4];
+                input.readFully(lengthBytes);
+                ByteBuffer lengthBuf = ByteBuffer.wrap(lengthBytes);
+                lengthBuf.order(ByteOrder.BIG_ENDIAN);
+                int length = lengthBuf.getInt();
+                if (length <= 0) {
+                    return "";
+                }
+
+                byte[] body = new byte[length];
+                input.readFully(body);
+                lastActivityTime.set(System.currentTimeMillis());
+                return new String(body, StandardCharsets.UTF_8);
+            } catch (IOException e) {
+                handleIOException(e);
+                throw e;
+            }
         }
     }
 

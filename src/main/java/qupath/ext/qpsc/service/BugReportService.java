@@ -18,8 +18,14 @@ import java.time.Duration;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.Map;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
+import java.util.concurrent.TimeUnit;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.utilities.ProjectLogger;
 import qupath.ext.qpsc.utilities.VersionInfo;
 
@@ -55,13 +61,34 @@ public class BugReportService {
     public static final int MIN_DESCRIPTION_CHARS = 20;
     public static final int MAX_DESCRIPTION_CHARS = 10000;
 
-    private static final int MAX_RUN_LOG_CHARS = 20000;
+    private static final int MAX_RUN_LOG_CHARS = 40000;
+    private static final int MAX_SERVER_LOG_CHARS = 20000;
     private static final int MAX_QUPATH_LOG_CHARS = 12000;
+
+    /**
+     * Start markers for each log's version/startup banner. When a log is over
+     * its cap, the "head" keeps everything through this banner (provenance is
+     * always present) and the "tail" keeps the most recent lines. See
+     * {@link #capWithHeadTail}.
+     */
+    private static final String QPSC_BANNER_MARKER = "=== QPSC Session Version Info ===";
+
+    private static final String SERVER_BANNER_MARKER = "=== Python Server Version Info ===";
+
+    /**
+     * End marker for a banner block -- a run of '=' chars. Both the QPSC and
+     * Python banners close with a long '=' rule; matching a 9-run is robust to
+     * the exact length while never matching the short "=== X ===" header lines.
+     */
+    private static final String BANNER_CLOSE_MARKER = "=========";
 
     /** Worker rejects screenshots whose base64 exceeds this (~3 MB binary). */
     public static final int MAX_SCREENSHOT_B64_CHARS = 4 * 1024 * 1024;
 
     private static final Duration HTTP_TIMEOUT = Duration.ofSeconds(30);
+
+    /** How long to wait for the server log over the socket before skipping it. */
+    private static final int SERVER_LOG_TIMEOUT_SECONDS = 6;
 
     private BugReportService() {}
 
@@ -86,14 +113,17 @@ public class BugReportService {
     }
 
     /**
-     * Reads the requested log files, scrubs home-directory paths, and caps each
-     * to keep the combined GitHub issue body under its 64 KB limit.
+     * Reads the requested logs, scrubs home-directory paths, and caps each to
+     * keep the combined GitHub issue body under its 64 KB limit. Large logs are
+     * trimmed head+tail (banner + most recent lines), not just tail.
      *
      * @param includeSessionLog attach the QPSC per-run session log (most useful)
+     * @param includeServerLog  attach the Python command-server log via socket
      * @param includeQuPathLog  attach QuPath's own log file, if one is on disk
      * @return ordered map of artifact-key -> text (only non-empty entries)
      */
-    public static Map<String, String> gatherLogArtifacts(boolean includeSessionLog, boolean includeQuPathLog) {
+    public static Map<String, String> gatherLogArtifacts(
+            boolean includeSessionLog, boolean includeServerLog, boolean includeQuPathLog) {
         Map<String, String> artifacts = new LinkedHashMap<>();
 
         if (includeSessionLog) {
@@ -101,15 +131,25 @@ public class BugReportService {
             if (sessionLog == null) {
                 sessionLog = ProjectLogger.getTempLogFile();
             }
-            String content = readCapped(sessionLog, MAX_RUN_LOG_CHARS);
+            String content = readCappedLog(sessionLog, MAX_RUN_LOG_CHARS, QPSC_BANNER_MARKER);
             if (!content.isEmpty()) {
                 artifacts.put("run_log", content);
             }
         }
 
+        if (includeServerLog) {
+            // The server already head+tail trims its own log; re-cap here as a
+            // backstop in case a newer/older server returns more than expected.
+            String raw = fetchServerLog();
+            String content = scrubPaths(capWithHeadTail(raw, MAX_SERVER_LOG_CHARS, SERVER_BANNER_MARKER));
+            if (content != null && !content.isEmpty()) {
+                artifacts.put("server_log", content);
+            }
+        }
+
         if (includeQuPathLog) {
             Path quPathLog = findQuPathLogFile();
-            String content = readCapped(quPathLog, MAX_QUPATH_LOG_CHARS);
+            String content = readCappedLog(quPathLog, MAX_QUPATH_LOG_CHARS, null);
             if (!content.isEmpty()) {
                 artifacts.put("qupath_log", content);
             }
@@ -123,7 +163,50 @@ public class BugReportService {
         return findQuPathLogFile() != null;
     }
 
-    private static String readCapped(Path path, int maxChars) {
+    /** True if the microscope command server is connected (drives a checkbox state). */
+    public static boolean isServerLogAvailable() {
+        try {
+            MicroscopeSocketClient client = MicroscopeController.getInstance().getSocketClient();
+            return client != null && client.isConnected();
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Fetches the server's session-log tail over the socket, bounded by a
+     * timeout so a busy or pre-GETLOG server cannot hang submission. Returns ""
+     * on any problem -- the server log is always optional.
+     */
+    private static String fetchServerLog() {
+        MicroscopeSocketClient client;
+        try {
+            client = MicroscopeController.getInstance().getSocketClient();
+        } catch (Exception e) {
+            return "";
+        }
+        if (client == null || !client.isConnected()) {
+            return "";
+        }
+        ExecutorService exec = Executors.newSingleThreadExecutor(r -> {
+            Thread t = new Thread(r, "qpsc-bug-server-log");
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            Future<String> future = exec.submit(client::getServerLogTail);
+            String result = future.get(SERVER_LOG_TIMEOUT_SECONDS, TimeUnit.SECONDS);
+            return result != null ? result : "";
+        } catch (Exception e) {
+            logger.debug("Server log fetch skipped: {}", e.getMessage());
+            return "";
+        } finally {
+            exec.shutdownNow();
+        }
+    }
+
+    /** Reads a log file from disk and applies head+tail capping + path scrubbing. */
+    private static String readCappedLog(Path path, int maxChars, String bannerMarker) {
         if (path == null || !Files.isRegularFile(path)) {
             return "";
         }
@@ -134,10 +217,45 @@ public class BugReportService {
             logger.debug("Could not read log artifact {}: {}", path, e.getMessage());
             return "";
         }
-        if (text.length() > maxChars) {
-            text = "... [truncated to last " + maxChars + " chars]\n" + text.substring(text.length() - maxChars);
+        return scrubPaths(capWithHeadTail(text, maxChars, bannerMarker));
+    }
+
+    /**
+     * Caps a log to {@code maxChars}. If it fits, returns it unchanged. If not,
+     * keeps a head (everything through the version banner, when {@code
+     * bannerMarker} is found) plus the most recent tail, joined by an
+     * "[N chars omitted]" note. With a null marker it is a pure tail cap.
+     */
+    static String capWithHeadTail(String text, int maxChars, String bannerMarker) {
+        if (text == null || text.isEmpty() || text.length() <= maxChars) {
+            return text == null ? "" : text;
         }
-        return scrubPaths(text);
+
+        String head = "";
+        if (bannerMarker != null) {
+            int start = text.indexOf(bannerMarker);
+            if (start >= 0) {
+                int close = text.indexOf(BANNER_CLOSE_MARKER, start + bannerMarker.length());
+                int headEnd;
+                if (close >= 0) {
+                    int lineEnd = text.indexOf('\n', close);
+                    headEnd = (lineEnd >= 0)
+                            ? lineEnd + 1
+                            : Math.min(text.length(), close + BANNER_CLOSE_MARKER.length());
+                } else {
+                    headEnd = Math.min(text.length(), start + 2000);
+                }
+                // Never let the head consume more than a third of the budget.
+                head = text.substring(0, Math.min(headEnd, Math.max(0, maxChars / 3)));
+            }
+        }
+
+        int sepReserve = 48;
+        int tailChars = Math.max(0, maxChars - head.length() - sepReserve);
+        int tailStart = Math.max(head.length(), text.length() - tailChars);
+        String tail = text.substring(tailStart);
+        int omitted = text.length() - head.length() - tail.length();
+        return head + "\n... [" + omitted + " chars omitted] ...\n" + tail;
     }
 
     /**
