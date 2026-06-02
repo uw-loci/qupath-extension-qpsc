@@ -1,0 +1,7 @@
+# Documentation image acknowledgements
+# Records screenshots accepted as current despite a UI change in their source,
+# so check-doc-images.sh stops flagging them. Re-flags when NEW UI changes land
+# on top of the acked commit. Manage via: tools/check-doc-images.sh --ack <Image.png>
+# image	acked_commit	acked_date	note
+Docs_AnnotationAcquisition.png	9a204533acc78dcbfba666fa78502f783df96b71	2026-06-02	Save MDA... footer button; figure already full, not re-capturing
+Docs_ExistingImage_ConsolidatedDialog.png	9a204533acc78dcbfba666fa78502f783df96b71	2026-06-02	Save MDA... footer button; figure already full, not re-capturing

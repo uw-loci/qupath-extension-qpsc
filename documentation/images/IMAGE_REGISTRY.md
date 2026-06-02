@@ -53,6 +53,34 @@ This file tracks the relationship between documentation screenshots and the Java
 3. Update the "Last Verified" date and set Status to "OK"
 4. Commit the updated image alongside the code change
 
-## CI Hook (planned)
+## CI Hook -- `tools/check-doc-images.sh`
 
-A pre-commit or CI check can compare the modification dates of tracked Java files against this registry to flag stale screenshots. See the `check-doc-images` script (TODO).
+`tools/check-doc-images.sh` parses this registry and, for each screenshot, diffs
+its source class from the screenshot's commit to `HEAD`. It only flags a
+screenshot when the added/removed lines touch **UI-construction code** (new
+controls, layout additions, visible text -- `new Button`, `ButtonType`,
+`getChildren().add`, `setText`, `setTitle`, ...). Internal wiring, logging,
+refactors, and comment edits do not trigger it, so a single sweep commit across
+many UI files no longer produces a wall of false positives.
+
+```bash
+tools/check-doc-images.sh            # human-readable report
+tools/check-doc-images.sh --ci       # exit 1 if any real UI change (CI gate)
+tools/check-doc-images.sh --verbose  # also list suppressed / unchanged images
+```
+
+### Dismissing a change without re-capturing
+
+When a source has a real UI change you do **not** want to re-capture (e.g. a new
+footer button that won't fit the existing figure), acknowledge it instead:
+
+```bash
+tools/check-doc-images.sh --ack Docs_ExistingImage_ConsolidatedDialog.png \
+    --note "Save MDA... footer button; figure already full"
+```
+
+This pins the current commit in `IMAGE_ACKS.tsv` (git-tracked, commit it with
+your change). The screenshot stops flagging until a **new** UI change lands on
+top of the acked commit -- so you stay protected against future drift while
+silencing the one change you accepted. Re-capturing the image (a newer image
+commit) supersedes the ack automatically.
