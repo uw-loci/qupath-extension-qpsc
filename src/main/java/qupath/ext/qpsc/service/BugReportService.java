@@ -47,7 +47,7 @@ public class BugReportService {
      * Until it is set, {@link #isConfigured()} returns false and the dialog
      * disables submission.
      */
-    public static final String WORKER_URL = "https://qpsc-bug-reporter.YOUR-SUBDOMAIN.workers.dev";
+    public static final String WORKER_URL = "https://qpsc-bug-reporter.imagescientistwebsite.workers.dev";
 
     /** Allow-list key understood by the Worker (see REPOS in src/index.js). */
     private static final String REPO_KEY = "qpsc";
