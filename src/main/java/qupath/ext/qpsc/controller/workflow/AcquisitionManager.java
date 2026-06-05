@@ -122,6 +122,19 @@ public class AcquisitionManager {
      *  so the next annotation's AF search is centered near reality, not the user's initial Z. */
     private Double lastAcquisitionZ = null;
 
+    /** Maximum plausible focal-plane step (um) between consecutive acquisitions.
+     *  A finalZ that jumps more than this from {@link #lastAcquisitionZ} is treated
+     *  as a runaway autofocus result (e.g. a contrast-inverted metric chasing the
+     *  stage off focus) rather than real tilt: it is NOT carried forward as the
+     *  next AF hint and NOT fed into the Z-focus plane fit, so one bad AF cannot
+     *  poison the hint chain or the tilt model. Real slide tilt across the FOVs
+     *  used here is far smaller than this even at low magnification. The runaway
+     *  it guards against is documented in
+     *  claude-reports/2026-06-02_autofocus-focus-runaway.md (PPM 40x walked
+     *  Z=7 -> 34 -> 104 um, never recovering). Defense-in-depth behind the
+     *  Python-side drift-check and standard-AF edge-retry guards. */
+    private static final double MAX_FOCUS_STEP_UM = 25.0;
+
     /** Parent image entry captured at session start -- stable reference for metadata inheritance.
      *  Do NOT look this up from gui.getImageData() later, as the viewer state can change
      *  when stitching dialogs close or other images are opened. */
@@ -617,7 +630,28 @@ public class AcquisitionManager {
                                     MicroscopeSocketClient socketClient =
                                             MicroscopeController.getInstance().getSocketClient();
                                     Double finalZ = socketClient.getLastAcquisitionFinalZ();
-                                    if (finalZ != null) {
+                                    if (finalZ != null
+                                            && lastAcquisitionZ != null
+                                            && Math.abs(finalZ - lastAcquisitionZ) > MAX_FOCUS_STEP_UM) {
+                                        // Runaway-autofocus containment: a single-step focal-plane
+                                        // jump this large is not physical tilt -- it is a corrupted
+                                        // AF result (contrast-inverted metric walking the stage off
+                                        // focus). Do NOT carry it forward as the next AF hint and do
+                                        // NOT feed it into the Z-focus plane fit; hold the last good
+                                        // plane so the next annotation's AF starts from reality and a
+                                        // full standard AF / manual focus can recover if focus was
+                                        // genuinely lost. See
+                                        // claude-reports/2026-06-02_autofocus-focus-runaway.md.
+                                        logger.warn(
+                                                "Rejecting runaway final Z={} um for {}: jumps {} um from "
+                                                        + "last good Z={} um (> {} um cap) -- not carrying forward "
+                                                        + "and not adding to Z-focus model",
+                                                String.format("%.2f", finalZ),
+                                                annotation.getName(),
+                                                String.format("%.1f", Math.abs(finalZ - lastAcquisitionZ)),
+                                                String.format("%.2f", lastAcquisitionZ),
+                                                String.format("%.1f", MAX_FOCUS_STEP_UM));
+                                    } else if (finalZ != null) {
                                         // Persist across annotation resets for Z-hint fallback
                                         lastAcquisitionZ = finalZ;
 

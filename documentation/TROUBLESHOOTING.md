@@ -582,6 +582,16 @@ Steps:
 
 The packaged manifest's default per-modality is still `laplacian_variance`; per-rig YAML override is the current recommendation. If multiple rigs hit this, consider promoting `brenner_gradient` to the modality default (out of scope for now -- need more evidence across scopes/scenes).
 
+#### Q: Focus went bad partway through an acquisition and every tile after that is out of focus
+
+**A:** Two-part answer -- what the software now does to contain it, and the underlying cause to fix.
+
+This is a *focus runaway*: a sweep correction (or a standard-AF edge-retry) commits a large wrong Z, that Z carries forward as the hint for the next tile, and focus walks progressively further off the sample. The stitched mosaic shows a hard seam -- sharp tiles before the event, uniformly blurry tiles after. It is most likely when the focus metric is *contrast-inverted*: on a heavily saturated channel (e.g. PPM red clipping at 255), moving out of focus can *raise* the apparent gradient, so the focus curve ramps toward an edge instead of peaking at focus.
+
+As of 2026-06-02 the software fails safe instead of walking: the sweep drift check will not commit a correction larger than one search window from where it started (it holds the current Z), standard AF refuses an edge peak that never brackets focus (falling back to `p98_p2` or manual focus), and the acquisition workflow rejects a single-tile Z jump > 25 um from the last good plane rather than carrying it forward. You will see warnings like `refusing to chase boundary peak`, `Edge-retry budget exhausted ... refusing unbracketed edge peak`, or `Rejecting runaway final Z` in the logs. Full analysis: `claude-reports/2026-06-02_autofocus-focus-runaway.md`.
+
+To remove the *cause* (so AF works normally instead of falling back every tile): check the server log for `SATURATION WARNING` lines and a session-wide `metric is contrast-inverted at this XY` on the focus curve. If the red (or any) channel is clipping, lower the per-angle exposure / fix the white balance for that objective so no channel saturates -- a non-clipped image gives a normal focus curve and AF stops needing the `p98_p2` fallback.
+
 #### Q: Autofocus is too slow
 
 **A:** Reduce the number of autofocus positions:

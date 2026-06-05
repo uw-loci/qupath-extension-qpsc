@@ -99,6 +99,8 @@ The focus curve must show:
 
 If validation fails on both the primary and fallback metrics, autofocus reports failure and triggers the manual focus fallback.
 
+**Unbracketed edge-peak refusal (2026-06-02):** When the edge-retry budget is exhausted (or stage Z limits leave no room) and the peak is *still* at the window edge with a one-sided, never-bracketed trend, the metric never found focus in any window searched -- committing that boundary Z is how a contrast-inverted / saturated metric walks the stage off the sample. Standard AF now refuses the unbracketed boundary peak: it falls back to `p98_p2` (which must itself bracket -- a fallback that is also an edge guess is rejected) and otherwise defers to manual focus, targeting the original hint Z rather than the unverified boundary. See `claude-reports/2026-06-02_autofocus-focus-runaway.md`.
+
 ---
 
 ## Sweep Autofocus
@@ -111,10 +113,10 @@ The server-side sweep:
 - Uses fewer steps (`sweep_n_steps`, default 6-10)
 - **Boundary retry (3 attempts):** When the peak is at a sweep boundary (monotonic profile), the sweep extends up to 2 additional times in the peak direction, each shifting the window by one full range. Total coverage is 3x `sweep_range_um` (e.g., 30um for a 10um setting), clamped to stage Z limits. This prevents dead zones where autofocus cannot recover from a bad starting Z on tilted samples.
 - Rejects flat profiles (score variation < 2% -- no retry, since retrying won't help)
-- If all attempts fail to find an interior peak but a focus slope is detected, **moves to the best Z found** (the boundary position with the highest metric) rather than returning to the starting Z. This is better than no correction even without a true peak.
+- **Total-drift cap (2026-06-02):** A drift check corrects small thermal drift, not lost focus. The committed correction is capped at one search window (`max_total_drift_um`, default = `sweep_range_um`) from the starting Z. If the edge-retry would chase a boundary peak beyond the cap -- the signature of a contrast-inverted / saturated metric ramping toward an edge -- the sweep **holds at the starting Z** and leaves real focus loss to the standard AF / manual path. This is the containment net for the focus runaway analyzed in `claude-reports/2026-06-02_autofocus-focus-runaway.md` (PPM 40x walked Z=7 -> 34 -> 104 um). A contrast-inverted *symmetric* U-shape is also held (separate guard).
 - Failed sweeps with flat profiles (no slope, no drift) are not recorded in the AF position map, preventing stale Z values from propagating to neighboring tiles via nearest-neighbor lookup
 
-The sweep is designed for corrections of 1-5um per attempt, with the retry loop extending reach to ~15um.
+The sweep is designed for corrections of 1-5um per attempt, with the retry loop extending reach to ~15um (bounded by the total-drift cap above).
 
 In the Live Viewer, when you select Sweep Autofocus, clicking the Autofocus button sends a `TESTADAF` command to the server and displays "Sweeping..." on the button while the server performs the scan. The focus range dropdown always defers to the `sweep_range_um` YAML setting for Sweep Autofocus (unlike Streaming AF, where explicit um values override the YAML).
 
