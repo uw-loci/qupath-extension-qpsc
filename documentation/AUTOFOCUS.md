@@ -101,6 +101,16 @@ If validation fails on both the primary and fallback metrics, autofocus reports 
 
 **Unbracketed edge-peak refusal (2026-06-02):** When the edge-retry budget is exhausted (or stage Z limits leave no room) and the peak is *still* at the window edge with a one-sided, never-bracketed trend, the metric never found focus in any window searched -- committing that boundary Z is how a contrast-inverted / saturated metric walks the stage off the sample. Standard AF now refuses the unbracketed boundary peak: it falls back to `p98_p2` (which must itself bracket -- a fallback that is also an edge guess is rejected) and otherwise defers to manual focus, targeting the original hint Z rather than the unverified boundary. See `claude-reports/2026-06-02_autofocus-focus-runaway.md`.
 
+### Saturation and autofocus
+
+Saturation is the *root* cause behind the contrast-inverted focus curves the guards above defend against: when a channel clips at 255, in-focus highlights flatten (low gradient) while defocus spreads them back below clipping (higher gradient), so the focus metric inverts and ramps toward defocus. Autofocus cannot recover real focus from a clipped frame, so the system does two things (2026-06-07):
+
+1. **AF auto-reduces its own exposure / illumination** (server-side, `_guard_af_saturation`). Once per run, at the first autofocus, it snaps a frame at the AF profile and -- if the brightest channel is saturated beyond the strategy's tolerance -- halves the AF exposure (or, for illumination-driven modalities, the illumination power) and re-snaps until it is under tolerance, then remembers that reduction for the rest of the run. This only touches the *autofocus* frames; the acquisition's own per-tile exposure is unchanged (your images are still exposed as you set them). If halving hits its floor while still saturated, AF proceeds but logs a clear warning.
+
+2. **The end-of-run Saturation Summary warns you** when concerning saturation is high that it degrades autofocus and that the *sample* exposure/illumination should be lowered. The auto-reduction is a stopgap for focus quality, not a substitute for correct exposure.
+
+**The tolerance is per-strategy** (a `saturation_threshold` fraction in each strategy's `validity_params` in `autofocus_<scope>.yml`, falling back to a code default): dense tissue / confluent fluorescence **0.10** (10%), sparse-signal (beads, FISH spots) and dark-field **0.03** -- a sparse field clips *all* of its real signal in only a few percent of pixels, so a tissue-style 10% gate would never fire even when every spot is blown out. `manual_only` opts out entirely. See `claude-reports/2026-06-02_autofocus-focus-runaway.md` (Follow-up).
+
 ---
 
 ## Sweep Autofocus

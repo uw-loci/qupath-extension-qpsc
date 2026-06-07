@@ -48,6 +48,11 @@ public class SaturationSummaryDialog {
 
     private static final Logger logger = LoggerFactory.getLogger(SaturationSummaryDialog.class);
 
+    /** Worst concerning saturation (%) at/above which the banner warns that
+     *  autofocus is degraded. Mirrors the default dense-tissue AF saturation
+     *  tolerance (0.10) on the Python side. */
+    private static final double AF_SATURATION_WARN_PCT = 10.0;
+
     /**
      * Show the saturation summary dialog from a saturation_report.json file.
      *
@@ -224,6 +229,19 @@ public class SaturationSummaryDialog {
                     .append(" tile(s) with concerning saturation (worst ")
                     .append(String.format("%.1f%%", worst))
                     .append(").");
+            // Be up front: saturation at this level degrades autofocus. A
+            // saturated channel inverts the focus metric so it ramps toward
+            // defocus, and autofocus cannot recover real focus from a clipped
+            // frame (it auto-reduces its OWN exposure as a stopgap, but the
+            // acquired tiles are still over-exposed). 10% mirrors the default
+            // dense-tissue AF saturation tolerance. See
+            // claude-reports/2026-06-02_autofocus-focus-runaway.md.
+            if (worst >= AF_SATURATION_WARN_PCT) {
+                sb.append(" WARNING: saturation this high degrades autofocus -- ")
+                        .append("a saturated channel inverts the focus metric and can ")
+                        .append("walk the stage off focus. Lower the exposure (or ")
+                        .append("illumination) for this sample so no channel clips.");
+            }
         } else {
             sb.append("No concerning saturation detected.");
         }
