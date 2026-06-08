@@ -979,10 +979,12 @@ public class ExistingImageAcquisitionController {
                     + "Smaller steps give finer Z sampling but more planes."));
 
             ComboBox<String> projectionCombo = new ComboBox<>();
-            projectionCombo.getItems().addAll("Max Intensity", "Min Intensity", "Sum", "Mean", "Std Deviation");
+            projectionCombo.getItems().addAll("Max Intensity", "Min Intensity", "Sum", "Mean", "Std Deviation", "None");
             projectionCombo.setValue(PersistentPreferences.getZStackProjection());
-            projectionCombo.setTooltip(new Tooltip("How to combine Z-planes into a single 2D tile for stitching. "
-                    + "Max intensity is standard for fluorescence and SHG."));
+            projectionCombo.setTooltip(new Tooltip("How to combine Z-planes for stitching. "
+                    + "Max intensity is standard for fluorescence and SHG. "
+                    + "Choose \"None\" to preserve the full Z-stack (and time series, if any) as a single "
+                    + "multi-dimensional stitched image instead of projecting to 2D."));
 
             Label infoLabel = new Label();
             infoLabel.setStyle("-fx-font-style: italic; -fx-font-size: 11;");

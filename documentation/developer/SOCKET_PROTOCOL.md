@@ -170,6 +170,8 @@ ENDOFSTR
 
 `--inner-axis` selects the inner loop of the per-tile snap nest. Allowed values: `z`, `channel`, `angle`. Omit the flag to get the per-modality default (`z` for widefield channel acquisitions, `angle` for PPM angle acquisitions, ignored for single-axis non-channel non-angle paths). The flag is additive -- callers that don't set it produce byte-identical command lines to pre-toggle builds. See `documentation/tools/z-stack-timelapse.md` for the user-facing semantics (fixed-slide-fast vs drift-tolerant for widefield; angle-switch-fast for PPM z-stacks).
 
+`--z-projection` selects how the Z-stack is reduced. Values `max` (default), `min`, `sum`, `mean`, `std` compute a 2D projection: one projected tile per position is written to `{group}/{filename}` and stitched into a 2D mosaic. The value `none` instead *preserves* every Z-plane: the server writes each plane to `{group}/[t{tt}/]z{zz}/{filename}` (the `t{tt}` segment is present only when `--timepoints > 1`), and the stitcher (`qupath-extension-tiles-to-pyramid`) derives each tile's z/t from those directory names and assembles a single multi-dimensional (5D: x,y,z,channel/angle,t) mosaic. `none` is mapped from the acquisition dialog's "None" projection choice; the Java side sends it only when the Z-stack pane is enabled, so omitting Z-stack or choosing any projection other than "None" yields the unchanged 2D output. The `none` plane layout matches the existing `--save-raw true` forensic layout for a single timepoint, so 2D/projected output is byte-identical.
+
 ### Background Acquisition (BGACQUIRE)
 
 `BGACQUIRE` collects flat-field background images. Like `ACQUIRE` it takes a

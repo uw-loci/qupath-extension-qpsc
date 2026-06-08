@@ -15,6 +15,7 @@ import qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.model.StitchingMetadata;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -173,6 +174,17 @@ public class TileProcessingUtilities {
         }
         final String outputName = resolveDisplayName(earlyMetadata, sampleLabel);
 
+        // Z-plane spacing for OME metadata. Only meaningful when the Z-stack is
+        // preserved (projection "None"); a projected mosaic is 2D so the value is
+        // unused. Source it from the same Z-stack preferences the acquisition used.
+        double zSpacingMicrons = 1.0;
+        if (PersistentPreferences.isZStackEnabled() && "None".equals(PersistentPreferences.getZStackProjection())) {
+            double step = PersistentPreferences.getZStackStep();
+            if (step > 0) {
+                zSpacingMicrons = step;
+            }
+        }
+
         StitchingConfig config = new StitchingConfig(
                 "Coordinates in TileConfiguration.txt file",
                 tileFolder,
@@ -181,7 +193,7 @@ public class TileProcessingUtilities {
                 pixelSizeMicrons,
                 downsample,
                 matchingString,
-                1.0, // zSpacingMicrons
+                zSpacingMicrons,
                 outputFormat);
         config.setOutputFilename(outputName);
 

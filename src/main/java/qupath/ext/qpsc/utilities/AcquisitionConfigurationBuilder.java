@@ -295,6 +295,10 @@ public class AcquisitionConfigurationBuilder {
                         case "Sum" -> "sum";
                         case "Mean" -> "mean";
                         case "Std Deviation" -> "std";
+                        // "None" preserves every Z-plane (and, with time-lapse, every
+                        // timepoint) so the stitcher assembles a 5D mosaic instead of a
+                        // projected 2D image. The server keys preserve-mode off "none".
+                        case "None" -> "none";
                         default -> "max";
                     };
             acquisitionBuilder.zProjection(code);
