@@ -21,10 +21,12 @@ const DEFAULT_REPO_KEY = "qpsc";
 
 // Text artifacts the client may attach. Each becomes a collapsed <details>
 // block in the issue body. Keys here must match the keys the app sends.
+// Labels are extension-neutral; the payload's `extension` field identifies the
+// source tool (this Worker serves several QuPath extensions).
 const ARTIFACT_SECTIONS = [
-  { key: "run_log",    label: "QPSC session log",  lang: "", max: 40000 },
-  { key: "server_log", label: "Python server log", lang: "", max: 20000 },
-  { key: "qupath_log", label: "QuPath log",        lang: "", max: 12000 },
+  { key: "run_log",    label: "session log",          lang: "", max: 40000 },
+  { key: "server_log", label: "microscope server log", lang: "", max: 20000 },
+  { key: "qupath_log", label: "QuPath log",           lang: "", max: 12000 },
 ];
 
 const MAX_BODY_CHARS = 64000;                      // GitHub issue body cap is 65,536
