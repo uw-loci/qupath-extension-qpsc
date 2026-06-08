@@ -1,0 +1,1 @@
+# Bug attachment storage. This orphan branch holds image attachments from the in-app bug reporter.
