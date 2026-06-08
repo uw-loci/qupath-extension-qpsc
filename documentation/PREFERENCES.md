@@ -584,6 +584,35 @@ Output format for stitched images.
 
 ---
 
+### Stitched output organization (multi-channel acquisitions)
+
+| Property | Value |
+|----------|-------|
+| Type | Choice |
+| Default | Single combined file |
+| Options | Single combined file, Separate file per channel |
+| Requires Restart | No |
+
+**Description:**
+Controls how stitched channels are grouped into files during multi-channel acquisitions (widefield fluorescence and BF+IF). This is a global per-acquisition preference and is selected via a dropdown in the acquisition dialog.
+
+| Option | Behavior |
+|--------|----------|
+| **Single combined file** | All channels (except those marked "Split" in the channel picker) are merged into one multichannel OME-TIFF, imported to the project as a single entry. Channels marked "Split" are imported as separate entries. |
+| **Separate file per channel** | Every channel is written as its own stitched OME-TIFF, imported as separate project entries. Per-channel "Split" checkboxes in the picker are ignored. |
+
+**Per-channel override:** Individual channels can be marked "Split" in the channel picker (when the master "Customize" checkbox is enabled) to override this global setting — a split channel will be written as its own file even when "Single combined file" is selected.
+
+**Merged vs split filenames:**
+- **Merged files** use a modality prefix: `<sample>_<short-modality>_NNN.ome.tif` (e.g. `PollenIF_fl_001.ome.tif`)
+- **Split files** use the channel id: one per-channel stitched pyramid, imported under its own entry
+
+**Project import behavior:**
+- When "Single combined file" is used with no split channels, only the merged file is imported; per-channel intermediates stay on disk as recovery artifacts.
+- When "Separate file per channel" is used, or when channels are split individually, all stitched files are imported as separate entries.
+
+---
+
 ## Filename Configuration
 
 Settings that control what information appears in image filenames.
@@ -812,6 +841,7 @@ All keys live under the prefix `widefield.channel.`:
 | `widefield.channel.<id>.selected` | String ("true" / "false") | `false` | Whether channel `<id>` is checked in the picker. Only consulted when `master_override_enabled` is `true`. |
 | `widefield.channel.<id>.exposure_ms` | String (double) | Channel's library `exposure_ms` (from YAML, with profile overrides applied) | Per-channel exposure in milliseconds, as edited in the picker spinner. Only consulted when `master_override_enabled` is `true` and the channel is selected. |
 | `widefield.channel.<id>.intensity` | String (double) | Channel's library `intensity_property` value | Per-channel intensity, as edited in the picker spinner (only present if the channel declares `intensity_property` in YAML). Only consulted when `master_override_enabled` is `true`. |
+| `widefield.channel.<id>.split` | String ("true" / "false") | `false` | Whether channel `<id>` is marked for split output (written as its own stitched file instead of merging into the multichannel file). Only consulted when `master_override_enabled` is `true` and the channel is selected. Ignored when the "Stitched output" dropdown (persisted as `qpscStitchOrganization`) is set to "Separate file per channel" (all channels are split in that mode). |
 | `widefield.channel.focus_channel` | String | (empty) | The channel id selected as the autofocus reference channel. Persisted across sessions and dialogs. |
 | `widefield.channel.preset.names` | String (TAB-separated list) | (empty) | List of saved preset names, delimited by TAB characters. Used internally to populate the Preset dropdown. |
 | `widefield.channel.preset.<safeKey>` | String (pipe-delimited blob) | (none) | Preset data for the preset named `<safeKey>`. Format: `v1\|focus=<id>\|<chId>=<sel>:<exp>:<int>\|...` where `sel` is true/false, `exp` and `int` are doubles. `<safeKey>` is the preset name lowercased and with non-alphanumerics replaced by underscores. |
