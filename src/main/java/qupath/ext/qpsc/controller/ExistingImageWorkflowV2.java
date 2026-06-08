@@ -657,6 +657,12 @@ public class ExistingImageWorkflowV2 {
             state.perAngleWhiteBalance = config.perAngleWhiteBalance();
             state.wbMode = config.wbMode();
 
+            // Store stitched-output grouping (channel split + organization).
+            state.splitChannelIds = config.splitChannelIds() == null ? java.util.Set.of() : config.splitChannelIds();
+            state.stitchingOrganization = config.stitchingOrganization() == null
+                    ? qupath.ext.qpsc.service.OutputFormat.OME_SINGLE
+                    : config.stitchingOrganization();
+
             // Re-fetch annotations for the selected classes from the current image.
             // The annotation dialog loaded them earlier but they weren't passed through
             // the config record -- re-read them from the hierarchy using the stored classes.
@@ -2132,5 +2138,11 @@ public class ExistingImageWorkflowV2 {
         public boolean enableWhiteBalance = true;
         public boolean perAngleWhiteBalance = false;
         public String wbMode = "per_angle";
+
+        // Stitched-output grouping: channel ids to write as their own file, and
+        // the overall organization. Default: merge all into one combined file.
+        public java.util.Set<String> splitChannelIds = java.util.Set.of();
+        public qupath.ext.qpsc.service.OutputFormat stitchingOrganization =
+                qupath.ext.qpsc.service.OutputFormat.OME_SINGLE;
     }
 }

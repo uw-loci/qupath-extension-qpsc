@@ -83,6 +83,12 @@ public class ExistingImageAcquisitionController {
     /** Debounce delay for preview updates in milliseconds */
     private static final long PREVIEW_DEBOUNCE_MS = 300;
 
+    /** Stitched-output organization dropdown labels and persistence key (shared with the bounded dialog). */
+    private static final String ORG_SINGLE = "Single combined file";
+
+    private static final String ORG_PER_CHANNEL = "Separate file per channel";
+    private static final String PREF_STITCH_ORGANIZATION = "qpscStitchOrganization";
+
     /** Confidence thresholds */
     private static final double HIGH_CONFIDENCE = 0.8;
 
@@ -150,7 +156,15 @@ public class ExistingImageAcquisitionController {
             // Per-tile snap-loop inner axis. Null = omit the flag and let the
             // server fall back to its per-modality default. Values: "z",
             // "channel", "angle".
-            String innerAxis) {}
+            String innerAxis,
+
+            // Channel ids the user marked "Split" (each written as its own stitched
+            // file instead of merged). Empty = merge all (the default).
+            java.util.Set<String> splitChannelIds,
+
+            // How the stitched output is grouped (single combined file vs one file
+            // per channel). Defaults to OME_SINGLE.
+            qupath.ext.qpsc.service.OutputFormat stitchingOrganization) {}
 
     /**
      * Shows the consolidated acquisition dialog.
@@ -241,6 +255,7 @@ public class ExistingImageAcquisitionController {
 
         // Z-stack section: loop-order toggle (channel-inner / angle-inner alternative).
         private CheckBox zStackEnableCheck;
+        private ComboBox<String> outputOrganizationCombo;
         private RadioButton loopOrderInnerZRadio;
         private RadioButton loopOrderInnerAltRadio;
         private Label loopOrderLabel;
@@ -1016,6 +1031,19 @@ public class ExistingImageAcquisitionController {
                 if (n != null) PersistentPreferences.setZStackProjection(n);
             });
 
+            // Stitched-output organization (independent of Z-stack).
+            outputOrganizationCombo = new ComboBox<>();
+            outputOrganizationCombo.getItems().addAll(ORG_SINGLE, ORG_PER_CHANNEL);
+            outputOrganizationCombo.setValue(
+                    PersistentPreferences.getStringPreference(PREF_STITCH_ORGANIZATION, ORG_SINGLE));
+            outputOrganizationCombo.setTooltip(new Tooltip("How to group the stitched output. "
+                    + "\"Single combined file\" merges all channels (and any preserved Z/T) into one image; "
+                    + "\"Separate file per channel\" writes each channel as its own file. The per-channel "
+                    + "\"Split\" checkboxes give finer control."));
+            outputOrganizationCombo.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) PersistentPreferences.setStringPreference(PREF_STITCH_ORGANIZATION, n);
+            });
+
             GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(8);
@@ -1027,6 +1055,8 @@ public class ExistingImageAcquisitionController {
             grid.add(new Label("Projection:"), 0, 2);
             grid.add(projectionCombo, 1, 2);
             grid.add(infoLabel, 0, 3, 2, 1);
+            grid.add(new Label("Stitched output:"), 0, 4);
+            grid.add(outputOrganizationCombo, 1, 4);
 
             // Loop-order toggle: mirrors the one in UnifiedAcquisitionController.
             // Disabled when Z-stack is off OR (widefield) fewer than 2 channels
@@ -2230,12 +2260,21 @@ public class ExistingImageAcquisitionController {
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
                 String focusChannelId = null;
+                java.util.Set<String> splitChannelIds = java.util.Set.of();
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
                     Map<String, Double> intensityMap = modalityUI.getChannelIntensityOverrides();
                     channelIntensityOverrides = intensityMap == null ? Map.of() : intensityMap;
                     focusChannelId = modalityUI.getFocusChannelId();
+                    java.util.Set<String> split = modalityUI.getSplitChannelIds();
+                    splitChannelIds = split == null ? java.util.Set.of() : split;
                 }
+
+                qupath.ext.qpsc.service.OutputFormat stitchingOrganization = outputOrganizationCombo != null
+                        ? (ORG_PER_CHANNEL.equals(outputOrganizationCombo.getValue())
+                                ? qupath.ext.qpsc.service.OutputFormat.OME_PER_CHANNEL
+                                : qupath.ext.qpsc.service.OutputFormat.OME_SINGLE)
+                        : qupath.ext.qpsc.service.OutputFormat.OME_SINGLE;
 
                 // Autofocus strategy override: display -> protocol name.
                 // Null means "use YAML per-modality binding".
@@ -2331,7 +2370,9 @@ public class ExistingImageAcquisitionController {
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode,
-                        innerAxis);
+                        innerAxis,
+                        splitChannelIds,
+                        stitchingOrganization);
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);
