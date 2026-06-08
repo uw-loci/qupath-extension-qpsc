@@ -177,8 +177,10 @@ When a channel-based profile is selected, the acquisition dialog grows a **Fluor
   - A per-channel **Exposure (ms)** spinner
   - A per-channel **Intensity** spinner (only for channels whose YAML library entry declares an `intensity_property`; greyed out otherwise)
   - A **Focus** radio button (one and only one channel per acquisition can be the focus channel)
+  - A **Split** checkbox (write this channel as its own separate stitched file instead of merging; only enabled when the row is selected)
 - A **Preset** bar (when master checkbox is enabled) with a dropdown to load saved presets, and **Save...** / **Delete** buttons to manage them. This lets you quickly recall and reapply previous channel configurations.
 - A **Test Current Channel** button (when master checkbox is enabled) to verify a single selected channel's hardware settings by applying it to the microscope and opening the Live Viewer. Useful for dialing in exposure and intensity values before starting a full acquisition.
+- A **Stitched output** dropdown (above the channel grid) to control how the stitched channels are grouped: **Single combined file** merges all channels into one multichannel image, or **Separate file per channel** writes each channel as its own file. Individual per-channel "Split" checkboxes give finer control: when set to "Single combined file," only the split channels are written separately and the rest are merged.
 
 Default behavior (master checkbox OFF): the acquisition uses every channel in the library at its YAML-declared exposure and intensity. The Use/Exposure/Intensity controls are greyed out. The Focus radio buttons remain active so you can pick which channel drives autofocus even when you are not customizing anything else.
 
@@ -204,9 +206,16 @@ Each channel gets its own per-tile directory, mirroring the PPM per-angle layout
     TileConfiguration.txt
 ```
 
-After the tile loop finishes, each channel subdirectory is stitched independently into its own single-channel pyramidal OME-TIFF (via `StitchingHelper.stitchChannelDirectories`, which reuses the same helper that PPM uses per angle). The per-channel pyramids are then merged into a single multichannel output with `ChannelMerger` / `ChannelMergeImageServer` from the [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) extension.
+After the tile loop finishes, each channel subdirectory is stitched independently into its own single-channel pyramidal OME-TIFF (via `StitchingHelper.stitchChannelDirectories`, which reuses the same helper that PPM uses per angle).
 
-The merged file uses a short-modality prefix and is named:
+**Channel Grouping in Output:** The stitched channels are then partitioned based on the "Stitched output" dropdown and per-channel "Split" settings:
+
+- **Channels marked "Split" or when "Separate file per channel" is selected** are imported into the QuPath project as individual entries, one per channel.
+- **Remaining channels** (unmarked when "Single combined file" is selected) are merged into a single multichannel output with `ChannelMerger` / `ChannelMergeImageServer` from the [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) extension. If only one channel remains to be merged, it is imported directly as its own entry (the merger requires at least two inputs).
+
+**Merged Filename Convention**
+
+Merged (multichannel) files use a short-modality prefix:
 
 ```
 <sample>_<short_modality>_NNN.ome.tif
@@ -214,7 +223,9 @@ The merged file uses a short-modality prefix and is named:
 
 For example: `PollenIF_fl_001.ome.tif` for a widefield fluorescence acquisition of the `PollenIF` sample, or `SkinBiopsy_bf_if_003.ome.tif` for the third combined BF+IF acquisition on `SkinBiopsy`. The short modality slug (`fl` for `widefield`, `bf_if` for `bf_if`) is chosen per modality type and the zero-padded counter is per annotation.
 
-Only the merged multichannel file is added to the QuPath project. The per-channel intermediate OME-TIFFs are written with `skipProjectImport: true` so they stay on disk as recovery artifacts but never clutter the project tree (this also means you will not see a sequence of single-channel project entries flash into existence during acquisition).
+Split (per-channel) files keep the name of their own per-channel stitched pyramid (which encodes the channel id) and are imported as separate project entries.
+
+When the "Single combined file" default is used with no channels split, only the merged multichannel file is added to the QuPath project; the per-channel intermediate OME-TIFFs are written with `skipProjectImport: true` so they stay on disk as recovery artifacts but never clutter the project tree (you will not see single-channel entries flash into existence during acquisition). Channels you split out -- and every channel under "Separate file per channel" -- are instead imported as their own entries.
 
 ### BF+IF on Single-Camera Scopes
 

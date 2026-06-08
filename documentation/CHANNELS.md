@@ -182,6 +182,7 @@ The picker is rendered by `WidefieldChannelBoundingBoxUI` and appears in the Bou
 | Exposure (ms) | Spinner | Override the library default exposure for this run. |
 | Intensity | Spinner or "-" | Override the library default value of the channel's `intensity_property` for this run. Shows a grayed "-" placeholder when the library entry does not declare `intensity_property`. |
 | Focus | Radio button | Pick which channel autofocus runs against. Mutually exclusive across rows via a shared JavaFX `ToggleGroup`. Disabled when the row is not selected. |
+| Split | Checkbox | Write this channel as its own separate stitched file instead of merging it into one multichannel file. Only enabled when the row is selected. |
 
 ### Intensity Spinner (NEW -- 2026-04-13)
 
