@@ -11,12 +11,15 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Dialog;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.TextArea;
+import javafx.scene.control.Tooltip;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.WritableImage;
 import javafx.scene.layout.HBox;
@@ -32,7 +35,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.BugReportService;
 import qupath.ext.qpsc.service.BugReportService.BugReport;
 import qupath.ext.qpsc.service.BugReportService.Result;
-import qupath.fx.dialogs.Dialogs;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -229,13 +232,47 @@ public class BugReportDialog {
         descriptionArea.setDisable(false);
 
         if (result.ok()) {
-            String number = result.issueNumber() != null ? "#" + result.issueNumber() : "";
-            Dialogs.showMessageDialog(
-                    "Thanks!", "Your bug report was submitted as issue " + number + ".\n\n" + result.issueUrl());
             stage.close();
+            showSuccess(result.issueNumber(), result.issueUrl());
         } else {
             setStatus(result.error() != null ? result.error() : "Submission failed.", true);
         }
+    }
+
+    /**
+     * Confirmation dialog with a clickable link to the created issue, so the
+     * user can open it in a browser to follow up or add detail. The URL is also
+     * shown as the link text so it stays visible (and copyable) if the browser
+     * cannot be launched.
+     */
+    private void showSuccess(Integer issueNumber, String url) {
+        String number = issueNumber != null ? "#" + issueNumber : "";
+        Label message = new Label(
+                number.isEmpty()
+                        ? "Your bug report was submitted. Thank you!"
+                        : "Your bug report was submitted as issue " + number + ". Thank you!");
+        message.setWrapText(true);
+
+        VBox content = new VBox(10, message);
+        content.setPadding(new Insets(4));
+
+        if (url != null && !url.isEmpty()) {
+            Label hint = new Label("View it or add more detail here:");
+            hint.setWrapText(true);
+            Hyperlink link = new Hyperlink(url);
+            link.setTooltip(new Tooltip("Open the issue in your browser"));
+            link.setOnAction(e -> DocumentationHelper.openUrl(url));
+            content.getChildren().addAll(hint, link);
+        }
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Thanks!");
+        alert.setHeaderText(null);
+        if (owner != null) {
+            alert.initOwner(owner);
+        }
+        alert.getDialogPane().setContent(content);
+        alert.showAndWait();
     }
 
     private void setStatus(String message, boolean isError) {
