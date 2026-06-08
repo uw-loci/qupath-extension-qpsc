@@ -138,20 +138,42 @@ When Z-stack parameters are included in an acquisition command (`--z-stack --z-s
 | **Sum** | `--z-projection sum` | Total signal across Z (overflow-safe) | Thick-section fluorescence |
 | **Mean** | `--z-projection mean` | Average across Z (noise reduction) | General denoising |
 | **Std deviation** | `--z-projection std` | Variability across Z | Highlighting Z-localized structures |
+| **None** | `--z-projection none` | *Preserve every Z-plane* — produces a multi-dimensional mosaic instead of projecting to 2D | 3D imaging, volumetric analysis, preserving depth information |
 
 ### Output Layout
 
-Per-tile output structure depends on the modality:
+Per-tile output structure depends on the modality and projection choice:
 
-| Modality | Projected output | Raw Z planes (with `--save-raw`) |
-|---|---|---|
-| Brightfield (single-shot) | `<output>/<tile>.tif` | `<output>/z000/<tile>.tif`, `z001/`, ... |
-| PPM (multi-angle) | `<output>/<angle>/<tile>.tif` | `<output>/<angle>/z000/<tile>.tif`, ... |
-| Widefield IF (channels) | `<output>/<channel>/<tile>.tif` | `<output>/<channel>/z000/<tile>.tif`, ... |
+**Projected output (Max, Min, Sum, Mean, Std — default):**
+
+Each Z-stack is reduced to a single 2D tile, yielding a standard 2D mosaic:
+
+| Modality | Output path |
+|---|---|
+| Brightfield (single-shot) | `<output>/<tile>.tif` |
+| PPM (multi-angle) | `<output>/<angle>/<tile>.tif` |
+| Widefield IF (channels) | `<output>/<channel>/<tile>.tif` |
+
+**Non-projected output (projection = "None"):**
+
+Every Z-plane is preserved as a separate file, yielding a multi-dimensional mosaic:
+
+| Modality | Output path |
+|---|---|
+| Single timepoint | `<output>/z{zz}/<tile>.tif` |
+| Multi-timepoint | `<output>/t{tt}/z{zz}/<tile>.tif` |
+
+For PPM and channel-based modalities the angle/channel layer appears between the output root and z/t:
+- PPM: `<output>/<angle>/[t{tt}/]z{zz}/<tile>.tif`
+- Widefield IF: `<output>/<channel>/[t{tt}/]z{zz}/<tile>.tif`
+
+The stitcher (`qupath-extension-tiles-to-pyramid`) automatically detects the multi-plane layout and assembles a 5D mosaic (x, y, z, channel/angle, t).
 
 ### Raw Z-Plane Storage
 
-Add `--save-raw` to save individual Z-planes alongside the projected tiles. Planes land in `z000/`, `z001/`, etc. subdirectories under the appropriate per-angle / per-channel / output directory (see table above).
+**For projected acquisitions** (Max, Min, Sum, Mean, Std), you can optionally save individual Z-planes alongside the projected tiles by enabling `--save-raw` in advanced options. Planes land in `z000/`, `z001/`, etc. subdirectories under the appropriate per-angle / per-channel / output directory (see Output Layout section above).
+
+**For non-projected acquisitions** (projection = "None"), all Z-planes are automatically preserved in the directory structure shown above — no `--save-raw` flag is needed or applicable.
 
 ## Future Expansion
 
