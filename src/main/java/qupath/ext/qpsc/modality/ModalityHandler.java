@@ -654,5 +654,21 @@ public interface ModalityHandler {
         default String getFocusChannelId() {
             return null;
         }
+
+        /**
+         * Returns the set of channel ids the user chose to write as their own
+         * separate stitched file (instead of being merged into one
+         * multichannel file). An empty set -- the default -- means every
+         * channel is merged into a single combined file.
+         *
+         * <p>Only meaningful for channel-based modalities whose UI exposes a
+         * per-channel "split out" checkbox; angle-based modalities have no
+         * channels to split and return the empty default.
+         *
+         * @return channel ids to write as separate files, empty if none
+         */
+        default java.util.Set<String> getSplitChannelIds() {
+            return java.util.Set.of();
+        }
     }
 }

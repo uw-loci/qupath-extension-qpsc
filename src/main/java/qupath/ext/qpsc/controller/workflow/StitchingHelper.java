@@ -11,6 +11,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -68,6 +69,39 @@ public class StitchingHelper {
     private static final Logger logger = LoggerFactory.getLogger(StitchingHelper.class);
 
     /**
+     * Per-acquisition output options that control how stitched channels are
+     * grouped into files. Independent of the global OME-TIFF/OME-ZARR file-format
+     * preference.
+     *
+     * @param organization how to group the stitched output:
+     *     {@code OME_SINGLE} merges all (non-split) channels into one
+     *     multi-dimensional file; {@code OME_PER_CHANNEL} writes every channel as
+     *     its own file; {@code OME_PER_T} splits the combined mosaic into one file
+     *     per timepoint.
+     * @param splitChannelIds channel ids the user chose to write as their own
+     *     separate file even under {@code OME_SINGLE}; the remaining channels are
+     *     merged. Ignored when {@code organization == OME_PER_CHANNEL} (all split).
+     */
+    public record StitchingOptions(qupath.ext.qpsc.service.OutputFormat organization, Set<String> splitChannelIds) {
+        public StitchingOptions {
+            if (organization == null) {
+                organization = qupath.ext.qpsc.service.OutputFormat.OME_SINGLE;
+            }
+            splitChannelIds = splitChannelIds == null ? Set.of() : Set.copyOf(splitChannelIds);
+        }
+
+        /** The behavior-preserving default: one combined multichannel file, no per-channel split. */
+        public static StitchingOptions defaults() {
+            return new StitchingOptions(qupath.ext.qpsc.service.OutputFormat.OME_SINGLE, Set.of());
+        }
+
+        /** True when channel {@code id} should be written as its own file. */
+        public boolean isSplit(String id) {
+            return organization == qupath.ext.qpsc.service.OutputFormat.OME_PER_CHANNEL || splitChannelIds.contains(id);
+        }
+    }
+
+    /**
      * Performs stitching for a single annotation across all rotation angles.
      *
      * <p>For multi-angle acquisitions (e.g., polarized light), this method
@@ -121,7 +155,8 @@ public class StitchingHelper {
                 sampleName,
                 projectsFolder,
                 null,
-                null);
+                null,
+                StitchingOptions.defaults());
     }
 
     /**
@@ -158,7 +193,8 @@ public class StitchingHelper {
             String sampleName,
             String projectsFolder,
             DualProgressDialog dualProgressDialog,
-            ProjectImageEntry<BufferedImage> parentEntry) {
+            ProjectImageEntry<BufferedImage> parentEntry,
+            StitchingOptions options) {
 
         // Use sample.sampleName() for file naming (source image name), not sampleName (project folder name)
         String displayName = sample.sampleName();
@@ -184,7 +220,8 @@ public class StitchingHelper {
                 handler,
                 sampleName,
                 projectsFolder,
-                dualProgressDialog);
+                dualProgressDialog,
+                options);
     }
 
     /**
@@ -231,7 +268,8 @@ public class StitchingHelper {
                 null,
                 null,
                 null,
-                null);
+                null,
+                StitchingOptions.defaults());
     }
 
     /**
@@ -258,7 +296,8 @@ public class StitchingHelper {
             Double stageBoundsX1Um,
             Double stageBoundsY1Um,
             Double stageBoundsX2Um,
-            Double stageBoundsY2Um) {
+            Double stageBoundsY2Um,
+            StitchingOptions options) {
 
         // Use user-entered sample name for display/naming, not the project folder name.
         String displayName = (sample != null
@@ -290,7 +329,8 @@ public class StitchingHelper {
                 handler,
                 sampleName,
                 projectsFolder,
-                null);
+                null,
+                options);
     }
 
     /**
@@ -325,7 +365,10 @@ public class StitchingHelper {
             ModalityHandler handler,
             String sampleName,
             String projectsFolder,
-            DualProgressDialog dualProgressDialog) {
+            DualProgressDialog dualProgressDialog,
+            StitchingOptions options) {
+
+        final StitchingOptions stitchOptions = options != null ? options : StitchingOptions.defaults();
 
         // Create blocking dialog on JavaFX thread before starting stitching
         final String operationId = sampleName + " - " + targetName;
@@ -380,7 +423,8 @@ public class StitchingHelper {
                     gui,
                     project,
                     executor,
-                    handler);
+                    handler,
+                    stitchOptions);
         }
 
         if (angleExposures != null && angleExposures.size() > 1) {
@@ -1078,9 +1122,15 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             ExecutorService executor,
-            ModalityHandler handler) {
+            ModalityHandler handler,
+            StitchingOptions options) {
 
-        logger.info("Stitching {} channels for: {}", channelIds.size(), annotationName);
+        logger.info(
+                "Stitching {} channels for: {} (organization={}, splitChannels={})",
+                channelIds.size(),
+                annotationName,
+                options.organization(),
+                options.splitChannelIds());
 
         return CompletableFuture.runAsync(
                 () -> {
@@ -1198,19 +1248,51 @@ public class StitchingHelper {
                                 stitchedImages.size(),
                                 acquiredChannelIds.size());
 
-                        // Merge per-channel pyramids into a single multichannel pyramid,
-                        // which becomes THE output of a channel-based acquisition: imported
-                        // to the project as one entry, with the intermediate per-channel
-                        // files removed from the project view (they stay on disk for
-                        // debugging but should not clutter the project tree).
-                        if (stitchedImages.size() >= 1) {
-                            if (stitchedImages.size() >= 2 && blockingDialog != null) {
+                        // Partition successfully stitched channels into those the user
+                        // chose to write as their own file (split) and those to merge into
+                        // one multichannel file. stitchedImages[i] pairs with
+                        // successfullyStitchedChannelIds[i]. Default options leave the split
+                        // set empty, so every channel merges -- unchanged behavior.
+                        List<String> mergeImages = new ArrayList<>();
+                        List<String> mergeIds = new ArrayList<>();
+                        List<String> splitImages = new ArrayList<>();
+                        for (int i = 0; i < stitchedImages.size(); i++) {
+                            String cid = successfullyStitchedChannelIds.get(i);
+                            if (options.isSplit(cid)) {
+                                splitImages.add(stitchedImages.get(i));
+                            } else {
+                                mergeImages.add(stitchedImages.get(i));
+                                mergeIds.add(cid);
+                            }
+                        }
+                        logger.info(
+                                "Channel output grouping: {} to merge ({}), {} written as separate file(s)",
+                                mergeIds.size(),
+                                mergeIds,
+                                splitImages.size());
+
+                        // Channels the user split out become their own project entries.
+                        if (!splitImages.isEmpty()) {
+                            importPerChannelFallback(splitImages, metadata, gui, project, handler);
+                        }
+
+                        // Merge the remaining (non-split) per-channel pyramids into a single
+                        // multichannel pyramid, imported to the project as one entry. A single
+                        // leftover channel cannot be merged (ChannelMerger needs >=2 sources),
+                        // so it is imported directly as its own entry.
+                        if (mergeImages.size() == 1) {
+                            logger.info(
+                                    "Only one channel to merge for {}; importing it directly as its own entry",
+                                    annotationName);
+                            importPerChannelFallback(mergeImages, metadata, gui, project, handler);
+                        } else if (mergeImages.size() >= 2) {
+                            if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
                                         operationId,
-                                        "Merging " + stitchedImages.size() + " channels into multichannel pyramid...");
+                                        "Merging " + mergeImages.size() + " channels into multichannel pyramid...");
                             }
                             try {
-                                Path firstStitch = Paths.get(stitchedImages.get(0));
+                                Path firstStitch = Paths.get(mergeImages.get(0));
                                 String mergedDir = firstStitch.getParent().toString();
 
                                 // Build merged filename via the standard naming scheme
@@ -1272,10 +1354,10 @@ public class StitchingHelper {
                                         sanitizedAnnotationName,
                                         candidateIndex);
 
-                                List<Integer> channelColors = getDefaultChannelColors(successfullyStitchedChannelIds);
+                                List<Integer> channelColors = getDefaultChannelColors(mergeIds);
                                 String mergedPath = ChannelMerger.merge(
-                                        stitchedImages,
-                                        successfullyStitchedChannelIds,
+                                        mergeImages,
+                                        mergeIds,
                                         channelColors,
                                         mergedDir,
                                         mergedStem,
@@ -1301,8 +1383,8 @@ public class StitchingHelper {
                                     logger.warn(
                                             "Multichannel merge returned null for {} -- falling back to importing {} per-channel file(s)",
                                             annotationName,
-                                            stitchedImages.size());
-                                    importPerChannelFallback(stitchedImages, metadata, gui, project, handler);
+                                            mergeImages.size());
+                                    importPerChannelFallback(mergeImages, metadata, gui, project, handler);
                                 }
                             } catch (Exception mergeEx) {
                                 logger.error(
@@ -1310,12 +1392,12 @@ public class StitchingHelper {
                                         annotationName,
                                         mergeEx.getMessage(),
                                         mergeEx);
-                                importPerChannelFallback(stitchedImages, metadata, gui, project, handler);
+                                importPerChannelFallback(mergeImages, metadata, gui, project, handler);
                             }
                         } else {
                             logger.debug(
-                                    "Skipping multichannel merge: only {} channel(s) stitched successfully",
-                                    stitchedImages.size());
+                                    "No channels to merge for {} (all split out or none stitched successfully)",
+                                    annotationName);
                         }
 
                         if (blockingDialog != null) {

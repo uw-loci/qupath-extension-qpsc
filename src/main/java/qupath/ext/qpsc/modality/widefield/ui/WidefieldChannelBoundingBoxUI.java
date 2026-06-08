@@ -96,6 +96,9 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     // hardware state is the same one autofocus runs against.
     private final LinkedHashMap<String, javafx.scene.control.RadioButton> channelFocusRadios = new LinkedHashMap<>();
     private final javafx.scene.control.ToggleGroup focusToggleGroup = new javafx.scene.control.ToggleGroup();
+    // Per-channel "split out" checkboxes. Checked => that channel is written as
+    // its own stitched file instead of being merged into one multichannel file.
+    private final LinkedHashMap<String, CheckBox> channelSplitCheckboxes = new LinkedHashMap<>();
     // Channel definitions retained so the Test button can look up
     // intensity_property and the preset save/load can capture per-channel state.
     private final LinkedHashMap<String, Channel> channelDefs = new LinkedHashMap<>();
@@ -160,13 +163,19 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         col3.setHalignment(HPos.RIGHT);
         ColumnConstraints col4 = new ColumnConstraints();
         col4.setHalignment(HPos.CENTER);
-        grid.getColumnConstraints().addAll(col0, col1, col2, col3, col4);
+        ColumnConstraints col5 = new ColumnConstraints();
+        col5.setHalignment(HPos.CENTER);
+        grid.getColumnConstraints().addAll(col0, col1, col2, col3, col4, col5);
 
         grid.add(boldLabel("Use"), 0, 0);
         grid.add(boldLabel("Channel"), 1, 0);
         grid.add(boldLabel("Exposure (ms)"), 2, 0);
         grid.add(boldLabel("Intensity"), 3, 0);
         grid.add(boldLabel("Focus"), 4, 0);
+        Label splitHeader = boldLabel("Split");
+        splitHeader.setTooltip(new Tooltip("Write this channel as its own separate stitched file.\n"
+                + "Unchecked channels are merged into one multichannel file."));
+        grid.add(splitHeader, 5, 0);
 
         // Persisted last focus-channel selection from a previous run.
         String savedFocusChannel = PersistentPreferences.getStringPreference(PREF_KEY_FOCUS_CHANNEL, "");
@@ -305,6 +314,25 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             });
             grid.add(focusRadio, 4, row);
             channelFocusRadios.put(id, focusRadio);
+
+            // "Split out" checkbox: when checked, this channel is stitched into
+            // its own file rather than merged. Enabled only when the row is
+            // selected and the master override is on. Persisted per-channel.
+            String splitPrefKey = PREF_KEY_PREFIX + id + ".split";
+            CheckBox splitCb = new CheckBox();
+            splitCb.setSelected(Boolean.parseBoolean(PersistentPreferences.getStringPreference(splitPrefKey, "false")));
+            splitCb.setTooltip(new Tooltip("Write " + channel.displayName() + " as its own separate stitched file.\n"
+                    + "Leave unchecked to merge it into one multichannel file with the other channels."));
+            splitCb.disableProperty()
+                    .bind(masterOverride
+                            .selectedProperty()
+                            .not()
+                            .or(cb.selectedProperty().not()));
+            splitCb.selectedProperty()
+                    .addListener((obs, oldVal, newVal) ->
+                            PersistentPreferences.setStringPreference(splitPrefKey, String.valueOf(newVal)));
+            grid.add(splitCb, 5, row);
+            channelSplitCheckboxes.put(id, splitCb);
 
             channelCheckboxes.put(id, cb);
             channelExposures.put(id, expSpinner);
@@ -850,6 +878,27 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         // No radio selected (shouldn't happen because we set one in the
         // constructor): fall back to the first channel in library order.
         return channelFocusRadios.keySet().iterator().next();
+    }
+
+    /**
+     * Returns the ids of currently-selected channels the user marked "Split".
+     * Each becomes its own stitched file; the rest are merged. Only honored
+     * when the master override is on -- otherwise the default (merge all) wins.
+     */
+    @Override
+    public java.util.Set<String> getSplitChannelIds() {
+        if (masterOverride == null || !masterOverride.isSelected()) {
+            return java.util.Set.of();
+        }
+        java.util.Set<String> split = new java.util.LinkedHashSet<>();
+        for (Map.Entry<String, CheckBox> entry : channelSplitCheckboxes.entrySet()) {
+            String id = entry.getKey();
+            CheckBox selectCb = channelCheckboxes.get(id);
+            if (selectCb != null && selectCb.isSelected() && entry.getValue().isSelected()) {
+                split.add(id);
+            }
+        }
+        return split;
     }
 
     /**

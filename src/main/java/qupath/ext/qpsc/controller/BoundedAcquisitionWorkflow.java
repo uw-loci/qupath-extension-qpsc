@@ -554,7 +554,9 @@ public class BoundedAcquisitionWorkflow {
                                                     result.x1(),
                                                     result.y1(),
                                                     result.x2(),
-                                                    result.y2())
+                                                    result.y2(),
+                                                    new StitchingHelper.StitchingOptions(
+                                                            result.stitchingOrganization(), result.splitChannelIds()))
                                             .thenRun(() -> {
                                                 UIFunctions.playWorkflowCompletionBeep();
 

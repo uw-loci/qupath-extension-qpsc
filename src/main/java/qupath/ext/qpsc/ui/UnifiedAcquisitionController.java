@@ -35,6 +35,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
+import qupath.ext.qpsc.service.OutputFormat;
 import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
 import qupath.ext.qpsc.service.mda.TileStagePos;
@@ -71,6 +72,17 @@ public class UnifiedAcquisitionController {
     /** Debounce delay for preview updates in milliseconds */
     private static final long PREVIEW_DEBOUNCE_MS = 300;
 
+    /** Stitched-output organization dropdown labels and persistence key. */
+    private static final String ORG_SINGLE = "Single combined file";
+
+    private static final String ORG_PER_CHANNEL = "Separate file per channel";
+    private static final String PREF_STITCH_ORGANIZATION = "qpscStitchOrganization";
+
+    /** Map an organization dropdown label to its {@link OutputFormat}. */
+    private static OutputFormat organizationFromDisplay(String display) {
+        return ORG_PER_CHANNEL.equals(display) ? OutputFormat.OME_PER_CHANNEL : OutputFormat.OME_SINGLE;
+    }
+
     /**
      * Result record containing all user selections from the unified dialog.
      * <p>
@@ -101,7 +113,13 @@ public class UnifiedAcquisitionController {
             // runs sweep + streaming AF (timed, neither applied) and the server
             // writes af_benchmark.csv. Diagnostic mode -- acquired images drift
             // out of focus since no AF result is applied.
-            boolean afBenchmark) {}
+            boolean afBenchmark,
+            // Channel ids the user marked "Split" -- each is stitched into its own
+            // file instead of being merged. Empty = merge all (the default).
+            Set<String> splitChannelIds,
+            // How the stitched output is grouped (single combined file vs one file
+            // per channel). Defaults to OME_SINGLE.
+            OutputFormat stitchingOrganization) {}
 
     /**
      * Shows the unified acquisition dialog.
@@ -191,6 +209,7 @@ public class UnifiedAcquisitionController {
 
         // UI Components - Z-stack Section
         private CheckBox zStackEnableCheck;
+        private ComboBox<String> outputOrganizationCombo;
         private RadioButton loopOrderInnerZRadio;
         private RadioButton loopOrderInnerAltRadio;
         private Label loopOrderLabel;
@@ -1065,6 +1084,23 @@ public class UnifiedAcquisitionController {
                 if (n != null) PersistentPreferences.setZStackProjection(n);
             });
 
+            // Stitched-output organization. Independent of Z-stack, so not
+            // disabled with the rest of the section. "Single combined file"
+            // merges all channels (and Z/T) into one image; "Separate file per
+            // channel" writes each channel on its own. The per-channel "Split"
+            // checkboxes give finer control between the two.
+            outputOrganizationCombo = new ComboBox<>();
+            outputOrganizationCombo.getItems().addAll(ORG_SINGLE, ORG_PER_CHANNEL);
+            outputOrganizationCombo.setValue(
+                    PersistentPreferences.getStringPreference(PREF_STITCH_ORGANIZATION, ORG_SINGLE));
+            outputOrganizationCombo.setTooltip(new Tooltip("How to group the stitched output. "
+                    + "\"Single combined file\" merges all channels (and any preserved Z/T) into one image; "
+                    + "\"Separate file per channel\" writes each channel as its own file. The per-channel "
+                    + "\"Split\" checkboxes give finer control."));
+            outputOrganizationCombo.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) PersistentPreferences.setStringPreference(PREF_STITCH_ORGANIZATION, n);
+            });
+
             GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(8);
@@ -1076,6 +1112,8 @@ public class UnifiedAcquisitionController {
             grid.add(new Label("Projection:"), 0, 2);
             grid.add(projectionCombo, 1, 2);
             grid.add(infoLabel, 0, 3, 2, 1);
+            grid.add(new Label("Stitched output:"), 0, 4);
+            grid.add(outputOrganizationCombo, 1, 4);
 
             // Loop-order toggle: lets the user flip the per-tile snap nest
             // between the current "Z-inner" default (one channel sweeps all
@@ -2229,6 +2267,7 @@ public class UnifiedAcquisitionController {
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
                 String focusChannelId = null;
+                Set<String> splitChannelIds = Set.of();
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
                     if (angleOverrides != null) {
@@ -2245,7 +2284,18 @@ public class UnifiedAcquisitionController {
                     if (focusChannelId != null) {
                         logger.info("User specified focus channel: {}", focusChannelId);
                     }
+                    splitChannelIds = modalityUI.getSplitChannelIds();
+                    if (splitChannelIds == null) {
+                        splitChannelIds = Set.of();
+                    }
+                    if (!splitChannelIds.isEmpty()) {
+                        logger.info("User chose to split channels into separate files: {}", splitChannelIds);
+                    }
                 }
+
+                OutputFormat stitchingOrganization = outputOrganizationCombo != null
+                        ? organizationFromDisplay(outputOrganizationCombo.getValue())
+                        : OutputFormat.OME_SINGLE;
 
                 // Get white balance settings from ComboBox
                 String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
@@ -2306,7 +2356,9 @@ public class UnifiedAcquisitionController {
                         perAngleWhiteBalance,
                         wbMode,
                         innerAxis,
-                        afBenchmark);
+                        afBenchmark,
+                        splitChannelIds,
+                        stitchingOrganization);
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);

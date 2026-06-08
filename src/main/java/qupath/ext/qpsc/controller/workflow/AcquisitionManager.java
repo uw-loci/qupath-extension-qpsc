@@ -1504,7 +1504,8 @@ public class AcquisitionManager {
                 state.projectInfo.getSampleName(),
                 projectsFolder.toString(),
                 dualProgressDialog,
-                parentEntry);
+                parentEntry,
+                StitchingHelper.StitchingOptions.defaults());
 
         state.stitchingFutures.add(stitchFuture);
         logger.info("Launched stitching for annotation: {}", annotation.getName());
