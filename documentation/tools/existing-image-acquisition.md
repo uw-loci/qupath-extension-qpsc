@@ -102,6 +102,13 @@ Select All / Deselect All buttons are available for convenience.
 | WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Listed under hardware (rather than under acquisition options) because the choice is camera-specific and matches the underlying calibration set. |
 | Angle Overrides | Various | - | Modality-specific angle controls (if applicable) |
 
+### Acquisition & Stitching Options
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| Z-Stack Projection | ComboBox | From preference | When acquiring Z-stacks, how to reduce the slices: Max, Min, Sum, Mean, Std, or **None** (preserve the full Z-stack as a multi-dimensional stitched image instead of projecting to 2D). Projection is applied on the microscope server during acquisition. See [Z-Stack / Time-Lapse](z-stack-timelapse.md) for full Z-stack configuration. |
+| Stitched output | ComboBox | Single combined file | How to group stitched channels into files for multi-channel acquisitions. **Single combined file** merges all channels (except those marked "Split" in the channel picker) into one multichannel OME-TIFF, imported as a single entry. **Separate file per channel** writes every channel as its own stitched file, each imported as a separate entry. Per-channel "Split" checkboxes (when "Customize" is enabled in the channel picker) can override this global setting, writing individual channels as separate files even when "Single combined file" is selected. See [Preferences > Stitched output organization](../PREFERENCES.md#stitched-output-organization-multi-channel-acquisitions) for more details. |
+
 ### MDA Export
 
 After configuring modality, objective, and detector, you may export the planned acquisition as a set of MicroManager MDA files instead of starting acquisition immediately. This is useful when you want to hand off the acquisition plan to Micro-Manager for execution outside of QuPath.
