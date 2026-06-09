@@ -113,6 +113,7 @@ dependencies {
 //TODO remove before release
 //For troubleshooting deprecation warnings,
 tasks.withType<JavaCompile> {
+    options.release.set(21) // QuPath 0.7 runs on Java 21; pin bytecode target so any build JDK emits loadable classes
     options.compilerArgs.add("-Xlint:deprecation")
     options.compilerArgs.add("-Xlint:unchecked")
 }
