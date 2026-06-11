@@ -110,6 +110,12 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference("tileHandlingProperty", "None");
     private static final DoubleProperty tileOverlapPercentProperty =
             PathPrefs.createPersistentPreference("tileOverlapPercentProperty", 10.0);
+    // Max angles/channels stitched at once within a single annotation. Each target
+    // is an independent DirectTiffOutputWriter call to its own output file, so they
+    // run concurrently. Higher = faster multi-angle/channel stitching, more memory
+    // and more concurrent writers. 1 = fully sequential.
+    private static final IntegerProperty stitchingConcurrencyProperty =
+            PathPrefs.createPersistentPreference("stitchingConcurrency", 4);
     // LZW default: J2K (DEFAULT) produces corrupt codestreams at lower pyramid
     // levels with certain tile grid dimensions (Bio-Formats OMEPyramidWriter bug).
     // LZW is lossless, universally readable, and slightly larger files.
@@ -441,6 +447,15 @@ public class QPPreferenceDialog {
                         + "Available options depend on the selected output format.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(stitchingConcurrencyProperty, Integer.class)
+                .name("Stitching concurrency")
+                .category(CATEGORY)
+                .description("Maximum number of angles or channels stitched simultaneously within a "
+                        + "single annotation (default: 4). Higher values stitch multi-angle (PPM) and "
+                        + "multi-channel (fluorescence) acquisitions faster, but use more memory and run "
+                        + "more concurrent writers. Set to 1 for fully sequential stitching.")
+                .build());
+
         items.add(new PropertyItemBuilder<>(microscopeServerHostProperty, String.class)
                 .name("Microscope Server Host")
                 .category(CATEGORY)
@@ -712,6 +727,15 @@ public class QPPreferenceDialog {
 
     public static int getMicroscopeServerPort() {
         return microscopeServerPortProperty.get();
+    }
+
+    /**
+     * Maximum number of angles/channels to stitch concurrently within a single
+     * annotation. Clamped to at least 1 so a zero/negative stored value can never
+     * stall stitching. Default 4.
+     */
+    public static int getStitchingConcurrency() {
+        return Math.max(1, stitchingConcurrencyProperty.get());
     }
 
     public static void setMicroscopeServerPort(int port) {

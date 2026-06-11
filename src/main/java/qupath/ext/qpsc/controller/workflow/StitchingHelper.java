@@ -15,6 +15,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javafx.application.Platform;
 import org.slf4j.Logger;
@@ -352,6 +353,123 @@ public class StitchingHelper {
      * for the bounded-region path). The rest of the pipeline is identical across
      * both callers.
      */
+    /**
+     * Stitch each subdirectory target (a PPM angle or an IF channel) in parallel,
+     * bounded by the user's "Stitching concurrency" preference (default 4).
+     *
+     * <p>Each target is fully independent -- its own per-target tile subdirectory,
+     * its own {@code DirectTiffOutputWriter} invocation, its own output file -- so
+     * they can stitch concurrently. The former "OME-TIFF must be sequential" guard
+     * existed only because QuPath's shared {@code OMEPyramidWriter} NPE'd under
+     * concurrency; that writer was replaced by the per-call
+     * {@code DirectTiffOutputWriter}, so the guard no longer applies. The OME-ZARR
+     * path already dispatched targets concurrently through this same
+     * {@code processAngleWithIsolation} call, so this unifies both formats on one
+     * bounded pool rather than the old ZARR-parallel / TIFF-sequential split.
+     *
+     * <p>Within a single annotation's batch all targets share identical flip
+     * metadata, so the {@code volatile} static flip flags set inside
+     * {@code stitchImagesAndUpdateProject} carry the same value across the
+     * concurrent calls -- the same condition under which the pre-existing ZARR
+     * parallel path already ran safely. Cross-annotation concurrency (which could
+     * mix flip values) is intentionally NOT introduced here: the caller's
+     * {@code STITCH_EXECUTOR} keeps one annotation batch running at a time.
+     *
+     * @return a list the SAME size and order as {@code targetSubdirs}; element i is
+     *         the stitched output path for target i, or {@code null} if that target
+     *         failed. Positional alignment lets callers that pair targets with
+     *         outputs (e.g. channel split/merge) keep their indexing.
+     */
+    private static List<String> stitchTargetsBounded(
+            List<String> targetSubdirs,
+            String targetKind,
+            Path tileBaseDir,
+            String projectsFolder,
+            String sampleName,
+            String modeWithIndex,
+            String annotationName,
+            String compression,
+            double pixelSize,
+            int downsampleFactor,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ModalityHandler handler,
+            Map<String, Object> stitchParams) {
+
+        int total = targetSubdirs.size();
+        int concurrency = Math.max(1, Math.min(total, QPPreferenceDialog.getStitchingConcurrency()));
+        logger.info(
+                "Stitching {} {}(s) for {} with up to {} concurrent writer(s)",
+                total,
+                targetKind,
+                annotationName,
+                concurrency);
+
+        ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
+            Thread t = new Thread(r, "stitch-" + targetKind);
+            t.setDaemon(true);
+            return t;
+        });
+        try {
+            List<CompletableFuture<String>> futures = new ArrayList<>(total);
+            for (int i = 0; i < total; i++) {
+                String sub = targetSubdirs.get(i);
+                final int idx = i;
+                futures.add(CompletableFuture.supplyAsync(
+                        () -> {
+                            logger.info("Stitching {} {} ({}/{})", targetKind, sub, idx + 1, total);
+                            try {
+                                return processAngleWithIsolation(
+                                        tileBaseDir,
+                                        sub,
+                                        projectsFolder,
+                                        sampleName,
+                                        modeWithIndex,
+                                        annotationName,
+                                        compression,
+                                        pixelSize,
+                                        downsampleFactor,
+                                        gui,
+                                        project,
+                                        handler,
+                                        stitchParams);
+                            } catch (Exception e) {
+                                logger.error(
+                                        "Failed to stitch {} {} ({}/{}): {}",
+                                        targetKind,
+                                        sub,
+                                        idx + 1,
+                                        total,
+                                        e.getMessage(),
+                                        e);
+                                return null;
+                            }
+                        },
+                        pool));
+            }
+
+            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
+
+            List<String> results = new ArrayList<>(total);
+            for (int i = 0; i < total; i++) {
+                String out = null;
+                try {
+                    out = futures.get(i).get();
+                } catch (Exception e) {
+                    logger.error(
+                            "Failed to retrieve stitch result for {} {}: {}",
+                            targetKind,
+                            targetSubdirs.get(i),
+                            e.getMessage());
+                }
+                results.add(out);
+            }
+            return results;
+        } finally {
+            pool.shutdown();
+        }
+    }
+
     private static CompletableFuture<Void> performStitchingInternal(
             String targetName,
             SampleSetupResult sample,
@@ -504,136 +622,47 @@ public class StitchingHelper {
                                 logger.warn("Could not list initial tile base directory: {}", e.getMessage());
                             }
 
-                            // OME-ZARR: parallel angle stitching (each chunk is
-                            // independent, no shared writer state).
-                            // OME-TIFF: sequential (BioFormats TiffWriter NPEs when
-                            // multiple writers run concurrently; a global semaphore
-                            // in PyramidImageWriter serializes writes as defense).
-                            boolean useParallel = stitchingConfig.outputFormat().stitchAsZarr();
-
-                            String mode = useParallel ? "parallel" : "sequential";
+                            // Both OME-TIFF and OME-ZARR stitch their angles in
+                            // parallel, bounded by the "Stitching concurrency"
+                            // preference (default 4). Each angle is an independent
+                            // writer to its own output file -- see stitchTargetsBounded.
                             logger.info(
-                                    "Starting {} stitching for {} angles (format={})",
-                                    mode,
+                                    "Starting bounded-parallel stitching for {} angles (format={})",
                                     angleExposures.size(),
                                     stitchingConfig.outputFormat());
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
                                         operationId,
-                                        "Stitching " + angleExposures.size() + " angles (" + mode + ") for "
-                                                + annotationName + "...");
+                                        "Stitching " + angleExposures.size() + " angles for " + annotationName + "...");
                             }
 
-                            if (useParallel) {
-                                // ZARR: dispatch all angles concurrently
-                                List<CompletableFuture<String>> angleFutures = new ArrayList<>();
-
-                                for (int i = 0; i < angleExposures.size(); i++) {
-                                    AngleExposure angleExposure = angleExposures.get(i);
-                                    String angleStr = String.valueOf(angleExposure.ticks());
-                                    final int angleIndex = i;
-
-                                    logger.info(
-                                            "Launching parallel stitch for angle {} ({}/{})",
-                                            angleStr,
-                                            i + 1,
-                                            angleExposures.size());
-
-                                    angleFutures.add(CompletableFuture.supplyAsync(() -> {
-                                        try {
-                                            return processAngleWithIsolation(
-                                                    tileBaseDir,
-                                                    angleStr,
-                                                    projectsFolder,
-                                                    sampleName,
-                                                    modeWithIndex,
-                                                    annotationName,
-                                                    compression,
-                                                    pixelSize,
-                                                    stitchingConfig.downsampleFactor(),
-                                                    gui,
-                                                    project,
-                                                    handler,
-                                                    stitchParams);
-                                        } catch (Exception e) {
-                                            logger.error(
-                                                    "Failed to stitch angle {} ({}/{}): {}",
-                                                    angleStr,
-                                                    angleIndex + 1,
-                                                    angleExposures.size(),
-                                                    e.getMessage(),
-                                                    e);
-                                            return null;
-                                        }
-                                    }));
-                                }
-
-                                CompletableFuture.allOf(angleFutures.toArray(new CompletableFuture[0]))
-                                        .join();
-
-                                for (int i = 0; i < angleFutures.size(); i++) {
-                                    try {
-                                        String outPath = angleFutures.get(i).get();
-                                        if (outPath != null) {
-                                            stitchedImages.add(outPath);
-                                            logger.info(
-                                                    "Parallel stitch completed for angle {}: {}",
-                                                    angleExposures.get(i).ticks(),
-                                                    outPath);
-                                        }
-                                    } catch (Exception e) {
-                                        logger.error(
-                                                "Failed to get result for angle {}: {}",
-                                                angleExposures.get(i).ticks(),
-                                                e.getMessage());
-                                    }
-                                }
-                            } else {
-                                // TIFF: sequential to avoid BioFormats concurrency bug
-                                for (int i = 0; i < angleExposures.size(); i++) {
-                                    AngleExposure angleExposure = angleExposures.get(i);
-                                    String angleStr = String.valueOf(angleExposure.ticks());
-
-                                    logger.info("Stitching angle {} ({}/{})", angleStr, i + 1, angleExposures.size());
-
-                                    try {
-                                        String outPath = processAngleWithIsolation(
-                                                tileBaseDir,
-                                                angleStr,
-                                                projectsFolder,
-                                                sampleName,
-                                                modeWithIndex,
-                                                annotationName,
-                                                compression,
-                                                pixelSize,
-                                                stitchingConfig.downsampleFactor(),
-                                                gui,
-                                                project,
-                                                handler,
-                                                stitchParams);
-                                        if (outPath != null) {
-                                            stitchedImages.add(outPath);
-                                            logger.info(
-                                                    "Stitch completed for angle {}: {}",
-                                                    angleExposure.ticks(),
-                                                    outPath);
-                                        }
-                                    } catch (Exception e) {
-                                        logger.error(
-                                                "Failed to stitch angle {} ({}/{}): {}",
-                                                angleStr,
-                                                i + 1,
-                                                angleExposures.size(),
-                                                e.getMessage(),
-                                                e);
-                                    }
+                            List<String> angleSubdirs = new ArrayList<>(angleExposures.size());
+                            for (AngleExposure ae : angleExposures) {
+                                angleSubdirs.add(String.valueOf(ae.ticks()));
+                            }
+                            for (String outPath : stitchTargetsBounded(
+                                    angleSubdirs,
+                                    "angle",
+                                    tileBaseDir,
+                                    projectsFolder,
+                                    sampleName,
+                                    modeWithIndex,
+                                    annotationName,
+                                    compression,
+                                    pixelSize,
+                                    stitchingConfig.downsampleFactor(),
+                                    gui,
+                                    project,
+                                    handler,
+                                    stitchParams)) {
+                                if (outPath != null) {
+                                    stitchedImages.add(outPath);
                                 }
                             }
 
                             logger.info(
-                                    "Completed {} stitching of {} angles. Successfully stitched {} images.",
-                                    mode,
+                                    "Completed bounded-parallel stitching of {} angles. Successfully stitched {} images.",
                                     angleExposures.size(),
                                     stitchedImages.size());
 
@@ -1197,49 +1226,40 @@ public class StitchingHelper {
                                 acquiredChannelIds.size(),
                                 tileBaseDir);
 
-                        // Channels are stitched sequentially. BioFormats TIFF writer concurrency
-                        // is the constraint (the global semaphore in PyramidImageWriter already
-                        // serializes writes, so parallel dispatch would just queue). Sequential
-                        // is simpler and keeps file I/O pressure manageable for IF with ~4 channels.
+                        // Channels are stitched in parallel, bounded by the "Stitching
+                        // concurrency" preference (default 4). Each channel is an
+                        // independent writer to its own output file. The result list is
+                        // positionally aligned to acquiredChannelIds so the split/merge
+                        // partition below keeps its index pairing.
+                        if (blockingDialog != null) {
+                            blockingDialog.updateStatus(
+                                    operationId,
+                                    String.format(
+                                            "Stitching %d channels for %s...",
+                                            acquiredChannelIds.size(), annotationName));
+                        }
+                        List<String> channelResults = stitchTargetsBounded(
+                                acquiredChannelIds,
+                                "channel",
+                                tileBaseDir,
+                                projectsFolder,
+                                sampleName,
+                                modeWithIndex,
+                                annotationName,
+                                compression,
+                                pixelSize,
+                                stitchingConfig.downsampleFactor(),
+                                gui,
+                                project,
+                                handler,
+                                stitchParams);
                         List<String> successfullyStitchedChannelIds = new ArrayList<>();
                         for (int i = 0; i < acquiredChannelIds.size(); i++) {
-                            String channelId = acquiredChannelIds.get(i);
-                            if (blockingDialog != null) {
-                                blockingDialog.updateStatus(
-                                        operationId,
-                                        String.format(
-                                                "Stitching channel %s (%d/%d) for %s...",
-                                                channelId, i + 1, acquiredChannelIds.size(), annotationName));
-                            }
-                            logger.info("Stitching channel {} ({}/{})", channelId, i + 1, acquiredChannelIds.size());
-                            try {
-                                String outPath = processAngleWithIsolation(
-                                        tileBaseDir,
-                                        channelId, // channel id doubles as the subdir name
-                                        projectsFolder,
-                                        sampleName,
-                                        modeWithIndex,
-                                        annotationName,
-                                        compression,
-                                        pixelSize,
-                                        stitchingConfig.downsampleFactor(),
-                                        gui,
-                                        project,
-                                        handler,
-                                        stitchParams);
-                                if (outPath != null) {
-                                    stitchedImages.add(outPath);
-                                    successfullyStitchedChannelIds.add(channelId);
-                                    logger.info("Stitch completed for channel {}: {}", channelId, outPath);
-                                }
-                            } catch (Exception e) {
-                                logger.error(
-                                        "Failed to stitch channel {} ({}/{}): {}",
-                                        channelId,
-                                        i + 1,
-                                        acquiredChannelIds.size(),
-                                        e.getMessage(),
-                                        e);
+                            String outPath = channelResults.get(i);
+                            if (outPath != null) {
+                                stitchedImages.add(outPath);
+                                successfullyStitchedChannelIds.add(acquiredChannelIds.get(i));
+                                logger.info("Stitch completed for channel {}: {}", acquiredChannelIds.get(i), outPath);
                             }
                         }
 

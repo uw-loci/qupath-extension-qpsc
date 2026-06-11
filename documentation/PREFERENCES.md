@@ -31,6 +31,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Tile Overlap Percent](#tile-overlap-percent) | Double | 10.0 | Overlap between adjacent tiles |
 | [Compression type](#compression-type) | Choice | LZW | OME pyramid compression |
 | [Stitching output format](#stitching-output-format) | Choice | OME_TIFF | Output format for stitched images |
+| [Stitching concurrency](#stitching-concurrency) | Integer | 4 | Max angles/channels stitched at once per annotation |
 | [Microscope Server Host](#microscope-server-host) | String | 127.0.0.1 | Server IP address |
 | [Microscope Server Port](#microscope-server-port) | Integer | 5000 | Server port number |
 | [Auto-connect to Server](#auto-connect-to-server) | Boolean | ON | Connect on QuPath startup |
@@ -581,6 +582,26 @@ Output format for stitched images.
 **Note:** OME-ZARR is an emerging standard that offers significant performance benefits. To get a single-file OME-TIFF from a ZARR-backed project, use **Make Project Portable** (Extensions > QPSC > Utilities).
 
 **Pyramid correctness:** OME-TIFF stitching uses a direct tiled-pyramidal writer that handles partial edge tiles correctly, so stitched mosaics whose dimensions are not a clean multiple of the tile size no longer produce corrupt (black) pyramid levels. The earlier `OME_TIFF_VIA_ZARR` format and its automatic retry/escalation were workarounds for that writer bug and have been removed.
+
+---
+
+### Stitching concurrency
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 4 |
+| Minimum | 1 |
+| Requires Restart | No |
+
+**Description:**
+Maximum number of angles (PPM) or channels (fluorescence) stitched **simultaneously within a single annotation**. Each angle/channel is an independent stitch writing its own output file, so they run concurrently up to this limit.
+
+- Higher values stitch multi-angle and multi-channel acquisitions faster, at the cost of more memory and more concurrent writers running at once.
+- `1` makes stitching fully sequential (one angle/channel at a time) -- useful if you hit memory pressure or want to isolate a stitching problem.
+- This bounds parallelism **within** an annotation only. Different annotations still stitch one at a time (their acquisition is inherently sequential because the stage moves between them), so stitching of one annotation overlaps acquisition of the next without piling up unbounded work.
+
+Applies to both OME-TIFF and OME-ZARR output. The default of 4 is a balance that speeds up the common 4-angle PPM and ~4-channel IF cases while keeping peak memory bounded.
 
 ---
 
