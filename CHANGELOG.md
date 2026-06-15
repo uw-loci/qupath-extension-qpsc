@@ -78,6 +78,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Existing Image Acquisition: alignment age display and recommendation logic**
+- Fixed a bug where scope-namespaced alignment files (e.g., `<sample>_OWS3_alignment.json`) were not detected, causing the "Last refined" date to show as "Unknown" and preventing the age-based confidence calculation from working. The system now checks for scope-namespaced files first, then falls back to legacy unscoped files, matching the behavior of the alignment-loading code.
+- Aged alignments (older than ~50 days, low confidence) now default to Single-Tile Refinement instead of Full Manual Alignment. Since an existing alignment is available (the refinement section only appears when "Use existing alignment" is active), a quick single-tile verification is more practical than a full re-alignment from scratch. Full Manual remains always available as an explicit choice.
+- Alignment timestamp parsing now handles both `Date.toString()` format (new save sites) and legacy ISO-like format (external or old files), so the "Last refined" banner and age-based recommendations work for either.
+
 **Live Viewer Z-bar focus trace and navigation grid layout**
 - Focus-metric trace is now drawn inline in the left margin of both coarse and fine bars, anchoring at the track's left edge and extending leftward proportionally to the Brenner gradient metric. This consolidates the trace into the bar canvases rather than rendering it in a separate column, making the panel more compact.
 - Navigation grid (joystick and arrow buttons) now centers correctly in the Navigate tab when the Z Focus widget is widened. The VBox containing the grid now has `fillWidth(false)` so its content respects the tab's `Pos.CENTER` alignment.

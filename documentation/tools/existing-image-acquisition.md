@@ -71,8 +71,12 @@ If alignment records from other microscopes exist but *cannot* be composed throu
 | Option | Description |
 |--------|-------------|
 | No Refinement | Use saved transform directly (fastest). Best when transform is known to be accurate. Default when a prior QPSC acquisition has auto-registered alignment on the current slide. |
-| Single-Tile Refinement | Refine alignment using one reference tile. Quick adjustment for minor drift or when a slide has been removed and re-seated since the last acquisition. The corrected alignment is saved for subsequent acquisitions. |
-| Full Manual Alignment | Create new transform with multiple points. Use the first time or after hardware changes. |
+| Single-Tile Refinement | Refine alignment using one reference tile. Quick adjustment for minor drift or when a slide has been removed and re-seated since the last acquisition. The corrected alignment is saved for subsequent acquisitions. Also the default for alignments older than ~50 days (low confidence) — verifies the aged transform in 2–3 minutes before full acquisition. |
+| Full Manual Alignment | Create new transform with multiple points. Use the first time or after hardware changes. Always available as an explicit choice, even for aged alignments. |
+
+**Automatic Recommendation by Alignment Age:** The dialog shows an automatic recommendation based on the saved alignment's last-refinement date:
+- **"Proceed without refinement"** — Alignment recently created or refined (high confidence).
+- **"Single-tile refinement"** — Alignment aged 1–~50 days (medium confidence) or older than ~50 days (low confidence). For aged alignments, the message adds: "verify the existing alignment; choose Full manual to re-align from scratch" to encourage explicit choice.
 
 **Saved Alignment Objective Mismatch Advisory:** If you load a saved alignment that was created at a different objective than your wizard's current setting, the system checks whether the mismatch poses a real risk. Going to a coarser objective (lower magnification, e.g., 40x alignment → 10x acquisition) is safe: the linear transform is preserved and any refinement translation shrinks to a fraction of the new tile. Going to a finer objective (higher magnification, e.g., 10x alignment → 40x acquisition) extrapolates the refinement translation across multiple tiles and risks misalignment. A modal dialog appears only in the risky case (finer objective), explaining that refinement translations are tied to the objective's tile geometry. You can continue with the loaded alignment or cancel to adjust the wizard's objective or re-align. (Note: this is distinct from a sub-image entry's objective mismatch, which is checked separately and has its own advisory.)
 
@@ -180,7 +184,7 @@ Choose how to align QuPath image coordinates with physical stage positions. You 
 
 ### Step 3: Refinement Options
 
-Select the level of alignment refinement needed. No Refinement is fastest and is the default when a slide has auto-registered alignment from a prior QPSC acquisition. Choose Single-Tile Refinement to correct for minor drift or when a slide has been physically removed and re-seated since the last acquisition — the corrected alignment is saved for future acquisitions. Use Full Manual Alignment for the first time or after significant hardware changes.
+Select the level of alignment refinement needed. The dialog shows an automatic recommendation based on alignment age. When using a recently refined alignment, No Refinement is the default and fastest. For aged alignments (older than ~50 days), the dialog automatically recommends Single-Tile Refinement — a quick 2–3 minute verification before full acquisition. Choose Single-Tile Refinement manually to correct for minor drift or when a slide has been physically removed and re-seated since the last acquisition; the corrected alignment is saved for future acquisitions. Use Full Manual Alignment explicitly when you want a complete re-alignment from scratch, or for the first time on a new scope or after significant hardware changes. Full manual remains always available, even when not recommended.
 
 If you choose Single-Tile Refinement, the workflow first generates tile detections from the **annotation classes you selected for collection** (not from every annotation in the image). The tile-selection dialog then lets you pick one of those tiles as the reference. This avoids the noisy/overlapping tile grids that used to appear when unrelated annotations got tiled alongside the ones you actually wanted to acquire. The dialog reports the count and class names so you can confirm the right set was tiled.
 
