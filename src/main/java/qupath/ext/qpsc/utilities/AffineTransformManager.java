@@ -1636,8 +1636,35 @@ public class AffineTransformManager {
             return null;
         }
 
-        File alignmentFile = new File(alignmentDir, sampleName + "_alignment.json");
-        if (!alignmentFile.exists()) {
+        // Resolve the same file loadSlideAlignmentFromDirectory would load: the
+        // scope-namespaced <sample>_<scope>_alignment.json is preferred, the
+        // legacy unscoped <sample>_alignment.json is the fallback. Reading only
+        // the legacy name here (the prior behaviour) meant any modern scoped
+        // alignment always reported "Last refined: Unknown" and the age-based
+        // outdated warning never fired.
+        String activeMicroscope = null;
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                activeMicroscope = mgr.getMicroscopeName();
+            }
+        } catch (Exception ignore) {
+        }
+
+        File alignmentFile = null;
+        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
+            if (scoped.exists()) {
+                alignmentFile = scoped;
+            }
+        }
+        if (alignmentFile == null) {
+            File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+            if (legacy.exists()) {
+                alignmentFile = legacy;
+            }
+        }
+        if (alignmentFile == null) {
             return null;
         }
 

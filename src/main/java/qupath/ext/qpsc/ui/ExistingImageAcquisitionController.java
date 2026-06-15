@@ -1786,12 +1786,21 @@ public class ExistingImageAcquisitionController {
             if (confidence >= HIGH_CONFIDENCE) {
                 recommendation = "[i] Recommendation: Proceed without refinement (high confidence)";
                 noRefineRadio.setSelected(true);
-            } else if (confidence >= MEDIUM_CONFIDENCE) {
-                recommendation = "[i] Recommendation: Single-tile refinement (medium confidence)";
-                singleTileRadio.setSelected(true);
             } else {
-                recommendation = "[i] Recommendation: Full manual alignment (low confidence)";
-                fullManualRadio.setSelected(true);
+                // Both medium and low confidence default to single-tile refinement.
+                // An existing scanner preset is selected here (the refinement
+                // section only shows when "Use existing alignment" is active, which
+                // requires at least one saved transform), so there is always an
+                // alignment to build on. Single-tile verifies/corrects it in 2-3 min.
+                // Defaulting LOW confidence to Full manual meant an aged-but-usable
+                // preset (age penalty alone drops confidence below 0.5 after ~50
+                // days) always auto-selected a 10-15 min re-alignment from scratch.
+                // Full manual remains available as an explicit choice.
+                singleTileRadio.setSelected(true);
+                recommendation = confidence >= MEDIUM_CONFIDENCE
+                        ? "[i] Recommendation: Single-tile refinement (medium confidence)"
+                        : "[i] Recommendation: Single-tile refinement (low confidence -- verify the existing "
+                                + "alignment; choose Full manual to re-align from scratch)";
             }
 
             refinementRecommendationLabel.setText(recommendation);
@@ -1887,14 +1896,35 @@ public class ExistingImageAcquisitionController {
             }
 
             // Parse and format date for display
-            try {
-                SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                SimpleDateFormat outputFormat = new SimpleDateFormat("MMM d, yyyy");
-                Date date = inputFormat.parse(dateStr);
-                return outputFormat.format(date);
-            } catch (Exception e) {
+            Date date = parseAlignmentTimestamp(dateStr);
+            if (date == null) {
                 return dateStr; // Return as-is if parsing fails
             }
+            return new SimpleDateFormat("MMM d, yyyy").format(date);
+        }
+
+        /**
+         * Parses an alignment-JSON {@code timestamp} string into a {@link Date}.
+         *
+         * <p>Save sites write the timestamp with {@code new Date().toString()}
+         * ({@code "EEE MMM d HH:mm:ss zzz yyyy"}, US locale), but some legacy /
+         * external files use ISO-like {@code "yyyy-MM-dd HH:mm:ss"}. Try both so
+         * the "Last refined" banner and the age-based outdated warning work for
+         * either. Returns {@code null} when neither format matches.
+         */
+        private Date parseAlignmentTimestamp(String dateStr) {
+            if (dateStr == null || dateStr.isBlank()) {
+                return null;
+            }
+            String[] patterns = {"EEE MMM d HH:mm:ss zzz yyyy", "yyyy-MM-dd HH:mm:ss"};
+            for (String pattern : patterns) {
+                try {
+                    return new SimpleDateFormat(pattern, java.util.Locale.US).parse(dateStr);
+                } catch (Exception ignore) {
+                    // try the next pattern
+                }
+            }
+            return null;
         }
 
         /**
@@ -1922,15 +1952,12 @@ public class ExistingImageAcquisitionController {
                 return -1;
             }
 
-            try {
-                SimpleDateFormat inputFormat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss");
-                Date alignmentDate = inputFormat.parse(dateStr);
-                Date now = new Date();
-                long diffMillis = now.getTime() - alignmentDate.getTime();
-                return diffMillis / (1000 * 60 * 60 * 24); // Convert to days
-            } catch (Exception e) {
+            Date alignmentDate = parseAlignmentTimestamp(dateStr);
+            if (alignmentDate == null) {
                 return -1;
             }
+            long diffMillis = new Date().getTime() - alignmentDate.getTime();
+            return diffMillis / (1000 * 60 * 60 * 24); // Convert to days
         }
 
         /**
