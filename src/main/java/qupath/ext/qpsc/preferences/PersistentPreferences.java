@@ -1280,6 +1280,51 @@ public class PersistentPreferences {
         return siftSearchMarginUmProperty;
     }
 
+    private static final BooleanProperty siftCoarseToFineEnabledProperty =
+            PathPrefs.createPersistentPreference("siftCoarseToFineEnabled", true);
+
+    /**
+     * When true, SIFT auto-align runs a coarse-to-fine search: a heavily
+     * downsampled pass over the whole (possibly large) WSI region to find a
+     * rough offset, then a full-resolution pass over a small crop for
+     * precision. This lets the search margin grow without paying the cost of
+     * full-resolution SIFT over the whole region. Server-side; takes effect on
+     * the next SIFT run. Applies to all SIFT auto-align scopes.
+     */
+    public static boolean isSiftCoarseToFineEnabled() {
+        return siftCoarseToFineEnabledProperty.get();
+    }
+
+    public static void setSiftCoarseToFineEnabled(boolean enabled) {
+        siftCoarseToFineEnabledProperty.set(enabled);
+    }
+
+    public static BooleanProperty siftCoarseToFineEnabledProperty() {
+        return siftCoarseToFineEnabledProperty;
+    }
+
+    private static final DoubleProperty siftCoarsePixelSizeUmProperty =
+            PathPrefs.createPersistentPreference("siftCoarsePixelSizeUm", 4.0);
+
+    /**
+     * Target resolution (um/pixel) for the coarse pass of the coarse-to-fine
+     * SIFT search. Coarser than the fine target (see
+     * {@link #getSiftMinPixelSize()}) so the whole region matches quickly.
+     * Only used when {@link #isSiftCoarseToFineEnabled()} is true and this is
+     * coarser than the fine target.
+     */
+    public static double getSiftCoarsePixelSizeUm() {
+        return siftCoarsePixelSizeUmProperty.get();
+    }
+
+    public static void setSiftCoarsePixelSizeUm(double umPerPixel) {
+        siftCoarsePixelSizeUmProperty.set(umPerPixel);
+    }
+
+    public static DoubleProperty siftCoarsePixelSizeUmProperty() {
+        return siftCoarsePixelSizeUmProperty;
+    }
+
     private static final DoubleProperty siftContrastThresholdProperty =
             PathPrefs.createPersistentPreference("siftContrastThreshold", 0.04);
 

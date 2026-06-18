@@ -135,6 +135,26 @@ public final class SiftAutoAlignHelper {
             }
         }
 
+        // Draw the SIFT search range on the Stage Map (no-op if it isn't open).
+        // The box is centered on the current stage position (where the predicted
+        // tile centre points now) and sized to the extracted WSI region: one FOV
+        // plus the search margin on each side. With coarse-to-fine enabled this
+        // is the area the coarse pass scans.
+        boolean searchRangeDrawn = false;
+        try {
+            double[] preMovePos = mc.getStagePositionXY();
+            double halfWidthUm = (tileW * wsiPixelSize) / 2.0 + marginUm;
+            double halfHeightUm = (tileH * wsiPixelSize) / 2.0 + marginUm;
+            qupath.ext.qpsc.ui.stagemap.StageMapWindow.setSearchRangePreview(
+                    preMovePos[0] - halfWidthUm,
+                    preMovePos[1] - halfHeightUm,
+                    preMovePos[0] + halfWidthUm,
+                    preMovePos[1] + halfHeightUm);
+            searchRangeDrawn = true;
+        } catch (Exception ex) {
+            logger.debug("Could not draw SIFT search range on Stage Map: {}", ex.getMessage());
+        }
+
         MicroscopeController.LiveViewState liveState = mc.stopAllLiveViewing();
         try {
             double minPx = PersistentPreferences.getSiftMinPixelSize();
@@ -147,6 +167,8 @@ public final class SiftAutoAlignHelper {
             double pctHigh = PersistentPreferences.getSiftPercentileHigh();
             boolean claheEnabled = PersistentPreferences.isSiftClaheEnabled();
             double claheClip = PersistentPreferences.getSiftClaheClipLimit();
+            boolean coarseToFine = PersistentPreferences.isSiftCoarseToFineEnabled();
+            double coarsePx = PersistentPreferences.getSiftCoarsePixelSizeUm();
             String response = mc.getSocketClient()
                     .siftAutoAlign(
                             tempFile.getAbsolutePath(),
@@ -163,7 +185,9 @@ public final class SiftAutoAlignHelper {
                             pctLow,
                             pctHigh,
                             claheEnabled,
-                            claheClip);
+                            claheClip,
+                            coarseToFine,
+                            coarsePx);
 
             if (!response.startsWith("SUCCESS:")) {
                 logger.warn("SIFT auto-align did not succeed: {}", response);
@@ -194,6 +218,13 @@ public final class SiftAutoAlignHelper {
 
         } finally {
             mc.restoreLiveViewState(liveState);
+            if (searchRangeDrawn) {
+                try {
+                    qupath.ext.qpsc.ui.stagemap.StageMapWindow.clearSearchRangePreview();
+                } catch (Exception ex) {
+                    logger.debug("Could not clear SIFT search range overlay: {}", ex.getMessage());
+                }
+            }
             if (!tempFile.delete()) {
                 logger.debug("Could not delete temp file: {}", tempFile);
             }
@@ -652,10 +683,33 @@ public final class SiftAutoAlignHelper {
         marginSpinner.setPrefWidth(90);
         grid.add(new Label("Search margin (um):"), 0, ++row);
         grid.add(marginSpinner, 1, row);
-        Label marginHelp = new Label("WSI region extends this far beyond the tile on each side.");
+        Label marginHelp = new Label("WSI region extends this far beyond the tile on each side. "
+                + "With coarse-to-fine enabled you can raise this without slowing matching.");
         marginHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
         marginHelp.setWrapText(true);
         grid.add(marginHelp, 0, ++row, 2, 1);
+
+        CheckBox coarseToFineCheckbox = new CheckBox("Coarse-to-fine search (faster large areas)");
+        coarseToFineCheckbox.setSelected(PersistentPreferences.isSiftCoarseToFineEnabled());
+        grid.add(coarseToFineCheckbox, 0, ++row, 2, 1);
+        Label c2fHelp = new Label("Match a downsampled view of the whole search area first, then refine at full "
+                + "resolution over a small crop. Lets the search margin grow without paying for full-resolution "
+                + "matching over the whole region. Applies to SIFT auto-align (camera refinement).");
+        c2fHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        c2fHelp.setWrapText(true);
+        grid.add(c2fHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> coarsePxSpinner =
+                new Spinner<>(1.0, 16.0, PersistentPreferences.getSiftCoarsePixelSizeUm(), 0.5);
+        coarsePxSpinner.setEditable(true);
+        coarsePxSpinner.setPrefWidth(90);
+        grid.add(new Label("Coarse pixel size (um):"), 0, ++row);
+        grid.add(coarsePxSpinner, 1, row);
+        Label coarsePxHelp = new Label("Resolution of the coarse pass. Higher = faster and larger reach but a coarser "
+                + "rough step. Only used when coarser than Min pixel size above.");
+        coarsePxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        coarsePxHelp.setWrapText(true);
+        grid.add(coarsePxHelp, 0, ++row, 2, 1);
 
         Spinner<Double> confSpinner = new Spinner<>(0.1, 1.0, prefs.getConfidenceThreshold(), 0.05);
         confSpinner.setEditable(true);
@@ -736,6 +790,8 @@ public final class SiftAutoAlignHelper {
                 prefs.setMinMatchCount(minMatchSpinner.getValue());
                 prefs.setContrastThreshold(contrastSpinner.getValue());
                 prefs.setSearchMarginUm(marginSpinner.getValue());
+                PersistentPreferences.setSiftCoarseToFineEnabled(coarseToFineCheckbox.isSelected());
+                PersistentPreferences.setSiftCoarsePixelSizeUm(coarsePxSpinner.getValue());
                 prefs.setConfidenceThreshold(confSpinner.getValue());
                 prefs.setMonoNormalization(monoNormChoice.getValue());
                 prefs.setPercentileLow(pctLowSpinner.getValue());

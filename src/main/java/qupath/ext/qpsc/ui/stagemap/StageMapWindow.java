@@ -192,6 +192,28 @@ public class StageMapWindow {
     }
 
     /**
+     * Shows a translucent cyan dashed rectangle on the Stage Map marking the
+     * area a SIFT auto-align is searching, centered on the current stage
+     * position. No-op if the Stage Map window is not open.
+     */
+    public static void setSearchRangePreview(double minStageX, double minStageY, double maxStageX, double maxStageY) {
+        Platform.runLater(() -> {
+            if (isVisible() && instance.canvas != null) {
+                instance.canvas.setSearchRangePreview(minStageX, minStageY, maxStageX, maxStageY);
+            }
+        });
+    }
+
+    /** Hides the SIFT search-range preview rectangle, if any. */
+    public static void clearSearchRangePreview() {
+        Platform.runLater(() -> {
+            if (instance != null && instance.canvas != null) {
+                instance.canvas.clearSearchRangePreview();
+            }
+        });
+    }
+
+    /**
      * Disposes of the window and resets the singleton for a clean re-open.
      * This prevents stale state issues when reopening after the microscope
      * disconnects or Live Mode is toggled.

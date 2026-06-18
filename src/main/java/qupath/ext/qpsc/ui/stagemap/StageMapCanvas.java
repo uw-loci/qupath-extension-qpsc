@@ -68,6 +68,8 @@ public class StageMapCanvas extends StackPane {
     private static final Color LIP_SHADE = Color.rgb(50, 50, 60, 0.45);
     private static final Color BOUNDING_BOX_PREVIEW_FILL = Color.rgb(0, 255, 0, 0.22);
     private static final Color BOUNDING_BOX_PREVIEW_STROKE = Color.LIME;
+    private static final Color SEARCH_RANGE_FILL = Color.rgb(0, 220, 255, 0.15);
+    private static final Color SEARCH_RANGE_STROKE = Color.rgb(0, 220, 255, 0.95);
 
     // ========== Rendering Constants ==========
     private static final double CROSSHAIR_RADIUS = 6; // pixels
@@ -89,6 +91,7 @@ public class StageMapCanvas extends StackPane {
     private Line targetLineHBg, targetLineVBg; // Black backing for contrast
     private Line targetLineH, targetLineV;
     private Rectangle boundingBoxPreviewRect;
+    private Rectangle searchRangePreviewRect;
     private List<Rectangle> slideRects = new ArrayList<>();
     private List<Text> slideLabels = new ArrayList<>();
     private Rectangle insertBorderRect;
@@ -134,6 +137,11 @@ public class StageMapCanvas extends StackPane {
     private double bboxPreviewMinY = Double.NaN;
     private double bboxPreviewMaxX = Double.NaN;
     private double bboxPreviewMaxY = Double.NaN;
+    // SIFT search-range preview: NaN = no preview shown
+    private double searchRangeMinX = Double.NaN;
+    private double searchRangeMinY = Double.NaN;
+    private double searchRangeMaxX = Double.NaN;
+    private double searchRangeMaxY = Double.NaN;
     private double scale = 1.0; // pixels per micron
     private double offsetX = 0; // canvas offset for centering
     private double offsetY = 0;
@@ -209,6 +217,15 @@ public class StageMapCanvas extends StackPane {
         boundingBoxPreviewRect.setVisible(false);
         boundingBoxPreviewRect.setMouseTransparent(true);
 
+        // Create SIFT search-range preview rectangle (translucent cyan, dashed)
+        searchRangePreviewRect = new Rectangle();
+        searchRangePreviewRect.setFill(SEARCH_RANGE_FILL);
+        searchRangePreviewRect.setStroke(SEARCH_RANGE_STROKE);
+        searchRangePreviewRect.setStrokeWidth(2);
+        searchRangePreviewRect.getStrokeDashArray().addAll(8.0, 6.0);
+        searchRangePreviewRect.setVisible(false);
+        searchRangePreviewRect.setMouseTransparent(true);
+
         // Create insert border rectangle
         insertBorderRect = new Rectangle();
         insertBorderRect.setFill(Color.TRANSPARENT);
@@ -239,6 +256,7 @@ public class StageMapCanvas extends StackPane {
                         acquisitionOverlayView, // Behind everything
                         macroOverlayView, // Behind shapes but above acquisitions
                         boundingBoxPreviewRect, // Above macro, below indicators
+                        searchRangePreviewRect, // SIFT search range, below indicators
                         insertBorderRect,
                         crosshairCircle,
                         crosshairLineH1,
@@ -839,6 +857,7 @@ public class StageMapCanvas extends StackPane {
         updateFOVOverlay();
         updateTargetOverlay();
         updateBoundingBoxPreviewOverlay();
+        updateSearchRangePreviewOverlay();
         if (acquisitionOverlayVisible) {
             compositeAndDisplayAcquisitions();
         }
@@ -1055,6 +1074,62 @@ public class StageMapCanvas extends StackPane {
         this.bboxPreviewMaxX = Double.NaN;
         this.bboxPreviewMaxY = Double.NaN;
         updateBoundingBoxPreviewOverlay();
+    }
+
+    private void updateSearchRangePreviewOverlay() {
+        if (!Platform.isFxApplicationThread()) {
+            Platform.runLater(this::updateSearchRangePreviewOverlay);
+            return;
+        }
+
+        if (Double.isNaN(searchRangeMinX)
+                || Double.isNaN(searchRangeMinY)
+                || Double.isNaN(searchRangeMaxX)
+                || Double.isNaN(searchRangeMaxY)
+                || currentInsert == null) {
+            searchRangePreviewRect.setVisible(false);
+            return;
+        }
+
+        double[] cornerA = stageToScreen(searchRangeMinX, searchRangeMinY);
+        double[] cornerB = stageToScreen(searchRangeMaxX, searchRangeMaxY);
+        if (cornerA == null || cornerB == null) {
+            searchRangePreviewRect.setVisible(false);
+            return;
+        }
+
+        double x = Math.min(cornerA[0], cornerB[0]);
+        double y = Math.min(cornerA[1], cornerB[1]);
+        double w = Math.abs(cornerB[0] - cornerA[0]);
+        double h = Math.abs(cornerB[1] - cornerA[1]);
+
+        searchRangePreviewRect.setX(x);
+        searchRangePreviewRect.setY(y);
+        searchRangePreviewRect.setWidth(w);
+        searchRangePreviewRect.setHeight(h);
+        searchRangePreviewRect.setVisible(true);
+    }
+
+    /**
+     * Shows a translucent cyan dashed rectangle marking the area a SIFT
+     * auto-align is searching, centered on the current stage position. Stage
+     * coordinates in microns; min/max ordering is normalized.
+     */
+    public void setSearchRangePreview(double minStageX, double minStageY, double maxStageX, double maxStageY) {
+        this.searchRangeMinX = Math.min(minStageX, maxStageX);
+        this.searchRangeMinY = Math.min(minStageY, maxStageY);
+        this.searchRangeMaxX = Math.max(minStageX, maxStageX);
+        this.searchRangeMaxY = Math.max(minStageY, maxStageY);
+        updateSearchRangePreviewOverlay();
+    }
+
+    /** Hides the SIFT search-range preview rectangle. */
+    public void clearSearchRangePreview() {
+        this.searchRangeMinX = Double.NaN;
+        this.searchRangeMinY = Double.NaN;
+        this.searchRangeMaxX = Double.NaN;
+        this.searchRangeMaxY = Double.NaN;
+        updateSearchRangePreviewOverlay();
     }
 
     // ========== Acquisition Overlay Methods ==========
