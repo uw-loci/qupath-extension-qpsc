@@ -79,7 +79,7 @@ dependencies {
     shadow(libs.gson)
 
     // Bundle tiles-to-pyramid into the shadow JAR for single-file distribution
-    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.4.2")
+    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.4.3")
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
     compileOnly("io.github.qupath:qupath-extension-bioformats:0.7.0")
