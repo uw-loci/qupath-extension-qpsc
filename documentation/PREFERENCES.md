@@ -893,6 +893,8 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 | Trust SIFT alignment | Boolean | OFF | When enabled, SIFT runs automatically during single-tile refinement without showing the manual dialog. If confidence exceeds the threshold, the refined position is accepted automatically. Falls back to manual if SIFT fails or confidence is too low. |
 | SIFT confidence threshold | Double | 0.5 | Minimum inlier ratio (0.0-1.0) required to auto-accept alignment when Trust SIFT is enabled. Higher values are stricter. 0.5 means at least 50% of matched features must be RANSAC inliers. |
 | SIFT min pixel size (um) | Double | 1.0 | Minimum resolution for SIFT matching. Both images are downsampled to at least this pixel size before feature detection. Suppresses JPEG compression artifacts and speeds up matching. Lower values for high-magnification objectives (e.g., 63x oil where 1 um/px is a large fraction of the FOV). |
+| SIFT coarse-to-fine enabled | Boolean | ON | When enabled, SIFT auto-align runs a two-pass search: a heavily downsampled coarse pass over the whole search region to find a rough offset, then a full-resolution fine pass over a small crop around the coarse result. Allows larger search margins without paying the cost of full-resolution matching over the whole region. Applies to all SIFT auto-align scopes. |
+| SIFT coarse pixel size (um) | Double | 4.0 | Target resolution (um/pixel) for the coarse pass. Coarser than the fine target (SIFT min pixel size above) so the whole region matches quickly. Only used when coarse-to-fine is enabled and this value is coarser than the fine target. |
 
 **Cross-modality preprocessing (16-bit camera vs 8-bit WSI):** Five additional knobs handle the case where the microscope camera produces 16-bit data (typically using only the lower 12-14 bits) and the reference is an 8-bit H&E or PPM scan. The legacy `/256` bit-shift would compress the useful camera range to a sliver of 8-bit and collapse SIFT matching against the brighter WSI. These prefs are surfaced in the SIFT Settings dialog (accessible from the refinement step's Auto-Align panel).
 
@@ -908,6 +910,8 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 - **Trust SIFT**: Enable when alignment is reliable and you want fully unattended acquisition
 - **Confidence threshold**: Lower (e.g., 0.3) if tissue has few features; raise (e.g., 0.7) for critical alignment
 - **Min pixel size**: Lower (e.g., 0.3) for 40x+ objectives; raise (e.g., 2.0) for 4x objectives or heavily compressed WSIs
+- **Coarse-to-fine enabled**: Keep enabled for large WSI regions or wide search margins. Disable if you have a fast computer and want a single-pass search (marginally simpler debugging).
+- **Coarse pixel size**: Raise (e.g., 8.0) to search faster and further, at the cost of a coarser initial estimate. Lower (e.g., 2.0) for more precision on smaller regions. The Stage Map shows the search range as a cyan dashed rectangle during alignment.
 - **Mono normalization**: Leave on `PERCENTILE` unless you have a specific calibrated reason. Switch to `BIT_SHIFT` only when reproducing legacy alignment runs.
 - **Percentile low/high**: Tighten (e.g., 5/95) to suppress speckle/noise; widen (e.g., 0.5/99.5) when matching very faint features against a bright reference.
 - **CLAHE clip limit**: Raise (e.g., 3.0-4.0) for very low-contrast samples; lower (e.g., 1.0) when CLAHE is amplifying noise into spurious feature matches.
