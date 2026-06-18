@@ -343,6 +343,16 @@ public class LiveViewerWindow {
             } else {
                 instance.stage.toFront();
             }
+
+            // The streamingActiveProperty listener only fires on change, so if
+            // the camera is ALREADY streaming when the viewer opens (e.g. a
+            // workflow started it), reconcile the button + green live border to
+            // the current server state now.
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller != null && controller.getSocketClient() != null) {
+                instance.syncLiveStateFromServer(
+                        controller.getSocketClient().streamingActiveProperty().get());
+            }
         });
     }
 
@@ -1140,6 +1150,27 @@ public class LiveViewerWindow {
         } else {
             liveToggleButton.setText("Live: OFF");
             liveToggleButton.setStyle("-fx-font-weight: bold; -fx-base: #9E9E9E;");
+        }
+        updateLiveBorder(active);
+    }
+
+    /**
+     * Outlines the live-image area with a thick green border while streaming is
+     * active so it is obvious at a glance that the viewer is live (vs. showing a
+     * stale last frame). Driven from {@link #updateLiveButtonStyle} so the border
+     * tracks the same authoritative state as the Live button. Null-guarded
+     * because this can be called from the toolbar setup before the image
+     * container is built.
+     */
+    private void updateLiveBorder(boolean active) {
+        if (imageContainer == null) {
+            return;
+        }
+        if (active) {
+            imageContainer.setStyle(
+                    "-fx-background-color: black; -fx-border-color: #4CAF50; -fx-border-width: 3; -fx-border-insets: 0;");
+        } else {
+            imageContainer.setStyle("-fx-background-color: black;");
         }
     }
 
