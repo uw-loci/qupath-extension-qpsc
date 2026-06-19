@@ -239,6 +239,12 @@ public class SingleTileRefinement {
         // Wait for stage to settle
         Thread.sleep(500);
 
+        // Show the SIFT search range on the Stage Map (no-op if it isn't open)
+        // centered on the predicted position, so the user can see the area that
+        // will be searched for the whole refinement, not just during the match.
+        SiftAutoAlignHelper.drawSearchRangeOnStageMap(
+                gui, selectedTile, estimatedStageCoords[0], estimatedStageCoords[1]);
+
         // If trust SIFT is enabled, try auto-alignment first
         if (trustSift) {
             logger.info("Trust SIFT enabled -- attempting automatic alignment");
@@ -265,6 +271,7 @@ public class SingleTileRefinement {
                                                     confidence,
                                                     confidenceThreshold);
                                             Platform.runLater(() -> {
+                                                SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                                                 Dialogs.showInfoNotification(
                                                         "SIFT Auto-Align",
                                                         String.format(
@@ -407,6 +414,7 @@ public class SingleTileRefinement {
                 Dialogs.showInfoNotification(
                         "Refine Alignment", "The alignment has been refined and saved for this slide.");
 
+                SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                 dialogStage.close();
                 future.complete(new RefinementResult(refinedTransform, selectedTile, true));
             } catch (IOException ex) {
@@ -418,6 +426,7 @@ public class SingleTileRefinement {
         Button skipButton = new Button("Skip Refinement");
         skipButton.setOnAction(e -> {
             logger.info("User skipped refinement");
+            SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             dialogStage.close();
             future.complete(new RefinementResult(initialTransform, selectedTile));
         });
@@ -425,6 +434,7 @@ public class SingleTileRefinement {
         Button newAlignmentButton = new Button("Create New Alignment");
         newAlignmentButton.setOnAction(e -> {
             logger.info("User requested new alignment");
+            SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             dialogStage.close();
             future.complete(new RefinementResult(null, selectedTile)); // Signal to switch to manual alignment
         });
@@ -471,6 +481,7 @@ public class SingleTileRefinement {
         // Handle window close (X button)
         dialogStage.setOnCloseRequest(e -> {
             logger.info("Refinement dialog closed without selection");
+            SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             future.complete(new RefinementResult(initialTransform, selectedTile));
         });
 

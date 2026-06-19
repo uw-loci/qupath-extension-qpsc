@@ -558,6 +558,9 @@ public class UIFunctions {
             Button confirmButton = new Button("Current Position is Accurate");
             confirmButton.setDefaultButton(true);
             confirmButton.setOnAction(e -> {
+                if (siftTargetTile != null) {
+                    qupath.ext.qpsc.ui.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                }
                 stage.close();
                 future.complete(true);
             });
@@ -565,6 +568,9 @@ public class UIFunctions {
             Button cancelButton = new Button("Cancel acquisition");
             cancelButton.setCancelButton(true);
             cancelButton.setOnAction(e -> {
+                if (siftTargetTile != null) {
+                    qupath.ext.qpsc.ui.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                }
                 stage.close();
                 future.complete(false);
             });
@@ -581,6 +587,9 @@ public class UIFunctions {
                         gui, siftTargetTile, stage, siftStatus);
                 layout.getChildren()
                         .addAll(headerLabel, instructionLabel, siftRow, siftStatus, new Separator(), buttonBox);
+                // Show the SIFT search range on the Stage Map (no-op if it isn't
+                // open) for the whole time this dialog is up. Cleared on close below.
+                qupath.ext.qpsc.ui.SiftAutoAlignHelper.drawSearchRangeAtCurrentPosition(gui, siftTargetTile);
             } else {
                 layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
             }
@@ -589,6 +598,9 @@ public class UIFunctions {
             stage.setScene(scene);
 
             stage.setOnCloseRequest(e -> {
+                if (siftTargetTile != null) {
+                    qupath.ext.qpsc.ui.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                }
                 future.complete(false);
             });
 

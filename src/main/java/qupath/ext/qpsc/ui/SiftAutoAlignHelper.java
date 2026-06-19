@@ -135,22 +135,14 @@ public final class SiftAutoAlignHelper {
             }
         }
 
-        // Draw the SIFT search range on the Stage Map (no-op if it isn't open).
-        // The box is centered on the current stage position (where the predicted
-        // tile centre points now) and sized to the extracted WSI region: one FOV
-        // plus the search margin on each side. With coarse-to-fine enabled this
-        // is the area the coarse pass scans.
-        boolean searchRangeDrawn = false;
+        // (Re)draw the SIFT search range on the Stage Map (no-op if it isn't
+        // open), centered on the current stage position. The box is left
+        // visible after the match; the hosting refinement/confirm dialog owns
+        // clearing it when it closes, so the user can see the search area for
+        // the whole time the dialog is up, not just during the match.
         try {
             double[] preMovePos = mc.getStagePositionXY();
-            double halfWidthUm = (tileW * wsiPixelSize) / 2.0 + marginUm;
-            double halfHeightUm = (tileH * wsiPixelSize) / 2.0 + marginUm;
-            qupath.ext.qpsc.ui.stagemap.StageMapWindow.setSearchRangePreview(
-                    preMovePos[0] - halfWidthUm,
-                    preMovePos[1] - halfHeightUm,
-                    preMovePos[0] + halfWidthUm,
-                    preMovePos[1] + halfHeightUm);
-            searchRangeDrawn = true;
+            drawSearchRangeOnStageMap(gui, tile, preMovePos[0], preMovePos[1]);
         } catch (Exception ex) {
             logger.debug("Could not draw SIFT search range on Stage Map: {}", ex.getMessage());
         }
@@ -218,16 +210,83 @@ public final class SiftAutoAlignHelper {
 
         } finally {
             mc.restoreLiveViewState(liveState);
-            if (searchRangeDrawn) {
-                try {
-                    qupath.ext.qpsc.ui.stagemap.StageMapWindow.clearSearchRangePreview();
-                } catch (Exception ex) {
-                    logger.debug("Could not clear SIFT search range overlay: {}", ex.getMessage());
-                }
-            }
             if (!tempFile.delete()) {
                 logger.debug("Could not delete temp file: {}", tempFile);
             }
+        }
+    }
+
+    /**
+     * Draws the SIFT search-range box on the Stage Map (no-op if the Stage Map
+     * window is closed), centered on the given stage position and sized to one
+     * tile field-of-view plus the configured search margin on each side. With
+     * coarse-to-fine enabled this is the area the coarse pass scans.
+     *
+     * <p>The box is NOT auto-cleared -- the caller (the refinement / position
+     * confirmation dialog) clears it via {@link #clearSearchRangeOnStageMap()}
+     * when it closes, so it stays visible for the dialog's whole lifetime.
+     *
+     * @param gui QuPath GUI (for the WSI pixel calibration). No-op if null.
+     * @param tile tile being matched (its bounds give the FOV size). No-op if null.
+     * @param centerStageX stage X (um) the box centers on
+     * @param centerStageY stage Y (um) the box centers on
+     */
+    public static void drawSearchRangeOnStageMap(
+            QuPathGUI gui, PathObject tile, double centerStageX, double centerStageY) {
+        try {
+            if (gui == null || tile == null || tile.getROI() == null) {
+                return;
+            }
+            var imageData = gui.getImageData();
+            if (imageData == null) {
+                return;
+            }
+            double wsiPixelSize = imageData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+            if (Double.isNaN(wsiPixelSize) || wsiPixelSize <= 0) {
+                return;
+            }
+            double marginUm = PersistentPreferences.getSiftSearchMarginUm();
+            double halfWidthUm = (tile.getROI().getBoundsWidth() * wsiPixelSize) / 2.0 + marginUm;
+            double halfHeightUm = (tile.getROI().getBoundsHeight() * wsiPixelSize) / 2.0 + marginUm;
+            qupath.ext.qpsc.ui.stagemap.StageMapWindow.setSearchRangePreview(
+                    centerStageX - halfWidthUm,
+                    centerStageY - halfHeightUm,
+                    centerStageX + halfWidthUm,
+                    centerStageY + halfHeightUm);
+        } catch (Exception ex) {
+            logger.debug("Could not draw SIFT search range on Stage Map: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * Convenience variant of
+     * {@link #drawSearchRangeOnStageMap(QuPathGUI, PathObject, double, double)}
+     * that centers on the CURRENT stage position. The position is read on a
+     * background thread so this is safe to call from the FX thread (e.g. when a
+     * dialog opens).
+     */
+    public static void drawSearchRangeAtCurrentPosition(QuPathGUI gui, PathObject tile) {
+        new Thread(
+                        () -> {
+                            try {
+                                double[] pos =
+                                        MicroscopeController.getInstance().getStagePositionXY();
+                                drawSearchRangeOnStageMap(gui, tile, pos[0], pos[1]);
+                            } catch (Exception ex) {
+                                logger.debug(
+                                        "Could not resolve stage position for SIFT search range: {}", ex.getMessage());
+                            }
+                        },
+                        "SIFT-SearchRange-Draw")
+                .start();
+    }
+
+    /** Hides the SIFT search-range box on the Stage Map, if any. */
+    public static void clearSearchRangeOnStageMap() {
+        try {
+            qupath.ext.qpsc.ui.stagemap.StageMapWindow.clearSearchRangePreview();
+        } catch (Exception ex) {
+            logger.debug("Could not clear SIFT search range overlay: {}", ex.getMessage());
         }
     }
 
