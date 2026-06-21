@@ -1,6 +1,8 @@
 package qupath.ext.qpsc.modality;
 
+import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
@@ -153,6 +155,42 @@ public class BrightfieldModalityHandler implements ModalityHandler {
                 objective,
                 detector);
         return fallback;
+    }
+
+    /**
+     * Brightfield contributes an exposure panel to the Bounded Acquisition
+     * dialog: it states how the single exposure is resolved and lets the
+     * operator override it (with a warning that overriding invalidates the
+     * saved background/flat-field profile). See
+     * {@link BrightfieldExposureBoundingBoxUI}.
+     */
+    @Override
+    public Optional<BoundingBoxUI> createBoundingBoxUI() {
+        return Optional.of(new BrightfieldExposureBoundingBoxUI());
+    }
+
+    /**
+     * Applies the operator's exposure override from
+     * {@link BrightfieldExposureBoundingBoxUI}. The override map carries a
+     * single {@code "exposure"} entry (milliseconds); when present it replaces
+     * the exposure on every (single, angle=0) acquisition step. Without it the
+     * handler-resolved exposure is used unchanged.
+     */
+    @Override
+    public List<AngleExposure> applyAngleOverrides(List<AngleExposure> angles, Map<String, Double> overrides) {
+        if (overrides == null) {
+            return angles;
+        }
+        Double exposure = overrides.get(BrightfieldExposureBoundingBoxUI.OVERRIDE_KEY);
+        if (exposure == null || exposure <= 0) {
+            return angles;
+        }
+        logger.info("Brightfield exposure overridden by user to {} ms (bypasses background profile)", exposure);
+        List<AngleExposure> adjusted = new ArrayList<>(angles.size());
+        for (AngleExposure ae : angles) {
+            adjusted.add(new AngleExposure(ae.ticks(), exposure));
+        }
+        return adjusted;
     }
 
     @Override
