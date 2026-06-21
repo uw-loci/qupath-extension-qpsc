@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.ui.liveviewer;
 
 import java.awt.image.BufferedImage;
+import java.beans.PropertyChangeListener;
 import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
@@ -57,6 +58,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
+import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -104,7 +106,6 @@ public class LiveViewerWindow {
     private TitledPane histogramPane;
     private NoiseStatsPanel noiseStatsPanel;
     private StageControlPanel stageControlPanel;
-    private ScrollPane stageScrollPane;
     private ToggleButton stageControlToggle;
 
     /** Detached in {@link #stopAndDispose()} to avoid leaking on Live Viewer close. */
@@ -185,6 +186,12 @@ public class LiveViewerWindow {
     private volatile double explicitScale = 1.0;
     private ScrollPane scrollPane; // Store reference for mode switching
     private StackPane imageContainer; // Inner container for centering
+
+    // Live XYZ(R) position overlay on the image + its toolbar toggle.
+    private Label positionOverlayLabel;
+    private ToggleButton positionOverlayToggle;
+    private PropertyChangeListener positionListener;
+    private javafx.beans.value.ChangeListener<qupath.lib.gui.prefs.PathPrefs.FontSize> positionFontSizeListener;
 
     // Tile viewing during acquisition
     private CheckBox showTilesCheckBox;
@@ -899,6 +906,18 @@ public class LiveViewerWindow {
         stageControlToggle.setStyle("-fx-font-size: 11px;");
         stageControlToggle.setTooltip(new Tooltip("Show/hide stage control panel"));
 
+        // Toggle for the XYZ(R) position overlay on the live image. Bound
+        // bidirectionally to the preference so the toolbar and the Preferences
+        // pane stay in sync, and the overlay label (which binds to the same
+        // preference) shows/hides accordingly.
+        positionOverlayToggle = new ToggleButton("XYZ");
+        positionOverlayToggle.setStyle("-fx-font-size: 11px;");
+        positionOverlayToggle.setTooltip(
+                new Tooltip("Show/hide the current XYZ(R) stage position overlaid on the live image"));
+        positionOverlayToggle
+                .selectedProperty()
+                .bindBidirectional(QPPreferenceDialog.showLiveViewerPositionOverlayProperty());
+
         // Snap button: captures current frame, opens file save dialog, writes
         // OME-TIFF (BG correction routed through CORRECTFRAME socket command
         // when requested and settings match). Right-click for options.
@@ -922,6 +941,7 @@ public class LiveViewerWindow {
                 focusRangeCombo,
                 showTilesCheckBox,
                 snapButton,
+                positionOverlayToggle,
                 spacer,
                 stageControlToggle,
                 scaleLabel,
@@ -959,11 +979,33 @@ public class LiveViewerWindow {
         fovOverlayCanvas = new Canvas();
         fovOverlayCanvas.setMouseTransparent(true);
 
+        // Live XYZ(R) position readout overlaid on the image (top-left corner).
+        // Visibility follows the "show position overlay" preference (also driven
+        // by the toolbar toggle). Mouse-transparent so it never blocks clicks.
+        positionOverlayLabel = new Label();
+        positionOverlayLabel.setMouseTransparent(true);
+        StackPane.setAlignment(positionOverlayLabel, Pos.TOP_LEFT);
+        StackPane.setMargin(positionOverlayLabel, new Insets(6));
+        positionOverlayLabel.visibleProperty().bind(QPPreferenceDialog.showLiveViewerPositionOverlayProperty());
+        positionOverlayLabel.managedProperty().bind(positionOverlayLabel.visibleProperty());
+        applyPositionOverlayStyle();
+
         // Inner container for centering when image is smaller than viewport
-        imageContainer = new StackPane(imageView, fovOverlayCanvas);
+        imageContainer = new StackPane(imageView, fovOverlayCanvas, positionOverlayLabel);
         imageContainer.setStyle("-fx-background-color: black;");
         imageContainer.setAlignment(Pos.CENTER);
         scrollPane.setContent(imageContainer);
+
+        // Refresh the readout when the position changes (reuse the shared
+        // StagePositionManager poller -- no new poll loop) and when the overlay
+        // is switched on. Update the styling when the font-size pref changes.
+        positionListener = evt -> Platform.runLater(this::updatePositionOverlay);
+        StagePositionManager.getInstance().addPropertyChangeListener(positionListener);
+        QPPreferenceDialog.showLiveViewerPositionOverlayProperty()
+                .addListener((obs, was, now) -> Platform.runLater(this::updatePositionOverlay));
+        positionFontSizeListener = (obs, was, now) -> Platform.runLater(this::applyPositionOverlayStyle);
+        QPPreferenceDialog.liveViewerPositionFontSizeProperty().addListener(positionFontSizeListener);
+        updatePositionOverlay();
 
         // Redraw overlay when image bounds change (resize/zoom)
         imageView.boundsInParentProperty().addListener((obs, oldB, newB) -> {
@@ -996,14 +1038,12 @@ public class LiveViewerWindow {
         // in the window title (e.g. "Live Viewer (Brightfield) (10x)").
         updateWindowTitle();
 
-        // Wrap in ScrollPane to handle overflow when window is short
-        stageScrollPane = new ScrollPane(stageControlPanel);
-        stageScrollPane.setFitToWidth(true);
-        stageScrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
-        stageScrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
-        stageScrollPane.setStyle("-fx-background-color: transparent;");
-        stageScrollPane.setPrefWidth(280);
-        stageScrollPane.setMinWidth(250);
+        // Mount the stage panel directly (no outer ScrollPane) so the TabPane
+        // headers stay fixed at the top; each tab's content scrolls inside its
+        // own ScrollPane (see StageControlPanel.tabScroll). Wrapping the whole
+        // panel in a ScrollPane used to scroll the tab headers off-screen.
+        stageControlPanel.setPrefWidth(280);
+        stageControlPanel.setMinWidth(250);
 
         // Histogram + contrast controls (wrapped in collapsible TitledPane)
         histogramView = new HistogramView(contrastSettings);
@@ -1034,14 +1074,14 @@ public class LiveViewerWindow {
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
-        root.setRight(stageScrollPane); // Stage control on right side (starts visible)
+        root.setRight(stageControlPanel); // Stage control on right side (starts visible)
         root.setCenter(scrollPane); // Live image in center
         root.setBottom(bottomPane);
 
         // Wire toggle to show/hide the stage control panel
         stageControlToggle.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
             if (isSelected) {
-                root.setRight(stageScrollPane);
+                root.setRight(stageControlPanel);
             } else {
                 root.setRight(null);
             }
@@ -1172,6 +1212,46 @@ public class LiveViewerWindow {
         } else {
             imageContainer.setStyle("-fx-background-color: black;");
         }
+    }
+
+    /**
+     * Applies the position-overlay label styling, including the font size from
+     * the {@code liveViewerPositionFontSize} preference (which defaults to
+     * QuPath's viewer location-text size). FX thread only.
+     */
+    private void applyPositionOverlayStyle() {
+        if (positionOverlayLabel == null) {
+            return;
+        }
+        String emSize = QPPreferenceDialog.getLiveViewerPositionFontSize().getFontSize();
+        positionOverlayLabel.setStyle("-fx-font-family: monospace; -fx-text-fill: white; "
+                + "-fx-background-color: rgba(0,0,0,0.55); -fx-padding: 3 8 3 8; -fx-background-radius: 4; "
+                + "-fx-font-size: " + emSize + ";");
+    }
+
+    /**
+     * Refreshes the XYZ(R) readout from the shared {@link StagePositionManager}
+     * cache. R is shown only on rotation scopes. No-op (cheap) when the overlay
+     * is hidden. FX thread only.
+     */
+    private void updatePositionOverlay() {
+        if (positionOverlayLabel == null || !positionOverlayLabel.isVisible()) {
+            return;
+        }
+        StagePositionManager mgr = StagePositionManager.getInstance();
+        StringBuilder sb = new StringBuilder();
+        sb.append(String.format("X %+9.2f  Y %+9.2f  Z %+8.2f", mgr.getX(), mgr.getY(), mgr.getZ()));
+        boolean hasR = false;
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            hasR = controller != null && controller.hasRotationStage();
+        } catch (Exception ignored) {
+            // No rotation info available -- omit R.
+        }
+        if (hasR) {
+            sb.append(String.format("  R %+7.2f", mgr.getR()));
+        }
+        positionOverlayLabel.setText(sb.toString());
     }
 
     /**
@@ -2364,6 +2444,17 @@ public class LiveViewerWindow {
         if (modalityTitleListener != null) {
             ModalityState.getInstance().modalityProperty().removeListener(modalityTitleListener);
             modalityTitleListener = null;
+        }
+
+        // Detach the position-overlay listeners (releases the StagePositionManager
+        // reference so its poller can stop when no one else is listening).
+        if (positionListener != null) {
+            StagePositionManager.getInstance().removePropertyChangeListener(positionListener);
+            positionListener = null;
+        }
+        if (positionFontSizeListener != null) {
+            QPPreferenceDialog.liveViewerPositionFontSizeProperty().removeListener(positionFontSizeListener);
+            positionFontSizeListener = null;
         }
 
         // Stop polling threads

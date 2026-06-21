@@ -166,6 +166,19 @@ public class QPPreferenceDialog {
     private static final BooleanProperty disableAllAutofocusProperty =
             PathPrefs.createPersistentPreference("disableAllAutofocus", false);
 
+    // Live Viewer: show the current XYZ(R) stage position overlaid on the live image.
+    // Also toggleable from the Live Viewer toolbar (the toggle binds to this property).
+    private static final BooleanProperty showLiveViewerPositionOverlayProperty =
+            PathPrefs.createPersistentPreference("showLiveViewerPositionOverlay", false);
+
+    // Live Viewer: text size for the position overlay. Defaults to QuPath's viewer
+    // location-text size so the readout matches the rest of the application.
+    private static final ObjectProperty<PathPrefs.FontSize> liveViewerPositionFontSizeProperty =
+            PathPrefs.createPersistentPreference(
+                    "liveViewerPositionFontSize",
+                    PathPrefs.locationFontSizeProperty().get(),
+                    PathPrefs.FontSize.class);
+
     // Warn the user when estimated acquisition size exceeds free disk space at the save location
     private static final BooleanProperty warnOnLowDiskSpaceProperty =
             PathPrefs.createPersistentPreference("warnOnLowDiskSpace", true);
@@ -495,6 +508,22 @@ public class QPPreferenceDialog {
                         + "This is also accessible via the Acquisition Wizard checkbox.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(showLiveViewerPositionOverlayProperty, Boolean.class)
+                .name("Live Viewer: Show Position Overlay")
+                .category(CATEGORY)
+                .description("Overlay the current XYZ (and R, on rotation scopes) stage position on the "
+                        + "Live Viewer image. Also toggleable from the Live Viewer toolbar.")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(liveViewerPositionFontSizeProperty, PathPrefs.FontSize.class)
+                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+                .choices(java.util.Arrays.asList(PathPrefs.FontSize.values()))
+                .name("Live Viewer: Position Overlay Text Size")
+                .category(CATEGORY)
+                .description("Text size for the Live Viewer position overlay. "
+                        + "Defaults to QuPath's viewer location-text size.")
+                .build());
+
         items.add(new PropertyItemBuilder<>(warnOnLowDiskSpaceProperty, Boolean.class)
                 .name("Warn On Low Disk Space")
                 .category(CATEGORY)
@@ -772,6 +801,28 @@ public class QPPreferenceDialog {
 
     public static BooleanProperty disableAllAutofocusProperty() {
         return disableAllAutofocusProperty;
+    }
+
+    /** Whether the Live Viewer shows the XYZ(R) position overlay on the image. */
+    public static boolean getShowLiveViewerPositionOverlay() {
+        return showLiveViewerPositionOverlayProperty.get();
+    }
+
+    public static void setShowLiveViewerPositionOverlay(boolean show) {
+        showLiveViewerPositionOverlayProperty.set(show);
+    }
+
+    public static BooleanProperty showLiveViewerPositionOverlayProperty() {
+        return showLiveViewerPositionOverlayProperty;
+    }
+
+    /** Text size for the Live Viewer position overlay (defaults to QuPath's location-text size). */
+    public static PathPrefs.FontSize getLiveViewerPositionFontSize() {
+        return liveViewerPositionFontSizeProperty.get();
+    }
+
+    public static ObjectProperty<PathPrefs.FontSize> liveViewerPositionFontSizeProperty() {
+        return liveViewerPositionFontSizeProperty;
     }
 
     public static void setDisableAllAutofocus(boolean disable) {

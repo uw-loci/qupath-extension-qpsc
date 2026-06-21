@@ -803,7 +803,7 @@ public class StageControlPanel extends VBox {
                         rStatus,
                         new Separator(),
                         calibrateRow);
-        navigateTab.setContent(navigateContent);
+        navigateTab.setContent(tabScroll(navigateContent));
 
         // ============ TAB 2: SAVED POINTS (was Tab 3) ============
         Tab savedPointsTab = new Tab("Saved Points");
@@ -858,7 +858,7 @@ public class StageControlPanel extends VBox {
         savedPointsContent
                 .getChildren()
                 .addAll(addPointBtn, savedPointsListView, goButtons, manageButtons, savedPointsStatus);
-        savedPointsTab.setContent(savedPointsContent);
+        savedPointsTab.setContent(tabScroll(savedPointsContent));
 
         // Wire up Saved Points event handlers
         addPointBtn.setOnAction(e -> handleAddSavedPoint());
@@ -877,8 +877,27 @@ public class StageControlPanel extends VBox {
         tabPane.getTabs().addAll(navigateTab, savedPointsTab, cameraTab);
         tabPane.getSelectionModel().select(navigateTab);
 
+        // Let the TabPane fill the available height so its content area is
+        // bounded and the per-tab ScrollPanes engage -- keeping the tab HEADERS
+        // fixed at the top while only the content scrolls.
+        VBox.setVgrow(tabPane, javafx.scene.layout.Priority.ALWAYS);
         content.getChildren().add(tabPane);
         return content;
+    }
+
+    /**
+     * Wraps a tab's content in a ScrollPane so the TabPane headers stay fixed
+     * while only the content scrolls (matches the Camera tab's pattern). Without
+     * this, the outer panel scroll moved the tab headers off-screen when a tab's
+     * content was taller than the window.
+     */
+    private static ScrollPane tabScroll(javafx.scene.Node content) {
+        ScrollPane sp = new ScrollPane(content);
+        sp.setFitToWidth(true);
+        sp.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        sp.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+        sp.setStyle("-fx-background-color: transparent;");
+        return sp;
     }
 
     // ------------------------------------------------------------------
