@@ -25,7 +25,7 @@ The Stage Map displays several visual indicators:
 | Target crosshair | Yellow (thin black outline) | Position under the mouse cursor on the Stage Map -- double-click to move the stage there |
 | FOV rectangle | Orange | Field of view at current position |
 | Bounding-box preview | Translucent green | Region that will be acquired when using [Bounded Acquisition](bounded-acquisition.md) (shown while the acquisition dialog is open) |
-| Search-range preview | Translucent cyan (dashed) | Area scanned during SIFT auto-align (shown during refinement camera step). Centered on current stage position and sized to the search region: one FOV plus search margin on each side. With coarse-to-fine search enabled this is the area the coarse pass covers. |
+| Search-range preview | Translucent bright orange (dashed) | Area searched during SIFT auto-align, shown for the whole time the Refine Alignment / Position Confirmation dialog is open. Centered on the predicted stage position and sized to the search region: one FOV plus search margin on each side. Updates live as you change **Search margin** in SIFT Settings, so you can see how close the stage must be for SIFT to work. With coarse-to-fine search enabled this is the area the coarse pass covers. |
 
 ## Options
 

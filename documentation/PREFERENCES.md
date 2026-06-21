@@ -911,7 +911,8 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 - **Confidence threshold**: Lower (e.g., 0.3) if tissue has few features; raise (e.g., 0.7) for critical alignment
 - **Min pixel size**: Lower (e.g., 0.3) for 40x+ objectives; raise (e.g., 2.0) for 4x objectives or heavily compressed WSIs
 - **Coarse-to-fine enabled**: Keep enabled for large WSI regions or wide search margins. Disable if you have a fast computer and want a single-pass search (marginally simpler debugging).
-- **Coarse pixel size**: Raise (e.g., 8.0) to search faster and further, at the cost of a coarser initial estimate. Lower (e.g., 2.0) for more precision on smaller regions. The Stage Map shows the search range as a cyan dashed rectangle during alignment.
+- **Coarse pixel size**: Raise (e.g., 8.0) to search faster and further, at the cost of a coarser initial estimate. Lower (e.g., 2.0) for more precision on smaller regions. The Stage Map shows the search range as a bright-orange dashed rectangle while the refinement dialog is open, updating live as you change the search margin.
+- **Search margin**: Raise to enlarge the area SIFT searches around the predicted position (how far off the stage can be and still match). Coarse-to-fine keeps large margins fast. The bright-orange box on the Stage Map shows the resulting area; range 50-5000 um.
 - **Mono normalization**: Leave on `PERCENTILE` unless you have a specific calibrated reason. Switch to `BIT_SHIFT` only when reproducing legacy alignment runs.
 - **Percentile low/high**: Tighten (e.g., 5/95) to suppress speckle/noise; widen (e.g., 0.5/99.5) when matching very faint features against a bright reference.
 - **CLAHE clip limit**: Raise (e.g., 3.0-4.0) for very low-contrast samples; lower (e.g., 1.0) when CLAHE is amplifying noise into spurious feature matches.

@@ -216,6 +216,17 @@ public final class SiftAutoAlignHelper {
         }
     }
 
+    // Context of the search-range box currently shown on the Stage Map, so it
+    // can be re-drawn live when the user changes the Search margin in Settings.
+    // Written from background threads (autoAlign / position fetch) and read on
+    // the FX thread (spinner preview), so volatile for visibility. A slightly
+    // stale center during a live preview is harmless.
+    private static volatile QuPathGUI searchRangeGui;
+    private static volatile PathObject searchRangeTile;
+    private static volatile double searchRangeCenterX = Double.NaN;
+    private static volatile double searchRangeCenterY = Double.NaN;
+    private static volatile boolean searchRangeActive = false;
+
     /**
      * Draws the SIFT search-range box on the Stage Map (no-op if the Stage Map
      * window is closed), centered on the given stage position and sized to one
@@ -224,7 +235,10 @@ public final class SiftAutoAlignHelper {
      *
      * <p>The box is NOT auto-cleared -- the caller (the refinement / position
      * confirmation dialog) clears it via {@link #clearSearchRangeOnStageMap()}
-     * when it closes, so it stays visible for the dialog's whole lifetime.
+     * when it closes, so it stays visible for the dialog's whole lifetime. While
+     * shown it tracks the Search margin preference: changing the margin in the
+     * SIFT Settings dialog re-draws it (see {@link #refreshSearchRangePreview()}
+     * and {@link #previewSearchRangeMargin(double)}).
      *
      * @param gui QuPath GUI (for the WSI pixel calibration). No-op if null.
      * @param tile tile being matched (its bounds give the FOV size). No-op if null.
@@ -233,6 +247,17 @@ public final class SiftAutoAlignHelper {
      */
     public static void drawSearchRangeOnStageMap(
             QuPathGUI gui, PathObject tile, double centerStageX, double centerStageY) {
+        searchRangeGui = gui;
+        searchRangeTile = tile;
+        searchRangeCenterX = centerStageX;
+        searchRangeCenterY = centerStageY;
+        searchRangeActive = true;
+        drawSearchRangeBox(gui, tile, centerStageX, centerStageY, PersistentPreferences.getSiftSearchMarginUm());
+    }
+
+    /** Shared draw with an explicit margin (used for live preview while tuning). */
+    private static void drawSearchRangeBox(
+            QuPathGUI gui, PathObject tile, double centerStageX, double centerStageY, double marginUm) {
         try {
             if (gui == null || tile == null || tile.getROI() == null) {
                 return;
@@ -245,7 +270,6 @@ public final class SiftAutoAlignHelper {
             if (Double.isNaN(wsiPixelSize) || wsiPixelSize <= 0) {
                 return;
             }
-            double marginUm = PersistentPreferences.getSiftSearchMarginUm();
             double halfWidthUm = (tile.getROI().getBoundsWidth() * wsiPixelSize) / 2.0 + marginUm;
             double halfHeightUm = (tile.getROI().getBoundsHeight() * wsiPixelSize) / 2.0 + marginUm;
             qupath.ext.qpsc.ui.stagemap.StageMapWindow.setSearchRangePreview(
@@ -281,8 +305,43 @@ public final class SiftAutoAlignHelper {
                 .start();
     }
 
+    /**
+     * Re-draws the currently-shown search-range box with an explicit margin,
+     * for a live preview as the user drags the Search margin spinner. No-op if
+     * no box is currently shown.
+     */
+    public static void previewSearchRangeMargin(double marginUm) {
+        if (!searchRangeActive || searchRangeTile == null) {
+            return;
+        }
+        drawSearchRangeBox(searchRangeGui, searchRangeTile, searchRangeCenterX, searchRangeCenterY, marginUm);
+    }
+
+    /**
+     * Re-draws the currently-shown search-range box using the persisted Search
+     * margin preference. Called after the SIFT Settings dialog closes so the box
+     * reflects the saved value (and reverts a cancelled live preview). No-op if
+     * no box is currently shown.
+     */
+    public static void refreshSearchRangePreview() {
+        if (!searchRangeActive || searchRangeTile == null) {
+            return;
+        }
+        drawSearchRangeBox(
+                searchRangeGui,
+                searchRangeTile,
+                searchRangeCenterX,
+                searchRangeCenterY,
+                PersistentPreferences.getSiftSearchMarginUm());
+    }
+
     /** Hides the SIFT search-range box on the Stage Map, if any. */
     public static void clearSearchRangeOnStageMap() {
+        searchRangeActive = false;
+        searchRangeGui = null;
+        searchRangeTile = null;
+        searchRangeCenterX = Double.NaN;
+        searchRangeCenterY = Double.NaN;
         try {
             qupath.ext.qpsc.ui.stagemap.StageMapWindow.clearSearchRangePreview();
         } catch (Exception ex) {
@@ -737,11 +796,19 @@ public final class SiftAutoAlignHelper {
         contrastHelp.setWrapText(true);
         grid.add(contrastHelp, 0, ++row, 2, 1);
 
-        Spinner<Double> marginSpinner = new Spinner<>(50.0, 500.0, prefs.getSearchMarginUm(), 10.0);
+        Spinner<Double> marginSpinner = new Spinner<>(50.0, 5000.0, prefs.getSearchMarginUm(), 10.0);
         marginSpinner.setEditable(true);
         marginSpinner.setPrefWidth(90);
         grid.add(new Label("Search margin (um):"), 0, ++row);
         grid.add(marginSpinner, 1, row);
+        // Live-preview the search area on the Stage Map as the margin changes, so
+        // the user can see how big the searched region gets (and how close they
+        // need to drive the stage) before committing.
+        marginSpinner.valueProperty().addListener((obs, oldV, newV) -> {
+            if (newV != null) {
+                previewSearchRangeMargin(newV);
+            }
+        });
         Label marginHelp = new Label("WSI region extends this far beyond the tile on each side. "
                 + "With coarse-to-fine enabled you can raise this without slowing matching.");
         marginHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
@@ -887,6 +954,10 @@ public final class SiftAutoAlignHelper {
                 dockNextTo(dialogWindow, ownerWindow);
             }
         });
+
+        // On close (OK persisted the new margin; Cancel discarded it), re-draw the
+        // live search box from the persisted value so a cancelled preview reverts.
+        dialog.setOnHidden(evt -> refreshSearchRangePreview());
 
         dialog.show();
     }

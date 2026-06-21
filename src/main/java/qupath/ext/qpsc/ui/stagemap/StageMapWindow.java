@@ -192,7 +192,7 @@ public class StageMapWindow {
     }
 
     /**
-     * Shows a translucent cyan dashed rectangle on the Stage Map marking the
+     * Shows a translucent bright-orange dashed rectangle on the Stage Map marking the
      * area a SIFT auto-align is searching, centered on the current stage
      * position. No-op if the Stage Map window is not open.
      */

@@ -68,8 +68,8 @@ public class StageMapCanvas extends StackPane {
     private static final Color LIP_SHADE = Color.rgb(50, 50, 60, 0.45);
     private static final Color BOUNDING_BOX_PREVIEW_FILL = Color.rgb(0, 255, 0, 0.22);
     private static final Color BOUNDING_BOX_PREVIEW_STROKE = Color.LIME;
-    private static final Color SEARCH_RANGE_FILL = Color.rgb(0, 220, 255, 0.15);
-    private static final Color SEARCH_RANGE_STROKE = Color.rgb(0, 220, 255, 0.95);
+    private static final Color SEARCH_RANGE_FILL = Color.rgb(255, 120, 0, 0.12);
+    private static final Color SEARCH_RANGE_STROKE = Color.rgb(255, 120, 0, 1.0);
 
     // ========== Rendering Constants ==========
     private static final double CROSSHAIR_RADIUS = 6; // pixels
@@ -217,7 +217,7 @@ public class StageMapCanvas extends StackPane {
         boundingBoxPreviewRect.setVisible(false);
         boundingBoxPreviewRect.setMouseTransparent(true);
 
-        // Create SIFT search-range preview rectangle (translucent cyan, dashed)
+        // Create SIFT search-range preview rectangle (translucent bright orange, dashed)
         searchRangePreviewRect = new Rectangle();
         searchRangePreviewRect.setFill(SEARCH_RANGE_FILL);
         searchRangePreviewRect.setStroke(SEARCH_RANGE_STROKE);
@@ -1111,7 +1111,7 @@ public class StageMapCanvas extends StackPane {
     }
 
     /**
-     * Shows a translucent cyan dashed rectangle marking the area a SIFT
+     * Shows a translucent bright-orange dashed rectangle marking the area a SIFT
      * auto-align is searching, centered on the current stage position. Stage
      * coordinates in microns; min/max ordering is normalized.
      */
