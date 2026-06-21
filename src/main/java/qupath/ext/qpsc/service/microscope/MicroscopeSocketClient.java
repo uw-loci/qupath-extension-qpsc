@@ -2509,6 +2509,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                     if (finalResponse.startsWith("FAILED:")) {
                         throw new IOException("Adaptive autofocus test failed: " + finalResponse.substring(7));
+                    } else if (finalResponse.startsWith("CANCELLED:")) {
+                        // User cancelled the sweep (ABORTAF). Not an error: the
+                        // server restored Z. Return a flagged result so the
+                        // caller skips the "autofocus failed" dialog.
+                        Map<String, String> result = new java.util.HashMap<>();
+                        result.put("cancelled", "true");
+                        result.put(
+                                "message",
+                                finalResponse.substring("CANCELLED:".length()).trim());
+                        lastActivityTime.set(System.currentTimeMillis());
+                        return result;
                     } else if (!finalResponse.startsWith("SUCCESS:")) {
                         logger.warn("Unexpected final response: {}", finalResponse);
                     }

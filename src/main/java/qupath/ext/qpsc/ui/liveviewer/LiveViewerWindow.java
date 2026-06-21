@@ -1205,9 +1205,9 @@ public class LiveViewerWindow {
      */
     private void handleAutofocus() {
         if (sweepRunning) {
-            // Button should be disabled while a sweep is in flight, but if
-            // a click sneaks through (e.g. an accelerator) ignore it -- the
-            // server-side TESTADAF has no client-side cancel path.
+            // A sweep is in flight and the button is showing "Cancel
+            // Autofocus": a click requests cancellation (ABORTAF).
+            cancelSweepFocus();
             return;
         }
         if (streamingFocusController != null && streamingFocusController.isRunning()) {
@@ -1251,10 +1251,38 @@ public class LiveViewerWindow {
         });
     }
 
+    /**
+     * Requests cancellation of an in-flight server-side sweep autofocus.
+     * Sends ABORTAF on the auxiliary socket (the primary is blocked inside the
+     * TESTADAF round-trip); the server's sweep loop polls the per-IP abort
+     * event, restores Z to the pre-sweep position, and the TESTADAF call
+     * returns a CANCELLED result handled in {@link #handleSweepFocus}.
+     */
+    private void cancelSweepFocus() {
+        autofocusButton.setText("Cancelling...");
+        autofocusButton.setDisable(true);
+        updateStatus("Sweep Autofocus: cancelling...");
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null || controller.getSocketClient() == null) {
+            return;
+        }
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        controller.getSocketClient().abortStreamingFocus();
+                    } catch (IOException e) {
+                        logger.warn("Failed to send sweep-AF abort: {}", e.getMessage());
+                    }
+                },
+                "LiveViewer-SweepCancel");
+        t.setDaemon(true);
+        t.start();
+    }
+
     private void handleSweepFocus() {
         if (sweepRunning) {
-            // No client-side cancel for server-side TESTADAF; defensively
-            // ignore re-entrant clicks (button is disabled).
+            // Already running -- a click here means cancel.
+            cancelSweepFocus();
             return;
         }
 
@@ -1282,14 +1310,14 @@ public class LiveViewerWindow {
         String outputPath = TestAutofocusWorkflow.getDefaultOutputPath();
 
         sweepRunning = true;
-        autofocusButton.setText("Sweeping...");
-        autofocusButton.setStyle("");
+        autofocusButton.setText("Cancel Autofocus");
+        autofocusButton.setStyle("-fx-base: #E57373;");
         autofocusButton.setTooltip(new Tooltip(
-                "Sweep autofocus running on the server using the autofocus YAML " + "settings; wait for completion."));
-        autofocusButton.setDisable(true);
+                "Sweep autofocus running on the server. Click to cancel " + "(Z is restored to the start position)."));
+        autofocusButton.setDisable(false);
         focusRangeCombo.setDisable(true);
         liveToggleButton.setDisable(true);
-        updateStatus("Sweep Autofocus: running...");
+        updateStatus("Sweep Autofocus: running... (click Cancel to stop)");
 
         Thread sweepThread = new Thread(() -> {
             String errorMsg = null;
@@ -1297,6 +1325,11 @@ public class LiveViewerWindow {
                 controller.withAllLiveViewingOff(() -> {
                     Map<String, String> result =
                             controller.getSocketClient().testAdaptiveAutofocus(configPath, outputPath, objective);
+                    if ("true".equals(result.get("cancelled"))) {
+                        // User cancelled; server restored Z. Not a failure.
+                        Platform.runLater(() -> updateStatusHeld("Sweep Autofocus cancelled (Z restored)"));
+                        return;
+                    }
                     String z0 = result.get("initial_z");
                     String z1 = result.get("final_z");
                     String dz = result.get("z_shift");
