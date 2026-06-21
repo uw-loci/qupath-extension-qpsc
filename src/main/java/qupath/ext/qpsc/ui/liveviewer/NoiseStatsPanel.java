@@ -17,8 +17,10 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 /**
  * Collapsible panel for Live Viewer showing per-channel noise statistics.
  *
- * <p>Displays a 3x4 grid: Channel | Mean | StdDev | SNR for R/G/B.
- * Single-frame spatial noise estimates are updated periodically from live frames.
+ * <p>Displays a grid: Channel | Mean | StdDev | SNR. RGB frames fill R/G/B
+ * rows; monochrome frames collapse to a single "Mono" row (the other two
+ * rows are blanked). Single-frame spatial noise estimates are updated
+ * periodically from live frames.
  * A "Measure" button triggers multi-frame temporal noise analysis via the GETNOISE command.
  */
 public class NoiseStatsPanel extends TitledPane {
@@ -35,6 +37,17 @@ public class NoiseStatsPanel extends TitledPane {
     private final Label redSnr = createValueLabel();
     private final Label greenSnr = createValueLabel();
     private final Label blueSnr = createValueLabel();
+
+    // Channel-name labels. Relabeled to a single "Mono" row for non-RGB
+    // (monochrome) frames, where rows 2-3 are blanked.
+    private final Label redName = new Label("Red");
+    private final Label greenName = new Label("Green");
+    private final Label blueName = new Label("Blue");
+
+    private static final String RED_STYLE = "-fx-text-fill: #cc0000; -fx-font-weight: bold; -fx-font-size: 10px;";
+    private static final String GREEN_STYLE = "-fx-text-fill: #009900; -fx-font-weight: bold; -fx-font-size: 10px;";
+    private static final String BLUE_STYLE = "-fx-text-fill: #0000cc; -fx-font-weight: bold; -fx-font-size: 10px;";
+    private static final String MONO_STYLE = "-fx-text-fill: #444444; -fx-font-weight: bold; -fx-font-size: 10px;";
 
     private final Button measureButton;
     private final Label measureStatus;
@@ -63,25 +76,22 @@ public class NoiseStatsPanel extends TitledPane {
         grid.add(createHeaderLabel("SNR"), 3, 0);
 
         // Red row
-        Label redLabel = new Label("Red");
-        redLabel.setStyle("-fx-text-fill: #cc0000; -fx-font-weight: bold; -fx-font-size: 10px;");
-        grid.add(redLabel, 0, 1);
+        redName.setStyle(RED_STYLE);
+        grid.add(redName, 0, 1);
         grid.add(redMean, 1, 1);
         grid.add(redStd, 2, 1);
         grid.add(redSnr, 3, 1);
 
         // Green row
-        Label greenLabel = new Label("Green");
-        greenLabel.setStyle("-fx-text-fill: #009900; -fx-font-weight: bold; -fx-font-size: 10px;");
-        grid.add(greenLabel, 0, 2);
+        greenName.setStyle(GREEN_STYLE);
+        grid.add(greenName, 0, 2);
         grid.add(greenMean, 1, 2);
         grid.add(greenStd, 2, 2);
         grid.add(greenSnr, 3, 2);
 
         // Blue row
-        Label blueLabel = new Label("Blue");
-        blueLabel.setStyle("-fx-text-fill: #0000cc; -fx-font-weight: bold; -fx-font-size: 10px;");
-        grid.add(blueLabel, 0, 3);
+        blueName.setStyle(BLUE_STYLE);
+        grid.add(blueName, 0, 3);
         grid.add(blueMean, 1, 3);
         grid.add(blueStd, 2, 3);
         grid.add(blueSnr, 3, 3);
@@ -108,36 +118,40 @@ public class NoiseStatsPanel extends TitledPane {
      * @param frame The current frame data
      */
     public void updateFromFrame(FrameData frame) {
-        if (frame == null || !frame.isRGB()) return;
+        if (frame == null) return;
 
         long now = System.currentTimeMillis();
         if (now - lastUpdateMs < UPDATE_THROTTLE_MS) return;
         lastUpdateMs = now;
 
+        // Number of channels to score: 3 for RGB, 1 for monochrome (the
+        // previous code bailed out on any non-RGB frame, so 16-bit mono
+        // cameras showed no live stats at all).
+        boolean rgb = frame.isRGB();
+        int nCh = rgb ? 3 : 1;
+
         // Compute per-channel spatial mean and std dev
-        int w = frame.width();
-        int h = frame.height();
-        int pixelCount = w * h;
+        int pixelCount = frame.width() * frame.height();
+        if (pixelCount <= 0) return;
         int bpp = frame.bytesPerPixel();
         int stride = frame.channels() * bpp;
 
-        // Accumulate sums for mean
-        long[] sum = new long[3];
-        long[] sumSq = new long[3];
+        long[] sum = new long[nCh];
+        long[] sumSq = new long[nCh];
 
         for (int i = 0; i < pixelCount; i++) {
             int baseOffset = i * stride;
-            for (int c = 0; c < 3; c++) {
+            for (int c = 0; c < nCh; c++) {
                 int val = frame.readPixelValue(baseOffset + c * bpp);
                 sum[c] += val;
                 sumSq[c] += (long) val * val;
             }
         }
 
-        double[] means = new double[3];
-        double[] stds = new double[3];
-        double[] snrs = new double[3];
-        for (int c = 0; c < 3; c++) {
+        double[] means = new double[nCh];
+        double[] stds = new double[nCh];
+        double[] snrs = new double[nCh];
+        for (int c = 0; c < nCh; c++) {
             means[c] = (double) sum[c] / pixelCount;
             double variance = (double) sumSq[c] / pixelCount - means[c] * means[c];
             stds[c] = Math.sqrt(Math.max(0, variance));
@@ -145,15 +159,38 @@ public class NoiseStatsPanel extends TitledPane {
         }
 
         Platform.runLater(() -> {
-            redMean.setText(String.format("%.1f", means[0]));
-            greenMean.setText(String.format("%.1f", means[1]));
-            blueMean.setText(String.format("%.1f", means[2]));
-            redStd.setText(String.format("%.2f", stds[0]));
-            greenStd.setText(String.format("%.2f", stds[1]));
-            blueStd.setText(String.format("%.2f", stds[2]));
-            redSnr.setText(String.format("%.1f", snrs[0]));
-            greenSnr.setText(String.format("%.1f", snrs[1]));
-            blueSnr.setText(String.format("%.1f", snrs[2]));
+            if (rgb) {
+                redName.setText("Red");
+                redName.setStyle(RED_STYLE);
+                greenName.setText("Green");
+                greenName.setStyle(GREEN_STYLE);
+                blueName.setText("Blue");
+                blueName.setStyle(BLUE_STYLE);
+                redMean.setText(String.format("%.1f", means[0]));
+                greenMean.setText(String.format("%.1f", means[1]));
+                blueMean.setText(String.format("%.1f", means[2]));
+                redStd.setText(String.format("%.2f", stds[0]));
+                greenStd.setText(String.format("%.2f", stds[1]));
+                blueStd.setText(String.format("%.2f", stds[2]));
+                redSnr.setText(String.format("%.1f", snrs[0]));
+                greenSnr.setText(String.format("%.1f", snrs[1]));
+                blueSnr.setText(String.format("%.1f", snrs[2]));
+            } else {
+                // Monochrome: one "Mono" row, blank the other two.
+                redName.setText("Mono");
+                redName.setStyle(MONO_STYLE);
+                greenName.setText("");
+                blueName.setText("");
+                redMean.setText(String.format("%.1f", means[0]));
+                redStd.setText(String.format("%.2f", stds[0]));
+                redSnr.setText(String.format("%.1f", snrs[0]));
+                greenMean.setText("--");
+                greenStd.setText("--");
+                greenSnr.setText("--");
+                blueMean.setText("--");
+                blueStd.setText("--");
+                blueSnr.setText("--");
+            }
         });
     }
 
