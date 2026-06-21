@@ -4,6 +4,9 @@ import java.io.IOException;
 import java.util.ResourceBundle;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
@@ -108,15 +111,32 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             logger.debug("Could not log StageImageTransform at startup: {}", e.getMessage());
         }
 
-        // Check if tiles-to-pyramid extension is installed (required for stitching)
+        // Check if tiles-to-pyramid extension is available (required for stitching).
+        // A modal warning (not an error) so the user must acknowledge it -- a toast
+        // notification at startup is easy to miss, and acquisition silently can't stitch
+        // without this dependency. QPPreferenceDialog detects it by reflection and degrades
+        // gracefully, so the extension still loads; this dialog just explains the gap.
         if (!QPPreferenceDialog.isStitchingAvailable()) {
-            Platform.runLater(() -> Dialogs.showErrorNotification(
-                    EXTENSION_NAME + " - Missing Dependency",
-                    "qupath-extension-tiles-to-pyramid is not installed!\n\n"
-                            + "Image stitching will NOT work. Please install the\n"
-                            + "tiles-to-pyramid extension JAR in your QuPath\n"
-                            + "extensions folder and restart QuPath.\n\n"
-                            + "Download: https://github.com/uw-loci/qupath-extension-tiles-to-pyramid"));
+            Platform.runLater(() -> {
+                Alert alert = new Alert(Alert.AlertType.WARNING);
+                alert.setTitle(EXTENSION_NAME + " - Stitching unavailable");
+                alert.setHeaderText("Image stitching is disabled");
+                alert.setContentText("The qupath-extension-tiles-to-pyramid extension was not found.\n\n"
+                        + "QuPath SCope has loaded, but image stitching is disabled: acquisition "
+                        + "workflows that stitch tiles into a mosaic will not work, and the "
+                        + "stitching output-format preference is hidden.\n\n"
+                        + "To enable stitching, install the tiles-to-pyramid extension JAR in your "
+                        + "QuPath extensions folder and restart QuPath. (If you just added it, a "
+                        + "restart may be needed so both extensions load together.)\n\n"
+                        + "Download: https://github.com/uw-loci/qupath-extension-tiles-to-pyramid");
+                alert.getButtonTypes().setAll(ButtonType.OK);
+                alert.getDialogPane().setMinWidth(520);
+                Label content = (Label) alert.getDialogPane().lookup(".content");
+                if (content != null) {
+                    content.setWrapText(true);
+                }
+                alert.showAndWait();
+            });
         }
 
         // 1b) On a fresh install (no microscope config chosen), auto-install and

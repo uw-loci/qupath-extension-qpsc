@@ -14,6 +14,7 @@ import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.StageImageTransform;
@@ -489,7 +490,7 @@ public class RapidScanWorkflow {
         stitchedFolder.mkdirs();
 
         StitchingConfiguration.StitchingParams params = StitchingConfiguration.getStandardConfiguration();
-        StitchingConfig.OutputFormat outputFormat = QPPreferenceDialog.getOutputFormatProperty();
+        StitchingConfig.OutputFormat outputFormat = StitchingFormatPreference.get();
         if (outputFormat == null) outputFormat = StitchingConfig.OutputFormat.OME_TIFF;
 
         StitchingConfig config = new StitchingConfig(

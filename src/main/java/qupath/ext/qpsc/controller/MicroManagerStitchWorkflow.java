@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
@@ -107,7 +108,7 @@ public class MicroManagerStitchWorkflow {
         ComboBox<StitchingConfig.OutputFormat> fmtCombo = new ComboBox<>();
         fmtCombo.getItems().addAll(StitchingConfig.OutputFormat.values());
         try {
-            fmtCombo.setValue(QPPreferenceDialog.getOutputFormatProperty());
+            fmtCombo.setValue(StitchingFormatPreference.get());
         } catch (Exception e) {
             fmtCombo.setValue(StitchingConfig.OutputFormat.OME_TIFF);
         }
@@ -115,7 +116,7 @@ public class MicroManagerStitchWorkflow {
         // ---- compression combo, filtered by format ----
         Label compLabel = new Label("Compression:");
         ComboBox<OMEPyramidWriter.CompressionType> compCombo = new ComboBox<>();
-        compCombo.getItems().setAll(QPPreferenceDialog.getCompressionTypesForFormat(fmtCombo.getValue()));
+        compCombo.getItems().setAll(StitchingFormatPreference.compressionTypesFor(fmtCombo.getValue()));
         OMEPyramidWriter.CompressionType prefComp;
         try {
             prefComp = QPPreferenceDialog.getCompressionTypeProperty();
@@ -124,7 +125,7 @@ public class MicroManagerStitchWorkflow {
         }
         compCombo.setValue(compCombo.getItems().contains(prefComp) ? prefComp : OMEPyramidWriter.CompressionType.LZW);
         fmtCombo.valueProperty().addListener((obs, oldF, newF) -> {
-            List<OMEPyramidWriter.CompressionType> allowed = QPPreferenceDialog.getCompressionTypesForFormat(newF);
+            List<OMEPyramidWriter.CompressionType> allowed = StitchingFormatPreference.compressionTypesFor(newF);
             OMEPyramidWriter.CompressionType current = compCombo.getValue();
             compCombo.getItems().setAll(allowed);
             compCombo.setValue(allowed.contains(current) ? current : OMEPyramidWriter.CompressionType.LZW);

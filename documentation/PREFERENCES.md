@@ -558,9 +558,10 @@ Percentage overlap between adjacent tiles during acquisition. Higher overlap imp
 | Type | Choice |
 | Default | DEFAULT |
 | Requires Restart | No |
+| **Visibility** | **Only shown when tiles-to-pyramid extension is installed** |
 
 **Description:**
-Compression algorithm for OME pyramid output files.
+Compression algorithm for OME pyramid output files. This preference is only relevant when stitching is enabled.
 
 | Option | Description |
 |--------|-------------|
@@ -572,6 +573,9 @@ Compression algorithm for OME pyramid output files.
 | **J2K_LOSSY** | Lossy JPEG2000 |
 | **ZLIB** | Zlib compression |
 
+**Dependencies:**
+Like [Stitching output format](#stitching-output-format), this preference requires the `qupath-extension-tiles-to-pyramid` extension. If tiles-to-pyramid is not installed, this preference is hidden.
+
 ---
 
 ### Stitching output format
@@ -582,6 +586,7 @@ Compression algorithm for OME pyramid output files.
 | Default | OME_TIFF |
 | Options | OME_TIFF, OME_ZARR |
 | Requires Restart | No |
+| **Visibility** | **Only shown when tiles-to-pyramid extension is installed** |
 
 **Description:**
 Output format for stitched images.
@@ -590,6 +595,9 @@ Output format for stitched images.
 |--------|------|------|
 | **OME_TIFF** | Widely compatible, single file, standard format | Slower to write, larger files |
 | **OME_ZARR** | 2-3x faster writing, 20-30% smaller, cloud-native | Directory format, less commonly used |
+
+**Dependencies:**
+This preference requires the `qupath-extension-tiles-to-pyramid` extension. If tiles-to-pyramid is not installed, this preference is hidden and stitching workflows are disabled. You can still use QPSC for analysis, utilities, and other non-stitching features. To enable stitching, install the tiles-to-pyramid extension JAR in your QuPath extensions folder and restart QuPath. See [Installation Guide](INSTALLATION.md) and [Troubleshooting](TROUBLESHOOTING.md) for more details.
 
 **Note:** OME-ZARR is an emerging standard that offers significant performance benefits. To get a single-file OME-TIFF from a ZARR-backed project, use **Make Project Portable** (Extensions > QPSC > Utilities).
 

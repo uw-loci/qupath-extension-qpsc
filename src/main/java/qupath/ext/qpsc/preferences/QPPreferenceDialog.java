@@ -10,7 +10,6 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.CameraOrientation;
@@ -123,19 +122,11 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference(
                     "compressionType", OMEPyramidWriter.CompressionType.LZW, OMEPyramidWriter.CompressionType.class);
 
-    // Lazy-init to avoid NoClassDefFoundError if tiles-to-pyramid extension is missing.
-    // The StitchingConfig.OutputFormat class comes from qupath-extension-tiles-to-pyramid,
-    // and referencing it in a static initializer would prevent the entire preference class
-    // from loading if that extension JAR is absent.
-    private static ObjectProperty<StitchingConfig.OutputFormat> outputFormatProperty;
-
-    private static ObjectProperty<StitchingConfig.OutputFormat> getOutputFormatPropertyInternal() {
-        if (outputFormatProperty == null) {
-            outputFormatProperty = PathPrefs.createPersistentPreference(
-                    "stitchingOutputFormat", StitchingConfig.OutputFormat.OME_TIFF, StitchingConfig.OutputFormat.class);
-        }
-        return outputFormatProperty;
-    }
+    // The stitching output-format preference is typed with StitchingConfig.OutputFormat,
+    // a class from qupath-extension-tiles-to-pyramid. ALL references to that type live in
+    // StitchingFormatPreference so this class loads/verifies cleanly even when that
+    // extension is absent or has not yet been added to the extension class loader.
+    // See StitchingFormatPreference for why a try/catch here is insufficient.
 
     // Filename configuration preferences
     // Note: These control what information appears in the filename
@@ -419,37 +410,26 @@ public class QPPreferenceDialog {
         // first -- compression choices are filtered based on the selected format.
         ObservableList<OMEPyramidWriter.CompressionType> compressionChoices =
                 FXCollections.observableArrayList(OMEPyramidWriter.CompressionType.values());
-        try {
-            ObjectProperty<StitchingConfig.OutputFormat> formatProp = getOutputFormatPropertyInternal();
-            items.add(new PropertyItemBuilder<>(formatProp, StitchingConfig.OutputFormat.class)
-                    .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
-                    .choices(Arrays.asList(StitchingConfig.OutputFormat.values()))
-                    .name("Stitching output format")
-                    .category(CATEGORY)
-                    .description("Output format for stitched images.\n"
-                            + "OME-TIFF: Traditional single-file format, widely compatible.\n"
-                            + "OME-ZARR: Directory format with parallel writing (2-3x faster). "
-                            + "Produces many small files -- harder to copy on Windows.\n"
-                            + "OME-TIFF via ZARR: Best of both -- parallel ZARR stitching for speed, "
-                            + "then automatic background conversion to single-file OME-TIFF. "
-                            + "Images are available immediately via ZARR while TIFF converts unattended.")
-                    .build());
-
-            // Populate compression choices for the current format
-            compressionChoices.setAll(getCompressionTypesForFormat(formatProp.get()));
-
-            // When format changes, update compression choices and fix invalid selection
-            formatProp.addListener((obs, oldFormat, newFormat) -> {
-                compressionChoices.setAll(getCompressionTypesForFormat(newFormat));
-                if (!compressionChoices.contains(compressionTypeProperty.get())) {
-                    compressionTypeProperty.set(OMEPyramidWriter.CompressionType.LZW);
-                }
-            });
-        } catch (NoClassDefFoundError e) {
+        // Detect tiles-to-pyramid by reflection so we never statically reference its classes
+        // here (which would fail this class's own verification when the extension is absent).
+        // Only when present do we touch StitchingFormatPreference, which holds all the typed
+        // references; the try/catch then covers a late/partial load (e.g. wrong load order).
+        stitchingAvailable = isStitchingExtensionPresent();
+        if (stitchingAvailable) {
+            try {
+                StitchingFormatPreference.addFormatPreferenceItem(
+                        items, compressionChoices, compressionTypeProperty, CATEGORY);
+            } catch (Throwable e) {
+                logger.error(
+                        "qupath-extension-tiles-to-pyramid present but its stitching format "
+                                + "preference failed to initialize; stitching will be unavailable.",
+                        e);
+                stitchingAvailable = false;
+            }
+        } else {
             logger.error("qupath-extension-tiles-to-pyramid is missing! "
                     + "Install it in your QuPath extensions folder. "
                     + "Stitching output format preference will be unavailable.");
-            stitchingAvailable = false;
         }
         items.add(new PropertyItemBuilder<>(compressionTypeProperty, OMEPyramidWriter.CompressionType.class)
                 .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
@@ -940,12 +920,21 @@ public class QPPreferenceDialog {
         return compressionTypeProperty.get();
     }
 
-    public static StitchingConfig.OutputFormat getOutputFormatProperty() {
+    /**
+     * Whether the {@code qupath-extension-tiles-to-pyramid} extension is on the class path.
+     * Uses reflection so this class carries no static reference to its types (which would
+     * break verification when the extension is absent). {@code initialize=false} only checks
+     * presence without running the class's static initializer.
+     */
+    private static boolean isStitchingExtensionPresent() {
         try {
-            return getOutputFormatPropertyInternal().get();
-        } catch (NoClassDefFoundError e) {
-            logger.warn("tiles-to-pyramid not available, defaulting to OME_TIFF");
-            return null;
+            Class.forName(
+                    "qupath.ext.basicstitching.config.StitchingConfig",
+                    false,
+                    QPPreferenceDialog.class.getClassLoader());
+            return true;
+        } catch (Throwable t) {
+            return false;
         }
     }
 
@@ -1247,26 +1236,6 @@ public class QPPreferenceDialog {
 
     public static void setNotifyOnErrors(boolean enabled) {
         notifyOnErrorsProperty.set(enabled);
-    }
-
-    /**
-     * Returns the compression types that are valid for the given stitching output format.
-     *
-     * <p>OME-TIFF supports all compression types. OME-ZARR only supports a subset:
-     * JPEG-2000 variants (J2K, J2K_LOSSY) have no native ZARR codec, and JPEG would
-     * silently fall back to zstd which is misleading. Only types that produce the
-     * expected compression algorithm are offered.
-     */
-    public static List<OMEPyramidWriter.CompressionType> getCompressionTypesForFormat(
-            StitchingConfig.OutputFormat format) {
-        if (format != null && format.stitchAsZarr()) {
-            return List.of(
-                    OMEPyramidWriter.CompressionType.LZW,
-                    OMEPyramidWriter.CompressionType.ZLIB,
-                    OMEPyramidWriter.CompressionType.UNCOMPRESSED,
-                    OMEPyramidWriter.CompressionType.DEFAULT);
-        }
-        return Arrays.asList(OMEPyramidWriter.CompressionType.values());
     }
 
     /** Observable flag controlling visibility of the experimental single-point acquisition dialog. */

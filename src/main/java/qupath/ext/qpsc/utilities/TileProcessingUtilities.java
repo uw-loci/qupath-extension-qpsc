@@ -16,7 +16,7 @@ import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.model.StitchingMetadata;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -158,7 +158,7 @@ public class TileProcessingUtilities {
 
         // Configure and run the stitching workflow
         // Get output format from preferences
-        StitchingConfig.OutputFormat outputFormat = QPPreferenceDialog.getOutputFormatProperty();
+        StitchingConfig.OutputFormat outputFormat = StitchingFormatPreference.get();
 
         logger.info(
                 "Configuring stitching: compression={}, pixelSize={} um, downsample={}, format={}",

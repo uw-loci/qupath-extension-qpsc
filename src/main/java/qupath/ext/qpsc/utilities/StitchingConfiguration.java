@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
 
 /**
@@ -58,7 +59,7 @@ public class StitchingConfiguration {
      */
     public static ValidationResult validateCurrentSettings() {
         OMEPyramidWriter.CompressionType compression = QPPreferenceDialog.getCompressionTypeProperty();
-        StitchingConfig.OutputFormat outputFormat = QPPreferenceDialog.getOutputFormatProperty();
+        StitchingConfig.OutputFormat outputFormat = StitchingFormatPreference.get();
 
         if (outputFormat == null) {
             // tiles-to-pyramid not available - stitching won't run, but that's not a blocking error
@@ -102,7 +103,7 @@ public class StitchingConfiguration {
         String compressionType = String.valueOf(QPPreferenceDialog.getCompressionTypeProperty());
         int downsampleFactor = 1; // Standard downsample factor for all workflows
         double qualityFactor = 0.85; // Standard quality factor for compression
-        StitchingConfig.OutputFormat outputFormat = QPPreferenceDialog.getOutputFormatProperty();
+        StitchingConfig.OutputFormat outputFormat = StitchingFormatPreference.get();
 
         return new StitchingParams(compressionType, downsampleFactor, qualityFactor, outputFormat);
     }

@@ -28,6 +28,7 @@ import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
@@ -163,20 +164,20 @@ public class StitchingRecoveryWorkflow {
         ComboBox<StitchingConfig.OutputFormat> formatCombo = new ComboBox<>();
         formatCombo.getItems().addAll(StitchingConfig.OutputFormat.values());
         try {
-            formatCombo.setValue(QPPreferenceDialog.getOutputFormatProperty());
+            formatCombo.setValue(StitchingFormatPreference.get());
         } catch (Exception e) {
             formatCombo.setValue(StitchingConfig.OutputFormat.OME_TIFF);
         }
 
         // Compression -- choices filtered by the current format. Mirrors
-        // QPPreferenceDialog.getCompressionTypesForFormat so the recovery
+        // StitchingFormatPreference.compressionTypesFor so the recovery
         // dialog can never select a codec the writer would reject (the
         // previous hardcoded "Uncompressed" / "zstd" strings would throw
         // IllegalArgumentException at UtilityFunctions.getCompressionType
         // for the TIFF path).
         Label compressionLabel = new Label("Compression:");
         ComboBox<OMEPyramidWriter.CompressionType> compressionCombo = new ComboBox<>();
-        compressionCombo.getItems().setAll(QPPreferenceDialog.getCompressionTypesForFormat(formatCombo.getValue()));
+        compressionCombo.getItems().setAll(StitchingFormatPreference.compressionTypesFor(formatCombo.getValue()));
         OMEPyramidWriter.CompressionType prefCompression;
         try {
             prefCompression = QPPreferenceDialog.getCompressionTypeProperty();
@@ -189,7 +190,7 @@ public class StitchingRecoveryWorkflow {
                         : OMEPyramidWriter.CompressionType.LZW);
 
         formatCombo.valueProperty().addListener((obs, oldFormat, newFormat) -> {
-            List<OMEPyramidWriter.CompressionType> allowed = QPPreferenceDialog.getCompressionTypesForFormat(newFormat);
+            List<OMEPyramidWriter.CompressionType> allowed = StitchingFormatPreference.compressionTypesFor(newFormat);
             OMEPyramidWriter.CompressionType current = compressionCombo.getValue();
             compressionCombo.getItems().setAll(allowed);
             compressionCombo.setValue(allowed.contains(current) ? current : OMEPyramidWriter.CompressionType.LZW);

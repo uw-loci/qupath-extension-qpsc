@@ -77,13 +77,19 @@ Then restart QuPath.
 2. Look at QuPath console for error messages on startup
 3. Verify you're using QuPath 0.6.0-rc4 or newer
 
-#### Q: The extension won't load - says "dependency error"
+#### Q: I see a "Stitching unavailable" warning dialog at startup
 
-**A:** You need both extensions:
-1. `qupath-extension-tiles-to-pyramid-0.1.0-all.jar` (install this FIRST)
-2. `qupath-extension-qpsc-0.3.0-all.jar` (install after)
+**A:** QuPath SCope could not find the `qupath-extension-tiles-to-pyramid` extension,
+which handles image stitching. The extension still loads and runs -- analysis,
+utilities, and the offline placeholder all work -- but acquisition workflows that
+stitch tiles into a mosaic are disabled, and the stitching output-format
+preference is hidden. To enable stitching, put the tiles-to-pyramid JAR in your
+QuPath extensions folder and restart QuPath. Download:
+https://github.com/uw-loci/qupath-extension-tiles-to-pyramid
 
-Both must be in the extensions folder. The tiles-to-pyramid extension handles image stitching.
+If you just added tiles-to-pyramid and still see the warning, restart QuPath once
+more so both extensions load together (the warning can appear if QPSC happens to
+load before tiles-to-pyramid during a mid-session extension-directory change).
 
 ### Offline / Analysis mode
 
