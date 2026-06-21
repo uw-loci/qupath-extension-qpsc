@@ -71,8 +71,20 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Angle Overrides | Various | Modality-specific options (e.g., PPM angle overrides) |
+| Angle Overrides | Various | Modality-specific options. See below for details per modality. |
 | Save as MicroManager MDA... | Button | Export the current bounding-box acquisition setup as a Micro-Manager MDA (Multi-Dimensional Acquisition) file. Requires sample name, projects folder, hardware configuration, and complete bounding-box coordinates. The MDA file can then be run directly in Micro-Manager to re-acquire the same region. |
+
+**Brightfield Exposure Override:**
+
+When using a brightfield modality, an exposure panel appears showing:
+- **Resolution rule:** How the exposure is determined at acquisition time (background-collection exposure when background correction is on and calibrated; otherwise the last unified exposure)
+- **Override exposure (ms):** An optional field to pin a specific camera exposure for this run, bypassing the resolved value. Use this to correct an over-exposed ("blinding") acquisition without leaving the dialog.
+
+⚠️ **Warning:** Overriding the exposure bypasses the saved background/flat-field profile. The background reference was captured at the calibrated exposure, so it no longer matches the override value. Background correction will not be valid for this run—re-run Background Collection at the new exposure if you need flat-field correction.
+
+**PPM Angle Overrides:**
+
+For PPM acquisitions, angle-specific options may be available (see PPM modality documentation for details).
 
 **Fluorescence / Widefield IF channel presets:**
 
