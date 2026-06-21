@@ -901,14 +901,19 @@ public class UnifiedAcquisitionController {
                 triggerPreviewUpdate();
             });
 
-            // Load saved bounding box
+            // Load saved bounding box -- restore ONLY the Two-Corners corner-2
+            // fields. Do NOT overwrite startX/startY here: those are the
+            // Start+Size "Center X/Y" fields and were just loaded from the
+            // dedicated center preference (which is kept up to date in both
+            // modes via the field listeners). The saved bounds string holds the
+            // computed min/max corners (x1,y1,x2,y2); loading x1,y1 into the
+            // center fields replaced the remembered center with the lower-left
+            // corner, which is why the center was not being remembered.
             String savedBounds = PersistentPreferences.getBoundingBoxString();
             if (savedBounds != null && !savedBounds.trim().isEmpty()) {
                 String[] parts = savedBounds.split(",");
                 if (parts.length == 4) {
                     try {
-                        startXField.setText(parts[0].trim());
-                        startYField.setText(parts[1].trim());
                         endXField.setText(parts[2].trim());
                         endYField.setText(parts[3].trim());
                     } catch (Exception e) {
