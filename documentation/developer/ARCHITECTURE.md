@@ -264,6 +264,8 @@ graph TB
 
 Multiple microscope-specific configs exist: `config_PPM.yml` for the PPM-only system, and `config_OWS3.yml` for the OWS3 multi-modal system (supporting brightfield, PPM, and laser-scanning modalities on a single microscope). The active config is selected via the QPSC preferences and determines which modalities, detectors, and objectives are available.
 
+**Offline / Analysis placeholder.** On a fresh install (the `microscopeConfigFileProperty` preference is empty), `SetupScope.installExtension` calls `OfflineScopeInstaller.ensureInstalled()` to extract a bundled, self-contained placeholder config (`config_Offline.yml` + sidecars) to `<QuPath user dir>/qpsc-offline-microscope/` and selects it. The placeholder is marked `microscope.placeholder: true`; `MicroscopeConfigManager.isOfflineScope()` reads that flag. When true, `SetupScope.addMenuItem` runs **analysis-only mode** -- every hardware/acquisition menu gate (`!configValid`) is widened to `!configValid || offlineScope`, so acquisition/calibration workflows are disabled while analysis and project utilities (PPM analysis, Propagation Manager, Stitching Recovery, Stage Map, Live Viewer, Setup Wizard) stay enabled. This replaces the old "settings missing -- everything disabled" warning on first run with a clean install plus a one-time info notification. Selecting any real config (or running the Setup Wizard) clears the flag and re-enables acquisition. The bundled config is the authoritative copy; a headless test (`OfflineScopeConfigTest`) asserts it validates clean.
+
 #### Tiling
 
 `TilingUtilities` computes tile grids from annotations or bounding boxes:

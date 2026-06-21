@@ -85,11 +85,39 @@ Then restart QuPath.
 
 Both must be in the extensions folder. The tiles-to-pyramid extension handles image stitching.
 
+### Offline / Analysis mode
+
+#### Q: I just installed QPSC and the acquisition menu items are greyed out. Is it broken?
+
+**A:** No. On a fresh install -- with no microscope configured -- QPSC selects a
+bundled **Offline / Analysis** placeholder microscope automatically. The
+extension loads cleanly (no error dialog), and you get a one-time notification
+that it is in Offline / Analysis mode. In this mode the hardware/acquisition
+workflows (Acquisition Wizard, Bounded/Existing Image, alignment, calibration
+utilities) are intentionally disabled, while analysis and project utilities --
+PPM analysis (via the PPM extension), Propagation Manager, Stitching Recovery,
+MicroManager Folder Stitch, Make Project Portable, Stage Map, Live Viewer,
+Report a Bug -- remain available. To enable acquisition, run the **Setup Wizard**
+to configure a real microscope.
+
+#### Q: Where does the offline placeholder config live?
+
+**A:** It is extracted to `<QuPath user directory>/qpsc-offline-microscope/`
+(`config_Offline.yml` plus its `imageprocessing_Offline.yml` and
+`resources/resources_LOCI.yml` sidecars). It is created once and never
+overwritten, so any edits survive restarts. If you delete it while it is still
+selected, QPSC re-extracts it on the next launch. Selecting any real config (or
+running the Setup Wizard) replaces it and re-enables acquisition.
+
 ### Setup Wizard
 
 #### Q: How do I run the Setup Wizard?
 
-**A:** The Setup Wizard appears automatically as the first menu item ("Setup Wizard (Start Here)...") when no valid microscope configuration is found. Once configured, it moves to Extensions > QP Scope > Utilities > Setup Wizard.
+**A:** On a fresh install QPSC runs in Offline / Analysis mode (see above); open
+the Setup Wizard from Extensions > QP Scope > Utilities > Setup Wizard to
+configure a microscope. (If a configuration is present but *invalid*, the wizard
+also appears as the first menu item, "Setup Wizard (Start Here)...".) Once a
+valid real config is selected, the wizard stays under Utilities.
 
 #### Q: The Setup Wizard created config files but QPSC still says "no valid configuration"
 

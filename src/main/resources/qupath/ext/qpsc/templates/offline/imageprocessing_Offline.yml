@@ -1,0 +1,13 @@
+# Imaging profiles for the Offline / Analysis placeholder microscope.
+#
+# Only present so the offline config satisfies QPSC's configuration
+# validation (which requires at least one modality/objective/detector
+# combination to declare an exposures_ms map). The values are inert
+# placeholders -- no acquisition runs while the offline scope is active.
+
+imaging_profiles:
+  Brightfield:
+    OFFLINE_OBJECTIVE_10X:
+      OFFLINE_CAMERA:
+        exposures_ms:
+          default: 10.0

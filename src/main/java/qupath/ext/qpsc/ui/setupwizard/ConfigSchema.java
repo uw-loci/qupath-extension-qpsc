@@ -65,6 +65,16 @@ public final class ConfigSchema {
         {"stage", "streaming_af", "normal_speed_value"},
     };
 
+    /**
+     * Optional top-level flag marking a config as the bundled "Offline / Analysis"
+     * placeholder microscope. Set {@code microscope.placeholder: true} only on the
+     * offline config QPSC auto-installs on a fresh install
+     * ({@code OfflineScopeInstaller}); real configs omit it. Read via
+     * {@code MicroscopeConfigManager.isOfflineScope()} to run analysis-only mode.
+     * Not a required key -- the Setup Wizard never writes it.
+     */
+    public static final String[] MICROSCOPE_PLACEHOLDER_KEY = {"microscope", "placeholder"};
+
     /** Hardware sub-keys required per objective. */
     public static final String[] OBJECTIVE_REQUIRED = {"id", "pixel_size_xy_um"};
 

@@ -24,6 +24,7 @@ import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.FlippedDuplicateMigrator;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.OfflineScopeInstaller;
 import qupath.ext.qpsc.utilities.ProjectLogger;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.fx.dialogs.Dialogs;
@@ -81,6 +82,14 @@ public class SetupScope implements QuPathExtension, GitHubProject {
     /** True if any configured detector is a JAI camera. */
     private boolean hasJAICamera;
 
+    /**
+     * True when the active config is the bundled "Offline / Analysis" placeholder
+     * microscope. In this mode the extension runs analysis-only: hardware and
+     * acquisition workflows are disabled while PPM analysis and project utilities
+     * stay available.
+     */
+    private boolean offlineScope;
+
     @Override
     public void installExtension(QuPathGUI qupath) {
         logger.info("Installing extension: " + EXTENSION_NAME);
@@ -110,10 +119,43 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                             + "Download: https://github.com/uw-loci/qupath-extension-tiles-to-pyramid"));
         }
 
+        // 1b) On a fresh install (no microscope config chosen), auto-install and
+        // select the bundled "Offline / Analysis" placeholder so the extension
+        // loads cleanly with no microscope and no command server. This replaces
+        // the old "settings missing -- everything disabled" warning on first run.
+        boolean autoInstalledOffline = false;
+        String cfg = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        boolean blank = cfg == null || cfg.isBlank();
+        // Re-extract if the selection IS the offline placeholder but its file went
+        // missing (user dir moved, files deleted) -- otherwise the old "settings
+        // missing" warning would resurface from a dangling selection.
+        boolean staleOffline = !blank
+                && OfflineScopeInstaller.isOfflineConfigPath(cfg)
+                && !java.nio.file.Files.exists(java.nio.file.Paths.get(cfg));
+        if (blank || staleOffline) {
+            try {
+                java.nio.file.Path offline = OfflineScopeInstaller.ensureInstalled();
+                QPPreferenceDialog.setMicroscopeConfigFileProperty(offline.toString());
+                autoInstalledOffline = blank; // first-run notice only for a truly fresh install
+                logger.info(
+                        "{} microscope config; selected offline placeholder config at {}",
+                        blank ? "No" : "Missing offline",
+                        offline);
+            } catch (Exception e) {
+                logger.warn("Could not install offline placeholder microscope config: {}", e.getMessage());
+            }
+        }
+
         MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
         // 2) Validate microscope YAML up-front via QPScopeChecks
         configValid = QPScopeChecks.validateMicroscopeConfig();
+
+        // Is the (valid) active config the offline placeholder? Drives analysis-only menus.
+        offlineScope = configValid
+                && MicroscopeConfigManager.getInstanceIfAvailable() != null
+                && MicroscopeConfigManager.getInstanceIfAvailable().isOfflineScope();
+
         if (!configValid) {
             // Warn user once on the FX thread
             Platform.runLater(() -> Dialogs.showWarningNotification(
@@ -121,6 +163,13 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                     "Some required microscope settings are missing or invalid.\n"
                             + "All workflows except Test have been disabled.\n"
                             + "Please correct your YAML and restart QuPath."));
+        } else if (offlineScope && autoInstalledOffline) {
+            // Gentle, non-modal notice on the first launch only (not an error).
+            Platform.runLater(() -> Dialogs.showInfoNotification(
+                    EXTENSION_NAME + " - Offline / Analysis mode",
+                    "No microscope is configured, so QPSC is running in Offline / Analysis mode.\n"
+                            + "PPM analysis and project utilities are available.\n"
+                            + "Run the Setup Wizard to configure a microscope and enable acquisition."));
         }
 
         // 3) Check if any configured detector is a JAI camera
@@ -167,7 +216,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // === ACQUISITION WIZARD (top of menu) ===
         MenuItem wizardOption = new MenuItem(res.getString("menu.acquisitionWizard"));
-        wizardOption.setDisable(!configValid);
+        wizardOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 wizardOption,
                 "Open a guided checklist that walks you through server connection, "
@@ -184,7 +233,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // 1) Bounded Acquisition - acquire tiles from a defined bounding box region
         MenuItem boundedAcquisitionOption = new MenuItem(res.getString("menu.boundedAcquisition"));
-        boundedAcquisitionOption.setDisable(!configValid);
+        boundedAcquisitionOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 boundedAcquisitionOption,
                 "Start a new acquisition by defining a rectangular region using stage coordinates. "
@@ -203,7 +252,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 .disableProperty()
                 .bind(Bindings.or(
                         Bindings.createBooleanBinding(() -> qupath.getImageData() == null, qupath.imageDataProperty()),
-                        Bindings.createBooleanBinding(() -> !configValid, qupath.imageDataProperty())));
+                        Bindings.createBooleanBinding(() -> !configValid || offlineScope, qupath.imageDataProperty())));
         setMenuItemTooltip(
                 existingImageOption,
                 "Acquire high-resolution images of annotated regions in the currently open image. "
@@ -225,7 +274,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             multiSlideOption
                     .disableProperty()
                     .bind(Bindings.createBooleanBinding(
-                            () -> !configValid || qupath.getProject() == null,
+                            () -> !configValid || offlineScope || qupath.getProject() == null,
                             qupath.imageDataProperty(),
                             qupath.projectProperty()));
             setMenuItemTooltip(
@@ -249,7 +298,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 .disableProperty()
                 .bind(Bindings.createBooleanBinding(
                         () -> {
-                            if (!configValid) {
+                            if (!configValid || offlineScope) {
                                 return true;
                             }
                             return !MacroImageUtility.isMacroImageAvailable(qupath);
@@ -297,7 +346,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Background collection (for flat field correction)
         MenuItem backgroundCollectionOption = new MenuItem(res.getString("menu.backgroundCollection"));
-        backgroundCollectionOption.setDisable(!configValid);
+        backgroundCollectionOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 backgroundCollectionOption,
                 "Capture background images for flat-field correction. "
@@ -312,7 +361,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Autofocus settings editor
         MenuItem autofocusEditorOption = new MenuItem(res.getString("menu.autofocusEditor"));
-        autofocusEditorOption.setDisable(!configValid);
+        autofocusEditorOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 autofocusEditorOption,
                 "Configure autofocus parameters for each objective lens. "
@@ -327,7 +376,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // WB Comparison Test
         MenuItem wbComparisonOption = new MenuItem(res.getString("menu.wbComparison"));
-        wbComparisonOption.setDisable(!configValid);
+        wbComparisonOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 wbComparisonOption,
                 "Compare camera_awb, simple, and per_angle white balance modes side-by-side. "
@@ -357,7 +406,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Autofocus parameter benchmark
         MenuItem autofocusBenchmarkOption = new MenuItem(res.getString("menu.autofocusBenchmark"));
-        autofocusBenchmarkOption.setDisable(!configValid);
+        autofocusBenchmarkOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 autofocusBenchmarkOption,
                 "Run systematic testing of autofocus parameters to find optimal settings. "
@@ -374,7 +423,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Re-probe Stage AF (rewrites stage.streaming_af.* in the active config)
         MenuItem probeStageAfOption = new MenuItem(res.getString("menu.probeStageAf"));
-        probeStageAfOption.setDisable(!configValid);
+        probeStageAfOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 probeStageAfOption,
                 "Re-run the streaming-autofocus stage probe on the configured rig and "
@@ -392,7 +441,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Parfocality calibration dialog (per-profile relative Z offsets)
         MenuItem parfocalityCalibrationOption = new MenuItem(res.getString("menu.parfocalityCalibration"));
-        parfocalityCalibrationOption.setDisable(!configValid);
+        parfocalityCalibrationOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 parfocalityCalibrationOption,
                 "Capture per-acquisition-profile Z offsets relative to a chosen "
@@ -452,7 +501,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // menu back to it. Rip-out will follow once the new path has been
         // exercised against production acquisitions.
         MenuItem stackTimeLapseOption = new MenuItem("Z-Stack / Time-Lapse...");
-        stackTimeLapseOption.setDisable(!configValid);
+        stackTimeLapseOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
                 stackTimeLapseOption,
                 "Acquire a Z-stack or time-lapse at the current stage position. "
@@ -577,7 +626,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
             // JAI White Balance Calibration
             MenuItem jaiWhiteBalanceOption = new MenuItem(res.getString("menu.jaiWhiteBalance"));
-            jaiWhiteBalanceOption.setDisable(!configValid);
+            jaiWhiteBalanceOption.setDisable(!configValid || offlineScope);
             setMenuItemTooltip(
                     jaiWhiteBalanceOption,
                     "Calibrate white balance for the JAI 3-CCD camera by adjusting per-channel "
@@ -594,7 +643,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
             // JAI Noise Characterization
             MenuItem noiseCharOption = new MenuItem(res.getString("menu.jaiNoiseCharacterization"));
-            noiseCharOption.setDisable(!configValid);
+            noiseCharOption.setDisable(!configValid || offlineScope);
             setMenuItemTooltip(
                     noiseCharOption,
                     "Systematically test the JAI camera's noise performance across a grid of "
@@ -651,7 +700,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // 3. Modality extensions (dynamic submenus from registered handlers)
         // Only show menu items for modalities that exist in the microscope config.
-        java.util.Set<String> configModalities = configValid
+        java.util.Set<String> configModalities = (configValid && !offlineScope)
                 ? MicroscopeConfigManager.getInstanceIfAvailable() != null
                         ? MicroscopeConfigManager.getInstanceIfAvailable().getAvailableModalities()
                         : java.util.Set.of()
@@ -681,7 +730,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         continue;
                     }
                     MenuItem mi = new MenuItem(item.label());
-                    mi.setDisable(!configValid);
+                    mi.setDisable(!configValid || offlineScope);
                     if (item.tooltip() != null) {
                         setMenuItemTooltip(mi, item.tooltip());
                     }

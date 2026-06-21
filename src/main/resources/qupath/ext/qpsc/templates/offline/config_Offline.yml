@@ -1,0 +1,77 @@
+# ========== OFFLINE / ANALYSIS PLACEHOLDER MICROSCOPE ==========
+#
+# Auto-generated placeholder config. QPSC extracts this file to the
+# QuPath user directory and selects it automatically on a fresh install
+# (when no microscope config has been chosen yet).
+#
+# Purpose: let QPSC install and run cleanly with NO microscope and NO
+# command server attached. In this mode the extension runs "Offline /
+# Analysis": PPM analysis, propagation, stitching recovery and other
+# project utilities are available; all hardware/acquisition workflows
+# are intentionally disabled.
+#
+# The 'placeholder: true' flag below is what marks this as the offline
+# scope -- do not remove it (it drives the analysis-only menu state).
+#
+# To enable acquisition: run Extensions > QP Scope > Setup Wizard to
+# generate a real config for your microscope, which replaces this one.
+#
+# The hardware values here are inert stand-ins; nothing physical is
+# driven while this config is active.
+
+microscope:
+  name: Offline
+  type: Analysis
+  placeholder: true
+  detector_in_use: null
+  objective_in_use: null
+  modality: null
+
+modalities:
+  Brightfield:
+    type: brightfield
+
+hardware:
+  objectives:
+    - id: OFFLINE_OBJECTIVE_10X
+      pixel_size_xy_um:
+        OFFLINE_CAMERA: 0.5
+  detectors:
+    - OFFLINE_CAMERA
+
+# Detector defined inline so this config is fully self-contained and does
+# not depend on the contents of resources/resources_LOCI.yml.
+id_detector:
+  OFFLINE_CAMERA:
+    name: Offline Camera
+    camera_type: generic
+    device: OfflineCamera
+    width_px: 1024
+    height_px: 1024
+    flip_x: false
+    flip_y: false
+
+stage:
+  stage_id: OFFLINE_STAGE
+  limits:
+    x_um:
+      low: -10000.0
+      high: 10000.0
+    y_um:
+      low: -10000.0
+      high: 10000.0
+    z_um:
+      low: -500.0
+      high: 500.0
+  # Present (and disabled) so a fresh extract is not auto-migrated on first load.
+  # Streaming autofocus is irrelevant for the offline placeholder -- no hardware.
+  streaming_af:
+    enabled: false
+    speed_property: null
+    slow_speed_value: '1'
+    slow_speed_um_per_s: 11.5
+    normal_speed_value: '100'
+
+slide_size_um:
+  x: 40000
+  y: 20000

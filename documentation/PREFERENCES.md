@@ -264,12 +264,22 @@ Settings for file locations and paths.
 | Property | Value |
 |----------|-------|
 | Type | File |
-| Default | (none) |
+| Default | Offline placeholder (auto-installed on first launch) |
 | Requires Restart | Yes |
 | **REQUIRED** | Yes |
 
 **Description:**
 Path to the YAML configuration file describing your microscope setup. This file defines available modalities, objectives, detectors, stage limits, and other hardware parameters.
+
+**Offline / Analysis default:**
+If this preference is empty on launch (a fresh install), QPSC auto-installs and
+selects a bundled **Offline / Analysis** placeholder microscope at
+`<QuPath user directory>/qpsc-offline-microscope/config_Offline.yml`. This lets
+the extension load cleanly with no microscope and no command server: PPM analysis
+and project utilities are available while hardware/acquisition workflows are
+disabled. Point this preference at a real `config_<scope>.yml` (or run the Setup
+Wizard) to enable acquisition. The placeholder is created once and never
+overwritten.
 
 **CRITICAL WARNING:**
 Using the wrong configuration file could damage the microscope! Ensure this points to the correct configuration for your specific microscope system.

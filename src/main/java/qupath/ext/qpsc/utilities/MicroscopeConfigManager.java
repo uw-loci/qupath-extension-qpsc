@@ -145,6 +145,25 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Whether the currently loaded config is the bundled "Offline / Analysis"
+     * placeholder microscope (marked with {@code microscope.placeholder: true}).
+     *
+     * <p>QPSC auto-installs this placeholder on a fresh install so the extension
+     * runs cleanly with no microscope and no command server. When true, callers
+     * (notably the menu builder) run in analysis-only mode: PPM analysis and
+     * project utilities stay available while hardware/acquisition workflows are
+     * disabled. Keyed on the {@code placeholder} flag rather than the name so a
+     * renamed scope cannot accidentally flip the behaviour. Missing or false
+     * flag means a real scope.
+     *
+     * @return true only when the active config explicitly declares
+     *         {@code microscope.placeholder: true}
+     */
+    public boolean isOfflineScope() {
+        return Boolean.TRUE.equals(getBoolean("microscope", "placeholder"));
+    }
+
+    /**
      * Build a NON-singleton config manager pointing at {@code configPath}.
      *
      * <p>Use this for cross-scope lookups (e.g. back-propagation needs the FOV
