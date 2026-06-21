@@ -45,6 +45,8 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Image name includes: Annotation](#image-name-includes-annotation) | Boolean | OFF | Add annotation name to filename |
 | [Image name includes: Angle](#image-name-includes-angle) | Boolean | ON | Add angle to filename |
 | [Metadata Propagation Prefix](#metadata-propagation-prefix) | String | OCR | Prefix for inherited metadata |
+| [Live Viewer: Show Position Overlay](#live-viewer-show-position-overlay) | Boolean | OFF | Overlay the current XYZ(R) stage position on the live image |
+| [Live Viewer: Position Overlay Text Size](#live-viewer-position-overlay-text-size) | Choice | (QuPath location size) | Text size for the position overlay |
 
 ---
 
@@ -802,6 +804,42 @@ This is broader than [No Manual Autofocus](#no-manual-autofocus-danger): No-Manu
 - No drift correction at all
 - Sample drift over a long acquisition will gradually defocus
 - No way for the system to recover from a Z mistake
+
+---
+
+## Live Viewer
+
+Display options for the Live Viewer window. Both are also reachable from the Live
+Viewer itself (the **XYZ** toolbar button toggles the overlay).
+
+### Live Viewer: Show Position Overlay
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No |
+
+**Description:**
+Overlays the current stage position on a corner of the live image as a monospace
+readout: `X ... Y ... Z ...`, and `R ...` on rotation scopes (PPM). The value
+updates ~2 Hz from the shared stage-position poller (no extra hardware polling).
+This preference is bound to the **XYZ** toggle button on the Live Viewer toolbar,
+so toggling either one updates the other.
+
+### Live Viewer: Position Overlay Text Size
+
+| Property | Value |
+|----------|-------|
+| Type | Choice (Tiny / Small / Medium / Large / Huge) |
+| Default | QuPath's viewer location-text size |
+| Requires Restart | No |
+
+**Description:**
+Text size for the position overlay above. The default mirrors QuPath's own viewer
+location-text size (Edit > Preferences > Viewer > "Location font size"), so the
+readout matches the rest of the application; change it here to make the overlay
+larger or smaller independently.
 
 ---
 

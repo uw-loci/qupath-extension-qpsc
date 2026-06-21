@@ -436,6 +436,18 @@ These hints name the likely cause and suggest fixes. Common hints:
 - This is normal for very flat, featureless regions -- the system keeps the current Z and continues
 - If it happens on tissue, try a different `score_metric` or increase `sweep_range_um`
 
+### Sparse brightfield walks out of focus on empty tiles (wrong strategy)
+- **Symptom:** on a sparse monochrome brightfield slide (mostly empty tiles), Z drifts badly between samples; the min-intensity projection shows defocused, bright-cornered tiles.
+- **Root cause:** the modality is bound to `sparse_signal` instead of `dense_texture`. `sparse_signal`'s validity check is `bright_spot_count` (bright dots on a *dark* background) with `on_failure: proceed`. Brightfield is the inverse (dark features on a *bright* background), so the check effectively always fails and `proceed` then **runs autofocus on every tile, including empty ones**, walking Z off focus on noise.
+- **Fix:** bind brightfield to `dense_texture` (validity `texture_and_area`, `on_failure: defer`) in `autofocus_<scope>.yml` -- the documented default (see [Modality-Aware Autofocus](#modality-aware-autofocus)). Empty tiles then fail the texture gate and **defer** (AF is skipped; the stage holds / reuses the nearest completed-AF Z) instead of focusing on noise. OWS3 had drifted to `sparse_signal` for brightfield and was corrected to `dense_texture` (2026-06-21).
+- This is the brightfield counterpart of the sparse-*fluorescence* mismatch in [Reading autofocus failure hints](#reading-autofocus-failure-hints): match the gate to the contrast (bright-on-dark -> `sparse_signal`; dark-on-bright tissue -> `dense_texture`).
+- **Note (16-bit mono residual):** the `texture_and_area` gate normalizes each tile by its own min-max range, so a *noisy* blank bright tile can occasionally pass the texture gate (mono has no brightness pre-rejection -- the `rgb_brightness_threshold` check only fires for 3-channel RGB). The sweep's U-shape / boundary-peak guards and the drift cap bound any resulting walk; a monochrome absolute-contrast blank guard in `focus/validity.py` would remove it entirely if it recurs.
+
+### Z-stack used in place of autofocus (background-correction artifacts)
+- Acquiring a Z-stack with autofocus **disabled** (`--af-disabled`) fixes the stack center at the last/drifting Z. On a brightfield slide with flat-field (background) correction, the divide correction (`image * background_mean / background_pixel`) amplifies the vignetted corners wherever the acquisition Z no longer matches the *focused* Z at which the background reference was captured -- producing bright-cornered tiles that survive the min-intensity projection.
+- Background correction is applied **per Z-plane before the projection** (verified 2026-06-21), so the projection operates on already-corrected planes; the artifact is the focus/reference mismatch, not the projection order.
+- **Fix:** re-enable autofocus (uncheck [Disable All Autofocus](#disable-all-autofocus-danger)) so tiles are acquired at the focused Z that matches the background reference, and keep only a small Z bracket (e.g. +/-5-10 um) as residual safety rather than a coarse +/-20 um stack.
+
 ---
 
 ## Related Documentation

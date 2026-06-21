@@ -30,6 +30,18 @@ The window title dynamically displays the current imaging modality and expected 
 
 Double-click on the camera image to center the stage at that position.
 
+### Position Overlay
+
+The **XYZ** toggle button on the toolbar overlays the current stage position on a
+corner of the live image: `X ... Y ... Z ...`, plus `R ...` on rotation scopes
+(PPM). It reuses the shared stage-position poller (updates ~2 Hz; no extra
+hardware polling) and is mouse-transparent so it never blocks clicks. The toggle
+is bound to the [Live Viewer: Show Position Overlay](../PREFERENCES.md#live-viewer-show-position-overlay)
+preference, and its text size follows
+[Live Viewer: Position Overlay Text Size](../PREFERENCES.md#live-viewer-position-overlay-text-size)
+(which defaults to QuPath's viewer location-text size). Use it to keep an eye on
+position while the Stage Control panel is hidden.
+
 ### Snap
 
 The **Snap** button on the toolbar captures the current live frame and writes it to disk as an OME-TIFF.
@@ -110,6 +122,14 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design st
 | Always Auto-Scale | CheckBox | When checked, every live frame and acquired tile is auto-scaled (drives the persistent `autoScale` flag). When unchecked, your manual Min/Max sliders are preserved. Replaces the previous always-on per-tile rescale, which was breaking non-fluorescence acquisitions whose contrast was already correctly set. |
 
 The histogram shows a 256-bin luminance distribution updated in real time. Per-channel (R/G/B) saturation percentages are displayed below the histogram and turn red when any channel exceeds 1% saturation.
+
+### Stage Control - Tabs
+
+The Stage Control panel (right side, toggled by the **Stage Control** toolbar
+button) is organized into tabs: **Navigate**, **Saved Points**, and **Camera**.
+The tab headers stay fixed at the top of the panel; each tab's content scrolls
+within its own area, so you can switch tabs at any scroll depth without losing
+the headers.
 
 ### Stage Control - Navigate Tab
 
