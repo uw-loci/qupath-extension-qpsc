@@ -1064,6 +1064,13 @@ public class LiveViewerWindow {
         histogramPane = new TitledPane("Histogram & Contrast", histogramView);
         histogramPane.setExpanded(true);
         histogramPane.setAnimated(false);
+        // A TitledPane (a Control) defaults its maxHeight to its PREFERRED height,
+        // so VBox.setVgrow(..., ALWAYS) below could not stretch it past pref -- the
+        // leftover column height showed up as an empty gap instead of a taller
+        // histogram. Lift the cap so the pane (and the canvas inside it) actually
+        // fills the column when docked right. Harmless in the bottom dock, where
+        // nothing grants it extra height.
+        histogramPane.setMaxHeight(Double.MAX_VALUE);
 
         // Noise stats panel (collapsible, below histogram)
         noiseStatsPanel = new NoiseStatsPanel();
