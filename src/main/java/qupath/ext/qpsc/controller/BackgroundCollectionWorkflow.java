@@ -266,16 +266,22 @@ public class BackgroundCollectionWorkflow {
                 return;
             }
 
+            // Resolve the output folder through the SAME canonical helper the
+            // acquisition read-side uses (BackgroundSettingsReader.resolveBackgroundFolder).
+            // Critically, that helper maps wbMode "off" (monochrome / no-WB) to the
+            // FLAT base path (<detector>/<modalityFamily>/<mag>) -- NOT a "/off"
+            // subfolder. The previous ad-hoc build appended every non-empty wbMode
+            // (including "off") as a subfolder, so monochrome brightfield backgrounds
+            // landed in ".../10x/off" while acquisition kept reading the flat
+            // ".../10x" path and picked up a stale background. Routing both sides
+            // through one helper makes the paths impossible to diverge again.
             String finalOutputPath = outputPath;
             if (objective != null && detector != null) {
-                String magnification = extractMagnificationFromObjective(objective);
-                // Store backgrounds in WB-mode subfolder so different WB modes coexist
-                if (wbMode != null && !wbMode.isEmpty()) {
-                    finalOutputPath = java.nio.file.Paths.get(outputPath, detector, modality, magnification, wbMode)
-                            .toString();
-                } else {
-                    finalOutputPath = java.nio.file.Paths.get(outputPath, detector, modality, magnification)
-                            .toString();
+                String effectiveWbMode = (wbMode == null || wbMode.isEmpty()) ? "off" : wbMode;
+                String resolved = BackgroundSettingsReader.resolveBackgroundFolder(
+                        outputPath, modality, objective, detector, effectiveWbMode);
+                if (resolved != null) {
+                    finalOutputPath = resolved;
                 }
             }
 
@@ -373,14 +379,16 @@ public class BackgroundCollectionWorkflow {
                 logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
             }
 
-            // Show success notification on UI thread
-            Platform.runLater(() -> {
-                Dialogs.showInfoNotification(
-                        "Background Collection Complete",
-                        String.format(
-                                "Successfully acquired %d background images for %s modality",
-                                angleExposures.size(), modality));
-            });
+            // Show success notification on UI thread -- report ALL the settings
+            // the background was captured at (lamp + exposure + folder), not just
+            // a count, so the user can confirm they match what acquisition uses.
+            final String summary = buildBackgroundSummary(
+                    modality,
+                    finalOutputPath,
+                    finalExposures,
+                    bgResult.appliedLampIntensity(),
+                    bgResult.lampDeviceLabel());
+            Platform.runLater(() -> Dialogs.showInfoNotification("Background Collection Complete", summary));
             qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
 
         } catch (Exception e) {
@@ -469,9 +477,9 @@ public class BackgroundCollectionWorkflow {
                 logger.warn("Config reload after channel background collection failed: {}", reloadEx.getMessage());
             }
 
-            Platform.runLater(() -> Dialogs.showInfoNotification(
-                    "Background Collection Complete",
-                    String.format("Collected %d per-channel backgrounds for profile %s", inUseIds.size(), profileKey)));
+            final String summary = buildChannelBackgroundSummary(
+                    profileKey, channelFolder, inUse, bgResult.channelExposures(), bgResult.channelIntensities());
+            Platform.runLater(() -> Dialogs.showInfoNotification("Background Collection Complete", summary));
             qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
         } catch (Exception e) {
             logger.error("Channel background acquisition failed", e);
@@ -849,6 +857,90 @@ public class BackgroundCollectionWorkflow {
         }
 
         logger.info("Background collection settings saved successfully with {} angles: {}", angles.size(), angles);
+    }
+
+    /** Formats a value without a trailing ".0" for whole numbers (e.g. 603, 3.1). */
+    private static String fmtNum(double v) {
+        if (v == Math.floor(v) && !Double.isInfinite(v)) {
+            return Long.toString((long) v);
+        }
+        return String.format("%.1f", v);
+    }
+
+    /**
+     * Builds a human-readable summary of the settings a (non-channel) background
+     * was captured at -- count, lamp device + intensity, final exposure(s), and the
+     * folder the images landed in. Used by the completion notification so every
+     * background reports all the relevant levers for its modality, not just a count.
+     */
+    private static String buildBackgroundSummary(
+            String modality,
+            String folder,
+            Map<Double, Double> finalExposures,
+            Double lampIntensity,
+            String lampDeviceLabel) {
+        StringBuilder sb = new StringBuilder();
+        int n = finalExposures != null ? finalExposures.size() : 0;
+        sb.append(String.format("Acquired %d background image%s for %s.", n, n == 1 ? "" : "s", modality));
+        if (lampIntensity != null) {
+            String label = (lampDeviceLabel != null && !lampDeviceLabel.isBlank()) ? lampDeviceLabel : "Lamp";
+            sb.append("\n").append(label).append(": ").append(fmtNum(lampIntensity));
+        }
+        if (finalExposures != null && !finalExposures.isEmpty()) {
+            if (finalExposures.size() == 1) {
+                sb.append("\nExposure: ")
+                        .append(fmtNum(finalExposures.values().iterator().next()))
+                        .append(" ms");
+            } else {
+                sb.append("\nExposures (ms):");
+                finalExposures.entrySet().stream()
+                        .sorted(Map.Entry.comparingByKey())
+                        .forEach(e -> sb.append("\n  ")
+                                .append(fmtNum(e.getKey()))
+                                .append(" deg: ")
+                                .append(fmtNum(e.getValue())));
+            }
+        }
+        if (folder != null && !folder.isBlank()) {
+            sb.append("\nSaved to: ").append(folder);
+        }
+        return sb.toString();
+    }
+
+    /**
+     * Builds a per-channel settings summary (exposure + intensity) for the
+     * fluorescence background completion notification.
+     */
+    private static String buildChannelBackgroundSummary(
+            String profileKey,
+            String folder,
+            List<Channel> inUseChannels,
+            Map<String, Double> channelExposures,
+            Map<String, Double> channelIntensities) {
+        StringBuilder sb = new StringBuilder();
+        int n = inUseChannels != null ? inUseChannels.size() : 0;
+        sb.append(String.format(
+                "Collected %d per-channel background%s for profile %s.", n, n == 1 ? "" : "s", profileKey));
+        if (inUseChannels != null) {
+            for (Channel ch : inUseChannels) {
+                Double exp = channelExposures != null ? channelExposures.get(ch.id()) : null;
+                double resolvedExp = exp != null ? exp : ch.defaultExposureMs();
+                Double intensity = channelIntensities != null ? channelIntensities.get(ch.id()) : null;
+                double resolvedIntensity = intensity != null
+                        ? intensity
+                        : (Double.isNaN(ch.currentIntensityValue()) ? 0.0 : ch.currentIntensityValue());
+                sb.append("\n  ")
+                        .append(ch.displayName())
+                        .append(": ")
+                        .append(fmtNum(resolvedExp))
+                        .append(" ms, intensity ")
+                        .append(fmtNum(resolvedIntensity));
+            }
+        }
+        if (folder != null && !folder.isBlank()) {
+            sb.append("\nSaved to: ").append(folder);
+        }
+        return sb.toString();
     }
 
     /**
