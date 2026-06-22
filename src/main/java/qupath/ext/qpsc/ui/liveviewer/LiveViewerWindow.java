@@ -1095,8 +1095,9 @@ public class LiveViewerWindow {
         bottomPane = new VBox(histoNoiseGroup, statusBar);
 
         // Right column: an HBox so the histo/noise group can sit as its own
-        // column LEFT of the stage control without fighting the stage panel's
-        // vertical-grow (each column is independent).
+        // column at the FAR RIGHT of the stage control (controls stay next to
+        // the image) without fighting the stage panel's vertical-grow (each
+        // column is independent).
         rightArea = new HBox(stageControlPanel);
 
         BorderPane root = new BorderPane();
@@ -1228,10 +1229,19 @@ public class LiveViewerWindow {
         if (right) {
             bottomPane.getChildren().remove(histoNoiseGroup);
             if (!rightArea.getChildren().contains(histoNoiseGroup)) {
-                rightArea.getChildren().add(0, histoNoiseGroup); // left of the stage control
+                // Append so the histo/noise group sits at the FAR RIGHT edge,
+                // leaving the stage-control panel next to the image (the user
+                // wants the controls adjacent to the image, not the histogram).
+                rightArea.getChildren().add(histoNoiseGroup);
             }
             histoNoiseGroup.setMinWidth(220);
             histoNoiseGroup.setPrefWidth(250);
+            // Fill the full column height so the vertical histogram is as tall as
+            // the image area. The HBox stretches children to its height only up to
+            // their maxHeight, and a VBox defaults to its computed (short) max --
+            // so without this the histogram stayed stubby. Vgrow on histogramPane
+            // (set at construction) then hands that height to the canvas.
+            histoNoiseGroup.setMaxHeight(Double.MAX_VALUE);
             histogramView.setVertical(true);
         } else {
             rightArea.getChildren().remove(histoNoiseGroup);
@@ -1240,6 +1250,7 @@ public class LiveViewerWindow {
             }
             histoNoiseGroup.setMinWidth(0);
             histoNoiseGroup.setPrefWidth(Region.USE_COMPUTED_SIZE);
+            histoNoiseGroup.setMaxHeight(Region.USE_COMPUTED_SIZE);
             histogramView.setVertical(false);
         }
     }
