@@ -829,7 +829,11 @@ public class AutofocusEditorWorkflow {
             double zScaled = minMetric + (z - minZ) * metricSpan / zSpan;
             zSeries.getData().add(new XYChart.Data<>(r[0], zScaled));
         }
-        chart.getData().addAll(metricSeries, zSeries);
+        // Add individually rather than addAll(metricSeries, zSeries): the
+        // varargs form creates a generic Series<Number,Number>[] and triggers an
+        // unchecked-generic-array-creation warning.
+        chart.getData().add(metricSeries);
+        chart.getData().add(zSeries);
         return chart;
     }
 
