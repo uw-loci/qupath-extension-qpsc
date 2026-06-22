@@ -803,6 +803,8 @@ When enabled, the Java side emits `--af-disabled` on the ACQUIRE wire payload (i
 
 This is broader than [No Manual Autofocus](#no-manual-autofocus-danger): No-Manual still runs AF and only suppresses the user prompt on failure; Disable-All-Autofocus skips AF entirely.
 
+**This preference is the single on/off switch.** The Acquisition Wizard shows a read-only `Autofocus: enabled / DISABLED` status that reflects this preference and links you back here -- there is no separate wizard toggle. (A former wizard "Disable Autofocus" checkbox wrote this very preference; it was removed because it made operators think there were two independent settings.)
+
 **Only enable for:**
 - Test runs with a manually-set Z
 - Samples where Z drift over the acquisition is known-small

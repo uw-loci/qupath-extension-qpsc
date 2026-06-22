@@ -485,7 +485,8 @@ public class QPPreferenceDialog {
                         + "When enabled, ALL autofocus is skipped during acquisition "
                         + "(both standard and sweep). Only use when you know the sample "
                         + "is flat and already in focus.\n\n"
-                        + "This is also accessible via the Acquisition Wizard checkbox.")
+                        + "This is the single autofocus on/off switch. The Acquisition "
+                        + "Wizard shows a read-only status reflecting this preference.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(showLiveViewerPositionOverlayProperty, Boolean.class)

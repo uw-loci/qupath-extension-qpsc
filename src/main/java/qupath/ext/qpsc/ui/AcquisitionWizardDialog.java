@@ -143,8 +143,11 @@ public class AcquisitionWizardDialog {
     private Button boundedButton;
     private Button existingImageButton;
 
-    // Autofocus disable checkbox
-    private CheckBox disableAutofocusCheckBox;
+    // Read-only autofocus status. The on/off toggle lives in Preferences >
+    // QuPath SCope > "Disable All Autofocus" (the single source of truth); this
+    // label just reflects that preference and updates live via the listener below.
+    private Label autofocusStatusLabel;
+    private javafx.beans.value.ChangeListener<Boolean> autofocusStatusListener;
 
     /**
      * Refreshes calibration statuses on the open wizard, if any. No-op when
@@ -231,6 +234,12 @@ public class AcquisitionWizardDialog {
         wizardStage.setOnHidden(ev -> {
             if (activeInstance == AcquisitionWizardDialog.this) {
                 activeInstance = null;
+            }
+            // Detach the autofocus-status preference listener so a closed wizard
+            // doesn't leak a reference via the static preference property.
+            if (autofocusStatusListener != null) {
+                QPPreferenceDialog.disableAllAutofocusProperty().removeListener(autofocusStatusListener);
+                autofocusStatusListener = null;
             }
         });
 
@@ -844,19 +853,20 @@ public class AcquisitionWizardDialog {
         section.setPadding(new Insets(4, 16, 4, 16));
         section.setAlignment(Pos.CENTER_LEFT);
 
-        disableAutofocusCheckBox = new CheckBox("Disable Autofocus");
-        disableAutofocusCheckBox.setTooltip(
-                new Tooltip("Skip all autofocus during acquisition. Only use when you know\n"
-                        + "the sample is flat and already in focus. Focus drift will NOT\n"
-                        + "be corrected."));
-
-        // Bind to the persistent preference (bidirectional)
-        disableAutofocusCheckBox.setSelected(QPPreferenceDialog.getDisableAllAutofocus());
-        disableAutofocusCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
-            QPPreferenceDialog.setDisableAllAutofocus(newVal);
-            updateAutofocusCheckBoxStyle();
-        });
-        updateAutofocusCheckBoxStyle();
+        // Read-only autofocus status. Toggling autofocus on/off is done in
+        // Preferences > QuPath SCope > "Disable All Autofocus (Danger)" -- the
+        // single source of truth. (Previously a duplicate "Disable Autofocus"
+        // checkbox here wrote the same preference, which made operators think
+        // there were two independent settings.) The label tracks the preference
+        // live so it reflects changes made in the Preferences pane while the
+        // wizard is open.
+        autofocusStatusLabel = new Label();
+        autofocusStatusLabel.setTooltip(new Tooltip("Autofocus on/off is controlled in Preferences > QuPath SCope >\n"
+                + "'Disable All Autofocus (Danger)'. When disabled, focus drift is NOT\n"
+                + "corrected during acquisition."));
+        updateAutofocusStatusLabel();
+        autofocusStatusListener = (obs, oldVal, newVal) -> updateAutofocusStatusLabel();
+        QPPreferenceDialog.disableAllAutofocusProperty().addListener(autofocusStatusListener);
 
         Button validateAfButton = new Button("Validate AF");
         validateAfButton.setStyle("-fx-font-size: 11px; -fx-border-color: #4A90D9; -fx-border-width: 1.5; "
@@ -898,7 +908,7 @@ public class AcquisitionWizardDialog {
         javafx.scene.layout.HBox afButtonRow = new javafx.scene.layout.HBox(10, validateAfButton, afWarningLabel);
         afButtonRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
 
-        section.getChildren().addAll(disableAutofocusCheckBox, afButtonRow);
+        section.getChildren().addAll(autofocusStatusLabel, afButtonRow);
         return section;
     }
 
@@ -979,11 +989,16 @@ public class AcquisitionWizardDialog {
         }
     }
 
-    private void updateAutofocusCheckBoxStyle() {
-        if (disableAutofocusCheckBox.isSelected()) {
-            disableAutofocusCheckBox.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
+    private void updateAutofocusStatusLabel() {
+        if (autofocusStatusLabel == null) {
+            return;
+        }
+        if (QPPreferenceDialog.getDisableAllAutofocus()) {
+            autofocusStatusLabel.setText("Autofocus: DISABLED (set in Preferences > QuPath SCope)");
+            autofocusStatusLabel.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
         } else {
-            disableAutofocusCheckBox.setStyle("-fx-font-size: 12px; -fx-text-fill: " + textPrimary() + ";");
+            autofocusStatusLabel.setText("Autofocus: enabled (set in Preferences > QuPath SCope)");
+            autofocusStatusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + textPrimary() + ";");
         }
     }
 

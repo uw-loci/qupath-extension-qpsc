@@ -634,9 +634,11 @@ To remove the *cause* (so AF works normally instead of falling back every tile):
 3. `n_tiles=5` means autofocus every 5 tiles instead of every 2 tiles
 4. Faster acquisition but less frequent focus updates
 
-#### Q: I checked "Disable Autofocus" but the manual focus dialog still appeared
+#### Q: I enabled "Disable All Autofocus" but the manual focus dialog still appeared
 
-**A:** Fixed 2026-04-26. The Java side previously dropped the `--af-tiles`/`--af-steps`/`--af-range` triplet but didn't tell the server "no AF at all", so the server fell back to YAML defaults and ran AF normally (including the manual-focus prompt on the first failure). Now the Java side sends an explicit `--af-disabled` flag the server short-circuits on. If you still see manual focus prompts after this fix, confirm: (1) the QuPath build is current (commit `98edcf2` or later), (2) the server is current (commit `b5ae861` or later), (3) "Disable Autofocus" is actually checked in Preferences (Extensions > QP Scope > Preferences > "Disable All Autofocus (Danger)"). Server log should show a single `Autofocus DISABLED for this acquisition` line at workflow start.
+**A:** Fixed 2026-04-26. The Java side previously dropped the `--af-tiles`/`--af-steps`/`--af-range` triplet but didn't tell the server "no AF at all", so the server fell back to YAML defaults and ran AF normally (including the manual-focus prompt on the first failure). Now the Java side sends an explicit `--af-disabled` flag the server short-circuits on. If you still see manual focus prompts after this fix, confirm: (1) the QuPath build is current (commit `98edcf2` or later), (2) the server is current (commit `b5ae861` or later), (3) "Disable All Autofocus (Danger)" is actually checked in Preferences (Extensions > QP Scope > Preferences). Server log should show a single `Autofocus DISABLED for this acquisition` line at workflow start.
+
+**Note:** autofocus has a single on/off switch -- the Preferences "Disable All Autofocus (Danger)" toggle. The Acquisition Wizard shows a read-only `Autofocus: enabled / DISABLED` status reflecting that preference (the old wizard "Disable Autofocus" checkbox was removed; it wrote the same preference and caused exactly this kind of confusion). Don't confuse it with "No Manual Autofocus", which leaves AF running and only suppresses the failure prompt.
 
 #### Q: Time-remaining estimate is wildly off after a slow start
 
