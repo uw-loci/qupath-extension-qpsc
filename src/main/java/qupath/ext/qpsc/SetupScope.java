@@ -120,14 +120,18 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             Platform.runLater(() -> {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
                 alert.setTitle(EXTENSION_NAME + " - Stitching unavailable");
-                alert.setHeaderText("Image stitching is disabled");
-                alert.setContentText("The qupath-extension-tiles-to-pyramid extension was not found.\n\n"
-                        + "QuPath SCope has loaded, but image stitching is disabled: acquisition "
-                        + "workflows that stitch tiles into a mosaic will not work, and the "
-                        + "stitching output-format preference is hidden.\n\n"
-                        + "To enable stitching, install the tiles-to-pyramid extension JAR in your "
-                        + "QuPath extensions folder and restart QuPath. (If you just added it, a "
-                        + "restart may be needed so both extensions load together.)\n\n"
+                alert.setHeaderText("Final images cannot be created");
+                alert.setContentText("The qupath-extension-tiles-to-pyramid extension was not found. "
+                        + "It is a separate extension (not bundled in QuPath SCope) that turns acquired "
+                        + "tiles into final stitched images.\n\n"
+                        + "QuPath SCope has loaded and analysis, utilities, and offline mode all work, "
+                        + "but WITHOUT tiles-to-pyramid no final stitched image will be produced: "
+                        + "acquisition cannot assemble its tiles into a mosaic, stitching recovery is "
+                        + "unavailable, and the stitching output-format preference is hidden.\n\n"
+                        + "To enable image creation, install the tiles-to-pyramid extension alongside "
+                        + "QuPath SCope and restart QuPath. Both are offered by the QPSC extension "
+                        + "catalog, so installing from the catalog keeps them together. (If you just "
+                        + "added it, restart once more so both extensions load together.)\n\n"
                         + "Download: https://github.com/uw-loci/qupath-extension-tiles-to-pyramid");
                 alert.getButtonTypes().setAll(ButtonType.OK);
                 alert.getDialogPane().setMinWidth(520);

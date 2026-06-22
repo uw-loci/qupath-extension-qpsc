@@ -168,11 +168,28 @@ If this command fails, install Git from https://git-scm.com/
 
 1. Go to https://github.com/uw-loci/qupath-extension-qpsc/releases
 2. Download the latest `qupath-extension-qpsc-<version>-all.jar` file.
-   The `-all` suffix means this is a "fat JAR" that includes all dependencies (including the tiles-to-pyramid stitching extension).
+   The `-all` suffix means this is a "fat JAR" that bundles QPSC's own dependencies.
+   It does **not** include the `qupath-extension-tiles-to-pyramid` stitching
+   extension -- that is a separate JAR you must install as well (see Step 4b). QPSC
+   loads and runs without it, but it cannot create final stitched images and warns
+   you at startup.
 
 ### Option B: Build from source
 
 See the [For Developers: Building from Source](#for-developers-building-from-source) section at the end of this guide.
+
+### Step 4b: Install the tiles-to-pyramid stitching extension
+
+Required to turn acquired tiles into final stitched images. Without it, acquisition
+and analysis still run, but no stitched output is produced and QPSC shows a
+"Stitching unavailable" warning at startup.
+
+1. Go to https://github.com/uw-loci/qupath-extension-tiles-to-pyramid/releases
+2. Download the latest `qupath-extension-tiles-to-pyramid-<version>-all.jar`.
+3. Place it in the same QuPath `extensions/` folder as QPSC and restart QuPath.
+
+When installing QPSC from the QPSC extension catalog, install tiles-to-pyramid from
+the same catalog so both stay in sync.
 
 ### Install the JAR in QuPath
 

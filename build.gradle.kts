@@ -78,7 +78,14 @@ dependencies {
     shadow(libs.snakeyaml)
     shadow(libs.gson)
 
-    // Bundle tiles-to-pyramid into the shadow JAR for single-file distribution
+    // tiles-to-pyramid is a SEPARATE extension, deliberately NOT bundled into our
+    // shadow JAR. Like the other shadow(...) entries (qupath core, gson, snakeyaml),
+    // it is "provided": present at compile time and expected to be installed
+    // alongside QPSC at runtime (via the QPSC extension catalog). QPSC loads and runs
+    // without it -- analysis, utilities and the offline placeholder all work -- but
+    // stitching tiles into a final image needs it (QPSC warns at startup if absent).
+    // Do NOT switch this to implementation()/api(): bundling would add ~170 MB and
+    // risk duplicate-class conflicts when the standalone extension is also installed.
     shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.4.3")
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build

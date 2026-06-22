@@ -132,7 +132,7 @@ All motorized components must be controllable through [Micro-Manager](https://mi
 **Software Requirements:**
 - **Operating System**: **Windows 10+** (required -- microscope hardware drivers and Micro-Manager device adapters are Windows-only)
 - [QuPath 0.7.0+](https://qupath.github.io/) with Java 25+
-- [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) - Required for image stitching
+- [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) - Separate extension, required to create final stitched images. **Not bundled** in the QPSC JAR; install it alongside QPSC (the QPSC extension catalog offers it). QPSC still loads without it (analysis, utilities and offline mode work) but warns at startup and cannot produce stitched output.
 - [Micro-Manager 2.0](https://micro-manager.org/) configured for your microscope
 - Python 3.10+ with [Pycro-Manager](https://pycro-manager.readthedocs.io/) installed
 
@@ -142,7 +142,7 @@ All motorized components must be controllable through [Micro-Manager](https://mi
    - `qupath-extension-qpsc-[version].jar` - This extension
    - `qupath-extension-tiles-to-pyramid-[version].jar` - [Required dependency](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid)
 
-2. **Install in QuPath:** Drag both JAR files into an open QuPath window, or copy them to your QuPath `extensions/` folder.
+2. **Install in QuPath:** Drag both JAR files into an open QuPath window, or copy them to your QuPath `extensions/` folder. (Both are part of the QPSC extension catalog, so installing via the catalog keeps them together.)
 
 3. **Restart QuPath** and verify the "QP Scope" menu appears.
 
