@@ -27,6 +27,7 @@ import javafx.geometry.VPos;
 import javafx.scene.Node;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
@@ -52,6 +53,7 @@ import javafx.scene.input.ScrollEvent;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Window;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -1793,6 +1795,39 @@ public class StageControlPanel extends VBox {
      * and the Python server (RECONFG), then rebuilds the tab so dropdowns
      * reflect the new state.
      */
+    /**
+     * Confirmation popup for the "save to profile / YAML" actions. Lists the
+     * exact values that will be written so the operator can catch a wrong value
+     * (e.g. a profile-reset lamp level) before it is persisted. Routed through
+     * {@link UIFunctions#showAlertOverParent} so it floats above the
+     * always-on-top Live Viewer instead of sinking behind it. FX thread only.
+     *
+     * @return true if the user chose Save.
+     */
+    private boolean confirmSaveToYaml(String header, String details) {
+        Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
+        alert.setTitle("Save to microscope YAML");
+        alert.setHeaderText(header);
+        Label content = new Label(details);
+        content.setStyle("-fx-font-family: monospace;");
+        content.setWrapText(true);
+        alert.getDialogPane().setContent(content);
+        ButtonType saveType = new ButtonType("Save", ButtonBar.ButtonData.OK_DONE);
+        ButtonType cancelType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+        alert.getButtonTypes().setAll(saveType, cancelType);
+        Window parent = getScene() != null ? getScene().getWindow() : null;
+        var result = UIFunctions.showAlertOverParent(alert, parent);
+        return result.isPresent() && result.get() == saveType;
+    }
+
+    /** Formats a value with no trailing ".0" for whole numbers (e.g. 603, 3.11). */
+    private static String fmtNum(double v) {
+        if (v == Math.floor(v) && !Double.isInfinite(v)) {
+            return Long.toString((long) v);
+        }
+        return String.format("%.2f", v);
+    }
+
     private Node buildBrightfieldSaveToProfileButton(String modality) {
         Button saveBtn = new Button("Save Intensity to Profile");
         saveBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
@@ -1828,11 +1863,16 @@ public class StageControlPanel extends VBox {
             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
             return;
         }
-        cameraStatusLabel.setText("Saving illumination to " + profileKey + "...");
+        cameraStatusLabel.setText("Reading current lamp level...");
         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
-        Thread t = new Thread(
+        // Step 1: read the LIVE lamp power (GETILLM is a socket round-trip, so
+        // off the FX thread). Step 2: confirm on the FX thread, showing the exact
+        // value that will be written -- this is the guard against silently
+        // re-saving a profile-reset level. Step 3: write + reload on a worker.
+        Thread reader = new Thread(
                 () -> {
+                    final double power;
                     try {
                         MicroscopeController mc = MicroscopeController.getInstance();
                         if (mc == null || !mc.isConnected()) throw new java.io.IOException("Not connected");
@@ -1840,32 +1880,73 @@ public class StageControlPanel extends VBox {
                         if (!illum.available()) {
                             throw new java.io.IOException("Server reports no illumination configured");
                         }
-                        double power = illum.power();
-                        var result = qupath.ext.qpsc.utilities.ConfigYamlEditor.setProfileScalar(
-                                java.nio.file.Paths.get(configPath), profileKey, "illumination_intensity", power);
-                        // Reload on BOTH sides so the next BG / acquisition actually sees the new value.
-                        mgr.reload(configPath);
-                        try {
-                            mc.getSocketClient().sendReconfig();
-                        } catch (Exception reconfigEx) {
-                            logger.warn("RECONFG after save failed: {}", reconfigEx.getMessage());
-                        }
-                        Platform.runLater(() -> {
-                            cameraStatusLabel.setText("Saved: " + result.message);
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
-                            rebuildCameraModContent(modality);
-                        });
+                        power = illum.power();
                     } catch (Exception ex) {
-                        logger.error("Save brightfield profile failed: {}", ex.getMessage(), ex);
+                        logger.error("Read lamp level failed: {}", ex.getMessage(), ex);
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Save failed: " + ex.getMessage());
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
                         });
+                        return;
                     }
+                    Double currentVal = null;
+                    try {
+                        currentVal = mgr.getProfileIlluminationIntensity(profileKey);
+                    } catch (Exception ignored) {
+                        // current value is advisory only
+                    }
+                    final Double current = currentVal;
+                    Platform.runLater(() -> {
+                        String details = "Profile:                 " + profileKey + "\n"
+                                + "Illumination intensity:  " + fmtNum(power)
+                                + (current != null ? "   (currently " + fmtNum(current) + ")" : "")
+                                + "\n\nBackground collection and tiled acquisition use this lamp\n"
+                                + "level. Brightfield exposure is NOT saved here (it is set per\n"
+                                + "acquisition by the adaptive-exposure loop).";
+                        if (!confirmSaveToYaml("Save illumination to acquisition profile?", details)) {
+                            cameraStatusLabel.setText("Save cancelled");
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+                            return;
+                        }
+                        cameraStatusLabel.setText("Saving illumination to " + profileKey + "...");
+                        Thread writer = new Thread(
+                                () -> {
+                                    try {
+                                        var result = qupath.ext.qpsc.utilities.ConfigYamlEditor.setProfileScalar(
+                                                java.nio.file.Paths.get(configPath),
+                                                profileKey,
+                                                "illumination_intensity",
+                                                power);
+                                        mgr.reload(configPath);
+                                        try {
+                                            MicroscopeController mc = MicroscopeController.getInstance();
+                                            if (mc != null && mc.isConnected()) {
+                                                mc.getSocketClient().sendReconfig();
+                                            }
+                                        } catch (Exception reconfigEx) {
+                                            logger.warn("RECONFG after save failed: {}", reconfigEx.getMessage());
+                                        }
+                                        Platform.runLater(() -> {
+                                            cameraStatusLabel.setText("Saved: " + result.message);
+                                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                            rebuildCameraModContent(modality);
+                                        });
+                                    } catch (Exception ex) {
+                                        logger.error("Save brightfield profile failed: {}", ex.getMessage(), ex);
+                                        Platform.runLater(() -> {
+                                            cameraStatusLabel.setText("Save failed: " + ex.getMessage());
+                                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                        });
+                                    }
+                                },
+                                "Save-Profile-BF");
+                        writer.setDaemon(true);
+                        writer.start();
+                    });
                 },
-                "Save-Profile-BF");
-        t.setDaemon(true);
-        t.start();
+                "Save-Profile-BF-read");
+        reader.setDaemon(true);
+        reader.start();
     }
 
     /**
@@ -1936,6 +2017,32 @@ public class StageControlPanel extends VBox {
             if (exp != null && exp.getValue() != null) expSnap.put(id, exp.getValue());
             if (in != null && in.getValue() != null) intSnap.put(id, in.getValue());
         }
+        // Confirmation popup listing every channel's exposure + intensity that
+        // will be written, so the operator can verify the values (and target)
+        // before they are persisted -- same guard as the brightfield path.
+        StringBuilder confirmDetails = new StringBuilder("Modality:  " + modality + "\n\n");
+        for (var entry : defSnap.entrySet()) {
+            String id = entry.getKey();
+            qupath.ext.qpsc.modality.Channel ch = entry.getValue();
+            confirmDetails.append("  ").append(id).append(":  ");
+            Double exp = expSnap.get(id);
+            confirmDetails.append("exposure ").append(exp != null ? fmtNum(exp) + " ms" : "(unchanged)");
+            Double intv = intSnap.get(id);
+            if (ch.intensityProperty() != null) {
+                confirmDetails.append(",  intensity ").append(intv != null ? fmtNum(intv) : "(unchanged)");
+            }
+            confirmDetails.append("\n");
+        }
+        confirmDetails
+                .append("\nWritten to modalities.")
+                .append(modality)
+                .append(".channels[*]\n(exposure_ms + the intensity device property).");
+        if (!confirmSaveToYaml("Save channel settings to YAML?", confirmDetails.toString())) {
+            cameraStatusLabel.setText("Save cancelled");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            return;
+        }
+
         cameraStatusLabel.setText("Saving " + defSnap.size() + " channels...");
         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
 
