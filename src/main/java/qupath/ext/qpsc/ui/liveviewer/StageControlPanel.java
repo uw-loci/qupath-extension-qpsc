@@ -1829,21 +1829,23 @@ public class StageControlPanel extends VBox {
     }
 
     private Node buildBrightfieldSaveToProfileButton(String modality) {
-        Button saveBtn = new Button("Save Intensity to Profile");
+        Button saveBtn = new Button("Save to Profile");
         saveBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
-        saveBtn.setTooltip(new Tooltip("Persists the LIVE lamp intensity (whatever GETILLM reports right now) "
-                + "to acquisition_profiles." + (cameraActiveProfile == null ? "<profile>" : cameraActiveProfile)
-                + ".illumination_intensity in your microscope YAML.\n\n"
-                + "Why it matters: Background Collection and tiled Acquisition both pull "
-                + "this value from the YAML profile (apply_profile_illumination + "
-                + "apply_mode_setup) -- they do NOT inherit whatever the Camera tab last "
-                + "tuned in live preview. Save here so a 700 Camera-tab tune-up actually "
-                + "drives BG and acquisition at 700.\n\n"
-                + "After save: the Java MicroscopeConfigManager reloads from disk and "
-                + "the server runs RECONFG so both sides see the new value immediately.\n\n"
-                + "Note: brightfield exposure is NOT saved -- BF exposure is determined "
-                + "per-acquisition by the adaptive-exposure loop targeting the detector's "
-                + "background_target_intensity, not by a profile-level field."));
+        saveBtn.setTooltip(new Tooltip("Captures the current LIVE camera settings (GETILLM lamp intensity + "
+                + "GETEXP exposure) for acquisition_profiles."
+                + (cameraActiveProfile == null ? "<profile>" : cameraActiveProfile) + ".\n\n"
+                + "Illumination intensity is written to "
+                + "illumination_intensity in your microscope YAML. Background Collection "
+                + "and tiled Acquisition both pull this value from the YAML profile "
+                + "(apply_profile_illumination + apply_mode_setup) -- they do NOT inherit "
+                + "whatever the Camera tab last tuned in live preview, so save here to make "
+                + "a Camera-tab tune-up actually drive BG and acquisition.\n\n"
+                + "Exposure is persisted as the Camera default that the next Bounded "
+                + "Acquisition inherits. Brightfield has no profile-level exposure field "
+                + "in the YAML -- exposure is carried as this persisted value, not under "
+                + "acquisition_profiles.\n\n"
+                + "After save: the Java MicroscopeConfigManager reloads from disk and the "
+                + "server runs RECONFG so both sides see the new value immediately."));
         saveBtn.setOnAction(e -> doSaveBrightfieldProfile(modality));
         HBox row = new HBox(4, saveBtn);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -1889,6 +1891,20 @@ public class StageControlPanel extends VBox {
                         });
                         return;
                     }
+                    // Also read the live exposure so the confirmation reflects ALL
+                    // relevant Camera settings, not just the lamp. Brightfield has
+                    // no profile-level exposure field, so this is persisted as the
+                    // Camera default the next Bounded Acquisition inherits.
+                    double expMs = Double.NaN;
+                    try {
+                        var exp = MicroscopeController.getInstance()
+                                .getSocketClient()
+                                .getExposures();
+                        expMs = exp.unified();
+                    } catch (Exception ignored) {
+                        // exposure is advisory in the dialog; absence is non-fatal
+                    }
+                    final double exposureMs = expMs;
                     Double currentVal = null;
                     try {
                         currentVal = mgr.getProfileIlluminationIntensity(profileKey);
@@ -1900,15 +1916,30 @@ public class StageControlPanel extends VBox {
                         String details = "Profile:                 " + profileKey + "\n"
                                 + "Illumination intensity:  " + fmtNum(power)
                                 + (current != null ? "   (currently " + fmtNum(current) + ")" : "")
-                                + "\n\nBackground collection and tiled acquisition use this lamp\n"
-                                + "level. Brightfield exposure is NOT saved here (it is set per\n"
-                                + "acquisition by the adaptive-exposure loop).";
-                        if (!confirmSaveToYaml("Save illumination to acquisition profile?", details)) {
+                                + "\n"
+                                + "Exposure:                "
+                                + (!Double.isNaN(exposureMs) && exposureMs > 0
+                                        ? fmtNum(exposureMs) + " ms"
+                                        : "(unavailable)")
+                                + "\n\n"
+                                + "Illumination intensity is written to the YAML profile and used\n"
+                                + "by Background collection and tiled acquisition.\n"
+                                + "Exposure is saved as the persisted Camera default that the next\n"
+                                + "acquisition inherits (brightfield has no profile-level exposure\n"
+                                + "field).";
+                        if (!confirmSaveToYaml("Save camera settings to acquisition profile?", details)) {
                             cameraStatusLabel.setText("Save cancelled");
                             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
                             return;
                         }
-                        cameraStatusLabel.setText("Saving illumination to " + profileKey + "...");
+                        // Persist the live exposure as the Camera default so the
+                        // next Bounded Acquisition inherits it (brightfield has no
+                        // profile-level exposure field in the YAML).
+                        if (!Double.isNaN(exposureMs) && exposureMs > 0) {
+                            qupath.ext.qpsc.preferences.PersistentPreferences.setLastUnifiedExposureMs(
+                                    (float) exposureMs);
+                        }
+                        cameraStatusLabel.setText("Saving camera settings to " + profileKey + "...");
                         Thread writer = new Thread(
                                 () -> {
                                     try {
@@ -1957,7 +1988,7 @@ public class StageControlPanel extends VBox {
      * matching the channel's intensity_property), then reloads both sides.
      */
     private Node buildFluorescenceSaveToProfileButton(String modality) {
-        Button saveBtn = new Button("Save Channels to YAML");
+        Button saveBtn = new Button("Save to Profile");
         saveBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
         StringBuilder lines = new StringBuilder();
         for (var ch : cameraChannelDefs.values()) {
@@ -2153,7 +2184,7 @@ public class StageControlPanel extends VBox {
 
     // --- Shared Camera Tab builders ---
 
-    /** Build an exposure control row (label + text field + Set button). */
+    /** Build an exposure control row (label + text field; applies on Enter/focus-loss). */
     private Node buildExposureControl() {
         Label expLabel = new Label("Exposure (ms):");
         expLabel.setStyle("-fx-font-size: 10px;");
@@ -2195,11 +2226,14 @@ public class StageControlPanel extends VBox {
                 expField.setText("");
             }
         }
-        Button applyBtn = new Button("Set");
-        applyBtn.setStyle("-fx-font-size: 10px;");
-        applyBtn.setOnAction(e -> {
+        // Apply on Enter or focus-loss -- no separate Set button. The field
+        // behaves like every other editable field in the panel: it commits when
+        // the user presses Enter or tabs/clicks away.
+        Runnable apply = () -> {
+            String text = expField.getText() == null ? "" : expField.getText().trim();
+            if (text.isEmpty()) return;
             try {
-                float exp = Float.parseFloat(expField.getText().trim());
+                float exp = Float.parseFloat(text);
                 MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {exp});
                 // Persist so the Bounded Acquisition workflow inherits this
                 // value when building the command for non-rotation modalities.
@@ -2225,11 +2259,13 @@ public class StageControlPanel extends VBox {
                 cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
                 logger.warn("Failed to set exposure: {}", ex.getMessage());
             }
+        };
+        expField.setOnAction(e -> apply.run());
+        expField.focusedProperty().addListener((obs, was, isNow) -> {
+            if (was && !isNow) apply.run();
         });
-        // Also allow Enter key to apply
-        expField.setOnAction(e -> applyBtn.fire());
 
-        HBox row = new HBox(4, expLabel, expField, applyBtn);
+        HBox row = new HBox(4, expLabel, expField);
         row.setAlignment(Pos.CENTER_LEFT);
         return row;
     }
@@ -2349,15 +2385,23 @@ public class StageControlPanel extends VBox {
                 }
             });
 
-            // Text field -> send power on Enter
-            valueField.setOnAction(e -> {
+            // Text field -> send power on Enter or focus-loss (no Set button;
+            // behaves like every other editable field in the panel).
+            Runnable applyIntensity = () -> {
+                String text =
+                        valueField.getText() == null ? "" : valueField.getText().trim();
+                if (text.isEmpty()) return;
                 try {
-                    float power = Float.parseFloat(valueField.getText().trim());
+                    float power = Float.parseFloat(text);
                     slider.setValue(power);
                     sendIlluminationPower(power);
                 } catch (NumberFormatException ex) {
                     // ignore
                 }
+            };
+            valueField.setOnAction(e -> applyIntensity.run());
+            valueField.focusedProperty().addListener((obs, was, isNow) -> {
+                if (was && !isNow) applyIntensity.run();
             });
 
             VBox illumBox = new VBox(2);
@@ -2366,18 +2410,7 @@ public class StageControlPanel extends VBox {
             HBox bottomRow = new HBox(4);
             Label valLabel = new Label("Intensity:");
             valLabel.setStyle("-fx-font-size: 9px;");
-            Button setBtn = new Button("Set");
-            setBtn.setStyle("-fx-font-size: 9px;");
-            setBtn.setOnAction(e -> {
-                try {
-                    float power = Float.parseFloat(valueField.getText().trim());
-                    slider.setValue(power);
-                    sendIlluminationPower(power);
-                } catch (NumberFormatException ex) {
-                    // ignore
-                }
-            });
-            bottomRow.getChildren().addAll(valLabel, valueField, setBtn);
+            bottomRow.getChildren().addAll(valLabel, valueField);
             bottomRow.setAlignment(Pos.CENTER_LEFT);
             illumBox.getChildren().addAll(topRow, bottomRow);
             return illumBox;
@@ -2410,6 +2443,48 @@ public class StageControlPanel extends VBox {
                     }
                 },
                 "Illum-Set");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /**
+     * Apply an acquisition profile on a worker thread, then rebuild the Camera
+     * tab so the displayed values match hardware. Invoked directly when the
+     * Profile dropdown changes (there is no separate Apply button).
+     *
+     * <p>APPLYPR resets exposure + illumination to the YAML profile's
+     * apply_mode_setup defaults, but the UI fields still show whatever the user
+     * (or saved prefs) had previously displayed. Rebuilding the panel re-pulls
+     * the saved prefs and pushes them back to hardware via buildExposureControl
+     * / buildIlluminationControl's restore threads, so the displayed values
+     * match what is actually on the camera. Without this, the user sees stale
+     * numbers (e.g. "2 ms / 700") that do not reflect the image hardware is
+     * actually producing.
+     */
+    private void applyProfileInBackground(String selectedProfile, String modality) {
+        if (selectedProfile == null) return;
+        cameraStatusLabel.setText("Applying profile: " + selectedProfile + "...");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController mc = MicroscopeController.getInstance();
+                        if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
+                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(selectedProfile));
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Profile applied: " + selectedProfile);
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            rebuildCameraModContent(modality);
+                        });
+                    } catch (Exception ex) {
+                        logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
+                        Platform.runLater(() -> {
+                            cameraStatusLabel.setText("Failed: " + ex.getMessage());
+                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        });
+                    }
+                },
+                "Profile-Apply");
         t.setDaemon(true);
         t.start();
     }
@@ -2464,57 +2539,21 @@ public class StageControlPanel extends VBox {
             profileCombo.setValue(defaultSelection);
             cameraActiveProfile = defaultSelection;
             profileCombo.valueProperty().addListener((obs, oldV, newV) -> {
-                if (newV != null) cameraActiveProfile = newV;
+                if (newV == null) return;
+                cameraActiveProfile = newV;
+                // Apply immediately on change -- no separate Apply button. The
+                // initial setValue() above runs BEFORE this listener is attached,
+                // so this fires only on a genuine user selection; and the
+                // rebuildCameraModContent() inside applyProfileInBackground builds
+                // a fresh combo (whose setValue likewise precedes its listener),
+                // so there is no apply loop.
+                applyProfileInBackground(newV, modality);
             });
             profileCombo.setMaxWidth(Double.MAX_VALUE);
             profileCombo.setStyle("-fx-font-size: 10px;");
             HBox.setHgrow(profileCombo, javafx.scene.layout.Priority.ALWAYS);
 
-            Button applyBtn = new Button("Apply");
-            applyBtn.setStyle("-fx-font-size: 10px; -fx-font-weight: bold;");
-            applyBtn.setOnAction(e -> {
-                String selectedProfile = profileCombo.getValue();
-                if (selectedProfile == null) return;
-                cameraStatusLabel.setText("Applying profile: " + selectedProfile + "...");
-                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
-
-                Thread t = new Thread(
-                        () -> {
-                            try {
-                                MicroscopeController mc = MicroscopeController.getInstance();
-                                if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
-                                mc.withLiveModeHandling(
-                                        () -> mc.getSocketClient().applyProfile(selectedProfile));
-                                // APPLYPR resets exposure + illumination to the YAML
-                                // profile's apply_mode_setup defaults, but the UI
-                                // fields still show whatever the user (or saved
-                                // prefs) had previously displayed. Rebuilding the
-                                // panel re-pulls the saved prefs and pushes them
-                                // back to hardware via buildExposureControl /
-                                // buildIlluminationControl's restore threads, so
-                                // the displayed values match what's actually on
-                                // the camera. Without this, the user sees stale
-                                // numbers (e.g. "2 ms / 700") that don't reflect
-                                // the dim image hardware is actually producing.
-                                Platform.runLater(() -> {
-                                    cameraStatusLabel.setText("Profile applied: " + selectedProfile);
-                                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
-                                    rebuildCameraModContent(modality);
-                                });
-                            } catch (Exception ex) {
-                                logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
-                                Platform.runLater(() -> {
-                                    cameraStatusLabel.setText("Failed: " + ex.getMessage());
-                                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
-                                });
-                            }
-                        },
-                        "Profile-Apply");
-                t.setDaemon(true);
-                t.start();
-            });
-
-            HBox row = new HBox(4, label, profileCombo, applyBtn);
+            HBox row = new HBox(4, label, profileCombo);
             row.setAlignment(Pos.CENTER_LEFT);
             return row;
         } catch (Exception e) {
