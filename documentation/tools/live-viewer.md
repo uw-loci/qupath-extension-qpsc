@@ -30,6 +30,8 @@ The window title dynamically displays the current imaging modality and expected 
 
 Double-click on the camera image to center the stage at that position.
 
+A **green border** is drawn around the image whenever Live is ON, as an at-a-glance indicator that the feed is streaming (it clears when Live is OFF).
+
 ### Position Overlay
 
 The **XYZ** toggle button on the toolbar overlays the current stage position on a
@@ -122,6 +124,15 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design st
 | Always Auto-Scale | CheckBox | When checked, every live frame and acquired tile is auto-scaled (drives the persistent `autoScale` flag). When unchecked, your manual Min/Max sliders are preserved. Replaces the previous always-on per-tile rescale, which was breaking non-fluorescence acquisitions whose contrast was already correctly set. |
 
 The histogram shows a 256-bin luminance distribution updated in real time. Per-channel (R/G/B) saturation percentages are displayed below the histogram and turn red when any channel exceeds 1% saturation.
+
+#### Docking the histogram on the right
+
+The **Hist: Right** toggle button on the toolbar moves the Histogram & Contrast + Noise Stats group between two layouts:
+
+- **Off (default)** -- docked *below* the image as a horizontal strip.
+- **On** -- docked at the *far-right edge* of the window as a vertical column. The stage-control panel stays next to the image (controls adjacent to the image, histogram on the outside), the histogram reorients vertically and fills the full height of the image area, and the sliders run vertically while the labels and buttons stay horizontal for readability.
+
+The choice persists via the [Live Viewer: Dock Histogram Right](../PREFERENCES.md#live-viewer-dock-histogram-right) preference. Useful on wide monitors where vertical space below the image is at a premium.
 
 ### Stage Control - Tabs
 

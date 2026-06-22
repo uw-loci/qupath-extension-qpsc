@@ -47,6 +47,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Metadata Propagation Prefix](#metadata-propagation-prefix) | String | OCR | Prefix for inherited metadata |
 | [Live Viewer: Show Position Overlay](#live-viewer-show-position-overlay) | Boolean | OFF | Overlay the current XYZ(R) stage position on the live image |
 | [Live Viewer: Position Overlay Text Size](#live-viewer-position-overlay-text-size) | Choice | (QuPath location size) | Text size for the position overlay |
+| [Live Viewer: Dock Histogram Right](#live-viewer-dock-histogram-right) | Boolean | OFF | Dock the histogram + noise stats on the right (vertical) instead of below the image |
 
 ---
 
@@ -850,6 +851,25 @@ Text size for the position overlay above. The default mirrors QuPath's own viewe
 location-text size (Edit > Preferences > Viewer > "Location font size"), so the
 readout matches the rest of the application; change it here to make the overlay
 larger or smaller independently.
+
+### Live Viewer: Dock Histogram Right
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No |
+
+**Description:**
+Controls where the Histogram & Contrast + Noise Stats group sits in the Live
+Viewer. When OFF (default) the group is docked **below** the image as a horizontal
+strip. When ON the group moves to the **far-right edge** of the window as a vertical
+column -- the stage-control panel stays next to the image, and the histogram
+reorients vertically and fills the full column height (the sliders run vertically;
+labels and buttons stay horizontal for readability). This preference is bound to the
+**Hist: Right** toggle button on the Live Viewer toolbar, so toggling either one
+updates the other. Useful on wide monitors where vertical space below the image is
+scarce.
 
 ---
 

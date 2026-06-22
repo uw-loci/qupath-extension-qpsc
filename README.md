@@ -69,7 +69,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 | Feature | Description |
 |---------|-------------|
-| **Live Camera Viewer** | Real-time camera feed with histogram, per-channel saturation %, RGB readouts, display scale controls, and **snapshot capture with optional background correction** |
+| **Live Camera Viewer** | Real-time camera feed with a dockable histogram (below the image or vertical on the right), per-channel saturation %, RGB readouts, an optional on-image XYZ(R) position overlay, a green Live indicator, display scale controls, and **snapshot capture with optional background correction** |
 | **Integrated Stage Control** | Virtual joystick, FOV-based step sizes, saved stage positions, and double-step arrows -- all built into the Live Viewer |
 | **Stage Map** | Visual map of the stage insert with configurable macro image overlay and real-time position tracking |
 
