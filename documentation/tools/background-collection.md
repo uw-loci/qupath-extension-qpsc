@@ -127,6 +127,15 @@ For each in-use channel in the selected profile:
 
 ## Output
 
+### Folder structure
+
+Backgrounds are filed under `<base>/<detector>/<modality>/<mag>/`. The white-balance mode determines whether a further subfolder is added:
+
+- **Monochrome / no white balance (`off`)** -- saved to the **flat** `<base>/<detector>/<modality>/<mag>/` folder (e.g. `.../HAMAMATSU_DCAM_01/Brightfield/10x/background.tif`). There is **no** `off` subfolder.
+- **Colour WB modes (`simple`, `per_angle`, `camera_awb`)** -- saved under a `<wbMode>/` subfolder so the modes coexist.
+
+Collection and acquisition resolve this path through the same helper, so a freshly collected background lands exactly where acquisition reads it. (A prior bug filed monochrome backgrounds in a stray `off/` subfolder while acquisition kept reading the flat path and silently reused a stale background -- fixed; re-collect once to overwrite any stale flat-folder file.)
+
 ### Angle-Based Modalities
 
 - One background image per angle, saved to the output folder
@@ -150,6 +159,7 @@ For each in-use channel in the selected profile:
 - JAI cameras automatically load per-channel white balance calibration when available (independent of per-channel background collection for fluorescence)
 - **Per-channel backgrounds (fluorescence)** are collected only for channels marked as "In use" (positive illumination intensity). Channels with 0 intensity are skipped; no background is required for them at acquisition time
 - If images show uneven patterns after correction, the background may be contaminated -- reposition to a cleaner area
+- **Repeated tile-grid texture after correction** usually means acquisition is using a *stale* background rather than the one you just collected. The completion notification reports the exact `Saved to:` folder, lamp, and exposure -- confirm that folder matches where acquisition loads from (monochrome backgrounds are the flat `.../<mag>/` folder, not a `.../<mag>/off/` subfolder). Re-collect to overwrite a stale file
 - Ensure the blank area is truly uniform -- dust, scratches, or tissue remnants will contaminate the background
 - For best results, collect backgrounds at the beginning of each imaging session
 - If auto-exposure does not converge to the target intensity, check that the lamp is on and the illumination path is clear
