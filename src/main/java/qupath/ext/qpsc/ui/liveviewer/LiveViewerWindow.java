@@ -105,6 +105,12 @@ public class LiveViewerWindow {
     private HistogramView histogramView;
     private TitledPane histogramPane;
     private NoiseStatsPanel noiseStatsPanel;
+    // Histogram + Noise group that can dock either below the image (default) or
+    // in the right-hand column (vertical). See setHistogramDockedRight().
+    private javafx.scene.layout.VBox histoNoiseGroup;
+    private javafx.scene.layout.HBox rightArea;
+    private javafx.scene.layout.VBox bottomPane;
+    private ToggleButton histogramDockToggle;
     private StageControlPanel stageControlPanel;
     private ToggleButton stageControlToggle;
 
@@ -918,6 +924,13 @@ public class LiveViewerWindow {
                 .selectedProperty()
                 .bindBidirectional(QPPreferenceDialog.showLiveViewerPositionOverlayProperty());
 
+        // Toggle that docks the Histogram & Contrast + Noise Stats panel on the
+        // right (vertical) instead of below the image, to use horizontal space.
+        histogramDockToggle = new ToggleButton("Hist: Right");
+        histogramDockToggle.setStyle("-fx-font-size: 11px;");
+        histogramDockToggle.setTooltip(new Tooltip("Dock the Histogram & Contrast + Noise Stats panel on the\n"
+                + "right (vertical histogram) instead of below the image."));
+
         // Snap button: captures current frame, opens file save dialog, writes
         // OME-TIFF (BG correction routed through CORRECTFRAME socket command
         // when requested and settings match). Right-click for options.
@@ -942,6 +955,7 @@ public class LiveViewerWindow {
                 showTilesCheckBox,
                 snapButton,
                 positionOverlayToggle,
+                histogramDockToggle,
                 spacer,
                 stageControlToggle,
                 scaleLabel,
@@ -1069,22 +1083,41 @@ public class LiveViewerWindow {
         updateFovLabel();
         updateFocusRangeOptions();
 
-        // Bottom pane: Histogram, Noise Stats, Status Bar
-        VBox bottomPane = new VBox(histogramPane, noiseStatsPanel, statusBar);
+        // Histogram + Noise group -- relocatable between the bottom and the
+        // right column. The histogram TitledPane grows to fill the group so the
+        // vertical histogram is tall when docked right; in the bottom dock the
+        // group sits at its preferred height (Vgrow is a no-op there).
+        histoNoiseGroup = new VBox(8, histogramPane, noiseStatsPanel);
+        VBox.setVgrow(histogramPane, Priority.ALWAYS);
+
+        // Bottom pane (status bar always lives here; the histo/noise group is
+        // added/removed by the dock toggle).
+        bottomPane = new VBox(histoNoiseGroup, statusBar);
+
+        // Right column: an HBox so the histo/noise group can sit as its own
+        // column LEFT of the stage control without fighting the stage panel's
+        // vertical-grow (each column is independent).
+        rightArea = new HBox(stageControlPanel);
 
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
-        root.setRight(stageControlPanel); // Stage control on right side (starts visible)
+        root.setRight(rightArea); // stage control (+ histo/noise when docked right)
         root.setCenter(scrollPane); // Live image in center
         root.setBottom(bottomPane);
 
-        // Wire toggle to show/hide the stage control panel
+        // Apply the persisted dock state (default: bottom).
+        setHistogramDockedRight(QPPreferenceDialog.getLiveViewerHistogramDockRight());
+        histogramDockToggle.setSelected(QPPreferenceDialog.getLiveViewerHistogramDockRight());
+        histogramDockToggle.selectedProperty().addListener((obs, was, dockRight) -> {
+            setHistogramDockedRight(dockRight);
+            QPPreferenceDialog.setLiveViewerHistogramDockRight(dockRight);
+        });
+
+        // Wire toggle to show/hide the stage control panel (within the right
+        // column, so it doesn't disturb a right-docked histogram).
         stageControlToggle.selectedProperty().addListener((obs, wasSelected, isSelected) -> {
-            if (isSelected) {
-                root.setRight(stageControlPanel);
-            } else {
-                root.setRight(null);
-            }
+            stageControlPanel.setVisible(isSelected);
+            stageControlPanel.setManaged(isSelected);
         });
 
         expandedContent = root;
@@ -1181,6 +1214,34 @@ public class LiveViewerWindow {
                 "LiveViewer-Toggle");
         toggleThread.setDaemon(true);
         toggleThread.start();
+    }
+
+    /**
+     * Moves the Histogram + Noise group between the bottom dock (horizontal,
+     * below the image) and the right column (vertical, beside the stage
+     * control). Default is the bottom dock. FX thread only.
+     */
+    private void setHistogramDockedRight(boolean right) {
+        if (histoNoiseGroup == null || rightArea == null || bottomPane == null) {
+            return;
+        }
+        if (right) {
+            bottomPane.getChildren().remove(histoNoiseGroup);
+            if (!rightArea.getChildren().contains(histoNoiseGroup)) {
+                rightArea.getChildren().add(0, histoNoiseGroup); // left of the stage control
+            }
+            histoNoiseGroup.setMinWidth(220);
+            histoNoiseGroup.setPrefWidth(250);
+            histogramView.setVertical(true);
+        } else {
+            rightArea.getChildren().remove(histoNoiseGroup);
+            if (!bottomPane.getChildren().contains(histoNoiseGroup)) {
+                bottomPane.getChildren().add(0, histoNoiseGroup); // above the status bar
+            }
+            histoNoiseGroup.setMinWidth(0);
+            histoNoiseGroup.setPrefWidth(Region.USE_COMPUTED_SIZE);
+            histogramView.setVertical(false);
+        }
     }
 
     private void updateLiveButtonStyle(boolean active) {

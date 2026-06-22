@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.ui.liveviewer;
 
 import javafx.geometry.Insets;
+import javafx.geometry.Orientation;
 import javafx.geometry.Pos;
 import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
@@ -10,28 +11,31 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Slider;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
 
 /**
  * Histogram display with min/max contrast sliders and FullRange/AutoScale buttons.
- * <p>
- * The histogram canvas is aligned directly above the slider tracks, with
- * labels placed to the left so the visual elements line up vertically.
- * <p>
- * Features:
+ *
+ * <p>Supports two layouts (see {@link #setVertical(boolean)}):
  * <ul>
- *   <li>256-bin luminance histogram with log-scale Y axis</li>
- *   <li>Min/max contrast range sliders aligned under the histogram</li>
- *   <li>Full Range and Auto Scale buttons</li>
- *   <li>Visual overlay showing active contrast range</li>
+ *   <li><b>Horizontal</b> (default) -- intensity on X, bars rising from the
+ *       bottom, horizontal sliders beneath. Suits a panel docked under the
+ *       live image.</li>
+ *   <li><b>Vertical</b> -- intensity on Y (low at the bottom), bars extending
+ *       rightward, vertical sliders beside the canvas. Suits a tall panel
+ *       docked on the right. The text labels and buttons stay in their normal
+ *       (horizontal) orientation for readability.</li>
  * </ul>
  */
 public class HistogramView extends VBox {
 
-    private static final int HIST_HEIGHT = 80;
-    // Label column width -- keeps histogram and sliders aligned.
-    // Must fit "Max: 65535" for 16-bit images.
+    // Thickness of the "count" axis of the histogram canvas (height in
+    // horizontal mode, width in vertical mode). The other axis fills.
+    private static final int HIST_THICKNESS = 80;
+    // Label column width -- keeps histogram and sliders aligned in horizontal
+    // mode. Must fit "Max: 65535" for 16-bit images.
     private static final double LABEL_WIDTH = 80;
 
     private final Canvas canvas;
@@ -40,7 +44,12 @@ public class HistogramView extends VBox {
     private final Label minLabel;
     private final Label maxLabel;
     private final Label meanLabel;
+    private final Button fullRangeBtn;
+    private final Button autoScaleBtn;
+    private final CheckBox alwaysAutoScale;
     private final ContrastSettings contrastSettings;
+
+    private boolean vertical = false;
 
     private int[] currentHistogram = new int[256];
     private int currentMaxValue = 255;
@@ -55,55 +64,25 @@ public class HistogramView extends VBox {
         setSpacing(2);
         setPadding(new Insets(4, 8, 4, 8));
 
-        // --- Row 1: Histogram canvas (full width) ---
-        // Canvas stretches to fill available width
-        canvas = new Canvas(256, HIST_HEIGHT);
+        canvas = new Canvas(256, HIST_THICKNESS);
+        // Redraw whenever the canvas is resized (its size is driven by the
+        // container listeners installed in applyLayout()).
+        canvas.widthProperty().addListener((obs, oldVal, newVal) -> drawHistogram());
+        canvas.heightProperty().addListener((obs, oldVal, newVal) -> drawHistogram());
 
-        HBox histRow = new HBox(canvas);
-        histRow.setAlignment(Pos.CENTER_LEFT);
-        // Prevent Canvas (non-resizable) from dictating parent's min width.
-        // Without this, Canvas.minWidth = Canvas.width = parent width, creating
-        // a rigid constraint that propagates up through TitledPane/VBox and causes
-        // the window to slowly expand on every layout pass.
-        histRow.setMinWidth(0);
-
-        // Bind canvas width to its parent HBox width (minus padding)
-        histRow.widthProperty().addListener((obs, oldVal, newVal) -> {
-            double newWidth = newVal.doubleValue();
-            if (newWidth > 0) {
-                canvas.setWidth(newWidth);
-                drawHistogram();
-            }
-        });
-
-        drawHistogram();
-
-        // --- Row 1b: Mean pixel value label ---
         meanLabel = new Label("Mean: --");
         meanLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11;");
         meanLabel.setPadding(new Insets(2, 0, 2, 0));
 
-        // --- Row 2: Min label + slider ---
         minLabel = new Label("Min: 0");
         minLabel.setMinWidth(LABEL_WIDTH);
         minLabel.setMaxWidth(LABEL_WIDTH);
-
         minSlider = new Slider(0, 255, 0);
-        HBox.setHgrow(minSlider, Priority.ALWAYS);
 
-        HBox minRow = new HBox(4, minLabel, minSlider);
-        minRow.setAlignment(Pos.CENTER_LEFT);
-
-        // --- Row 3: Max label + slider ---
         maxLabel = new Label("Max: 255");
         maxLabel.setMinWidth(LABEL_WIDTH);
         maxLabel.setMaxWidth(LABEL_WIDTH);
-
         maxSlider = new Slider(0, 255, 255);
-        HBox.setHgrow(maxSlider, Priority.ALWAYS);
-
-        HBox maxRow = new HBox(4, maxLabel, maxSlider);
-        maxRow.setAlignment(Pos.CENTER_LEFT);
 
         // --- Slider listeners ---
         minSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -124,10 +103,10 @@ public class HistogramView extends VBox {
             drawHistogram();
         });
 
-        // --- Row 4: Buttons + Always Auto-Scale checkbox ---
-        Button fullRangeBtn = new Button("Full Range");
-        Button autoScaleBtn = new Button("Auto Scale");
-        CheckBox alwaysAutoScale = new CheckBox("Always Auto-Scale");
+        // --- Buttons + Always Auto-Scale checkbox ---
+        fullRangeBtn = new Button("Full Range");
+        autoScaleBtn = new Button("Auto Scale");
+        alwaysAutoScale = new CheckBox("Always Auto-Scale");
         alwaysAutoScale.setTooltip(
                 new javafx.scene.control.Tooltip("When checked, every live frame and acquired tile is auto-scaled.\n"
                         + "When unchecked, your manual Min/Max sliders are preserved.\n"
@@ -163,10 +142,6 @@ public class HistogramView extends VBox {
             }
         });
 
-        HBox buttonRow = new HBox(8, fullRangeBtn, autoScaleBtn, alwaysAutoScale);
-        buttonRow.setAlignment(Pos.CENTER);
-        buttonRow.setPadding(new Insets(2, 0, 0, 0));
-
         // Slider drag turns off the persistent flag. Reflect that in the
         // checkbox so its state stays in sync with the underlying setting.
         minSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
@@ -176,7 +151,91 @@ public class HistogramView extends VBox {
             if (alwaysAutoScale.isSelected()) alwaysAutoScale.setSelected(false);
         });
 
-        getChildren().addAll(histRow, meanLabel, minRow, maxRow, buttonRow);
+        applyLayout();
+    }
+
+    /**
+     * Switches between the horizontal (below-image) and vertical (right-side)
+     * layouts. The histogram bars and the min/max sliders reorient; the text
+     * labels and buttons stay upright.
+     */
+    public void setVertical(boolean v) {
+        if (this.vertical == v) {
+            return;
+        }
+        this.vertical = v;
+        applyLayout();
+    }
+
+    public boolean isVertical() {
+        return vertical;
+    }
+
+    /** (Re)builds the child layout for the current orientation. */
+    private void applyLayout() {
+        getChildren().clear();
+
+        if (vertical) {
+            minSlider.setOrientation(Orientation.VERTICAL);
+            maxSlider.setOrientation(Orientation.VERTICAL);
+            minSlider.setMaxHeight(Double.MAX_VALUE);
+            maxSlider.setMaxHeight(Double.MAX_VALUE);
+            canvas.setWidth(HIST_THICKNESS);
+
+            HBox histArea = new HBox(4, canvas, minSlider, maxSlider);
+            histArea.setAlignment(Pos.TOP_LEFT);
+            histArea.setMinHeight(0);
+            VBox.setVgrow(histArea, Priority.ALWAYS);
+            VBox.setVgrow(minSlider, Priority.ALWAYS);
+            VBox.setVgrow(maxSlider, Priority.ALWAYS);
+            // Canvas height tracks the (growing) histogram area.
+            histArea.heightProperty().addListener((obs, oldVal, newVal) -> {
+                double h = newVal.doubleValue();
+                if (h > 0) {
+                    canvas.setHeight(h);
+                }
+            });
+
+            HBox valueRow = new HBox(8, minLabel, maxLabel);
+            valueRow.setAlignment(Pos.CENTER_LEFT);
+            VBox buttons = new VBox(4, fullRangeBtn, autoScaleBtn, alwaysAutoScale);
+            buttons.setPadding(new Insets(2, 0, 0, 0));
+
+            getChildren().addAll(histArea, meanLabel, valueRow, buttons);
+        } else {
+            minSlider.setOrientation(Orientation.HORIZONTAL);
+            maxSlider.setOrientation(Orientation.HORIZONTAL);
+            minSlider.setMaxHeight(Region.USE_COMPUTED_SIZE);
+            maxSlider.setMaxHeight(Region.USE_COMPUTED_SIZE);
+            canvas.setHeight(HIST_THICKNESS);
+
+            HBox histRow = new HBox(canvas);
+            histRow.setAlignment(Pos.CENTER_LEFT);
+            // Prevent the non-resizable Canvas from dictating the parent's min
+            // width (otherwise the window slowly grows on every layout pass).
+            histRow.setMinWidth(0);
+            histRow.widthProperty().addListener((obs, oldVal, newVal) -> {
+                double w = newVal.doubleValue();
+                if (w > 0) {
+                    canvas.setWidth(w);
+                }
+            });
+
+            HBox.setHgrow(minSlider, Priority.ALWAYS);
+            HBox.setHgrow(maxSlider, Priority.ALWAYS);
+            HBox minRow = new HBox(4, minLabel, minSlider);
+            minRow.setAlignment(Pos.CENTER_LEFT);
+            HBox maxRow = new HBox(4, maxLabel, maxSlider);
+            maxRow.setAlignment(Pos.CENTER_LEFT);
+
+            HBox buttonRow = new HBox(8, fullRangeBtn, autoScaleBtn, alwaysAutoScale);
+            buttonRow.setAlignment(Pos.CENTER);
+            buttonRow.setPadding(new Insets(2, 0, 0, 0));
+
+            getChildren().addAll(histRow, meanLabel, minRow, maxRow, buttonRow);
+        }
+
+        drawHistogram();
     }
 
     /**
@@ -295,14 +354,87 @@ public class HistogramView extends VBox {
     }
 
     private void drawHistogram() {
+        if (vertical) {
+            drawHistogramVertical();
+        } else {
+            drawHistogramHorizontal();
+        }
+    }
+
+    private void drawHistogramHorizontal() {
         double canvasWidth = canvas.getWidth();
+        double h = canvas.getHeight();
         GraphicsContext gc = canvas.getGraphicsContext2D();
 
-        // Clear
         gc.setFill(Color.BLACK);
-        gc.fillRect(0, 0, canvasWidth, HIST_HEIGHT);
+        gc.fillRect(0, 0, canvasWidth, h);
 
-        // Find max for log scale normalization
+        double maxLog = maxLogCount();
+
+        int rangeMin = contrastSettings.getDisplayMin() * 255 / Math.max(1, currentMaxValue);
+        int rangeMax = contrastSettings.getDisplayMax() * 255 / Math.max(1, currentMaxValue);
+        double barWidth = canvasWidth / 256.0;
+
+        // Contrast range shading
+        gc.setFill(Color.rgb(40, 40, 80));
+        gc.fillRect(rangeMin * barWidth, 0, (rangeMax - rangeMin) * barWidth, h);
+
+        // Bars (rise from the bottom)
+        gc.setFill(Color.LIGHTGRAY);
+        for (int i = 0; i < 256; i++) {
+            if (currentHistogram[i] > 0) {
+                double barHeight = (Math.log1p(currentHistogram[i]) / maxLog) * (h - 2);
+                gc.fillRect(i * barWidth, h - barHeight, Math.max(barWidth, 1), barHeight);
+            }
+        }
+
+        // Min/max lines
+        gc.setStroke(Color.CYAN);
+        gc.setLineWidth(1);
+        gc.strokeLine(rangeMin * barWidth, 0, rangeMin * barWidth, h);
+        gc.strokeLine(rangeMax * barWidth, 0, rangeMax * barWidth, h);
+    }
+
+    private void drawHistogramVertical() {
+        double w = canvas.getWidth();
+        double h = canvas.getHeight();
+        GraphicsContext gc = canvas.getGraphicsContext2D();
+
+        gc.setFill(Color.BLACK);
+        gc.fillRect(0, 0, w, h);
+
+        double maxLog = maxLogCount();
+
+        int rangeMin = contrastSettings.getDisplayMin() * 255 / Math.max(1, currentMaxValue);
+        int rangeMax = contrastSettings.getDisplayMax() * 255 / Math.max(1, currentMaxValue);
+        double barHeight = h / 256.0;
+
+        // y for a bin (intensity low at the bottom, high at the top)
+        // bin i occupies [yTop(i), yTop(i)+barHeight); yTop(i) = h - (i+1)*barHeight
+        // Contrast range shading (a horizontal band on the intensity axis)
+        double yRangeTop = h - rangeMax * barHeight;
+        double yRangeBot = h - rangeMin * barHeight;
+        gc.setFill(Color.rgb(40, 40, 80));
+        gc.fillRect(0, yRangeTop, w, yRangeBot - yRangeTop);
+
+        // Bars (extend rightward from the left edge)
+        gc.setFill(Color.LIGHTGRAY);
+        for (int i = 0; i < 256; i++) {
+            if (currentHistogram[i] > 0) {
+                double barLen = (Math.log1p(currentHistogram[i]) / maxLog) * (w - 2);
+                double y = h - (i + 1) * barHeight;
+                gc.fillRect(0, y, barLen, Math.max(barHeight, 1));
+            }
+        }
+
+        // Min/max lines (horizontal)
+        gc.setStroke(Color.CYAN);
+        gc.setLineWidth(1);
+        gc.strokeLine(0, yRangeBot, w, yRangeBot);
+        gc.strokeLine(0, yRangeTop, w, yRangeTop);
+    }
+
+    private double maxLogCount() {
         double maxLog = 0;
         for (int count : currentHistogram) {
             if (count > 0) {
@@ -310,30 +442,6 @@ public class HistogramView extends VBox {
                 if (logVal > maxLog) maxLog = logVal;
             }
         }
-
-        if (maxLog == 0) maxLog = 1;
-
-        // Draw contrast range shading
-        int rangeMin = contrastSettings.getDisplayMin() * 255 / Math.max(1, currentMaxValue);
-        int rangeMax = contrastSettings.getDisplayMax() * 255 / Math.max(1, currentMaxValue);
-        double barWidth = canvasWidth / 256.0;
-        gc.setFill(Color.rgb(40, 40, 80));
-        gc.fillRect(rangeMin * barWidth, 0, (rangeMax - rangeMin) * barWidth, HIST_HEIGHT);
-
-        // Draw histogram bars
-        gc.setFill(Color.LIGHTGRAY);
-        for (int i = 0; i < 256; i++) {
-            if (currentHistogram[i] > 0) {
-                double logVal = Math.log1p(currentHistogram[i]);
-                double barHeight = (logVal / maxLog) * (HIST_HEIGHT - 2);
-                gc.fillRect(i * barWidth, HIST_HEIGHT - barHeight, Math.max(barWidth, 1), barHeight);
-            }
-        }
-
-        // Draw min/max lines
-        gc.setStroke(Color.CYAN);
-        gc.setLineWidth(1);
-        gc.strokeLine(rangeMin * barWidth, 0, rangeMin * barWidth, HIST_HEIGHT);
-        gc.strokeLine(rangeMax * barWidth, 0, rangeMax * barWidth, HIST_HEIGHT);
+        return maxLog == 0 ? 1 : maxLog;
     }
 }

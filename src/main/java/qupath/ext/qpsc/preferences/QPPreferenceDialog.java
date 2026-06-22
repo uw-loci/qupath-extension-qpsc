@@ -170,6 +170,11 @@ public class QPPreferenceDialog {
                     PathPrefs.locationFontSizeProperty().get(),
                     PathPrefs.FontSize.class);
 
+    // Live Viewer: dock the Histogram & Contrast + Noise Stats panel on the
+    // right (vertical) instead of below the image. Driven by a toolbar toggle.
+    private static final BooleanProperty liveViewerHistogramDockRightProperty =
+            PathPrefs.createPersistentPreference("liveViewerHistogramDockRight", false);
+
     // Warn the user when estimated acquisition size exceeds free disk space at the save location
     private static final BooleanProperty warnOnLowDiskSpaceProperty =
             PathPrefs.createPersistentPreference("warnOnLowDiskSpace", true);
@@ -804,6 +809,15 @@ public class QPPreferenceDialog {
 
     public static ObjectProperty<PathPrefs.FontSize> liveViewerPositionFontSizeProperty() {
         return liveViewerPositionFontSizeProperty;
+    }
+
+    /** Whether the Live Viewer docks the histogram/noise panel on the right (vertical). */
+    public static boolean getLiveViewerHistogramDockRight() {
+        return liveViewerHistogramDockRightProperty.get();
+    }
+
+    public static void setLiveViewerHistogramDockRight(boolean dockRight) {
+        liveViewerHistogramDockRightProperty.set(dockRight);
     }
 
     public static void setDisableAllAutofocus(boolean disable) {
