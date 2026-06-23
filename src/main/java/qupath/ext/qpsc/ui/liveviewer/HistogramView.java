@@ -196,12 +196,13 @@ public class HistogramView extends VBox {
                 }
             });
 
-            HBox valueRow = new HBox(8, minLabel, maxLabel);
-            valueRow.setAlignment(Pos.CENTER_LEFT);
+            // Intensity runs low-at-bottom / high-at-top in vertical mode, so
+            // put Max above the histogram and Min below it. A single bottom row
+            // with both labels makes it impossible to tell which end is which.
             VBox buttons = new VBox(4, fullRangeBtn, autoScaleBtn, alwaysAutoScale);
             buttons.setPadding(new Insets(2, 0, 0, 0));
 
-            getChildren().addAll(histArea, meanLabel, valueRow, buttons);
+            getChildren().addAll(maxLabel, histArea, minLabel, meanLabel, buttons);
         } else {
             minSlider.setOrientation(Orientation.HORIZONTAL);
             maxSlider.setOrientation(Orientation.HORIZONTAL);

@@ -2281,8 +2281,20 @@ public class StageControlPanel extends VBox {
             var illumResult = mc.getSocketClient().getIllumination();
             if (!illumResult.available()) return null;
 
-            float min = illumResult.minPower();
-            float max = illumResult.maxPower();
+            // GETILLM reports the range of whatever illumination device is
+            // CURRENTLY active on the hardware -- which is not necessarily the
+            // device for the modality this Camera tab is showing. On startup,
+            // or during a modality swap that races ModalityActuator's APPLYPR,
+            // the BF tab can be built while the FL Epi LED (max=1.0) is still
+            // the active device, so the slider collapses to a useless 0-1 band
+            // instead of 0-2100. The authoritative per-modality bound lives in
+            // config: modalities.<modality>.illumination.max_intensity. Prefer
+            // it for the slider range so the bounds are deterministic and never
+            // depend on hardware switch timing. (The live GETILLM value is
+            // still used below to seed the current slider position.)
+            Float configMax = readModalityMaxIntensity(currentCameraModality);
+            final float min = (configMax != null && configMax > 0) ? 0f : illumResult.minPower();
+            final float max = (configMax != null && configMax > 0) ? configMax : illumResult.maxPower();
             // Prefer the persisted last-edit per modality (e.g. BF) so the
             // Camera tab survives the APPLYPR-on-modality-switch that
             // otherwise resets the lamp to the YAML's
@@ -2405,12 +2417,19 @@ public class StageControlPanel extends VBox {
             });
 
             VBox illumBox = new VBox(2);
-            HBox topRow = new HBox(4, label, slider, onOffBtn);
+            // Keep the ON/OFF toggle OFF the slider row. Previously the row read
+            // "DiaLamp [====slider====] ON", which looks like the slider's right
+            // end is an ON switch (and reinforced the "0..1" misread when the
+            // range bug collapsed the track). The toggle now sits on the bottom
+            // row, visually separated from the slider track.
+            HBox topRow = new HBox(4, label, slider);
             topRow.setAlignment(Pos.CENTER_LEFT);
-            HBox bottomRow = new HBox(4);
+            HBox bottomRow = new HBox(6);
             Label valLabel = new Label("Intensity:");
             valLabel.setStyle("-fx-font-size: 9px;");
-            bottomRow.getChildren().addAll(valLabel, valueField);
+            javafx.scene.layout.Region spacer = new javafx.scene.layout.Region();
+            HBox.setHgrow(spacer, javafx.scene.layout.Priority.ALWAYS);
+            bottomRow.getChildren().addAll(valLabel, valueField, spacer, onOffBtn);
             bottomRow.setAlignment(Pos.CENTER_LEFT);
             illumBox.getChildren().addAll(topRow, bottomRow);
             return illumBox;
@@ -2445,6 +2464,44 @@ public class StageControlPanel extends VBox {
                 "Illum-Set");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Reads {@code modalities.<modality>.illumination.max_intensity} from config.
+     *
+     * <p>This is the authoritative per-modality upper bound for the illumination
+     * slider, independent of which device is currently active on the hardware.
+     * Using it makes the slider range deterministic instead of depending on the
+     * live GETILLM device (which races the modality switch -- see
+     * buildIlluminationControl). Returns null if the modality is unknown or the
+     * field is missing/non-numeric, in which case the caller falls back to the
+     * live GETILLM range.
+     */
+    private Float readModalityMaxIntensity(String modality) {
+        if (modality == null || modality.isBlank()) return null;
+        try {
+            Object modalities = mgr.getConfigItem("modalities");
+            if (!(modalities instanceof java.util.Map<?, ?> modMap)) return null;
+            // Match the modality key case-insensitively (config keys are
+            // capitalized e.g. "Brightfield"; the tab modality may differ).
+            Object modCfg = null;
+            for (var e : modMap.entrySet()) {
+                if (String.valueOf(e.getKey()).equalsIgnoreCase(modality)) {
+                    modCfg = e.getValue();
+                    break;
+                }
+            }
+            if (!(modCfg instanceof java.util.Map<?, ?> cfg)) return null;
+            Object illum = cfg.get("illumination");
+            if (!(illum instanceof java.util.Map<?, ?> illumMap)) return null;
+            Object maxObj = illumMap.get("max_intensity");
+            if (maxObj instanceof Number n) {
+                return n.floatValue();
+            }
+        } catch (Exception e) {
+            logger.debug("readModalityMaxIntensity({}) failed: {}", modality, e.getMessage());
+        }
+        return null;
     }
 
     /**
