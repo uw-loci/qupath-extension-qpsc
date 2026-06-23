@@ -99,6 +99,76 @@ public final class ConfigYamlEditor {
     }
 
     /**
+     * Update a scalar field on a stage insert under
+     * {@code stage.inserts.configurations.<insertId>}. Used by the Stage Insert
+     * Calibration dialog to persist captured stage positions (e.g. well-edge
+     * aperture coordinates).
+     *
+     * <p>If the field already exists its value is replaced (any trailing
+     * comment on the line is preserved, since calibration fields carry helpful
+     * "# stage X at well LEFT edge" annotations). If the field is absent it is
+     * inserted at the end of the insert's block.
+     *
+     * @param insertId  the insert configuration id (e.g. "dish35_well20")
+     * @param fieldName the scalar field (e.g. "aperture_left_x_um")
+     * @param value     the value to write
+     */
+    public static Result setInsertScalar(Path configPath, String insertId, String fieldName, double value)
+            throws IOException {
+        List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
+
+        int stageAt = findTopLevelKey(lines, "stage");
+        if (stageAt < 0) {
+            return new Result(false, "stage section not found");
+        }
+        int insertsIndent = leadingSpaces(lines.get(stageAt)).length() + 2;
+        int insertsAt = findChildKey(lines, stageAt + 1, insertsIndent, "inserts");
+        if (insertsAt < 0) {
+            return new Result(false, "stage.inserts not found");
+        }
+        int configsIndent = insertsIndent + 2;
+        int configsAt = findChildKey(lines, insertsAt + 1, configsIndent, "configurations");
+        if (configsAt < 0) {
+            return new Result(false, "stage.inserts.configurations not found");
+        }
+        int insertIndent = configsIndent + 2;
+        int insertAt = findChildKey(lines, configsAt + 1, insertIndent, insertId);
+        if (insertAt < 0) {
+            return new Result(false, "Insert '" + insertId + "' not found under stage.inserts.configurations");
+        }
+        int blockEnd = findBlockEnd(lines, insertAt + 1, insertIndent);
+        int fieldIndent = insertIndent + 2;
+        String formatted = formatScalar(value);
+
+        for (int i = insertAt + 1; i < blockEnd; i++) {
+            String line = lines.get(i);
+            if (matchesKey(line, fieldIndent, fieldName)) {
+                String existingValue = scalarValueOf(line);
+                // Preserve any trailing comment on the original line.
+                String comment = "";
+                int colon = line.indexOf(':');
+                String tail = colon >= 0 ? line.substring(colon + 1) : "";
+                int hash = indexOfUnquoted(tail, '#');
+                if (hash >= 0) {
+                    comment = "  " + tail.substring(hash).trim();
+                }
+                if (existingValue != null && existingValue.equals(formatted)) {
+                    return new Result(false, "No change (already " + formatted + ")");
+                }
+                lines.set(i, repeat(' ', fieldIndent) + fieldName + ": " + formatted + comment);
+                Files.write(configPath, lines, StandardCharsets.UTF_8);
+                logger.info("ConfigYamlEditor: {}.{} {} -> {}", insertId, fieldName, existingValue, formatted);
+                return new Result(true, insertId + "." + fieldName + " -> " + formatted);
+            }
+        }
+        // Field absent -- insert at the end of the insert block.
+        lines.add(blockEnd, repeat(' ', fieldIndent) + fieldName + ": " + formatted);
+        Files.write(configPath, lines, StandardCharsets.UTF_8);
+        logger.info("ConfigYamlEditor: inserted {}.{}: {}", insertId, fieldName, formatted);
+        return new Result(true, insertId + "." + fieldName + " -> " + formatted + " (new)");
+    }
+
+    /**
      * Update {@code exposure_ms} on a single channel under
      * {@code modalities.<modalityKey>.channels}. The channel must already
      * exist; this method does not create channels.

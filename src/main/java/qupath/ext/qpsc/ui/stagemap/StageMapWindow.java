@@ -400,6 +400,16 @@ public class StageMapWindow {
                 + "Edit the YAML file to set aperture and slide reference points."));
         configButton.setOnAction(e -> openConfigFolder());
 
+        // Calibrate button - drive-to-point capture of the selected insert's
+        // reference points, written straight back to the YAML.
+        Button calibrateButton = new Button("Calibrate...");
+        calibrateButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
+        calibrateButton.setTooltip(new Tooltip("Calibrate the selected insert's reference points.\n"
+                + "Drive the stage to each point (e.g. a petri-dish well edge)\n"
+                + "in Live View and capture the position; values are saved\n"
+                + "back to the microscope YAML and the map reloads."));
+        calibrateButton.setOnAction(e -> calibrateSelectedInsert());
+
         // Reload button - re-reads YAML config and updates display
         Button reloadButton = new Button("Reload");
         reloadButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
@@ -507,6 +517,7 @@ public class StageMapWindow {
                         applyFlipsCheckbox,
                         macroOverlayCheckbox,
                         configButton,
+                        calibrateButton,
                         reloadButton,
                         helpButton);
         return topBar;
@@ -589,6 +600,60 @@ public class StageMapWindow {
         } catch (Exception e) {
             logger.error("Failed to open config folder: {}", e.getMessage(), e);
             showError("Error", "Failed to open configuration folder:\n" + e.getMessage());
+        }
+    }
+
+    /**
+     * Opens the calibration dialog for the currently-selected insert. Lets the
+     * user capture the insert's reference points from the live stage and saves
+     * them back to the YAML, then reloads so the Stage Map reflects them.
+     */
+    @SuppressWarnings("unchecked")
+    private void calibrateSelectedInsert() {
+        try {
+            StageInsert selected = insertComboBox.getValue();
+            if (selected == null) {
+                showWarning("No Insert", "Select an insert to calibrate first.");
+                return;
+            }
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isEmpty()) {
+                showWarning(
+                        "No Config File",
+                        "No microscope configuration file is set.\n" + "Please set one in QuPath preferences.");
+                return;
+            }
+
+            MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+            Map<String, Object> insertsConfig = configManager.getSection("stage", "inserts");
+            Object configsObj = (insertsConfig != null) ? insertsConfig.get("configurations") : null;
+            Map<String, Object> insertConfig = null;
+            if (configsObj instanceof Map<?, ?> configs) {
+                Object c = configs.get(selected.getId());
+                if (c instanceof Map<?, ?> cm) {
+                    insertConfig = (Map<String, Object>) cm;
+                }
+            }
+            if (insertConfig == null) {
+                showWarning(
+                        "Not Calibratable",
+                        "Insert '" + selected.getId() + "' is synthesized from stage limits and has no\n"
+                                + "editable reference points in the config.\n\n"
+                                + "Only inserts declared under stage.inserts.configurations\n"
+                                + "(e.g. the petri-dish carriers) can be calibrated here.");
+                return;
+            }
+
+            boolean saved =
+                    InsertCalibrationDialog.show(stage, configPath, selected.getId(), selected.getName(), insertConfig);
+            if (saved) {
+                reloadConfiguration();
+                statusLabel.setText("Insert calibration saved");
+                statusLabel.setStyle("-fx-text-fill: #6b6;");
+            }
+        } catch (Exception e) {
+            logger.error("Insert calibration failed: {}", e.getMessage(), e);
+            showError("Error", "Calibration failed:\n" + e.getMessage());
         }
     }
 

@@ -138,6 +138,28 @@ public class StageInsertRegistry {
                 }
             }
 
+            // Ensure a baseline single-slide insert exists. A scope can declare
+            // a stage.inserts block purely to add special carriers (e.g. petri
+            // dishes) while still wanting the normal single-slide Stage Map. If
+            // the configured default slide isn't among the explicit configs,
+            // synthesize it from stage.limits + slide_size_um -- this keeps the
+            // polarity-derived axis inversion correct (the same path used when no
+            // inserts block exists at all), so the slide map never mirrors or
+            // disappears. Scopes that calibrate their slide explicitly keep it.
+            if (!inserts.isEmpty() && !inserts.containsKey(defaultInsertId)) {
+                StageInsert synthesized = synthesizeFromStageLimits(configManager);
+                if (synthesized != null) {
+                    inserts.putIfAbsent(synthesized.getId(), synthesized);
+                    if (!inserts.containsKey(defaultInsertId)) {
+                        defaultInsertId = synthesized.getId();
+                    }
+                    logger.info(
+                            "Added synthesized single-slide baseline '{}' alongside {} explicit insert(s)",
+                            synthesized.getId(),
+                            inserts.size() - 1);
+                }
+            }
+
             // If no configurations were loaded, use defaults
             if (inserts.isEmpty()) {
                 logger.info("No insert configurations found in YAML, using defaults");
