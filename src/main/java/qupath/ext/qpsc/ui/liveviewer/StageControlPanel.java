@@ -1571,10 +1571,11 @@ public class StageControlPanel extends VBox {
                         + "Switches cube/shutter/light source via APPLYCH; "
                         + "the per-channel Exp/Intensity spinners then drive the hardware live."));
 
-                // Show the channel id only -- displayName carries the wavelength
-                // ("DAPI (385 nm)") which doubles the column width and pushes
-                // the spinners into a single-character editor in cramped layouts.
-                Label channelLabel = new Label(ch.id());
+                // Lead with the excitation wavelength to match MicroManager's
+                // LED labeling ("385 nm") -- biologists key off the wavelength,
+                // not a dye name that may not apply to their sample. The dye id
+                // follows in parens since it is still the filename key.
+                Label channelLabel = new Label(formatChannelLabel(ch));
                 channelLabel.setStyle("-fx-font-size: 10px;");
                 if (ch.displayName() != null && !ch.displayName().equals(ch.id())) {
                     channelLabel.setTooltip(new Tooltip(ch.displayName()));
@@ -2941,6 +2942,30 @@ public class StageControlPanel extends VBox {
         }
         cameraStatusLabel.setText("Applied preset: " + name);
         cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+    }
+
+    // Matches an excitation wavelength like "385 nm" / "385nm" anywhere in a
+    // channel's display name (e.g. "DAPI (385 nm)").
+    private static final java.util.regex.Pattern WAVELENGTH_PATTERN =
+            java.util.regex.Pattern.compile("(\\d{3,4})\\s*nm", java.util.regex.Pattern.CASE_INSENSITIVE);
+
+    /**
+     * Builds the channel row label, leading with the excitation wavelength to
+     * match MicroManager's LED naming ("385 nm"), with the dye id in parens
+     * ("385 nm (DAPI)"). The wavelength is parsed from the channel display name
+     * (config display_name, e.g. "DAPI (385 nm)"). Falls back to the bare id
+     * when no wavelength is present (e.g. the Brightfield channel of a bf_if
+     * library), so non-wavelength channels still render sensibly.
+     */
+    private static String formatChannelLabel(qupath.ext.qpsc.modality.Channel ch) {
+        String display = ch.displayName();
+        if (display != null) {
+            java.util.regex.Matcher m = WAVELENGTH_PATTERN.matcher(display);
+            if (m.find()) {
+                return m.group(1) + " nm (" + ch.id() + ")";
+            }
+        }
+        return ch.id();
     }
 
     /**
