@@ -781,6 +781,40 @@ public class StageInsert {
     }
 
     /**
+     * True when this insert declares an outer outline (e.g. a petri-dish body
+     * around its imaging well), set via {@code dish_diameter_mm}. The outline is
+     * a circle concentric with the aperture center and may extend beyond the
+     * aperture.
+     */
+    public boolean hasOutline() {
+        return outlineDiameterUm > 0;
+    }
+
+    /**
+     * Checks whether a stage position lies within the outer outline circle
+     * (e.g. the 35mm petri-dish body). The outline is concentric with the
+     * aperture center and is generally larger than the aperture, so this admits
+     * positions outside {@link #isPositionInInsert} but still on the dish --
+     * which is what makes well-edge calibration practical. Returns {@code false}
+     * when no outline is configured.
+     *
+     * @param stageX X coordinate in stage coordinates (um)
+     * @param stageY Y coordinate in stage coordinates (um)
+     * @return true if the position is within the outline circle
+     */
+    public boolean isPositionInOutline(double stageX, double stageY) {
+        if (outlineDiameterUm <= 0) {
+            return false;
+        }
+        double cx = (getMinStageX() + getMaxStageX()) / 2.0;
+        double cy = (getMinStageY() + getMaxStageY()) / 2.0;
+        double r = outlineDiameterUm / 2.0;
+        double dx = stageX - cx;
+        double dy = stageY - cy;
+        return (dx * dx + dy * dy) <= (r * r);
+    }
+
+    /**
      * Checks if a stage position is on any slide (within the slide boundaries).
      *
      * @param stageX X coordinate in stage coordinates (um)

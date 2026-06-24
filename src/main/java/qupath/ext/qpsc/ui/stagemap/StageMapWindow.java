@@ -97,6 +97,11 @@ public class StageMapWindow {
     private volatile int consecutiveErrors = 0; // Track polling failures
     private static final int MAX_CONSECUTIVE_ERRORS = 10; // Pause polling after this many errors
     private static boolean movementWarningShownThisSession = false;
+    // Once-per-session acknowledgement for clicking past the imaging well into
+    // the surrounding dish body (inserts that declare an outer outline, e.g. a
+    // 35mm petri dish around a 14/20mm well). Moving here is legitimate -- it is
+    // needed to calibrate the well edge -- so we caution once, then allow it.
+    private static boolean outsideApertureWarningShownThisSession = false;
 
     // ========== Macro Overlay State ==========
     private CheckBox macroOverlayCheckbox;
@@ -1696,20 +1701,47 @@ public class StageMapWindow {
             return;
         }
 
-        // Check if position is within the aperture/insert bounds
-        // Note: The aperture calibration points define the valid clickable area.
+        // Check if position is within the aperture/insert bounds.
+        // Note: The aperture calibration points define the primary clickable area.
         // The stage.limits values in config are NOT accurate hardware limits.
+        //
+        // For inserts with an outer outline (a petri dish body around its imaging
+        // well), the well is smaller than the dish. Limiting clicks to the well
+        // makes edge calibration painful, so positions between the well and the
+        // dish outline are ALLOWED with a once-per-session caution; only clicks
+        // past the dish body are blocked. Plain slides (no outline) keep the
+        // strict aperture gate.
         if (!insert.isPositionInInsert(stageX, stageY)) {
-            logger.warn(
-                    "Invalid position clicked: ({}, {}) - outside aperture for insert '{}'",
-                    String.format("%.1f", stageX),
-                    String.format("%.1f", stageY),
-                    insert.getId());
-            showWarning(
-                    "Invalid Position",
-                    "The selected position is outside the visible aperture.\n"
-                            + "Please select a position within the stage insert area.");
-            return;
+            boolean withinDishBody = insert.hasOutline() && insert.isPositionInOutline(stageX, stageY);
+            if (withinDishBody) {
+                logger.info(
+                        "Click at ({}, {}) is outside the well but within the dish body of insert '{}'",
+                        String.format("%.1f", stageX),
+                        String.format("%.1f", stageY),
+                        insert.getId());
+                if (!outsideApertureWarningShownThisSession) {
+                    boolean confirmed = showOutsideApertureWarning(stageX, stageY);
+                    if (!confirmed) {
+                        return;
+                    }
+                    outsideApertureWarningShownThisSession = true;
+                }
+            } else {
+                logger.warn(
+                        "Invalid position clicked: ({}, {}) - outside {} for insert '{}'",
+                        String.format("%.1f", stageX),
+                        String.format("%.1f", stageY),
+                        insert.hasOutline() ? "dish body" : "aperture",
+                        insert.getId());
+                showWarning(
+                        "Invalid Position",
+                        insert.hasOutline()
+                                ? "The selected position is past the dish body outline.\n"
+                                        + "Please select a position within the dish."
+                                : "The selected position is outside the visible aperture.\n"
+                                        + "Please select a position within the stage insert area.");
+                return;
+            }
         }
 
         // First movement warning
@@ -1723,6 +1755,38 @@ public class StageMapWindow {
 
         // Execute the move
         executeMove(stageX, stageY);
+    }
+
+    /**
+     * Caution shown the first time this session that the user clicks past the
+     * imaging well into the surrounding dish body. Confirms once, then allows
+     * subsequent out-of-well moves silently (needed for well-edge calibration).
+     */
+    private boolean showOutsideApertureWarning(double targetX, double targetY) {
+        dialogShowing = true;
+        try {
+            Alert alert = new Alert(Alert.AlertType.WARNING);
+            alert.setTitle("Outside Imaging Well");
+            alert.setHeaderText("Moving Outside the Imaging Well");
+            alert.setContentText(String.format(
+                    "Target position: (%.1f, %.1f) um\n\n"
+                            + "This position is outside the imaging well but still within the\n"
+                            + "dish body. Moving here is allowed (e.g. to calibrate the well\n"
+                            + "edge), but there may be no coverslip or sample under the\n"
+                            + "objective. Watch clearance.\n\n"
+                            + "This warning will not appear again this session.",
+                    targetX, targetY));
+
+            ButtonType moveButton = new ButtonType("Move Stage", ButtonBar.ButtonData.OK_DONE);
+            ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
+            alert.getButtonTypes().setAll(moveButton, cancelButton);
+
+            // StageMap is always-on-top; helper parents + raises the alert.
+            Optional<ButtonType> result = UIFunctions.showAlertOverParent(alert, stage);
+            return result.isPresent() && result.get() == moveButton;
+        } finally {
+            dialogShowing = false;
+        }
     }
 
     private boolean showFirstMovementWarning(double targetX, double targetY) {
@@ -1806,6 +1870,7 @@ public class StageMapWindow {
      */
     public static void resetWarningFlag() {
         movementWarningShownThisSession = false;
+        outsideApertureWarningShownThisSession = false;
     }
 
     // ========== Macro Overlay Methods ==========
