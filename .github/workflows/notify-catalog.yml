@@ -47,10 +47,20 @@ jobs:
           # still work; the catalog-side bump_catalog.py just stores whatever
           # URL we send, so consistency with the existing main_url is more
           # important than the suffix.
+          #
+          # The download URL key differs by source: the `release: published`
+          # event payload uses `browser_download_url`, but `gh release view
+          # --json assets` (the workflow_dispatch path) uses `url`. Accept
+          # either so BOTH paths resolve -- previously the dispatch path always
+          # failed with "No .jar asset found", which is the only path that runs
+          # for releases created by the default GITHUB_TOKEN (the token guard
+          # suppresses the release event), so the catalog silently never bumped.
           ASSET_URL=$(echo "$ASSETS_JSON" | jq -r '
-            ([.[] | select(.name | endswith("-all.jar"))][0]?.browser_download_url
-             // [.[] | select(.name | endswith(".jar"))][0]?.browser_download_url
-             // empty)')
+            ([.[] | select(.name | endswith("-all.jar"))] | .[0]) as $all
+            | ([.[] | select(.name | endswith(".jar"))] | .[0]) as $any
+            | ( ($all.browser_download_url // $all.url)
+                // ($any.browser_download_url // $any.url)
+                // empty )')
           if [ -z "$ASSET_URL" ] || [ "$ASSET_URL" = "null" ]; then
             echo "::error::No .jar asset found on release $TAG"
             exit 1
