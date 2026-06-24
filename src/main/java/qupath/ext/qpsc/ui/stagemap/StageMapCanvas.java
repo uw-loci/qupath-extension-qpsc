@@ -11,6 +11,7 @@ import javafx.embed.swing.SwingFXUtils;
 import javafx.scene.image.ImageView;
 import javafx.scene.image.PixelWriter;
 import javafx.scene.image.WritableImage;
+import javafx.scene.input.MouseButton;
 import javafx.scene.layout.Pane;
 import javafx.scene.layout.StackPane;
 import javafx.scene.paint.Color;
@@ -149,6 +150,17 @@ public class StageMapCanvas extends StackPane {
     private double scale = 1.0; // pixels per micron
     private double offsetX = 0; // canvas offset for centering
     private double offsetY = 0;
+    // Auto-fit scale (the "fit the whole insert" baseline). Mouse-wheel zoom
+    // multiplies this; clamped to [fitScale*MIN_ZOOM, fitScale*MAX_ZOOM]. Set
+    // by calculateScale(); resetView() / insert-change / resize return here.
+    private double fitScale = 1.0;
+    private static final double MIN_ZOOM = 0.5; // a little wider than fit (see overflowing acquisitions)
+    private static final double MAX_ZOOM = 50.0; // deep zoom for inspecting acquired tiles
+    private static final double ZOOM_STEP = 1.1; // per wheel notch
+    // Drag-to-pan state (primary button). NaN = not dragging.
+    private double dragLastX = Double.NaN;
+    private double dragLastY = Double.NaN;
+    private boolean panning = false;
     private boolean showLegalZones = true;
     private boolean showTarget = false;
     private boolean flipsApplied = false;
@@ -303,12 +315,82 @@ public class StageMapCanvas extends StackPane {
         });
 
         overlayPane.setOnMouseClicked(e -> {
+            // Right-click resets the zoom/pan back to the fit-to-insert view.
+            if (e.getButton() == MouseButton.SECONDARY) {
+                resetView();
+                return;
+            }
+            // A pan drag ends with a click event; don't treat it as a move.
+            if (panning) {
+                return;
+            }
             if (e.getClickCount() == 2 && clickHandler != null && currentInsert != null) {
                 double[] stageCoords = screenToStage(e.getX(), e.getY());
                 if (stageCoords != null) {
                     clickHandler.accept(stageCoords[0], stageCoords[1]);
                 }
             }
+        });
+
+        // Mouse-wheel zoom, anchored on the cursor: the stage point under the
+        // pointer stays put while the view scales around it. Helps inspect
+        // large macro overlays and acquired tiles in slide context.
+        overlayPane.setOnScroll(e -> {
+            if (currentInsert == null || scale == 0 || e.getDeltaY() == 0) {
+                return;
+            }
+            double factor = (e.getDeltaY() > 0) ? ZOOM_STEP : 1.0 / ZOOM_STEP;
+            double newScale = Math.max(fitScale * MIN_ZOOM, Math.min(fitScale * MAX_ZOOM, scale * factor));
+            if (newScale == scale) {
+                return;
+            }
+            double cx = e.getX();
+            double cy = e.getY();
+            double f = newScale / scale;
+            // Keep the point under the cursor fixed: screen = offset + insert*scale,
+            // so offset' = cursor - (cursor - offset) * (newScale/scale).
+            offsetX = cx - (cx - offsetX) * f;
+            offsetY = cy - (cy - offsetY) * f;
+            scale = newScale;
+            renderBackground();
+            updateOverlays();
+            e.consume();
+        });
+
+        // Primary-button drag pans the view.
+        overlayPane.setOnMousePressed(e -> {
+            if (e.getButton() == MouseButton.PRIMARY) {
+                dragLastX = e.getX();
+                dragLastY = e.getY();
+                panning = false;
+            }
+        });
+        overlayPane.setOnMouseDragged(e -> {
+            if (Double.isNaN(dragLastX) || currentInsert == null) {
+                return;
+            }
+            double dx = e.getX() - dragLastX;
+            double dy = e.getY() - dragLastY;
+            // Small dead-zone so a click with tiny jitter isn't treated as a pan
+            // (which would otherwise suppress double-click-to-move).
+            if (!panning && Math.hypot(dx, dy) < 3) {
+                return;
+            }
+            panning = true;
+            showTarget = false;
+            offsetX += dx;
+            offsetY += dy;
+            dragLastX = e.getX();
+            dragLastY = e.getY();
+            renderBackground();
+            updateOverlays();
+        });
+        overlayPane.setOnMouseReleased(e -> {
+            dragLastX = Double.NaN;
+            dragLastY = Double.NaN;
+            // Leave `panning` true until the click event fires so the click
+            // handler can distinguish a pan-release from a real click; reset it
+            // on the next press.
         });
 
         // Handle size changes
@@ -544,6 +626,9 @@ public class StageMapCanvas extends StackPane {
         // The view origin (viewX, viewY) is shifted so the slide area is centered.
         offsetX = (w - viewWidth * scale) / 2.0 - viewX * scale;
         offsetY = (h - viewHeight * scale) / 2.0 - viewY * scale;
+
+        // This fit becomes the zoom baseline (and the right-click reset target).
+        fitScale = scale;
 
         logger.info(
                 "calculateScale: canvas={}x{}, aperture={}x{} um, viewBounds=[{}, {}, {}, {}] um, "
@@ -1764,6 +1849,19 @@ public class StageMapCanvas extends StackPane {
      * Triggers a full re-render.
      */
     public void render() {
+        renderBackground();
+        updateOverlays();
+    }
+
+    /**
+     * Resets the mouse-wheel zoom and pan back to the fit-to-insert view.
+     * Bound to right-click on the map.
+     */
+    public void resetView() {
+        if (currentInsert == null) {
+            return;
+        }
+        calculateScale();
         renderBackground();
         updateOverlays();
     }

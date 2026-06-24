@@ -42,6 +42,17 @@ The Stage Map displays several visual indicators:
 | Reload | Button | — | Re-read the microscope configuration file from disk and update the Stage Map display. Use this after manually editing the YAML or after calibrating an insert to see the changes reflected on the map. |
 | Clear | Button | — | Drop the cached acquisition thumbnails and Images list. Unlike unchecking **Show Acquisitions** (which just hides the overlay and keeps the cache), Clear frees memory and forces a fresh project rescan the next time you re-enable **Show Acquisitions**. Use this after acquiring new images that should appear in the overlay. |
 
+## Mouse navigation
+
+| Action | Effect |
+|--------|--------|
+| **Mouse wheel** | Zoom in/out, anchored on the cursor -- the point under the pointer stays put as the view scales. Use it to inspect a large macro overview or acquired tiles in slide context. |
+| **Drag (left button)** | Pan the view. |
+| **Right-click** | Reset zoom and pan back to the fit-to-insert view. |
+| **Double-click (left button)** | Move the stage to that point (unchanged). |
+
+Zoom and pan are display-only -- they never move the stage. Switching inserts, reloading the config, or right-clicking returns to the fit view. Resizing the window also re-fits.
+
 ## Workflow
 
 1. Open Stage Map from the menu

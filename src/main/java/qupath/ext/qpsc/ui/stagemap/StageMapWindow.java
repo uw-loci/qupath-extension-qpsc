@@ -428,7 +428,9 @@ public class StageMapWindow {
                     + "- Green crosshair: Current objective position\n"
                     + "- Orange rectangle: Camera field of view\n"
                     + "- Blue rectangles: Slide positions\n"
-                    + "- Double-click to move the stage"));
+                    + "- Double-click to move the stage\n"
+                    + "- Mouse wheel to zoom (on cursor), drag to pan,\n"
+                    + "  right-click to reset the view"));
         }
 
         Region spacer = new Region();
