@@ -336,6 +336,26 @@ public class BoundedAcquisitionWorkflow {
                                     tempTileDir);
                         }
 
+                        // Warn if the flat-field background was collected at a different lamp
+                        // level than the profile about to be used (silent flat-field artifacts).
+                        // Only relevant when correction will actually run.
+                        if (AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(
+                                configManager, result.modality(), result.detector())) {
+                            String bgBaseFolder = configManager.getBackgroundCorrectionFolder(result.modality());
+                            boolean proceed = BackgroundIlluminationCheck.checkAndWarn(
+                                    configManager,
+                                    result.modality(),
+                                    result.objective(),
+                                    result.detector(),
+                                    result.wbMode(),
+                                    bgBaseFolder);
+                            if (!proceed) {
+                                logger.warn("Acquisition cancelled by user after background/profile "
+                                        + "illumination mismatch warning");
+                                return;
+                            }
+                        }
+
                         // Lock stage movements and stop live viewing before acquisition starts
                         MicroscopeController.getInstance().setAcquisitionActive(true);
                         MicroscopeController.LiveViewState liveState =

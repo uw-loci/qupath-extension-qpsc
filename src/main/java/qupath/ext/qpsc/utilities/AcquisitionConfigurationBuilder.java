@@ -40,6 +40,36 @@ public class AcquisitionConfigurationBuilder {
             AcquisitionCommandBuilder commandBuilder) {}
 
     /**
+     * Whether background correction will effectively run for this
+     * {@code (modality, detector)} pair, accounting for the YAML enabled flag,
+     * the monochrome "Use background correction" user-preference override, and
+     * JAI handling. Mirrors the gating inside {@link #buildConfiguration} so
+     * pre-acquisition checks (e.g. the background/profile illumination warning)
+     * can decide whether a mismatch is even relevant without running the full
+     * build. Kept in sync with that block by hand -- if the gating there changes,
+     * update here too.
+     *
+     * @param configManager config manager for the active microscope
+     * @param baseModality   base modality name
+     * @param detector       detector id in use
+     * @return true if flat-field correction will be applied
+     */
+    public static boolean isBackgroundCorrectionEffectivelyEnabled(
+            MicroscopeConfigManager configManager, String baseModality, String detector) {
+        boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
+        String bgBaseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
+        if (!configManager.isJAICamera(detector)) {
+            boolean monoPref = PersistentPreferences.getUseBackgroundCorrectionMono();
+            if (bgEnabled && !monoPref) {
+                bgEnabled = false;
+            } else if (!bgEnabled && monoPref && bgBaseFolder != null) {
+                bgEnabled = true;
+            }
+        }
+        return bgEnabled;
+    }
+
+    /**
      * Builds a complete acquisition configuration from the provided parameters.
      *
      * @param sample Sample setup result containing hardware configuration
