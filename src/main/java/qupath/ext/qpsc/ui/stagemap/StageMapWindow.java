@@ -646,13 +646,13 @@ public class StageMapWindow {
                 return;
             }
 
-            boolean saved =
-                    InsertCalibrationDialog.show(stage, configPath, selected.getId(), selected.getName(), insertConfig);
-            if (saved) {
+            // Non-modal: the window stays open so the user can keep driving the
+            // stage to each point. The callback fires on each successful save.
+            InsertCalibrationDialog.show(stage, configPath, selected.getId(), selected.getName(), insertConfig, () -> {
                 reloadConfiguration();
                 statusLabel.setText("Insert calibration saved");
                 statusLabel.setStyle("-fx-text-fill: #6b6;");
-            }
+            });
         } catch (Exception e) {
             logger.error("Insert calibration failed: {}", e.getMessage(), e);
             showError("Error", "Calibration failed:\n" + e.getMessage());

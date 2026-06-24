@@ -8,16 +8,16 @@ import java.util.Map;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Scene;
 import javafx.scene.control.Button;
-import javafx.scene.control.ButtonBar;
-import javafx.scene.control.ButtonType;
-import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
+import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -25,19 +25,25 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 
 /**
- * Small calibration dialog for a single stage insert. Lets the user set the
+ * Non-modal calibration window for a single stage insert. Lets the user set the
  * insert's reference points (well-edge / aperture / slide edges) either by
- * typing a value or by driving the stage to that point in Live View and
+ * typing a value or by driving the stage to that point in the Live Viewer and
  * capturing the current position. "Save to config" writes the captured values
  * back to the microscope YAML via {@link ConfigYamlEditor}.
  *
- * <p>The intended workflow for a petri-dish insert: drive the stage so the
- * objective is centered on the well's left edge, click "Use current" on the
- * LEFT row; repeat for right / top / bottom. The Stage Map then derives the
+ * <p>The window is intentionally <b>modeless</b> (and always-on-top) so the user
+ * can keep operating the Live Viewer / joystick to move the stage while it is
+ * open -- a modal dialog would freeze exactly the controls needed to drive to
+ * each point. It stays open after Save so multiple points can be captured and
+ * persisted iteratively.
+ *
+ * <p>The intended workflow for a petri-dish insert: center the objective on the
+ * well's left edge in the Live Viewer, click "Use current X" on the LEFT row;
+ * repeat for right / top / bottom; click Save. The Stage Map then derives the
  * well center and extent from those four points.
  *
- * <p>Only the reference fields actually present in the insert's config block
- * are shown, so the same dialog serves both petri-dish carriers (four aperture
+ * <p>Only the reference fields actually present in the insert's config block are
+ * shown, so the same window serves both petri-dish carriers (four aperture
  * edges) and slide holders (aperture + slide edges).
  */
 public final class InsertCalibrationDialog {
@@ -68,17 +74,23 @@ public final class InsertCalibrationDialog {
     private InsertCalibrationDialog() {}
 
     /**
-     * Shows the calibration dialog modally.
+     * Opens the calibration window (non-modal). Returns immediately.
      *
-     * @param owner        the Stage Map window (dialog owner, for modality)
+     * @param owner        the Stage Map window (window owner)
      * @param configPath   path to the microscope YAML to write back to
      * @param insertId     the insert configuration id (e.g. "dish35_well20")
-     * @param insertName   display name for the dialog header
+     * @param insertName   display name for the window header
      * @param insertConfig the raw config map for this insert (to read current values)
-     * @return true if any value was saved (caller should reload the config)
+     * @param onSaved      run on the FX thread after a successful save (e.g. reload the map);
+     *                     may be null
      */
-    public static boolean show(
-            Stage owner, String configPath, String insertId, String insertName, Map<String, Object> insertConfig) {
+    public static void show(
+            Stage owner,
+            String configPath,
+            String insertId,
+            String insertName,
+            Map<String, Object> insertConfig,
+            Runnable onSaved) {
 
         // Determine which reference fields this insert actually declares.
         List<CalField> fields = new ArrayList<>();
@@ -87,27 +99,27 @@ public final class InsertCalibrationDialog {
                 fields.add(f);
             }
         }
-        if (fields.isEmpty()) {
-            logger.info("Insert '{}' has no known calibration fields to edit", insertId);
-        }
 
-        Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Calibrate Insert");
-        dialog.setHeaderText("Calibrate reference points for: " + insertName + "\n"
-                + "Drive the stage to each point in Live View, then click \"Use current\".");
+        Stage win = new Stage();
+        win.setTitle("Calibrate Insert: " + insertName);
         if (owner != null) {
-            dialog.initOwner(owner);
+            win.initOwner(owner);
         }
-        ButtonType saveType = new ButtonType("Save to config", ButtonBar.ButtonData.OK_DONE);
-        dialog.getDialogPane().getButtonTypes().addAll(saveType, ButtonType.CANCEL);
+        // Modeless on purpose: the user must keep driving the stage (Live Viewer
+        // / joystick) to each point while this is open. Always-on-top so it
+        // stays reachable above the Live Viewer during capture.
+        win.initModality(Modality.NONE);
+        win.setAlwaysOnTop(true);
+
+        Label header = new Label("Drive the stage to each point, then click \"Use current\".\n"
+                + "For a petri dish the well edge is the easiest feature to focus on.");
+        header.setStyle("-fx-font-size: 11px;");
 
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(6);
-        grid.setPadding(new Insets(10));
         grid.addRow(0, bold("Reference point"), bold("Stage value (um)"), bold(""));
 
-        // Live current-position readout, refreshed on each capture.
         Label currentPosLabel = new Label("Current stage: (press Refresh)");
         Button refreshBtn = new Button("Refresh");
 
@@ -121,8 +133,7 @@ public final class InsertCalibrationDialog {
             Button useCurrent = new Button("Use current " + f.axis());
             useCurrent.setTooltip(new Tooltip("Capture the live stage " + f.axis()
                     + " position into this field. Center the objective on the "
-                    + f.label().toLowerCase()
-                    + " first."));
+                    + f.label().toLowerCase() + " first."));
             final Axis axis = f.axis();
             useCurrent.setOnAction(e -> captureAxis(axis, valueField, currentPosLabel, useCurrent));
             grid.addRow(row++, nameLabel, valueField, useCurrent);
@@ -130,29 +141,41 @@ public final class InsertCalibrationDialog {
         }
 
         refreshBtn.setOnAction(e -> refreshCurrentPosition(currentPosLabel, refreshBtn));
-
         HBox posRow = new HBox(8, currentPosLabel, refreshBtn);
         posRow.setAlignment(Pos.CENTER_LEFT);
-        posRow.setPadding(new Insets(8, 0, 0, 0));
 
-        Label tip = new Label("Tip: for a petri dish the well edge is the easiest feature to focus on.\n"
-                + "Values are stage coordinates in micrometers; you can also type them directly.");
-        tip.setStyle("-fx-font-size: 11px; -fx-text-fill: #888;");
-        tip.setPadding(new Insets(8, 0, 0, 0));
+        Label statusLabel = new Label();
+        statusLabel.setStyle("-fx-font-size: 11px;");
 
-        VBox content = new VBox(4, grid, posRow, tip);
-        dialog.getDialogPane().setContent(content);
+        Button saveBtn = new Button("Save to config");
+        Button closeBtn = new Button("Close");
+        saveBtn.setDisable(fields.isEmpty());
+        HBox buttonRow = new HBox(8, saveBtn, closeBtn);
+        buttonRow.setAlignment(Pos.CENTER_RIGHT);
 
-        // Disable Save when there are no editable fields.
-        dialog.getDialogPane().lookupButton(saveType).setDisable(fields.isEmpty());
-
-        var result = dialog.showAndWait();
-        if (result.isEmpty() || result.get() != saveType) {
-            return false;
-        }
-
-        // Write each field back. Parse defensively; skip unparseable rows.
         Path path = Paths.get(configPath);
+        saveBtn.setOnAction(e -> doSave(path, insertId, fields, valueFields, statusLabel, onSaved));
+        closeBtn.setOnAction(e -> win.close());
+
+        Label tip = new Label("Values are stage coordinates in micrometers; you can also type them directly.\n"
+                + "This window stays open and does not block the Live Viewer -- move the stage freely.");
+        tip.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+
+        VBox content = new VBox(8, header, grid, posRow, new Separator(), statusLabel, buttonRow, tip);
+        content.setPadding(new Insets(12));
+
+        win.setScene(new Scene(content));
+        win.show();
+    }
+
+    /** Writes each field back to the YAML and reports the outcome inline. */
+    private static void doSave(
+            Path path,
+            String insertId,
+            List<CalField> fields,
+            List<TextField> valueFields,
+            Label statusLabel,
+            Runnable onSaved) {
         boolean anyChanged = false;
         List<String> failures = new ArrayList<>();
         for (int i = 0; i < fields.size(); i++) {
@@ -179,18 +202,20 @@ public final class InsertCalibrationDialog {
         }
 
         if (!failures.isEmpty()) {
-            javafx.scene.control.Alert alert =
-                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
-            alert.setTitle("Calibration");
-            alert.setHeaderText("Some fields were not saved");
-            alert.setContentText(String.join("\n", failures));
-            if (owner != null) {
-                alert.initOwner(owner);
-            }
-            alert.showAndWait();
+            statusLabel.setText("Not saved: " + String.join("; ", failures));
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #c0392b;");
+            return;
         }
-
-        return anyChanged;
+        if (anyChanged) {
+            statusLabel.setText("Saved. Map updated.");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #1e8449;");
+            if (onSaved != null) {
+                onSaved.run();
+            }
+        } else {
+            statusLabel.setText("No changes to save.");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888;");
+        }
     }
 
     /** Captures the live stage position on a background thread and fills the field. */
