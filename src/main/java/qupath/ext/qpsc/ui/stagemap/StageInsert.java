@@ -170,9 +170,21 @@ public class StageInsert {
         Double slideRightX = getDoubleValueOrNull(configMap, "slide_right_x_um");
 
         // Detect axis orientation (optics may invert the coordinate system)
-        // "Left" visually may correspond to larger X values if optics flip the image
+        // "Left" visually may correspond to larger X values if optics flip the image.
+        // Derive each axis from the SAME source used for that axis's origin/extent:
+        //   - X always comes from the aperture_left/right_x_um points.
+        //   - Y prefers the aperture_top/bottom_y_um points when present (dishes and
+        //     any insert that calibrates aperture Y), falling back to the slide_top/
+        //     bottom_y_um edges only when aperture Y is absent. Using slideTopY/
+        //     slideBottomY unconditionally was a bug: a dish supplies aperture Y but
+        //     not slide Y, so yInverted defaulted to (0 > 25000) = false and the whole
+        //     Y axis (origin at line ~187 and the acquisition overlay) rendered
+        //     vertically flipped. The well is a centered circle so the flip is
+        //     invisible on it, but the acquired image was upside down.
         boolean xInverted = apertureLeftX > apertureRightX;
-        boolean yInverted = slideTopY > slideBottomY;
+        boolean yInverted = (apertureTopY != null && apertureBottomY != null)
+                ? apertureTopY > apertureBottomY
+                : slideTopY > slideBottomY;
 
         // Calculate aperture dimensions from reference points (always positive)
         double apertureWidthUm = Math.abs(apertureRightX - apertureLeftX);
