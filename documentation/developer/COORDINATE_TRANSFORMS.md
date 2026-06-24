@@ -198,6 +198,16 @@ graph TB
 | Applied when | Each save site writes the transform in the frame of the entry it operates on; `AlignmentHelper.checkForSlideAlignment` loads it as-is (no bake) | Computing tile grid positions |
 | Storage post Step B | Per-pair preset + per-slide JSON `flipMacroX/Y` documents the frame. **Not** per-image metadata; per-image `FLIP_X/FLIP_Y` is no longer load-bearing for new code (legacy projects may still carry it). | Auto-detected from `StageInsert` calibration when YAML has `slide_holder`/`inserts`; the synthesized-insert path (`StageInsertRegistry.synthesizeFromStageLimits`, used when YAML has only `stage.limits`) takes inversion from the stage-polarity preference instead. |
 
+### Stage Map "Apply Flips" uses the camera flip ONLY (not the stitcher composite)
+
+The Stage Map's geometry is drawn through `StageMapCanvas.stageToScreen`, which already applies the active insert's axis inversion (= stage polarity — see the synthesized-insert path above). So the **unflipped** Stage Map is already in the *sample* frame. Only the **camera orientation** separates the sample frame from the displayed (Live Viewer) frame.
+
+Therefore `StageMapWindow.resolveCurrentFlipAxes` composes **`StageImageTransform.cameraFlipFlags()`** (camera only) XOR the source preset's `flipMacroX/Y` — it must **not** use `stitcherFlipFlags()` (stage polarity + camera), which would re-apply the polarity already baked into the map geometry.
+
+> **Why two different flag methods.** The *stitcher* builds its output from raw stage coordinates, so it needs the full `stitcherFlipFlags()` (polarity + camera). The *Stage Map* starts from already-polarity-corrected screen geometry, so it needs `cameraFlipFlags()` (camera only). Using the stitcher composite on the map double-counts polarity.
+
+This was the OWS3 "Apply Flips" bug (2026-06-23): polarity `(true, true)`, camera `NORMAL` → `stitcherFlipFlags()` = `(true, true)`, but the unflipped map already matched the Live Viewer (and the stitched acquisition, and the arrows were correct), so the correct Apply-Flips value was `(false, false)`. Checking Apply Flips mirrored the whole canvas — including the acquisition overlay — 180° away from the Live Viewer. The fix swaps the base term to `cameraFlipFlags()`. On non-inverted scopes (polarity `false, false`) the two methods are identical, so only inverted-stage scopes change behavior. The macro-overlay (`flipMacroX/Y`) term is unchanged; cross-scope macro overlays on inverted-stage scopes should be re-verified, since their presets may have been tuned against the old (double-counted) base.
+
 ### Per-slide JSON `flipMacroX/Y` — records the pixel frame each transform was saved in
 
 `AlignmentHelper.checkForSlideAlignment` reads `flipMacroX/Y` from the per-slide JSON purely as documentation of the frame the saved transform is in — this allows cross-scope alignment composition and legacy-flip advisories. The loader does **not** apply a flip bake; instead, the value lets `ImageFlipHelper.validateAndFlipIfNeeded` ensure the workflow runs on the correct entry. When `flipMacroX/Y` are omitted (BoundingBox fallback, legacy JSON), the loader assumes `false, false` and warns if a cross-scope compose attempt or legacy-flip check is needed.

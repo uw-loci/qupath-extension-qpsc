@@ -474,9 +474,10 @@ public class StageMapWindow {
                 + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-border-radius: 2; "
                 + "-fx-padding: 2 4;");
         applyFlipsCheckbox.setTooltip(new Tooltip("Flip the Stage Map to match the Live Viewer orientation.\n\n"
-                + "Default state composes two hardware properties:\n"
-                + "  - Active scope's Stage Polarity + Camera Orientation\n"
-                + "    (same composition the stitcher uses)\n"
+                + "Default state composes:\n"
+                + "  - Active scope's Camera Orientation (the map already\n"
+                + "    applies Stage Polarity, so only the camera flip is\n"
+                + "    needed to reach Live Viewer orientation)\n"
                 + "  - The macro overlay's per-scanner flipMacroX/Y from\n"
                 + "    the source picked in the Source dropdown\n"
                 + "XOR'd per-axis so the whole map -- including the macro\n"
@@ -1425,11 +1426,16 @@ public class StageMapWindow {
      * <p>Composes two fixed hardware-side properties of the active microscope
      * setup; the open project entry has no influence on the result.
      * <ol>
-     *   <li><b>Camera/stage flip</b> -- the composition of the active scope's
-     *       {@link qupath.ext.qpsc.utilities.StagePolarity} and
-     *       {@link qupath.ext.qpsc.utilities.CameraOrientation}, surfaced via
-     *       {@link StageImageTransform#stitcherFlipFlags()}. This is what the
-     *       stitcher already uses to mirror its output to match Live Viewer.</li>
+     *   <li><b>Camera flip</b> -- the active scope's
+     *       {@link qupath.ext.qpsc.utilities.CameraOrientation} only, via
+     *       {@link StageImageTransform#cameraFlipFlags()}. The map geometry is
+     *       drawn through {@code stageToScreen}, which already applies the
+     *       insert's axis inversion (= {@link qupath.ext.qpsc.utilities.StagePolarity}),
+     *       so the unflipped map is already in the sample frame. Only the camera
+     *       orientation separates the sample frame from the displayed (Live
+     *       Viewer) frame -- so we must NOT fold polarity in again here. Using
+     *       {@code stitcherFlipFlags()} (stage+camera) double-counted polarity
+     *       and made Apply Flips 180 deg wrong on inverted-stage scopes (OWS3).</li>
      *   <li><b>Macro overlay flip</b> -- if a macro is being shown, its source
      *       scanner's preset records {@code flipMacroX/Y} (the orientation of
      *       that scanner's macro relative to the stage). Read from
@@ -1445,7 +1451,16 @@ public class StageMapWindow {
      * @return a 2-element array {@code {flipX, flipY}}; never null
      */
     private boolean[] resolveCurrentFlipAxes() {
-        boolean[] stageFlags = StageImageTransform.current().stitcherFlipFlags();
+        // CAMERA flip only -- NOT stitcherFlipFlags(). The Stage Map geometry is
+        // drawn through stageToScreen, which already applies the insert's axis
+        // inversion (= stage polarity). stitcherFlipFlags() folds polarity in a
+        // second time, which double-counted it and made "Apply Flips" 180 deg
+        // wrong on inverted-stage scopes (OWS3: polarity (true,true), camera
+        // NORMAL -> stitcher (true,true) but the map already matched the Live
+        // Viewer unflipped, so the correct flip is (false,false)). The map is in
+        // the sample frame; only the camera orientation separates it from the
+        // displayed (Live Viewer) frame. See COORDINATE_TRANSFORMS.md.
+        boolean[] stageFlags = StageImageTransform.current().cameraFlipFlags();
         boolean macroFlipX = false;
         boolean macroFlipY = false;
         if (activePreset != null && activePreset.hasFlipState()) {
@@ -1454,7 +1469,7 @@ public class StageMapWindow {
         }
         boolean[] axes = {stageFlags[0] ^ macroFlipX, stageFlags[1] ^ macroFlipY};
         logger.info(
-                "resolveCurrentFlipAxes: stage/camera=({}, {}) XOR macroPreset='{}'=({}, {}) -> ({}, {})",
+                "resolveCurrentFlipAxes: camera=({}, {}) XOR macroPreset='{}'=({}, {}) -> ({}, {})",
                 stageFlags[0],
                 stageFlags[1],
                 activePreset != null ? activePreset.getName() : "(none)",

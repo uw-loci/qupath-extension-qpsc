@@ -210,6 +210,38 @@ public class StageImageTransform {
         return new boolean[] {flipX, flipY};
     }
 
+    /**
+     * Compute the axis-aligned sign-flip flags for the <strong>camera
+     * orientation only</strong>, i.e. the flip that maps the sample frame to
+     * the displayed (Live Viewer) frame. Unlike {@link #stitcherFlipFlags()},
+     * this does <em>not</em> fold in the stage polarity.
+     *
+     * <p>Use this for surfaces that are <strong>already in the sample frame</strong>
+     * (stage polarity already applied) and only need the remaining camera flip to
+     * reach Live Viewer orientation. The Stage Map is exactly such a surface: its
+     * geometry is drawn through {@code stageToScreen}, which already applies the
+     * insert's axis inversion (= stage polarity). Using {@code stitcherFlipFlags()}
+     * there would re-apply the polarity a second time -- the double-count that made
+     * the Stage Map's "Apply Flips" 180-degree wrong on inverted-stage scopes such
+     * as OWS3. The stitcher, by contrast, builds its output from raw stage
+     * coordinates and therefore needs the full stage+camera composite.
+     *
+     * <p>Swap-axis (90-degree) camera orientations are approximated the same way
+     * as in {@link #stitcherFlipFlags()} (mirror-only fallback).
+     *
+     * @return {@code boolean[2]} containing {@code [flipX, flipY]}
+     */
+    public boolean[] cameraFlipFlags() {
+        if (cameraOrientation.swapsAxes()) {
+            boolean flipX = cameraOrientation == CameraOrientation.ROT_90_CW
+                    || cameraOrientation == CameraOrientation.ANTI_TRANSPOSE;
+            boolean flipY = cameraOrientation == CameraOrientation.ROT_90_CCW
+                    || cameraOrientation == CameraOrientation.ANTI_TRANSPOSE;
+            return new boolean[] {flipX, flipY};
+        }
+        return new boolean[] {cameraOrientation.flipsX(), cameraOrientation.flipsY()};
+    }
+
     @Override
     public String toString() {
         return String.format("StageImageTransform[stage=%s, camera=%s]", stagePolarity, cameraOrientation);
