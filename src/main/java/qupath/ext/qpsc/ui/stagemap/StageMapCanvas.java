@@ -66,6 +66,10 @@ public class StageMapCanvas extends StackPane {
     private static final Color TARGET_OUTLINE_COLOR = Color.BLACK;
     private static final Color OUT_OF_BOUNDS_COLOR = Color.rgb(255, 100, 100, 0.8);
     private static final Color LIP_SHADE = Color.rgb(50, 50, 60, 0.45);
+    // Outer dish-body outline (e.g. the 35mm wall around a petri-dish well).
+    // A muted ring distinct from the bright blue well so the two read as
+    // "well inside dish" rather than merging into one circle.
+    private static final Color DISH_OUTLINE_COLOR = Color.rgb(150, 150, 160);
     private static final Color BOUNDING_BOX_PREVIEW_FILL = Color.rgb(0, 255, 0, 0.22);
     private static final Color BOUNDING_BOX_PREVIEW_STROKE = Color.LIME;
     private static final Color SEARCH_RANGE_FILL = Color.rgb(255, 120, 0, 0.12);
@@ -625,6 +629,15 @@ public class StageMapCanvas extends StackPane {
                     fillRectBlend(zx, zy, zw, zh, LEGAL_ZONE);
                 }
             }
+        }
+
+        // Draw the optional outer dish outline (context only) concentric with
+        // the aperture center, before the samples so the well renders on top.
+        if (currentInsert.getOutlineDiameterUm() > 0) {
+            double ocx = offsetX + currentInsert.getWidthUm() / 2.0 * scale;
+            double ocy = offsetY + currentInsert.getHeightUm() / 2.0 * scale;
+            double oR = currentInsert.getOutlineDiameterUm() / 2.0 * scale;
+            drawCircleBorder(ocx, ocy, oR, DISH_OUTLINE_COLOR, 2);
         }
 
         // Draw samples (shape-aware)

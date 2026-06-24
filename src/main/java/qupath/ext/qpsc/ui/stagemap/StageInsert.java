@@ -51,6 +51,11 @@ public class StageInsert {
     private boolean xAxisInverted = false;
     private boolean yAxisInverted = false;
 
+    // Optional outer-outline diameter (microns) drawn for context on the Stage
+    // Map, concentric with the aperture center. Purely visual -- e.g. the 35mm
+    // body of a petri dish around its imaging well. 0 means no outline.
+    private double outlineDiameterUm = 0.0;
+
     /**
      * Creates a new StageInsert with the specified parameters.
      *
@@ -286,6 +291,8 @@ public class StageInsert {
                 id, name, apertureWidthMm, apertureHeightMm, originXUm, originYUm, slideMarginUm, slides, kind);
         insert.xAxisInverted = xInverted;
         insert.yAxisInverted = yInverted;
+        // Optional outer outline (e.g. a petri dish body around its well).
+        insert.outlineDiameterUm = getDoubleValue(configMap, "dish_diameter_mm", 0.0) * MM_TO_UM;
 
         logger.info(
                 "fromConfigMap '{}': aperture={}x{} mm, origin=({}, {}) um, "
@@ -553,6 +560,15 @@ public class StageInsert {
     }
 
     /**
+     * Returns the outer-outline diameter in microns (e.g. a petri dish body),
+     * or 0 if none. Drawn for context on the Stage Map, concentric with the
+     * aperture center. Purely visual -- not a sample, move target, or legal zone.
+     */
+    public double getOutlineDiameterUm() {
+        return outlineDiameterUm;
+    }
+
+    /**
      * Returns only the SLIDE-kind samples. Useful for callers that operate on
      * rectangular slide positions specifically (e.g., the MS workflow).
      */
@@ -635,18 +651,42 @@ public class StageInsert {
                 String.format("%.0f", maxY),
                 String.format("%.0f", marginUm));
 
+        // Include the optional outer outline (e.g. a petri dish body) so the
+        // view shows the whole dish, not just the well. The outline is
+        // concentric with the aperture center and may extend beyond the
+        // aperture (a 35mm dish around a 20mm well).
+        double rawMinX = minX, rawMinY = minY, rawMaxX = maxX, rawMaxY = maxY;
+        if (outlineDiameterUm > 0) {
+            double r = outlineDiameterUm / 2.0;
+            double cx = widthUm / 2.0;
+            double cy = heightUm / 2.0;
+            rawMinX = Math.min(rawMinX, cx - r);
+            rawMinY = Math.min(rawMinY, cy - r);
+            rawMaxX = Math.max(rawMaxX, cx + r);
+            rawMaxY = Math.max(rawMaxY, cy + r);
+        }
+        minX = rawMinX;
+        minY = rawMinY;
+        maxX = rawMaxX;
+        maxY = rawMaxY;
+
         // Add margin
         minX -= marginUm;
         minY -= marginUm;
         maxX += marginUm;
         maxY += marginUm;
 
-        // Clamp to aperture bounds (don't show beyond the aperture)
+        // Clamp so we don't show empty holder beyond the aperture -- but allow
+        // the view to extend to anything that legitimately sticks out past the
+        // aperture (a dish outline larger than its well-sized aperture). The
+        // clamp bound is the union of the aperture and the raw sample/outline
+        // extent, so normal slides still clamp to the aperture exactly while
+        // dishes are shown in full.
         double preClampMinX = minX, preClampMinY = minY, preClampMaxX = maxX, preClampMaxY = maxY;
-        minX = Math.max(0, minX);
-        minY = Math.max(0, minY);
-        maxX = Math.min(widthUm, maxX);
-        maxY = Math.min(heightUm, maxY);
+        minX = Math.max(Math.min(0, rawMinX), minX);
+        minY = Math.max(Math.min(0, rawMinY), minY);
+        maxX = Math.min(Math.max(widthUm, rawMaxX), maxX);
+        maxY = Math.min(Math.max(heightUm, rawMaxY), maxY);
 
         logger.info(
                 "getSlideViewBounds: after margin [{}, {}] to [{}, {}], "
