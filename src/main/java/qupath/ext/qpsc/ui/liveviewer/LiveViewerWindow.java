@@ -1373,11 +1373,88 @@ public class LiveViewerWindow {
             handleStreamingFocus();
             return;
         }
+        // Once per session, warn that autofocus will be slow when the exposure
+        // is high (e.g. a fluorescence channel at 100 ms): the Z scan captures
+        // many frames, so it can take a long time while the live image barely
+        // changes -- which reads as a freeze but is not. Then dispatch.
+        maybeWarnSlowAutofocus(this::dispatchAutofocus);
+    }
+
+    /** Runs the configured autofocus method (sweep or streaming). */
+    private void dispatchAutofocus() {
         if ("SWEEP".equals(PersistentPreferences.getLiveViewerAutofocusMethod())) {
             handleSweepFocus();
         } else {
             handleStreamingFocus();
         }
+    }
+
+    // Shown at most once per QuPath session (across Live Viewer open/close).
+    private static boolean slowAfWarningShownThisSession = false;
+    private static final double SLOW_AF_EXPOSURE_THRESHOLD_MS = 15.0;
+
+    /**
+     * If this is the first autofocus this session and the current exposure is
+     * above {@link #SLOW_AF_EXPOSURE_THRESHOLD_MS}, asks the user to confirm
+     * before the (slow) scan; otherwise proceeds immediately. The exposure is
+     * read on a background thread (GETCAM is a blocking socket call); if it
+     * can't be read, autofocus proceeds without a prompt rather than blocking.
+     *
+     * @param proceed run on the FX thread when the user confirms (or no warning is needed)
+     */
+    private void maybeWarnSlowAutofocus(Runnable proceed) {
+        if (slowAfWarningShownThisSession) {
+            proceed.run();
+            return;
+        }
+        Thread t = new Thread(
+                () -> {
+                    double exposureMs = -1;
+                    try {
+                        MicroscopeController c = MicroscopeController.getInstance();
+                        if (c != null && c.isConnected()) {
+                            var ex = c.getSocketClient().getExposures();
+                            exposureMs = ex.isPerChannel()
+                                    ? Math.max(ex.unified(), Math.max(ex.red(), Math.max(ex.green(), ex.blue())))
+                                    : ex.unified();
+                        }
+                    } catch (Exception ignore) {
+                        // Unknown exposure -- don't block AF on a failed read.
+                    }
+                    final double exp = exposureMs;
+                    Platform.runLater(() -> {
+                        if (exp <= SLOW_AF_EXPOSURE_THRESHOLD_MS) {
+                            proceed.run();
+                            return;
+                        }
+                        // Warn once per session, regardless of the user's choice.
+                        slowAfWarningShownThisSession = true;
+                        javafx.scene.control.Alert alert =
+                                new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.CONFIRMATION);
+                        alert.setTitle("Autofocus may be slow");
+                        alert.setHeaderText(String.format("Exposure is %.0f ms - autofocus will be slow.", exp));
+                        javafx.scene.control.Label msg = new javafx.scene.control.Label(
+                                "Autofocus captures many frames as it scans through Z. At "
+                                        + String.format("%.0f", exp)
+                                        + " ms per frame the scan can take a while, and the live image\n"
+                                        + "may not change noticeably during it -- that is normal, not a freeze.\n\n"
+                                        + "Proceed with autofocus?");
+                        msg.setWrapText(true);
+                        msg.setMaxWidth(420);
+                        alert.getDialogPane().setContent(msg);
+                        ButtonType proceedBtn =
+                                new ButtonType("Autofocus", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+                        alert.getButtonTypes().setAll(proceedBtn, ButtonType.CANCEL);
+                        UIFunctions.showAlertOverParent(alert, stage).ifPresent(bt -> {
+                            if (bt == proceedBtn) {
+                                proceed.run();
+                            }
+                        });
+                    });
+                },
+                "AF-Exposure-Check");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**
