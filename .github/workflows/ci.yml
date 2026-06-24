@@ -28,6 +28,9 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: uw-loci/qupath-extension-tiles-to-pyramid
+          # Keep in sync with the shadow("...tiles-to-pyramid:X.Y.Z") version in
+          # build.gradle.kts; pinned so a tiles main bump can't desync the build.
+          ref: v0.4.4
           path: tiles-to-pyramid
 
       - name: Grant execute permission for gradlew
