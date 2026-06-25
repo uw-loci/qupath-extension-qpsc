@@ -197,14 +197,17 @@ public class StageMapWindow {
     }
 
     /**
-     * Shows a translucent bright-orange dashed rectangle on the Stage Map marking the
-     * area a SIFT auto-align is searching, centered on the current stage
-     * position. No-op if the Stage Map window is not open.
+     * Shows a translucent bright-orange dashed rectangle on the Stage Map marking
+     * the area a SIFT auto-align is searching, pinned to the live crosshair so it
+     * tracks stage motion during the alignment step. Sized by the given
+     * half-extents (microns) and seeded at {@code seedCenterX/Y}. No-op if the
+     * Stage Map window is not open.
      */
-    public static void setSearchRangePreview(double minStageX, double minStageY, double maxStageX, double maxStageY) {
+    public static void setSearchRangeFollow(
+            double seedCenterX, double seedCenterY, double halfWidthUm, double halfHeightUm) {
         Platform.runLater(() -> {
             if (isVisible() && instance.canvas != null) {
-                instance.canvas.setSearchRangePreview(minStageX, minStageY, maxStageX, maxStageY);
+                instance.canvas.setSearchRangeFollow(seedCenterX, seedCenterY, halfWidthUm, halfHeightUm);
             }
         });
     }

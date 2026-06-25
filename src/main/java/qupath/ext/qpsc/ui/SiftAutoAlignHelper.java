@@ -272,11 +272,10 @@ public final class SiftAutoAlignHelper {
             }
             double halfWidthUm = (tile.getROI().getBoundsWidth() * wsiPixelSize) / 2.0 + marginUm;
             double halfHeightUm = (tile.getROI().getBoundsHeight() * wsiPixelSize) / 2.0 + marginUm;
-            qupath.ext.qpsc.ui.stagemap.StageMapWindow.setSearchRangePreview(
-                    centerStageX - halfWidthUm,
-                    centerStageY - halfHeightUm,
-                    centerStageX + halfWidthUm,
-                    centerStageY + halfHeightUm);
+            // Pin the box to the live crosshair so it tracks stage motion during
+            // the alignment step; centerStageX/Y only seed it before the first poll.
+            qupath.ext.qpsc.ui.stagemap.StageMapWindow.setSearchRangeFollow(
+                    centerStageX, centerStageY, halfWidthUm, halfHeightUm);
         } catch (Exception ex) {
             logger.debug("Could not draw SIFT search range on Stage Map: {}", ex.getMessage());
         }

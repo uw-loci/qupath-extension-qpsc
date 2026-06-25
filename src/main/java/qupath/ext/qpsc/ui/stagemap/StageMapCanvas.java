@@ -147,6 +147,11 @@ public class StageMapCanvas extends StackPane {
     private double searchRangeMinY = Double.NaN;
     private double searchRangeMaxX = Double.NaN;
     private double searchRangeMaxY = Double.NaN;
+    // When following, the SIFT search box re-centers on the live crosshair each
+    // position poll (half-extents below). See setSearchRangeFollow.
+    private boolean searchRangeFollowCrosshair = false;
+    private double searchRangeHalfWidthUm = Double.NaN;
+    private double searchRangeHalfHeightUm = Double.NaN;
     private double scale = 1.0; // pixels per micron
     private double offsetX = 0; // canvas offset for centering
     private double offsetY = 0;
@@ -448,6 +453,10 @@ public class StageMapCanvas extends StackPane {
         this.currentStageY = stageY;
         updateCrosshairOverlay();
         updateFOVOverlay();
+        // Pin the SIFT search box to the crosshair while it is following.
+        if (searchRangeFollowCrosshair) {
+            applySearchRangeCenter(stageX, stageY);
+        }
     }
 
     /**
@@ -1210,19 +1219,48 @@ public class StageMapCanvas extends StackPane {
 
     /**
      * Shows a translucent bright-orange dashed rectangle marking the area a SIFT
-     * auto-align is searching, centered on the current stage position. Stage
-     * coordinates in microns; min/max ordering is normalized.
+     * auto-align is searching, pinned to the live stage crosshair. The box is
+     * sized by the given half-extents (microns) and re-centers on the current
+     * objective position every time {@link #updatePosition(double, double)} fires,
+     * so it tracks stage motion during the alignment step. It is seeded at
+     * {@code seedCenterX/Y} for the moment before the first position poll arrives.
+     * Cleared via {@link #clearSearchRangePreview()} when the step ends.
+     *
+     * @param seedCenterX  initial center stage X (um), used until the first poll
+     * @param seedCenterY  initial center stage Y (um)
+     * @param halfWidthUm  half-width of the box (um)
+     * @param halfHeightUm half-height of the box (um)
      */
-    public void setSearchRangePreview(double minStageX, double minStageY, double maxStageX, double maxStageY) {
-        this.searchRangeMinX = Math.min(minStageX, maxStageX);
-        this.searchRangeMinY = Math.min(minStageY, maxStageY);
-        this.searchRangeMaxX = Math.max(minStageX, maxStageX);
-        this.searchRangeMaxY = Math.max(minStageY, maxStageY);
+    public void setSearchRangeFollow(double seedCenterX, double seedCenterY, double halfWidthUm, double halfHeightUm) {
+        this.searchRangeHalfWidthUm = halfWidthUm;
+        this.searchRangeHalfHeightUm = halfHeightUm;
+        this.searchRangeFollowCrosshair = true;
+        double cx = !Double.isNaN(currentStageX) ? currentStageX : seedCenterX;
+        double cy = !Double.isNaN(currentStageY) ? currentStageY : seedCenterY;
+        applySearchRangeCenter(cx, cy);
+    }
+
+    /** Re-centers the follow box on a stage position and redraws. No-op if inactive or sizes unset. */
+    private void applySearchRangeCenter(double cx, double cy) {
+        if (!searchRangeFollowCrosshair
+                || Double.isNaN(cx)
+                || Double.isNaN(cy)
+                || Double.isNaN(searchRangeHalfWidthUm)
+                || Double.isNaN(searchRangeHalfHeightUm)) {
+            return;
+        }
+        this.searchRangeMinX = cx - searchRangeHalfWidthUm;
+        this.searchRangeMinY = cy - searchRangeHalfHeightUm;
+        this.searchRangeMaxX = cx + searchRangeHalfWidthUm;
+        this.searchRangeMaxY = cy + searchRangeHalfHeightUm;
         updateSearchRangePreviewOverlay();
     }
 
-    /** Hides the SIFT search-range preview rectangle. */
+    /** Hides the SIFT search-range preview rectangle and stops it following the crosshair. */
     public void clearSearchRangePreview() {
+        this.searchRangeFollowCrosshair = false;
+        this.searchRangeHalfWidthUm = Double.NaN;
+        this.searchRangeHalfHeightUm = Double.NaN;
         this.searchRangeMinX = Double.NaN;
         this.searchRangeMinY = Double.NaN;
         this.searchRangeMaxX = Double.NaN;
