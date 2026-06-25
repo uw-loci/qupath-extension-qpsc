@@ -1683,36 +1683,6 @@ public class PersistentPreferences {
         zStackProjectionProperty.set(v);
     }
 
-    // --- Z-Stack / Time-Lapse dialog modality + profile selection ---
-    // Shared between both tabs of StackTimeLapseWorkflow; sets the microscope
-    // hardware state (objective, detector, filter, illumination, exposure)
-    // via APPLYPR + APPLYCH before each one-shot Z-stack or time-lapse run.
-
-    // Modality now lives in ModalityState (shared across all 8 acquisition
-    // dialogs). The legacy qpscStackTimeLapseModality preference key is left in
-    // the user's prefs file as harmless inert data; no Java code reads or
-    // writes it any more.
-    private static final StringProperty stackTimeLapseProfileProperty =
-            PathPrefs.createPersistentPreference("qpscStackTimeLapseProfile", "");
-    private static final StringProperty stackTimeLapseChannelProperty =
-            PathPrefs.createPersistentPreference("qpscStackTimeLapseChannel", "");
-
-    public static String getStackTimeLapseProfile() {
-        return stackTimeLapseProfileProperty.get();
-    }
-
-    public static void setStackTimeLapseProfile(String v) {
-        stackTimeLapseProfileProperty.set(v == null ? "" : v);
-    }
-
-    public static String getStackTimeLapseChannel() {
-        return stackTimeLapseChannelProperty.get();
-    }
-
-    public static void setStackTimeLapseChannel(String v) {
-        stackTimeLapseChannelProperty.set(v == null ? "" : v);
-    }
-
     // --- Time-lapse acquisition preferences ---
 
     private static final BooleanProperty timeLapseEnabledProperty =

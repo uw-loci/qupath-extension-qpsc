@@ -261,13 +261,6 @@ public class QPPreferenceDialog {
     private static final IntegerProperty sunburstRadiusOuterProperty =
             PathPrefs.createPersistentPreference("sunburstRadiusOuter", 150);
 
-    // Unified single-point acquisition dialog (successor to StackTimeLapseWorkflow).
-    // Default true as of the menu cutover: the Utilities > Z-Stack / Time-Lapse menu
-    // routes to SinglePointAcquisitionController. Set false to fall back to the
-    // legacy StackTimeLapseWorkflow if the new path misbehaves in production.
-    private static final BooleanProperty singlePointDialogEnabledProperty =
-            PathPrefs.createPersistentPreference("qpsc.experimental.singlePointDialog", true);
-
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
      */
@@ -396,15 +389,6 @@ public class QPPreferenceDialog {
                 .description("Save unprocessed (pre-background-correction) tile images.\n"
                         + "Useful for troubleshooting background subtraction.\n"
                         + "WARNING: Doubles file I/O time during acquisition.")
-                .build());
-        items.add(new PropertyItemBuilder<>(singlePointDialogEnabledProperty, Boolean.class)
-                .name("Use new Z-Stack / Time-Lapse dialog")
-                .category(CATEGORY)
-                .description("Route the Utilities > Z-Stack / Time-Lapse menu to the unified "
-                        + "Single-Point Acquisition dialog. Honors the selected modality "
-                        + "(instead of hardcoded brightfield), emits multi-plane OME-TIFFs, "
-                        + "and keeps the Live Viewer button synced with server streaming state. "
-                        + "Disable to fall back to the legacy StackTimeLapseWorkflow dialog.")
                 .build());
         items.add(new PropertyItemBuilder<>(tileOverlapPercentProperty, Double.class)
                 .name("Tile Overlap Percent")
@@ -1251,14 +1235,5 @@ public class QPPreferenceDialog {
 
     public static void setNotifyOnErrors(boolean enabled) {
         notifyOnErrorsProperty.set(enabled);
-    }
-
-    /** Observable flag controlling visibility of the experimental single-point acquisition dialog. */
-    public static BooleanProperty getSinglePointDialogEnabledProperty() {
-        return singlePointDialogEnabledProperty;
-    }
-
-    public static boolean isSinglePointDialogEnabled() {
-        return singlePointDialogEnabledProperty.get();
     }
 }

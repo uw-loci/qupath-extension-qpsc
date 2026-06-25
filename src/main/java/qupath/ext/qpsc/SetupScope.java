@@ -17,7 +17,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
-import qupath.ext.qpsc.controller.StackTimeLapseWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -517,13 +516,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         parfocalityCalibrationOption);
 
         // Z-Stack / Time-Lapse (needs microscope)
-        // Default path is now SinglePointAcquisitionController -- it honors the
-        // selected modality (instead of hardcoding brightfield), emits multi-dim
+        // Routes to SinglePointAcquisitionController -- it honors the selected
+        // modality (instead of hardcoding brightfield), emits multi-dim
         // OME-TIFFs, and syncs the Live button with server streaming state.
-        // The legacy StackTimeLapseWorkflow.java is retained as a fallback:
-        // setting qpsc.experimental.singlePointDialog to false re-routes the
-        // menu back to it. Rip-out will follow once the new path has been
-        // exercised against production acquisitions.
         MenuItem stackTimeLapseOption = new MenuItem("Z-Stack / Time-Lapse...");
         stackTimeLapseOption.setDisable(!configValid || offlineScope);
         setMenuItemTooltip(
@@ -531,13 +526,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 "Acquire a Z-stack or time-lapse at the current stage position. "
                         + "Single-tile acquisition with configurable Z range, time intervals, "
                         + "and per-modality output (multi-plane OME-TIFF).");
-        stackTimeLapseOption.setOnAction(e -> {
-            if (QPPreferenceDialog.isSinglePointDialogEnabled()) {
-                SinglePointAcquisitionController.show();
-            } else {
-                StackTimeLapseWorkflow.show(qupath);
-            }
-        });
+        stackTimeLapseOption.setOnAction(e -> SinglePointAcquisitionController.show());
 
         // Propagation tools (project utilities, no microscope needed)
         MenuItem propagationManagerOption = new MenuItem("Propagation Manager...");
