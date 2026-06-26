@@ -7,7 +7,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-06-25
+
 ### Added
+
+**Stage Map**
+- The SIFT search-range box now follows the live stage crosshair during a refinement step instead of staying at a fixed center, so the square tracks the objective position as you nudge the stage; it is removed when the alignment step ends. (`StageMapCanvas` follow mode + `StageMapWindow.setSearchRangeFollow`.)
+- Click-to-move into the **dish body** is now allowed for petri-dish inserts (any insert with `dish_diameter_mm` set): inside the imaging well moves freely, moving out into the dish body is allowed with a once-per-session caution (needed to calibrate the well edge), and moves past the dish outline are blocked. Plain slides keep the strict aperture gate.
+
+**Acquisition**
+- Pre-acquisition warning when the flat-field background was collected at a different lamp/illumination level than the acquisition profile about to be used (the silent cause of per-tile intensity/vignetting seams in brightfield). Compares the profile `illumination_intensity` against the level recorded in `background_settings.yml` and shows a cancelable dialog before the stage locks; scoped to adjustable-lamp collections (`lamp.available: true`). (`BackgroundIlluminationCheck`.)
 
 **Stage direction calibration ("Calibrate Directions" tool)**
 - Interactive dialog for calibrating camera orientation (optical flip/rotation) by jogging the stage and observing the Live Viewer image. Available in two places: as an optional Setup Wizard step (Step 5: Stage Calibration) and as a "Calibrate Directions..." button in the Live Viewer's Navigate tab. The dialog physically moves the stage by a small step in +X then +Y, asks which direction the image appeared to pan, and solves for the `Camera orientation` that matches under the user's current `Inverted X/Y stage` polarity setting — polarity is treated as a hardware-wiring fact (verified via direct stage observation or the MicroManager-script procedure in PREFERENCES.md) and is not changed by the tool. Non-blocking: saves your start position and restores it when closing. Manual override panel allows editing both polarity and orientation together for advanced users. Implementation: `StageDirectionCalibrationDialog` with 8-orientation back-solve over a fixed polarity, `StageCalibrationStep` in the Setup Wizard, and `Calibrate Directions...` button in `StageControlPanel`.
@@ -57,6 +66,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**Z-Stack / Time-Lapse dialog (legacy removal)**
+- Removed the legacy `StackTimeLapseWorkflow` dialog and the "Use new Z-Stack / Time-Lapse dialog" preference (`qpsc.experimental.singlePointDialog`) that gated the fallback to it. The Utilities > Z-Stack / Time-Lapse menu now always routes to the unified Single-Point Acquisition dialog (the default since 0.6.0). The unused `qpscStackTimeLapseProfile` / `qpscStackTimeLapseChannel` preferences were dropped as well.
+
 **Stitching concurrency: parallel angles and channels (both OME-TIFF and OME-ZARR)**
 - Angles (PPM) and channels (fluorescence) within a single annotation now stitch in parallel, bounded by the **Stitching concurrency** preference (default: 4 concurrent writers). Previously, OME-TIFF required sequential stitching due to BioFormats' `OMEPyramidWriter` concurrency bug; this constraint no longer applies with the new `DirectTiffOutputWriter`. Both OME-TIFF and OME-ZARR now use the same bounded-pool approach: each angle/channel is an independent writer to its own output file, and higher concurrency values accelerate multi-angle PPM and multi-channel fluorescence acquisitions. Set to 1 in **Preferences** for fully sequential stitching if needed for memory or isolation reasons. Does **not** introduce cross-annotation parallelism: different annotations continue stitching one at a time (their acquisition is inherently sequential as the stage moves between regions), so stitching of one annotation overlaps acquisition of the next without unbounded work accumulation.
 
@@ -77,6 +89,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - The dialog now has a shared **Setup** pane above the tabs with Modality / Profile / Channel dropdowns. On **Start**, the dialog calls `applyProfile(profile)` (full mode switch: PMT safety, ConfigGroup presets, detector switch, illumination, intensity, mode positions) and -- for channel-based modalities -- `applyChannel(profile, channelId)` before the existing Z-stack / time-lapse run. Replaces the previous hardcoded `"brightfield"` modality and `null` objective/detector wire arguments. **This fixes the brightfield dynamic-range issue**: with a real BF profile applied, the YAML's exposure / lamp intensity / condenser aperture settings reach the hardware before any tiles are captured. Channel row is hidden for modalities with no channels (BF, PPM). Selections persist across dialog re-opens. Empty `acquisition_profiles` config disables the controls with an inline notice rather than throwing.
 
 ### Fixed
+
+**Petri-dish insert: acquired image rendered upside down**
+- A `dish_holder` insert derived its Y-axis inversion from `slide_top/bottom_y_um` (which dishes do not set, so they defaulted to `0`/`25000` -> `yInverted=false`) instead of the `aperture_top/bottom_y_um` points the dish actually supplies. On stage-inverted scopes this rendered the dish's acquired-image overlay (and well origin) vertically flipped; the well is a centered circle so the flip was invisible on it. `yInverted` now prefers the aperture Y points, parallel to `xInverted` and the origin computation.
 
 **Existing Image Acquisition: alignment age display and recommendation logic**
 - Fixed a bug where scope-namespaced alignment files (e.g., `<sample>_OWS3_alignment.json`) were not detected, causing the "Last refined" date to show as "Unknown" and preventing the age-based confidence calculation from working. The system now checks for scope-namespaced files first, then falls back to legacy unscoped files, matching the behavior of the alignment-loading code.
