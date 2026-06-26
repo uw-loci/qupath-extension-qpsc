@@ -3,5 +3,7 @@
 # so check-doc-images.sh stops flagging them. Re-flags when NEW UI changes land
 # on top of the acked commit. Manage via: tools/check-doc-images.sh --ack <Image.png>
 # image	acked_commit	acked_date	note
-Docs_AnnotationAcquisition.png	9a204533acc78dcbfba666fa78502f783df96b71	2026-06-02	Save MDA... footer button; figure already full, not re-capturing
-Docs_ExistingImage_ConsolidatedDialog.png	9a204533acc78dcbfba666fa78502f783df96b71	2026-06-02	Save MDA... footer button; figure already full, not re-capturing
+Docs_mainmenu.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Only the stitching-unavailable alert text changed in SetupScope; the Extensions menu figure is unaffected.
+Docs_BoundedAcquisition.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Projection dropdown gained a 'None' item plus paste-split X/Y handling; no layout change vs the figure.
+Docs_AnnotationAcquisition.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Added projection 'None' and an output-organization dropdown; existing figure still represents the dialog adequately.
+Docs_ExistingImage_ConsolidatedDialog.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Added projection 'None' and an output-organization dropdown; not worth a re-shoot.
