@@ -349,6 +349,27 @@ public final class SiftAutoAlignHelper {
     }
 
     /**
+     * Builds the bold focus/exposure warning shown in every SIFT alignment
+     * dialog. SIFT matches on image detail, so a blurry, out-of-focus, or
+     * saturated live frame will misalign or fail outright -- and the workflow
+     * does NOT detect this automatically. The warning tells the user to verify
+     * focus and exposure before aligning. Reuse this in any new SIFT dialog so
+     * the reminder stays consistent.
+     *
+     * @return a styled, wrapped, bold warning Label ready to add to a dialog layout
+     */
+    public static Label buildFocusSaturationWarning() {
+        Label warn = new Label("Before aligning: confirm the live image is IN FOCUS and well-exposed "
+                + "(not saturated). SIFT matches on image detail -- a blurry or blown-out frame will "
+                + "misalign or fail. This is NOT checked automatically.");
+        warn.setWrapText(true);
+        warn.setMaxWidth(Double.MAX_VALUE);
+        warn.setStyle("-fx-font-weight: bold; -fx-text-fill: #C62828; -fx-background-color: #fff3e0; "
+                + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-padding: 6;");
+        return warn;
+    }
+
+    /**
      * Builds an HBox containing an "Auto-Align (SIFT)" button and a
      * "Settings..." button. The buttons drive {@link #autoAlign} and
      * {@link #showSettingsDialog} respectively. Status feedback is written
@@ -357,7 +378,8 @@ public final class SiftAutoAlignHelper {
      *
      * <p>Designed to be a drop-in row that both the SingleTileRefinement
      * dialog and the per-tile confirm dialog in the alignment workflow
-     * embed.
+     * embed. Pair it with {@link #buildFocusSaturationWarning()} so every
+     * SIFT dialog carries the focus/exposure reminder.
      */
     public static HBox buildSiftButtonRow(
             QuPathGUI gui, PathObject targetTile, Window settingsOwnerSupplierTarget, Label statusLabel) {

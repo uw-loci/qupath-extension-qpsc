@@ -470,6 +470,7 @@ public class SingleTileRefinement {
         content.getChildren()
                 .addAll(
                         headerLabel,
+                        SiftAutoAlignHelper.buildFocusSaturationWarning(),
                         instructionLabel,
                         tileInfoLabel,
                         siftButtonRow,

@@ -586,7 +586,14 @@ public class UIFunctions {
                 HBox siftRow = qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildSiftButtonRow(
                         gui, siftTargetTile, stage, siftStatus);
                 layout.getChildren()
-                        .addAll(headerLabel, instructionLabel, siftRow, siftStatus, new Separator(), buttonBox);
+                        .addAll(
+                                headerLabel,
+                                qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildFocusSaturationWarning(),
+                                instructionLabel,
+                                siftRow,
+                                siftStatus,
+                                new Separator(),
+                                buttonBox);
                 // Show the SIFT search range on the Stage Map (no-op if it isn't
                 // open) for the whole time this dialog is up. Cleared on close below.
                 qupath.ext.qpsc.ui.SiftAutoAlignHelper.drawSearchRangeAtCurrentPosition(gui, siftTargetTile);
@@ -594,7 +601,7 @@ public class UIFunctions {
                 layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
             }
 
-            Scene scene = new Scene(layout, siftTargetTile != null ? 460 : 350, siftTargetTile != null ? 240 : 150);
+            Scene scene = new Scene(layout, siftTargetTile != null ? 460 : 350, siftTargetTile != null ? 320 : 150);
             stage.setScene(scene);
 
             stage.setOnCloseRequest(e -> {
