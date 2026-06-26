@@ -9,6 +9,8 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
+import javafx.scene.canvas.Canvas;
+import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
@@ -17,6 +19,7 @@ import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
@@ -26,41 +29,48 @@ import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 
 /**
  * Non-modal calibration window for a single stage insert. Lets the user set the
- * insert's reference points (well-edge / aperture / slide edges) either by
- * typing a value or by driving the stage to that point in the Live Viewer and
- * capturing the current position. "Save to config" writes the captured values
- * back to the microscope YAML via {@link ConfigYamlEditor}.
+ * insert's reference points by typing a value or by driving the stage to that
+ * point in the Live Viewer and capturing the current position. "Save to config"
+ * writes the captured values back to the microscope YAML via
+ * {@link ConfigYamlEditor}.
+ *
+ * <p>Two capture styles, chosen by which keys the insert declares:
+ * <ul>
+ *   <li><b>Coverslip corners</b> (petri dishes): four {@code coverslip_cN_x_um/_y_um}
+ *       points. Drive each corner of the square coverslip to the center of the FOV
+ *       and click "Capture corner" -- both X and Y are taken at once. A wireframe
+ *       schematic shows the dish, coverslip, and central well with the active corner
+ *       highlighted. Corners may be captured in any order; the imaging rectangle is
+ *       their bounding box and axis inversion comes from the stage-polarity setting.</li>
+ *   <li><b>Edge points</b> (slide holders / legacy): single-axis aperture / slide
+ *       edges captured one axis at a time.</li>
+ * </ul>
  *
  * <p>The window is intentionally <b>modeless</b> (and always-on-top) so the user
- * can keep operating the Live Viewer / joystick to move the stage while it is
- * open -- a modal dialog would freeze exactly the controls needed to drive to
- * each point. It stays open after Save so multiple points can be captured and
- * persisted iteratively.
- *
- * <p>The intended workflow for a petri-dish insert: center the objective on the
- * well's left edge in the Live Viewer, click "Use current X" on the LEFT row;
- * repeat for right / top / bottom; click Save. The Stage Map then derives the
- * well center and extent from those four points.
- *
- * <p>Only the reference fields actually present in the insert's config block are
- * shown, so the same window serves both petri-dish carriers (four aperture
- * edges) and slide holders (aperture + slide edges).
+ * can keep operating the Live Viewer / joystick to move the stage while it is open
+ * -- a modal dialog would freeze exactly the controls needed to drive to each point.
+ * It stays open after Save so multiple points can be captured iteratively.
  */
 public final class InsertCalibrationDialog {
 
     private static final Logger logger = LoggerFactory.getLogger(InsertCalibrationDialog.class);
 
-    /** Stage axis a reference point is measured along. */
+    /** Stage axis a single-axis reference point is measured along. */
     private enum Axis {
         X,
         Y
     }
 
-    /** A known calibration field: its YAML key, a friendly label, and its axis. */
+    /** A single-axis calibration field: its YAML key, a friendly label, and its axis. */
     private record CalField(String key, String label, Axis axis) {}
 
-    // Ordered list of the reference points the Stage Map understands. Only those
-    // present in a given insert's config are shown.
+    /** A coverslip corner captured as an (X,Y) pair into two YAML keys. */
+    private record CalCorner(String label, String xKey, String yKey) {}
+
+    /** A key paired with the text field that edits it (used for save). */
+    private record KeyedField(String key, TextField field) {}
+
+    // Single-axis edge fields (slide holders / legacy dishes). Shown only when present.
     private static final List<CalField> KNOWN_FIELDS = List.of(
             new CalField("aperture_left_x_um", "Well / aperture LEFT edge", Axis.X),
             new CalField("aperture_right_x_um", "Well / aperture RIGHT edge", Axis.X),
@@ -70,6 +80,13 @@ public final class InsertCalibrationDialog {
             new CalField("slide_right_x_um", "Slide RIGHT edge", Axis.X),
             new CalField("slide_top_y_um", "Slide TOP edge", Axis.Y),
             new CalField("slide_bottom_y_um", "Slide BOTTOM edge", Axis.Y));
+
+    // Coverslip corners (petri dishes). Shown when present.
+    private static final List<CalCorner> KNOWN_CORNERS = List.of(
+            new CalCorner("Coverslip corner 1", "coverslip_c1_x_um", "coverslip_c1_y_um"),
+            new CalCorner("Coverslip corner 2", "coverslip_c2_x_um", "coverslip_c2_y_um"),
+            new CalCorner("Coverslip corner 3", "coverslip_c3_x_um", "coverslip_c3_y_um"),
+            new CalCorner("Coverslip corner 4", "coverslip_c4_x_um", "coverslip_c4_y_um"));
 
     private InsertCalibrationDialog() {}
 
@@ -81,8 +98,7 @@ public final class InsertCalibrationDialog {
      * @param insertId     the insert configuration id (e.g. "dish35_well20")
      * @param insertName   display name for the window header
      * @param insertConfig the raw config map for this insert (to read current values)
-     * @param onSaved      run on the FX thread after a successful save (e.g. reload the map);
-     *                     may be null
+     * @param onSaved      run on the FX thread after a successful save (e.g. reload the map); may be null
      */
     public static void show(
             Stage owner,
@@ -92,10 +108,15 @@ public final class InsertCalibrationDialog {
             Map<String, Object> insertConfig,
             Runnable onSaved) {
 
-        // Determine which reference fields this insert actually declares.
+        List<CalCorner> corners = new ArrayList<>();
+        for (CalCorner c : KNOWN_CORNERS) {
+            if (isNumber(insertConfig, c.xKey()) || isNumber(insertConfig, c.yKey())) {
+                corners.add(c);
+            }
+        }
         List<CalField> fields = new ArrayList<>();
         for (CalField f : KNOWN_FIELDS) {
-            if (insertConfig != null && insertConfig.get(f.key()) instanceof Number) {
+            if (isNumber(insertConfig, f.key())) {
                 fields.add(f);
             }
         }
@@ -105,39 +126,76 @@ public final class InsertCalibrationDialog {
         if (owner != null) {
             win.initOwner(owner);
         }
-        // Modeless on purpose: the user must keep driving the stage (Live Viewer
-        // / joystick) to each point while this is open. Always-on-top so it
-        // stays reachable above the Live Viewer during capture.
+        // Modeless on purpose: the user must keep driving the stage (Live Viewer /
+        // joystick) to each point while this is open. Always-on-top so it stays
+        // reachable above the Live Viewer during capture.
         win.initModality(Modality.NONE);
         win.setAlwaysOnTop(true);
 
-        Label header = new Label("Drive the stage to each point, then click \"Use current\".\n"
-                + "For a petri dish the well edge is the easiest feature to focus on.");
+        Label header = new Label(
+                corners.isEmpty()
+                        ? "Drive the stage to each point, then click \"Use current\"."
+                        : "Drive each coverslip corner to the CENTER of the FOV, then click \"Capture corner\".\n"
+                                + "Corners may be captured in any order.");
         header.setStyle("-fx-font-size: 11px;");
-
-        GridPane grid = new GridPane();
-        grid.setHgap(8);
-        grid.setVgap(6);
-        grid.addRow(0, bold("Reference point"), bold("Stage value (um)"), bold(""));
 
         Label currentPosLabel = new Label("Current stage: (press Refresh)");
         Button refreshBtn = new Button("Refresh");
 
-        List<TextField> valueFields = new ArrayList<>();
-        int row = 1;
-        for (CalField f : fields) {
-            Label nameLabel = new Label(f.label() + "  (" + f.axis() + ")");
-            double current = ((Number) insertConfig.get(f.key())).doubleValue();
-            TextField valueField = new TextField(formatUm(current));
-            valueField.setPrefWidth(110);
-            Button useCurrent = new Button("Use current " + f.axis());
-            useCurrent.setTooltip(new Tooltip("Capture the live stage " + f.axis()
-                    + " position into this field. Center the objective on the "
-                    + f.label().toLowerCase() + " first."));
-            final Axis axis = f.axis();
-            useCurrent.setOnAction(e -> captureAxis(axis, valueField, currentPosLabel, useCurrent));
-            grid.addRow(row++, nameLabel, valueField, useCurrent);
-            valueFields.add(valueField);
+        // Collect every editable (key, field) pair for save.
+        List<KeyedField> keyed = new ArrayList<>();
+
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(6);
+        int row = 0;
+
+        // Optional dish wireframe, with the active corner highlighted on capture.
+        DishWireframe wireframe = corners.isEmpty() ? null : new DishWireframe();
+
+        if (!corners.isEmpty()) {
+            grid.addRow(row++, bold("Coverslip corner"), bold("Stage X (um)"), bold("Stage Y (um)"), bold(""));
+            for (int i = 0; i < corners.size(); i++) {
+                CalCorner c = corners.get(i);
+                Label nameLabel = new Label(c.label());
+                TextField xField = new TextField(formatUm(numberOr(insertConfig, c.xKey(), 0)));
+                TextField yField = new TextField(formatUm(numberOr(insertConfig, c.yKey(), 0)));
+                xField.setPrefWidth(100);
+                yField.setPrefWidth(100);
+                Button capture = new Button("Capture corner");
+                capture.setTooltip(new Tooltip("Center the objective on this coverslip corner in the Live "
+                        + "Viewer, then click to capture both X and Y."));
+                final int idx = i;
+                capture.setOnAction(e -> {
+                    if (wireframe != null) {
+                        wireframe.setActive(idx);
+                    }
+                    captureCorner(xField, yField, currentPosLabel, capture);
+                });
+                grid.addRow(row++, nameLabel, xField, yField, capture);
+                keyed.add(new KeyedField(c.xKey(), xField));
+                keyed.add(new KeyedField(c.yKey(), yField));
+            }
+        }
+
+        if (!fields.isEmpty()) {
+            if (!corners.isEmpty()) {
+                grid.add(new Separator(), 0, row++, 4, 1);
+            }
+            grid.addRow(row++, bold("Reference point"), bold("Stage value (um)"), bold(""));
+            for (CalField f : fields) {
+                Label nameLabel = new Label(f.label() + "  (" + f.axis() + ")");
+                TextField valueField = new TextField(formatUm(numberOr(insertConfig, f.key(), 0)));
+                valueField.setPrefWidth(110);
+                Button useCurrent = new Button("Use current " + f.axis());
+                useCurrent.setTooltip(new Tooltip("Capture the live stage " + f.axis()
+                        + " position into this field. Center the objective on the "
+                        + f.label().toLowerCase() + " first."));
+                final Axis axis = f.axis();
+                useCurrent.setOnAction(e -> captureAxis(axis, valueField, currentPosLabel, useCurrent));
+                grid.addRow(row++, nameLabel, valueField, useCurrent);
+                keyed.add(new KeyedField(f.key(), valueField));
+            }
         }
 
         refreshBtn.setOnAction(e -> refreshCurrentPosition(currentPosLabel, refreshBtn));
@@ -149,19 +207,23 @@ public final class InsertCalibrationDialog {
 
         Button saveBtn = new Button("Save to config");
         Button closeBtn = new Button("Close");
-        saveBtn.setDisable(fields.isEmpty());
+        saveBtn.setDisable(keyed.isEmpty());
         HBox buttonRow = new HBox(8, saveBtn, closeBtn);
         buttonRow.setAlignment(Pos.CENTER_RIGHT);
 
         Path path = Paths.get(configPath);
-        saveBtn.setOnAction(e -> doSave(path, insertId, fields, valueFields, statusLabel, onSaved));
+        saveBtn.setOnAction(e -> doSave(path, insertId, keyed, statusLabel, onSaved));
         closeBtn.setOnAction(e -> win.close());
 
         Label tip = new Label("Values are stage coordinates in micrometers; you can also type them directly.\n"
                 + "This window stays open and does not block the Live Viewer -- move the stage freely.");
         tip.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
 
-        VBox content = new VBox(8, header, grid, posRow, new Separator(), statusLabel, buttonRow, tip);
+        VBox content = new VBox(8, header);
+        if (wireframe != null) {
+            content.getChildren().add(wireframe.node());
+        }
+        content.getChildren().addAll(grid, posRow, new Separator(), statusLabel, buttonRow, tip);
         content.setPadding(new Insets(12));
 
         win.setScene(new Scene(content));
@@ -170,34 +232,28 @@ public final class InsertCalibrationDialog {
 
     /** Writes each field back to the YAML and reports the outcome inline. */
     private static void doSave(
-            Path path,
-            String insertId,
-            List<CalField> fields,
-            List<TextField> valueFields,
-            Label statusLabel,
-            Runnable onSaved) {
+            Path path, String insertId, List<KeyedField> keyed, Label statusLabel, Runnable onSaved) {
         boolean anyChanged = false;
         List<String> failures = new ArrayList<>();
-        for (int i = 0; i < fields.size(); i++) {
-            CalField f = fields.get(i);
-            String text = valueFields.get(i).getText();
+        for (KeyedField kf : keyed) {
+            String text = kf.field().getText();
             if (text == null || text.isBlank()) continue;
             double value;
             try {
                 value = Double.parseDouble(text.trim());
             } catch (NumberFormatException ex) {
-                failures.add(f.key() + " (not a number: '" + text + "')");
+                failures.add(kf.key() + " (not a number: '" + text + "')");
                 continue;
             }
             try {
-                ConfigYamlEditor.Result r = ConfigYamlEditor.setInsertScalar(path, insertId, f.key(), value);
+                ConfigYamlEditor.Result r = ConfigYamlEditor.setInsertScalar(path, insertId, kf.key(), value);
                 if (r.changed) {
                     anyChanged = true;
                     logger.info("Calibration saved: {}", r.message);
                 }
             } catch (Exception ex) {
-                failures.add(f.key() + " (" + ex.getMessage() + ")");
-                logger.error("Failed to write {}.{}: {}", insertId, f.key(), ex.getMessage(), ex);
+                failures.add(kf.key() + " (" + ex.getMessage() + ")");
+                logger.error("Failed to write {}.{}: {}", insertId, kf.key(), ex.getMessage(), ex);
             }
         }
 
@@ -218,7 +274,33 @@ public final class InsertCalibrationDialog {
         }
     }
 
-    /** Captures the live stage position on a background thread and fills the field. */
+    /** Captures the live stage (X,Y) into both corner fields on a background thread. */
+    private static void captureCorner(TextField xField, TextField yField, Label currentPosLabel, Button button) {
+        button.setDisable(true);
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        double[] xy = MicroscopeController.getInstance().getStagePositionXY();
+                        Platform.runLater(() -> {
+                            xField.setText(formatUm(xy[0]));
+                            yField.setText(formatUm(xy[1]));
+                            currentPosLabel.setText(String.format("Current stage: X=%.1f  Y=%.1f um", xy[0], xy[1]));
+                            button.setDisable(false);
+                        });
+                    } catch (Exception ex) {
+                        logger.warn("Could not read stage position: {}", ex.getMessage());
+                        Platform.runLater(() -> {
+                            currentPosLabel.setText("Current stage: unavailable (" + ex.getMessage() + ")");
+                            button.setDisable(false);
+                        });
+                    }
+                },
+                "Insert-Calibrate-CaptureCorner");
+        t.setDaemon(true);
+        t.start();
+    }
+
+    /** Captures the live stage position (single axis) on a background thread. */
     private static void captureAxis(Axis axis, TextField target, Label currentPosLabel, Button button) {
         button.setDisable(true);
         Thread t = new Thread(
@@ -265,6 +347,80 @@ public final class InsertCalibrationDialog {
                 "Insert-Calibrate-Refresh");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * Small schematic of a coverslipped petri dish: outer dish outline, square
+     * coverslip (its four corners are the calibration fiducials), and the central
+     * circular well. The corner being captured is highlighted.
+     */
+    private static final class DishWireframe {
+        private static final double SIZE = 190;
+        private final Canvas canvas = new Canvas(SIZE, SIZE);
+        private int active = -1;
+
+        DishWireframe() {
+            draw();
+        }
+
+        Canvas node() {
+            return canvas;
+        }
+
+        void setActive(int idx) {
+            this.active = idx;
+            draw();
+        }
+
+        private void draw() {
+            GraphicsContext g = canvas.getGraphicsContext2D();
+            g.clearRect(0, 0, SIZE, SIZE);
+            double cx = SIZE / 2, cy = SIZE / 2;
+            double dishR = SIZE / 2 - 12; // 35mm dish
+            double coverHalf = dishR * (22.0 / 35.0); // 22mm coverslip half-side
+            double wellR = dishR * (14.0 / 35.0); // illustrative well
+
+            // dish outline
+            g.setStroke(Color.web("#9a9aa6"));
+            g.setLineWidth(2);
+            g.strokeOval(cx - dishR, cy - dishR, dishR * 2, dishR * 2);
+
+            // coverslip square
+            g.setStroke(Color.web("#1f6fb2"));
+            g.setLineWidth(2.2);
+            g.strokeRect(cx - coverHalf, cy - coverHalf, coverHalf * 2, coverHalf * 2);
+
+            // well circle
+            g.setFill(Color.web("#e8f5e9"));
+            g.fillOval(cx - wellR, cy - wellR, wellR * 2, wellR * 2);
+            g.setStroke(Color.web("#2e8b57"));
+            g.setLineWidth(1.6);
+            g.strokeOval(cx - wellR, cy - wellR, wellR * 2, wellR * 2);
+
+            // corners 1..4 (TL, TR, BR, BL to match the placeholder ordering)
+            double[][] pts = {
+                {cx - coverHalf, cy - coverHalf},
+                {cx + coverHalf, cy - coverHalf},
+                {cx + coverHalf, cy + coverHalf},
+                {cx - coverHalf, cy + coverHalf}
+            };
+            for (int i = 0; i < 4; i++) {
+                boolean on = i == active;
+                double r = on ? 8 : 5;
+                g.setFill(on ? Color.web("#c0392b") : Color.web("#c0392b", 0.55));
+                g.fillOval(pts[i][0] - r, pts[i][1] - r, r * 2, r * 2);
+                g.setFill(Color.web("#7a1f17"));
+                g.fillText(String.valueOf(i + 1), pts[i][0] + (i == 1 || i == 2 ? 6 : -12), pts[i][1] + 4);
+            }
+        }
+    }
+
+    private static boolean isNumber(Map<String, Object> cfg, String key) {
+        return cfg != null && cfg.get(key) instanceof Number;
+    }
+
+    private static double numberOr(Map<String, Object> cfg, String key, double dflt) {
+        return (cfg != null && cfg.get(key) instanceof Number n) ? n.doubleValue() : dflt;
     }
 
     private static Label bold(String text) {

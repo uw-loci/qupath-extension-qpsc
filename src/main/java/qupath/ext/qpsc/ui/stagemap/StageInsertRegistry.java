@@ -124,6 +124,7 @@ public class StageInsertRegistry {
                     String insertId = entry.getKey();
                     if (entry.getValue() instanceof Map) {
                         Map<String, Object> insertConfig = (Map<String, Object>) entry.getValue();
+                        insertConfig = applyCoverslipCornersIfPresent(insertId, insertConfig);
                         StageInsert insert = StageInsert.fromConfigMap(insertId, insertConfig, slideMarginUm);
                         inserts.put(insertId, insert);
                         logger.debug(
@@ -188,6 +189,61 @@ public class StageInsertRegistry {
      *
      * @return a synthetic StageInsert, or null if stage.limits or slide_size_um is missing
      */
+    /**
+     * Coverslip-corner calibration for petri-dish inserts. When an insert declares
+     * {@code coverslip_c1_x_um/_y_um} .. {@code _c4_} corner points, the imaging
+     * rectangle is the axis-aligned bounding box of the captured corners, and axis
+     * inversion is taken from the stage-polarity preference -- corners are captured
+     * in any order, so they cannot themselves indicate which way is visually-left
+     * (resolving that is the deferred rotation feature). This injects the
+     * {@code aperture_*_um} points the rest of the loader already understands, so
+     * {@link StageInsert#fromConfigMap} needs no special case. Returns the original
+     * map unchanged when fewer than two corners are present.
+     */
+    private static Map<String, Object> applyCoverslipCornersIfPresent(String insertId, Map<String, Object> cfg) {
+        List<double[]> corners = new ArrayList<>(4);
+        for (int i = 1; i <= 4; i++) {
+            Double x = asDouble(cfg.get("coverslip_c" + i + "_x_um"));
+            Double y = asDouble(cfg.get("coverslip_c" + i + "_y_um"));
+            if (x != null && y != null) {
+                corners.add(new double[] {x, y});
+            }
+        }
+        if (corners.size() < 2) {
+            return cfg;
+        }
+        double minX = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, minY = Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        for (double[] c : corners) {
+            minX = Math.min(minX, c[0]);
+            maxX = Math.max(maxX, c[0]);
+            minY = Math.min(minY, c[1]);
+            maxY = Math.max(maxY, c[1]);
+        }
+        StagePolarity polarity = QPPreferenceDialog.getStagePolarityProperty();
+        Map<String, Object> merged = new LinkedHashMap<>(cfg);
+        merged.put("aperture_left_x_um", polarity.invertX ? maxX : minX);
+        merged.put("aperture_right_x_um", polarity.invertX ? minX : maxX);
+        merged.put("aperture_top_y_um", polarity.invertY ? maxY : minY);
+        merged.put("aperture_bottom_y_um", polarity.invertY ? minY : maxY);
+        logger.info(
+                "Coverslip-corner insert '{}': {} corner(s) -> bbox X[{} .. {}] Y[{} .. {}] um, "
+                        + "polarity invX={} invY={}",
+                insertId,
+                corners.size(),
+                String.format("%.0f", minX),
+                String.format("%.0f", maxX),
+                String.format("%.0f", minY),
+                String.format("%.0f", maxY),
+                polarity.invertX,
+                polarity.invertY);
+        return merged;
+    }
+
+    /** Lenient numeric coercion for a config value; null when absent or non-numeric. */
+    private static Double asDouble(Object v) {
+        return (v instanceof Number n) ? n.doubleValue() : null;
+    }
+
     private static StageInsert synthesizeFromStageLimits(MicroscopeConfigManager configManager) {
         try {
             Double xLow = configManager.getDouble("stage", "limits", "x_um", "low");
