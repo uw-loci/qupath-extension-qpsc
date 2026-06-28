@@ -335,12 +335,17 @@ public class ExistingImageWorkflowV2 {
          * manually, review the results, then confirm.
          */
         private CompletableFuture<WorkflowState> handleNoAnnotations(WorkflowState state, List<String> validClasses) {
-            return UIFunctions.showAnnotationWarningDialog(gui, validClasses).thenCompose(action -> {
+            // Pass null (not validClasses) so the warning dialog's "Use Annotations and
+            // Continue" gate counts ANY annotation, not only the pre-selected classes.
+            // The class choice happens AFTER detection (selectClassesAfterDetection),
+            // because the class tissue detection produces (e.g. "Tissue") may not be
+            // among the pre-selected classes. Previously the gate filtered by
+            // validClasses, so running tissue detection that created "Tissue" left the
+            // user stuck whenever "Tissue" was not pre-selected, with no way to pick it.
+            return UIFunctions.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
                 switch (action) {
                     case ANNOTATIONS_CONFIRMED:
-                        state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
-                        logger.info("User confirmed {} annotations", state.annotations.size());
-                        return CompletableFuture.completedFuture(state);
+                        return selectClassesAfterDetection(state);
 
                     case CANCEL:
                         logger.info("User cancelled workflow due to no annotations");
@@ -349,6 +354,40 @@ public class ExistingImageWorkflowV2 {
                     default:
                         throw new RuntimeException("Unexpected annotation action: " + action);
                 }
+            });
+        }
+
+        /**
+         * After tissue detection (or manual drawing) created annotations, let the user
+         * choose which annotation CLASS(es) to acquire. The class-selection dialog is
+         * shown HERE -- not before detection -- because the classes that now exist
+         * (notably "Tissue" from the detection script) may not have been pre-selected.
+         * Filters the live hierarchy to the chosen classes and stores them so the
+         * post-routing re-read finds the same set without re-prompting.
+         */
+        private CompletableFuture<WorkflowState> selectClassesAfterDetection(WorkflowState state) {
+            Set<String> existing = getExistingAnnotationClasses();
+            if (existing.isEmpty()) {
+                // Annotations exist but are unclassified -- no class to choose; use them all.
+                state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, null);
+                logger.info("Using {} unclassified annotation(s) after detection", state.annotations.size());
+                return CompletableFuture.completedFuture(state);
+            }
+            List<String> preselected = PersistentPreferences.getSelectedAnnotationClasses();
+            return AnnotationAcquisitionDialog.showDialog(existing, preselected).thenApply(result -> {
+                if (result == null || !result.proceed || result.selectedClasses.isEmpty()) {
+                    throw new CancellationException("Annotation class selection cancelled after detection");
+                }
+                state.selectedAnnotationClasses = result.selectedClasses;
+                state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, result.selectedClasses);
+                logger.info(
+                        "After detection, user selected classes {} -> {} annotation(s)",
+                        result.selectedClasses,
+                        state.annotations.size());
+                if (state.annotations.isEmpty()) {
+                    throw new CancellationException("No annotations match the selected classes after detection");
+                }
+                return state;
             });
         }
 
