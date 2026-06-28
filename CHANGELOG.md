@@ -7,6 +7,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Petri-dish calibration by coverslip corners**
+- Coverslipped 35mm dishes are now calibrated by the **four corners of the square coverslip** instead of the circular well edges. A circle has no rotational reference, but the coverslip corners are real fiducials and easy to center in the FOV. In Stage Map > Calibrate..., dishes show four coverslip-corner rows (one "Capture corner" button takes X and Y together, any order) plus a wireframe schematic (dish / coverslip / well) that highlights the corner being captured. The imaging rectangle is the bounding box of the four corners; axis inversion comes from the Stage Polarity setting (so place the dish in the scope's usual orientation). Config schema: `coverslip_c1..c4_x_um/_y_um` (+ `coverslip_size_mm`) on a `dish_holder` insert; the registry injects the aperture rectangle, so the well circle and dish outline still render. Free re-orientation (rigid solve + rotated overlay) remains a deferred follow-up.
+
+**SIFT alignment: focus/exposure warning**
+- Every SIFT alignment dialog (microscope-to-microscope alignment, existing-image manual alignment, and sub-acquisition refinement) now shows a bold reminder to confirm the live image is in focus and not saturated before aligning. SIFT matches on image detail, so a blurry or blown-out frame misaligns or fails -- and this is not detected automatically. Centralized in `SiftAutoAlignHelper.buildFocusSaturationWarning()`.
+
+### Fixed
+
+**Existing-image: choose annotation class after tissue detection**
+- In the no-annotations path, the warning dialog gated "Use Annotations and Continue" on the pre-selected classes and re-read by those classes, so running tissue detection (which classifies as "Tissue") left the user stuck whenever "Tissue" was not pre-selected -- the detected annotations were filtered out with no way to pick the class that was produced. The dialog now counts any annotation (so detection output lets you proceed), and on confirm the annotation-class selection dialog is shown populated with the classes that now exist; the chosen class filters the hierarchy and is stored so the post-routing re-read does not re-prompt.
+
+**Live Viewer Camera tab: stale hardware -> wrong PPM/BF presets**
+- The Camera tab resolved its objective + detector once at Live Viewer open, which can run before the socket's live pixel size is available and fall back to a stale objective -- building the PPM/brightfield presets for the wrong objective+detector (incorrect/single exposures, missing per-channel "Uncrossed (Simple WB)" button). It now re-detects automatically when the Camera tab is selected (change-aware: only rebuilds when the objective/detector actually moved), so presets reflect the real hardware without a manual "Refresh from MM" click.
+
+### Documentation
+
+- Clarified that PPM sunburst calibration (hue -> angle) is **objective-independent**: a calibration captured at one objective (e.g. 40x) is valid at any other (e.g. 20x), higher magnification only improves quality. A magnification in the calibration filename/metadata records where it was captured, not a mismatch. (Active Calibration File preference tooltip + `PPM_MODALITY.md`, which also warns against re-adding an objective gate to the stamping.)
+
 ## [0.7.0] - 2026-06-25
 
 ### Added

@@ -95,6 +95,8 @@ This workflow already drives 3-point refinement implicitly: after you select a r
 
 > **Tip:** SIFT only succeeds when the live view already overlaps the selected tile by at least a few hundred microns. Pick a reference tile near visible features and drive the stage close (joystick or Live Viewer click-to-center) before clicking Auto-Align.
 
+> **In focus, not saturated.** Every SIFT dialog now shows a bold reminder to confirm the live image is in focus and well-exposed before aligning. SIFT matches on image detail, so a blurry or blown-out frame will misalign or fail -- this is not checked automatically.
+
 For each tile-confirm step:
 
 1. The stage is automatically moved to the predicted position (or you drive it manually if no estimate exists yet).
