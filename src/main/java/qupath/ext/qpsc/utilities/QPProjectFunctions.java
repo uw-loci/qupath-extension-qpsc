@@ -646,36 +646,12 @@ public class QPProjectFunctions {
                     detectorId,
                     sourceMicroscope);
 
-            // Stamp active PPM calibration on PPM images -- but ONLY when its
-            // objective matches this acquisition's objective. A PPM sunburst
-            // calibration is objective-specific, and the active calibration is a
-            // single global preference, so without this guard a 40x calibration
-            // left active gets stamped onto 20x acquisitions (wrong calibration in
-            // the entry metadata). The calibration magnification comes from the
-            // recorded calibration objective, falling back to the calibration
-            // filename for legacy calibrations that predate that record. If neither
-            // yields a magnification, skip rather than stamp a possibly-wrong file.
+            // Stamp active PPM calibration on PPM images
             if (modality != null && modality.toLowerCase().startsWith("ppm")) {
                 String activeCalibration = qupath.ext.qpsc.modality.ppm.PPMPreferences.getActiveCalibrationPath();
                 if (activeCalibration != null && !activeCalibration.isEmpty()) {
-                    String calObjective = qupath.ext.qpsc.modality.ppm.PPMPreferences.getActiveCalibrationObjective();
-                    String calMag = ObjectiveUtils.extractMagnification(
-                            (calObjective != null && !calObjective.isEmpty()) ? calObjective : activeCalibration);
-                    String acqMag = ObjectiveUtils.extractMagnification(objective);
-                    if (calMag != null && acqMag != null && calMag.equalsIgnoreCase(acqMag)) {
-                        ImageMetadataManager.setPPMCalibration(newEntry, activeCalibration, false);
-                        logger.info("Stamped PPM calibration on {} ({}): {}", imageName, acqMag, activeCalibration);
-                    } else {
-                        logger.warn(
-                                "Skipping PPM calibration stamp on {}: active calibration objective='{}' (mag {}) "
-                                        + "does not match acquisition objective='{}' (mag {}). Re-run sunburst "
-                                        + "calibration at this objective to stamp it.",
-                                imageName,
-                                calObjective,
-                                calMag,
-                                objective,
-                                acqMag);
-                    }
+                    ImageMetadataManager.setPPMCalibration(newEntry, activeCalibration, false);
+                    logger.info("Stamped PPM calibration on {}: {}", imageName, activeCalibration);
                 }
             }
 
