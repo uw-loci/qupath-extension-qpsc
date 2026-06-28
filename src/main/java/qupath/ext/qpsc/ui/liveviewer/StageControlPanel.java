@@ -1060,7 +1060,16 @@ public class StageControlPanel extends VBox {
                         + "Use this after manually rotating the objective turret so QPSC\n"
                         + "picks up the change. Also saves the new objective as the default\n"
                         + "for the next acquisition dialog."));
-        refreshHardwareBtn.setOnAction(e -> {
+        // Shared hardware re-detection, used by the manual button AND the
+        // automatic re-detect when the Camera tab is selected (wired at the end
+        // of this method). At Live Viewer open, detectCurrentHardware() can run
+        // before the socket's live pixel size is available and fall back to a
+        // stale objective -- which builds the PPM/BF presets for the WRONG
+        // objective+detector (single/incorrect exposures, missing per-channel
+        // Simple WB). Re-detecting when the user opens the Camera tab fixes that
+        // without requiring a manual "Refresh from MM" click. Only rebuilds when
+        // the hardware actually changed, so re-selecting the tab is cheap.
+        java.util.function.Consumer<Boolean> refreshHardware = userInitiated -> {
             String previousObjective = currentCameraObjectiveId;
             String previousDetector = currentCameraDetectorId;
             detectCurrentHardware();
@@ -1068,29 +1077,34 @@ public class StageControlPanel extends VBox {
             objValue.setTooltip(new Tooltip(currentCameraObjectiveId));
             detValue.setText(shortenId(currentCameraDetectorId));
             detValue.setTooltip(new Tooltip(currentCameraDetectorId));
+            boolean objChanged =
+                    currentCameraObjectiveId != null && !currentCameraObjectiveId.equals(previousObjective);
+            boolean detChanged = currentCameraDetectorId != null && !currentCameraDetectorId.equals(previousDetector);
             if (currentCameraObjectiveId != null && !"Unknown".equals(currentCameraObjectiveId)) {
                 // Route through ObjectiveState so any open dialog (Wizard,
                 // Existing-Image, Background Collection, etc.) re-syncs.
                 qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(currentCameraObjectiveId);
             }
             // Per-objective exposures / gains / WB presets change with the
-            // objective; rebuild the modality panel so the UI reflects the
-            // newly-detected hardware.
-            if (currentCameraModality != null) {
-                rebuildCameraModContent(currentCameraModality);
+            // objective; rebuild the modality panel only when the hardware moved.
+            if (objChanged || detChanged) {
+                if (currentCameraModality != null) {
+                    rebuildCameraModContent(currentCameraModality);
+                }
+                if (onHardwareChanged != null) onHardwareChanged.run();
             }
             if (cameraStatusLabel != null) {
-                if (currentCameraObjectiveId != null && !currentCameraObjectiveId.equals(previousObjective)) {
+                if (objChanged) {
                     cameraStatusLabel.setText("Hardware refreshed: objective "
                             + shortenId(previousObjective)
                             + " -> "
                             + shortenId(currentCameraObjectiveId));
-                } else if (currentCameraDetectorId != null && !currentCameraDetectorId.equals(previousDetector)) {
+                } else if (detChanged) {
                     cameraStatusLabel.setText("Hardware refreshed: detector "
                             + shortenId(previousDetector)
                             + " -> "
                             + shortenId(currentCameraDetectorId));
-                } else {
+                } else if (userInitiated) {
                     cameraStatusLabel.setText("Hardware already up to date: "
                             + shortenId(currentCameraObjectiveId)
                             + " on "
@@ -1098,11 +1112,12 @@ public class StageControlPanel extends VBox {
                 }
             }
             logger.info(
-                    "Camera tab: refreshed hardware from MM -- objective='{}' detector='{}'",
+                    "Camera tab: refreshed hardware ({}) -- objective='{}' detector='{}'",
+                    userInitiated ? "manual" : "auto-on-tab-select",
                     currentCameraObjectiveId,
                     currentCameraDetectorId);
-            if (onHardwareChanged != null) onHardwareChanged.run();
-        });
+        };
+        refreshHardwareBtn.setOnAction(e -> refreshHardware.accept(true));
         hwGrid.add(refreshHardwareBtn, 2, 0, 1, 2);
         GridPane.setMargin(refreshHardwareBtn, new Insets(0, 0, 0, 6));
 
@@ -1245,6 +1260,16 @@ public class StageControlPanel extends VBox {
         cameraScroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
         cameraScroll.setStyle("-fx-background-color: transparent;");
         tab.setContent(cameraScroll);
+
+        // Auto re-detect hardware whenever the user opens the Camera tab. By then
+        // the socket is connected and MM's live pixel size resolves the actual
+        // objective/detector, so the presets reflect the real hardware instead of
+        // a stale objective captured at Live Viewer open. No-op when unchanged.
+        tab.setOnSelectionChanged(ev -> {
+            if (tab.isSelected()) {
+                refreshHardware.accept(false);
+            }
+        });
         return tab;
     }
 
