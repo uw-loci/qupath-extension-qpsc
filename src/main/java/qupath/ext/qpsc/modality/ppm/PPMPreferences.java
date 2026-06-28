@@ -63,6 +63,13 @@ public class PPMPreferences {
     private static final StringProperty activeCalibrationPath =
             PathPrefs.createPersistentPreference("PPMActiveCalibrationPath", "");
 
+    // Objective the active calibration was acquired at. A PPM sunburst calibration
+    // is objective-specific, so this guards against stamping (e.g.) a 40x
+    // calibration onto a 20x acquisition. Captured automatically when the active
+    // calibration is set; empty for calibrations created before this was added.
+    private static final StringProperty activeCalibrationObjective =
+            PathPrefs.createPersistentPreference("PPMActiveCalibrationObjective", "");
+
     // Minimum intensity threshold for birefringence: dark pixels below this
     // combined intensity (I+ + I-) are zeroed to suppress read-noise artifacts
     private static final StringProperty birefringenceMinIntensity =
@@ -393,7 +400,22 @@ public class PPMPreferences {
      */
     public static void setActiveCalibrationPath(String path) {
         activeCalibrationPath.set(path != null ? path : "");
-        logger.info("Active PPM calibration set to: {}", path);
+        // Capture the objective the calibration was acquired at (PPM calibration is
+        // objective-specific). All current callers set the active calibration right
+        // after a sunburst acquisition at the current objective, so ObjectiveState
+        // reflects the calibration objective here.
+        String objective = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+        activeCalibrationObjective.set(objective != null ? objective : "");
+        logger.info("Active PPM calibration set to: {} (objective={})", path, objective);
+    }
+
+    /**
+     * Objective the active calibration was acquired at, or empty for legacy
+     * calibrations set before this was tracked. Used to gate stamping the
+     * calibration onto acquisitions of a matching objective.
+     */
+    public static String getActiveCalibrationObjective() {
+        return activeCalibrationObjective.get();
     }
 
     /**
