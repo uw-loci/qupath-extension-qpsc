@@ -248,6 +248,27 @@ graph TB
     W1 --> D["Disable BG correction<br/>for affected angles<br/>(--bg-disabled-angles)"]
 ```
 
+## Sunburst Calibration (hue -> angle) is objective-independent
+
+The PPM sunburst calibration (`.npz`) maps image **hue -> orientation angle**.
+This mapping is **objective-INDEPENDENT**: a calibration captured at one
+objective (e.g. 40x) is valid for acquisitions at any other (e.g. 20x). A
+higher-magnification objective yields a better-quality calibration, but the
+hue->angle relationship itself does not change with magnification.
+
+Consequences for the code:
+
+- The active calibration is a single global preference
+  (`PPMPreferences.activeCalibrationPath`), and
+  `QPProjectFunctions.addImageToProjectWithMetadata` stamps it onto **every**
+  imported PPM image (`ppm_calibration` metadata) regardless of objective. This
+  is correct -- **do NOT add an objective / magnification gate to the stamping.**
+  (One was added in `0cfc8d6f` on a wrong premise and reverted in `1810cf58`; a
+  20x image carrying a "40x" calibration path is valid, just where it was
+  captured.)
+- If the magnification in the stamped path is ever surfaced to users as a
+  potential mismatch, that is a labelling concern, not a data concern.
+
 ## Post-Processing Outputs
 
 The Python acquisition server creates additional outputs for PPM:

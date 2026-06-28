@@ -616,7 +616,14 @@ public class QPPreferenceDialog {
                         + "but can also be selected manually here if the setting was lost.\n\n"
                         + "All PPM analysis tools (Polarity Plot, Hue Range, Batch Analysis,\n"
                         + "Surface Perpendicularity) require this calibration to convert\n"
-                        + "hue values to orientation angles.")
+                        + "hue values to orientation angles.\n\n"
+                        + "The hue-to-angle mapping is OBJECTIVE-INDEPENDENT: a calibration\n"
+                        + "captured at one objective (e.g. 40x) is valid for acquisitions at\n"
+                        + "any other (e.g. 20x). A higher-magnification objective gives a\n"
+                        + "better-quality calibration, but the mapping itself is the same. If\n"
+                        + "the filename or stamped metadata shows a different magnification\n"
+                        + "than your acquisition, that only records where the calibration was\n"
+                        + "captured -- it is not a mismatch.")
                 .build());
         items.add(new PropertyItemBuilder<>(lastCalibrationFolderProperty, String.class)
                 .propertyType(PropertyItemBuilder.PropertyType.DIRECTORY)
