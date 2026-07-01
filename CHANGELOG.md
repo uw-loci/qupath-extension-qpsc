@@ -15,6 +15,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **SIFT alignment: focus/exposure warning**
 - Every SIFT alignment dialog (microscope-to-microscope alignment, existing-image manual alignment, and sub-acquisition refinement) now shows a bold reminder to confirm the live image is in focus and not saturated before aligning. SIFT matches on image detail, so a blurry or blown-out frame misaligns or fails -- and this is not detected automatically. Centralized in `SiftAutoAlignHelper.buildFocusSaturationWarning()`.
 
+**Register Current Objective utility** (QP Scope > Utilities)
+- New menu item to add the objective currently in the light path to the microscope config. It reads the pixel size from MicroManager (the one thing MM knows about an objective -- there is no MM magnification/NA/name), then prompts for the metadata MM cannot provide (id, display name, magnification, NA, working distance, detector). It writes skeleton entries across all the config files (`hardware.objectives` pixel size, an `autofocus_settings` block with `calibrated: false`, `imaging_profiles` placeholders per modality, and the `id_objective_lens` display entry in `resources_LOCI.yml`), then reloads the config so the objective is immediately selectable. Calibration-heavy data stays a placeholder -- the summary points to the Autofocus / White Balance / Background utilities to finish. All writes are comment-preserving (new `ConfigYamlEditor.appendListItem` / `appendMapEntry` primitives) and idempotent, so re-running after a partial failure is safe. Requires a live microscope connection.
+
 ### Fixed
 
 **Existing-image: choose annotation class after tissue detection**

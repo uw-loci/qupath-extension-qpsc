@@ -104,6 +104,9 @@ dependencies {
     // For testing
     testImplementation(libs.bundles.qupath)
     testImplementation("io.github.qupath:qupath-app:0.7.0")
+    // snakeyaml is shadow(provided) for main; tests that parse YAML directly
+    // (e.g. ConfigYamlEditorAppendTest) need it on the test compile classpath.
+    testImplementation(libs.snakeyaml)
     //testImplementation(libs.junit)
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")

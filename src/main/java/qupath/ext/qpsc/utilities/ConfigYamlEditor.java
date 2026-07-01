@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
@@ -285,7 +286,189 @@ public final class ConfigYamlEditor {
                 "device_properties entry " + device + "." + property + " not found on channel '" + channelId + "'");
     }
 
+    /**
+     * Append a new item to a block-sequence (list) reached by walking the
+     * key path {@code parentPath} (e.g. {@code {"hardware","objectives"}} or
+     * {@code {"autofocus_settings"}}). The {@code item} map is serialized to
+     * block YAML (via SnakeYAML) and inserted at the end of the existing
+     * list, matched to the list's own item indentation -- which in these
+     * files equals the parent-key indent (compact block-sequence style,
+     * e.g. {@code objectives:} then {@code - id: ...} both at indent 2).
+     *
+     * <p>Idempotent: if an item whose {@code idField} already equals
+     * {@code idValue} exists in the list, this is a no-op. Comments elsewhere
+     * in the file are untouched (line-based insert, no round-trip).
+     *
+     * @param parentPath key path to the list's owning key
+     * @param idField    the item's identity field (e.g. "id" / "objective")
+     * @param idValue    the identity value used for the exists-already check
+     * @param item       ordered map of the new item's fields
+     */
+    public static Result appendListItem(
+            Path configPath, String[] parentPath, String idField, String idValue, Map<String, Object> item)
+            throws IOException {
+        List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
+        int keyLine = navigatePath(lines, parentPath);
+        if (keyLine < 0) {
+            return new Result(false, pathStr(parentPath) + " not found");
+        }
+        int keyIndent = leadingSpaces(lines.get(keyLine)).length();
+
+        // Locate the first existing list item to lock its indent, and the
+        // end of the list block.
+        int firstItem = -1;
+        int itemIndent = -1;
+        for (int i = keyLine + 1; i < lines.size(); i++) {
+            String l = lines.get(i);
+            if (l.isBlank()) continue;
+            int lead = leadingSpaces(l).length();
+            if (l.trim().startsWith("- ")) {
+                firstItem = i;
+                itemIndent = lead;
+                break;
+            }
+            if (lead <= keyIndent) break; // sibling key before any item -> empty list
+        }
+        if (firstItem < 0) {
+            return new Result(false, pathStr(parentPath) + " is not a non-empty list");
+        }
+
+        // Walk to the end of the list block; also check idempotency.
+        int listEnd = lines.size();
+        for (int i = firstItem; i < lines.size(); i++) {
+            String l = lines.get(i);
+            if (l.isBlank()) continue;
+            int lead = leadingSpaces(l).length();
+            boolean isItemStart = l.trim().startsWith("- ");
+            if (i > firstItem && lead <= itemIndent && !isItemStart) {
+                listEnd = i;
+                break;
+            }
+            // Identity check: "- idField: idValue" or (indented) "idField: idValue".
+            String bare = l.trim();
+            if (bare.startsWith("- ")) bare = bare.substring(2).trim();
+            if (bare.startsWith(idField + ":")) {
+                String v = stripQuotes(bare.substring((idField + ":").length()).trim());
+                if (v.equals(idValue)) {
+                    return new Result(false, idField + " '" + idValue + "' already present in " + pathStr(parentPath));
+                }
+            }
+        }
+        // Back up over trailing blank lines so the new item hugs the list.
+        int insertAt = listEnd;
+        while (insertAt - 1 > firstItem && lines.get(insertAt - 1).isBlank()) insertAt--;
+
+        List<String> raw = renderYamlLines(item);
+        List<String> rendered = new ArrayList<>(raw.size());
+        for (int i = 0; i < raw.size(); i++) {
+            String prefix = repeat(' ', itemIndent) + (i == 0 ? "- " : "  ");
+            rendered.add(prefix + raw.get(i));
+        }
+        lines.addAll(insertAt, rendered);
+        Files.write(configPath, lines, StandardCharsets.UTF_8);
+        logger.info(
+                "ConfigYamlEditor: appended {} item {}={} ({} lines)",
+                pathStr(parentPath),
+                idField,
+                idValue,
+                rendered.size());
+        return new Result(true, "appended " + idField + " '" + idValue + "' to " + pathStr(parentPath));
+    }
+
+    /**
+     * Append a new keyed entry {@code newKey: <value>} under the map reached
+     * by walking {@code parentPath} (e.g. add an objective under
+     * {@code imaging_profiles.<modality>}, or under
+     * {@code id_objective_lens}). The value map is serialized (SnakeYAML) and
+     * indented to match the parent's existing child style.
+     *
+     * <p>Idempotent: no-op if {@code newKey} already exists directly under the
+     * parent. Assumes a uniform indent step within the parent block (true for
+     * these configs: {@code imaging_profiles} is 2-space; the flat
+     * {@code id_objective_lens} entries are 4-space with no deeper nesting).
+     */
+    public static Result appendMapEntry(Path configPath, String[] parentPath, String newKey, Map<String, Object> value)
+            throws IOException {
+        List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
+        int keyLine = navigatePath(lines, parentPath);
+        if (keyLine < 0) {
+            return new Result(false, pathStr(parentPath) + " not found");
+        }
+        int keyIndent = leadingSpaces(lines.get(keyLine)).length();
+        int childIndent = detectChildIndent(lines, keyLine, keyIndent);
+
+        if (findChildKey(lines, keyLine + 1, childIndent, newKey) >= 0) {
+            return new Result(false, newKey + " already present under " + pathStr(parentPath));
+        }
+
+        int blockEnd = findBlockEnd(lines, keyLine + 1, keyIndent);
+        int insertAt = blockEnd;
+        while (insertAt - 1 > keyLine && lines.get(insertAt - 1).isBlank()) insertAt--;
+
+        // Grandchild field indent, assuming a uniform step within the block.
+        int fieldIndent = 2 * childIndent - keyIndent;
+        List<String> raw = renderYamlLines(value);
+        List<String> rendered = new ArrayList<>(raw.size() + 1);
+        rendered.add(repeat(' ', childIndent) + newKey + ":");
+        for (String r : raw) {
+            rendered.add(repeat(' ', fieldIndent) + r);
+        }
+        lines.addAll(insertAt, rendered);
+        Files.write(configPath, lines, StandardCharsets.UTF_8);
+        logger.info("ConfigYamlEditor: appended {}.{} ({} lines)", pathStr(parentPath), newKey, rendered.size());
+        return new Result(true, "appended " + newKey + " under " + pathStr(parentPath));
+    }
+
     // ---------- internals ----------
+
+    /** Walk a key path, returning the line index of the deepest key, or -1. */
+    private static int navigatePath(List<String> lines, String[] path) {
+        if (path.length == 0) return -1;
+        int idx = findTopLevelKey(lines, path[0]);
+        if (idx < 0) return -1;
+        int indent = 0;
+        for (int p = 1; p < path.length; p++) {
+            int childIndent = detectChildIndent(lines, idx, indent);
+            int found = findChildKey(lines, idx + 1, childIndent, path[p]);
+            if (found < 0) return -1;
+            idx = found;
+            indent = childIndent;
+        }
+        return idx;
+    }
+
+    /**
+     * Return the indent of the first child line under {@code parentLine},
+     * or {@code parentIndent + 2} when the block has no children yet.
+     */
+    private static int detectChildIndent(List<String> lines, int parentLine, int parentIndent) {
+        for (int i = parentLine + 1; i < lines.size(); i++) {
+            String l = lines.get(i);
+            if (l.isBlank()) continue;
+            int lead = leadingSpaces(l).length();
+            if (lead > parentIndent) return lead;
+            return parentIndent + 2;
+        }
+        return parentIndent + 2;
+    }
+
+    /** Serialize an object to block-YAML lines (no trailing newline entries). */
+    private static List<String> renderYamlLines(Object value) {
+        org.yaml.snakeyaml.DumperOptions options = new org.yaml.snakeyaml.DumperOptions();
+        options.setDefaultFlowStyle(org.yaml.snakeyaml.DumperOptions.FlowStyle.BLOCK);
+        options.setDefaultScalarStyle(org.yaml.snakeyaml.DumperOptions.ScalarStyle.PLAIN);
+        options.setIndent(2);
+        String dumped = new org.yaml.snakeyaml.Yaml(options).dump(value);
+        List<String> out = new ArrayList<>();
+        for (String l : dumped.split("\n", -1)) {
+            if (!l.isEmpty()) out.add(l);
+        }
+        return out;
+    }
+
+    private static String pathStr(String[] path) {
+        return String.join(".", path);
+    }
 
     private static Result setChannelScalar(
             Path configPath, String modalityKey, String channelId, String fieldName, double value) throws IOException {

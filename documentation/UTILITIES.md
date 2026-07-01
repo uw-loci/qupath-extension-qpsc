@@ -74,6 +74,10 @@ If the microscope config has no `stage.inserts` block, the Stage Map synthesizes
 
 Step-by-step wizard that creates all required microscope YAML configuration files. Appears automatically as the first menu item when no valid configuration is found. Guides users through hardware selection (objectives, detectors, stage), pixel size calibration, modality setup, and server connection. Uses a bundled catalog of known LOCI hardware for quick selection.
 
+### Register Current Objective
+
+Adds the objective currently in the light path to the microscope configuration without re-running the full Setup Wizard -- handy when objectives are swapped on the scope frequently. Reads the pixel size from MicroManager (the only optical fact MM exposes; it does not know magnification, NA, or a human name), then prompts for that missing metadata (id, display name, magnification, NA, working distance, detector). It writes skeleton entries to `hardware.objectives`, `autofocus_settings` (`calibrated: false`), `imaging_profiles` (placeholder per modality), and `id_objective_lens`, then reloads so the objective is immediately selectable with the correct pixel size. The calibration data itself (autofocus, white balance, exposures, background) stays a placeholder -- run the corresponding calibration utilities afterwards to make the objective acquisition-ready. Requires a live microscope connection; comment-preserving and idempotent.
+
 ### [Communication Settings](tools/server-connection.md)
 
 Configure and test the connection between QuPath and the microscope control server, and manage notification alerts. Includes connection, advanced timeout, status, and alerts tabs with push notification support via ntfy.sh.

@@ -17,6 +17,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
+import qupath.ext.qpsc.controller.RegisterObjectiveWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -603,6 +604,17 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         + "Preserves all annotations, metadata, and image settings.");
         makePortableOption.setOnAction(e -> MakePortableWorkflow.run(qupath));
 
+        // Register Current Objective (needs microscope -- reads MM pixel size)
+        MenuItem registerObjectiveOption = new MenuItem("Register Current Objective...");
+        registerObjectiveOption.setDisable(!configValid || offlineScope);
+        setMenuItemTooltip(
+                registerObjectiveOption,
+                "Add the objective currently in the light path to the microscope config. "
+                        + "Reads its pixel size from MicroManager and prompts for the metadata MM "
+                        + "cannot know (id, name, magnification, NA). Writes calibrated:false stubs; "
+                        + "run the autofocus / white-balance / background utilities afterwards.");
+        registerObjectiveOption.setOnAction(e -> RegisterObjectiveWorkflow.run(qupath));
+
         // Setup Wizard (always available -- guides first-time configuration)
         MenuItem setupWizardOption = new MenuItem(res.getString("menu.setupWizard"));
         setMenuItemTooltip(
@@ -630,6 +642,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         stitchMicroManagerFolderOption,
                         makePortableOption,
                         new SeparatorMenuItem(),
+                        registerObjectiveOption,
                         setupWizardOption,
                         serverConnectionOption);
 
