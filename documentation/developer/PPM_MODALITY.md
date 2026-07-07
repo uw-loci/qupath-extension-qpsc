@@ -300,6 +300,48 @@ When PPM post-processed outputs (`.biref` and `.sum` files) are imported into a 
 
 The channel names persist across project re-opens and enable consistent display settings across repeated acquisitions. Without this, repeated PPM runs would have ambiguous channel names like "Channel 0" and "Channel 1" depending on which tile happened to be read first by BioFormats.
 
+## Birefringence bit depth (8-bit inputs vs. high-bit-depth capture)
+
+The `.biref` file has **always** been written as 16-bit single-channel. But the
+birefringence is computed from the two angle frames, and the JAI 3-CCD delivers
+**8-bit RGB** by default -- so the historical 16-bit `.biref` carries only ~8 bits
+of real information. The normalized formula `|(I+ - I-)/(I+ + I-)|` runs in float32
+and is **scale-invariant**, so higher-bit inputs do not change the *shape* of the
+result; they reduce **quantization noise**, most visibly in the dark crossed-polarizer
+regions where `I+ + I-` is small and 8-bit integer steps make the ratio coarse.
+
+An **opt-in** preference, **PPM > "High Bit Depth PPM Capture"** (`PPMPreferences.getHighBitDepth`,
+default OFF), acquires the PPM angle frames at the camera's higher-bit PixelFormat so
+the biref is computed from genuine high-precision inputs. Data flow:
+
+- Java: `PPMModalityHandler.configureCommandBuilder` emits `--ppm-high-bit-depth true`
+  (via `AcquisitionCommandBuilder.ppmHighBitDepth`) only when the preference is on.
+  When off, no flag is sent and the acquisition is byte-identical to the 8-bit path.
+- Python: `workflow.py` parses the flag, resolves the high-bit full-scale from the
+  detector's `high_bit_depth` YAML block, and wraps **only the per-tile angle-snap
+  call** in `camera.set_high_bit_mode(True)` / `set_high_bit_mode(False)` (autofocus,
+  which runs before the wrap, stays 8-bit; the format is always restored, even on
+  cancel/error, so live view and other modalities are never left in 16-bit).
+- `JAICamera.set_high_bit_mode` flips a config-driven MM device property (the JAI is a
+  prism, so higher bits come from the PixelFormat, not debayering). The property name
+  and values are camera/adapter specific and live in `resources_LOCI.yml` under the JAI
+  detector's `high_bit_depth` block; **absent -> the feature is a safe no-op** (logs a
+  warning, stays 8-bit).
+- `ppm_library` `ppm_normalized_difference_abs` / `ppm_angle_sum` take an `input_max`
+  so the biref dark-mask threshold (`--biref-min-intensity`, specified on the 8-bit
+  scale) and the sum normalization track the input's real full-scale. `input_max=None`
+  keeps the exact 8-bit behavior.
+
+The JAI hardware WB (per-channel exposures/gains) is a set of **ratios** plus a relative
+target level, so an existing 8-bit calibration stays valid at high bit depth without
+re-calibration (the same exposures produce the same *relative* level; only the ADC
+resolution changes). The `bit_depth: 16` hook in `jai/calibration.py` only matters if
+you re-run a WB calibration in high-bit mode.
+
+**Verification owed on the scope:** discover the JAI PixelFormat property/values, confirm
+the camera delivers *real* extra bits (not left-shifted 8-bit), and collect the PPM
+flat-field background in the same high-bit mode so the flat-field divide matches scales.
+
 ## Z-stack / angle loop-order toggle (2026-05-14)
 
 PPM acquisitions historically ran **z-outer / angle-inner**: every angle re-images at each z plane before z advances. When users start z-stacking PPM (e.g. 40x on thicker tissue slices) this becomes expensive -- a 5-z x 4-angle field pays 20 rotation-stage moves per tile when the same data could be acquired with 4.

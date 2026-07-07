@@ -24,6 +24,8 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Tissue Median Kernel](#tissue-median-kernel) | Integer | 17 | Median filter kernel size |
 | [Tissue Morph Close Kernel](#tissue-morph-close-kernel) | Integer | 7 | Morphological closing kernel size |
 | [Tissue Morph Close Iterations](#tissue-morph-close-iterations) | Integer | 3 | Morphological closing iterations |
+| [High Bit Depth PPM Capture](#high-bit-depth-ppm-capture) | Boolean | OFF | Acquire PPM frames at higher camera bit depth |
+| [Birefringence Minimum Intensity](#birefringence-minimum-intensity) | Integer | 10 | Dark region noise suppression threshold for PPM |
 | [Enable time-lapse acquisition](#time-lapse-options) | Boolean | OFF | Repeat acquisition over multiple timepoints at fixed interval |
 | [Timepoints](#time-lapse-options) | Integer | 1 | Number of times full acquisition is repeated |
 | [Interval (s)](#time-lapse-options) | Double | 60.0 | Seconds between start of consecutive timepoints |
@@ -463,6 +465,67 @@ Number of times the morphological closing operation is repeated. More iterations
 - **6-10**: Aggressive cleanup, produces very smooth regions
 
 **Tip:** Increasing iterations has a similar effect to increasing the kernel size, but with finer control. Start with the default (3) and adjust if tissue regions appear fragmented.
+
+---
+
+## PPM Preferences
+
+Settings specific to PPM (Polarization-Resolved Microscopy) acquisitions and image processing.
+
+### High Bit Depth PPM Capture
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No |
+
+**Description:**
+When enabled, PPM angle frames are acquired at the camera's higher-bit PixelFormat (typically 12-bit or 16-bit instead of 8-bit) so the birefringence image is computed from genuinely high-precision inputs. This reduces quantization noise, especially visible in the dark crossed-polarizer regions where the denominator `I+ + I-` is small.
+
+**Technical Detail:**
+The `.biref` (birefringence) file has always been written as 16-bit, but was historically fed by 8-bit camera output, carrying only ~8 bits of real information. The normalized birefringence formula `|(I+ - I-)/(I+ + I-)|` is scale-invariant, so higher-bit inputs do **not** change the result's shape — they reduce quantization steps and noise. Autofocus remains 8-bit for speed; only the PPM angle-snap frames switch to the higher bit depth.
+
+**Requirements:**
+- The camera must have a `high_bit_depth` block configured in the detector entry of your microscope's YAML configuration (e.g., `resources_LOCI.yml`).
+- If not configured, the preference is a safe no-op and the acquisition stays 8-bit.
+- Existing white balance calibrations stay valid at high bit depth (WB is a set of ratios plus target level).
+
+**When to Enable:**
+- PPM acquisitions on thicker tissue where dark crossed-polarizer regions carry signal
+- When birefringence images show excessive quantization noise
+- When re-running PPM after commissioning the camera's high-bit-depth capability
+
+**When to Keep OFF:**
+- If your camera lacks the `high_bit_depth` YAML configuration (safe but pointless)
+- During initial setup; switch on only after verifying high-bit frames are genuine higher precision (not left-shifted 8-bit)
+- When bit-depth is not a limiting factor in your sample (thin tissue, bright birefringence)
+
+---
+
+### Birefringence Minimum Intensity
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 10 |
+| Range | 0+ |
+| Requires Restart | No |
+
+**Description:**
+Dark-region noise suppression threshold for birefringence computation on the server side. Pixels in the sum image `I+ + I-` below this threshold are zeroed during birefringence calculation (`(I+ - I-) / (I+ + I-)`), preventing division-by-small-number noise amplification.
+
+The threshold is applied on the **bit-depth of the acquisition**:
+- When **High Bit Depth PPM Capture** is OFF: threshold is on 8-bit scale (0-255)
+- When **High Bit Depth PPM Capture** is ON: threshold is scaled to the camera's actual bit depth (typically 0-4095 for 12-bit)
+
+**When to Adjust:**
+- **Increase** (e.g., 20-30) if birefringence images show speckle noise in dark regions
+- **Decrease** (e.g., 5-10) if tissue signal is being masked out in dim areas
+- Start with the default (10) and adjust if image quality is poor
+
+**Effect on Output:**
+Thresholded pixels appear as zero (black) in the final birefringence image. The `.sum` (intensity) file is unaffected.
 
 ---
 

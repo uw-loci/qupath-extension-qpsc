@@ -642,6 +642,18 @@ public class QPPreferenceDialog {
                         + "are zeroed during birefringence computation on the server.\n"
                         + "Default: 10")
                 .build());
+
+        items.add(new PropertyItemBuilder<>(PPMPreferences.highBitDepthProperty(), Boolean.class)
+                .name("High Bit Depth PPM Capture")
+                .category(PPM_CATEGORY)
+                .description("Acquire PPM angle frames at the camera's higher-bit PixelFormat so\n"
+                        + "the birefringence image is computed from genuine high-precision inputs\n"
+                        + "instead of 8-bit. Reduces quantization noise in the dark crossed-polarizer\n"
+                        + "regions; the birefringence file stays 16-bit. Requires the camera's\n"
+                        + "high_bit_depth block to be configured in the detector YAML -- a no-op on\n"
+                        + "the server otherwise. OFF keeps acquisition identical to the 8-bit path.\n"
+                        + "Default: OFF")
+                .build());
         // Analysis preferences (birefringence threshold, histogram bins, saturation,
         // value, dilation, TACS) are registered by the PPM Analysis extension.
     }

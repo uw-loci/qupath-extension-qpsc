@@ -130,6 +130,11 @@ public class AcquisitionCommandBuilder {
     // Birefringence minimum intensity threshold (dark region noise suppression)
     private Integer birefMinIntensity;
 
+    // Opt-in: capture PPM angle frames at the camera's higher-bit PixelFormat so
+    // the birefringence is computed from high-precision inputs (null/false = the
+    // legacy 8-bit path, no flag emitted).
+    private Boolean ppmHighBitDepth;
+
     // Preferred first AF tile index (from WSI tissue scoring)
     private Integer preferredAfTile;
 
@@ -515,6 +520,23 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
+     * Enables opt-in high-bit-depth capture for PPM angle frames.
+     *
+     * <p>When enabled, the command server switches the camera to its higher-bit
+     * PixelFormat for the PPM angle snaps so the (already 16-bit) birefringence
+     * image is computed from genuinely high-precision inputs instead of 8-bit.
+     * When not set (or false), no flag is emitted and the acquisition follows the
+     * legacy 8-bit path.</p>
+     *
+     * @param enabled whether to request high-bit-depth PPM capture
+     * @return this builder for method chaining
+     */
+    public AcquisitionCommandBuilder ppmHighBitDepth(boolean enabled) {
+        this.ppmHighBitDepth = enabled;
+        return this;
+    }
+
+    /**
      * Sets the preferred tile index for the first autofocus position,
      * determined by scoring WSI tissue content at each tile location.
      *
@@ -854,6 +876,11 @@ public class AcquisitionCommandBuilder {
         // Add birefringence minimum intensity threshold
         if (birefMinIntensity != null) {
             args.addAll(Arrays.asList("--biref-min-intensity", String.valueOf(birefMinIntensity)));
+        }
+
+        // Add opt-in high-bit-depth PPM capture flag (only when explicitly enabled)
+        if (Boolean.TRUE.equals(ppmHighBitDepth)) {
+            args.addAll(Arrays.asList("--ppm-high-bit-depth", "true"));
         }
 
         // Add preferred AF tile from WSI tissue scoring

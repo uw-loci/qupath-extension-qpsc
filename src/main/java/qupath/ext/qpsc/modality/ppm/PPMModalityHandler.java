@@ -268,6 +268,14 @@ public class PPMModalityHandler implements ModalityHandler {
         if (minIntensity > 0) {
             builder.birefMinIntensity(minIntensity);
         }
+
+        // Opt-in high-bit-depth capture: acquire PPM angle frames at the camera's
+        // higher-bit PixelFormat so the birefringence is computed from genuine
+        // high-precision inputs. Only emitted when the preference is on; when off,
+        // no flag is sent and the Python path stays byte-identical to 8-bit.
+        if (PPMPreferences.getHighBitDepth()) {
+            builder.ppmHighBitDepth(true);
+        }
     }
 
     /**

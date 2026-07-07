@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**High-bit-depth PPM capture (opt-in)**
+- New PPM preference **"High Bit Depth PPM Capture"** (default OFF). When enabled, the PPM angle frames are acquired at the camera's higher-bit PixelFormat so the birefringence image is computed from genuinely high-precision inputs instead of 8-bit. The `.biref` file has always been 16-bit, but it was fed by the JAI's 8-bit output, so it carried only ~8 bits of real information; because the normalized birefringence `|(I+ - I-)/(I+ + I-)|` is scale-invariant, higher-bit inputs do not change the result's shape -- they reduce quantization noise, most visibly in the dark crossed-polarizer regions. The birefringence file stays 16-bit; QuPath's display maps it to the screen. OFF is byte-identical to the previous 8-bit path (no wire flag emitted). Requires a `high_bit_depth` block on the camera's detector entry in `resources_LOCI.yml` (MM PixelFormat property + high value, discovered per-scope); absent, the preference is a safe no-op. Spans the Java extension (`--ppm-high-bit-depth` flag), the command server (per-tile format switch with guaranteed restore, autofocus stays 8-bit), and `ppm_library` (dtype-aware dark-mask + sum normalization). See `documentation/developer/PPM_MODALITY.md`.
+
 ## [0.7.1] - 2026-07-06
 
 ### Added

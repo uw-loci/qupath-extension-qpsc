@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.modality.ppm;
 
 import java.util.Map;
+import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.StringProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -67,6 +68,15 @@ public class PPMPreferences {
     // combined intensity (I+ + I-) are zeroed to suppress read-noise artifacts
     private static final StringProperty birefringenceMinIntensity =
             PathPrefs.createPersistentPreference("PPMBirefringenceMinIntensity", "10");
+
+    // High-bit-depth PPM capture (opt-in, default OFF). When enabled, PPM angle
+    // frames are acquired at the camera's higher-bit PixelFormat so the (already
+    // 16-bit) birefringence image is computed from genuinely high-precision
+    // inputs instead of 8-bit -- reducing quantization noise in the dark
+    // crossed-polarizer regions. OFF keeps the acquisition byte-identical to the
+    // legacy 8-bit path. Requires the JAI PixelFormat to be configured in the
+    // detector YAML (high_bit_depth block); a no-op on the Python side if not.
+    private static final BooleanProperty highBitDepth = PathPrefs.createPersistentPreference("PPMHighBitDepth", false);
 
     // =============== Analysis Parameters ===============
 
@@ -291,6 +301,18 @@ public class PPMPreferences {
 
     public static void setBirefringenceMinIntensity(int threshold) {
         birefringenceMinIntensity.set(String.valueOf(threshold));
+    }
+
+    public static BooleanProperty highBitDepthProperty() {
+        return highBitDepth;
+    }
+
+    public static boolean getHighBitDepth() {
+        return highBitDepth.get();
+    }
+
+    public static void setHighBitDepth(boolean enabled) {
+        highBitDepth.set(enabled);
     }
 
     public static StringProperty birefringenceThresholdProperty() {
