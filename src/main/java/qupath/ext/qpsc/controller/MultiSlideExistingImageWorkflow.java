@@ -129,7 +129,12 @@ public final class MultiSlideExistingImageWorkflow {
         stage.initModality(Modality.NONE);
         stage.initOwner(gui.getStage());
         stage.setTitle("MS Workflow Progress (experimental)");
-        stage.setAlwaysOnTop(true);
+        // NOT always-on-top: every driver launches the single-slide workflow, which shows
+        // application-modal dialogs (annotation selection, acquisition setup) owned by the
+        // main window. An always-on-top panel would float over those dialogs while the modal
+        // grab blocks all input -- the dialog hides behind this panel and the whole app looks
+        // frozen (the documented always-on-top + modal deadlock). The panel stays owned by the
+        // main window so it remains reachable without floating above the workflow's dialogs.
 
         Label header = new Label("Multi-Slide Existing Image -- " + carrier.getName());
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
