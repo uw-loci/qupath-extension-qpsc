@@ -158,7 +158,7 @@ public final class MultiSlideAssignmentDialog {
             row++;
             int pos = 1;
             for (StageInsert.SlidePosition slot : selected.getSlideSamples()) {
-                Label slotLabel = new Label(pos + ". " + slot.getName());
+                Label slotLabel = new Label(slot.getName());
                 ChoiceBox<ProjectImageEntry<BufferedImage>> entryBox = new ChoiceBox<>();
                 entryBox.getItems().add(null);
                 entryBox.getItems().addAll(macroCandidates);

@@ -193,7 +193,7 @@ public final class MultiSlideExistingImageWorkflow {
 
         for (SlotState s : states) {
             int rowFinal = row++;
-            Label posLabel = new Label("#" + s.assignment.position() + " " + s.assignment.slotLabel());
+            Label posLabel = new Label(s.assignment.slotLabel());
             Label entryLabel = new Label(s.assignment.entry().getImageName());
             entryLabel.setMaxWidth(220);
             Label statusLabel = new Label(s.status.label());
@@ -555,10 +555,7 @@ public final class MultiSlideExistingImageWorkflow {
         body.append("Carrier: ").append(carrier.getName()).append("\n");
         body.append("Run id: ").append(runId).append("\n\n");
         for (SlotState s : states) {
-            body.append("#")
-                    .append(s.assignment.position())
-                    .append(" ")
-                    .append(s.assignment.slotLabel())
+            body.append(s.assignment.slotLabel())
                     .append("  ")
                     .append(s.assignment.entry().getImageName())
                     .append("  -- ")
