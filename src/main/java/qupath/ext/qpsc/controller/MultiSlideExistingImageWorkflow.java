@@ -145,6 +145,23 @@ public final class MultiSlideExistingImageWorkflow {
         intro.setWrapText(true);
         intro.setMaxWidth(640);
 
+        // Orientation reminder: each slot's orientation is established by its own
+        // alignment during setup, not by the holder calibration (which is a center
+        // point, invariant to how the slide is rotated). A slide placed with its label
+        // at the other end is a pure 180-degree rotation about the slot center -- no
+        // mirror/inversion -- and a manual (landmark) alignment measures that rotation
+        // directly. The green-box / saved-preset path assumes the macro's canonical
+        // orientation, so it would target a rotated slide at the wrong end.
+        Label orientationNote = new Label("Orientation is set per slide by its alignment during setup, "
+                + "not by the holder calibration. A slide placed with its label at either end is just a "
+                + "180-degree rotation (tissue at the slot center stays centered; off-center tissue moves to "
+                + "the opposite end). Use MANUAL alignment for any slot whose slide may be rotated, so the "
+                + "rotation is measured -- the green-box / existing-preset path assumes the standard "
+                + "orientation and would target a rotated slide at the wrong end.");
+        orientationNote.setWrapText(true);
+        orientationNote.setMaxWidth(640);
+        orientationNote.setStyle("-fx-font-style: italic; -fx-text-fill: -fx-accent;");
+
         List<SlotState> states = new ArrayList<>();
         for (MultiSlideAssignmentDialog.SlotAssignment a : assignments) {
             states.add(new SlotState(a));
@@ -320,7 +337,17 @@ public final class MultiSlideExistingImageWorkflow {
         buttons.setAlignment(Pos.CENTER_RIGHT);
         refreshFinish.run();
 
-        VBox root = new VBox(10, header, intro, new Separator(), scroll, new Separator(), autoRow, twoPassRow, buttons);
+        VBox root = new VBox(
+                10,
+                header,
+                intro,
+                orientationNote,
+                new Separator(),
+                scroll,
+                new Separator(),
+                autoRow,
+                twoPassRow,
+                buttons);
         root.setPadding(new Insets(14));
         root.setStyle("-fx-pref-width: 780; -fx-pref-height: 520;");
         stage.setScene(new Scene(root));

@@ -126,6 +126,8 @@ Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the
    Tick **Stop after current slide** to halt any of these drivers cleanly once the running slide finishes (an in-flight acquisition is never interrupted). A slot advances to **Done** on a successful acquisition, or stays **In Progress** / **Set up** (so you can retry or Skip) if a run is cancelled at a gate or hits a handled error.
 4. Once every slot is Done or Skipped, click **Finish** to see a summary.
 
+**Slide orientation (label on either end):** each slot's orientation is established by *its own alignment during setup*, not by the holder calibration. The holder calibration is just a slot **center** (the midpoint of two diagonal corners), which is invariant to how the slide is rotated. Placing a slide with its label at the opposite end is a pure **180-degree rotation** about the slot center -- no mirror or inversion -- so tissue at the center stays centered and off-center tissue moves to the opposite end. A **manual (landmark) alignment** measures that rotation directly, so a rotated slide is handled correctly. The green-box / saved-preset alignment path assumes the macro's standard orientation, so **use manual alignment for any slot whose slide may be rotated** -- otherwise a rotated slide is targeted at the wrong end.
+
 Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2 -- the two-pass mode just splits that same workflow into a setup half (which persists the per-slide alignment) and an acquire half (which replays it). This is an early experimental release.
 
 ---
