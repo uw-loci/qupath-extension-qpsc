@@ -509,7 +509,19 @@ public class AcquisitionManager {
         // annotation) and fits a tilt plane.  After 4 annotations it can predict Z
         // for any position on the slide, handling long jumps correctly.
         // Before enough points accumulate, lastAcquisitionZ is the fallback.
-        lastAcquisitionZ = null;
+        //
+        // Two-pass batch seed (G4): if the setup pass captured a focused Z for this
+        // slide, use it as the initial lastAcquisitionZ so the FIRST annotation's AF
+        // starts near focus instead of at the arbitrary current stage Z. The
+        // MAX_FOCUS_STEP_UM runaway clamp and the +/-20 um prediction-deviation guard
+        // downstream still bound how far a bad seed can push the search, so a stale
+        // seed degrades gracefully to normal AF rather than driving a runaway.
+        lastAcquisitionZ = state.seedZ;
+        if (state.seedZ != null) {
+            logger.info(
+                    "Seeding first-annotation AF hint with setup-pass focus Z={} um",
+                    String.format("%.2f", state.seedZ));
+        }
         zFocusModel.reset();
 
         // Defensive re-check: if capturedImageData was not set during prepareForAcquisition

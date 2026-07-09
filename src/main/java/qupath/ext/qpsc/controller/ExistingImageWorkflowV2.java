@@ -63,7 +63,7 @@ public class ExistingImageWorkflowV2 {
      * future is ignored.
      */
     public static void start() {
-        new WorkflowOrchestrator(Mode.FULL, null, null).execute();
+        new WorkflowOrchestrator(Mode.FULL, null, null, null).execute();
     }
 
     /**
@@ -87,7 +87,7 @@ public class ExistingImageWorkflowV2 {
      * The future always completes on the JavaFX thread's continuation of the chain.
      */
     public static CompletableFuture<WorkflowState> startAsync() {
-        return new WorkflowOrchestrator(Mode.FULL, null, null).execute();
+        return new WorkflowOrchestrator(Mode.FULL, null, null, null).execute();
     }
 
     /**
@@ -100,8 +100,12 @@ public class ExistingImageWorkflowV2 {
      *
      * @param config the acquisition config the operator chose during setup
      * @param selectedAnnotationClasses the annotation classes chosen during setup
+     * @param focusZ the focused stage Z (um) captured after setup refinement, or
+     *     {@code null} if setup ran no refinement (the acquire pass then falls back to
+     *     the current stage Z). Used to seed the acquire pass's first-annotation AF.
      */
-    public record SetupResult(ExistingImageAcquisitionConfig config, List<String> selectedAnnotationClasses) {}
+    public record SetupResult(
+            ExistingImageAcquisitionConfig config, List<String> selectedAnnotationClasses, Double focusZ) {}
 
     /**
      * Runs the interactive setup half of the workflow -- alignment (manual / existing,
@@ -114,12 +118,12 @@ public class ExistingImageWorkflowV2 {
      *     {@code null} on cancel / short-circuit / handled error. Never exceptional.
      */
     public static CompletableFuture<SetupResult> startSetupAsync() {
-        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null);
+        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null);
         return o.execute().thenApply(st -> {
             if (st == null || o.capturedConfig == null) {
                 return null;
             }
-            return new SetupResult(o.capturedConfig, o.state.selectedAnnotationClasses);
+            return new SetupResult(o.capturedConfig, o.state.selectedAnnotationClasses, o.capturedFocusZ);
         });
     }
 
@@ -139,7 +143,9 @@ public class ExistingImageWorkflowV2 {
         if (setup == null || setup.config() == null) {
             return CompletableFuture.completedFuture(null);
         }
-        return new WorkflowOrchestrator(Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses()).execute();
+        return new WorkflowOrchestrator(
+                        Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ())
+                .execute();
     }
 
     /** Execution mode for {@link WorkflowOrchestrator}. */
@@ -163,15 +169,24 @@ public class ExistingImageWorkflowV2 {
         private final ExistingImageAcquisitionConfig presetConfig;
         /** Annotation classes to re-read in ACQUIRE_ONLY (from the setup pass). */
         private final List<String> presetClasses;
+        /** Focused Z (um) captured during setup, to seed the ACQUIRE_ONLY first-annotation AF. */
+        private final Double presetSeedZ;
         /** Captured in SETUP_ONLY when initializeFromConfig runs, for the acquire pass to replay. */
         private ExistingImageAcquisitionConfig capturedConfig;
+        /** Captured in SETUP_ONLY at the terminal when refinement ran, to seed the acquire pass. */
+        private Double capturedFocusZ;
 
-        WorkflowOrchestrator(Mode mode, ExistingImageAcquisitionConfig presetConfig, List<String> presetClasses) {
+        WorkflowOrchestrator(
+                Mode mode,
+                ExistingImageAcquisitionConfig presetConfig,
+                List<String> presetClasses,
+                Double presetSeedZ) {
             this.gui = QuPathGUI.getInstance();
             this.state = new WorkflowState();
             this.mode = mode;
             this.presetConfig = presetConfig;
             this.presetClasses = presetClasses;
+            this.presetSeedZ = presetSeedZ;
         }
 
         /**
@@ -236,6 +251,8 @@ public class ExistingImageWorkflowV2 {
             if (mode == Mode.ACQUIRE_ONLY) {
                 logger.info("ACQUIRE_ONLY: replaying captured config for unattended acquisition");
                 state.selectedAnnotationClasses = presetClasses != null ? presetClasses : new ArrayList<>();
+                // G4: seed the first-annotation AF with the focus Z captured during setup.
+                state.seedZ = presetSeedZ;
                 CompletableFuture<WorkflowState> chain = initializeFromConfig(presetConfig)
                         .thenApply(this::forceRefinementNone)
                         .thenCompose(this::checkExistingSlideAlignment)
@@ -327,6 +344,31 @@ public class ExistingImageWorkflowV2 {
         }
 
         /**
+         * G4: after a SETUP_ONLY run whose refinement acquired a tile, the stage is left
+         * at that tile's focus Z. Read it as the seed Z for the acquire pass's first
+         * annotation. Skipped (leaves {@code capturedFocusZ} null) when refinement was
+         * NONE -- there is no focus event, so the current stage Z would be arbitrary and a
+         * worse hint than the acquire pass's own current-Z fallback. Any socket error is
+         * non-fatal: the seed is an optimization, not a correctness requirement.
+         */
+        private void captureFocusZForSeed() {
+            if (state == null || state.refinementChoice == RefinementSelectionController.RefinementChoice.NONE) {
+                return;
+            }
+            try {
+                double focusZ =
+                        MicroscopeController.getInstance().getSocketClient().getStageXYZ()[2];
+                capturedFocusZ = focusZ;
+                logger.info(
+                        "SETUP_ONLY captured focus Z={} um to seed the acquire pass", String.format("%.2f", focusZ));
+            } catch (Exception e) {
+                logger.warn(
+                        "Could not read stage Z to seed the acquire pass; acquire will use current Z: {}",
+                        e.getMessage());
+            }
+        }
+
+        /**
          * Forces refinement to NONE for the acquire pass so the saved per-slide alignment
          * is consumed as-is (no reference-tile refinement dialog). A no-op on a null state.
          */
@@ -365,6 +407,12 @@ public class ExistingImageWorkflowV2 {
                             return;
                         }
                         if (mode == Mode.SETUP_ONLY) {
+                            // G4: capture the focused Z (stage is still at the refinement
+                            // tile's focus) so the acquire pass can seed its first-annotation
+                            // AF. Only meaningful when refinement actually ran; on NONE we
+                            // leave capturedFocusZ null and the acquire pass falls back to the
+                            // current stage Z.
+                            captureFocusZForSeed();
                             // Setup succeeded but nothing was acquired -- no tiles to clean,
                             // no ACQUISITION_COMPLETE beep. cleanup() still clears the
                             // currentTransform singleton + acquisitionActive flag.
@@ -2299,6 +2347,16 @@ public class ExistingImageWorkflowV2 {
         public final AnnotationPreservationService annotationPreservation = new AnnotationPreservationService();
 
         public double pixelSize;
+
+        /**
+         * Optional starting Z hint (um) for the acquisition's FIRST annotation, so the
+         * first-tile autofocus begins near focus instead of at an arbitrary stage Z.
+         * Populated by the two-pass acquire path from a focus Z captured during setup
+         * (see {@link ExistingImageWorkflowV2.SetupResult}). Null in the normal single
+         * run -- {@code AcquisitionManager} then falls back to the current stage Z.
+         */
+        public Double seedZ;
+
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();
         public String focusChannelId;
