@@ -24,6 +24,7 @@ import qupath.lib.images.servers.ImageChannel;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.ImageServerMetadata;
 import qupath.lib.images.servers.ImageServers;
+import qupath.lib.images.servers.RotatedImageServer;
 import qupath.lib.images.servers.TransformedServerBuilder;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectIO;
@@ -846,6 +847,101 @@ public class QPProjectFunctions {
 
         logger.info("Successfully created flipped duplicate: {}", flippedName);
         return flippedEntry;
+    }
+
+    /**
+     * Creates a rotated duplicate of a macro entry, for slides mounted at a
+     * 90/180/270-degree rotation relative to the scanned orientation (e.g. the vertical
+     * slide holder, where portrait mounting turns the macro 90 degrees from the camera
+     * view). Unlike the mirror flip -- which QuPath has no native primitive for, so
+     * {@link #createFlippedDuplicate} builds it by hand with a {@link TransformedServerBuilder}
+     * -- rotation IS native: this wraps the original server in QuPath's
+     * {@link RotatedImageServer}, so no custom transform math is needed and pixel data
+     * still streams from the original file (a virtual, on-render rotation).
+     *
+     * <p>Like the flip sibling, the rotated entry shares the original's {@code base_image}
+     * (so alignment/propagation resolve to the same macro), preserves the original image
+     * type and pixel calibration, and does NOT copy annotations (those live on the base).
+     * A 90/270 rotation swaps width and height; {@code RotatedImageServer} reports the
+     * rotated dimensions and calibration.
+     *
+     * @param project the project
+     * @param originalEntry the macro entry to rotate
+     * @param rotation the rotation to apply (ROTATE_90 / 180 / 270; ROTATE_NONE is a no-op)
+     * @param sampleName the sample name for metadata
+     * @return the new rotated entry, or null on failure / no-op
+     */
+    public static ProjectImageEntry<BufferedImage> createRotatedDuplicate(
+            Project<BufferedImage> project,
+            ProjectImageEntry<BufferedImage> originalEntry,
+            RotatedImageServer.Rotation rotation,
+            String sampleName)
+            throws IOException {
+
+        if (project == null || originalEntry == null) {
+            logger.error("Cannot create rotated duplicate: null project or entry");
+            return null;
+        }
+        if (rotation == null || rotation == RotatedImageServer.Rotation.ROTATE_NONE) {
+            logger.warn("createRotatedDuplicate: no rotation requested ({}); nothing to do", rotation);
+            return null;
+        }
+
+        logger.info("Creating rotated duplicate of {} ({})", originalEntry.getImageName(), rotation);
+
+        ImageData<BufferedImage> originalData = originalEntry.readImageData();
+        ImageServer<BufferedImage> originalServer = originalData.getServer();
+        ImageData.ImageType imageType = originalData.getImageType();
+
+        // Native rotation -- no hand-rolled affine (contrast with createFlippedDuplicate).
+        ImageServer<BufferedImage> rotatedServer = new RotatedImageServer(originalServer, rotation);
+        ProjectImageEntry<BufferedImage> rotatedEntry = project.addImage(rotatedServer.getBuilder());
+
+        String suffix =
+                switch (rotation) {
+                    case ROTATE_90 -> " (rotated 90)";
+                    case ROTATE_180 -> " (rotated 180)";
+                    case ROTATE_270 -> " (rotated 270)";
+                    default -> " (rotated)";
+                };
+        String rotatedName = originalEntry.getImageName() + suffix;
+        rotatedEntry.setImageName(rotatedName);
+
+        ImageData<BufferedImage> rotatedData = rotatedEntry.readImageData();
+        rotatedData.setImageType(imageType);
+
+        double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+        double rotatedPixelSize = rotatedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Math.abs(originalPixelSize - rotatedPixelSize) > 0.001) {
+            logger.warn(
+                    "Rotated duplicate pixel-size mismatch: original={} um/px, rotated={} um/px",
+                    originalPixelSize,
+                    rotatedPixelSize);
+        }
+
+        // Share base_image with the original so downstream lookups resolve to the same macro.
+        Map<String, String> originalMetadata = originalEntry.getMetadata();
+        if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
+            String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
+            originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
+            logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
+        }
+
+        double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
+        ImageMetadataManager.applyImageMetadata(
+                rotatedEntry,
+                originalEntry, // inherit collection + base_image from the original
+                offsets[0],
+                offsets[1],
+                false, // rotation is not a flip; no flip axes are set
+                false,
+                sampleName);
+
+        rotatedEntry.saveImageData(rotatedData);
+        project.syncChanges();
+
+        logger.info("Successfully created rotated duplicate: {}", rotatedName);
+        return rotatedEntry;
     }
 
     /**
