@@ -689,6 +689,30 @@ Applies to both OME-TIFF and OME-ZARR output. The default of 4 is a balance that
 
 ---
 
+### Enable Multi-Slide Workflow (experimental)
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No |
+
+**Description:**
+Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu. The menu item appears and disappears **live** when you toggle this preference — **no restart required**. When enabled, the workflow assigns project macro images to slot positions in a multi-slide carrier (e.g. the 4-slide vertical holder) and guides you through acquisition on each slot. You can run slots one at a time manually, or use semi-automated or fully unattended two-pass batch modes.
+
+**When to Enable:**
+- You are using a multi-slide carrier (quad_v or similar)
+- You have a project with macro entries (one per slide) that are ready to acquire from
+- You want to run the same acquisition workflow on multiple slides in sequence
+
+**When to Disable:**
+- Hide the MS-Existing Image menu entry when you don't need multi-slide batch acquisition
+- Return to single-slide workflows (the regular Bounded Acquisition and Acquire from Existing Image entries remain unaffected)
+
+**See Also:** [MS-Existing Image (experimental)](WORKFLOWS.md#ms-existing-image-experimental) workflow documentation.
+
+---
+
 ### Stitched output organization (multi-channel acquisitions)
 
 | Property | Value |

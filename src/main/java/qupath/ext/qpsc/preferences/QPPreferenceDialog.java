@@ -508,11 +508,12 @@ public class QPPreferenceDialog {
         items.add(new PropertyItemBuilder<>(enableMultiSlideWorkflowProperty, Boolean.class)
                 .name("Enable Multi-Slide Workflow (experimental)")
                 .category(CATEGORY)
-                .description("Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu. "
-                        + "The workflow assigns project macro images to slot positions in a multi-slide carrier "
-                        + "(e.g. the 4-slide vertical holder), then shepherds you through the regular "
-                        + "Existing Image workflow on each slot. Acquisition and alignment logic are unchanged; "
-                        + "this is an orchestration layer on top. Disable to hide the menu entry.")
+                .description("Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu "
+                        + "(appears immediately, no restart). The workflow assigns project macro images to "
+                        + "slot positions in a multi-slide carrier (e.g. the 4-slide vertical holder), then "
+                        + "walks you through the Existing Image workflow on each slot -- one at a time, or as "
+                        + "a semi-automated / fully unattended two-pass batch. Acquisition and alignment logic "
+                        + "are unchanged; this is an orchestration layer on top. Disable to hide the menu entry.")
                 .build());
 
         // Image name contents -- what metadata to include in generated filenames.
@@ -870,6 +871,14 @@ public class QPPreferenceDialog {
     /** Returns true if the experimental Multi-Slide Existing Image menu entry should be shown. */
     public static boolean getEnableMultiSlideWorkflow() {
         return enableMultiSlideWorkflowProperty.get();
+    }
+
+    /**
+     * The backing property for the Multi-Slide Workflow toggle, so the menu entry's
+     * visibility can bind to it and update live (no QuPath restart needed).
+     */
+    public static BooleanProperty enableMultiSlideWorkflowProperty() {
+        return enableMultiSlideWorkflowProperty;
     }
 
     /**

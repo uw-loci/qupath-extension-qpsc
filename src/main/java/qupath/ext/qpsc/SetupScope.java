@@ -289,31 +289,31 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // 2b) Multi-Slide Existing Image (experimental) - only shown when the preference is enabled.
-        // Drives the user through the regular Existing Image workflow across each slot of a
-        // multi-slide carrier (e.g. quad_v). Requires an open project containing the macro entries.
-        MenuItem multiSlideOption = null;
-        if (QPPreferenceDialog.getEnableMultiSlideWorkflow()) {
-            multiSlideOption = new MenuItem(res.getString("menu.multiSlideExistingImage"));
-            multiSlideOption
-                    .disableProperty()
-                    .bind(Bindings.createBooleanBinding(
-                            () -> !configValid || offlineScope || qupath.getProject() == null,
-                            qupath.imageDataProperty(),
-                            qupath.projectProperty()));
-            setMenuItemTooltip(
-                    multiSlideOption,
-                    "Experimental: assign project macro entries to slide-carrier slot positions, "
-                            + "then walk through the Existing Image workflow on each slot. "
-                            + "Enable in Preferences > QuPath Scope > Enable Multi-Slide Workflow (experimental).");
-            multiSlideOption.setOnAction(e -> {
-                try {
-                    QPScopeController.getInstance().startWorkflow("multiSlideExistingImage");
-                } catch (IOException ex) {
-                    throw new RuntimeException(ex);
-                }
-            });
-        }
+        // 2b) Multi-Slide Existing Image (experimental) - visibility bound to the preference so
+        // it appears / disappears live when the toggle changes (the menu is built once at startup,
+        // so gating creation on the preference would require a restart -- bind visibleProperty
+        // instead). Drives the user through the regular Existing Image workflow across each slot of
+        // a multi-slide carrier (e.g. quad_v). Requires an open project containing the macro entries.
+        MenuItem multiSlideOption = new MenuItem(res.getString("menu.multiSlideExistingImage"));
+        multiSlideOption.visibleProperty().bind(QPPreferenceDialog.enableMultiSlideWorkflowProperty());
+        multiSlideOption
+                .disableProperty()
+                .bind(Bindings.createBooleanBinding(
+                        () -> !configValid || offlineScope || qupath.getProject() == null,
+                        qupath.imageDataProperty(),
+                        qupath.projectProperty()));
+        setMenuItemTooltip(
+                multiSlideOption,
+                "Experimental: assign project macro entries to slide-carrier slot positions, "
+                        + "then walk through the Existing Image workflow on each slot. "
+                        + "Enable in Preferences > QuPath Scope > Enable Multi-Slide Workflow (experimental).");
+        multiSlideOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("multiSlideExistingImage");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
 
         // 3) Microscope alignment workflow (only enabled if macro is available -
         //    either directly from the current image or via project metadata chain)
@@ -716,9 +716,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // 1. Acquisition
         extensionMenu.getItems().addAll(boundedAcquisitionOption, existingImageOption);
-        if (multiSlideOption != null) {
-            extensionMenu.getItems().add(multiSlideOption);
-        }
+        // Always added; its visibleProperty is bound to the Multi-Slide preference so it
+        // shows/hides live without a restart.
+        extensionMenu.getItems().add(multiSlideOption);
         extensionMenu.getItems().add(new SeparatorMenuItem());
 
         // 2. Viewers & Controls

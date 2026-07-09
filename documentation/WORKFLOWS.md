@@ -114,7 +114,7 @@ See [full documentation](tools/existing-image-acquisition.md) for step-by-step i
 
 ### MS-Existing Image (experimental)
 
-If you enable **Enable Multi-Slide Workflow (experimental)** in Preferences, the menu gains an **MS-Existing Image (experimental)** entry. It is a shepherding layer over Workflow 2 for slide carriers that hold multiple slides (currently the 4-slide vertical holder, `quad_v`):
+Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the **MS-Existing Image (experimental)** menu entry. The menu item appears and disappears live when you toggle the preference — no restart required. It is a shepherding layer over Workflow 2 for slide carriers that hold multiple slides (currently the 4-slide vertical holder, `quad_v`):
 
 1. Pick the carrier in the assignment dialog.
 2. For each slot, assign one project macro entry (or check Skip).
