@@ -179,6 +179,7 @@ watched_symbols:
   - PPMSensitivityTestWorkflow.run
 acknowledged_stale:
   - "334f4fda/0f5a7980: W1 gained startAsync() (completion future for batch orchestration); MultiSlide Run button now awaits it. Map's dispatch/reads/writes unchanged."
+  - "85b5f498: MultiSlide panel gained 'Run All Remaining' -- sequential auto-run over W1.startAsync() across slots (opens each entry, awaits completion, advances). Per-slide dispatch/reads/writes unchanged; still one W1 invocation per slot."
 ---
 
 # QPSC Workflow Map
