@@ -118,12 +118,15 @@ If you enable **Enable Multi-Slide Workflow (experimental)** in Preferences, the
 
 1. Pick the carrier in the assignment dialog.
 2. For each slot, assign one project macro entry (or check Skip).
-3. Run the slots, either automatically or one at a time:
-   - **Run All Remaining** walks every not-yet-done slot in order -- the panel opens each macro entry and runs the regular Existing Image workflow on it, advancing the slot to **Done** when acquisition completes and moving on to the next. You still answer each slide's own dialogs (alignment, refinement, acquisition setup) as its turn comes up; the panel automates only the sequencing between slides. Tick **Stop after current slide** to halt cleanly once the running slide finishes (an in-flight acquisition is never interrupted).
-   - Or drive one slot by hand with its row buttons: **Open** switches to that slot's macro entry, then **Run Single-Slide Workflow** launches the regular workflow on it. Either way the slot advances to **Done** on a successful acquisition, or stays **In Progress** (so you can retry or Skip) if the run is cancelled at a gate or hits a handled error.
+3. Run the slots. There are three ways, and you can mix them:
+   - **Run All Remaining** (semi-automated single pass) walks every not-yet-done slot in order -- the panel opens each macro entry and runs the full Existing Image workflow on it, advancing the slot to **Done** when acquisition completes and moving on. You still answer each slide's own dialogs (alignment, refinement, acquisition setup) as its turn comes up; the panel automates only the sequencing between slides.
+   - **Two-pass (unattended acquire)** -- for a walk-away batch, first click **Set Up All Remaining**: this runs the interactive align + refine + tissue pass on every slot *without acquiring*, so each slot advances to **Set up (ready to acquire)** and remembers its acquisition settings. Then click **Acquire All Set-Up**: the panel acquires every set-up slot **unattended, with no dialogs**, replaying each slot's settings against the alignment saved during setup. Front-load all your decisions in the setup pass, then leave it running.
+   - Or drive one slot by hand with its row buttons: **Open** switches to that slot's macro entry, then **Run Single-Slide Workflow** launches the regular workflow on it.
+
+   Tick **Stop after current slide** to halt any of these drivers cleanly once the running slide finishes (an in-flight acquisition is never interrupted). A slot advances to **Done** on a successful acquisition, or stays **In Progress** / **Set up** (so you can retry or Skip) if a run is cancelled at a gate or hits a handled error.
 4. Once every slot is Done or Skipped, click **Finish** to see a summary.
 
-Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2. This is an early experimental release: Run All automates the sequencing between slides, but each slide's setup dialogs still run interactively. A fully unattended mode -- front-loading every decision in a setup pass, then acquiring all slides with no dialogs -- is planned.
+Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2 -- the two-pass mode just splits that same workflow into a setup half (which persists the per-slide alignment) and an acquire half (which replays it). This is an early experimental release.
 
 ---
 

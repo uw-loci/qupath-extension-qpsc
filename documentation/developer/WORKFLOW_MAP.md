@@ -125,6 +125,10 @@ watched_symbols:
   # Workflow entry points / dispatch
   - QPScopeController.startWorkflow
   - ExistingImageWorkflowV2.start
+  - ExistingImageWorkflowV2.startAsync
+  - ExistingImageWorkflowV2.startSetupAsync
+  - ExistingImageWorkflowV2.startAcquireAsync
+  - ExistingImageWorkflowV2.SetupResult
   - ExistingImageWorkflowV2.routeSubWorkflow
   - ExistingImageWorkflowV2.checkAndHandleOrphanedFlippedSibling
   - ExistingImageWorkflowV2.processSubAcquisitionPath
@@ -180,6 +184,7 @@ watched_symbols:
 acknowledged_stale:
   - "334f4fda/0f5a7980: W1 gained startAsync() (completion future for batch orchestration); MultiSlide Run button now awaits it. Map's dispatch/reads/writes unchanged."
   - "85b5f498: MultiSlide panel gained 'Run All Remaining' -- sequential auto-run over W1.startAsync() across slots (opens each entry, awaits completion, advances). Per-slide dispatch/reads/writes unchanged; still one W1 invocation per slot."
+  - "ae3d7c2b: W1 gained startSetupAsync() and startAcquireAsync() for two-pass batch mode; MultiSlide panel dispatches 'Set Up All Remaining' over startSetupAsync() (no acquisition), then 'Acquire All Set-Up' over startAcquireAsync() (unattended replay). Per-slide alignment persists to disk between passes; reads/writes largely unchanged, just split across two invocations per slot."
 ---
 
 # QPSC Workflow Map
@@ -258,7 +263,7 @@ shared IDs the helpers actually use.
 id: W1
 class: qupath.ext.qpsc.controller.ExistingImageWorkflowV2
 file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
-entry: start() | startAsync() -> CompletableFuture<WorkflowState> (settles on full completion; non-null = acquired, null = short-circuit/cancel/handled-error; never exceptional -- for batch orchestrators)
+entry: start() | startAsync() -> CompletableFuture<WorkflowState> (full run; non-null = acquired, null = short-circuit/cancel/handled-error; never exceptional -- for batch orchestrators) | startSetupAsync() -> CompletableFuture<SetupResult> (setup-only: align + refine + tissue without acquisition, persists per-slide alignment JSON) | startAcquireAsync(SetupResult) -> CompletableFuture<WorkflowState> (acquire-only: replays captured config unattended against persisted alignment JSON)
 category: acquisition
 ui_entries:
   - "Menu: Extensions > QP Scope > Acquire from Existing Image (SetupScope.java:200, dispatch 'existingImage')"

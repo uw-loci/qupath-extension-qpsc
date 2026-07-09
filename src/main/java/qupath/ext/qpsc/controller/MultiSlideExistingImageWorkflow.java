@@ -45,14 +45,31 @@ import qupath.lib.projects.ProjectImageEntry;
  * and {@code ms_run_id} metadata per entry, and reports per-slot status
  * (pending / done / skipped) at the end.
  *
- * <p>This is intentionally a thin orchestrator over the existing workflow rather than a
- * deep refactor: the underlying alignment + acquisition logic is unchanged, and Run All
- * automates only the <em>sequencing</em> between slides -- each slide's own dialogs
- * (alignment, refinement, acquisition setup) still run as its turn comes up. A fully
- * unattended two-pass mode (front-load every human decision in a setup pass, then acquire
- * all N with no dialogs) additionally requires splitting the single-slide workflow into a
- * setup-only path that persists per-slide alignment and a non-interactive acquire path
- * that replays a captured acquisition config -- tracked as later batch work.
+ * <p>Two ways to run the slots:
+ * <ul>
+ *   <li><b>Run All Remaining</b> -- semi-automated single pass. The panel sequences the
+ *       full interactive single-slide workflow over each slot; you still answer each
+ *       slide's dialogs (alignment, refinement, acquisition setup) as its turn comes up,
+ *       but the sequencing between slides is automatic.</li>
+ *   <li><b>Two-pass (unattended acquire)</b> -- <b>Set Up All Remaining</b> runs the
+ *       interactive setup-only workflow ({@link ExistingImageWorkflowV2#startSetupAsync()})
+ *       on every slot: align + optional refine + confirm tissue, which persists a per-slide
+ *       alignment JSON, but acquires nothing (each slot advances to "Set up" and stashes its
+ *       captured config). Then <b>Acquire All Set-Up</b> replays each captured config
+ *       unattended ({@link ExistingImageWorkflowV2#startAcquireAsync}) against the persisted
+ *       alignment, with no dialogs -- so you front-load every decision in the setup pass,
+ *       then walk away for the long acquisition pass.</li>
+ * </ul>
+ * A <b>Stop after current slide</b> control halts any driver cleanly between slides. The
+ * panel records {@code slide_position}, {@code slide_carrier}, and {@code ms_run_id}
+ * metadata per entry, and reports per-slot status at the end.
+ *
+ * <p>The unattended acquire pass is safe across the entry reopen because the hand-off from
+ * setup to acquire is persistence-based, not in-memory: the alignment lives in a per-slide
+ * JSON on disk (written by the manual / existing alignment paths during setup) and the
+ * acquire pass re-reads both the alignment and the annotations from the freshly opened
+ * hierarchy. The only thing carried in memory is the captured acquisition config (modality,
+ * objective, angles, etc.), which is frame-independent.
  */
 public final class MultiSlideExistingImageWorkflow {
 
@@ -117,13 +134,14 @@ public final class MultiSlideExistingImageWorkflow {
         Label header = new Label("Multi-Slide Existing Image -- " + carrier.getName());
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
 
-        Label intro = new Label("Click Run All Remaining to walk every not-yet-done slot in order: "
-                + "the panel opens each macro entry and runs the regular Existing Image workflow on it, "
-                + "advancing the slot to Done when acquisition completes. You still answer each slide's "
-                + "own dialogs (alignment, refinement, acquisition setup) as its turn comes up; the panel "
-                + "only automates the sequencing between slides. Tick Stop after current slide to halt "
-                + "cleanly once the running slide finishes. The per-row Open / Run / Skip buttons remain "
-                + "for driving a single slot by hand. Click Finish when all slots are Done or Skipped.");
+        Label intro = new Label("Two ways to run the slots. Run All Remaining walks every not-yet-done "
+                + "slot in order, running the full Existing Image workflow on each (you answer each slide's "
+                + "dialogs as its turn comes up; only the sequencing is automated). For a walk-away batch, "
+                + "use the two-pass buttons: Set Up All Remaining does the interactive align + tissue pass on "
+                + "every slot without acquiring (each becomes Set up), then Acquire All Set-Up acquires them "
+                + "all unattended, no dialogs. Tick Stop after current slide to halt cleanly once the running "
+                + "slide finishes. The per-row Open / Run / Skip buttons drive a single slot by hand. Click "
+                + "Finish when all slots are Done or Skipped.");
         intro.setWrapText(true);
         intro.setMaxWidth(640);
 
@@ -146,7 +164,9 @@ public final class MultiSlideExistingImageWorkflow {
         Runnable refreshFinish = () -> {
             boolean allTerminal = true;
             for (SlotState s : states) {
-                if (s.status == Status.PENDING || s.status == Status.IN_PROGRESS) {
+                // SET_UP counts as non-terminal: a set-up-but-not-acquired slot still
+                // needs an acquire pass (or an explicit Skip) before the run can finish.
+                if (!s.isTerminal()) {
                     allTerminal = false;
                     break;
                 }
@@ -220,31 +240,87 @@ public final class MultiSlideExistingImageWorkflow {
             stage.close();
         });
 
-        // Sequential auto-run across every not-yet-terminal slot. The driver opens
-        // each entry and runs its single-slide workflow through the completion future,
-        // advancing only when the current slide has fully settled. "Stop after current
-        // slide" halts cleanly between slides without interrupting an in-flight run.
+        // Sequential auto-run across every not-yet-terminal slot. Each driver opens the
+        // entry and runs a single-slide operation through its completion future, advancing
+        // only when the current slide has fully settled. "Stop after current slide" halts
+        // cleanly between slides without interrupting an in-flight run, and is shared by all
+        // three drivers below.
         Button runAllBtn = new Button("Run All Remaining");
+        Button setUpAllBtn = new Button("Set Up All Remaining");
+        Button acquireAllBtn = new Button("Acquire All Set-Up");
         CheckBox stopAfterCurrent = new CheckBox("Stop after current slide");
+        List<Button> driverButtons = List.of(runAllBtn, setUpAllBtn, acquireAllBtn);
+
+        // Semi-automated single pass: full interactive workflow per slot, sequenced.
         runAllBtn.setOnAction(e -> {
             stopAfterCurrent.setSelected(false);
-            setPanelBusy(states, runAllBtn, finishBtn, true);
+            setPanelBusy(states, driverButtons, finishBtn, true);
             logger.info("MS workflow: Run All Remaining started, runId={}", runId);
-            runAllRemaining(gui, states, 0, refreshFinish, stopAfterCurrent::isSelected, () -> {
-                logger.info("MS workflow: Run All Remaining finished, runId={}", runId);
-                setPanelBusy(states, runAllBtn, finishBtn, false);
-                refreshFinish.run();
-            });
+            driveSequential(
+                    gui,
+                    states,
+                    0,
+                    s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
+                    s -> fullSlot(gui, s, refreshFinish),
+                    stopAfterCurrent::isSelected,
+                    () -> {
+                        logger.info("MS workflow: Run All Remaining finished, runId={}", runId);
+                        setPanelBusy(states, driverButtons, finishBtn, false);
+                        refreshFinish.run();
+                    });
+        });
+
+        // Two-pass PASS 1: interactive setup (align + refine + tissue) on every slot, no
+        // acquisition. Each slot advances to Set up and stashes its captured config.
+        setUpAllBtn.setOnAction(e -> {
+            stopAfterCurrent.setSelected(false);
+            setPanelBusy(states, driverButtons, finishBtn, true);
+            logger.info("MS workflow: Set Up All Remaining started, runId={}", runId);
+            driveSequential(
+                    gui,
+                    states,
+                    0,
+                    s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
+                    s -> setupSlot(gui, s, refreshFinish),
+                    stopAfterCurrent::isSelected,
+                    () -> {
+                        logger.info("MS workflow: Set Up All Remaining finished, runId={}", runId);
+                        setPanelBusy(states, driverButtons, finishBtn, false);
+                        refreshFinish.run();
+                    });
+        });
+
+        // Two-pass PASS 2: unattended acquisition on every Set-up slot, replaying its
+        // captured config against the alignment JSON persisted during setup.
+        acquireAllBtn.setOnAction(e -> {
+            stopAfterCurrent.setSelected(false);
+            setPanelBusy(states, driverButtons, finishBtn, true);
+            logger.info("MS workflow: Acquire All Set-Up started (unattended), runId={}", runId);
+            driveSequential(
+                    gui,
+                    states,
+                    0,
+                    s -> s.status == Status.SET_UP,
+                    s -> acquireSlot(gui, s, refreshFinish),
+                    stopAfterCurrent::isSelected,
+                    () -> {
+                        logger.info("MS workflow: Acquire All Set-Up finished, runId={}", runId);
+                        setPanelBusy(states, driverButtons, finishBtn, false);
+                        refreshFinish.run();
+                    });
         });
 
         HBox autoRow = new HBox(10, runAllBtn, stopAfterCurrent);
         autoRow.setAlignment(Pos.CENTER_LEFT);
+        Label twoPassLabel = new Label("Two-pass (unattended acquire):");
+        HBox twoPassRow = new HBox(10, twoPassLabel, setUpAllBtn, acquireAllBtn);
+        twoPassRow.setAlignment(Pos.CENTER_LEFT);
 
         HBox buttons = new HBox(10, abortBtn, finishBtn);
         buttons.setAlignment(Pos.CENTER_RIGHT);
         refreshFinish.run();
 
-        VBox root = new VBox(10, header, intro, new Separator(), scroll, new Separator(), autoRow, buttons);
+        VBox root = new VBox(10, header, intro, new Separator(), scroll, new Separator(), autoRow, twoPassRow, buttons);
         root.setPadding(new Insets(14));
         root.setStyle("-fx-pref-width: 780; -fx-pref-height: 520;");
         stage.setScene(new Scene(root));
@@ -302,29 +378,116 @@ public final class MultiSlideExistingImageWorkflow {
         return acquired;
     }
 
+    /** A per-slot operation: open the entry, do the work, update status; complete when settled. */
+    @FunctionalInterface
+    private interface SlotOp {
+        CompletableFuture<Void> run(SlotState s);
+    }
+
     /**
-     * Sequentially drives every not-yet-terminal slot from {@code index} onward:
-     * open its entry, run its single-slide workflow, wait for completion, then advance
-     * to the next. Terminal slots (Done / Skipped) are stepped over. Halts early when
-     * {@code stopRequested} is true (checked between slides, so an in-flight run always
-     * finishes cleanly). Calls {@code onDone} on the FX thread when there is nothing
-     * left to run or a stop was honoured.
-     *
-     * <p>Implemented as an FX-thread recursion over the completion future rather than a
-     * blocking loop, so the UI stays responsive and each slide's own dialogs run
-     * normally as its turn comes up. This automates the sequencing between slides; it
-     * does not make the per-slide runs unattended.
+     * Full single-slide run (open + interactive workflow + acquire) for one slot.
+     * Used by the "Run All Remaining" semi-automated driver.
      */
-    private static void runAllRemaining(
+    private static CompletableFuture<Void> fullSlot(QuPathGUI gui, SlotState s, Runnable refreshFinish) {
+        if (!openEntry(gui, s, refreshFinish)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return runSlot(s, refreshFinish).thenApply(ok -> null);
+    }
+
+    /**
+     * Two-pass PASS 1 for one slot: open + run the interactive setup-only workflow
+     * (align + optional refine + tissue), which persists a per-slide alignment JSON but
+     * does NOT acquire. On success the slot advances to Set up and stashes the captured
+     * config for the acquire pass; otherwise it is left In progress for retry/Skip.
+     */
+    private static CompletableFuture<Void> setupSlot(QuPathGUI gui, SlotState s, Runnable refreshFinish) {
+        if (!openEntry(gui, s, refreshFinish)) {
+            return CompletableFuture.completedFuture(null);
+        }
+        logger.info(
+                "MS workflow: setup pass for slot {} ({})",
+                s.assignment.position(),
+                s.assignment.entry().getImageName());
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        ExistingImageWorkflowV2.startSetupAsync()
+                .whenComplete((setup, ex) -> Platform.runLater(() -> {
+                    if (setup != null) {
+                        s.setup = setup;
+                        s.setStatus(Status.SET_UP);
+                        logger.info("MS workflow: slot {} set up (ready to acquire)", s.assignment.position());
+                    } else {
+                        logger.info(
+                                "MS workflow: slot {} setup cancelled / gated; leaving In progress",
+                                s.assignment.position());
+                    }
+                    refreshFinish.run();
+                    done.complete(null);
+                }));
+        return done;
+    }
+
+    /**
+     * Two-pass PASS 2 for one slot: open + replay the captured config unattended against
+     * the alignment JSON persisted during setup. On a real acquisition the slot advances
+     * to Done; otherwise it is restored to Set up so the acquire pass can be retried.
+     */
+    private static CompletableFuture<Void> acquireSlot(QuPathGUI gui, SlotState s, Runnable refreshFinish) {
+        if (s.setup == null) {
+            logger.warn("MS workflow: acquireSlot called on slot {} with no setup; skipping", s.assignment.position());
+            return CompletableFuture.completedFuture(null);
+        }
+        if (!openEntry(gui, s, refreshFinish)) {
+            // openEntry set IN_PROGRESS then failed; restore SET_UP so it stays retryable.
+            s.setStatus(Status.SET_UP);
+            refreshFinish.run();
+            return CompletableFuture.completedFuture(null);
+        }
+        logger.info(
+                "MS workflow: acquire pass (unattended) for slot {} ({})",
+                s.assignment.position(),
+                s.assignment.entry().getImageName());
+        CompletableFuture<Void> done = new CompletableFuture<>();
+        ExistingImageWorkflowV2.startAcquireAsync(s.setup)
+                .whenComplete((result, ex) -> Platform.runLater(() -> {
+                    if (result != null) {
+                        s.setStatus(Status.DONE);
+                        logger.info("MS workflow: slot {} acquired (unattended)", s.assignment.position());
+                    } else {
+                        s.setStatus(Status.SET_UP);
+                        logger.info(
+                                "MS workflow: slot {} acquire failed / gated; restored to Set up",
+                                s.assignment.position());
+                    }
+                    refreshFinish.run();
+                    done.complete(null);
+                }));
+        return done;
+    }
+
+    /**
+     * Sequentially drives every slot matching {@code match} from {@code index} onward:
+     * apply {@code op} to it, wait for the op to settle, then advance to the next. Slots
+     * that do not match (already terminal, or not in the pass's target state) are stepped
+     * over. Halts early when {@code stopRequested} is true (checked between slides, so an
+     * in-flight run always finishes cleanly). Calls {@code onDone} on the FX thread when
+     * there is nothing left to run or a stop was honoured.
+     *
+     * <p>Implemented as an FX-thread recursion over each op's completion future rather
+     * than a blocking loop, so the UI stays responsive and any interactive dialogs run
+     * normally as each slot's turn comes up.
+     */
+    private static void driveSequential(
             QuPathGUI gui,
             List<SlotState> states,
             int index,
-            Runnable refreshFinish,
+            java.util.function.Predicate<SlotState> match,
+            SlotOp op,
             java.util.function.BooleanSupplier stopRequested,
             Runnable onDone) {
 
         int i = index;
-        while (i < states.size() && states.get(i).isTerminal()) {
+        while (i < states.size() && !match.test(states.get(i))) {
             i++;
         }
         if (i >= states.size()) {
@@ -332,31 +495,28 @@ public final class MultiSlideExistingImageWorkflow {
             return;
         }
         if (stopRequested.getAsBoolean()) {
-            logger.info("MS workflow: Run All halted by 'Stop after current slide' before slot index {}", i);
+            logger.info("MS workflow: driver halted by 'Stop after current slide' before slot index {}", i);
             onDone.run();
             return;
         }
 
         final int idx = i;
-        SlotState s = states.get(idx);
-        if (!openEntry(gui, s, refreshFinish)) {
-            // Opening failed; leave the slot In progress and continue with the rest.
-            runAllRemaining(gui, states, idx + 1, refreshFinish, stopRequested, onDone);
-            return;
-        }
-        runSlot(s, refreshFinish)
-                .whenComplete((ok, ex) -> Platform.runLater(
-                        () -> runAllRemaining(gui, states, idx + 1, refreshFinish, stopRequested, onDone)));
+        op.run(states.get(idx))
+                .whenComplete((v, ex) -> Platform.runLater(
+                        () -> driveSequential(gui, states, idx + 1, match, op, stopRequested, onDone)));
     }
 
     /**
-     * Disables (or restores) the panel's driving controls while Run All is active.
+     * Disables (or restores) the panel's driving controls while a driver is active.
      * Abort is intentionally left live so the user can always close the panel; Finish
      * is disabled here and re-gated by {@code refreshFinish} when the run ends. Per-row
      * controls are disabled so the manual and auto drivers cannot overlap.
      */
-    private static void setPanelBusy(List<SlotState> states, Button runAllBtn, Button finishBtn, boolean busy) {
-        runAllBtn.setDisable(busy);
+    private static void setPanelBusy(
+            List<SlotState> states, List<Button> driverButtons, Button finishBtn, boolean busy) {
+        for (Button b : driverButtons) {
+            b.setDisable(busy);
+        }
         finishBtn.setDisable(busy);
         for (SlotState s : states) {
             s.setRowButtonsDisabled(busy);
@@ -397,6 +557,8 @@ public final class MultiSlideExistingImageWorkflow {
         Button runBtn;
         Button doneBtn;
         Button skipBtn;
+        // Captured during the two-pass setup pass; replayed unattended in the acquire pass.
+        ExistingImageWorkflowV2.SetupResult setup;
 
         SlotState(MultiSlideAssignmentDialog.SlotAssignment a) {
             this.assignment = a;
@@ -422,6 +584,7 @@ public final class MultiSlideExistingImageWorkflow {
     private enum Status {
         PENDING("Pending"),
         IN_PROGRESS("In progress"),
+        SET_UP("Set up (ready to acquire)"),
         DONE("Done"),
         SKIPPED("Skipped");
 

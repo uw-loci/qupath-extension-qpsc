@@ -63,7 +63,7 @@ public class ExistingImageWorkflowV2 {
      * future is ignored.
      */
     public static void start() {
-        new WorkflowOrchestrator().execute();
+        new WorkflowOrchestrator(Mode.FULL, null, null).execute();
     }
 
     /**
@@ -87,7 +87,69 @@ public class ExistingImageWorkflowV2 {
      * The future always completes on the JavaFX thread's continuation of the chain.
      */
     public static CompletableFuture<WorkflowState> startAsync() {
-        return new WorkflowOrchestrator().execute();
+        return new WorkflowOrchestrator(Mode.FULL, null, null).execute();
+    }
+
+    /**
+     * Captured product of a setup-only run: everything the unattended acquire pass
+     * needs to replay this slide without any dialogs. The alignment itself is NOT
+     * carried here -- it is persisted to a per-slide alignment JSON during the setup
+     * run (by the manual / existing alignment paths) and re-read fresh from disk on
+     * the acquire pass, so there are no stale in-memory {@code PathObject} or transform
+     * references across the entry reopen.
+     *
+     * @param config the acquisition config the operator chose during setup
+     * @param selectedAnnotationClasses the annotation classes chosen during setup
+     */
+    public record SetupResult(ExistingImageAcquisitionConfig config, List<String> selectedAnnotationClasses) {}
+
+    /**
+     * Runs the interactive setup half of the workflow -- alignment (manual / existing,
+     * which persists a per-slide alignment JSON) plus optional refinement and annotation
+     * confirmation -- but STOPS before acquisition. Intended as pass 1 of the two-pass
+     * multi-slide batch: the operator confirms alignment/tissue on every slide, nothing
+     * is acquired.
+     *
+     * @return a future completing with the captured {@link SetupResult} on success, or
+     *     {@code null} on cancel / short-circuit / handled error. Never exceptional.
+     */
+    public static CompletableFuture<SetupResult> startSetupAsync() {
+        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null);
+        return o.execute().thenApply(st -> {
+            if (st == null || o.capturedConfig == null) {
+                return null;
+            }
+            return new SetupResult(o.capturedConfig, o.state.selectedAnnotationClasses);
+        });
+    }
+
+    /**
+     * Runs the unattended acquire half of the workflow for a slide that was already set
+     * up (pass 2 of the two-pass batch). Replays the captured config with refinement
+     * forced to NONE, so {@code checkExistingSlideAlignment} finds the per-slide JSON
+     * persisted during setup and routes through the dialog-free
+     * {@code processSlideSpecificAlignment} path, then acquires. Annotations are re-read
+     * from the freshly opened hierarchy -- no in-memory hand-off from setup.
+     *
+     * @param setup the product of {@link #startSetupAsync()} for this slide's entry
+     * @return a future completing with the {@link WorkflowState} on a real acquisition,
+     *     or {@code null} on short-circuit / handled error. Never exceptional.
+     */
+    public static CompletableFuture<WorkflowState> startAcquireAsync(SetupResult setup) {
+        if (setup == null || setup.config() == null) {
+            return CompletableFuture.completedFuture(null);
+        }
+        return new WorkflowOrchestrator(Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses()).execute();
+    }
+
+    /** Execution mode for {@link WorkflowOrchestrator}. */
+    private enum Mode {
+        /** Interactive dialogs + acquisition (the normal single-slide run). */
+        FULL,
+        /** Interactive dialogs through alignment/refinement, but stop before acquisition. */
+        SETUP_ONLY,
+        /** No dialogs: replay a captured config, refinement forced NONE, then acquire. */
+        ACQUIRE_ONLY
     }
 
     /**
@@ -96,10 +158,20 @@ public class ExistingImageWorkflowV2 {
     private static class WorkflowOrchestrator {
         private final QuPathGUI gui;
         private final WorkflowState state;
+        private final Mode mode;
+        /** Non-null only in ACQUIRE_ONLY: the config to replay instead of showing dialogs. */
+        private final ExistingImageAcquisitionConfig presetConfig;
+        /** Annotation classes to re-read in ACQUIRE_ONLY (from the setup pass). */
+        private final List<String> presetClasses;
+        /** Captured in SETUP_ONLY when initializeFromConfig runs, for the acquire pass to replay. */
+        private ExistingImageAcquisitionConfig capturedConfig;
 
-        WorkflowOrchestrator() {
+        WorkflowOrchestrator(Mode mode, ExistingImageAcquisitionConfig presetConfig, List<String> presetClasses) {
             this.gui = QuPathGUI.getInstance();
             this.state = new WorkflowState();
+            this.mode = mode;
+            this.presetConfig = presetConfig;
+            this.presetClasses = presetClasses;
         }
 
         /**
@@ -158,6 +230,23 @@ public class ExistingImageWorkflowV2 {
                 }
             }
 
+            // ACQUIRE_ONLY (pass 2): no dialogs. Replay the captured config + classes,
+            // let checkExistingSlideAlignment find the per-slide JSON persisted during
+            // setup, and route through the dialog-free processSlideSpecificAlignment.
+            if (mode == Mode.ACQUIRE_ONLY) {
+                logger.info("ACQUIRE_ONLY: replaying captured config for unattended acquisition");
+                state.selectedAnnotationClasses = presetClasses != null ? presetClasses : new ArrayList<>();
+                CompletableFuture<WorkflowState> chain = initializeFromConfig(presetConfig)
+                        .thenApply(this::forceRefinementNone)
+                        .thenCompose(this::checkExistingSlideAlignment)
+                        .thenCompose(this::routeSubWorkflow)
+                        .thenCompose(this::reReadAnnotationsAfterRouting)
+                        .thenCompose(this::handleRefinement)
+                        .thenCompose(this::maybeAcquire);
+                finishChain(chain, done);
+                return done;
+            }
+
             // Step 2: Check if annotations exist and show annotation dialog FIRST
             Set<String> existingClasses = getExistingAnnotationClasses();
 
@@ -200,8 +289,7 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::routeSubWorkflow)
                         .thenCompose(this::reReadAnnotationsAfterRouting)
                         .thenCompose(this::handleRefinement)
-                        .thenCompose(this::performAcquisition)
-                        .thenCompose(this::waitForCompletion);
+                        .thenCompose(this::maybeAcquire);
                 finishChain(chain, done);
             } else {
                 // No annotations - proceed with consolidated dialog which will handle annotation creation
@@ -217,11 +305,36 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::routeSubWorkflow)
                         .thenCompose(this::reReadAnnotationsAfterRouting)
                         .thenCompose(this::handleRefinement)
-                        .thenCompose(this::performAcquisition)
-                        .thenCompose(this::waitForCompletion);
+                        .thenCompose(this::maybeAcquire);
                 finishChain(chain, done);
             }
             return done;
+        }
+
+        /**
+         * In SETUP_ONLY, stop here: the per-slide alignment JSON has already been
+         * persisted by the alignment path, so the acquire pass can replay it. In FULL /
+         * ACQUIRE_ONLY, run the acquisition + wait for stitching.
+         */
+        private CompletableFuture<WorkflowState> maybeAcquire(WorkflowState state) {
+            if (mode == Mode.SETUP_ONLY) {
+                if (state != null) {
+                    logger.info("SETUP_ONLY: alignment prepared and persisted; skipping acquisition");
+                }
+                return CompletableFuture.completedFuture(state);
+            }
+            return performAcquisition(state).thenCompose(this::waitForCompletion);
+        }
+
+        /**
+         * Forces refinement to NONE for the acquire pass so the saved per-slide alignment
+         * is consumed as-is (no reference-tile refinement dialog). A no-op on a null state.
+         */
+        private WorkflowState forceRefinementNone(WorkflowState state) {
+            if (state != null) {
+                state.refinementChoice = RefinementSelectionController.RefinementChoice.NONE;
+            }
+            return state;
         }
 
         /**
@@ -249,6 +362,15 @@ public class ExistingImageWorkflowV2 {
                             logger.info("Workflow short-circuited; skipping success notification");
                             cleanup();
                             done.complete(null);
+                            return;
+                        }
+                        if (mode == Mode.SETUP_ONLY) {
+                            // Setup succeeded but nothing was acquired -- no tiles to clean,
+                            // no ACQUISITION_COMPLETE beep. cleanup() still clears the
+                            // currentTransform singleton + acquisitionActive flag.
+                            cleanup();
+                            logger.info("SETUP_ONLY run complete; slide alignment is ready for the acquire pass");
+                            done.complete(result);
                             return;
                         }
                         cleanupTilesAfterStitching();
@@ -688,6 +810,9 @@ public class ExistingImageWorkflowV2 {
             }
 
             logger.info("Initializing workflow from consolidated config");
+
+            // Capture the config so a SETUP_ONLY run can hand it to the acquire pass.
+            this.capturedConfig = config;
 
             // Create sample setup result
             state.sample = new SampleSetupResult(
