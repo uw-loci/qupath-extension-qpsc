@@ -177,7 +177,8 @@ watched_symbols:
   - BirefringenceOptimizationWorkflow.run
   - SunburstCalibrationWorkflow.run
   - PPMSensitivityTestWorkflow.run
-acknowledged_stale: []
+acknowledged_stale:
+  - "334f4fda/0f5a7980: W1 gained startAsync() (completion future for batch orchestration); MultiSlide Run button now awaits it. Map's dispatch/reads/writes unchanged."
 ---
 
 # QPSC Workflow Map
@@ -256,7 +257,7 @@ shared IDs the helpers actually use.
 id: W1
 class: qupath.ext.qpsc.controller.ExistingImageWorkflowV2
 file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
-entry: start()
+entry: start() | startAsync() -> CompletableFuture<WorkflowState> (settles on full completion; non-null = acquired, null = short-circuit/cancel/handled-error; never exceptional -- for batch orchestrators)
 category: acquisition
 ui_entries:
   - "Menu: Extensions > QP Scope > Acquire from Existing Image (SetupScope.java:200, dispatch 'existingImage')"
