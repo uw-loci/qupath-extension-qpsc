@@ -254,7 +254,14 @@ public class StageInsert {
         // an explicit samples list > legacy num_slides / slide_spacing_mm pitch.
         int numSlides = ((Number) configMap.getOrDefault("num_slides", 1)).intValue();
         Object samplesObj = configMap.get("samples");
-        if (getDoubleValueOrNull(configMap, "slide1_center_x_um") != null) {
+        boolean hasPerSlotCenters = false;
+        for (int k = 1; k <= Math.max(numSlides, 1); k++) {
+            if (getDoubleValueOrNull(configMap, "slide" + k + "_center_x_um") != null) {
+                hasPerSlotCenters = true;
+                break;
+            }
+        }
+        if (hasPerSlotCenters) {
             // Per-slot calibration: each slot's center is an absolute stage position captured
             // via the Stage Map. Convert it to a local insert offset exactly as the single-slide
             // center is derived above (|centerStage - origin|, then subtract the half-size).

@@ -74,6 +74,22 @@ class StageInsertPerSlotTest {
     }
 
     @Test
+    @DisplayName("per-slot mode triggers on any captured slot, not just slot 1")
+    void perSlotTriggersOnAnySlot() {
+        Map<String, Object> c = quadBase();
+        // Slot 1 NOT captured; slots 2 and 4 are.
+        c.put("slide2_center_x_um", 50000.0);
+        c.put("slide2_center_y_um", 37500.0);
+        c.put("slide4_center_x_um", 100000.0);
+        c.put("slide4_center_y_um", 37500.0);
+        StageInsert insert = StageInsert.fromConfigMap("quad_v", c, 2000);
+        List<StageInsert.SlidePosition> slides = insert.getSlides();
+        assertEquals(2, slides.size(), "only captured slots build, even when slot 1 is absent");
+        assertEquals(50000.0, centerX(insert, slides.get(0)), 1.0);
+        assertEquals(100000.0, centerX(insert, slides.get(1)), 1.0);
+    }
+
+    @Test
     @DisplayName("without per-slot centers, num_slides/pitch still yields 4 slides")
     void pitchFallback() {
         StageInsert insert = StageInsert.fromConfigMap("quad_v", quadBase(), 2000);

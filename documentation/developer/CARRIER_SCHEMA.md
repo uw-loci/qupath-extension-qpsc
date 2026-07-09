@@ -33,9 +33,12 @@ stage:
             ...
 ```
 
-When `samples:` is absent, the parser falls back to the legacy
-`num_slides` / `slide_spacing_mm` derivation, which produces rectangular SLIDE
-samples with no lips. This is what every existing project gets.
+When `samples:` is absent, the parser uses this precedence:
+1. **Per-slot calibration** (captured centers): If any `slideK_center_x_um` / `slideK_center_y_um` fields are present (K = 1, 2, 3, ...), each calibrated slot builds one rectangular SLIDE sample centered on that captured position. Partial calibration (e.g., only slides 1 and 3 captured) is valid — only the calibrated slots are included.
+2. **Explicit samples list**: If `samples:` is present, it is used as-is.
+3. **Legacy pitch derivation**: Otherwise, the parser falls back to `num_slides` / `slide_spacing_mm`, which produces rectangular SLIDE samples with fixed spacing and no lips.
+
+Per-slot calibration is the highest-precedence method, designed for multi-slot holders where the exact center of each slot has been measured interactively via the Stage Map **Calibrate...** dialog.
 
 ## Fields
 
@@ -104,6 +107,19 @@ A `well_grid` entry expands into N circular WELL samples arranged in a grid.
 | `lip_inset_mm`              | number | 0                       | Applied to every well in the grid          |
 
 Defaults match the SBS/ANSI 6-well plate footprint. Override for other plate formats.
+
+### Per-slot calibration fields
+
+When `samples:` is absent, the parser checks for per-slot center calibration. These fields define the absolute stage position (in micrometers) of each slide's center, captured interactively via the Stage Map **Calibrate...** dialog.
+
+| Field                      | Type   | Default | Meaning                                            |
+|----------------------------|--------|---------|-----------------------------------------------------|
+| `slideK_center_x_um`       | number | —       | Slide K center stage X position (K = 1, 2, 3, ...) |
+| `slideK_center_y_um`       | number | —       | Slide K center stage Y position                    |
+
+If both `slideK_center_x_um` and `slideK_center_y_um` are present for a given K, that slot builds one rectangular SLIDE sample centered on the captured position. If either coordinate is missing, the slot is skipped. This allows partial calibration (e.g., calibrating only slots 1 and 3 in a 4-slot holder).
+
+Per-slot calibration takes precedence over the legacy `num_slides` / `slide_spacing_mm` pitch. When per-slot centers are present, the pitch is ignored entirely.
 
 ## Examples
 
@@ -236,6 +252,33 @@ plate_6_well:
       col_labels: "123"
       lip_inset_mm: 0.5
 ```
+
+### 4-slide holder with per-slot calibration
+
+When a multi-slot holder is calibrated interactively via the Stage Map **Calibrate...** dialog, the captured center of each slot is stored as `slideK_center_*_um` fields. These override the fixed pitch:
+
+```yaml
+quad_v:
+  kind: slide_holder
+  name: "4-Slide Holder (Vertical, Label-Bottom)"
+  aperture_left_x_um: 0
+  aperture_right_x_um: 120000
+  slide_top_y_um: 0
+  slide_bottom_y_um: 75000
+  num_slides: 4
+  slide_spacing_mm: 30.0          # ignored when per-slot centers are present
+  # Per-slot calibration: one pair per slot captured via the Calibrate dialog
+  slide1_center_x_um: 20000
+  slide1_center_y_um: 37500
+  slide2_center_x_um: 50000
+  slide2_center_y_um: 37500
+  slide3_center_x_um: 80000
+  slide3_center_y_um: 37500
+  slide4_center_x_um: 100000
+  slide4_center_y_um: 37500
+```
+
+When `samples:` is absent and per-slot center fields are present, the parser builds one SLIDE sample per slot, each centered on the captured position. The size of each slide (width/height/rotation) is derived from the aperture frame and `slide_width_mm`/`slide_height_mm` fields (if specified) or carrier defaults.
 
 ## Java model
 
