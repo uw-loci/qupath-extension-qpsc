@@ -121,6 +121,20 @@ public final class InsertCalibrationDialog {
             }
         }
 
+        // Per-slot slide-center capture for a multi-slot holder: one (X,Y) center per slot
+        // (slideK_center_x_um/_y_um). These keys usually do not exist before the first
+        // capture, so this section is driven by num_slides rather than the field-presence
+        // gate the aperture rows use. Capturing them switches the holder to per-slot mode
+        // (StageInsert.fromConfigMap prefers per-slot centers over the fixed pitch).
+        int numSlides = (insertConfig != null && insertConfig.get("num_slides") instanceof Number n) ? n.intValue() : 0;
+        List<CalCorner> perSlots = new ArrayList<>();
+        if (numSlides > 1) {
+            for (int k = 1; k <= numSlides; k++) {
+                perSlots.add(new CalCorner(
+                        "Slide " + k + " center", "slide" + k + "_center_x_um", "slide" + k + "_center_y_um"));
+            }
+        }
+
         Stage win = new Stage();
         win.setTitle("Calibrate Insert: " + insertName);
         if (owner != null) {
@@ -152,6 +166,8 @@ public final class InsertCalibrationDialog {
 
         // Optional dish wireframe, with the active corner highlighted on capture.
         DishWireframe wireframe = corners.isEmpty() ? null : new DishWireframe();
+        // Optional slide-holder wireframe (N vertical slots), active slot highlighted.
+        SlideHolderWireframe slideWireframe = perSlots.isEmpty() ? null : new SlideHolderWireframe(numSlides);
 
         if (!corners.isEmpty()) {
             grid.addRow(row++, bold("Coverslip corner"), bold("Stage X (um)"), bold("Stage Y (um)"), bold(""));
@@ -198,6 +214,41 @@ public final class InsertCalibrationDialog {
             }
         }
 
+        if (!perSlots.isEmpty()) {
+            if (!corners.isEmpty() || !fields.isEmpty()) {
+                grid.add(new Separator(), 0, row++, 4, 1);
+            }
+            grid.addRow(
+                    row++,
+                    bold("Per-slot center (overrides fixed pitch)"),
+                    bold("Stage X (um)"),
+                    bold("Stage Y (um)"),
+                    bold(""));
+            for (int i = 0; i < perSlots.size(); i++) {
+                CalCorner c = perSlots.get(i);
+                Label nameLabel = new Label(c.label());
+                TextField xField = new TextField(
+                        isNumber(insertConfig, c.xKey()) ? formatUm(numberOr(insertConfig, c.xKey(), 0)) : "");
+                TextField yField = new TextField(
+                        isNumber(insertConfig, c.yKey()) ? formatUm(numberOr(insertConfig, c.yKey(), 0)) : "");
+                xField.setPrefWidth(100);
+                yField.setPrefWidth(100);
+                Button capture = new Button("Capture center");
+                capture.setTooltip(new Tooltip("Center the objective on this slot's center in the Live "
+                        + "Viewer, then click to capture both X and Y."));
+                final int idx = i;
+                capture.setOnAction(e -> {
+                    if (slideWireframe != null) {
+                        slideWireframe.setActive(idx);
+                    }
+                    captureCorner(xField, yField, currentPosLabel, capture);
+                });
+                grid.addRow(row++, nameLabel, xField, yField, capture);
+                keyed.add(new KeyedField(c.xKey(), xField));
+                keyed.add(new KeyedField(c.yKey(), yField));
+            }
+        }
+
         refreshBtn.setOnAction(e -> refreshCurrentPosition(currentPosLabel, refreshBtn));
         HBox posRow = new HBox(8, currentPosLabel, refreshBtn);
         posRow.setAlignment(Pos.CENTER_LEFT);
@@ -222,6 +273,9 @@ public final class InsertCalibrationDialog {
         VBox content = new VBox(8, header);
         if (wireframe != null) {
             content.getChildren().add(wireframe.node());
+        }
+        if (slideWireframe != null) {
+            content.getChildren().add(slideWireframe.node());
         }
         content.getChildren().addAll(grid, posRow, new Separator(), statusLabel, buttonRow, tip);
         content.setPadding(new Insets(12));
@@ -411,6 +465,51 @@ public final class InsertCalibrationDialog {
                 g.fillOval(pts[i][0] - r, pts[i][1] - r, r * 2, r * 2);
                 g.setFill(Color.web("#7a1f17"));
                 g.fillText(String.valueOf(i + 1), pts[i][0] + (i == 1 || i == 2 ? 6 : -12), pts[i][1] + 4);
+            }
+        }
+    }
+
+    /**
+     * Small schematic of a multi-slot vertical slide holder: N vertical slide
+     * rectangles side by side, with the slot being captured highlighted. Sibling
+     * to {@link DishWireframe} for per-slot capture ergonomics.
+     */
+    private static final class SlideHolderWireframe {
+        private static final double W = 260;
+        private static final double H = 120;
+        private final Canvas canvas = new Canvas(W, H);
+        private final int n;
+        private int active = -1;
+
+        SlideHolderWireframe(int slots) {
+            this.n = Math.max(1, slots);
+            draw();
+        }
+
+        Canvas node() {
+            return canvas;
+        }
+
+        void setActive(int idx) {
+            this.active = idx;
+            draw();
+        }
+
+        private void draw() {
+            GraphicsContext g = canvas.getGraphicsContext2D();
+            g.clearRect(0, 0, W, H);
+            double margin = 10;
+            double gap = 8;
+            double slotW = (W - 2 * margin - (n - 1) * gap) / n;
+            double slotH = H - 2 * margin;
+            for (int i = 0; i < n; i++) {
+                double x = margin + i * (slotW + gap);
+                boolean on = i == active;
+                g.setStroke(on ? Color.web("#c0392b") : Color.web("#1f6fb2"));
+                g.setLineWidth(on ? 2.6 : 1.8);
+                g.strokeRect(x, margin, slotW, slotH);
+                g.setFill(Color.web("#7a1f17"));
+                g.fillText(String.valueOf(i + 1), x + slotW / 2 - 3, margin + slotH / 2 + 4);
             }
         }
     }

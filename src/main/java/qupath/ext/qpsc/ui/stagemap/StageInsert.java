@@ -250,10 +250,31 @@ public class StageInsert {
         // Build slide positions
         List<SlidePosition> slides = new ArrayList<>();
 
-        // Prefer the new explicit samples list when present; otherwise fall back
-        // to legacy num_slides / slide_spacing_mm derivation.
+        // Precedence: explicit per-slot captured centers (slideK_center_x_um/_y_um) >
+        // an explicit samples list > legacy num_slides / slide_spacing_mm pitch.
+        int numSlides = ((Number) configMap.getOrDefault("num_slides", 1)).intValue();
         Object samplesObj = configMap.get("samples");
-        if (samplesObj instanceof List) {
+        if (getDoubleValueOrNull(configMap, "slide1_center_x_um") != null) {
+            // Per-slot calibration: each slot's center is an absolute stage position captured
+            // via the Stage Map. Convert it to a local insert offset exactly as the single-slide
+            // center is derived above (|centerStage - origin|, then subtract the half-size).
+            for (int k = 1; k <= Math.max(numSlides, 1); k++) {
+                Double centerX = getDoubleValueOrNull(configMap, "slide" + k + "_center_x_um");
+                Double centerY = getDoubleValueOrNull(configMap, "slide" + k + "_center_y_um");
+                if (centerX == null || centerY == null) {
+                    continue;
+                }
+                double localCenterX = Math.abs(centerX - originXUm);
+                double localCenterY = Math.abs(centerY - originYUm);
+                slides.add(new SlidePosition(
+                        "Slide " + k,
+                        (localCenterX - slideWidthUm / 2.0) / MM_TO_UM,
+                        (localCenterY - slideHeightUm / 2.0) / MM_TO_UM,
+                        slideWidthMm,
+                        slideHeightUm / MM_TO_UM,
+                        slideHeightMm > slideWidthMm ? 90 : 0));
+            }
+        } else if (samplesObj instanceof List) {
             buildSamplesFromList(
                     slides,
                     (List<Map<String, Object>>) samplesObj,
@@ -262,8 +283,7 @@ public class StageInsert {
                     slideWidthUm,
                     slideHeightUm);
         } else {
-            // Legacy path
-            int numSlides = ((Number) configMap.getOrDefault("num_slides", 1)).intValue();
+            // Legacy pitch path
             double slideSpacingMm = getDoubleValue(configMap, "slide_spacing_mm", 0.0);
 
             if (numSlides > 1 && slideSpacingMm > 0) {
