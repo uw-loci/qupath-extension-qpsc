@@ -27,7 +27,9 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
+import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -252,14 +254,35 @@ public final class MultiSlideAssignmentDialog {
         stage.showAndWait();
     }
 
+    /**
+     * Collects the project entries eligible to be assigned to a carrier slot: the
+     * primary macro / whole-slide entries, excluding derived sub-acquisitions and the
+     * {@code (flipped ...)} companion siblings.
+     *
+     * <p>Crucially, a root macro entry carries {@code base_image == its own name}:
+     * {@link ImageMetadataManager} stamps parentless entries with their own (extension-
+     * stripped) name as base_image. So testing merely "base_image is set" wrongly
+     * excludes every macro once it has been through a QPSC run -- the cause of the
+     * "no eligible macro entries" report on a project full of valid macros. A true
+     * sub-acquisition is {@code base_image} set AND *different* from its own name; this
+     * mirrors {@code ExistingImageWorkflowV2.isSubAcquisition()}.
+     */
     private static List<ProjectImageEntry<BufferedImage>> collectMacroCandidates(Project<BufferedImage> project) {
         List<ProjectImageEntry<BufferedImage>> out = new ArrayList<>();
         if (project == null) return out;
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            // Skip the (flipped X|Y|XY) visual-UX siblings -- they carry no macro.
+            if (ImageFlipHelper.isFlippedSiblingName(entry.getImageName())) {
+                continue;
+            }
+            // Skip true sub-acquisitions: base_image set AND != own name. Root macros
+            // (base_image == own name) fall through and remain eligible.
             String base = ImageMetadataManager.getBaseImage(entry);
             if (base != null && !base.isEmpty()) {
-                // Sub-acquisition; not a macro.
-                continue;
+                String ownName = GeneralTools.stripExtension(entry.getImageName());
+                if (!base.equals(ownName)) {
+                    continue;
+                }
             }
             out.add(entry);
         }
