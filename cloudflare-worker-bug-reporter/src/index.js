@@ -48,6 +48,7 @@ export default {
     if (!repo) return jsonError(`Unknown repo '${repoKey}'.`, 400);
 
     const description = (payload.description || "").toString().trim();
+    const summary = (payload.summary || "").toString().trim();
     const sysinfo = (payload.sysinfo || "").toString().trim();
     const appVersion = (payload.app_version || "unknown").toString().trim();
     const extension = (payload.extension || repoKey).toString().trim();
@@ -71,7 +72,12 @@ export default {
       else { screenshotError = result.error; console.error(`Screenshot upload failed: ${screenshotError}`); }
     }
 
-    const title = `[bug] ${description.split("\n")[0].slice(0, 80)}`;
+    // Prefer an explicit one-line summary from the dialog. Older installed jars
+    // do not send one, so fall back to the first line of the description -- which
+    // is how issues ended up titled "[bug] Hi," when a reporter opened with a
+    // greeting (uw-loci/qupath-extension-cell-analysis-tools#8).
+    const titleText = (summary || description.split("\n")[0]).replace(/\s+/g, " ").trim();
+    const title = `[bug] ${titleText.slice(0, 80)}`;
     const bodyLines = ["**Description**", description, "",
                        `**Extension:** ${extension}`, `**App version:** ${appVersion}`];
     if (screenshotUrl) bodyLines.push("", "**Screenshot**", "", `![Screenshot](${screenshotUrl})`);

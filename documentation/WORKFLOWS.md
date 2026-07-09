@@ -118,10 +118,12 @@ If you enable **Enable Multi-Slide Workflow (experimental)** in Preferences, the
 
 1. Pick the carrier in the assignment dialog.
 2. For each slot, assign one project macro entry (or check Skip).
-3. The MS panel walks you through each assigned slot. For each slot you click **Open** to switch to its macro entry, then **Run Single-Slide Workflow** to launch the regular Existing Image workflow on that slot. The slot automatically advances to **Done** when acquisition completes successfully. If the workflow is cancelled at a gate or encounters a handled error, the slot remains **In Progress** so you can retry or Skip.
+3. Run the slots, either automatically or one at a time:
+   - **Run All Remaining** walks every not-yet-done slot in order -- the panel opens each macro entry and runs the regular Existing Image workflow on it, advancing the slot to **Done** when acquisition completes and moving on to the next. You still answer each slide's own dialogs (alignment, refinement, acquisition setup) as its turn comes up; the panel automates only the sequencing between slides. Tick **Stop after current slide** to halt cleanly once the running slide finishes (an in-flight acquisition is never interrupted).
+   - Or drive one slot by hand with its row buttons: **Open** switches to that slot's macro entry, then **Run Single-Slide Workflow** launches the regular workflow on it. Either way the slot advances to **Done** on a successful acquisition, or stays **In Progress** (so you can retry or Skip) if the run is cancelled at a gate or hits a handled error.
 4. Once every slot is Done or Skipped, click **Finish** to see a summary.
 
-Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2. This is an early experimental release; future iterations will add fully unattended operation.
+Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2. This is an early experimental release: Run All automates the sequencing between slides, but each slide's setup dialogs still run interactively. A fully unattended mode -- front-loading every decision in a setup pass, then acquiring all slides with no dialogs -- is planned.
 
 ---
 
