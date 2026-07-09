@@ -118,7 +118,7 @@ If you enable **Enable Multi-Slide Workflow (experimental)** in Preferences, the
 
 1. Pick the carrier in the assignment dialog.
 2. For each slot, assign one project macro entry (or check Skip).
-3. The MS panel walks you through each assigned slot. For each slot you click **Open** to switch to its macro entry, then **Run Single-Slide Workflow** to launch the regular Existing Image workflow on that slot. When that workflow has finished for the slot, click **Mark Done**. Skip slots whose acquisition should not happen.
+3. The MS panel walks you through each assigned slot. For each slot you click **Open** to switch to its macro entry, then **Run Single-Slide Workflow** to launch the regular Existing Image workflow on that slot. The slot automatically advances to **Done** when acquisition completes successfully. If the workflow is cancelled at a gate or encounters a handled error, the slot remains **In Progress** so you can retry or Skip.
 4. Once every slot is Done or Skipped, click **Finish** to see a summary.
 
 Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2. This is an early experimental release; future iterations will add fully unattended operation.

@@ -59,10 +59,35 @@ public class ExistingImageWorkflowV2 {
     private static final Logger logger = LoggerFactory.getLogger(ExistingImageWorkflowV2.class);
 
     /**
-     * Starts the workflow.
+     * Starts the workflow (fire-and-forget). The menu entry point; the returned
+     * future is ignored.
      */
     public static void start() {
         new WorkflowOrchestrator().execute();
+    }
+
+    /**
+     * Starts the workflow and returns a future that completes when the run has
+     * fully settled (acquisition + stitching finished, cancelled, or errored).
+     *
+     * <p>Intended for orchestrators that drive the single-slide workflow across
+     * several entries in turn (e.g. the multi-slide batch pass): await this future
+     * before advancing to the next slide instead of shepherding the user manually.
+     *
+     * <p>The future NEVER completes exceptionally -- errors are surfaced to the
+     * user inside the workflow (dialog + notification via {@code handleError}) and
+     * then reported to the caller as a {@code null} result. Completion semantics:
+     * <ul>
+     *   <li>non-null {@link WorkflowState} -- a real acquisition ran to completion
+     *       (the success beep / ACQUISITION_COMPLETE notification fired);</li>
+     *   <li>{@code null} -- the run short-circuited (a validation gate, an empty
+     *       ROI/annotation set, user cancel, or a handled error). The orchestrator
+     *       should treat this slot as "not acquired" and move on.</li>
+     * </ul>
+     * The future always completes on the JavaFX thread's continuation of the chain.
+     */
+    public static CompletableFuture<WorkflowState> startAsync() {
+        return new WorkflowOrchestrator().execute();
     }
 
     /**
@@ -79,11 +104,19 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Executes the complete workflow.
+         *
+         * @return a future that completes when the run has fully settled; non-null
+         *     {@link WorkflowState} on a real acquisition, {@code null} on any
+         *     short-circuit (validation gate, cancel, or handled error). Never
+         *     completes exceptionally -- see {@link #startAsync()}.
          */
-        public void execute() {
+        public CompletableFuture<WorkflowState> execute() {
+            CompletableFuture<WorkflowState> done = new CompletableFuture<>();
+
             // Step 1: Validate prerequisites
             if (!validatePrerequisites()) {
-                return;
+                done.complete(null);
+                return done;
             }
 
             // Step 1a: If the open entry's source_microscope disagrees with the
@@ -91,7 +124,8 @@ public class ExistingImageWorkflowV2 {
             // The user can fix the tag in-place (treat as native) or proceed
             // explicitly with cross-scope alignment.
             if (!checkAndHandleSourceMismatch()) {
-                return;
+                done.complete(null);
+                return done;
             }
 
             // Step 1b: If the open entry is a flipped sibling whose base is
@@ -101,7 +135,8 @@ public class ExistingImageWorkflowV2 {
             // run with the scanner's macro pixel size and produce a transform
             // that is wrong by ~125x. Refuse with a clear pointer to the base.
             if (!checkAndHandleOrphanedFlippedSibling()) {
-                return;
+                done.complete(null);
+                return done;
             }
 
             // Step 1.5: Preserve annotations if this is a standalone image (no project)
@@ -135,7 +170,8 @@ public class ExistingImageWorkflowV2 {
                 String defaultSampleName = getDefaultSampleName();
 
                 // Show annotation selection dialog (modality options are in the combined dialog's Advanced Options)
-                AnnotationAcquisitionDialog.showDialog(existingClasses, preselected)
+                CompletableFuture<WorkflowState> chain = AnnotationAcquisitionDialog.showDialog(
+                                existingClasses, preselected)
                         .thenCompose(annotationResult -> {
                             if (!annotationResult.proceed || annotationResult.selectedClasses.isEmpty()) {
                                 throw new CancellationException("Annotation selection cancelled");
@@ -165,29 +201,8 @@ public class ExistingImageWorkflowV2 {
                         .thenCompose(this::reReadAnnotationsAfterRouting)
                         .thenCompose(this::handleRefinement)
                         .thenCompose(this::performAcquisition)
-                        .thenCompose(this::waitForCompletion)
-                        .thenAccept(result -> {
-                            // Gate the success-only side effects (beep, ACQUISITION_COMPLETE
-                            // notification, aggressive tile cleanup) on a non-null result.
-                            // The chain's null-state-propagation pattern (every internal
-                            // method returns completedFuture(null) on cancel/short-circuit)
-                            // means we can reach this branch after the pixel-size gate, the
-                            // camera-ROI gate, or any internal cancel -- without distinguishing
-                            // them from real success. Without this gate the operator could
-                            // hear the success beep + see ACQUISITION_COMPLETE notification
-                            // after cancelling at the gate. Review finding H5. cleanup() must
-                            // still run on both paths so resource leaks (preserved annotations,
-                            // currentTransform singleton) are cleared either way.
-                            if (result == null) {
-                                logger.info("Workflow short-circuited; skipping success notification");
-                                cleanup();
-                                return;
-                            }
-                            cleanupTilesAfterStitching();
-                            cleanup();
-                            showSuccessNotification();
-                        })
-                        .exceptionally(this::handleError);
+                        .thenCompose(this::waitForCompletion);
+                finishChain(chain, done);
             } else {
                 // No annotations - proceed with consolidated dialog which will handle annotation creation
                 logger.info("No annotations found in image, proceeding with consolidated dialog");
@@ -195,37 +210,57 @@ public class ExistingImageWorkflowV2 {
                 String defaultSampleName = getDefaultSampleName();
                 List<PathObject> emptyAnnotations = new ArrayList<>();
 
-                ExistingImageAcquisitionController.showDialog(defaultSampleName, emptyAnnotations)
+                CompletableFuture<WorkflowState> chain = ExistingImageAcquisitionController.showDialog(
+                                defaultSampleName, emptyAnnotations)
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
                         .thenCompose(this::routeSubWorkflow)
                         .thenCompose(this::reReadAnnotationsAfterRouting)
                         .thenCompose(this::handleRefinement)
                         .thenCompose(this::performAcquisition)
-                        .thenCompose(this::waitForCompletion)
-                        .thenAccept(result -> {
-                            // Gate the success-only side effects (beep, ACQUISITION_COMPLETE
-                            // notification, aggressive tile cleanup) on a non-null result.
-                            // The chain's null-state-propagation pattern (every internal
-                            // method returns completedFuture(null) on cancel/short-circuit)
-                            // means we can reach this branch after the pixel-size gate, the
-                            // camera-ROI gate, or any internal cancel -- without distinguishing
-                            // them from real success. Without this gate the operator could
-                            // hear the success beep + see ACQUISITION_COMPLETE notification
-                            // after cancelling at the gate. Review finding H5. cleanup() must
-                            // still run on both paths so resource leaks (preserved annotations,
-                            // currentTransform singleton) are cleared either way.
-                            if (result == null) {
-                                logger.info("Workflow short-circuited; skipping success notification");
-                                cleanup();
-                                return;
-                            }
-                            cleanupTilesAfterStitching();
-                            cleanup();
-                            showSuccessNotification();
-                        })
-                        .exceptionally(this::handleError);
+                        .thenCompose(this::waitForCompletion);
+                finishChain(chain, done);
             }
+            return done;
+        }
+
+        /**
+         * Terminal handling shared by both dialog branches: applies the success-only
+         * side effects (beep, ACQUISITION_COMPLETE notification, tile cleanup) on a
+         * non-null result, runs {@link #cleanup()} on every path, routes exceptions
+         * through {@link #handleError(Throwable)}, and settles {@code done}.
+         *
+         * <p>Gate rationale (review finding H5): the chain's null-state-propagation
+         * pattern (every internal method returns {@code completedFuture(null)} on
+         * cancel/short-circuit) means we can reach the accept branch after the
+         * pixel-size gate, the camera-ROI gate, or any internal cancel -- without
+         * distinguishing them from real success. Without the null gate the operator
+         * could hear the success beep + see ACQUISITION_COMPLETE after cancelling at a
+         * gate. {@code cleanup()} must still run on both paths so resource leaks
+         * (preserved annotations, currentTransform singleton) are cleared either way.
+         *
+         * <p>{@code done} always completes normally -- with the {@link WorkflowState}
+         * on success/short-circuit, or {@code null} after a handled error -- so an
+         * orchestrator awaiting it never has to unwrap a CompletionException.
+         */
+        private void finishChain(CompletableFuture<WorkflowState> chain, CompletableFuture<WorkflowState> done) {
+            chain.thenAccept(result -> {
+                        if (result == null) {
+                            logger.info("Workflow short-circuited; skipping success notification");
+                            cleanup();
+                            done.complete(null);
+                            return;
+                        }
+                        cleanupTilesAfterStitching();
+                        cleanup();
+                        showSuccessNotification();
+                        done.complete(result);
+                    })
+                    .exceptionally(ex -> {
+                        handleError(ex);
+                        done.complete(null);
+                        return null;
+                    });
         }
 
         /**

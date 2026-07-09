@@ -5,7 +5,6 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
-import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -183,7 +182,24 @@ public final class MultiSlideExistingImageWorkflow {
                         s.assignment.entry().getImageName());
                 s.setStatus(Status.IN_PROGRESS);
                 refreshFinish.run();
-                ExistingImageWorkflowV2.start();
+                // Drive the single-slide workflow through its completion future so the
+                // slot advances to Done automatically when acquisition finishes. A null
+                // result means the run short-circuited (cancel / gate / handled error) --
+                // leave the slot In progress so the operator can retry or Skip.
+                runBtn.setDisable(true);
+                ExistingImageWorkflowV2.startAsync()
+                        .whenComplete((result, ex) -> Platform.runLater(() -> {
+                            runBtn.setDisable(false);
+                            if (result != null) {
+                                s.setStatus(Status.DONE);
+                                logger.info("MS workflow: slot {} acquired", s.assignment.position());
+                            } else {
+                                logger.info(
+                                        "MS workflow: slot {} did not acquire (cancelled / gated); leaving In progress",
+                                        s.assignment.position());
+                            }
+                            refreshFinish.run();
+                        }));
             });
             doneBtn.setOnAction(e -> {
                 s.setStatus(Status.DONE);
@@ -282,15 +298,5 @@ public final class MultiSlideExistingImageWorkflow {
         String label() {
             return label;
         }
-    }
-
-    /** Variant for unit-test reachability; not currently used elsewhere. */
-    public static CompletableFuture<Void> startAsync() {
-        CompletableFuture<Void> done = new CompletableFuture<>();
-        Platform.runLater(() -> {
-            start();
-            done.complete(null);
-        });
-        return done;
     }
 }
