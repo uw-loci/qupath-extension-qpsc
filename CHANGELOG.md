@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**Bug reporter: issue titles came from the first line of the description**
+- The "Report a bug" dialog now has a required one-line **Summary** field, which becomes the GitHub issue title. Previously the shared Cloudflare Worker derived the title from `description.split("\n")[0]`, so a report that opened with a greeting filed an issue titled `[bug] Hi,` -- and nothing in the dialog hinted that the first line mattered. Surfaced by `uw-loci/qupath-extension-cell-analysis-tools#8`. The Worker (`cloudflare-worker-bug-reporter/src/index.js`) now prefers a `summary` field and falls back to the old first-line behaviour, so jars that predate this change keep working. The same field was added to the QP-CAT and DL Pixel Classifier reporters. **The Worker must be redeployed for the new field to take effect.**
+
 ### Added
 
 **High-bit-depth PPM capture (opt-in)**

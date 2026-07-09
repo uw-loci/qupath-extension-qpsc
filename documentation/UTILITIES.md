@@ -290,14 +290,15 @@ Easily submit bug reports directly from QuPath without needing a GitHub account 
 
 **How to use:**
 1. Go to **Extensions > QP Scope > Report a Bug...**
-2. Write a description of what went wrong (minimum 20 characters)
-3. Optionally include:
+2. Enter a one-line **Summary** (8–80 characters, required) — this becomes the GitHub issue title
+3. Write a **Description** of what went wrong (minimum 20 characters)
+4. Optionally include:
    - **System info** (OS version, Java version, QuPath version)
    - **QPSC session log** (activity from the current session)
    - **Microscope server log** (the Python command server's session log, fetched over the socket; only available when connected to the server)
    - **QuPath log** (QuPath's own application log)
    - **Screenshot** (of the QuPath window; you will be shown a preview before sending)
-4. Click **Submit**
+5. Click **Submit**
 
 Large logs are trimmed to fit GitHub's issue size limit: the version/startup banner is always kept (for provenance) along with the most recent lines (where errors usually appear), with an `[N chars omitted]` note in between.
 
