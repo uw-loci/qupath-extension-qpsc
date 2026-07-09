@@ -256,9 +256,25 @@ public final class MultiSlideExistingImageWorkflow {
             showSummary(gui, carrier, states, runId);
             stage.close();
         });
-        Button abortBtn = new Button("Abort");
+        // Abort-all flag: set by the Abort All button, checked by driveSequential before it
+        // advances to the next slot. Without this, closing the panel (or aborting one run)
+        // left the driver recursing -- each remaining slot still opened and tried to run.
+        java.util.concurrent.atomic.AtomicBoolean aborted = new java.util.concurrent.atomic.AtomicBoolean(false);
+        Button abortBtn = new Button("Abort All");
+        // Always clickable: never added to the disabled-during-run set, so the operator can
+        // halt the whole batch at any point (an in-flight single run still finishes/cancels
+        // via its own dialog, but NO further slots will start).
+        //
+        // TODO(batch abort-all): this halts the DRIVER only -- it stops further slots from
+        // starting, but it does NOT cancel an acquisition already running inside
+        // AcquisitionManager (the unattended acquire pass has no per-slide dialog to cancel).
+        // A true Abort-all must signal AcquisitionManager to stop the current tile loop +
+        // ABORTAF/stitching and unwind. When that cancellation hook is built, wire this
+        // button (and an always-clickable Abort-all inside the acquisition progress UI) to it.
+        // See memory: project_multislide_batch_design (batch Abort-all requirement).
         abortBtn.setOnAction(e -> {
-            logger.info("MS workflow aborted by user, runId={}", runId);
+            logger.info("MS workflow: Abort All requested, runId={}", runId);
+            aborted.set(true);
             stage.close();
         });
 
@@ -285,6 +301,7 @@ public final class MultiSlideExistingImageWorkflow {
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
                     s -> fullSlot(gui, s, refreshFinish),
                     stopAfterCurrent::isSelected,
+                    aborted::get,
                     () -> {
                         logger.info("MS workflow: Run All Remaining finished, runId={}", runId);
                         setPanelBusy(states, driverButtons, finishBtn, false);
@@ -305,6 +322,7 @@ public final class MultiSlideExistingImageWorkflow {
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
                     s -> setupSlot(gui, s, refreshFinish),
                     stopAfterCurrent::isSelected,
+                    aborted::get,
                     () -> {
                         logger.info("MS workflow: Set Up All Remaining finished, runId={}", runId);
                         setPanelBusy(states, driverButtons, finishBtn, false);
@@ -325,6 +343,7 @@ public final class MultiSlideExistingImageWorkflow {
                     s -> s.status == Status.SET_UP,
                     s -> acquireSlot(gui, s, refreshFinish),
                     stopAfterCurrent::isSelected,
+                    aborted::get,
                     () -> {
                         logger.info("MS workflow: Acquire All Set-Up finished, runId={}", runId);
                         setPanelBusy(states, driverButtons, finishBtn, false);
@@ -516,7 +535,16 @@ public final class MultiSlideExistingImageWorkflow {
             java.util.function.Predicate<SlotState> match,
             SlotOp op,
             java.util.function.BooleanSupplier stopRequested,
+            java.util.function.BooleanSupplier abortRequested,
             Runnable onDone) {
+
+        // Abort All: stop immediately, do not open or run any further slot. Checked first so
+        // it wins over stop-after-current and the match scan.
+        if (abortRequested.getAsBoolean()) {
+            logger.info("MS workflow: driver aborted (Abort All) at slot index {}", index);
+            onDone.run();
+            return;
+        }
 
         int i = index;
         while (i < states.size() && !match.test(states.get(i))) {
@@ -535,7 +563,7 @@ public final class MultiSlideExistingImageWorkflow {
         final int idx = i;
         op.run(states.get(idx))
                 .whenComplete((v, ex) -> Platform.runLater(
-                        () -> driveSequential(gui, states, idx + 1, match, op, stopRequested, onDone)));
+                        () -> driveSequential(gui, states, idx + 1, match, op, stopRequested, abortRequested, onDone)));
     }
 
     /**
