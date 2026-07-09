@@ -13,6 +13,7 @@ import javafx.scene.canvas.Canvas;
 import javafx.scene.canvas.GraphicsContext;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
@@ -34,7 +35,7 @@ import qupath.ext.qpsc.utilities.ConfigYamlEditor;
  * writes the captured values back to the microscope YAML via
  * {@link ConfigYamlEditor}.
  *
- * <p>Two capture styles, chosen by which keys the insert declares:
+ * <p>Capture styles, chosen by the insert's declared keys / kind:
  * <ul>
  *   <li><b>Coverslip corners</b> (petri dishes): four {@code coverslip_cN_x_um/_y_um}
  *       points. Drive each corner of the square coverslip to the center of the FOV
@@ -44,6 +45,12 @@ import qupath.ext.qpsc.utilities.ConfigYamlEditor;
  *       their bounding box and axis inversion comes from the stage-polarity setting.</li>
  *   <li><b>Edge points</b> (slide holders / legacy): single-axis aperture / slide
  *       edges captured one axis at a time.</li>
+ *   <li><b>Per-slot centers</b> (multi-slot holders, {@code num_slides > 1}): for each
+ *       slot the operator drives to two <b>diagonal corners</b> of the slide (identifiable
+ *       points, unlike the featureless middle) and the dialog stores their midpoint as
+ *       {@code slideK_center_x_um/_y_um}. The midpoint of a rectangle's diagonal is its
+ *       center regardless of rotation. These per-slot centers override the fixed
+ *       {@code num_slides}/{@code slide_spacing_mm} pitch in {@code StageInsert.fromConfigMap}.</li>
  * </ul>
  *
  * <p>The window is intentionally <b>modeless</b> (and always-on-top) so the user
@@ -121,19 +128,16 @@ public final class InsertCalibrationDialog {
             }
         }
 
-        // Per-slot slide-center capture for a multi-slot holder: one (X,Y) center per slot
-        // (slideK_center_x_um/_y_um). These keys usually do not exist before the first
-        // capture, so this section is driven by num_slides rather than the field-presence
-        // gate the aperture rows use. Capturing them switches the holder to per-slot mode
-        // (StageInsert.fromConfigMap prefers per-slot centers over the fixed pitch).
+        // Per-slot slide-center capture for a multi-slot holder. A slot's CENTER is not a
+        // point a human can aim at (the middle of a slide is featureless), so the operator
+        // instead drives to two DIAGONAL CORNERS of the slide -- crisp, identifiable points --
+        // and we store their midpoint as slideK_center_x_um/_y_um (the midpoint of a
+        // rectangle's diagonal is its center regardless of rotation). Driven by num_slides,
+        // not the field-presence gate, since these keys do not exist before first capture.
+        // Capturing them switches the holder to per-slot mode (StageInsert.fromConfigMap
+        // prefers per-slot centers over the fixed pitch).
         int numSlides = (insertConfig != null && insertConfig.get("num_slides") instanceof Number n) ? n.intValue() : 0;
-        List<CalCorner> perSlots = new ArrayList<>();
-        if (numSlides > 1) {
-            for (int k = 1; k <= numSlides; k++) {
-                perSlots.add(new CalCorner(
-                        "Slide " + k + " center", "slide" + k + "_center_x_um", "slide" + k + "_center_y_um"));
-            }
-        }
+        boolean showPerSlot = numSlides > 1;
 
         Stage win = new Stage();
         win.setTitle("Calibrate Insert: " + insertName);
@@ -167,7 +171,7 @@ public final class InsertCalibrationDialog {
         // Optional dish wireframe, with the active corner highlighted on capture.
         DishWireframe wireframe = corners.isEmpty() ? null : new DishWireframe();
         // Optional slide-holder wireframe (N vertical slots), active slot highlighted.
-        SlideHolderWireframe slideWireframe = perSlots.isEmpty() ? null : new SlideHolderWireframe(numSlides);
+        SlideHolderWireframe slideWireframe = showPerSlot ? new SlideHolderWireframe(numSlides) : null;
 
         if (!corners.isEmpty()) {
             grid.addRow(row++, bold("Coverslip corner"), bold("Stage X (um)"), bold("Stage Y (um)"), bold(""));
@@ -214,38 +218,79 @@ public final class InsertCalibrationDialog {
             }
         }
 
-        if (!perSlots.isEmpty()) {
+        if (showPerSlot) {
             if (!corners.isEmpty() || !fields.isEmpty()) {
                 grid.add(new Separator(), 0, row++, 4, 1);
             }
             grid.addRow(
                     row++,
-                    bold("Per-slot center (overrides fixed pitch)"),
+                    bold("Per-slot center (drive to 2 diagonal corners; overrides fixed pitch)"),
                     bold("Stage X (um)"),
                     bold("Stage Y (um)"),
                     bold(""));
-            for (int i = 0; i < perSlots.size(); i++) {
-                CalCorner c = perSlots.get(i);
-                Label nameLabel = new Label(c.label());
-                TextField xField = new TextField(
-                        isNumber(insertConfig, c.xKey()) ? formatUm(numberOr(insertConfig, c.xKey(), 0)) : "");
-                TextField yField = new TextField(
-                        isNumber(insertConfig, c.yKey()) ? formatUm(numberOr(insertConfig, c.yKey(), 0)) : "");
-                xField.setPrefWidth(100);
-                yField.setPrefWidth(100);
-                Button capture = new Button("Capture center");
-                capture.setTooltip(new Tooltip("Center the objective on this slot's center in the Live "
-                        + "Viewer, then click to capture both X and Y."));
-                final int idx = i;
-                capture.setOnAction(e -> {
-                    if (slideWireframe != null) {
-                        slideWireframe.setActive(idx);
+            for (int k = 1; k <= numSlides; k++) {
+                final int slotIdx = k - 1;
+                String centerXKey = "slide" + k + "_center_x_um";
+                String centerYKey = "slide" + k + "_center_y_um";
+
+                // Two transient diagonal-corner fields (not saved) + a read-only derived
+                // center (saved). The center recomputes whenever either corner changes.
+                TextField cAx = new TextField();
+                TextField cAy = new TextField();
+                TextField cBx = new TextField();
+                TextField cBy = new TextField();
+                TextField centerX = new TextField(
+                        isNumber(insertConfig, centerXKey) ? formatUm(numberOr(insertConfig, centerXKey, 0)) : "");
+                TextField centerY = new TextField(
+                        isNumber(insertConfig, centerYKey) ? formatUm(numberOr(insertConfig, centerYKey, 0)) : "");
+                for (TextField tf : new TextField[] {cAx, cAy, cBx, cBy, centerX, centerY}) {
+                    tf.setPrefWidth(100);
+                }
+                centerX.setEditable(false);
+                centerY.setEditable(false);
+                centerX.setStyle("-fx-control-inner-background: #eef;");
+                centerY.setStyle("-fx-control-inner-background: #eef;");
+
+                Runnable recompute = () -> {
+                    Double ax = parseOrNull(cAx.getText());
+                    Double ay = parseOrNull(cAy.getText());
+                    Double bx = parseOrNull(cBx.getText());
+                    Double by = parseOrNull(cBy.getText());
+                    if (ax != null && ay != null && bx != null && by != null) {
+                        centerX.setText(formatUm((ax + bx) / 2.0));
+                        centerY.setText(formatUm((ay + by) / 2.0));
                     }
-                    captureCorner(xField, yField, currentPosLabel, capture);
+                };
+                cAx.textProperty().addListener((obs, o, v) -> recompute.run());
+                cAy.textProperty().addListener((obs, o, v) -> recompute.run());
+                cBx.textProperty().addListener((obs, o, v) -> recompute.run());
+                cBy.textProperty().addListener((obs, o, v) -> recompute.run());
+
+                Button captureA = new Button("Capture corner 1");
+                Button captureB = new Button("Capture corner 2");
+                captureA.setTooltip(new Tooltip("Center the objective on one corner of slide " + k
+                        + " (e.g. top-left) in the Live Viewer, then click."));
+                captureB.setTooltip(new Tooltip("Center the objective on the OPPOSITE corner of slide " + k
+                        + " (e.g. bottom-right), then click."));
+                captureA.setOnAction(e -> {
+                    if (slideWireframe != null) {
+                        slideWireframe.setActive(slotIdx);
+                    }
+                    captureCorner(cAx, cAy, currentPosLabel, captureA);
                 });
-                grid.addRow(row++, nameLabel, xField, yField, capture);
-                keyed.add(new KeyedField(c.xKey(), xField));
-                keyed.add(new KeyedField(c.yKey(), yField));
+                captureB.setOnAction(e -> {
+                    if (slideWireframe != null) {
+                        slideWireframe.setActive(slotIdx);
+                    }
+                    captureCorner(cBx, cBy, currentPosLabel, captureB);
+                });
+
+                grid.addRow(row++, new Label("Slide " + k + "  corner 1"), cAx, cAy, captureA);
+                grid.addRow(row++, new Label("Slide " + k + "  corner 2"), cBx, cBy, captureB);
+                grid.addRow(row++, new Label("Slide " + k + "  -> center"), centerX, centerY, new Label(""));
+
+                keyed.add(new KeyedField(centerXKey, centerX));
+                keyed.add(new KeyedField(centerYKey, centerY));
             }
         }
 
@@ -277,7 +322,16 @@ public final class InsertCalibrationDialog {
         if (slideWireframe != null) {
             content.getChildren().add(slideWireframe.node());
         }
-        content.getChildren().addAll(grid, posRow, new Separator(), statusLabel, buttonRow, tip);
+        // Per-slot capture adds many rows (3 per slot); keep the window a sane height.
+        if (showPerSlot) {
+            ScrollPane gridScroll = new ScrollPane(grid);
+            gridScroll.setFitToWidth(true);
+            gridScroll.setPrefViewportHeight(360);
+            content.getChildren().add(gridScroll);
+        } else {
+            content.getChildren().add(grid);
+        }
+        content.getChildren().addAll(posRow, new Separator(), statusLabel, buttonRow, tip);
         content.setPadding(new Insets(12));
 
         win.setScene(new Scene(content));
@@ -520,6 +574,18 @@ public final class InsertCalibrationDialog {
 
     private static double numberOr(Map<String, Object> cfg, String key, double dflt) {
         return (cfg != null && cfg.get(key) instanceof Number n) ? n.doubleValue() : dflt;
+    }
+
+    /** Parses a text field to a double, or null if blank / not a number. */
+    private static Double parseOrNull(String text) {
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(text.trim());
+        } catch (NumberFormatException ex) {
+            return null;
+        }
     }
 
     private static Label bold(String text) {
