@@ -729,8 +729,8 @@ Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu. The 
 
 **Behavior when enabled:**
 1. A confirmation dialog appears at the start of each multi-slide batch run
-2. Choosing "Yes" reuses saved per-slide alignment (skips alignment / refinement)
-3. Choosing "No" runs fresh alignment on all slots (safe)
+2. Clicking "OK" reuses saved per-slide alignment (skips alignment / refinement)
+3. Clicking "Cancel" runs fresh alignment on all slots (safe)
 4. Slots with no valid saved alignment always align fresh (per-slot fallback)
 5. The confirmation choice is cached for the batch, so you are not re-prompted per slot
 

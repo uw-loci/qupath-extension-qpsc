@@ -104,11 +104,11 @@ public final class MultiSlideExistingImageWorkflow {
         boolean confirmed = Dialogs.showConfirmDialog(
                 "Reuse saved alignment (TESTING ONLY)",
                 "TESTING ONLY: reuse each slot's saved per-slide alignment instead of re-aligning?\n\n"
-                        + "Choose Yes ONLY if the holder has NOT been moved since the alignments were "
+                        + "Click OK ONLY if the holder has NOT been moved since the alignments were "
                         + "saved -- a remount invalidates them. Slots with no saved alignment will still "
                         + "align fresh.\n\n"
-                        + "Yes = reuse saved alignment (skip alignment/refinement).\n"
-                        + "No = align fresh (normal, safe).");
+                        + "OK = reuse saved alignment (skip alignment/refinement).\n"
+                        + "Cancel = align fresh (normal, safe).");
         decision.set(confirmed);
         logger.warn(
                 "MS workflow: TEST-ONLY alignment reuse {} for this batch (holder assumed {}).",
