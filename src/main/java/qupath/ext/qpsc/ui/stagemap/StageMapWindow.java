@@ -357,6 +357,9 @@ public class StageMapWindow {
                 logger.debug("Switched to insert configuration: {}", selected.getId());
             }
             updateMovementWarning();
+            // Re-evaluate macro overlay availability: multi-slot holders disable it (the
+            // single-macro overlay would span all slots), single-slide inserts re-enable it.
+            checkMacroOverlayAvailability();
         });
 
         // Source microscope/scanner selector. Lists distinct source scanners that have an
@@ -1928,6 +1931,32 @@ public class StageMapWindow {
             currentMacroAnchorStageX = Double.NaN;
             currentMacroAnchorStageY = Double.NaN;
             currentMacroPresetPixelSizeUm = Double.NaN;
+
+            // Multi-slot slide holders (e.g. quad_v): a single macro belongs to ONE slot,
+            // but the single-macro overlay is positioned/scaled as if the slide fills the
+            // whole insert -- on a 4-slot holder it renders as one horizontal slide spanning
+            // all four positions, which is wrong and misleading. The correct per-slot macro
+            // rendering is the separate "macros at slots" Stage Map view; until that exists,
+            // disable the single-macro overlay for multi-slot holders rather than draw the
+            // spanning artifact. Single-slide inserts are unaffected.
+            StageInsert selectedInsert = insertComboBox != null ? insertComboBox.getValue() : null;
+            if (selectedInsert != null
+                    && selectedInsert.getSlides() != null
+                    && selectedInsert.getSlides().size() > 1) {
+                logger.info(
+                        "Macro overlay disabled for multi-slot holder '{}' ({} slots): "
+                                + "single-macro overlay would span all slots",
+                        selectedInsert.getName(),
+                        selectedInsert.getSlides().size());
+                macroOverlayCheckbox.setSelected(false);
+                macroOverlayCheckbox.setDisable(true);
+                macroOverlayCheckbox.setTooltip(new Tooltip("Macro overlay is disabled for multi-slot slide holders.\n"
+                        + "A single macro belongs to one slot, but this overlay would\n"
+                        + "stretch it across all slots as one horizontal slide.\n"
+                        + "Per-slot macro display is handled separately."));
+                if (canvas != null) canvas.clearMacroOverlay();
+                return;
+            }
 
             // Always refresh activePreset from disk so a recently-saved alignment is picked
             // up on the next overlay refresh. Without this, the in-memory preset object
