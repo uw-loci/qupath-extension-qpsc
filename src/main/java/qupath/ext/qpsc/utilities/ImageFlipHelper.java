@@ -308,6 +308,23 @@ public final class ImageFlipHelper {
             ImageData<BufferedImage> sibData = siblingEntry.readImageData();
             PathObjectHierarchy sibHierarchy = sibData.getHierarchy();
 
+            // Guard: if the base carries no annotations, there is nothing
+            // authoritative to mirror -- so do NOT clear the sibling. In the
+            // multi-slide manual-draw flow the operator draws tissue ROIs
+            // directly on the (rotated)(flipped) sibling (it matches the live
+            // viewer), and those must survive re-entry into
+            // validateAndFlipIfNeeded. Clobbering them here was silent data loss.
+            boolean baseHasAnnotations =
+                    baseHierarchy.getAnnotationObjects().stream().anyMatch(a -> a.getROI() != null);
+            if (!baseHasAnnotations) {
+                logger.info(
+                        "mirrorAnnotationsToSibling: base has no annotations; leaving {} existing "
+                                + "sibling annotation(s) on '{}' untouched (no mirror, no clear)",
+                        sibHierarchy.getAnnotationObjects().size(),
+                        siblingEntry.getImageName());
+                return;
+            }
+
             // Replace step: clear whatever annotations the sibling currently holds.
             List<PathObject> stale = new ArrayList<>(sibHierarchy.getAnnotationObjects());
             if (!stale.isEmpty()) {
