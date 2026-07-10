@@ -1,9 +1,12 @@
 package qupath.ext.qpsc.ui;
 
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.IdentityHashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -27,9 +30,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
+import qupath.ext.qpsc.ui.stagemap.StageMapCanvas;
+import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.common.GeneralTools;
+import qupath.lib.images.servers.RotatedImageServer;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -84,11 +91,13 @@ public final class MultiSlideAssignmentDialog {
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
 
         Label intro = new Label("Pick a carrier. For each occupied slide position, choose the project "
-                + "image that maps to it. Leave a slot empty (or check Skip) for unoccupied positions. "
-                + "Pass 1 of the workflow will walk you through alignment and annotation per slide; "
+                + "image that maps to it, and set its Rotation to match how the slide is physically mounted "
+                + "(open the Stage Map beside this dialog -- it previews all assigned slides live, so you can "
+                + "rotate each until it matches placement). Leave a slot empty (or check Skip) for unoccupied "
+                + "positions. Pass 1 of the workflow walks you through alignment and annotation per slide; "
                 + "Pass 2 acquires across all assigned slides.");
         intro.setWrapText(true);
-        intro.setMaxWidth(560);
+        intro.setMaxWidth(620);
 
         // Build the carrier dropdown -- only slide_holder kinds with >1 slot
         List<StageInsert> carriers = new ArrayList<>();
@@ -145,6 +154,30 @@ public final class MultiSlideAssignmentDialog {
         slotGrid.setPadding(new Insets(8, 0, 8, 0));
 
         List<SlotRow> slotRows = new ArrayList<>();
+        Map<ProjectImageEntry<BufferedImage>, BufferedImage> thumbCache = new IdentityHashMap<>();
+
+        // Live orientation preview: push each assigned slot's macro thumbnail (at its chosen
+        // rotation) to the Stage Map, which renders them over the holder's slots. The MS dialog
+        // is the control surface; the Stage Map is a passive viewer.
+        Runnable refreshPreview = () -> {
+            StageInsert chosen = carrierBox.getValue();
+            if (chosen == null) {
+                StageMapWindow.clearSlotMacroPreviews();
+                return;
+            }
+            List<StageMapCanvas.SlotMacroPreview> previews = new ArrayList<>();
+            for (SlotRow r : slotRows) {
+                if (r.skip.isSelected()) continue;
+                ProjectImageEntry<BufferedImage> entry =
+                        r.entryBox.getSelectionModel().getSelectedItem();
+                if (entry == null) continue;
+                BufferedImage thumb = thumbCache.computeIfAbsent(entry, MultiSlideAssignmentDialog::readThumb);
+                if (thumb == null) continue;
+                Integer rot = r.rotationBox.getValue();
+                previews.add(new StageMapCanvas.SlotMacroPreview(r.position - 1, thumb, rot == null ? 0 : rot));
+            }
+            StageMapWindow.previewSlotMacros(chosen, previews);
+        };
 
         Runnable rebuildSlots = () -> {
             slotGrid.getChildren().clear();
@@ -154,7 +187,8 @@ public final class MultiSlideAssignmentDialog {
             int row = 0;
             slotGrid.add(new Label("Slot"), 0, row);
             slotGrid.add(new Label("Project image"), 1, row);
-            slotGrid.add(new Label("Skip"), 2, row);
+            slotGrid.add(new Label("Rotation"), 2, row);
+            slotGrid.add(new Label("Skip"), 3, row);
             row++;
             int pos = 1;
             for (StageInsert.SlidePosition slot : selected.getSlideSamples()) {
@@ -186,20 +220,42 @@ public final class MultiSlideAssignmentDialog {
                 if (entryBox.getSelectionModel().getSelectedItem() == null) {
                     entryBox.getSelectionModel().select(null);
                 }
+                // Rotation picker (clockwise degrees) applied to the slide's macro to match
+                // how it is physically mounted in the holder.
+                ChoiceBox<Integer> rotationBox = new ChoiceBox<>();
+                rotationBox.getItems().addAll(0, 90, 180, 270);
+                rotationBox.getSelectionModel().select(Integer.valueOf(0));
+                rotationBox.setConverter(new StringConverter<>() {
+                    @Override
+                    public String toString(Integer deg) {
+                        return deg == null ? "0 deg" : deg + " deg";
+                    }
+
+                    @Override
+                    public Integer fromString(String s) {
+                        return 0;
+                    }
+                });
                 CheckBox skip = new CheckBox();
                 skip.selectedProperty().addListener((obs, oldV, newV) -> {
                     if (newV) {
                         entryBox.getSelectionModel().select(null);
                     }
                     entryBox.setDisable(newV);
+                    rotationBox.setDisable(newV);
                 });
+                // Any change updates the live Stage Map preview.
+                entryBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> refreshPreview.run());
+                rotationBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> refreshPreview.run());
                 slotGrid.add(slotLabel, 0, row);
                 slotGrid.add(entryBox, 1, row);
-                slotGrid.add(skip, 2, row);
-                slotRows.add(new SlotRow(pos, slot.getName(), entryBox, skip));
+                slotGrid.add(rotationBox, 2, row);
+                slotGrid.add(skip, 3, row);
+                slotRows.add(new SlotRow(pos, slot.getName(), entryBox, skip, rotationBox));
                 pos++;
                 row++;
             }
+            refreshPreview.run();
         };
         rebuildSlots.run();
         carrierBox.valueProperty().addListener((obs, oldV, newV) -> rebuildSlots.run());
@@ -229,27 +285,36 @@ public final class MultiSlideAssignmentDialog {
                 ProjectImageEntry<BufferedImage> entry =
                         r.entryBox.getSelectionModel().getSelectedItem();
                 if (entry == null) continue;
-                assignments.add(new SlotAssignment(r.position, r.slotLabel, entry));
+                // Apply the chosen rotation: a non-zero rotation swaps the slot's assigned
+                // entry to a rotated duplicate (created/reused), so the batch aligns and
+                // acquires on the correctly-oriented macro.
+                Integer rotDeg = r.rotationBox.getValue();
+                ProjectImageEntry<BufferedImage> assigned =
+                        resolveAssignedEntry(project, entry, rotDeg == null ? 0 : rotDeg);
+                assignments.add(new SlotAssignment(r.position, r.slotLabel, assigned));
             }
             if (assignments.isEmpty()) {
                 hint.setText("Assign at least one slot before starting.");
                 return;
             }
+            StageMapWindow.clearSlotMacroPreviews();
             future.complete(new Result(chosen, Collections.unmodifiableList(assignments)));
             stage.close();
         });
         cancelButton.setOnAction(e -> {
+            StageMapWindow.clearSlotMacroPreviews();
             future.complete(null);
             stage.close();
         });
         stage.setOnCloseRequest(e -> {
+            StageMapWindow.clearSlotMacroPreviews();
             if (!future.isDone()) future.complete(null);
         });
 
         VBox root =
                 new VBox(10, header, intro, new Separator(), carrierRow, new Separator(), slotsScroll, hint, buttons);
         root.setPadding(new Insets(14));
-        root.setStyle("-fx-pref-width: 620; -fx-pref-height: 520;");
+        root.setStyle("-fx-pref-width: 680; -fx-pref-height: 540;");
         stage.setScene(new Scene(root));
         stage.showAndWait();
     }
@@ -290,5 +355,61 @@ public final class MultiSlideAssignmentDialog {
     }
 
     private record SlotRow(
-            int position, String slotLabel, ChoiceBox<ProjectImageEntry<BufferedImage>> entryBox, CheckBox skip) {}
+            int position,
+            String slotLabel,
+            ChoiceBox<ProjectImageEntry<BufferedImage>> entryBox,
+            CheckBox skip,
+            ChoiceBox<Integer> rotationBox) {}
+
+    /** Reads an entry's project thumbnail as a BufferedImage for the orientation preview. */
+    private static BufferedImage readThumb(ProjectImageEntry<BufferedImage> entry) {
+        try {
+            return entry.getThumbnail();
+        } catch (Exception e) {
+            logger.debug("No thumbnail for '{}': {}", entry.getImageName(), e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Returns the entry to assign for a slot given the chosen rotation: the base entry for
+     * 0 degrees, otherwise a rotated duplicate (reusing an existing "(rotated N)" sibling if
+     * one is present, else creating it via {@link QPProjectFunctions#createRotatedDuplicate}).
+     * Falls back to the base entry if creation fails.
+     */
+    private static ProjectImageEntry<BufferedImage> resolveAssignedEntry(
+            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> base, int rotationDeg) {
+        if (rotationDeg == 0) {
+            return base;
+        }
+        RotatedImageServer.Rotation rotation =
+                switch (rotationDeg) {
+                    case 90 -> RotatedImageServer.Rotation.ROTATE_90;
+                    case 180 -> RotatedImageServer.Rotation.ROTATE_180;
+                    case 270 -> RotatedImageServer.Rotation.ROTATE_270;
+                    default -> null;
+                };
+        if (rotation == null) {
+            return base;
+        }
+        String targetName = base.getImageName() + " (rotated " + rotationDeg + ")";
+        for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+            if (targetName.equals(e.getImageName())) {
+                logger.info("Reusing existing rotated entry '{}'", targetName);
+                return e;
+            }
+        }
+        try {
+            String sampleName = GeneralTools.stripExtension(base.getImageName());
+            ProjectImageEntry<BufferedImage> rotated =
+                    QPProjectFunctions.createRotatedDuplicate(project, base, rotation, sampleName);
+            if (rotated != null) {
+                return rotated;
+            }
+            logger.warn("createRotatedDuplicate returned null for '{}'; using base entry", base.getImageName());
+        } catch (IOException ex) {
+            logger.error("Failed to create rotated duplicate for '{}': {}", base.getImageName(), ex.getMessage());
+        }
+        return base;
+    }
 }

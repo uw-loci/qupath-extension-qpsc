@@ -164,7 +164,8 @@ public class StageMapWindow {
      * active, Apply Flips is forced OFF and greyed so the displayed macro is in its raw
      * orientation (what the software will store), and restored on {@link #clearSlotMacroPreviews}.
      */
-    public static void previewSlotMacros(java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
+    public static void previewSlotMacros(
+            StageInsert carrier, java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
         Platform.runLater(() -> {
             if (instance == null) {
                 instance = new StageMapWindow();
@@ -176,7 +177,7 @@ public class StageMapWindow {
             } else {
                 instance.stage.toFront();
             }
-            instance.applySlotPreviews(previews);
+            instance.applySlotPreviews(carrier, previews);
         });
     }
 
@@ -192,7 +193,26 @@ public class StageMapWindow {
     /** Prior Apply Flips state saved while a slot preview forces it off; null when inactive. */
     private Boolean savedApplyFlipsState;
 
-    private void applySlotPreviews(java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
+    private void applySlotPreviews(StageInsert carrier, java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
+        // Sync the map to the carrier so slot indices/rects in the previews match what is
+        // drawn. Prefer selecting the matching dropdown item (fires the canvas + overlay
+        // update); fall back to setting the insert directly.
+        if (carrier != null) {
+            StageInsert match = null;
+            if (insertComboBox != null) {
+                for (StageInsert i : insertComboBox.getItems()) {
+                    if (i != null && i.getId().equals(carrier.getId())) {
+                        match = i;
+                        break;
+                    }
+                }
+            }
+            if (match != null) {
+                insertComboBox.getSelectionModel().select(match);
+            } else if (canvas != null) {
+                canvas.setInsert(carrier);
+            }
+        }
         // Save + force Apply Flips off (greyed) once, on entering the orientation check.
         if (savedApplyFlipsState == null && applyFlipsCheckbox != null) {
             savedApplyFlipsState = applyFlipsCheckbox.isSelected();
