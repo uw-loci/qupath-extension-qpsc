@@ -120,12 +120,12 @@ For each tile-confirm step:
 3. Click **Current Position is Accurate** to commit the measurement; click **Cancel acquisition** to abort.
 
 **Multi-slide batch mode:** When running alignment as part of a multi-slide batch (e.g., on a 4-slide carrier):
-The workflow ALWAYS runs the full 3-point manual landmark alignment to measure the slide's true position and rotation for its current mount. The holder's per-slot center calibration provides only a rough auto-move when you select your first reference tile, positioning the stage near the slot region -- the calibration knows where the (empty) slot sits, not where the tissue smear is within it, so expect to drive a short distance to the tissue. After you confirm point 1, the transform re-anchors there and points 2-3 refine it.
-- Whether you select **Single-tile refinement** or **Full manual**, the 3-point landmark process is identical.
-- **Single-tile refinement** then runs after the landmark completes, allowing you to refine and verify the alignment on one tile before full acquisition.
-- **Full manual** runs the same 3-point landmark, followed by two additional confirmation tiles (identical to single-slide mode).
+The workflow first attempts the green-box + preset path, which re-detects the tissue's location on each slide's own macro image. This is the primary alignment path when a scanner preset exists (the preset captures the optical properties for the source/target microscope pair). If no usable scanner preset is available, the workflow falls back to the full 3-point manual landmark alignment to measure the slide's true position and rotation for its current mount.
 
-The slot-center seed speeds up multi-slide runs by moving the stage near the slide at the start of each alignment, so you drive a short distance to the tissue rather than navigating from scratch.
+- **Green-box + preset path (primary):** Re-detects tissue location per slide using the scanner preset for orientation/scale. After initial green-box detection and preset application, the selected **single-tile refinement** corrects the per-slot center offset (the preset was calibrated at one holder position, not necessarily the current slot). This combines automatic tissue detection with manual operator verification.
+- **Manual landmark (fallback):** When no preset exists, the full 3-point landmark process runs instead. You manually confirm three points (reference tile, then top-center and left-center refinement tiles) to establish position and rotation.
+
+The slot-center seed (from holder calibration) speeds up multi-slide runs by moving the stage near the slide at the start of each alignment, so you drive a short distance to the tissue rather than navigating from scratch.
 
 **Auto-Align (SIFT)**:
 - Extracts a region from the WSI around the selected tile (with the configured search margin, default 160um).
