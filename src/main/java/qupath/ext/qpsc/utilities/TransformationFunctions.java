@@ -971,18 +971,29 @@ public class TransformationFunctions {
     public static AffineTransform addTranslationToScaledAffine(
             AffineTransform scalingTransform, double[] qpCoordinateArray, double[] stageCoordinateArray) {
 
-        // Reset to pure scale
-        scalingTransform.setTransform(scalingTransform.getScaleX(), 0, 0, scalingTransform.getScaleY(), 0, 0);
+        // Single-tile refinement: keep the transform's FULL linear part (scale AND any
+        // rotation/shear) and solve only the translation so the selected QuPath point
+        // maps exactly onto the measured stage position: for p -> M*p + T, set
+        // T = stage - M*qp.
+        //
+        // The previous implementation collapsed the matrix to a diagonal
+        // setTransform(getScaleX(), 0, 0, getScaleY(), 0, 0) -- valid only for an
+        // axis-aligned scale+translate transform. The multi-slide macro->stage now
+        // carries a 270-deg rotation (m00 = cos(270) ~= 0), so getScaleX()/getScaleY()
+        // are ~0: the diagonal rebuild produced a zero matrix and divided the
+        // translation by ~0, yielding [[0,0,NaN],[0,-0,NaN]] and a Gson NaN save crash.
+        double m00 = scalingTransform.getScaleX();
+        double m01 = scalingTransform.getShearX();
+        double m10 = scalingTransform.getShearY();
+        double m11 = scalingTransform.getScaleY();
 
-        Point2D.Double scaled = new Point2D.Double();
-        scalingTransform.transform(new Point2D.Double(qpCoordinateArray[0], qpCoordinateArray[1]), scaled);
+        double mappedX = m00 * qpCoordinateArray[0] + m01 * qpCoordinateArray[1];
+        double mappedY = m10 * qpCoordinateArray[0] + m11 * qpCoordinateArray[1];
+        double tx = stageCoordinateArray[0] - mappedX;
+        double ty = stageCoordinateArray[1] - mappedY;
 
-        double tx = (stageCoordinateArray[0] - scaled.x) / scalingTransform.getScaleX();
-        double ty = (stageCoordinateArray[1] - scaled.y) / scalingTransform.getScaleY();
-
-        AffineTransform out = new AffineTransform(scalingTransform);
-        out.translate(tx, ty);
-        return out;
+        // AffineTransform(m00, m10, m01, m11, m02, m12)
+        return new AffineTransform(m00, m10, m01, m11, tx, ty);
     }
 
     /**

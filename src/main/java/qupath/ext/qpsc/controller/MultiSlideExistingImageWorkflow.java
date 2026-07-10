@@ -140,14 +140,12 @@ public final class MultiSlideExistingImageWorkflow {
         Label header = new Label("Multi-Slide Existing Image -- " + carrier.getName());
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
 
-        Label intro = new Label("Two ways to run the slots. Run All Remaining walks every not-yet-done "
-                + "slot in order, running the full Existing Image workflow on each (you answer each slide's "
-                + "dialogs as its turn comes up; only the sequencing is automated). For a walk-away batch, "
-                + "use the two-pass buttons: Set Up All Remaining does the interactive align + tissue pass on "
-                + "every slot without acquiring (each becomes Set up), then Acquire All Set-Up acquires them "
-                + "all unattended, no dialogs. Tick Stop after current slide to halt cleanly once the running "
-                + "slide finishes. The per-row Open / Run / Skip buttons drive a single slot by hand. Click "
-                + "Finish when all slots are Done or Skipped.");
+        Label intro = new Label(
+                "- Run All Remaining: full workflow on each unfinished slot in turn (you answer each slide's dialogs).\n"
+                        + "- Set Up All Remaining: interactive align + tissue pass on every slot, no acquisition.\n"
+                        + "- Acquire All Set-Up: acquires all set-up slots unattended (no dialogs).\n"
+                        + "- Stop after current slide: halts cleanly once the running slide finishes.\n"
+                        + "- Per-row Open / Run / Skip: drive one slot by hand. Finish when all are Done or Skipped.");
         intro.setWrapText(true);
         intro.setMaxWidth(640);
 
@@ -158,12 +156,10 @@ public final class MultiSlideExistingImageWorkflow {
         // mirror/inversion -- and a manual (landmark) alignment measures that rotation
         // directly. The green-box / saved-preset path assumes the macro's canonical
         // orientation, so it would target a rotated slide at the wrong end.
-        Label orientationNote = new Label("Orientation is set per slide by its alignment during setup, "
-                + "not by the holder calibration. A slide placed with its label at either end is just a "
-                + "180-degree rotation (tissue at the slot center stays centered; off-center tissue moves to "
-                + "the opposite end). Use MANUAL alignment for any slot whose slide may be rotated, so the "
-                + "rotation is measured -- the green-box / existing-preset path assumes the standard "
-                + "orientation and would target a rotated slide at the wrong end.");
+        Label orientationNote = new Label("Orientation is set per slide by its alignment, not the holder calibration.\n"
+                + "- A slide with its label at either end is just a 180-degree rotation.\n"
+                + "- Use MANUAL alignment for any slot that may be rotated; the green-box / preset path "
+                + "assumes standard orientation and would target a rotated slide at the wrong end.");
         orientationNote.setWrapText(true);
         orientationNote.setMaxWidth(640);
         orientationNote.setStyle("-fx-font-style: italic; -fx-text-fill: -fx-accent;");
