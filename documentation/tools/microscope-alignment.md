@@ -120,10 +120,12 @@ For each tile-confirm step:
 3. Click **Current Position is Accurate** to commit the measurement; click **Cancel acquisition** to abort.
 
 **Multi-slide batch mode:** When running alignment as part of a multi-slide batch (e.g., on a 4-slide carrier):
-- If you selected **Single-tile refinement**, the workflow skips the full 3-point manual landmark entirely. Instead, the holder's per-slot center calibration seeds the starting transform, and the single-tile refinement step (above) refines that estimate. Selecting your reference tile auto-moves the stage near the tissue center, then SIFT or manual adjustment completes the alignment.
-- If you explicitly selected **Full manual**, the workflow runs the complete 3-point manual landmark (this step plus two additional confirmation tiles), as on single-slide acquisitions.
+The workflow ALWAYS runs the full 3-point manual landmark alignment to measure the slide's true position and rotation for its current mount. The holder's per-slot center calibration provides only a rough auto-move when you select your first reference tile, positioning the stage near the slot region -- the calibration knows where the (empty) slot sits, not where the tissue smear is within it, so expect to drive a short distance to the tissue. After you confirm point 1, the transform re-anchors there and points 2-3 refine it.
+- Whether you select **Single-tile refinement** or **Full manual**, the 3-point landmark process is identical.
+- **Single-tile refinement** then runs after the landmark completes, allowing you to refine and verify the alignment on one tile before full acquisition.
+- **Full manual** runs the same 3-point landmark, followed by two additional confirmation tiles (identical to single-slide mode).
 
-The slot-center seed significantly speeds up multi-slide runs by eliminating the need to manually position the stage at the start of each alignment.
+The slot-center seed speeds up multi-slide runs by moving the stage near the slide at the start of each alignment, so you drive a short distance to the tissue rather than navigating from scratch.
 
 **Auto-Align (SIFT)**:
 - Extracts a region from the WSI around the selected tile (with the configured search margin, default 160um).
