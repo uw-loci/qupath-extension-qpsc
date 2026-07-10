@@ -1318,11 +1318,24 @@ public class ExistingImageWorkflowV2 {
             // drives to the tissue's actual stage positions -- captures the slide's true
             // position AND rotation for its current mount.
             if (forceFreshAlignment) {
-                logger.info("Force-fresh alignment: routing to MANUAL landmark alignment "
-                        + "(the 3 measured points solve the slide's true position AND rotation for its current "
-                        + "mount; a holder slot-center estimate, when available, only provides a rough auto-move "
-                        + "to the first tile). The SIFT / existing-preset path is skipped: it assumes canonical "
-                        + "orientation and mis-places a slide mounted in a multi-slide holder.");
+                // "Fresh" means: do NOT reuse a SAVED per-slide alignment (already skipped in
+                // checkExistingSlideAlignment). It does NOT mean skip the green-box path. The
+                // green-box + scanner-preset path re-detects EACH slide's tissue green box on
+                // its own macro -- every slide's tissue sits in a different place, so this is
+                // essential; it is what actually locates the tissue. The preset gives the
+                // Ocus40->PPM orientation/scale; the per-slot stage offset (the preset was
+                // calibrated at one holder position) is then corrected by the operator-selected
+                // single-tile refinement in handleRefinement. Only fall back to the 3-point
+                // manual landmark when there is no usable scanner preset (no macro / no preset).
+                if (state.alignmentChoice != null
+                        && state.alignmentChoice.useExistingAlignment()
+                        && state.alignmentChoice.selectedTransform() != null) {
+                    logger.info("Force-fresh alignment: green-box + preset path (re-detects the tissue green box "
+                            + "per slide); single-tile refinement then corrects the per-slot offset");
+                    return processExistingAlignmentPath(state);
+                }
+                logger.info("Force-fresh alignment: no usable scanner preset -- falling back to MANUAL landmark "
+                        + "alignment (the 3 measured points solve position AND rotation for the current mount)");
                 return processManualAlignmentPath(state);
             }
 
