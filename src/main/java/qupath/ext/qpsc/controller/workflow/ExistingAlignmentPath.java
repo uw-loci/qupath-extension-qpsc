@@ -384,6 +384,39 @@ public class ExistingAlignmentPath {
         AffineTransform fullResToStage = new AffineTransform(macroToStage);
         fullResToStage.concatenate(fullResToMacro);
 
+        // Multi-slide: re-anchor to the holder slot center. The preset's macro->stage
+        // translation is for the canonical (single-slide holder) position, so green box +
+        // preset lands the tissue at that canonical spot -- off by the per-slot offset,
+        // which on quad_v put slot 1's tissue tens of mm away, onto a different slide.
+        // Shift the transform so the MACRO (whole-slide) center maps to THIS slot's
+        // captured center; the green box then places the tissue at its correct offset
+        // within the slot (e.g. a smear at the bottom lands at the bottom of the slot).
+        // Single-tile refinement corrects any residual (slide not perfectly centered).
+        if (state.slotCenterStageXY != null && state.slotCenterStageXY.length >= 2) {
+            BufferedImage macroImg = context.macroContext.displayImage;
+            if (macroImg != null) {
+                Point2D macroCenter = new Point2D.Double(macroImg.getWidth() / 2.0, macroImg.getHeight() / 2.0);
+                Point2D presetMacroCenterStage = new Point2D.Double();
+                macroToStage.transform(macroCenter, presetMacroCenterStage);
+                double shiftX = state.slotCenterStageXY[0] - presetMacroCenterStage.getX();
+                double shiftY = state.slotCenterStageXY[1] - presetMacroCenterStage.getY();
+                fullResToStage.preConcatenate(AffineTransform.getTranslateInstance(shiftX, shiftY));
+                logger.info(
+                        "Multi-slide slot re-anchor: macro center ({}, {}) preset-> ({}, {}); slot center "
+                                + "({}, {}); applied shift ({}, {})",
+                        macroCenter.getX(),
+                        macroCenter.getY(),
+                        presetMacroCenterStage.getX(),
+                        presetMacroCenterStage.getY(),
+                        state.slotCenterStageXY[0],
+                        state.slotCenterStageXY[1],
+                        shiftX,
+                        shiftY);
+            } else {
+                logger.warn("Multi-slide slot re-anchor skipped: no display macro image for center reference");
+            }
+        }
+
         // Test if the saved transform expects unflipped macro coordinates
 
         logger.info("Green box in flipped macro: ({}, {})", greenBox.getBoundsX(), greenBox.getBoundsY());
