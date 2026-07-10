@@ -610,8 +610,77 @@ public class ExistingImageWorkflowV2 {
                 logger.info("Post-routing entry already has {} annotation(s); skipping re-prompt", present.size());
                 return CompletableFuture.completedFuture(state);
             }
+            // Race guard: validateAndFlipIfNeeded switches the open entry to the flipped
+            // sibling, but switchOpenEntry's listener can complete before gui.getImageData()
+            // settles -- so this read can still hit the PRE-FLIP base entry (observed on the
+            // acquire pass: annotations live on '...(rotated 270)(flipped XY)' but the read
+            // saw '...(rotated 270)' FLIP_X=0 and popped "No annotations detected"). If the
+            // current entry lacks the required flip but the matching flipped sibling has
+            // annotations, use those directly instead of prompting.
+            List<PathObject> siblingAnnotations = readFlippedSiblingAnnotationsIfStale(state);
+            if (siblingAnnotations != null && !siblingAnnotations.isEmpty()) {
+                state.annotations = siblingAnnotations;
+                logger.info(
+                        "Post-routing entry is the pre-flip base; using {} annotation(s) from the flipped sibling "
+                                + "(entry switch had not committed yet)",
+                        siblingAnnotations.size());
+                return CompletableFuture.completedFuture(state);
+            }
             state.annotations = null;
             return ensureAnnotationsExist(state);
+        }
+
+        /**
+         * Race guard for the flipped-sibling entry switch. When a flip is required but the
+         * currently-open entry is still the pre-flip base (the {@code switchOpenEntry} listener
+         * completed before {@code gui.getImageData()} settled), reads the matching flipped
+         * sibling's persisted annotations directly. Returns null when no flip is required, the
+         * current entry already carries the required flip (not stale), or no sibling exists.
+         */
+        private List<PathObject> readFlippedSiblingAnnotationsIfStale(WorkflowState state) {
+            try {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                if (project == null || gui.getImageData() == null) {
+                    return null;
+                }
+                ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                if (openEntry == null) {
+                    return null;
+                }
+                AffineTransformManager.TransformPreset preset =
+                        state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
+                boolean requiresFlipX = FlipResolver.resolveFlipX(null, preset, null);
+                boolean requiresFlipY = FlipResolver.resolveFlipY(null, preset, null);
+                if (!requiresFlipX && !requiresFlipY) {
+                    return null; // no flip required -> current entry is authoritative
+                }
+                boolean currentHasFlip = (!requiresFlipX || ImageMetadataManager.isFlippedX(openEntry))
+                        && (!requiresFlipY || ImageMetadataManager.isFlippedY(openEntry));
+                if (currentHasFlip) {
+                    return null; // current entry already in the required flip frame -> not stale
+                }
+                ProjectImageEntry<BufferedImage> sibling =
+                        ImageFlipHelper.findFlippedSibling(project, openEntry, requiresFlipX, requiresFlipY);
+                if (sibling == null) {
+                    return null;
+                }
+                ImageData<BufferedImage> sibData = sibling.readImageData();
+                try {
+                    return sibData.getHierarchy().getAnnotationObjects().stream()
+                            .filter(a -> a.getROI() != null && !a.getROI().isEmpty())
+                            .collect(java.util.stream.Collectors.toList());
+                } finally {
+                    try {
+                        sibData.getServer().close();
+                    } catch (Exception ignore) {
+                        // best-effort: annotations do not touch pixels
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Flipped-sibling annotation fallback failed: {}", e.getMessage());
+                return null;
+            }
         }
 
         private CompletableFuture<WorkflowState> ensureAnnotationsExist(WorkflowState state) {

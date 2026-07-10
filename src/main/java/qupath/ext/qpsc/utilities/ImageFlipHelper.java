@@ -540,7 +540,7 @@ public final class ImageFlipHelper {
      * matching the requested flip axes. Matches by `base_image`
      * metadata if available, falling back to name prefix.
      */
-    private static ProjectImageEntry<BufferedImage> findFlippedSibling(
+    public static ProjectImageEntry<BufferedImage> findFlippedSibling(
             Project<BufferedImage> project, ProjectImageEntry<BufferedImage> baseEntry, boolean flipX, boolean flipY) {
 
         String desiredSuffix;
