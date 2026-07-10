@@ -523,6 +523,19 @@ public class ExistingImageWorkflowV2 {
          */
         private CompletableFuture<WorkflowState> reReadAnnotationsAfterRouting(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
+            // If the current (post-routing, post-flip) entry already carries
+            // annotations, use them directly. The manual-alignment path (and the
+            // slide-specific path) establish annotations on this entry as part of
+            // routing; re-prompting here -- which the empty-validClasses branch of
+            // ensureAnnotationsExist would otherwise do -- is a redundant second
+            // dialog. We are on the final entry now, so this is not the "stale from
+            // a previous run / wrong image" case that branch guards against.
+            List<PathObject> present = AnnotationHelper.getCurrentValidAnnotations(gui, null);
+            if (!present.isEmpty()) {
+                state.annotations = present;
+                logger.info("Post-routing entry already has {} annotation(s); skipping re-prompt", present.size());
+                return CompletableFuture.completedFuture(state);
+            }
             state.annotations = null;
             return ensureAnnotationsExist(state);
         }
