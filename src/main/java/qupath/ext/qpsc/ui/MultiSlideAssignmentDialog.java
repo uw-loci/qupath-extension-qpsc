@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.ui;
 
 import java.awt.image.BufferedImage;
+import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
@@ -29,13 +30,16 @@ import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapCanvas;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
+import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.images.servers.RotatedImageServer;
@@ -148,6 +152,22 @@ public final class MultiSlideAssignmentDialog {
             stage.showAndWait();
             return;
         }
+
+        // Source scanner: the scope that produced the macros (e.g. Ocus40). Required so the
+        // workflow can resolve the (source -> active-scope) flip; stamped onto every assigned
+        // slide that lacks source_microscope. Listed from the scanners that have a preset to the
+        // active microscope (the target scope itself is excluded -- a flip-needing scope needs a
+        // real scanner source).
+        List<String> sourceScanners = availableSourceScanners();
+        ComboBox<String> sourceBox = new ComboBox<>();
+        sourceBox.getItems().setAll(sourceScanners);
+        String defaultSource = defaultSourceScanner(macroCandidates, sourceScanners);
+        if (defaultSource != null) {
+            sourceBox.getSelectionModel().select(defaultSource);
+        }
+        Label sourceLabel = new Label("Source scanner:");
+        HBox sourceRow = new HBox(8, sourceLabel, sourceBox);
+        sourceRow.setStyle("-fx-alignment: center-left;");
 
         // Slot rows live in a GridPane; rebuilt on carrier change
         GridPane slotGrid = new GridPane();
@@ -361,6 +381,7 @@ public final class MultiSlideAssignmentDialog {
                 hint.setText("Please select a carrier.");
                 return;
             }
+            String chosenSource = sourceBox.getValue();
             List<SlotAssignment> assignments = new ArrayList<>();
             for (SlotRow r : slotRows) {
                 if (r.skip.isSelected()) continue;
@@ -369,10 +390,12 @@ public final class MultiSlideAssignmentDialog {
                 if (entry == null) continue;
                 // Apply the chosen rotation: a non-zero rotation swaps the slot's assigned
                 // entry to a rotated duplicate (created/reused), so the batch aligns and
-                // acquires on the correctly-oriented macro.
+                // acquires on the correctly-oriented macro. The chosen source scanner is
+                // stamped onto every assigned entry that lacks source_microscope so the flip
+                // logic can resolve.
                 Integer rotDeg = r.rotationBox.getValue();
                 ProjectImageEntry<BufferedImage> assigned =
-                        resolveAssignedEntry(project, entry, rotDeg == null ? 0 : rotDeg);
+                        resolveAssignedEntry(project, entry, rotDeg == null ? 0 : rotDeg, chosenSource);
                 assignments.add(new SlotAssignment(r.position, r.slotLabel, assigned));
             }
             if (assignments.isEmpty()) {
@@ -401,6 +424,7 @@ public final class MultiSlideAssignmentDialog {
                 intro,
                 new Separator(),
                 carrierRow,
+                sourceRow,
                 rotateAllRow,
                 new Separator(),
                 slotsScroll,
@@ -495,12 +519,14 @@ public final class MultiSlideAssignmentDialog {
      * Falls back to the base entry if creation fails.
      */
     private static ProjectImageEntry<BufferedImage> resolveAssignedEntry(
-            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> base, int rotationDeg) {
-        // Ensure the base has a source_microscope BEFORE any rotated copy inherits from it.
-        // Without it the flip logic refuses to build a required flipped sibling on scopes
-        // that need one (e.g. PPM). The Stage Map source picker only stamps the open entry,
-        // so the other slides can be missing it -- backfill from the selected scanner.
-        ensureSourceMicroscope(base);
+            Project<BufferedImage> project,
+            ProjectImageEntry<BufferedImage> base,
+            int rotationDeg,
+            String chosenSource) {
+        // Stamp source_microscope on the base (if missing) BEFORE any rotated copy inherits
+        // from it. Without it the flip logic refuses to build a required flipped sibling on
+        // scopes that need one (e.g. PPM).
+        ensureSourceMicroscope(base, chosenSource);
         if (rotationDeg == 0) {
             return base;
         }
@@ -518,6 +544,7 @@ public final class MultiSlideAssignmentDialog {
         for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
             if (targetName.equals(e.getImageName())) {
                 logger.info("Reusing existing rotated entry '{}'", targetName);
+                ensureSourceMicroscope(e, chosenSource); // a prior-run sibling may lack source
                 return e;
             }
         }
@@ -526,7 +553,7 @@ public final class MultiSlideAssignmentDialog {
             ProjectImageEntry<BufferedImage> rotated =
                     QPProjectFunctions.createRotatedDuplicate(project, base, rotation, sampleName);
             if (rotated != null) {
-                ensureSourceMicroscope(rotated); // belt-and-suspenders (inherits from base too)
+                ensureSourceMicroscope(rotated, chosenSource); // belt-and-suspenders (inherits from base too)
                 return rotated;
             }
             logger.warn("createRotatedDuplicate returned null for '{}'; using base entry", base.getImageName());
@@ -537,24 +564,73 @@ public final class MultiSlideAssignmentDialog {
     }
 
     /**
-     * Stamps {@code source_microscope} on an entry that lacks it, using the selected-scanner
-     * preference (the Stage Map source picker persists it). No-op when the entry already has
-     * one or the preference is unset/Generic -- in which case the workflow's own
+     * Stamps {@code source_microscope} on an entry that lacks it, using the operator's chosen
+     * source scanner (falling back to the selected-scanner preference). No-op when the entry
+     * already has one or no usable source is available -- in which case the workflow's own
      * missing-source dialog will prompt the operator.
      */
-    private static void ensureSourceMicroscope(ProjectImageEntry<BufferedImage> entry) {
+    private static void ensureSourceMicroscope(ProjectImageEntry<BufferedImage> entry, String chosenSource) {
         String existing = ImageMetadataManager.getSourceMicroscope(entry);
         if (existing != null && !existing.isEmpty()) {
             return;
         }
-        String scanner = PersistentPreferences.getSelectedScanner();
+        String scanner = (chosenSource != null && !chosenSource.isEmpty())
+                ? chosenSource
+                : PersistentPreferences.getSelectedScanner();
         if (scanner == null || scanner.isEmpty() || "Generic".equalsIgnoreCase(scanner)) {
-            logger.info(
-                    "Entry '{}' has no source_microscope and no usable selected-scanner to backfill",
-                    entry.getImageName());
+            logger.info("Entry '{}' has no source_microscope and no usable source to backfill", entry.getImageName());
             return;
         }
         entry.getMetadata().put(ImageMetadataManager.SOURCE_MICROSCOPE, scanner);
         logger.info("Stamped source_microscope='{}' on '{}' (was missing)", scanner, entry.getImageName());
+    }
+
+    /** Scanners that have a saved preset to the active microscope (the target scope excluded). */
+    private static List<String> availableSourceScanners() {
+        List<String> out = new ArrayList<>();
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isEmpty()) {
+                return out;
+            }
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String target = mgr != null ? mgr.getMicroscopeName() : null;
+            AffineTransformManager tm = new AffineTransformManager(
+                    new File(configPath).getParentFile().getAbsolutePath());
+            if (target != null && !target.isEmpty() && !"Unknown".equals(target)) {
+                for (String s : tm.getDistinctSourceScannersForMicroscope(target)) {
+                    if (s != null && !s.isEmpty() && !s.equals(target)) {
+                        out.add(s);
+                    }
+                }
+            }
+            if (out.isEmpty()) {
+                tm.getAllTransforms().stream()
+                        .map(AffineTransformManager.TransformPreset::getSourceScanner)
+                        .filter(s -> s != null && !s.isEmpty())
+                        .distinct()
+                        .sorted()
+                        .forEach(out::add);
+            }
+        } catch (Exception e) {
+            logger.warn("Could not list source scanners: {}", e.getMessage());
+        }
+        return out;
+    }
+
+    /** Picks a sensible default source: an assigned entry's existing source, else the pref, else the first listed. */
+    private static String defaultSourceScanner(
+            List<ProjectImageEntry<BufferedImage>> candidates, List<String> available) {
+        for (ProjectImageEntry<BufferedImage> e : candidates) {
+            String src = ImageMetadataManager.getSourceMicroscope(e);
+            if (src != null && !src.isEmpty() && available.contains(src)) {
+                return src;
+            }
+        }
+        String pref = PersistentPreferences.getSelectedScanner();
+        if (pref != null && !pref.isEmpty() && available.contains(pref)) {
+            return pref;
+        }
+        return available.isEmpty() ? null : available.get(0);
     }
 }

@@ -188,7 +188,13 @@ public final class ImageFlipHelper {
                                 + "active microscope requires a flipped sibling; refusing to proceed.",
                         openEntry.getImageName());
                 showMissingSourceMicroscopeDialog(openEntry.getImageName());
-                future.completeExceptionally(new RuntimeException("source_microscope missing on a flip-needing scope"));
+                // Cancel (not a RuntimeException): the missing-source dialog already informs
+                // the operator. A RuntimeException here reaches the workflow's handleError,
+                // which pops a SECOND "Workflow Error" dialog on top of this one -- two stacked
+                // modal dialogs the user cannot dismiss (locks the app). CancellationException
+                // makes handleError log-and-cleanup silently, leaving just this one dialog.
+                future.completeExceptionally(new java.util.concurrent.CancellationException(
+                        "source_microscope missing on a flip-needing scope"));
                 return future;
             }
             boolean[] resolved = resolveFlipFromPreset(openEntry);
@@ -374,12 +380,12 @@ public final class ImageFlipHelper {
                         + "alignment (one or more saved presets for this scope have%n"
                         + "flipMacroX or flipMacroY set).%n%n",
                 entryName));
-        body.append("Without source_microscope we cannot resolve which preset's flip%n");
-        body.append("state applies, and the workflow would silently run against the%n");
-        body.append("unflipped macro -- targeting the wrong physical location.%n%n");
-        body.append("To fix, stamp the source scanner via:%n");
-        body.append("  Microscope -> Stage Map -> Stamp Source Microscope%n");
-        body.append("Then re-run the workflow.%n%n");
+        body.append("Without source_microscope we cannot resolve which preset's flip\n");
+        body.append("state applies, and the workflow would silently run against the\n");
+        body.append("unflipped macro -- targeting the wrong physical location.\n\n");
+        body.append("To fix, set the source scanner via:\n");
+        body.append("  Extensions -> QP Scope -> Stage Map -> pick the Source, or\n");
+        body.append("  set it in the Multi-Slide assignment dialog, then re-run.\n\n");
         body.append("This workflow has been cancelled.");
 
         Runnable show = () -> {
