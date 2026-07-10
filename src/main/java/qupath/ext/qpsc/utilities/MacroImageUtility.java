@@ -577,9 +577,11 @@ public class MacroImageUtility {
     }
 
     /**
-     * Reads the macro associated image directly from a project entry.
+     * Reads the macro associated image directly from a project entry (the full-slide
+     * overview with the frosted label), or null if the entry has no macro. Opens the
+     * entry's server, so call off the FX thread for responsiveness.
      */
-    private static BufferedImage readMacroFromEntry(ProjectImageEntry<BufferedImage> entry) {
+    public static BufferedImage readMacroFromEntry(ProjectImageEntry<BufferedImage> entry) {
         try {
             ImageData<BufferedImage> data = entry.readImageData();
             var server = data.getServer();

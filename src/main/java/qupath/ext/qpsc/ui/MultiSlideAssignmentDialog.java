@@ -28,12 +28,14 @@ import javafx.stage.Window;
 import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapCanvas;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.images.servers.RotatedImageServer;
@@ -154,29 +156,70 @@ public final class MultiSlideAssignmentDialog {
         slotGrid.setPadding(new Insets(8, 0, 8, 0));
 
         List<SlotRow> slotRows = new ArrayList<>();
-        Map<ProjectImageEntry<BufferedImage>, BufferedImage> thumbCache = new IdentityHashMap<>();
+        // Processed macro per entry (macro associated image, cropped to the slide). Reading
+        // opens the entry's server, so it is loaded off the FX thread and cached. Synchronized
+        // for the FX/loader-thread handoff; IdentityHashMap so null (no-macro) values cache.
+        Map<ProjectImageEntry<BufferedImage>, BufferedImage> macroCache =
+                Collections.synchronizedMap(new IdentityHashMap<>());
 
-        // Live orientation preview: push each assigned slot's macro thumbnail (at its chosen
+        // Live orientation preview: push each assigned slot's PROCESSED macro (at its chosen
         // rotation) to the Stage Map, which renders them over the holder's slots. The MS dialog
-        // is the control surface; the Stage Map is a passive viewer.
+        // is the control surface; the Stage Map is a passive viewer. Macros load off the FX
+        // thread; once cached, rotation changes rebuild the preview instantly.
         Runnable refreshPreview = () -> {
             StageInsert chosen = carrierBox.getValue();
             if (chosen == null) {
                 StageMapWindow.clearSlotMacroPreviews();
                 return;
             }
-            List<StageMapCanvas.SlotMacroPreview> previews = new ArrayList<>();
+            List<ProjectImageEntry<BufferedImage>> entries = new ArrayList<>();
+            List<int[]> slotAndRot = new ArrayList<>(); // {slotIndex, rotationDeg}
             for (SlotRow r : slotRows) {
                 if (r.skip.isSelected()) continue;
                 ProjectImageEntry<BufferedImage> entry =
                         r.entryBox.getSelectionModel().getSelectedItem();
                 if (entry == null) continue;
-                BufferedImage thumb = thumbCache.computeIfAbsent(entry, MultiSlideAssignmentDialog::readThumb);
-                if (thumb == null) continue;
                 Integer rot = r.rotationBox.getValue();
-                previews.add(new StageMapCanvas.SlotMacroPreview(r.position - 1, thumb, rot == null ? 0 : rot));
+                entries.add(entry);
+                slotAndRot.add(new int[] {r.position - 1, rot == null ? 0 : rot});
             }
-            StageMapWindow.previewSlotMacros(chosen, previews);
+            if (entries.isEmpty()) {
+                StageMapWindow.clearSlotMacroPreviews();
+                return;
+            }
+            Runnable build = () -> {
+                List<StageMapCanvas.SlotMacroPreview> previews = new ArrayList<>();
+                for (int i = 0; i < entries.size(); i++) {
+                    BufferedImage macro = macroCache.get(entries.get(i));
+                    if (macro == null) continue;
+                    previews.add(new StageMapCanvas.SlotMacroPreview(
+                            slotAndRot.get(i)[0], macro, slotAndRot.get(i)[1]));
+                }
+                StageMapWindow.previewSlotMacros(chosen, previews);
+            };
+            boolean allCached = true;
+            for (ProjectImageEntry<BufferedImage> e : entries) {
+                if (!macroCache.containsKey(e)) {
+                    allCached = false;
+                    break;
+                }
+            }
+            if (allCached) {
+                build.run();
+                return;
+            }
+            Thread loader = new Thread(
+                    () -> {
+                        for (ProjectImageEntry<BufferedImage> e : entries) {
+                            if (!macroCache.containsKey(e)) {
+                                macroCache.put(e, loadSlotMacro(e)); // may be null; cached to avoid re-read
+                            }
+                        }
+                        Platform.runLater(build);
+                    },
+                    "ms-macro-preview-loader");
+            loader.setDaemon(true);
+            loader.start();
         };
 
         Runnable rebuildSlots = () -> {
@@ -361,13 +404,37 @@ public final class MultiSlideAssignmentDialog {
             CheckBox skip,
             ChoiceBox<Integer> rotationBox) {}
 
-    /** Reads an entry's project thumbnail as a BufferedImage for the orientation preview. */
-    private static BufferedImage readThumb(ProjectImageEntry<BufferedImage> entry) {
-        try {
-            return entry.getThumbnail();
-        } catch (Exception e) {
-            logger.debug("No thumbnail for '{}': {}", entry.getImageName(), e.getMessage());
+    /**
+     * Loads the PROCESSED macro for the orientation preview: the entry's macro associated
+     * image (the full glass slide with the frosted label -- NOT the tissue thumbnail),
+     * cropped to the slide area via the scanner config (the same crop the green-box /
+     * macro-overlay path uses). No flip is applied -- the preview shows the raw orientation
+     * (Apply Flips is forced off during the check), and the chosen rotation is applied at
+     * render time. Returns null if the entry has no macro. Opens the server, so call off the
+     * FX thread.
+     */
+    private static BufferedImage loadSlotMacro(ProjectImageEntry<BufferedImage> entry) {
+        BufferedImage raw = MacroImageUtility.readMacroFromEntry(entry);
+        if (raw == null) {
             return null;
+        }
+        String scanner = ImageMetadataManager.getSourceMicroscope(entry);
+        if (scanner == null || scanner.isEmpty()) {
+            scanner = PersistentPreferences.getSelectedScannerProperty();
+        }
+        if (scanner == null || scanner.isEmpty()) {
+            logger.info("No scanner known for '{}'; previewing uncropped macro", entry.getImageName());
+            return raw;
+        }
+        try {
+            return MacroImageUtility.cropToSlideArea(raw, scanner).getCroppedImage();
+        } catch (Exception e) {
+            logger.warn(
+                    "Macro crop failed for '{}' (scanner '{}'): {}; previewing uncropped macro",
+                    entry.getImageName(),
+                    scanner,
+                    e.getMessage());
+            return raw;
         }
     }
 
