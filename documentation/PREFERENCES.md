@@ -42,6 +42,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | Save Raw Tiles | Boolean | OFF | Save unprocessed tiles alongside corrected |
 | Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
 | Enable Multi-Slide Workflow (experimental) | Boolean | OFF | Adds the MS-Existing Image menu entry for multi-slide carriers (e.g. quad_v) |
+| [Reuse saved alignment (TESTING ONLY)](#reuse-saved-alignment-testing-only) | Boolean | OFF | Multi-slide batch alignment reuse (UNSAFE, testing only) |
 | [Image name includes: Objective](#image-name-includes-objective) | Boolean | OFF | Add objective to filename |
 | [Image name includes: Modality](#image-name-includes-modality) | Boolean | OFF | Add modality to filename |
 | [Image name includes: Annotation](#image-name-includes-annotation) | Boolean | OFF | Add annotation name to filename |
@@ -708,6 +709,39 @@ Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu. The 
 **When to Disable:**
 - Hide the MS-Existing Image menu entry when you don't need multi-slide batch acquisition
 - Return to single-slide workflows (the regular Bounded Acquisition and Acquire from Existing Image entries remain unaffected)
+
+**See Also:** [MS-Existing Image (experimental)](WORKFLOWS.md#ms-existing-image-experimental) workflow documentation.
+
+---
+
+### Reuse saved alignment (TESTING ONLY)
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No |
+
+**Description:**
+**TESTING ONLY — UNSAFE for real acquisition.** When enabled, the multi-slide batch workflow reuses each slot's saved per-slide alignment JSON instead of re-aligning, skipping SIFT/manual alignment and single-tile refinement. A confirmation dialog appears at the start of each batch asking you to confirm the reuse decision; the same decision is cached so you are not prompted for every slot.
+
+**Critical assumption:** This feature assumes every slide is **still physically mounted exactly as it was when its alignment was captured**. Any remount (removing and replacing a slide) invalidates the reused alignment, causing mis-positioned acquisitions.
+
+**Behavior when enabled:**
+1. A confirmation dialog appears at the start of each multi-slide batch run
+2. Choosing "Yes" reuses saved per-slide alignment (skips alignment / refinement)
+3. Choosing "No" runs fresh alignment on all slots (safe)
+4. Slots with no valid saved alignment always align fresh (per-slot fallback)
+5. The confirmation choice is cached for the batch, so you are not re-prompted per slot
+
+**When to Enable:**
+- Iterative on-scope testing where you know the holder has not been touched
+- Debugging or validation runs on the same pre-aligned slides
+- Speeding up repeated test acquisitions on a frozen holder configuration
+
+**When to Keep OFF:**
+- **Always OFF for real acquisition** — any slide remount invalidates the transforms
+- Default production setting; only toggle ON for specific test scenarios
 
 **See Also:** [MS-Existing Image (experimental)](WORKFLOWS.md#ms-existing-image-experimental) workflow documentation.
 

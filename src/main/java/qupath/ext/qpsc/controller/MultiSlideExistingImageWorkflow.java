@@ -23,6 +23,7 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -76,26 +77,44 @@ public final class MultiSlideExistingImageWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(MultiSlideExistingImageWorkflow.class);
 
-    /** JVM system property name for the TEST-ONLY per-slide alignment-reuse override. */
-    private static final String REUSE_ALIGNMENT_PROP = "qpsc.multislide.reuseAlignment";
-
     private MultiSlideExistingImageWorkflow() {}
 
     /**
-     * TEST-ONLY escape hatch: when {@code -Dqpsc.multislide.reuseAlignment=true} is set,
-     * the batch reuses each slot's saved per-slide alignment JSON instead of re-deriving
-     * it, skipping the SIFT/manual alignment and single-tile refinement. Slots with no
-     * valid saved alignment fall back to fresh alignment automatically (per-slot, not
-     * all-or-nothing).
+     * TEST-ONLY: resolve whether this batch should reuse each slot's saved per-slide
+     * alignment JSON instead of re-deriving it (skipping SIFT/manual alignment and
+     * single-tile refinement). Gated by the "Reuse saved alignment (TESTING ONLY)"
+     * preference (default off) AND a per-batch confirmation dialog. The confirmation
+     * fires at most once per batch: the resolved decision is cached in {@code decision}
+     * so the driver does not re-prompt on every slot. When the preference is off, returns
+     * false without prompting.
      *
-     * <p><b>UNSAFE for real acquisition.</b> It assumes every slide is still physically
-     * mounted exactly as it was when the saved alignment was captured -- any remount
-     * invalidates the reused transform. It exists solely to speed up iterative on-scope
-     * testing. Deliberately a JVM system property, not a UI preference, so it cannot
-     * persist into a production run and vanishes on restart unless explicitly re-set.
+     * <p><b>UNSAFE for real acquisition.</b> Reuse assumes every slide is still physically
+     * mounted exactly as it was when its alignment was captured -- any remount invalidates
+     * the reused transform. Slots with no valid saved alignment fall back to fresh
+     * alignment automatically (per-slot, not all-or-nothing).
      */
-    private static boolean reuseSavedAlignmentForTesting() {
-        return Boolean.getBoolean(REUSE_ALIGNMENT_PROP);
+    private static boolean resolveReuseForBatch(java.util.concurrent.atomic.AtomicReference<Boolean> decision) {
+        if (!QPPreferenceDialog.getMultiSlideReuseAlignmentProperty()) {
+            return false;
+        }
+        Boolean cached = decision.get();
+        if (cached != null) {
+            return cached;
+        }
+        boolean confirmed = Dialogs.showConfirmDialog(
+                "Reuse saved alignment (TESTING ONLY)",
+                "TESTING ONLY: reuse each slot's saved per-slide alignment instead of re-aligning?\n\n"
+                        + "Choose Yes ONLY if the holder has NOT been moved since the alignments were "
+                        + "saved -- a remount invalidates them. Slots with no saved alignment will still "
+                        + "align fresh.\n\n"
+                        + "Yes = reuse saved alignment (skip alignment/refinement).\n"
+                        + "No = align fresh (normal, safe).");
+        decision.set(confirmed);
+        logger.warn(
+                "MS workflow: TEST-ONLY alignment reuse {} for this batch (holder assumed {}).",
+                confirmed ? "ENABLED" : "declined",
+                confirmed ? "untouched -- UNSAFE for real runs" : "possibly moved");
+        return confirmed;
     }
 
     /** Entry point invoked from the menu. */
@@ -123,14 +142,6 @@ public final class MultiSlideExistingImageWorkflow {
                     result.carrier().getId(),
                     runId,
                     result.assignments().size());
-
-            if (reuseSavedAlignmentForTesting()) {
-                logger.warn(
-                        "MS workflow: TEST-ONLY alignment reuse ENABLED (-D{}=true) -- slots with a saved "
-                                + "per-slide alignment will SKIP fresh alignment/refinement. This assumes the holder "
-                                + "has NOT been touched since the saved alignment and is UNSAFE for real runs.",
-                        REUSE_ALIGNMENT_PROP);
-            }
 
             // Persist slot metadata so partial runs are recoverable
             for (MultiSlideAssignmentDialog.SlotAssignment a : result.assignments()) {
@@ -221,6 +232,12 @@ public final class MultiSlideExistingImageWorkflow {
             finishBtn.setDisable(!allTerminal);
         };
 
+        // TEST-ONLY per-batch alignment-reuse decision, resolved once (pref on -> confirm)
+        // and cached so the driver does not re-prompt per slot. null = not yet asked.
+        // Declared before the slot rows so the per-slot Run button can reach it.
+        java.util.concurrent.atomic.AtomicReference<Boolean> reuseDecision =
+                new java.util.concurrent.atomic.AtomicReference<>(null);
+
         for (SlotState s : states) {
             int rowFinal = row++;
             Label posLabel = new Label(s.assignment.slotLabel());
@@ -253,7 +270,7 @@ public final class MultiSlideExistingImageWorkflow {
                 // result means the run short-circuited (cancel / gate / handled error) --
                 // leave the slot In progress so the operator can retry or Skip.
                 runBtn.setDisable(true);
-                runSlot(carrier, s, refreshFinish)
+                runSlot(carrier, s, refreshFinish, resolveReuseForBatch(reuseDecision))
                         .whenComplete((ok, ex) -> Platform.runLater(() -> runBtn.setDisable(false)));
             });
             doneBtn.setOnAction(e -> {
@@ -318,6 +335,7 @@ public final class MultiSlideExistingImageWorkflow {
         // Semi-automated single pass: full interactive workflow per slot, sequenced.
         runAllBtn.setOnAction(e -> {
             stopAfterCurrent.setSelected(false);
+            boolean reuse = resolveReuseForBatch(reuseDecision);
             setPanelBusy(states, driverButtons, finishBtn, true);
             logger.info("MS workflow: Run All Remaining started, runId={}", runId);
             driveSequential(
@@ -325,7 +343,7 @@ public final class MultiSlideExistingImageWorkflow {
                     states,
                     0,
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
-                    s -> fullSlot(gui, carrier, s, refreshFinish),
+                    s -> fullSlot(gui, carrier, s, refreshFinish, reuse),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
@@ -339,6 +357,7 @@ public final class MultiSlideExistingImageWorkflow {
         // acquisition. Each slot advances to Set up and stashes its captured config.
         setUpAllBtn.setOnAction(e -> {
             stopAfterCurrent.setSelected(false);
+            boolean reuse = resolveReuseForBatch(reuseDecision);
             setPanelBusy(states, driverButtons, finishBtn, true);
             logger.info("MS workflow: Set Up All Remaining started, runId={}", runId);
             driveSequential(
@@ -346,7 +365,7 @@ public final class MultiSlideExistingImageWorkflow {
                     states,
                     0,
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
-                    s -> setupSlot(gui, carrier, s, refreshFinish),
+                    s -> setupSlot(gui, carrier, s, refreshFinish, reuse),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
@@ -430,7 +449,8 @@ public final class MultiSlideExistingImageWorkflow {
      * operator can retry or Skip. The returned future always completes on the FX
      * thread and never exceptionally.
      */
-    private static CompletableFuture<Boolean> runSlot(StageInsert carrier, SlotState s, Runnable refreshFinish) {
+    private static CompletableFuture<Boolean> runSlot(
+            StageInsert carrier, SlotState s, Runnable refreshFinish, boolean reuseAlignment) {
         logger.info(
                 "MS workflow: launching single-slide workflow for slot {} ({})",
                 s.assignment.position(),
@@ -444,9 +464,9 @@ public final class MultiSlideExistingImageWorkflow {
         // reuse a prior alignment or the SIFT/preset path (both assume the horizontal
         // scanner orientation and mis-target a slide mounted in the holder). The slot
         // center feeds the alignment's auto-move-to-selected-tile.
-        // TEST-ONLY: reuseSavedAlignmentForTesting() flips this to false so a saved
-        // per-slide JSON is reused (holder assumed untouched); see the method's Javadoc.
-        boolean forceFresh = !reuseSavedAlignmentForTesting();
+        // TEST-ONLY: reuseAlignment (pref + per-batch confirm) flips this to false so a
+        // saved per-slide JSON is reused (holder assumed untouched); see resolveReuseForBatch.
+        boolean forceFresh = !reuseAlignment;
         ExistingImageWorkflowV2.startAsync(forceFresh, slotCenter)
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     boolean ok = result != null;
@@ -475,13 +495,14 @@ public final class MultiSlideExistingImageWorkflow {
      * Used by the "Run All Remaining" semi-automated driver.
      */
     private static CompletableFuture<Void> fullSlot(
-            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish) {
+            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish, boolean reuseAlignment) {
         if (!openEntry(gui, s, refreshFinish)) {
             return CompletableFuture.completedFuture(null);
         }
         // Force-fresh: a slide's position/orientation in the holder is re-derived, never
-        // taken from a prior (e.g. standard-layout) alignment. See runSlot.
-        return runSlot(carrier, s, refreshFinish).thenApply(ok -> null);
+        // taken from a prior (e.g. standard-layout) alignment, UNLESS the TEST-ONLY reuse
+        // path is active. See runSlot / resolveReuseForBatch.
+        return runSlot(carrier, s, refreshFinish, reuseAlignment).thenApply(ok -> null);
     }
 
     /**
@@ -522,7 +543,7 @@ public final class MultiSlideExistingImageWorkflow {
      * config for the acquire pass; otherwise it is left In progress for retry/Skip.
      */
     private static CompletableFuture<Void> setupSlot(
-            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish) {
+            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish, boolean reuseAlignment) {
         if (!openEntry(gui, s, refreshFinish)) {
             return CompletableFuture.completedFuture(null);
         }
@@ -532,10 +553,10 @@ public final class MultiSlideExistingImageWorkflow {
                 s.assignment.entry().getImageName());
         CompletableFuture<Void> done = new CompletableFuture<>();
         double[] slotCenter = resolveSlotCenter(carrier, s.assignment.position());
-        // TEST-ONLY: reuseSavedAlignmentForTesting() lets the setup pass reuse a saved
-        // per-slide JSON (holder assumed untouched) instead of re-aligning; slots without
-        // a valid saved alignment still fall back to fresh alignment.
-        boolean forceFresh = !reuseSavedAlignmentForTesting();
+        // TEST-ONLY: reuseAlignment (pref + per-batch confirm) lets the setup pass reuse a
+        // saved per-slide JSON (holder assumed untouched) instead of re-aligning; slots
+        // without a valid saved alignment still fall back to fresh alignment.
+        boolean forceFresh = !reuseAlignment;
         ExistingImageWorkflowV2.startSetupAsync(slotCenter, forceFresh)
                 .whenComplete((setup, ex) -> Platform.runLater(() -> {
                     if (setup != null) {

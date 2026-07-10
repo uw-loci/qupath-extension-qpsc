@@ -105,6 +105,12 @@ public class QPPreferenceDialog {
     private static final BooleanProperty saveRawTilesProperty =
             PathPrefs.createPersistentPreference("saveRawTilesProperty", false);
 
+    // TEST-ONLY: when true, the multi-slide batch reuses each slot's saved per-slide
+    // alignment instead of re-deriving it. UNSAFE for real runs (assumes the holder is
+    // untouched since setup). Default false; a per-batch confirmation dialog still fires.
+    private static final BooleanProperty multiSlideReuseAlignmentProperty =
+            PathPrefs.createPersistentPreference("multiSlideReuseAlignmentProperty", false);
+
     private static final StringProperty tileHandlingMethodProperty =
             PathPrefs.createPersistentPreference("tileHandlingProperty", "None");
     private static final DoubleProperty tileOverlapPercentProperty =
@@ -389,6 +395,16 @@ public class QPPreferenceDialog {
                 .description("Save unprocessed (pre-background-correction) tile images.\n"
                         + "Useful for troubleshooting background subtraction.\n"
                         + "WARNING: Doubles file I/O time during acquisition.")
+                .build());
+        items.add(new PropertyItemBuilder<>(multiSlideReuseAlignmentProperty, Boolean.class)
+                .name("Reuse saved alignment (TESTING ONLY)")
+                .category(CATEGORY)
+                .description("TESTING ONLY -- assumes the holder has NOT been touched.\n"
+                        + "When on, the multi-slide batch reuses each slot's saved per-slide\n"
+                        + "alignment instead of re-aligning (slots with no saved alignment still\n"
+                        + "align fresh). A confirmation dialog fires at the start of each batch.\n"
+                        + "WARNING: any remount invalidates the reused alignment -- leave OFF for\n"
+                        + "real acquisition.")
                 .build());
         items.add(new PropertyItemBuilder<>(tileOverlapPercentProperty, Double.class)
                 .name("Tile Overlap Percent")
@@ -937,6 +953,17 @@ public class QPPreferenceDialog {
 
     public static boolean getSaveRawTilesProperty() {
         return saveRawTilesProperty.get();
+    }
+
+    /**
+     * TEST-ONLY: whether the multi-slide batch should reuse each slot's saved per-slide
+     * alignment instead of re-deriving it. Default false. UNSAFE for real acquisition --
+     * assumes every slide is still physically mounted exactly as when its alignment was
+     * captured; any remount invalidates the reused transform. A per-batch confirmation
+     * dialog gates it in {@code MultiSlideExistingImageWorkflow}.
+     */
+    public static boolean getMultiSlideReuseAlignmentProperty() {
+        return multiSlideReuseAlignmentProperty.get();
     }
 
     public static Double getTileOverlapPercentProperty() {
