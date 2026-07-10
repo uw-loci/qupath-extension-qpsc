@@ -115,9 +115,15 @@ This workflow already drives 3-point refinement implicitly: after you select a r
 
 For each tile-confirm step:
 
-1. The stage is automatically moved to the predicted position (or you drive it manually if no estimate exists yet). **Multi-slide batch mode:** When running alignment as part of a multi-slide batch (e.g., on a 4-slide carrier), the stage estimate is seeded from the holder's per-slot center calibration, so selecting a reference tile auto-moves the stage near the tissue instead of leaving you to drive from scratch.
+1. The stage is automatically moved to the predicted position (or you drive it manually if no estimate exists yet).
 2. Either click **Auto-Align (SIFT)** to refine, or use the joystick to position manually.
 3. Click **Current Position is Accurate** to commit the measurement; click **Cancel acquisition** to abort.
+
+**Multi-slide batch mode:** When running alignment as part of a multi-slide batch (e.g., on a 4-slide carrier):
+- If you selected **Single-tile refinement**, the workflow skips the full 3-point manual landmark entirely. Instead, the holder's per-slot center calibration seeds the starting transform, and the single-tile refinement step (above) refines that estimate. Selecting your reference tile auto-moves the stage near the tissue center, then SIFT or manual adjustment completes the alignment.
+- If you explicitly selected **Full manual**, the workflow runs the complete 3-point manual landmark (this step plus two additional confirmation tiles), as on single-slide acquisitions.
+
+The slot-center seed significantly speeds up multi-slide runs by eliminating the need to manually position the stage at the start of each alignment.
 
 **Auto-Align (SIFT)**:
 - Extracts a region from the WSI around the selected tile (with the configured search margin, default 160um).
