@@ -330,7 +330,7 @@ public class ExistingImageWorkflowV2 {
                             List<PathObject> selectedAnnotations =
                                     getAnnotationsForClasses(annotationResult.selectedClasses);
                             return ExistingImageAcquisitionController.showDialog(
-                                    defaultSampleName, selectedAnnotations);
+                                    defaultSampleName, selectedAnnotations, forceFreshAlignment);
                         })
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
@@ -347,7 +347,7 @@ public class ExistingImageWorkflowV2 {
                 List<PathObject> emptyAnnotations = new ArrayList<>();
 
                 CompletableFuture<WorkflowState> chain = ExistingImageAcquisitionController.showDialog(
-                                defaultSampleName, emptyAnnotations)
+                                defaultSampleName, emptyAnnotations, forceFreshAlignment)
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
                         .thenCompose(this::routeSubWorkflow)

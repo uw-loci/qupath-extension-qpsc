@@ -175,12 +175,23 @@ public class ExistingImageAcquisitionController {
      */
     public static CompletableFuture<ExistingImageAcquisitionConfig> showDialog(
             String defaultSampleName, List<PathObject> annotations) {
+        return showDialog(defaultSampleName, annotations, false);
+    }
+
+    /**
+     * @param forceFreshAlignment when true (multi-slide batch), a saved slide alignment is
+     *     ignored (it was built for a different stage insert) and the refinement recommendation
+     *     defaults to single-tile re-alignment instead of "proceed without refinement"
+     */
+    public static CompletableFuture<ExistingImageAcquisitionConfig> showDialog(
+            String defaultSampleName, List<PathObject> annotations, boolean forceFreshAlignment) {
 
         CompletableFuture<ExistingImageAcquisitionConfig> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
             try {
-                ConsolidatedDialogBuilder builder = new ConsolidatedDialogBuilder(defaultSampleName, annotations);
+                ConsolidatedDialogBuilder builder =
+                        new ConsolidatedDialogBuilder(defaultSampleName, annotations, forceFreshAlignment);
                 Optional<ExistingImageAcquisitionConfig> result = builder.buildAndShow();
 
                 if (result.isPresent()) {
@@ -217,6 +228,10 @@ public class ExistingImageAcquisitionController {
         private List<AffineTransformManager.TransformPreset> availableTransforms;
         private AffineTransformManager transformManager;
         private boolean hasSlideAlignment; // True if _alignment.json exists for current image
+        // Multi-slide batch: a saved alignment (if any) was built for a DIFFERENT stage insert
+        // (e.g. a single-slide layout) and must not be trusted. Suppresses hasSlideAlignment and
+        // makes the refinement recommendation default to re-aligning rather than "proceed without".
+        private final boolean forceFreshAlignment;
         private boolean hasMacroImage; // True if a macro image is reachable from this entry
 
         // UI Components - Banner
@@ -290,7 +305,8 @@ public class ExistingImageAcquisitionController {
         private Dialog<ExistingImageAcquisitionConfig> dialog;
         private Button startButton;
 
-        ConsolidatedDialogBuilder(String defaultSampleName, List<PathObject> annotations) {
+        ConsolidatedDialogBuilder(String defaultSampleName, List<PathObject> annotations, boolean forceFreshAlignment) {
+            this.forceFreshAlignment = forceFreshAlignment;
             this.defaultSampleName = defaultSampleName;
             this.annotations = annotations != null ? annotations : new ArrayList<>();
             this.annotationCount = this.annotations.size();
@@ -320,9 +336,14 @@ public class ExistingImageAcquisitionController {
             this.availableTransforms = transformManager.getTransformsForMicroscope(microscopeName);
             logger.info("Found {} transforms for microscope '{}'", availableTransforms.size(), microscopeName);
 
-            // Check for slide-specific alignment (auto-registered from BoundingBox acquisition)
-            this.hasSlideAlignment = detectSlideSpecificAlignment();
-            logger.info("Slide-specific alignment for current image: {}", hasSlideAlignment);
+            // Check for slide-specific alignment (auto-registered from BoundingBox acquisition).
+            // In the multi-slide batch the slide's position depends on its current mount, so any
+            // saved alignment (built for a different insert) is not trustworthy -- ignore it.
+            this.hasSlideAlignment = !forceFreshAlignment && detectSlideSpecificAlignment();
+            logger.info(
+                    "Slide-specific alignment for current image: {} (forceFresh={})",
+                    hasSlideAlignment,
+                    forceFreshAlignment);
 
             // Detect whether a macro image is reachable. The scanner-preset
             // "Use existing alignment" path runs green-box detection on a macro
@@ -347,7 +368,29 @@ public class ExistingImageAcquisitionController {
             @SuppressWarnings("unchecked")
             Project<java.awt.image.BufferedImage> project = (Project<java.awt.image.BufferedImage>) gui.getProject();
             java.awt.geom.AffineTransform t = AffineTransformManager.loadSlideAlignment(project, imageName);
-            if (t != null) return true;
+            if (t != null) {
+                // Insert-mismatch guard: an alignment made on a DIFFERENT stage insert (e.g. a
+                // single-slide layout) is meaningless for the insert now in use (e.g. a quad
+                // holder). When the saved alignment's insert and the current Stage Map insert
+                // are both known and differ, do NOT treat it as a trustworthy alignment -- so
+                // the dialog recommends re-aligning instead of "proceed without refinement".
+                String savedInsert = AffineTransformManager.loadSlideAlignmentInsert(project, imageName);
+                String currentInsert = PersistentPreferences.getStageMapInsert();
+                if (savedInsert != null
+                        && !savedInsert.isEmpty()
+                        && currentInsert != null
+                        && !currentInsert.isEmpty()
+                        && !savedInsert.equals(currentInsert)) {
+                    logger.info(
+                            "Slide alignment for '{}' was made on insert '{}' but the current insert is "
+                                    + "'{}'; not trusting it (recommend re-align)",
+                            imageName,
+                            savedInsert,
+                            currentInsert);
+                    return false;
+                }
+                return true;
+            }
             // Fallback: an open entry stamped with BoundingBox stage metadata
             // (QPSC-acquired stitch) yields a slide-specific transform via
             // ImageMetadataManager.buildBoundingBoxPixelToStageTransform. Mirror
@@ -1768,6 +1811,19 @@ public class ExistingImageAcquisitionController {
         }
 
         private void updateRefinementRecommendation() {
+            // Multi-slide batch: the slide is being aligned fresh for its current mount, so a
+            // prior alignment (built for a different insert) must not be trusted -- recommend
+            // verifying the fresh alignment with a single tile (which also captures the focus Z
+            // that seeds the unattended acquire pass), not "proceed without refinement".
+            if (forceFreshAlignment) {
+                singleTileRadio.setSelected(true);
+                refinementRecommendationLabel.setText("[i] Recommendation: Single-tile refinement -- "
+                        + "this slide is aligned fresh for the holder; any saved alignment was for a "
+                        + "different insert and is not used. Single-tile verifies the alignment and "
+                        + "captures the focus depth for unattended acquisition.");
+                return;
+            }
+
             // Bounding-box images have auto-registered alignment from known
             // stage coordinates -- highest possible confidence, no refinement needed.
             if (hasSlideAlignment) {

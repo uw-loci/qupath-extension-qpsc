@@ -16,6 +16,7 @@ import java.util.*;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.lib.projects.Project;
 
 /**
@@ -860,6 +861,14 @@ public class AffineTransformManager {
             if (microscopeName != null && !microscopeName.isEmpty()) {
                 alignmentData.put("microscope", microscopeName);
             }
+            // Record the stage insert this alignment was made on (the Stage Map's current
+            // insert), so a later run can tell whether a saved alignment applies to the
+            // insert now in use -- an alignment from a single-slide layout is meaningless
+            // for a multi-slide holder and should not be trusted / recommended as "no refine".
+            String stageInsert = PersistentPreferences.getStageMapInsert();
+            if (stageInsert != null && !stageInsert.isEmpty()) {
+                alignmentData.put("stageInsert", stageInsert);
+            }
             alignmentData.put("timestamp", new Date().toString());
             alignmentData.put("transform", new double[] {
                 transform.getScaleX(),
@@ -1058,6 +1067,58 @@ public class AffineTransformManager {
         }
 
         return null;
+    }
+
+    /**
+     * Returns the stage insert id recorded on the saved slide alignment for
+     * {@code sampleName}, or null if there is no alignment or it predates the
+     * {@code stageInsert} field. Used to check whether a saved alignment applies to the
+     * insert now in use (e.g. a single-slide-layout alignment is not valid for a quad
+     * holder), so the workflow can recommend re-aligning instead of trusting it.
+     */
+    public static String loadSlideAlignmentInsert(Project<BufferedImage> project, String sampleName) {
+        if (project == null || sampleName == null) {
+            return null;
+        }
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            File alignmentDir = new File(projectDir, "alignmentFiles");
+            if (!alignmentDir.exists()) {
+                return null;
+            }
+            String activeMicroscope = null;
+            try {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                if (mgr != null) {
+                    activeMicroscope = mgr.getMicroscopeName();
+                }
+            } catch (Exception ignore) {
+            }
+            File file = null;
+            if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+                File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
+                if (scoped.exists()) {
+                    file = scoped;
+                }
+            }
+            if (file == null) {
+                File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+                if (legacy.exists()) {
+                    file = legacy;
+                }
+            }
+            if (file == null) {
+                return null;
+            }
+            String json = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
+            Map<String, Object> data = new Gson().fromJson(json, mapType);
+            Object si = data != null ? data.get("stageInsert") : null;
+            return si instanceof String ? (String) si : null;
+        } catch (Exception e) {
+            logger.debug("Could not read stageInsert for '{}': {}", sampleName, e.getMessage());
+            return null;
+        }
     }
 
     /**
