@@ -733,6 +733,21 @@ public class ExistingImageWorkflowV2 {
                 return selectClassesAfterDetection(state);
             }
 
+            // Race guard (covers every path into this method, e.g. the reuse/slide-specific
+            // path): the flip-switch to the (rotated N)(flipped XY) sibling may not have
+            // committed, so the open entry can still be the pre-flip base -- which is the
+            // annotation-free (rotated N) intermediate. Before declaring "no annotations",
+            // read the flipped sibling's persisted annotations and use them.
+            List<PathObject> siblingAnnotations = readFlippedSiblingAnnotationsIfStale(state);
+            if (siblingAnnotations != null && !siblingAnnotations.isEmpty()) {
+                state.annotations = siblingAnnotations;
+                logger.info(
+                        "Using {} annotation(s) from the flipped sibling before prompting (open entry was the "
+                                + "pre-flip base)",
+                        siblingAnnotations.size());
+                return CompletableFuture.completedFuture(state);
+            }
+
             // Genuinely no annotations - show warning dialog with options
             logger.info("No annotations found, showing warning dialog");
             return handleNoAnnotations(state, validClasses);
