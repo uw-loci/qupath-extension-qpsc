@@ -115,6 +115,19 @@ public class StageMapCanvas extends StackPane {
     private AffineTransform macroTransform;
     private int macroWidth, macroHeight;
     private boolean macroOverlayVisible = false;
+
+    // ========== Multi-slot macro preview layer (MS orientation check) ==========
+    // Renders each assigned macro over its slot rect at a chosen rotation, driven live
+    // by the Multi-Slide dialog. Independent of the single-macro overlay above.
+    private ImageView slotPreviewView;
+
+    /**
+     * One macro to preview over one slot at a rotation, for the multi-slide orientation
+     * check. {@code slotIndex} is the 0-based index into the insert's slide list;
+     * {@code rotationDeg} is 0/90/180/270 (clockwise).
+     */
+    public record SlotMacroPreview(int slotIndex, java.awt.image.BufferedImage macro, int rotationDeg) {}
+
     private static final double MACRO_OVERLAY_OPACITY = 0.6; // 40% transparency
     private boolean macroTransformFlipX = false;
     private boolean macroTransformFlipY = false;
@@ -268,6 +281,13 @@ public class StageMapCanvas extends StackPane {
         macroOverlayView.setVisible(false);
         macroOverlayView.setMouseTransparent(true);
 
+        // Multi-slot macro preview layer (above the single macro overlay; below shapes).
+        slotPreviewView = new ImageView();
+        slotPreviewView.setOpacity(0.9);
+        slotPreviewView.setPreserveRatio(false);
+        slotPreviewView.setVisible(false);
+        slotPreviewView.setMouseTransparent(true);
+
         // Add all shapes to overlay (acquisition first, then macro, then shapes).
         // Bounding-box preview sits above the macro image so it overlays the WSI macro,
         // but below crosshair/FOV/target so the position indicators remain visible on top.
@@ -276,6 +296,7 @@ public class StageMapCanvas extends StackPane {
                 .addAll(
                         acquisitionOverlayView, // Behind everything
                         macroOverlayView, // Behind shapes but above acquisitions
+                        slotPreviewView, // Multi-slot orientation preview, above single macro
                         boundingBoxPreviewRect, // Above macro, below indicators
                         searchRangePreviewRect, // SIFT search range, below indicators
                         insertBorderRect,
@@ -1415,6 +1436,107 @@ public class StageMapCanvas extends StackPane {
         acquisitionOverlayView.setFitWidth(screenW);
         acquisitionOverlayView.setFitHeight(screenH);
         acquisitionOverlayView.setVisible(true);
+    }
+
+    // ========== Multi-slot macro preview (MS orientation check) ==========
+
+    /**
+     * Renders each supplied macro over its slot at the given rotation, for the multi-slide
+     * orientation check. Each macro is scaled to fill its slot rectangle and rotated
+     * clockwise by 0/90/180/270 degrees about the slot centre (a 90/270 rotation swaps the
+     * fit dimensions so the rotated image still fills the slot). Positions come from the
+     * current insert's slot geometry, NOT from any alignment transform -- this is a visual
+     * "does this macro, rotated this way, match how I mounted the slide" check, done before
+     * any alignment exists. Pass an empty/null list (or call {@link #clearSlotMacroPreviews})
+     * to hide it.
+     */
+    public void setSlotMacroPreviews(java.util.List<SlotMacroPreview> previews) {
+        if (!renderingEnabled || currentInsert == null || previews == null || previews.isEmpty()) {
+            clearSlotMacroPreviews();
+            return;
+        }
+        java.util.List<StageInsert.SlidePosition> slides = currentInsert.getSlides();
+        if (slides == null || slides.isEmpty()) {
+            clearSlotMacroPreviews();
+            return;
+        }
+
+        // Union screen bbox of the slots being previewed.
+        double minX = Double.MAX_VALUE, minY = Double.MAX_VALUE, maxX = -Double.MAX_VALUE, maxY = -Double.MAX_VALUE;
+        boolean any = false;
+        for (SlotMacroPreview p : previews) {
+            if (p == null || p.macro() == null || p.slotIndex() < 0 || p.slotIndex() >= slides.size()) continue;
+            StageInsert.SlidePosition slot = slides.get(p.slotIndex());
+            double sx = offsetX + slot.getXOffsetUm() * scale;
+            double sy = offsetY + slot.getYOffsetUm() * scale;
+            double sw = slot.getWidthUm() * scale;
+            double sh = slot.getHeightUm() * scale;
+            minX = Math.min(minX, sx);
+            minY = Math.min(minY, sy);
+            maxX = Math.max(maxX, sx + sw);
+            maxY = Math.max(maxY, sy + sh);
+            any = true;
+        }
+        if (!any) {
+            clearSlotMacroPreviews();
+            return;
+        }
+
+        int compW = Math.min((int) Math.ceil(maxX - minX), 4096);
+        int compH = Math.min((int) Math.ceil(maxY - minY), 4096);
+        if (compW <= 0 || compH <= 0) {
+            clearSlotMacroPreviews();
+            return;
+        }
+
+        java.awt.image.BufferedImage composite =
+                new java.awt.image.BufferedImage(compW, compH, java.awt.image.BufferedImage.TYPE_INT_ARGB);
+        java.awt.Graphics2D g = composite.createGraphics();
+        g.setRenderingHint(
+                java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+        for (SlotMacroPreview p : previews) {
+            if (p == null || p.macro() == null || p.slotIndex() < 0 || p.slotIndex() >= slides.size()) continue;
+            StageInsert.SlidePosition slot = slides.get(p.slotIndex());
+            double sw = slot.getWidthUm() * scale;
+            double sh = slot.getHeightUm() * scale;
+            // Slot centre relative to the composite origin.
+            double cx = offsetX + slot.getXOffsetUm() * scale + sw / 2.0 - minX;
+            double cy = offsetY + slot.getYOffsetUm() * scale + sh / 2.0 - minY;
+            int rot = ((p.rotationDeg() % 360) + 360) % 360;
+            // After a 90/270 rotation the drawn image's width/height map to the slot's
+            // height/width, so swap the fit box to still fill the slot.
+            double drawW = (rot == 90 || rot == 270) ? sh : sw;
+            double drawH = (rot == 90 || rot == 270) ? sw : sh;
+            java.awt.geom.AffineTransform saved = g.getTransform();
+            g.translate(cx, cy);
+            g.rotate(Math.toRadians(rot));
+            g.drawImage(
+                    p.macro(),
+                    (int) Math.round(-drawW / 2.0),
+                    (int) Math.round(-drawH / 2.0),
+                    (int) Math.round(drawW),
+                    (int) Math.round(drawH),
+                    null);
+            g.setTransform(saved);
+        }
+        g.dispose();
+
+        javafx.scene.image.Image fxImage = SwingFXUtils.toFXImage(composite, null);
+        slotPreviewView.setImage(fxImage);
+        slotPreviewView.setLayoutX(minX);
+        slotPreviewView.setLayoutY(minY);
+        slotPreviewView.setFitWidth(maxX - minX);
+        slotPreviewView.setFitHeight(maxY - minY);
+        slotPreviewView.setVisible(true);
+    }
+
+    /** Hides the multi-slot macro preview layer. */
+    public void clearSlotMacroPreviews() {
+        if (slotPreviewView != null) {
+            slotPreviewView.setImage(null);
+            slotPreviewView.setVisible(false);
+        }
     }
 
     // ========== Macro Overlay Methods ==========

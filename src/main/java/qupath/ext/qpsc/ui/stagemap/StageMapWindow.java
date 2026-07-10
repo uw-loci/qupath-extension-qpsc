@@ -158,6 +158,65 @@ public class StageMapWindow {
     }
 
     /**
+     * Multi-slide orientation check: show the Stage Map (opening/focusing it) and render the
+     * given macros over their slots at the chosen rotations, driven by the Multi-Slide dialog.
+     * This is a passive VIEWER call -- the controls live in the MS dialog. While a preview is
+     * active, Apply Flips is forced OFF and greyed so the displayed macro is in its raw
+     * orientation (what the software will store), and restored on {@link #clearSlotMacroPreviews}.
+     */
+    public static void previewSlotMacros(java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
+        Platform.runLater(() -> {
+            if (instance == null) {
+                instance = new StageMapWindow();
+            }
+            if (!instance.stage.isShowing()) {
+                instance.stage.show();
+                instance.applyInitialFlipState();
+                instance.startPositionPolling();
+            } else {
+                instance.stage.toFront();
+            }
+            instance.applySlotPreviews(previews);
+        });
+    }
+
+    /** Clears the multi-slide macro preview and restores the Apply Flips control. */
+    public static void clearSlotMacroPreviews() {
+        Platform.runLater(() -> {
+            if (instance != null) {
+                instance.clearSlotPreviews();
+            }
+        });
+    }
+
+    /** Prior Apply Flips state saved while a slot preview forces it off; null when inactive. */
+    private Boolean savedApplyFlipsState;
+
+    private void applySlotPreviews(java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
+        // Save + force Apply Flips off (greyed) once, on entering the orientation check.
+        if (savedApplyFlipsState == null && applyFlipsCheckbox != null) {
+            savedApplyFlipsState = applyFlipsCheckbox.isSelected();
+            applyFlipsCheckbox.setSelected(false);
+            applyFlipsCheckbox.setDisable(true);
+        }
+        if (canvas != null) {
+            canvas.setSlotMacroPreviews(previews);
+        }
+    }
+
+    private void clearSlotPreviews() {
+        if (canvas != null) {
+            canvas.clearSlotMacroPreviews();
+        }
+        // Restore Apply Flips to its pre-check state.
+        if (savedApplyFlipsState != null && applyFlipsCheckbox != null) {
+            applyFlipsCheckbox.setDisable(false);
+            applyFlipsCheckbox.setSelected(savedApplyFlipsState);
+        }
+        savedApplyFlipsState = null;
+    }
+
+    /**
      * Hides the Stage Map window.
      */
     public static void hide() {
