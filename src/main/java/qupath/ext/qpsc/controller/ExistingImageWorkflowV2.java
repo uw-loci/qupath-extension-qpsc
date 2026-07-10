@@ -100,7 +100,23 @@ public class ExistingImageWorkflowV2 {
      *     re-derive this slide's position from scratch
      */
     public static CompletableFuture<WorkflowState> startAsync(boolean forceFreshAlignment) {
-        return new WorkflowOrchestrator(Mode.FULL, null, null, null, forceFreshAlignment).execute();
+        return startAsync(forceFreshAlignment, null);
+    }
+
+    /**
+     * Full single-slide run with an optional holder slot-center hint. The multi-slide
+     * batch passes the slot's absolute stage center so the fresh manual alignment can
+     * auto-move the stage near the tissue on tile selection (see
+     * {@code WorkflowState.slotCenterStageXY}).
+     *
+     * @param forceFreshAlignment when true, ignore any saved per-slide alignment
+     * @param slotCenterStageXY absolute stage (X, Y) center (um) of this slide's holder
+     *     slot, or {@code null} (no auto-move hint)
+     */
+    public static CompletableFuture<WorkflowState> startAsync(boolean forceFreshAlignment, double[] slotCenterStageXY) {
+        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.FULL, null, null, null, forceFreshAlignment);
+        o.state.slotCenterStageXY = slotCenterStageXY;
+        return o.execute();
     }
 
     /**
@@ -135,8 +151,9 @@ public class ExistingImageWorkflowV2 {
      * @return a future completing with the captured {@link SetupResult} on success, or
      *     {@code null} on cancel / short-circuit / handled error. Never exceptional.
      */
-    public static CompletableFuture<SetupResult> startSetupAsync() {
+    public static CompletableFuture<SetupResult> startSetupAsync(double[] slotCenterStageXY) {
         WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null, true);
+        o.state.slotCenterStageXY = slotCenterStageXY;
         return o.execute().thenApply(st -> {
             if (st == null || o.capturedConfig == null) {
                 return null;
@@ -2462,6 +2479,14 @@ public class ExistingImageWorkflowV2 {
          * run -- {@code AcquisitionManager} then falls back to the current stage Z.
          */
         public Double seedZ;
+
+        /**
+         * Absolute stage (X, Y) center (um) of the holder slot this slide is mounted
+         * in, or {@code null}. Set by the multi-slide batch from the insert's per-slot
+         * calibration. {@code ManualAlignmentPath} uses it to build a fullRes -> stage
+         * estimate so selecting a reference tile auto-moves the stage near the tissue.
+         */
+        public double[] slotCenterStageXY;
 
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();

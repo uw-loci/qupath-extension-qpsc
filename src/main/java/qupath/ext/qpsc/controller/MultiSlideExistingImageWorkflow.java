@@ -26,6 +26,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -228,7 +229,8 @@ public final class MultiSlideExistingImageWorkflow {
                 // result means the run short-circuited (cancel / gate / handled error) --
                 // leave the slot In progress so the operator can retry or Skip.
                 runBtn.setDisable(true);
-                runSlot(s, refreshFinish).whenComplete((ok, ex) -> Platform.runLater(() -> runBtn.setDisable(false)));
+                runSlot(carrier, s, refreshFinish)
+                        .whenComplete((ok, ex) -> Platform.runLater(() -> runBtn.setDisable(false)));
             });
             doneBtn.setOnAction(e -> {
                 s.setStatus(Status.DONE);
@@ -299,7 +301,7 @@ public final class MultiSlideExistingImageWorkflow {
                     states,
                     0,
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
-                    s -> fullSlot(gui, s, refreshFinish),
+                    s -> fullSlot(gui, carrier, s, refreshFinish),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
@@ -320,7 +322,7 @@ public final class MultiSlideExistingImageWorkflow {
                     states,
                     0,
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
-                    s -> setupSlot(gui, s, refreshFinish),
+                    s -> setupSlot(gui, carrier, s, refreshFinish),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
@@ -404,7 +406,7 @@ public final class MultiSlideExistingImageWorkflow {
      * operator can retry or Skip. The returned future always completes on the FX
      * thread and never exceptionally.
      */
-    private static CompletableFuture<Boolean> runSlot(SlotState s, Runnable refreshFinish) {
+    private static CompletableFuture<Boolean> runSlot(StageInsert carrier, SlotState s, Runnable refreshFinish) {
         logger.info(
                 "MS workflow: launching single-slide workflow for slot {} ({})",
                 s.assignment.position(),
@@ -412,11 +414,13 @@ public final class MultiSlideExistingImageWorkflow {
         s.setStatus(Status.IN_PROGRESS);
         refreshFinish.run();
         CompletableFuture<Boolean> acquired = new CompletableFuture<>();
+        double[] slotCenter = resolveSlotCenter(carrier, s.assignment.position());
         // forceFreshAlignment=true: multi-slide runs must re-derive each slide's
         // position/orientation for its current mount via fresh MANUAL alignment, never
         // reuse a prior alignment or the SIFT/preset path (both assume the horizontal
-        // scanner orientation and mis-target a slide mounted in the holder).
-        ExistingImageWorkflowV2.startAsync(true)
+        // scanner orientation and mis-target a slide mounted in the holder). The slot
+        // center feeds the alignment's auto-move-to-selected-tile.
+        ExistingImageWorkflowV2.startAsync(true, slotCenter)
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     boolean ok = result != null;
                     if (ok) {
@@ -443,13 +447,45 @@ public final class MultiSlideExistingImageWorkflow {
      * Full single-slide run (open + interactive workflow + acquire) for one slot.
      * Used by the "Run All Remaining" semi-automated driver.
      */
-    private static CompletableFuture<Void> fullSlot(QuPathGUI gui, SlotState s, Runnable refreshFinish) {
+    private static CompletableFuture<Void> fullSlot(
+            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish) {
         if (!openEntry(gui, s, refreshFinish)) {
             return CompletableFuture.completedFuture(null);
         }
         // Force-fresh: a slide's position/orientation in the holder is re-derived, never
         // taken from a prior (e.g. standard-layout) alignment. See runSlot.
-        return runSlot(s, refreshFinish).thenApply(ok -> null);
+        return runSlot(carrier, s, refreshFinish).thenApply(ok -> null);
+    }
+
+    /**
+     * Absolute stage (X, Y) center (um) of the given carrier slot, read from the
+     * insert's per-slot calibration ({@code slideK_center_x_um/_y_um}). Returns
+     * {@code null} when the holder has no per-slot centers or the config is
+     * unavailable -- the alignment then runs without an auto-move estimate.
+     */
+    private static double[] resolveSlotCenter(StageInsert carrier, int slotPosition) {
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr == null || carrier == null) {
+                return null;
+            }
+            Double cx = mgr.getDouble(
+                    "stage", "inserts", "configurations", carrier.getId(), "slide" + slotPosition + "_center_x_um");
+            Double cy = mgr.getDouble(
+                    "stage", "inserts", "configurations", carrier.getId(), "slide" + slotPosition + "_center_y_um");
+            if (cx == null || cy == null) {
+                logger.info(
+                        "No per-slot center for slot {} of insert '{}'; alignment auto-move disabled",
+                        slotPosition,
+                        carrier.getId());
+                return null;
+            }
+            logger.info("Slot {} of insert '{}' center = ({}, {}) um", slotPosition, carrier.getId(), cx, cy);
+            return new double[] {cx, cy};
+        } catch (Exception e) {
+            logger.warn("Could not resolve slot center for slot {}: {}", slotPosition, e.getMessage());
+            return null;
+        }
     }
 
     /**
@@ -458,7 +494,8 @@ public final class MultiSlideExistingImageWorkflow {
      * does NOT acquire. On success the slot advances to Set up and stashes the captured
      * config for the acquire pass; otherwise it is left In progress for retry/Skip.
      */
-    private static CompletableFuture<Void> setupSlot(QuPathGUI gui, SlotState s, Runnable refreshFinish) {
+    private static CompletableFuture<Void> setupSlot(
+            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish) {
         if (!openEntry(gui, s, refreshFinish)) {
             return CompletableFuture.completedFuture(null);
         }
@@ -467,7 +504,8 @@ public final class MultiSlideExistingImageWorkflow {
                 s.assignment.position(),
                 s.assignment.entry().getImageName());
         CompletableFuture<Void> done = new CompletableFuture<>();
-        ExistingImageWorkflowV2.startSetupAsync()
+        double[] slotCenter = resolveSlotCenter(carrier, s.assignment.position());
+        ExistingImageWorkflowV2.startSetupAsync(slotCenter)
                 .whenComplete((setup, ex) -> Platform.runLater(() -> {
                     if (setup != null) {
                         s.setup = setup;

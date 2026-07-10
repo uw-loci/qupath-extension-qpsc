@@ -1,5 +1,6 @@
 package qupath.ext.qpsc.controller.workflow;
 
+import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.Map;
@@ -332,6 +333,71 @@ public class ManualAlignmentPath {
      *
      * @return CompletableFuture containing the updated workflow state
      */
+    /**
+     * Builds a full-res-pixel -> stage estimate transform that maps the open
+     * image's CENTER pixel to the holder slot center (from {@code state
+     * .slotCenterStageXY}). Returns {@code null} when no slot center is known
+     * (non-multi-slide runs, or a holder without per-slot calibration), in which
+     * case the alignment UI keeps its no-estimate behaviour.
+     *
+     * <p>The estimate assumes the slide sits roughly centered in its slot -- good
+     * enough to auto-move the stage near the tissue; the operator then fine-tunes.
+     * Scale comes from the open image's actual full-res pixel size (not the macro
+     * pixel size), and the sign convention matches
+     * {@code TransformationFunctions.setupAffineTransformation} so it composes with
+     * how the final alignment interprets pixel -> stage.
+     */
+    private AffineTransform buildSlotCenterEstimate(
+            double fullResPixelSize, boolean stageInvertedX, boolean stageInvertedY) {
+        double[] slotCenter = state.slotCenterStageXY;
+        if (slotCenter == null || slotCenter.length < 2) {
+            return null;
+        }
+        try {
+            var server = gui.getImageData().getServer();
+            if (!(fullResPixelSize > 0)) {
+                logger.info("Slot-center estimate skipped: full-res pixel size unavailable");
+                return null;
+            }
+            double[] centerPx = {server.getWidth() / 2.0, server.getHeight() / 2.0};
+            AffineTransform scaling = qupath.ext.qpsc.utilities.TransformationFunctions.setupAffineTransformation(
+                    fullResPixelSize, stageInvertedX, stageInvertedY);
+            AffineTransform estimate = qupath.ext.qpsc.utilities.TransformationFunctions.addTranslationToScaledAffine(
+                    scaling, centerPx, slotCenter);
+            logger.info(
+                    "Built slot-center fullRes->stage estimate: slotCenter=({}, {}), imageCenterPx=({}, {}), "
+                            + "fullResPixelSize={} um/px -> auto-move enabled",
+                    slotCenter[0],
+                    slotCenter[1],
+                    centerPx[0],
+                    centerPx[1],
+                    fullResPixelSize);
+            return estimate;
+        } catch (Exception e) {
+            logger.warn("Could not build slot-center estimate: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Full-res pixel size (um/px) of the open image, for the alignment scaling
+     * transform. Falls back to {@code state.pixelSize} only if the server has no
+     * calibration (should not happen for a real .svs).
+     */
+    private double resolveFullResPixelSize() {
+        try {
+            double px = gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+            if (px > 0) {
+                return px;
+            }
+        } catch (Exception e) {
+            logger.warn("Could not read full-res pixel size: {}", e.getMessage());
+        }
+        logger.warn(
+                "Full-res pixel size unavailable; falling back to state.pixelSize ({}) for alignment", state.pixelSize);
+        return state.pixelSize;
+    }
+
     private CompletableFuture<WorkflowState> buildTilesAndShowAlignmentUI() {
         // Use the same tile creation as acquisition - delegates to TilingUtilities
         // which reads stageInvertedX/Y from global preferences for consistent tile positioning
@@ -352,9 +418,22 @@ public class ManualAlignmentPath {
         boolean stageInvertedX = stagePolarity.invertX;
         boolean stageInvertedY = stagePolarity.invertY;
 
+        // The manual alignment maps FULL-RES image pixels -> stage, so the scaling
+        // transform must use the open image's full-res pixel size -- NOT the macro
+        // pixel size (state.pixelSize, ~81 um/px). Passing the macro size produced a
+        // transform ~300x too large: the reference point looked fine, but the
+        // secondary refinement tile move (transformQuPathFullResToStage) was flung
+        // hundreds of mm off, tripping "outside stage bounds".
+        double fullResPixelSize = resolveFullResPixelSize();
+
+        // Build a fullRes->stage estimate from the holder slot center (multi-slide
+        // batch only). With it, selecting a reference tile auto-moves the stage
+        // near the tissue instead of leaving the operator to drive from scratch.
+        AffineTransform slotEstimate = buildSlotCenterEstimate(fullResPixelSize, stageInvertedX, stageInvertedY);
+
         // Show manual alignment UI
         return AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                        state.pixelSize, stageInvertedX, stageInvertedY)
+                        fullResPixelSize, stageInvertedX, stageInvertedY, slotEstimate)
                 .thenApply(transform -> {
                     if (transform == null) {
                         throw new CancellationException("Manual alignment cancelled by user");
