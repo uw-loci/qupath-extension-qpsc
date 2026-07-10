@@ -688,8 +688,12 @@ public class MicroscopeConfigManager {
                 current = map2.get(key);
                 continue;
             }
-            // Not found -- log full context
-            logger.warn(res.getString("configManager.keyNotFound"), key, i, current, Arrays.toString(keys));
+            // Not found. This is a normal outcome for OPTIONAL lookups (e.g. an
+            // acquisition_profiles section a PPM config simply doesn't have), so it is a
+            // debug breadcrumb -- not a WARN, and without dumping the entire config map.
+            // Callers that require a key handle the null return (and surface their own error);
+            // this generic getter must not spam a full-config warning on every optional miss.
+            logger.debug("Config key '{}' not found at step {} (path: {})", key, i, Arrays.toString(keys));
             return null;
         }
         logger.debug(res.getString("configManager.lookupSuccess"), Arrays.toString(keys), current);
