@@ -188,7 +188,11 @@ public final class MultiSlideAssignmentDialog {
         boolean[] suppressPreview = {false};
         ChoiceBox<Integer> rotateAllBox = new ChoiceBox<>();
         rotateAllBox.getItems().addAll(0, 90, 180, 270);
-        rotateAllBox.getSelectionModel().select(Integer.valueOf(0));
+        // Restore the last-used rotation (slides are usually mounted the same way).
+        int savedRotateAll = PersistentPreferences.getMultiSlideRotateAll();
+        rotateAllBox
+                .getSelectionModel()
+                .select(Integer.valueOf(rotateAllBox.getItems().contains(savedRotateAll) ? savedRotateAll : 0));
         rotateAllBox.setConverter(new StringConverter<>() {
             @Override
             public String toString(Integer deg) {
@@ -264,6 +268,7 @@ public final class MultiSlideAssignmentDialog {
         // Rotate all: set every slot's rotation at once (coalesced into one preview refresh).
         rotateAllBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> {
             if (nv == null) return;
+            PersistentPreferences.setMultiSlideRotateAll(nv);
             suppressPreview[0] = true;
             for (SlotRow r : slotRows) {
                 r.rotationBox.getSelectionModel().select(nv);

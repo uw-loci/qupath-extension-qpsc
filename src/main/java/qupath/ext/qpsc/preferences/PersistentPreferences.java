@@ -64,6 +64,23 @@ public class PersistentPreferences {
     public static void setStageMapInsert(String insertId) {
         stageMapInsertProperty.set(insertId == null ? "" : insertId);
     }
+
+    /** Last "Rotate all slides" value (deg) in the Multi-Slide dialog -- slides are usually
+     * mounted the same way, so it is restored across sessions. */
+    private static final StringProperty multiSlideRotateAllProperty =
+            PathPrefs.createPersistentPreference("multiSlideRotateAll", "0");
+
+    public static int getMultiSlideRotateAll() {
+        try {
+            return Integer.parseInt(multiSlideRotateAllProperty.get());
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    public static void setMultiSlideRotateAll(int deg) {
+        multiSlideRotateAllProperty.set(Integer.toString(deg));
+    }
     // ================== BOUNDING BOX WORKFLOW ==================
     private static final StringProperty boundingBoxString =
             PathPrefs.createPersistentPreference("BoundingBox", "27000,7000,20000,10000");
