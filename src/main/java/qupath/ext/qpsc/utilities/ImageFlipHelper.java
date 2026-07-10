@@ -535,13 +535,38 @@ public final class ImageFlipHelper {
             desiredSuffix = "(flipped Y)";
         }
 
+        List<ProjectImageEntry<BufferedImage>> entries = project.getImageList();
+
+        // Exact-name pass FIRST: the flipped sibling of THIS entry is
+        // "<baseEntry name> <suffix>". This is essential for a rotated entry (e.g.
+        // "X (rotated 270)"): its base_image is the ORIGINAL ("X"), so the loose
+        // base_image match below would return the ORIGINAL's "X (flipped XY)" sibling and
+        // silently drop the rotation. The exact-name match returns
+        // "X (rotated 270) (flipped XY)" instead, preserving the rotation.
+        String exact = baseEntry.getImageName() + " " + desiredSuffix;
+        String exactStripped =
+                qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName()) + " " + desiredSuffix;
+        for (ProjectImageEntry<BufferedImage> e : entries) {
+            if (e == baseEntry) continue;
+            String name = e.getImageName();
+            if (name != null && (name.equals(exact) || name.equals(exactStripped))) {
+                return e;
+            }
+        }
+
+        // A rotated entry must NOT fall through to the loose base_image match -- that would
+        // return the original's flipped sibling (wrong orientation). Return null so the
+        // caller creates the rotated entry's OWN flipped sibling.
+        if (isRotatedSiblingName(baseEntry.getImageName())) {
+            return null;
+        }
+
         String baseImage = ImageMetadataManager.getBaseImage(baseEntry);
         if (baseImage == null || baseImage.isBlank()) {
             baseImage = qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName());
         }
         String baseImageFinal = baseImage;
 
-        List<ProjectImageEntry<BufferedImage>> entries = project.getImageList();
         for (ProjectImageEntry<BufferedImage> e : entries) {
             if (e == baseEntry) continue;
             String name = e.getImageName();
@@ -557,6 +582,11 @@ public final class ImageFlipHelper {
             }
         }
         return null;
+    }
+
+    /** True if {@code name} contains a "(rotated N)" suffix from createRotatedDuplicate. */
+    private static boolean isRotatedSiblingName(String name) {
+        return name != null && name.contains("(rotated ");
     }
 
     /**
