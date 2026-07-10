@@ -350,17 +350,9 @@ public class TilingUtilities {
      * the acquisition image is a chain (rotated + flipped) and getWrappedServer() is not
      * accessible from this package.
      */
-    /**
-     * Rotation (degrees, one of 0/90/180/270) of the current acquisition image, parsed from
-     * the {@code (rotated N)} token in the open entry's name. Used by the stitcher to
-     * un-rotate the tile-position file so horizontal camera tiles assemble into the rotated
-     * image frame (rather than the stage frame). The tile GRID and stage MOVES keep the full
-     * rotation via the alignment transform; only the stitch assembly is un-rotated. Returns 0
-     * when the acquisition image is not rotated.
-     */
-    public static int acquisitionRotationDegrees(QuPathGUI gui) {
+    private static boolean isAcquisitionImageRotated90or270(QuPathGUI gui) {
         if (gui == null || gui.getImageData() == null) {
-            return 0;
+            return false;
         }
         String name = null;
         try {
@@ -377,19 +369,7 @@ public class TilingUtilities {
         if (name == null) {
             name = gui.getImageData().getServer().getMetadata().getName();
         }
-        if (name == null) {
-            return 0;
-        }
-        java.util.regex.Matcher m =
-                java.util.regex.Pattern.compile("\\(rotated\\s+(\\d+)\\)").matcher(name);
-        if (m.find()) {
-            try {
-                return Integer.parseInt(m.group(1)) % 360;
-            } catch (NumberFormatException ignore) {
-                // fall through
-            }
-        }
-        return 0;
+        return name != null && (name.contains("(rotated 90)") || name.contains("(rotated 270)"));
     }
 
     /**
@@ -440,13 +420,23 @@ public class TilingUtilities {
 
         logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
 
-        // NOTE: the camera FOV is used as-is (landscape, sensor-native). A rotated acquisition
-        // image does NOT swap the FOV here: the tile GRID is laid out in the (rotated) image
-        // frame where a camera frame is landscape, so the tile rectangles must stay landscape.
-        // The old FOV-swap (reverted) made the grid portrait to compensate for stitching in the
-        // STAGE frame; instead the stitcher now un-rotates the tile positions
-        // (TilingUtilities.acquisitionRotationDegrees + TileProcessingUtilities), so the grid
-        // needs no adjustment. See claude-reports/2026-07-10 stitch-orientation notes.
+        // A 90/270-rotated acquisition image (the multi-slide rotated sibling) swaps the image
+        // width/height relative to the camera sensor. getCameraFOV reports the FOV in the
+        // sensor's native (unrotated) orientation, so swap it to match the rotated tile grid --
+        // otherwise each axis' grid step is sized against the wrong camera dimension and the
+        // tiles gap between rows (observed: landscape frames with a gap every row because the
+        // vertical step used the frame WIDTH). 180-degree rotation does not swap dims.
+        if (isAcquisitionImageRotated90or270(gui)) {
+            double rotatedFrameWidth = frameHeightMicrons;
+            double rotatedFrameHeight = frameWidthMicrons;
+            frameWidthMicrons = rotatedFrameWidth;
+            frameHeightMicrons = rotatedFrameHeight;
+            logger.info(
+                    "Acquisition image is rotated 90/270 -- swapped camera FOV to {} x {} microns to match "
+                            + "the rotated tile grid (prevents inter-row gaps)",
+                    frameWidthMicrons,
+                    frameHeightMicrons);
+        }
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
         if (frameWidthMicrons < 100
@@ -560,13 +550,23 @@ public class TilingUtilities {
 
         logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
 
-        // NOTE: the camera FOV is used as-is (landscape, sensor-native). A rotated acquisition
-        // image does NOT swap the FOV here: the tile GRID is laid out in the (rotated) image
-        // frame where a camera frame is landscape, so the tile rectangles must stay landscape.
-        // The old FOV-swap (reverted) made the grid portrait to compensate for stitching in the
-        // STAGE frame; instead the stitcher now un-rotates the tile positions
-        // (TilingUtilities.acquisitionRotationDegrees + TileProcessingUtilities), so the grid
-        // needs no adjustment. See claude-reports/2026-07-10 stitch-orientation notes.
+        // A 90/270-rotated acquisition image (the multi-slide rotated sibling) swaps the image
+        // width/height relative to the camera sensor. getCameraFOV reports the FOV in the
+        // sensor's native (unrotated) orientation, so swap it to match the rotated tile grid --
+        // otherwise each axis' grid step is sized against the wrong camera dimension and the
+        // tiles gap between rows (observed: landscape frames with a gap every row because the
+        // vertical step used the frame WIDTH). 180-degree rotation does not swap dims.
+        if (isAcquisitionImageRotated90or270(gui)) {
+            double rotatedFrameWidth = frameHeightMicrons;
+            double rotatedFrameHeight = frameWidthMicrons;
+            frameWidthMicrons = rotatedFrameWidth;
+            frameHeightMicrons = rotatedFrameHeight;
+            logger.info(
+                    "Acquisition image is rotated 90/270 -- swapped camera FOV to {} x {} microns to match "
+                            + "the rotated tile grid (prevents inter-row gaps)",
+                    frameWidthMicrons,
+                    frameHeightMicrons);
+        }
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
         if (frameWidthMicrons < 100
