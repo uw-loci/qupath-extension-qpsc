@@ -115,7 +115,7 @@ This workflow already drives 3-point refinement implicitly: after you select a r
 
 For each tile-confirm step:
 
-1. The stage is automatically moved to the predicted position (or you drive it manually if no estimate exists yet).
+1. The stage is automatically moved to the predicted position (or you drive it manually if no estimate exists yet). **Multi-slide batch mode:** When running alignment as part of a multi-slide batch (e.g., on a 4-slide carrier), the stage estimate is seeded from the holder's per-slot center calibration, so selecting a reference tile auto-moves the stage near the tissue instead of leaving you to drive from scratch.
 2. Either click **Auto-Align (SIFT)** to refine, or use the joystick to position manually.
 3. Click **Current Position is Accurate** to commit the measurement; click **Cancel acquisition** to abort.
 
