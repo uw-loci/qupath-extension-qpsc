@@ -49,6 +49,16 @@ import qupath.lib.roi.interfaces.ROI;
 public class ExistingAlignmentPath {
     private static final Logger logger = LoggerFactory.getLogger(ExistingAlignmentPath.class);
 
+    /**
+     * Rotation (degrees) applied when rebuilding macro->stage for a multi-slide holder.
+     * Each slide in the quad_v (4-vertical) holder is mounted rotated 270 deg relative to
+     * the single-slide preset's calibration orientation: the landscape Ocus40 macro
+     * (width ~= the slide's 75mm length) maps to the portrait slide on the stage. Applied
+     * only on the multi-slide path (WorkflowState.slotCenterStageXY set); single-slide
+     * alignment keeps the un-rotated preset.
+     */
+    private static final double MULTI_SLIDE_HOLDER_ROTATION_DEG = 270.0;
+
     private final QuPathGUI gui;
     private final WorkflowState state;
 
@@ -384,35 +394,62 @@ public class ExistingAlignmentPath {
         AffineTransform fullResToStage = new AffineTransform(macroToStage);
         fullResToStage.concatenate(fullResToMacro);
 
-        // Multi-slide: DIAGNOSTIC ONLY (re-anchor reverted, commit 813ba8a3 crashed).
-        // The prior geometric re-anchor (shift so the macro center maps to the captured
-        // slot center) produced an out-of-bounds transform AND the wrong offset -- the
-        // captured slot centers and this preset's macro->stage output do NOT share a
-        // sign convention (classic flip-vs-invert frame mismatch), so subtracting one
-        // from the other is not the per-slot shift. We do NOT mutate the transform here
-        // anymore; the operator-selected single-tile refinement pulls onto the correct
-        // slide. These log lines capture the quantities needed to derive the per-slot
-        // rule empirically across >1 slot (see project_multislide_batch_design):
-        //   preset-mapped macro center vs captured slot center, per slot.
+        // Multi-slide: rebuild macro->stage from slide geometry instead of using the
+        // single-slide preset's translation.
+        //
+        // The preset's macro->stage is PURE SCALE (no rotation): stage = S*(macro) + b,
+        // calibrated with one slide in the single-slide holder. Two things are wrong for
+        // a slide in the quad_v (4-vertical) holder:
+        //   1. Position: slide K sits at its own captured slot center, not the preset's
+        //      calibration spot (off by tens of mm -> lands on a different slide).
+        //   2. Orientation: each slide is mounted rotated 270 deg (the landscape macro,
+        //      938x312 ~= the slide's 75mm LENGTH, maps to the PORTRAIT slide on stage),
+        //      which the pure-scale preset does not encode.
+        // A pure-translation re-anchor (commit 813ba8a3) fixed only (1) and put the tissue
+        // ~25mm off, out of bounds. Rebuild the whole macro->stage geometrically:
+        //   stage = slotCenter + R270 * S * (macroPx - macroCenter)
+        // keeping the preset's SCALE magnitude+sign S (same optics/flip), adding the 270
+        // rotation, and anchoring the macro (whole-slide) center to the captured slot
+        // center. Verified numerically against on-scope ground truth: the green box and a
+        // selected tile land INSIDE slide K's green box, within single-tile-refinement
+        // range; single-tile refinement then corrects the few-mm residual.
         if (state.slotCenterStageXY != null && state.slotCenterStageXY.length >= 2) {
             BufferedImage macroImg = context.macroContext.displayImage;
             if (macroImg != null) {
-                Point2D macroCenter = new Point2D.Double(macroImg.getWidth() / 2.0, macroImg.getHeight() / 2.0);
-                Point2D presetMacroCenterStage = new Point2D.Double();
-                macroToStage.transform(macroCenter, presetMacroCenterStage);
+                double macroCx = macroImg.getWidth() / 2.0;
+                double macroCy = macroImg.getHeight() / 2.0;
+                double scaleX = macroToStage.getScaleX(); // preset scale magnitude + sign (~ +macroPixelSize)
+                double scaleY = macroToStage.getScaleY();
+
+                // AffineTransform applies calls in reverse: point p ->
+                //   translate(-macroCenter) -> scale(S) -> rotate(270) -> translate(slotCenter)
+                // == slotCenter + R270 * S * (p - macroCenter).
+                AffineTransform geoMacroToStage = new AffineTransform();
+                geoMacroToStage.translate(state.slotCenterStageXY[0], state.slotCenterStageXY[1]);
+                geoMacroToStage.rotate(Math.toRadians(MULTI_SLIDE_HOLDER_ROTATION_DEG)); // R270: (x,y)->(y,-x)
+                geoMacroToStage.scale(scaleX, scaleY);
+                geoMacroToStage.translate(-macroCx, -macroCy);
+
+                macroToStage = geoMacroToStage;
+                fullResToStage = new AffineTransform(macroToStage);
+                fullResToStage.concatenate(fullResToMacro);
+
+                Point2D macroCenterStage = new Point2D.Double();
+                macroToStage.transform(new Point2D.Double(macroCx, macroCy), macroCenterStage);
                 logger.info(
-                        "Multi-slide DIAGNOSTIC (no transform change): macro center ({}, {}) preset-> ({}, {}); "
-                                + "captured slot center ({}, {}); naive-shift-would-be ({}, {}) [NOT applied]",
-                        macroCenter.getX(),
-                        macroCenter.getY(),
-                        presetMacroCenterStage.getX(),
-                        presetMacroCenterStage.getY(),
+                        "Multi-slide geometric macro->stage: macroCenter ({}, {}) -> slotCenter ({}, {}); "
+                                + "scale ({}, {}), rotation {} deg [check: macroCenter maps to ({}, {})]",
+                        macroCx,
+                        macroCy,
                         state.slotCenterStageXY[0],
                         state.slotCenterStageXY[1],
-                        state.slotCenterStageXY[0] - presetMacroCenterStage.getX(),
-                        state.slotCenterStageXY[1] - presetMacroCenterStage.getY());
+                        scaleX,
+                        scaleY,
+                        MULTI_SLIDE_HOLDER_ROTATION_DEG,
+                        macroCenterStage.getX(),
+                        macroCenterStage.getY());
             } else {
-                logger.warn("Multi-slide DIAGNOSTIC skipped: no display macro image for center reference");
+                logger.warn("Multi-slide geometric macro->stage skipped: no display macro image for center reference");
             }
         }
 
