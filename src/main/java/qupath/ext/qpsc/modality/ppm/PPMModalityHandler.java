@@ -8,7 +8,6 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
-import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
@@ -166,48 +165,47 @@ public class PPMModalityHandler implements ModalityHandler {
     }
 
     /**
-     * Returns rotation angles with overrides, showing the PPM angle selection dialog
-     * so the user can confirm or adjust the overridden values.
-     *
-     * <p>This override gets defaults (without dialog), applies overrides,
-     * then shows the PPMAngleSelectionController dialog with the overridden
-     * values pre-filled for user confirmation.</p>
+     * Returns rotation angles for the given selection, non-interactively. The angle selection
+     * (and any plus/minus tick override) is front-loaded in the acquisition dialog's PPM panel
+     * and arrives via {@code overrides}; there is no per-image angle popup.
      */
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAnglesWithOverrides(
             String modality, String objective, String detector, Map<String, Double> overrides, String wbMode) {
 
-        if (overrides == null || overrides.isEmpty()) {
-            // No overrides -- use normal flow (which shows the dialog)
-            return getRotationAngles(modality, objective, detector, wbMode);
-        }
-
-        // Get defaults without dialog, apply overrides, then show dialog with overridden values
-        RotationManager rotationManager = new RotationManager(modality, objective, detector);
-        return rotationManager.getDefaultAnglesWithExposure(modality).thenCompose(defaultAngles -> {
-            List<AngleExposure> overriddenAngles = applyAngleOverrides(defaultAngles, overrides);
-
-            // Extract overridden plus/minus/uncrossed angles for dialog initialization
-            double plusAngle = 7.0, minusAngle = -7.0, uncrossedAngle = 90.0;
-            for (AngleExposure ae : overriddenAngles) {
-                if (ae.ticks() > 0 && ae.ticks() < 45) plusAngle = ae.ticks();
-                else if (ae.ticks() < 0) minusAngle = ae.ticks();
-                else if (ae.ticks() >= 45) uncrossedAngle = ae.ticks();
+        // Non-interactive. The acquisition dialog's PPM panel (PPMBoundingBoxUI) provides the
+        // angle SELECTION + plus/minus tick overrides ONCE via {@code overrides}: each entry's
+        // key is an angle name ("plus"/"minus"/"zero"/"uncrossed") = selected, and its value is
+        // the tick (a plus/minus tick override, or the configured tick for zero/uncrossed). No
+        // per-image popup. Empty/absent overrides -> all configured angles.
+        return getRotationAngles(modality, objective, detector, wbMode).thenApply(allAngles -> {
+            if (overrides == null || overrides.isEmpty()) {
+                return allAngles;
             }
-
-            return PPMAngleSelectionController.showDialog(
-                            plusAngle, minusAngle, uncrossedAngle, modality, objective, detector, wbMode)
-                    .thenApply(dialogResult -> {
-                        if (dialogResult == null) {
-                            throw new RuntimeException("ANGLE_SELECTION_CANCELLED");
-                        }
-                        List<AngleExposure> finalAngles = new ArrayList<>();
-                        for (PPMAngleSelectionController.AngleExposure ae : dialogResult.angleExposures) {
-                            finalAngles.add(new AngleExposure(ae.angle, ae.exposureMs));
-                        }
-                        return finalAngles;
-                    });
+            List<AngleExposure> selected = new ArrayList<>();
+            for (AngleExposure ae : allAngles) {
+                String name = classifyAngleName(ae.ticks());
+                if (overrides.containsKey(name)) {
+                    Double overrideTick = overrides.get(name);
+                    double tick = overrideTick != null ? overrideTick : ae.ticks();
+                    selected.add(new AngleExposure(tick, ae.exposureMs()));
+                }
+            }
+            // If the selection map matched nothing (e.g. legacy override map), fall back to all.
+            return selected.isEmpty() ? allAngles : selected;
         });
+    }
+
+    /** Classifies a tick into the panel's angle-name buckets. */
+    private static String classifyAngleName(double tick) {
+        if (Math.abs(tick) < 0.001) {
+            return "zero";
+        } else if (tick < 0) {
+            return "minus";
+        } else if (tick < 45) {
+            return "plus";
+        }
+        return "uncrossed";
     }
 
     /**

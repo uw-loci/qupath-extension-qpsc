@@ -198,8 +198,8 @@ graph TB
         PPM --> RM[RotationManager]
         RM --> RS[PPMRotationStrategy]
         RS --> PP[PPMPreferences<br/>exposure defaults]
-        PPM --> BUI[PPMBoundingBoxUI<br/>angle override spinners]
-        PPM --> PASC[PPMAngleSelectionController<br/>angle/exposure dialog]
+        PPM --> BUI[PPMBoundingBoxUI<br/>angle selection + overrides]
+        PPM --> ER[PPMExposureResolver<br/>background/config/prefs]
     end
 ```
 

@@ -550,17 +550,20 @@ Drive the stage roughly close (a few hundred microns is enough) using the joysti
 
 #### Q: Images are overexposed (too bright/white)
 
-**A:** Exposure time too long:
-1. Reduce exposure time in angle selection dialog
-2. For background collection, use lower exposures
-3. Check if adaptive exposure is enabled (it should auto-adjust, but initial value might be wrong)
+**A:** Exposure time too long. PPM exposures are auto-derived from background flat-field → config file → preferences. To adjust:
+1. Run **Background Collection** with lower exposure times
+2. Or edit `imageprocessing_PPM.yml` to lower exposure values for the angles
+3. Or change PPM exposure preferences (Extensions > QP Scope > Preferences > PPM)
+4. Check if adaptive exposure is enabled (it should auto-adjust, but initial value might be wrong)
 
 #### Q: Images are underexposed (too dark)
 
-**A:** Exposure time too short or illumination problem:
-1. Increase exposure time in angle selection dialog
-2. Check microscope illumination is on at correct intensity
-3. Verify camera gain settings in Micro-Manager
+**A:** Exposure time too short or illumination problem. To fix:
+1. Run **Background Collection** with higher exposure times
+2. Or edit `imageprocessing_PPM.yml` to increase exposure values for the angles
+3. Or change PPM exposure preferences (Extensions > QP Scope > Preferences > PPM)
+4. Check microscope illumination is on at correct intensity
+5. Verify camera gain settings in Micro-Manager
 
 #### Q: Autofocus isn't working - images out of focus
 
@@ -854,13 +857,6 @@ Only the angle that was being processed when stitching failed will be stuck -- a
 3. For annotation-based acquisitions, pixel size MUST be set - check logs for warnings
 
 ### PPM-Specific Issues
-
-#### Q: PPM angle selection dialog freezes when clicking OK
-
-**A:** This was a bug that's been fixed. Make sure you have the latest version. If still happening:
-1. Update to latest qupath-extension-qpsc
-2. Check QuPath logs for "JavaFX Application Thread" errors
-3. This shouldn't happen anymore, but if it does, force-quit QuPath and report the bug
 
 #### Q: Warning says "exposure settings don't match background"
 

@@ -40,6 +40,15 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
     private final CheckBox overrideAngles;
     private final Spinner<Double> plusSpinner;
     private final Spinner<Double> minusSpinner;
+    // Which angles to acquire (front-loaded here instead of a per-image popup).
+    private final CheckBox selMinus;
+    private final CheckBox selZero;
+    private final CheckBox selPlus;
+    private final CheckBox selUncrossed;
+    private final double zeroTick;
+    private final double uncrossedTick;
+    private final double plusTick;
+    private final double minusTick;
     // "Save as MicroManager MDA..." button. Always built but hidden until the
     // parent dialog installs an MdaExportContext supplier so the button has
     // access to the current sample / region / cmdBuilder state.
@@ -55,6 +64,8 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
 
         double defaultPlus = 7.0;
         double defaultMinus = -7.0;
+        double defaultZero = 0.0;
+        double defaultUncrossed = 90.0;
 
         java.util.List<?> angles = mgr.getList("modalities", "ppm", "rotation_angles");
         if (angles != null) {
@@ -66,13 +77,36 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
                         double tick = ((Number) tickObj).doubleValue();
                         if ("positive".equals(name.toString())) defaultPlus = tick;
                         else if ("negative".equals(name.toString())) defaultMinus = tick;
+                        else if ("zero".equals(name.toString()) || "crossed".equals(name.toString()))
+                            defaultZero = tick;
+                        else if ("uncrossed".equals(name.toString()) || "parallel".equals(name.toString()))
+                            defaultUncrossed = tick;
                     }
                 }
             }
         }
+        this.zeroTick = defaultZero;
+        this.uncrossedTick = defaultUncrossed;
+        this.plusTick = defaultPlus;
+        this.minusTick = defaultMinus;
 
         Label label = new Label("PPM Polarization Angles:");
         label.setStyle("-fx-font-weight: bold;");
+
+        // Angle selection (front-loaded here so nothing pops per image / per slide).
+        Label selLabel = new Label("Angles to acquire:");
+        selMinus = new CheckBox("minus");
+        selZero = new CheckBox("zero");
+        selPlus = new CheckBox("plus");
+        selUncrossed = new CheckBox("uncrossed");
+        selMinus.setSelected(true);
+        selZero.setSelected(true);
+        selPlus.setSelected(true);
+        selUncrossed.setSelected(true);
+        HBox angleSelRow = new HBox(10, selMinus, selZero, selPlus, selUncrossed);
+        angleSelRow.setAlignment(Pos.CENTER_LEFT);
+        Label expNote = new Label("Exposures are auto-derived per angle (background flat-field -> config -> prefs).");
+        expNote.setStyle("-fx-font-style: italic;");
 
         overrideAngles = new CheckBox("Override default angles for this acquisition");
         overrideAngles.setTooltip(new Tooltip("When checked, the plus and minus angles below will be used\n"
@@ -142,7 +176,7 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         HBox mdaBar = new HBox(8, saveMdaButton);
         mdaBar.setAlignment(Pos.CENTER_LEFT);
 
-        root.getChildren().addAll(new Separator(), label, overrideAngles, grid, mdaBar);
+        root.getChildren().addAll(new Separator(), label, selLabel, angleSelRow, expNote, overrideAngles, grid, mdaBar);
     }
 
     /**
@@ -215,14 +249,29 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         return root;
     }
 
+    /**
+     * Returns the selected angles as {name -> tick}. Presence of a key = that angle is
+     * acquired; the value is the tick (a plus/minus override when "Override default angles" is
+     * on, else the configured tick). Consumed non-interactively by
+     * {@code PPMModalityHandler.getRotationAnglesWithOverrides} -- there is no per-image popup.
+     * Never null (always at least the checked angles), so PPM always drives its own selection.
+     */
     @Override
     public Map<String, Double> getAngleOverrides() {
-        if (!overrideAngles.isSelected()) {
-            return null;
-        }
+        boolean override = overrideAngles.isSelected();
         Map<String, Double> map = new HashMap<>();
-        map.put("plus", plusSpinner.getValue());
-        map.put("minus", minusSpinner.getValue());
+        if (selMinus.isSelected()) {
+            map.put("minus", override ? minusSpinner.getValue() : minusTick);
+        }
+        if (selZero.isSelected()) {
+            map.put("zero", zeroTick);
+        }
+        if (selPlus.isSelected()) {
+            map.put("plus", override ? plusSpinner.getValue() : plusTick);
+        }
+        if (selUncrossed.isSelected()) {
+            map.put("uncrossed", uncrossedTick);
+        }
         return map;
     }
 }

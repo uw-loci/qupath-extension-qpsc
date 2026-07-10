@@ -86,16 +86,11 @@ classDiagram
     }
 
     class PPMBoundingBoxUI {
+        -selMinus, selZero, selPlus, selUncrossed: CheckBox
         -overrideCheckBox: CheckBox
         -plusSpinner: Spinner
         -minusSpinner: Spinner
         +getAngleOverrides() Map~String,Double~
-    }
-
-    class PPMAngleSelectionController {
-        +showDialog(angles) List~AngleExposure~
-        -minusCheck, zeroCheck, plusCheck, uncrossedCheck
-        -minusExposure, zeroExposure, plusExposure, uncrossedExposure
     }
 
     ModalityHandler <|.. PPMModalityHandler
@@ -104,10 +99,8 @@ classDiagram
     PPMModalityHandler --> PPMPreferences
     RotationManager --> RotationStrategy
     RotationStrategy <|.. PPMRotationStrategy
-    PPMRotationStrategy --> PPMAngleSelectionController
     PPMRotationStrategy --> AngleExposure
-    PPMAngleSelectionController --> AngleExposure
-    PPMPreferences --> PPMAngleSelectionController
+    PPMPreferences --> PPMRotationStrategy
 ```
 
 ## Angle Resolution Flow
@@ -117,38 +110,38 @@ sequenceDiagram
     participant AM as AcquisitionManager
     participant ARS as AngleResolutionService
     participant PPM as PPMModalityHandler
-    participant PP as PPMPreferences
     participant RM as RotationManager
     participant RS as PPMRotationStrategy
-    participant DLG as PPMAngleSelectionController
-    participant User
+    participant ER as PPMExposureResolver
 
     AM->>ARS: resolve(modality, objective, detector)
     ARS->>PPM: prepareForAcquisition(objective, detector)
-    PPM->>PP: loadExposuresForProfile(objective, detector)
-    PP-->>PPM: exposure defaults loaded
+    PPM-->>ARS: ready
 
-    alt Has angle overrides from BoundingBoxUI
+    alt Has angle overrides from BoundingBoxUI (angle selection + optional +/- override)
         ARS->>PPM: getRotationAnglesWithOverrides(overrides)
         PPM->>RM: getConfiguredAngles()
         RM->>RS: getConfiguredAngles()
-        RS-->>PPM: all 4 angles (with defaults)
+        RS-->>PPM: all 4 angles (unconfigured)
         PPM->>PPM: applyAngleOverrides(angles, overrides)
-        PPM->>DLG: showDialog(overridden angles)
-    else No overrides
+        PPM->>ER: resolve exposure for each selected angle
+    else No overrides (all angles selected by default)
         ARS->>PPM: getRotationAngles()
         PPM->>RM: create(modality, objective, detector)
-        RM->>RS: new PPMRotationStrategy(config angles, exposures)
+        RM->>RS: new PPMRotationStrategy(config angles)
         PPM->>RS: getRotationTicksWithExposure()
-        RS->>DLG: showDialog(configured angles)
+        RS->>ER: resolve exposure for each angle
     end
 
-    DLG->>User: Show angle selection dialog
-    User-->>DLG: Select angles, adjust exposures, click OK
-    DLG->>PP: save selections to preferences
-    DLG-->>ARS: List of AngleExposure (selected only)
+    ER->>ER: 1. Check background settings
+    ER->>ER: 2. Check imageprocessing YAML config
+    ER->>ER: 3. Check PPMPreferences
+    ER-->>PPM: List of AngleExposure (with resolved exposures)
+    PPM-->>ARS: final angle list (non-interactive)
     ARS-->>AM: final angle list
 ```
+
+All angle selection and override values come upfront from the `PPMBoundingBoxUI` in the acquisition dialog. There is no per-image dialog -- angle resolution is non-interactive.
 
 ## Configuration
 
@@ -207,28 +200,30 @@ graph TB
 
 This ensures consistency: if background images were collected at specific exposures, acquisitions default to the same values.
 
-## Angle Override System
+## Angle Selection & Override System
 
-Users can override the default +/- angles for a single acquisition without changing the global config. This is useful when the birefringence signal is weak and a wider angular spread is needed.
+Users control which angles are acquired and can override the default +/- angles via controls in `PPMBoundingBoxUI` (part of the acquisition dialog). This happens upfront before acquisition starts -- there is no per-image angle popup.
 
 ```mermaid
 graph LR
-    subgraph "Acquisition Dialog"
-        CB["Override checkbox"] --> SP["Plus/Minus spinners<br/>(-180 to 180, step 0.5)"]
+    subgraph "Acquisition Dialog (PPMBoundingBoxUI)"
+        SEL["Angle Selection<br/>(selMinus, selZero, selPlus, selUncrossed)"]
+        CB["Override checkbox"]
+        SP["Plus/Minus spinners<br/>(-180 to 180, step 0.5)"]
+        CB --> SP
     end
 
-    subgraph "PPMBoundingBoxUI"
-        SP --> GO["getAngleOverrides()<br/>{'plus': 10.0, 'minus': -10.0}"]
-    end
+    SEL --> GO["getAngleOverrides()<br/>{'minus': -7, 'zero': 0,<br/>'plus': 7, 'uncrossed': 90}"]
+    SP --> GO
 
     subgraph "PPMModalityHandler"
-        GO --> AAO["applyAngleOverrides()<br/>Replace +/- ticks,<br/>keep zero/uncrossed"]
+        GO --> AAO["applyAngleOverrides()<br/>Filter angles by selection,<br/>replace +/- ticks if override is on"]
     end
 
-    AAO --> DLG["AngleSelectionDialog<br/>(pre-filled with overrides)"]
+    AAO --> RES["PPMExposureResolver<br/>(non-interactive)"]
 ```
 
-The override only affects the positive and negative angles. Crossed (0) and uncrossed (90) are always preserved because they are physically meaningful reference positions.
+The angle selection determines *which* angles are included. The override spinners only affect the positive and negative angles when the override checkbox is enabled; crossed (0) and uncrossed (90) are always preserved because they are physically meaningful reference positions. Exposure for each angle is resolved non-interactively (background → config → preferences).
 
 ## Background Validation
 
@@ -369,10 +364,10 @@ The new code path lives in `_acquire_tile_angles_angle_outer` in `microscope_com
 | `modality/ModalityRegistry.java` | Prefix-based handler lookup |
 | `modality/AngleExposure.java` | Immutable (ticks, exposureMs) record |
 | `modality/ppm/PPMModalityHandler.java` | PPM implementation (~450 lines) |
+| `modality/ppm/PPMExposureResolver.java` | Resolves exposure per angle (background → config → prefs) |
 | `modality/ppm/RotationManager.java` | Config loading + strategy creation |
 | `modality/ppm/RotationStrategy.java` | PPMRotationStrategy + NoRotationStrategy |
 | `modality/ppm/PPMPreferences.java` | Persistent exposure/angle defaults |
-| `modality/ppm/ui/PPMBoundingBoxUI.java` | Angle override spinners |
-| `modality/ppm/ui/PPMAngleSelectionController.java` | Angle/exposure dialog |
+| `modality/ppm/ui/PPMBoundingBoxUI.java` | Angle selection checkboxes, override spinners |
 | `service/AngleResolutionService.java` | Orchestrates the resolution pipeline |
 | `service/AcquisitionCommandBuilder.java` | Formats `--angles` and `--exposures` |

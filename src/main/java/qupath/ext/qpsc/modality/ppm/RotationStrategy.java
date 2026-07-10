@@ -4,7 +4,6 @@ import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.ppm.ui.PPMAngleSelectionController;
 
 /**
  * Strategy interface for handling stage rotation based on imaging modality.
@@ -82,45 +81,26 @@ class PPMRotationStrategy implements RotationStrategy {
 
     @Override
     public CompletableFuture<List<Double>> getRotationTicks(String wbMode) {
-        // Show dialog for angle selection with exposure times
-        return PPMAngleSelectionController.showDialog(
-                        plusAngleExposure.ticks(),
-                        minusAngleExposure.ticks(),
-                        uncrossedAngleExposure.ticks(),
-                        modality,
-                        objective,
-                        detector,
-                        wbMode)
-                .thenApply(result -> {
-                    if (result == null) {
-                        return new ArrayList<>();
-                    }
-                    return result.getAngles();
-                });
+        List<Double> ticks = new ArrayList<>();
+        for (AngleExposure ae : getConfiguredAngles()) {
+            ticks.add(ae.ticks());
+        }
+        return CompletableFuture.completedFuture(ticks);
     }
 
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationTicksWithExposure(String wbMode) {
-        // Show dialog for angle selection with exposure times
-        return PPMAngleSelectionController.showDialog(
-                        plusAngleExposure.ticks(),
-                        minusAngleExposure.ticks(),
-                        uncrossedAngleExposure.ticks(),
-                        modality,
-                        objective,
-                        detector,
-                        wbMode)
-                .thenApply(result -> {
-                    if (result == null) {
-                        return new ArrayList<>();
-                    }
-
-                    List<AngleExposure> tickExposures = new ArrayList<>();
-                    for (PPMAngleSelectionController.AngleExposure ae : result.angleExposures) {
-                        tickExposures.add(new AngleExposure(ae.angle, ae.exposureMs));
-                    }
-                    return tickExposures;
-                });
+        // Non-interactive: build the configured angles with RESOLVED exposures (background
+        // flat-field -> config -> prefs). Angle selection and plus/minus tick overrides are
+        // applied by PPMModalityHandler from the acquisition dialog's PPM panel -- there is no
+        // per-image angle popup (it broke unattended multi-slide acquisition).
+        List<AngleExposure> result = new ArrayList<>();
+        for (AngleExposure ae : getConfiguredAngles()) {
+            double exposureMs =
+                    PPMExposureResolver.getDefaultExposureTime(ae.ticks(), modality, objective, detector, wbMode);
+            result.add(new AngleExposure(ae.ticks(), exposureMs));
+        }
+        return CompletableFuture.completedFuture(result);
     }
 
     @Override

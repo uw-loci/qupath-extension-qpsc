@@ -82,9 +82,15 @@ When using a brightfield modality, an exposure panel appears showing:
 
 ⚠️ **Warning:** Overriding the exposure bypasses the saved background/flat-field profile. The background reference was captured at the calibrated exposure, so it no longer matches the override value. Background correction will not be valid for this run—re-run Background Collection at the new exposure if you need flat-field correction.
 
-**PPM Angle Overrides:**
+**PPM Angle Selection & Exposure:**
 
-For PPM acquisitions, angle-specific options may be available (see PPM modality documentation for details).
+When using a PPM modality, the acquisition dialog includes a **PPM Polarization Angles** panel with:
+
+- **Angles to acquire (checkboxes):** Select which polarization angles are captured -- minus, zero, plus, and/or uncrossed. All four are selected by default.
+- **Exposure times (auto-derived):** Exposure for each angle is automatically resolved using this priority: background flat-field exposure (so divide-correction matches) → config file exposure → persistent preferences. Users do not manually set exposures per angle.
+- **Angle overrides (optional):** If "Override default angles for this acquisition" is checked, spinners for plus and minus angles allow one-time adjustment without changing the configuration.
+
+The angle selection and override controls are set upfront in this dialog -- there is no per-image angle popup during acquisition. This design supports unattended multi-slide workflows.
 
 **Fluorescence / Widefield IF channel presets:**
 
