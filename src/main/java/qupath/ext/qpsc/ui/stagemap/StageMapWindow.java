@@ -533,6 +533,18 @@ public class StageMapWindow {
                 + "Use this after editing the config file."));
         reloadButton.setOnAction(e -> reloadConfiguration());
 
+        // Reset View button - undo zoom/pan back to the fit-to-insert view.
+        // Same action as right-click on the canvas, surfaced as a button for discoverability.
+        Button resetViewButton = new Button("Reset View");
+        resetViewButton.setStyle("-fx-font-size: 10; -fx-padding: 2 6;");
+        resetViewButton.setTooltip(new Tooltip(
+                "Reset zoom and pan back to the fit-to-insert view.\n" + "(Same as right-clicking the map.)"));
+        resetViewButton.setOnAction(e -> {
+            if (canvas != null) {
+                canvas.resetView();
+            }
+        });
+
         // Help button - opens online documentation
         Button helpButton = DocumentationHelper.createHelpButton("stageMap");
         if (helpButton != null) {
@@ -636,6 +648,7 @@ public class StageMapWindow {
                         configButton,
                         calibrateButton,
                         reloadButton,
+                        resetViewButton,
                         helpButton);
         return topBar;
     }

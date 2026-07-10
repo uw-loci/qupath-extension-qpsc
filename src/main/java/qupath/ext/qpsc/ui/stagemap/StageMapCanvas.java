@@ -168,6 +168,16 @@ public class StageMapCanvas extends StackPane {
     private double scale = 1.0; // pixels per micron
     private double offsetX = 0; // canvas offset for centering
     private double offsetY = 0;
+    // Multi-slot macro preview (slotPreviewView) tracking so it follows zoom/pan.
+    // The composite raster bakes in `scale`, so a scale change must rebuild it; a
+    // pure pan (offset change, same scale) only translates the ImageView. Built* are
+    // the scale/offset/layout captured when the current composite was rasterized.
+    private java.util.List<SlotMacroPreview> lastSlotPreviews;
+    private double slotPreviewBuiltScale = Double.NaN;
+    private double slotPreviewBuiltOffsetX = 0;
+    private double slotPreviewBuiltOffsetY = 0;
+    private double slotPreviewBuiltLayoutX = 0;
+    private double slotPreviewBuiltLayoutY = 0;
     // Auto-fit scale (the "fit the whole insert" baseline). Mouse-wheel zoom
     // multiplies this; clamped to [fitScale*MIN_ZOOM, fitScale*MAX_ZOOM]. Set
     // by calculateScale(); resetView() / insert-change / resize return here.
@@ -992,6 +1002,7 @@ public class StageMapCanvas extends StackPane {
         if (macroOverlayVisible) {
             updateMacroOverlayPosition();
         }
+        repositionSlotPreviews();
     }
 
     private void updateCrosshairOverlay() {
@@ -1529,10 +1540,40 @@ public class StageMapCanvas extends StackPane {
         slotPreviewView.setFitWidth(maxX - minX);
         slotPreviewView.setFitHeight(maxY - minY);
         slotPreviewView.setVisible(true);
+
+        // Remember the previews and the view state they were rasterized at so
+        // repositionSlotPreviews() can follow subsequent zoom (rebuild) / pan (translate).
+        this.lastSlotPreviews = previews;
+        this.slotPreviewBuiltScale = scale;
+        this.slotPreviewBuiltOffsetX = offsetX;
+        this.slotPreviewBuiltOffsetY = offsetY;
+        this.slotPreviewBuiltLayoutX = minX;
+        this.slotPreviewBuiltLayoutY = minY;
+    }
+
+    /**
+     * Keeps the multi-slot macro preview layer aligned with the stage during
+     * zoom/pan. Called from {@link #updateOverlays()} (every view-change site).
+     * The composite raster bakes in {@code scale}, so a scale change rebuilds it;
+     * a pure pan (same scale, changed offset) just translates the ImageView,
+     * avoiding a per-drag-event 4096x4096 reallocation.
+     */
+    private void repositionSlotPreviews() {
+        if (lastSlotPreviews == null || lastSlotPreviews.isEmpty() || !slotPreviewView.isVisible()) {
+            return;
+        }
+        if (scale == slotPreviewBuiltScale) {
+            slotPreviewView.setLayoutX(slotPreviewBuiltLayoutX + (offsetX - slotPreviewBuiltOffsetX));
+            slotPreviewView.setLayoutY(slotPreviewBuiltLayoutY + (offsetY - slotPreviewBuiltOffsetY));
+        } else {
+            setSlotMacroPreviews(lastSlotPreviews);
+        }
     }
 
     /** Hides the multi-slot macro preview layer. */
     public void clearSlotMacroPreviews() {
+        this.lastSlotPreviews = null;
+        this.slotPreviewBuiltScale = Double.NaN;
         if (slotPreviewView != null) {
             slotPreviewView.setImage(null);
             slotPreviewView.setVisible(false);

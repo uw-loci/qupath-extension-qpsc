@@ -586,11 +586,28 @@ public class ExistingImageWorkflowV2 {
             state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, validClasses);
 
             if (!state.annotations.isEmpty()) {
-                logger.info("Found {} existing annotations", state.annotations.size());
+                logger.info("Found {} existing annotations matching selected classes", state.annotations.size());
                 return CompletableFuture.completedFuture(state);
             }
 
-            // No annotations found - show warning dialog with options
+            // Class-filtered detection found none -- but annotations may plainly EXIST in a
+            // class that is not pre-selected (or be unclassified). Showing "No annotations
+            // detected" then is wrong and confusing: the user has drawn annotations, they
+            // just do not carry a pre-selected class (which the user was never shown). In
+            // that case skip the warning dialog and route straight to post-detection class
+            // selection -- the same step the dialog's "Use Annotations and Continue" leads
+            // to -- so the user picks from the classes that actually exist.
+            List<PathObject> anyClassAnnotations = AnnotationHelper.getCurrentValidAnnotations(gui, null);
+            if (!anyClassAnnotations.isEmpty()) {
+                logger.info(
+                        "{} annotation(s) exist but none match pre-selected classes {} -- skipping the "
+                                + "no-annotations dialog and going straight to class selection",
+                        anyClassAnnotations.size(),
+                        validClasses);
+                return selectClassesAfterDetection(state);
+            }
+
+            // Genuinely no annotations - show warning dialog with options
             logger.info("No annotations found, showing warning dialog");
             return handleNoAnnotations(state, validClasses);
         }

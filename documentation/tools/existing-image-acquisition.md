@@ -237,7 +237,7 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | "Source microscope mismatch" dialog appears on startup | The image's `source_microscope` metadata differs from the active microscope | See the **Startup Check: Source Microscope Mismatch** section above. The most common fix: click **Fix source to `<active>`** to update the tag. |
-| "No annotations found" | No annotations on image | Draw annotations on the macro image before starting |
+| "No annotations found" | No annotations on image | Draw annotations on the macro image before starting. **Note:** If annotations exist but do not match the pre-selected annotation classes, the workflow skips this dialog and goes directly to the Annotation Class Selection step so you can choose the classes that actually exist. |
 | "Transform validation failed" | Alignment is off | Run refinement or create a new transform |
 | Scanner-preset combo is greyed out / unavailable | Image has no reachable macro (common for sub-images from prior QPSC acquisitions) | Use manual alignment, or if a slide-specific alignment was created during a prior acquisition, select "Use Existing Alignment" to access it directly without the scanner-preset combo. |
 | Images appear shifted | Coordinate mismatch | Check flip/invert settings in Preferences |
