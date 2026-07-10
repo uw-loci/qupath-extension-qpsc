@@ -143,16 +143,23 @@ public class ExistingImageWorkflowV2 {
      * multi-slide batch: the operator confirms alignment/tissue on every slide, nothing
      * is acquired.
      *
-     * <p>Always re-derives alignment fresh ({@code forceFreshAlignment}): a slide's
+     * <p>Normally re-derives alignment fresh ({@code forceFreshAlignment=true}): a slide's
      * position in the holder is independent of any prior alignment (e.g. from a standard
      * single-slide layout), so the setup pass must not trust a saved per-slide JSON. The
-     * fresh alignment overwrites that JSON, which the acquire pass then replays.
+     * fresh alignment overwrites that JSON, which the acquire pass then replays. Pass
+     * {@code forceFreshAlignment=false} ONLY from the multi-slide batch's TEST-ONLY
+     * alignment-reuse escape hatch, where the operator has asserted the holder is untouched
+     * and a saved per-slide JSON should be reused instead of re-derived.
      *
+     * @param forceFreshAlignment when true, ignore any saved per-slide alignment and
+     *     re-derive; when false, reuse a saved per-slide JSON if one exists for this mount
+     *     (slots without a valid saved alignment still fall back to fresh alignment)
      * @return a future completing with the captured {@link SetupResult} on success, or
      *     {@code null} on cancel / short-circuit / handled error. Never exceptional.
      */
-    public static CompletableFuture<SetupResult> startSetupAsync(double[] slotCenterStageXY) {
-        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null, true);
+    public static CompletableFuture<SetupResult> startSetupAsync(
+            double[] slotCenterStageXY, boolean forceFreshAlignment) {
+        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null, forceFreshAlignment);
         o.state.slotCenterStageXY = slotCenterStageXY;
         return o.execute().thenApply(st -> {
             if (st == null || o.capturedConfig == null) {

@@ -76,7 +76,27 @@ public final class MultiSlideExistingImageWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(MultiSlideExistingImageWorkflow.class);
 
+    /** JVM system property name for the TEST-ONLY per-slide alignment-reuse override. */
+    private static final String REUSE_ALIGNMENT_PROP = "qpsc.multislide.reuseAlignment";
+
     private MultiSlideExistingImageWorkflow() {}
+
+    /**
+     * TEST-ONLY escape hatch: when {@code -Dqpsc.multislide.reuseAlignment=true} is set,
+     * the batch reuses each slot's saved per-slide alignment JSON instead of re-deriving
+     * it, skipping the SIFT/manual alignment and single-tile refinement. Slots with no
+     * valid saved alignment fall back to fresh alignment automatically (per-slot, not
+     * all-or-nothing).
+     *
+     * <p><b>UNSAFE for real acquisition.</b> It assumes every slide is still physically
+     * mounted exactly as it was when the saved alignment was captured -- any remount
+     * invalidates the reused transform. It exists solely to speed up iterative on-scope
+     * testing. Deliberately a JVM system property, not a UI preference, so it cannot
+     * persist into a production run and vanishes on restart unless explicitly re-set.
+     */
+    private static boolean reuseSavedAlignmentForTesting() {
+        return Boolean.getBoolean(REUSE_ALIGNMENT_PROP);
+    }
 
     /** Entry point invoked from the menu. */
     public static void start() {
@@ -103,6 +123,14 @@ public final class MultiSlideExistingImageWorkflow {
                     result.carrier().getId(),
                     runId,
                     result.assignments().size());
+
+            if (reuseSavedAlignmentForTesting()) {
+                logger.warn(
+                        "MS workflow: TEST-ONLY alignment reuse ENABLED (-D{}=true) -- slots with a saved "
+                                + "per-slide alignment will SKIP fresh alignment/refinement. This assumes the holder "
+                                + "has NOT been touched since the saved alignment and is UNSAFE for real runs.",
+                        REUSE_ALIGNMENT_PROP);
+            }
 
             // Persist slot metadata so partial runs are recoverable
             for (MultiSlideAssignmentDialog.SlotAssignment a : result.assignments()) {
@@ -416,7 +444,10 @@ public final class MultiSlideExistingImageWorkflow {
         // reuse a prior alignment or the SIFT/preset path (both assume the horizontal
         // scanner orientation and mis-target a slide mounted in the holder). The slot
         // center feeds the alignment's auto-move-to-selected-tile.
-        ExistingImageWorkflowV2.startAsync(true, slotCenter)
+        // TEST-ONLY: reuseSavedAlignmentForTesting() flips this to false so a saved
+        // per-slide JSON is reused (holder assumed untouched); see the method's Javadoc.
+        boolean forceFresh = !reuseSavedAlignmentForTesting();
+        ExistingImageWorkflowV2.startAsync(forceFresh, slotCenter)
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     boolean ok = result != null;
                     if (ok) {
@@ -501,7 +532,11 @@ public final class MultiSlideExistingImageWorkflow {
                 s.assignment.entry().getImageName());
         CompletableFuture<Void> done = new CompletableFuture<>();
         double[] slotCenter = resolveSlotCenter(carrier, s.assignment.position());
-        ExistingImageWorkflowV2.startSetupAsync(slotCenter)
+        // TEST-ONLY: reuseSavedAlignmentForTesting() lets the setup pass reuse a saved
+        // per-slide JSON (holder assumed untouched) instead of re-aligning; slots without
+        // a valid saved alignment still fall back to fresh alignment.
+        boolean forceFresh = !reuseSavedAlignmentForTesting();
+        ExistingImageWorkflowV2.startSetupAsync(slotCenter, forceFresh)
                 .whenComplete((setup, ex) -> Platform.runLater(() -> {
                     if (setup != null) {
                         s.setup = setup;
