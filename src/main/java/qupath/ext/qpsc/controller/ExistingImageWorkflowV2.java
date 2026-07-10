@@ -417,6 +417,51 @@ public class ExistingImageWorkflowV2 {
         }
 
         /**
+         * Persists the currently open image's annotations to its project entry so the
+         * unattended acquire pass finds them.
+         *
+         * <p>Multi-slide runs draw / detect annotations on the (rotated)(flipped) sibling
+         * entry during setup, but the sibling's hierarchy lives only in memory. Both passes
+         * reopen the base entry via {@code gui.openImageEntry(...)} and the workflow switches
+         * to the sibling again; when the setup pass advances to the next slot the sibling's
+         * ImageData is abandoned WITHOUT saving, so the acquire pass reopens a sibling with no
+         * annotations and stops on the "No annotations detected" dialog -- defeating the
+         * walk-away acquire pass. Saving the hierarchy to disk here (plus a project sync) makes
+         * the annotations survive the slot round-trip. Best-effort: any failure is logged, not
+         * fatal (the acquire pass would then re-prompt, the pre-fix behavior).
+         */
+        @SuppressWarnings("unchecked")
+        private void persistAnnotationsForAcquirePass() {
+            try {
+                QuPathGUI gui = QuPathGUI.getInstance();
+                if (gui == null) {
+                    return;
+                }
+                ImageData<BufferedImage> imageData = gui.getImageData();
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                if (imageData == null || project == null) {
+                    return;
+                }
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(imageData);
+                if (entry == null) {
+                    logger.warn("SETUP_ONLY: no project entry for the open image; annotations not persisted");
+                    return;
+                }
+                entry.saveImageData(imageData);
+                project.syncChanges();
+                logger.info(
+                        "SETUP_ONLY: persisted {} annotation(s) to entry '{}' for the acquire pass",
+                        imageData.getHierarchy().getAnnotationObjects().size(),
+                        entry.getImageName());
+            } catch (Exception e) {
+                logger.error(
+                        "SETUP_ONLY: failed to persist annotations for the acquire pass (acquire may re-prompt): {}",
+                        e.getMessage(),
+                        e);
+            }
+        }
+
+        /**
          * Forces refinement to NONE for the acquire pass so the saved per-slide alignment
          * is consumed as-is (no reference-tile refinement dialog). A no-op on a null state.
          */
@@ -461,6 +506,11 @@ public class ExistingImageWorkflowV2 {
                             // leave capturedFocusZ null and the acquire pass falls back to the
                             // current stage Z.
                             captureFocusZForSeed();
+                            // Persist the sibling's annotations to disk so the unattended
+                            // acquire pass finds them instead of stopping on the "No
+                            // annotations detected" dialog (they are otherwise only in the
+                            // in-memory hierarchy and lost when the next slot opens).
+                            persistAnnotationsForAcquirePass();
                             // Setup succeeded but nothing was acquired -- no tiles to clean,
                             // no ACQUISITION_COMPLETE beep. cleanup() still clears the
                             // currentTransform singleton + acquisitionActive flag.
