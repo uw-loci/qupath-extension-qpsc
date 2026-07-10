@@ -650,6 +650,25 @@ public class ExistingImageWorkflowV2 {
          * <p>Returns {@code true} to proceed, {@code false} when the user cancels.
          * Must be called on the JavaFX thread when the dialog branch is taken.
          */
+        /**
+         * True if a saved (source -> active) transform preset exists -- i.e. the source is a
+         * known scanner that legitimately feeds the active scope (a normal cross-scope
+         * acquisition), not a stale/wrong tag.
+         */
+        private boolean hasCrossScopePreset(String source, String active) {
+            try {
+                String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+                if (configPath == null || configPath.isEmpty()) return false;
+                java.io.File dir = new java.io.File(configPath).getParentFile();
+                if (dir == null) return false;
+                AffineTransformManager tm = new AffineTransformManager(dir.getAbsolutePath());
+                return tm.getBestPresetForPair(source, active) != null;
+            } catch (Exception e) {
+                logger.debug("hasCrossScopePreset check failed: {}", e.getMessage());
+                return false;
+            }
+        }
+
         private boolean checkAndHandleSourceMismatch() {
             if (gui.getProject() == null || gui.getImageData() == null) return true;
             @SuppressWarnings("unchecked")
@@ -696,7 +715,22 @@ public class ExistingImageWorkflowV2 {
                 return true;
             }
 
-            // acquired_on_microscope is missing -- genuinely ambiguous, ask the user.
+            // acquired_on_microscope is missing. Before treating this as ambiguous, check
+            // whether the source is a KNOWN SCANNER with a saved (source -> active) preset.
+            // If so, this is a legitimate cross-scope acquisition (e.g. an Ocus40 macro
+            // acquired on PPM) -- the source is correct, not a mismatch to resolve -- so
+            // proceed silently. Only prompt when the source cannot reach the active scope
+            // (no preset), which is the genuinely suspicious case.
+            if (hasCrossScopePreset(source, active)) {
+                logger.info(
+                        "Source mismatch: source='{}' has a preset to active='{}' -- legitimate cross-scope, "
+                                + "proceeding without prompt",
+                        source,
+                        active);
+                return true;
+            }
+
+            // No preset from source to active -- genuinely ambiguous, ask the user.
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             alert.setTitle("Source microscope mismatch");
