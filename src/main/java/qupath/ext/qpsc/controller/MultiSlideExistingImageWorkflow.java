@@ -187,6 +187,7 @@ public final class MultiSlideExistingImageWorkflow {
                         + "- Per-row Open / Run / Skip: drive one slot by hand. Finish when all are Done or Skipped.");
         intro.setWrapText(true);
         intro.setMaxWidth(640);
+        intro.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
         // Orientation reminder: each slot's orientation is established by its own
         // alignment during setup, not by the holder calibration (which is a center
@@ -201,6 +202,9 @@ public final class MultiSlideExistingImageWorkflow {
                 + "assumes standard orientation and would target a rotated slide at the wrong end.");
         orientationNote.setWrapText(true);
         orientationNote.setMaxWidth(640);
+        // Reserve the full wrapped height so the last line is not clipped with an ellipsis
+        // (a wrapText Label truncates when its allotted height is computed for fewer lines).
+        orientationNote.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         orientationNote.setStyle("-fx-font-style: italic; -fx-text-fill: -fx-accent;");
 
         List<SlotState> states = new ArrayList<>();
