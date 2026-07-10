@@ -1001,6 +1001,33 @@ public class ExistingAlignmentPath {
         boolean requiresFlipX = FlipResolver.resolveFlipX(null, preset, null);
         boolean requiresFlipY = FlipResolver.resolveFlipY(null, preset, null);
 
+        // Tier 1 -- honor the currently-open entry. If the entry the operator is viewing is
+        // ALREADY in the required flip frame (e.g. the multi-slide "(rotated 270)(flipped XY)"
+        // sibling representing the slide's orientation on the microscope) and already carries
+        // annotations, use them directly. This covers annotations drawn on the final entry (or
+        // brought through on a prior run). It also avoids the flip-sibling name search below,
+        // which is NOT rotation-aware: a "(rotated 270)(flipped XY)" and a plain "(flipped XY)"
+        // entry share base_image + flip flags, so that search can match a different, annotation-
+        // free sibling and wrongly report "No annotations detected" while the open entry has them.
+        @SuppressWarnings("unchecked")
+        Project<BufferedImage> openProject = (Project<BufferedImage>) gui.getProject();
+        if (openProject != null && gui.getImageData() != null) {
+            ProjectImageEntry<BufferedImage> openEntry = openProject.getEntry(gui.getImageData());
+            if (openEntry != null && hasCorrectFlipStatus(openEntry, requiresFlipX, requiresFlipY)) {
+                java.util.List<PathObject> openAnnotations = AnnotationHelper.getCurrentValidAnnotations(gui, null);
+                if (!openAnnotations.isEmpty()) {
+                    logger.info(
+                            "Open entry '{}' is already in the required flip frame (flipX={}, flipY={}) and has {} "
+                                    + "annotation(s) -- using them directly (skipping flip-sibling search)",
+                            openEntry.getImageName(),
+                            requiresFlipX,
+                            requiresFlipY,
+                            openAnnotations.size());
+                    return openAnnotations;
+                }
+            }
+        }
+
         // If no flip required, get ALL annotations from current GUI hierarchy
         // NOTE: Do NOT filter by class - alignment needs all annotations regardless of class
         // Class filtering happens later during acquisition, not during alignment
