@@ -394,8 +394,10 @@ public class WhiteBalanceWorkflow {
                             Dialogs.showErrorMessage("White Balance Failed", "Calibration failed: " + e.getMessage());
                         });
                         // On failure, do NOT restore live mode -- the camera may be in a bad
-                        // state. User can manually re-enable live mode after investigating.
-                        logger.info("Skipping live mode restore after WB failure");
+                        // state. User can manually re-enable live mode after investigating. But
+                        // ALWAYS release the control lock, or the Live Viewer is bricked.
+                        qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.unlockControls();
+                        logger.info("Skipping live mode restore after WB failure (controls unlocked)");
                         return;
                     }
                     // Only restore live mode on success (camera is in a known good state)
@@ -525,7 +527,12 @@ public class WhiteBalanceWorkflow {
                             Dialogs.showErrorMessage(
                                     "PPM White Balance Failed", "Calibration failed: " + e.getMessage());
                         });
-                        logger.info("Skipping live mode restore after PPM WB failure");
+                        // ALWAYS release the control lock, even on failure -- otherwise the Live
+                        // Viewer stays locked and the operator is bricked out of the interface.
+                        // Live-mode RESTORE is intentionally skipped (hardware state after a WB
+                        // failure is uncertain), but the lock must be released regardless.
+                        qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.unlockControls();
+                        logger.info("Skipping live mode restore after PPM WB failure (controls unlocked)");
                         return;
                     }
                     try {
