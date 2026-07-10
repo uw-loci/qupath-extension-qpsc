@@ -63,7 +63,7 @@ public class ExistingImageWorkflowV2 {
      * future is ignored.
      */
     public static void start() {
-        new WorkflowOrchestrator(Mode.FULL, null, null, null).execute();
+        new WorkflowOrchestrator(Mode.FULL, null, null, null, false).execute();
     }
 
     /**
@@ -87,7 +87,20 @@ public class ExistingImageWorkflowV2 {
      * The future always completes on the JavaFX thread's continuation of the chain.
      */
     public static CompletableFuture<WorkflowState> startAsync() {
-        return new WorkflowOrchestrator(Mode.FULL, null, null, null).execute();
+        return startAsync(false);
+    }
+
+    /**
+     * Full single-slide run, with control over whether a saved per-slide alignment is
+     * trusted. Pass {@code forceFreshAlignment = true} from the multi-slide batch so a
+     * slide's position is re-derived for its current mount instead of reusing a prior
+     * alignment (e.g. a standard single-slide layout) that is meaningless in the holder.
+     *
+     * @param forceFreshAlignment when true, ignore any saved per-slide alignment and
+     *     re-derive this slide's position from scratch
+     */
+    public static CompletableFuture<WorkflowState> startAsync(boolean forceFreshAlignment) {
+        return new WorkflowOrchestrator(Mode.FULL, null, null, null, forceFreshAlignment).execute();
     }
 
     /**
@@ -114,11 +127,16 @@ public class ExistingImageWorkflowV2 {
      * multi-slide batch: the operator confirms alignment/tissue on every slide, nothing
      * is acquired.
      *
+     * <p>Always re-derives alignment fresh ({@code forceFreshAlignment}): a slide's
+     * position in the holder is independent of any prior alignment (e.g. from a standard
+     * single-slide layout), so the setup pass must not trust a saved per-slide JSON. The
+     * fresh alignment overwrites that JSON, which the acquire pass then replays.
+     *
      * @return a future completing with the captured {@link SetupResult} on success, or
      *     {@code null} on cancel / short-circuit / handled error. Never exceptional.
      */
     public static CompletableFuture<SetupResult> startSetupAsync() {
-        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null);
+        WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null, true);
         return o.execute().thenApply(st -> {
             if (st == null || o.capturedConfig == null) {
                 return null;
@@ -143,8 +161,10 @@ public class ExistingImageWorkflowV2 {
         if (setup == null || setup.config() == null) {
             return CompletableFuture.completedFuture(null);
         }
+        // forceFreshAlignment = false: the acquire pass MUST use the per-slide JSON the
+        // setup pass just re-derived for this mount (via processSlideSpecificAlignment).
         return new WorkflowOrchestrator(
-                        Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ())
+                        Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ(), false)
                 .execute();
     }
 
@@ -176,17 +196,28 @@ public class ExistingImageWorkflowV2 {
         /** Captured in SETUP_ONLY at the terminal when refinement ran, to seed the acquire pass. */
         private Double capturedFocusZ;
 
+        /**
+         * When true, do NOT trust any saved per-slide alignment for this slide -- re-derive
+         * its position from scratch. Set by the multi-slide batch, where a slide's position
+         * depends on its current mount (which slot, orientation) and a prior alignment (e.g.
+         * from a standard single-slide layout) is meaningless for the holder. Per the batch
+         * design, Tier-2 per-slide alignment must be re-derived every run, never reused.
+         */
+        private final boolean forceFreshAlignment;
+
         WorkflowOrchestrator(
                 Mode mode,
                 ExistingImageAcquisitionConfig presetConfig,
                 List<String> presetClasses,
-                Double presetSeedZ) {
+                Double presetSeedZ,
+                boolean forceFreshAlignment) {
             this.gui = QuPathGUI.getInstance();
             this.state = new WorkflowState();
             this.mode = mode;
             this.presetConfig = presetConfig;
             this.presetClasses = presetClasses;
             this.presetSeedZ = presetSeedZ;
+            this.forceFreshAlignment = forceFreshAlignment;
         }
 
         /**
@@ -952,6 +983,19 @@ public class ExistingImageWorkflowV2 {
         private CompletableFuture<WorkflowState> checkExistingSlideAlignment(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
 
+            if (forceFreshAlignment) {
+                // Multi-slide batch: a slide's position depends on its current mount (slot,
+                // orientation), so a saved per-slide alignment -- even for this same slide from
+                // a standard single-slide layout -- must NOT be trusted. Skip the lookup (and
+                // the cross-scope compose) entirely; useExistingSlideAlignment stays false, so
+                // routeSubWorkflow goes to a fresh alignment path that re-derives the position
+                // and overwrites the stale JSON. Per the batch design: Tier-2 per-slide
+                // alignment is re-derived every run, never reused.
+                logger.info("Force-fresh alignment: not trusting any saved per-slide alignment; "
+                        + "re-deriving this slide's position for its current mount");
+                return CompletableFuture.completedFuture(state);
+            }
+
             logger.info("Checking for existing slide-specific alignment");
 
             return AlignmentHelper.checkForSlideAlignment(gui, state.sample).thenApply(slideResult -> {
@@ -1199,6 +1243,21 @@ public class ExistingImageWorkflowV2 {
             if (isSubAcquisition()) {
                 logger.info("Routing to sub-acquisition offset-based targeting path");
                 return processSubAcquisitionPath(state);
+            }
+
+            // Multi-slide batch: force a fresh MANUAL (landmark) alignment. The saved
+            // per-slide alignment was already skipped (checkExistingSlideAlignment), and we
+            // deliberately do NOT use the existing-alignment / SIFT / green-box path either:
+            // that path assumes the macro sits in its canonical scanner orientation and maps
+            // it via a preset built for a standard layout, so it mis-places (and mis-orients)
+            // a slide mounted in the holder. Only landmark alignment -- where the operator
+            // drives to the tissue's actual stage positions -- captures the slide's true
+            // position AND rotation for its current mount.
+            if (forceFreshAlignment) {
+                logger.info("Force-fresh alignment: routing to MANUAL landmark alignment "
+                        + "(SIFT / existing-preset path assumes canonical orientation and is wrong for a "
+                        + "slide mounted in a multi-slide holder)");
+                return processManualAlignmentPath(state);
             }
 
             // If we have a slide-specific alignment (including previously refined ones),

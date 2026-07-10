@@ -412,7 +412,11 @@ public final class MultiSlideExistingImageWorkflow {
         s.setStatus(Status.IN_PROGRESS);
         refreshFinish.run();
         CompletableFuture<Boolean> acquired = new CompletableFuture<>();
-        ExistingImageWorkflowV2.startAsync()
+        // forceFreshAlignment=true: multi-slide runs must re-derive each slide's
+        // position/orientation for its current mount via fresh MANUAL alignment, never
+        // reuse a prior alignment or the SIFT/preset path (both assume the horizontal
+        // scanner orientation and mis-target a slide mounted in the holder).
+        ExistingImageWorkflowV2.startAsync(true)
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     boolean ok = result != null;
                     if (ok) {
@@ -443,6 +447,8 @@ public final class MultiSlideExistingImageWorkflow {
         if (!openEntry(gui, s, refreshFinish)) {
             return CompletableFuture.completedFuture(null);
         }
+        // Force-fresh: a slide's position/orientation in the holder is re-derived, never
+        // taken from a prior (e.g. standard-layout) alignment. See runSlot.
         return runSlot(s, refreshFinish).thenApply(ok -> null);
     }
 
