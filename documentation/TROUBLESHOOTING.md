@@ -501,11 +501,18 @@ Drive the stage roughly close (a few hundred microns is enough) using the joysti
 
 **Why this matters:** Without knowing the source microscope, the workflow can't resolve which preset to use. On a flip-needing scope, proceeding with the wrong flip assumption would cause the live camera view to disagree with the annotations by a mirror, breaking alignment and driving the stage to the wrong physical location.
 
-**To fix:**
-1. Go to **Microscope → Stage Map**
-2. Click **Stamp Source Microscope** button
-3. Select the microscope (scanner) that originally captured the overview image
-4. Restart the workflow
+**To fix (two options):**
+
+**Option 1 (Recommended for multi-slide batch acquisitions):** Use the Multi-Slide Assignment Dialog source scanner picker:
+1. Before starting the acquisition workflow, open the Multi-Slide Assignment Dialog (Extensions > QP Scope > Bounded Acquisition, then select a multi-slide carrier)
+2. At the top of the dialog, select the **Source scanner** from the dropdown (the microscope that originally captured the macro images)
+3. Complete your slide assignments and start the workflow
+4. The source scanner is stamped on every assigned slide that lacks it
+
+**Option 2 (For single-image or Stage Map workflow):**
+1. Go to **Extensions → QP Scope → Stage Map**
+2. Select the **Preset** dropdown to display the correct source scanner's macro overlay
+3. This confirms which source scanner to use; restart the workflow
 
 **Alternative:** If you don't know the original source microscope, open the parent macro entry (overview image) instead of a sub-image and re-run the workflow on that.
 
