@@ -195,6 +195,8 @@ The Refine Alignment dialog shown after the move encourages you to click **Auto-
 
 Choose which annotation classes to include in the acquisition. The dialog shows all classes present on the current image with their counts and color previews. The same selection drives tiling for the Single-Tile Refinement step (Step 3).
 
+**Automatic annotation inheritance on rotated/flipped entries:** If you are acquiring from a rotated or flipped sub-image that has no annotations of its own, but the source macro image does, QPSC automatically transforms the source annotations through the same rotation and flip operations that produced this entry, writes them to the sub-image entry, and uses them for acquisition. This avoids having to manually re-draw annotations when working with intermediate processing steps. If both the sub-image and its source are empty, the normal "No annotations found" dialog appears.
+
 ### Step 5: Hardware Configuration
 
 Select the modality, objective, and detector combination. Only valid hardware combinations are shown.
@@ -237,7 +239,7 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 | Issue | Cause | Solution |
 |-------|-------|----------|
 | "Source microscope mismatch" dialog appears on startup | The image's `source_microscope` metadata differs from the active microscope | See the **Startup Check: Source Microscope Mismatch** section above. The most common fix: click **Fix source to `<active>`** to update the tag. |
-| "No annotations found" | No annotations on image | Draw annotations on the macro image before starting. **Note:** If annotations exist but do not match the pre-selected annotation classes, the workflow skips this dialog and goes directly to the Annotation Class Selection step so you can choose the classes that actually exist. |
+| "No annotations found" | No annotations on image | When opening a rotated or flipped sub-image that has no annotations, QPSC automatically copies annotations from the source macro image (after transforming them through the rotation+flip), if available. Only if both the sub-image and its source are empty does this dialog appear. **Draw annotations on the macro image and re-run the workflow.** **Note:** If annotations exist but do not match the pre-selected annotation classes, the workflow skips this dialog and goes directly to the Annotation Class Selection step so you can choose the classes that actually exist. |
 | "Transform validation failed" | Alignment is off | Run refinement or create a new transform |
 | Scanner-preset combo is greyed out / unavailable | Image has no reachable macro (common for sub-images from prior QPSC acquisitions) | Use manual alignment, or if a slide-specific alignment was created during a prior acquisition, select "Use Existing Alignment" to access it directly without the scanner-preset combo. |
 | Images appear shifted | Coordinate mismatch | Check flip/invert settings in Preferences |

@@ -17,9 +17,11 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.GreenBoxPreviewController;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.*;
+import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
+import qupath.lib.objects.PathObjectTools;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.roi.interfaces.ROI;
@@ -1025,6 +1027,18 @@ public class ExistingAlignmentPath {
                             openAnnotations.size());
                     return openAnnotations;
                 }
+                // Tier 2 -- the open microscope-frame target is EMPTY. Bring the source
+                // (Ocus40 / original macro) annotations through the rotation+flip that
+                // produced this entry, WRITE them onto it (so they persist and a re-run
+                // hits tier 1), and use them. Getting the Ocus40 data into the slide's
+                // microscope orientation is the whole point of the rotated+flipped entry.
+                java.util.List<PathObject> broughtThrough =
+                        bringSourceAnnotationsOntoOpenEntry(openProject, openEntry, requiresFlipX, requiresFlipY);
+                if (broughtThrough != null && !broughtThrough.isEmpty()) {
+                    return broughtThrough;
+                }
+                // Tier 3 -- neither the target nor the source has annotations: fall through
+                // to the existing empty-handling (caller shows the "No annotations" dialog).
             }
         }
 
@@ -1137,6 +1151,180 @@ public class ExistingAlignmentPath {
             logger.error("Falling back to GUI hierarchy (may have wrong coordinates!)");
             return AnnotationHelper.getCurrentValidAnnotations(gui, null); // null = no class filter
         }
+    }
+
+    /**
+     * Tier 2 of the annotation gate: when the open microscope-frame entry (the
+     * {@code (rotated N)(flipped ...)} sibling) is EMPTY, transform the source macro's
+     * annotations through the same rotation+flip that produced this entry, add them to the
+     * open entry's hierarchy, persist, and return them. Returns null when there is no source
+     * or the source has no annotations (caller then falls through to the tier-3 dialog).
+     *
+     * <p>Composite maps original macro pixels -> rotated frame -> flipped frame:
+     * {@code transform = flip . rotate}. Getting the Ocus40 annotations into the slide's
+     * microscope orientation is the whole purpose of the rotated+flipped entry.
+     */
+    private java.util.List<PathObject> bringSourceAnnotationsOntoOpenEntry(
+            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> openEntry, boolean flipX, boolean flipY) {
+        try {
+            int rotationDeg = parseRotationDegrees(openEntry.getImageName());
+            // Final (rotated-frame) dimensions from the open entry's server.
+            int wr = gui.getImageData().getServer().getWidth();
+            int hr = gui.getImageData().getServer().getHeight();
+
+            ProjectImageEntry<BufferedImage> source = findSourceMacroEntry(project, openEntry);
+            if (source == null) {
+                logger.info(
+                        "Tier 2: no source macro entry found for '{}'; leaving target empty", openEntry.getImageName());
+                return null;
+            }
+
+            ImageData<BufferedImage> sourceData = source.readImageData();
+            java.util.List<PathObject> sourceAnnotations;
+            try {
+                sourceAnnotations = sourceData.getHierarchy().getAnnotationObjects().stream()
+                        .filter(a -> a.getROI() != null && !a.getROI().isEmpty())
+                        .collect(java.util.stream.Collectors.toList());
+            } finally {
+                try {
+                    sourceData.getServer().close();
+                } catch (Exception ignore) {
+                    // best-effort: reading annotations does not touch pixels
+                }
+            }
+            if (sourceAnnotations.isEmpty()) {
+                logger.info(
+                        "Tier 2: source macro '{}' has no annotations; leaving target empty", source.getImageName());
+                return null;
+            }
+
+            AffineTransform transform = originalToFinalTransform(rotationDeg, wr, hr, flipX, flipY);
+            java.util.List<PathObject> transformed = new java.util.ArrayList<>();
+            for (PathObject ann : sourceAnnotations) {
+                PathObject copy = PathObjectTools.transformObject(ann, transform, true, true);
+                if (copy != null && copy.getROI() != null && !copy.getROI().isEmpty()) {
+                    transformed.add(copy);
+                }
+            }
+            if (transformed.isEmpty()) {
+                logger.warn(
+                        "Tier 2: transform produced no valid annotations from {} source object(s)",
+                        sourceAnnotations.size());
+                return null;
+            }
+
+            gui.getImageData().getHierarchy().addObjects(transformed);
+            try {
+                openEntry.saveImageData(gui.getImageData());
+                project.syncChanges();
+            } catch (Exception e) {
+                logger.warn(
+                        "Tier 2: could not persist brought-through annotations on '{}': {}",
+                        openEntry.getImageName(),
+                        e.getMessage());
+            }
+            logger.info(
+                    "Tier 2: brought {} annotation(s) from source '{}' through rotate {}deg + flip(x={},y={}) onto '{}'",
+                    transformed.size(),
+                    source.getImageName(),
+                    rotationDeg,
+                    flipX,
+                    flipY,
+                    openEntry.getImageName());
+            return transformed;
+        } catch (Exception e) {
+            logger.error(
+                    "Tier 2: failed to bring source annotations onto '{}': {}",
+                    openEntry.getImageName(),
+                    e.getMessage());
+            return null;
+        }
+    }
+
+    /** Parses the {@code (rotated N)} token from an entry name; returns 0 if absent. */
+    private static int parseRotationDegrees(String name) {
+        if (name == null) {
+            return 0;
+        }
+        java.util.regex.Matcher m =
+                java.util.regex.Pattern.compile("\\(rotated\\s+(\\d+)\\)").matcher(name);
+        if (m.find()) {
+            try {
+                return Integer.parseInt(m.group(1)) % 360;
+            } catch (NumberFormatException ignore) {
+                // fall through
+            }
+        }
+        return 0;
+    }
+
+    /**
+     * Builds the affine mapping original macro pixels to the final (rotated THEN flipped)
+     * frame. Rotation follows QuPath's {@code RotatedImageServer} quarter-rotation mapping;
+     * the flip is applied in the rotated frame with its (swapped for 90/270) dimensions and
+     * matches {@code ForwardPropagationWorkflow.createFlip}.
+     *
+     * @param rotationDeg 0 / 90 / 180 / 270
+     * @param wr final (rotated-frame) width in pixels
+     * @param hr final (rotated-frame) height in pixels
+     */
+    private static AffineTransform originalToFinalTransform(
+            int rotationDeg, int wr, int hr, boolean flipX, boolean flipY) {
+        // Original (un-rotated) dimensions: for 90/270 the axes are swapped.
+        double wo = (rotationDeg == 90 || rotationDeg == 270) ? hr : wr;
+        double ho = (rotationDeg == 90 || rotationDeg == 270) ? wr : hr;
+
+        AffineTransform rotate;
+        switch (rotationDeg) {
+            case 90 -> rotate = new AffineTransform(0, 1, -1, 0, ho, 0); // x'=ho-y, y'=x
+            case 180 -> rotate = new AffineTransform(-1, 0, 0, -1, wo, ho); // x'=wo-x, y'=ho-y
+            case 270 -> rotate = new AffineTransform(0, -1, 1, 0, 0, wo); // x'=y, y'=wo-x
+            default -> rotate = new AffineTransform(); // identity (0 deg)
+        }
+
+        // Flip in the rotated frame (dimensions wr x hr).
+        AffineTransform flip = new AffineTransform();
+        if (flipX && flipY) {
+            flip.translate(wr, hr);
+            flip.scale(-1, -1);
+        } else if (flipX) {
+            flip.translate(wr, 0);
+            flip.scale(-1, 1);
+        } else if (flipY) {
+            flip.translate(0, hr);
+            flip.scale(1, -1);
+        }
+
+        AffineTransform t = new AffineTransform(flip);
+        t.concatenate(rotate); // apply rotate first, then flip
+        return t;
+    }
+
+    /**
+     * Finds the original macro entry (the Ocus40 scan carrying the annotations) that the
+     * open rotated/flipped entry derives from: an entry with NO {@code (rotated}/{@code (flipped}
+     * suffix whose extension-stripped name matches the open entry's {@code base_image}. Returns
+     * null when none matches.
+     */
+    private ProjectImageEntry<BufferedImage> findSourceMacroEntry(
+            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> openEntry) {
+        String baseImage = ImageMetadataManager.getBaseImage(openEntry);
+        if (baseImage == null || baseImage.isEmpty()) {
+            return null;
+        }
+        for (var entry : project.getImageList()) {
+            String name = entry.getImageName();
+            if (name == null || name.contains("(rotated") || name.contains("(flipped")) {
+                continue;
+            }
+            String stripped = GeneralTools.stripExtension(name);
+            if (baseImage.equals(name)
+                    || baseImage.equals(stripped)
+                    || baseImage.equals(ImageMetadataManager.getBaseImage(entry))) {
+                return entry;
+            }
+        }
+        return null;
     }
 
     /**
