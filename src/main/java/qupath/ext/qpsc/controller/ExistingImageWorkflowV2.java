@@ -653,6 +653,15 @@ public class ExistingImageWorkflowV2 {
                 boolean requiresFlipX = FlipResolver.resolveFlipX(null, preset, null);
                 boolean requiresFlipY = FlipResolver.resolveFlipY(null, preset, null);
                 if (!requiresFlipX && !requiresFlipY) {
+                    // state.alignmentChoice is null on the reuse / slide-specific / acquire path,
+                    // so the choice-based resolve yields no-flip and would skip the lookup. Fall
+                    // back to the entry's scanner preset -- the same source validateAndFlipIfNeeded
+                    // uses when no explicit flags are passed.
+                    boolean[] fromEntry = ImageFlipHelper.resolveRequiredFlipFromPreset(openEntry);
+                    requiresFlipX = fromEntry[0];
+                    requiresFlipY = fromEntry[1];
+                }
+                if (!requiresFlipX && !requiresFlipY) {
                     return null; // no flip required -> current entry is authoritative
                 }
                 boolean currentHasFlip = (!requiresFlipX || ImageMetadataManager.isFlippedX(openEntry))
