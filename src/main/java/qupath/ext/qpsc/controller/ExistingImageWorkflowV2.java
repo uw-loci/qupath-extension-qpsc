@@ -1147,6 +1147,30 @@ public class ExistingImageWorkflowV2 {
                     logger.info(
                             "Found slide-specific alignment - confidence: {}",
                             String.format("%.2f", state.alignmentConfidence));
+                    // Reuse the persisted focus-Z seed (if any) so the first-annotation AF
+                    // starts near focus instead of re-measuring from scratch -- a real saving
+                    // at high magnification. Only when not already seeded in memory (the
+                    // two-pass acquire pass sets seedZ from the same-session setup first). The
+                    // seed is a bounded hint; AcquisitionManager's clamp degrades a stale value
+                    // to normal AF. Same lookup key checkForSlideAlignment used to load the JSON.
+                    if (state.seedZ == null) {
+                        try {
+                            Project<BufferedImage> proj = gui.getProject();
+                            String imgName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+                            String key = (proj != null && imgName != null)
+                                    ? AlignmentHelper.resolveMacroLookupKey(proj, gui.getImageData(), imgName)
+                                    : null;
+                            Double savedZ = key != null ? AffineTransformManager.loadSlideFocusZ(proj, key) : null;
+                            if (savedZ != null) {
+                                state.seedZ = savedZ;
+                                logger.info(
+                                        "Reusing saved focus Z={} um to seed first-annotation AF",
+                                        String.format("%.2f", savedZ));
+                            }
+                        } catch (Exception e) {
+                            logger.debug("Could not load saved focus Z for reuse seed: {}", e.getMessage());
+                        }
+                    }
                     return state;
                 }
                 // No alignment for the active scope. Check whether one exists for a
@@ -2209,6 +2233,18 @@ public class ExistingImageWorkflowV2 {
                             "Could not read open-entry flip metadata for saveRefinedAlignment; defaulting to (false, false): {}",
                             e.getMessage());
                 }
+                // Capture the focused stage Z now -- refinement just left the stage at the
+                // refined tile's focus (same point captureFocusZForSeed reads). Persisting it
+                // lets a later reuse of this alignment seed the first-annotation AF instead of
+                // re-measuring from scratch. Best-effort: a socket failure omits the seed and
+                // the acquire pass falls back to the current stage Z.
+                Double refinedFocusZ = null;
+                try {
+                    refinedFocusZ =
+                            MicroscopeController.getInstance().getSocketClient().getStageXYZ()[2];
+                } catch (Exception e) {
+                    logger.debug("Could not read stage Z to persist a focus seed: {}", e.getMessage());
+                }
                 AffineTransformManager.saveSlideAlignment(
                         project,
                         lookupKey,
@@ -2219,15 +2255,17 @@ public class ExistingImageWorkflowV2 {
                         openEntryFlipY,
                         AffineTransformManager.PIXEL_FRAME_MACRO,
                         state.objective,
-                        state.detector);
+                        state.detector,
+                        refinedFocusZ);
                 logger.info(
-                        "Saved refined alignment for image: {} (lookupKey={}, flipMacroX={}, flipMacroY={}, objective={}, detector={})",
+                        "Saved refined alignment for image: {} (lookupKey={}, flipMacroX={}, flipMacroY={}, objective={}, detector={}, focusZ={})",
                         imageName,
                         lookupKey,
                         openEntryFlipX,
                         openEntryFlipY,
                         state.objective,
-                        state.detector);
+                        state.detector,
+                        refinedFocusZ == null ? "n/a" : String.format("%.2f", refinedFocusZ));
             }
         }
 

@@ -813,6 +813,43 @@ public class AffineTransformManager {
             String pixelFrame,
             String objective,
             String detector) {
+        saveSlideAlignment(
+                project,
+                sampleName,
+                modality,
+                transform,
+                processedMacroImage,
+                flipMacroX,
+                flipMacroY,
+                pixelFrame,
+                objective,
+                detector,
+                null);
+    }
+
+    /**
+     * Full-control save with objective + detector + a focus-Z seed. Same as the 10-arg form
+     * plus {@code focusZ}: the focused stage Z (um) captured at alignment/refinement time,
+     * persisted so a later REUSE of this alignment can seed the first-annotation autofocus
+     * instead of re-measuring it from scratch (a meaningful saving at high magnification).
+     * Null omits the field; loaders return null and the acquire pass falls back to current Z.
+     * The seed is only ever a starting hint -- AcquisitionManager's MAX_FOCUS_STEP clamp +
+     * prediction guard bound a stale value, so it degrades to normal AF, never a runaway.
+     *
+     * @param focusZ focused stage Z (um) at alignment time, or null to omit the field
+     */
+    public static void saveSlideAlignment(
+            Project<BufferedImage> project,
+            String sampleName,
+            String modality,
+            AffineTransform transform,
+            BufferedImage processedMacroImage,
+            Boolean flipMacroX,
+            Boolean flipMacroY,
+            String pixelFrame,
+            String objective,
+            String detector,
+            Double focusZ) {
 
         try {
             // Get project folder
@@ -910,6 +947,14 @@ public class AffineTransformManager {
             }
             if (detector != null && !detector.isEmpty()) {
                 alignmentData.put("detector", detector);
+            }
+
+            // Focus-Z seed (um) captured at alignment/refinement time, when the stage is at
+            // the refined tile's focus. Persisted so a later reuse of this alignment can seed
+            // the first-annotation autofocus instead of re-measuring from scratch. Omitted
+            // (loaders return null) when no focus was captured -- e.g. refinement was NONE.
+            if (focusZ != null) {
+                alignmentData.put("focusZ", focusZ);
             }
 
             // Mark that the saved macro image is in raw format (no display flips baked in).
@@ -1117,6 +1162,58 @@ public class AffineTransformManager {
             return si instanceof String ? (String) si : null;
         } catch (Exception e) {
             logger.debug("Could not read stageInsert for '{}': {}", sampleName, e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Reads the persisted focus-Z seed (um) from a per-slide alignment JSON, resolving the
+     * scope-namespaced file first then the legacy unscoped name (mirrors
+     * {@link #loadSlideAlignmentInsert}). Returns null when no alignment file exists or the
+     * JSON carries no {@code focusZ} field (e.g. it was saved without a captured focus).
+     * Used when an alignment is reused to seed the first-annotation autofocus.
+     */
+    public static Double loadSlideFocusZ(Project<BufferedImage> project, String sampleName) {
+        if (project == null || sampleName == null) {
+            return null;
+        }
+        try {
+            File projectDir = project.getPath().toFile().getParentFile();
+            File alignmentDir = new File(projectDir, "alignmentFiles");
+            if (!alignmentDir.exists()) {
+                return null;
+            }
+            String activeMicroscope = null;
+            try {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                if (mgr != null) {
+                    activeMicroscope = mgr.getMicroscopeName();
+                }
+            } catch (Exception ignore) {
+            }
+            File file = null;
+            if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+                File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
+                if (scoped.exists()) {
+                    file = scoped;
+                }
+            }
+            if (file == null) {
+                File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+                if (legacy.exists()) {
+                    file = legacy;
+                }
+            }
+            if (file == null) {
+                return null;
+            }
+            String json = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
+            Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
+            Map<String, Object> data = new Gson().fromJson(json, mapType);
+            Object z = data != null ? data.get("focusZ") : null;
+            return z instanceof Number ? ((Number) z).doubleValue() : null;
+        } catch (Exception e) {
+            logger.debug("Could not read focusZ for '{}': {}", sampleName, e.getMessage());
             return null;
         }
     }

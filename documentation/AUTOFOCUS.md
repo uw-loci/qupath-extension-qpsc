@@ -33,7 +33,11 @@ Before each annotation's autofocus runs, the system provides a **Z-focus hint** 
 The hint comes from (in order of preference):
 1. **Tilt prediction model** -- After 6+ completed annotations, a least-squares plane fit predicts Z based on the target annotation's XY position (see [Tilt Prediction](#z-focus-tilt-prediction))
 2. **Last acquisition Z** -- The final Z from the previous annotation (good for nearby annotations thanks to proximity ordering)
-3. **Current microscope Z** -- The user's focus position (first annotation only)
+3. **First-annotation starting Z** -- for the very first annotation, before any acquisition or tilt data exists:
+   - **Persisted focus-Z seed** -- when an alignment is reused and its JSON carries a focus Z captured during a previous refinement, that value seeds the first annotation's AF so it starts near focus instead of searching from scratch (a meaningful saving at high magnification).
+   - **Current microscope Z** -- otherwise, the user's current focus position.
+
+   Either way this is only the *starting* hint: the first annotation's AF still runs, and the tilt model / last-acquisition Z take over for subsequent annotations. A stale seed is bounded by the max-focus-step clamp, so it degrades to a normal search rather than driving the stage to a wrong Z.
 
 ### 3. Per-Tile Focus During Acquisition
 
