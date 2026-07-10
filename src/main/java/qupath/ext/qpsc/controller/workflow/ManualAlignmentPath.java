@@ -13,7 +13,6 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
-import qupath.ext.qpsc.ui.RefinementSelectionController;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
@@ -416,29 +415,21 @@ public class ManualAlignmentPath {
         double fullResPixelSize = resolveFullResPixelSize();
 
         // Slot-center estimate from the holder calibration (multi-slide batch only).
+        // Used ONLY as a rough auto-move to get the stage near the slide when the
+        // operator selects the FIRST reference tile -- NOT as the final transform.
+        // The 3-point landmark below solves the true position AND rotation from the
+        // operator's three measured points, so it is robust to the estimate being
+        // off: the holder calibration knows where the (empty) slot sits, but not
+        // where the tissue smear is within it, so the estimate can be ~tens of mm
+        // from the tissue. After the operator drives to the real tissue for point 1,
+        // the transform re-anchors there and points 2-3 refine it.
         AffineTransform slotEstimate = buildSlotCenterEstimate(fullResPixelSize, stageInvertedX, stageInvertedY);
 
-        // Multi-slide: DON'T run a full 3-point manual landmark alignment. The slide's
-        // rotation is already baked into its (rotated) entry and its rough position is
-        // known from the holder slot center, so we seed the slot-center estimate as the
-        // STARTING transform and let the operator-selected refinement (e.g. single-tile,
-        // in handleRefinement) do the actual alignment. Doing a 3-point landmark here AND
-        // then the selected refinement was aligning the slide twice.
-        //
-        // Exception: if the operator EXPLICITLY chose "Full manual" refinement, honour it
-        // and run the 3-point landmark below.
-        boolean wantsFullManual = state.refinementChoice == RefinementSelectionController.RefinementChoice.FULL_MANUAL;
-        if (slotEstimate != null && !wantsFullManual) {
-            logger.info("Multi-slide: seeding slot-center estimate as the starting transform; the "
-                    + "operator-selected refinement will refine it (no 3-point manual landmark)");
-            state.transform = slotEstimate;
-            MicroscopeController.getInstance().setCurrentTransform(slotEstimate);
-            saveSlideTransform(slotEstimate);
-            return CompletableFuture.completedFuture(state);
-        }
-
-        // Regular (non-multi-slide) manual alignment: build tiles and run the 3-point
-        // landmark picker to establish the transform from scratch.
+        // Build tiles and run the 3-point landmark picker to establish the transform
+        // from scratch. Multi-slide force-fresh runs this too (the slide's true
+        // position/orientation must be measured for its current mount); the operator
+        // -selected refinement (e.g. single-tile) then runs afterwards in
+        // handleRefinement and also captures the focus Z for the unattended acquire.
         logger.info("Creating tiles for manual alignment using global inversion preferences");
         TileHelper.createTilesForAnnotations(
                 state.annotations,

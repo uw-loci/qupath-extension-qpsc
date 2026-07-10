@@ -1318,12 +1318,11 @@ public class ExistingImageWorkflowV2 {
             // drives to the tissue's actual stage positions -- captures the slide's true
             // position AND rotation for its current mount.
             if (forceFreshAlignment) {
-                logger.info("Force-fresh alignment: routing to ManualAlignmentPath "
-                        + "(seeds the holder slot-center estimate as the starting transform when available, "
-                        + "so the operator-selected refinement does the alignment; falls back to the 3-point "
-                        + "landmark when there is no slot center or Full manual was chosen). The SIFT / "
-                        + "existing-preset path is skipped: it assumes canonical orientation and mis-places a "
-                        + "slide mounted in a multi-slide holder.");
+                logger.info("Force-fresh alignment: routing to MANUAL landmark alignment "
+                        + "(the 3 measured points solve the slide's true position AND rotation for its current "
+                        + "mount; a holder slot-center estimate, when available, only provides a rough auto-move "
+                        + "to the first tile). The SIFT / existing-preset path is skipped: it assumes canonical "
+                        + "orientation and mis-places a slide mounted in a multi-slide holder.");
                 return processManualAlignmentPath(state);
             }
 
