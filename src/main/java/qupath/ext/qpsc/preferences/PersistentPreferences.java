@@ -52,6 +52,18 @@ public class PersistentPreferences {
     public static void setSelectedScanner(String scanner) {
         selectedScannerProperty.set(scanner);
     }
+
+    /** Last insert selected in the Stage Map (its id), so it is restored across sessions. */
+    private static final StringProperty stageMapInsertProperty =
+            PathPrefs.createPersistentPreference("stageMapInsert", "");
+
+    public static String getStageMapInsert() {
+        return stageMapInsertProperty.get();
+    }
+
+    public static void setStageMapInsert(String insertId) {
+        stageMapInsertProperty.set(insertId == null ? "" : insertId);
+    }
     // ================== BOUNDING BOX WORKFLOW ==================
     private static final StringProperty boundingBoxString =
             PathPrefs.createPersistentPreference("BoundingBox", "27000,7000,20000,10000");

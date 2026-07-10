@@ -162,6 +162,25 @@ public final class MultiSlideAssignmentDialog {
         Map<ProjectImageEntry<BufferedImage>, BufferedImage> macroCache =
                 Collections.synchronizedMap(new IdentityHashMap<>());
 
+        // "Rotate all" -- slides are usually mounted the same way, so this sets every slot's
+        // rotation at once; the per-slot pickers below override individual exceptions.
+        // suppressPreview coalesces the bulk update into a single preview refresh.
+        boolean[] suppressPreview = {false};
+        ChoiceBox<Integer> rotateAllBox = new ChoiceBox<>();
+        rotateAllBox.getItems().addAll(0, 90, 180, 270);
+        rotateAllBox.getSelectionModel().select(Integer.valueOf(0));
+        rotateAllBox.setConverter(new StringConverter<>() {
+            @Override
+            public String toString(Integer deg) {
+                return deg == null ? "0 deg" : deg + " deg";
+            }
+
+            @Override
+            public Integer fromString(String s) {
+                return 0;
+            }
+        });
+
         // Live orientation preview: push each assigned slot's PROCESSED macro (at its chosen
         // rotation) to the Stage Map, which renders them over the holder's slots. The MS dialog
         // is the control surface; the Stage Map is a passive viewer. Macros load off the FX
@@ -222,6 +241,17 @@ public final class MultiSlideAssignmentDialog {
             loader.start();
         };
 
+        // Rotate all: set every slot's rotation at once (coalesced into one preview refresh).
+        rotateAllBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> {
+            if (nv == null) return;
+            suppressPreview[0] = true;
+            for (SlotRow r : slotRows) {
+                r.rotationBox.getSelectionModel().select(nv);
+            }
+            suppressPreview[0] = false;
+            refreshPreview.run();
+        });
+
         Runnable rebuildSlots = () -> {
             slotGrid.getChildren().clear();
             slotRows.clear();
@@ -267,7 +297,9 @@ public final class MultiSlideAssignmentDialog {
                 // how it is physically mounted in the holder.
                 ChoiceBox<Integer> rotationBox = new ChoiceBox<>();
                 rotationBox.getItems().addAll(0, 90, 180, 270);
-                rotationBox.getSelectionModel().select(Integer.valueOf(0));
+                // Inherit the current "Rotate all" value so new rows match the bulk setting.
+                Integer allRot = rotateAllBox.getValue();
+                rotationBox.getSelectionModel().select(allRot == null ? Integer.valueOf(0) : allRot);
                 rotationBox.setConverter(new StringConverter<>() {
                     @Override
                     public String toString(Integer deg) {
@@ -287,9 +319,12 @@ public final class MultiSlideAssignmentDialog {
                     entryBox.setDisable(newV);
                     rotationBox.setDisable(newV);
                 });
-                // Any change updates the live Stage Map preview.
+                // Any change updates the live Stage Map preview (rotation guarded so a bulk
+                // "Rotate all" coalesces into one refresh).
                 entryBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> refreshPreview.run());
-                rotationBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> refreshPreview.run());
+                rotationBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> {
+                    if (!suppressPreview[0]) refreshPreview.run();
+                });
                 slotGrid.add(slotLabel, 0, row);
                 slotGrid.add(entryBox, 1, row);
                 slotGrid.add(rotationBox, 2, row);
@@ -302,6 +337,10 @@ public final class MultiSlideAssignmentDialog {
         };
         rebuildSlots.run();
         carrierBox.valueProperty().addListener((obs, oldV, newV) -> rebuildSlots.run());
+
+        Label rotateAllLabel = new Label("Rotate all slides:");
+        HBox rotateAllRow = new HBox(8, rotateAllLabel, rotateAllBox);
+        rotateAllRow.setStyle("-fx-alignment: center-left;");
 
         ScrollPane slotsScroll = new ScrollPane(slotGrid);
         slotsScroll.setFitToWidth(true);
@@ -340,7 +379,9 @@ public final class MultiSlideAssignmentDialog {
                 hint.setText("Assign at least one slot before starting.");
                 return;
             }
-            StageMapWindow.clearSlotMacroPreviews();
+            // Keep the previews on the Stage Map as a reference for the per-slide alignments
+            // that follow; just restore the Apply Flips control.
+            StageMapWindow.finishOrientationCheck();
             future.complete(new Result(chosen, Collections.unmodifiableList(assignments)));
             stage.close();
         });
@@ -354,8 +395,17 @@ public final class MultiSlideAssignmentDialog {
             if (!future.isDone()) future.complete(null);
         });
 
-        VBox root =
-                new VBox(10, header, intro, new Separator(), carrierRow, new Separator(), slotsScroll, hint, buttons);
+        VBox root = new VBox(
+                10,
+                header,
+                intro,
+                new Separator(),
+                carrierRow,
+                rotateAllRow,
+                new Separator(),
+                slotsScroll,
+                hint,
+                buttons);
         root.setPadding(new Insets(14));
         root.setStyle("-fx-pref-width: 680; -fx-pref-height: 540;");
         stage.setScene(new Scene(root));
@@ -446,6 +496,11 @@ public final class MultiSlideAssignmentDialog {
      */
     private static ProjectImageEntry<BufferedImage> resolveAssignedEntry(
             Project<BufferedImage> project, ProjectImageEntry<BufferedImage> base, int rotationDeg) {
+        // Ensure the base has a source_microscope BEFORE any rotated copy inherits from it.
+        // Without it the flip logic refuses to build a required flipped sibling on scopes
+        // that need one (e.g. PPM). The Stage Map source picker only stamps the open entry,
+        // so the other slides can be missing it -- backfill from the selected scanner.
+        ensureSourceMicroscope(base);
         if (rotationDeg == 0) {
             return base;
         }
@@ -471,6 +526,7 @@ public final class MultiSlideAssignmentDialog {
             ProjectImageEntry<BufferedImage> rotated =
                     QPProjectFunctions.createRotatedDuplicate(project, base, rotation, sampleName);
             if (rotated != null) {
+                ensureSourceMicroscope(rotated); // belt-and-suspenders (inherits from base too)
                 return rotated;
             }
             logger.warn("createRotatedDuplicate returned null for '{}'; using base entry", base.getImageName());
@@ -478,5 +534,27 @@ public final class MultiSlideAssignmentDialog {
             logger.error("Failed to create rotated duplicate for '{}': {}", base.getImageName(), ex.getMessage());
         }
         return base;
+    }
+
+    /**
+     * Stamps {@code source_microscope} on an entry that lacks it, using the selected-scanner
+     * preference (the Stage Map source picker persists it). No-op when the entry already has
+     * one or the preference is unset/Generic -- in which case the workflow's own
+     * missing-source dialog will prompt the operator.
+     */
+    private static void ensureSourceMicroscope(ProjectImageEntry<BufferedImage> entry) {
+        String existing = ImageMetadataManager.getSourceMicroscope(entry);
+        if (existing != null && !existing.isEmpty()) {
+            return;
+        }
+        String scanner = PersistentPreferences.getSelectedScanner();
+        if (scanner == null || scanner.isEmpty() || "Generic".equalsIgnoreCase(scanner)) {
+            logger.info(
+                    "Entry '{}' has no source_microscope and no usable selected-scanner to backfill",
+                    entry.getImageName());
+            return;
+        }
+        entry.getMetadata().put(ImageMetadataManager.SOURCE_MICROSCOPE, scanner);
+        logger.info("Stamped source_microscope='{}' on '{}' (was missing)", scanner, entry.getImageName());
     }
 }

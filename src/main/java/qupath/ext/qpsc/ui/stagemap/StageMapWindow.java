@@ -190,6 +190,29 @@ public class StageMapWindow {
         });
     }
 
+    /**
+     * Ends the orientation check but KEEPS the slot previews visible, so they remain as a
+     * layout reference through the per-slide alignments that follow. Re-enables the Apply
+     * Flips control (leaving it off, matching the raw-orientation previews).
+     */
+    public static void finishOrientationCheck() {
+        Platform.runLater(() -> {
+            if (instance != null) {
+                instance.finishOrientationCheckInternal();
+            }
+        });
+    }
+
+    private void finishOrientationCheckInternal() {
+        if (applyFlipsCheckbox != null) {
+            applyFlipsCheckbox.setDisable(false);
+        }
+        // Leave savedApplyFlipsState cleared and the checkbox OFF -- the previews are drawn in
+        // raw orientation and are not re-projected by Apply Flips, so keeping it off avoids a
+        // preview/map desync during the alignment step. Previews stay visible.
+        savedApplyFlipsState = null;
+    }
+
     /** Prior Apply Flips state saved while a slot preview forces it off; null when inactive. */
     private Boolean savedApplyFlipsState;
 
@@ -433,6 +456,7 @@ public class StageMapWindow {
             StageInsert selected = insertComboBox.getValue();
             if (selected != null) {
                 canvas.setInsert(selected);
+                PersistentPreferences.setStageMapInsert(selected.getId());
                 logger.debug("Switched to insert configuration: {}", selected.getId());
             }
             updateMovementWarning();
@@ -1139,11 +1163,16 @@ public class StageMapWindow {
             List<StageInsert> inserts = StageInsertRegistry.getAvailableInserts();
             insertComboBox.setItems(FXCollections.observableArrayList(inserts));
 
-            // Select default
-            StageInsert defaultInsert = StageInsertRegistry.getDefaultInsert();
-            if (defaultInsert != null) {
-                insertComboBox.setValue(defaultInsert);
-                canvas.setInsert(defaultInsert);
+            // Restore the last-used insert (persisted), falling back to the config default.
+            String savedId = PersistentPreferences.getStageMapInsert();
+            StageInsert initial =
+                    (savedId != null && !savedId.isEmpty()) ? StageInsertRegistry.getInsert(savedId) : null;
+            if (initial == null) {
+                initial = StageInsertRegistry.getDefaultInsert();
+            }
+            if (initial != null) {
+                insertComboBox.setValue(initial);
+                canvas.setInsert(initial);
             }
 
             logger.info("Loaded {} insert configurations", inserts.size());

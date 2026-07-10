@@ -408,7 +408,12 @@ public final class ImageFlipHelper {
             alert.showAndWait();
         };
         if (Platform.isFxApplicationThread()) {
-            show.run();
+            // Defer via runLater even on the FX thread: this can be reached while a
+            // project-setup future completes inside an Animation/layout pulse, where
+            // showAndWait is forbidden ("not allowed during animation or layout
+            // processing"). runLater re-dispatches it into a clean pulse. Fire-and-forget
+            // is fine -- the caller refuses to proceed regardless of the dialog result.
+            Platform.runLater(show);
             return;
         }
         java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
