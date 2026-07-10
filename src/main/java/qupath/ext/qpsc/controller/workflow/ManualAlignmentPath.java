@@ -13,6 +13,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
+import qupath.ext.qpsc.ui.RefinementSelectionController;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
@@ -399,18 +400,6 @@ public class ManualAlignmentPath {
     }
 
     private CompletableFuture<WorkflowState> buildTilesAndShowAlignmentUI() {
-        // Use the same tile creation as acquisition - delegates to TilingUtilities
-        // which reads stageInvertedX/Y from global preferences for consistent tile positioning
-        logger.info("Creating tiles for manual alignment using global inversion preferences");
-
-        // Use the 5-parameter version which reads inversion from preferences
-        TileHelper.createTilesForAnnotations(
-                state.annotations,
-                state.sample,
-                state.projectInfo.getTempTileDirectory(),
-                state.projectInfo.getImagingModeWithIndex(),
-                state.pixelSize);
-
         // Get stage inversion settings from preferences for the alignment UI.
         // The UI uses these to interpret the operator's click direction; the
         // transform class is the canonical reader so all call sites agree.
@@ -426,79 +415,96 @@ public class ManualAlignmentPath {
         // hundreds of mm off, tripping "outside stage bounds".
         double fullResPixelSize = resolveFullResPixelSize();
 
-        // Build a fullRes->stage estimate from the holder slot center (multi-slide
-        // batch only). With it, selecting a reference tile auto-moves the stage
-        // near the tissue instead of leaving the operator to drive from scratch.
+        // Slot-center estimate from the holder calibration (multi-slide batch only).
         AffineTransform slotEstimate = buildSlotCenterEstimate(fullResPixelSize, stageInvertedX, stageInvertedY);
 
-        // Show manual alignment UI
+        // Multi-slide: DON'T run a full 3-point manual landmark alignment. The slide's
+        // rotation is already baked into its (rotated) entry and its rough position is
+        // known from the holder slot center, so we seed the slot-center estimate as the
+        // STARTING transform and let the operator-selected refinement (e.g. single-tile,
+        // in handleRefinement) do the actual alignment. Doing a 3-point landmark here AND
+        // then the selected refinement was aligning the slide twice.
+        //
+        // Exception: if the operator EXPLICITLY chose "Full manual" refinement, honour it
+        // and run the 3-point landmark below.
+        boolean wantsFullManual = state.refinementChoice == RefinementSelectionController.RefinementChoice.FULL_MANUAL;
+        if (slotEstimate != null && !wantsFullManual) {
+            logger.info("Multi-slide: seeding slot-center estimate as the starting transform; the "
+                    + "operator-selected refinement will refine it (no 3-point manual landmark)");
+            state.transform = slotEstimate;
+            MicroscopeController.getInstance().setCurrentTransform(slotEstimate);
+            saveSlideTransform(slotEstimate);
+            return CompletableFuture.completedFuture(state);
+        }
+
+        // Regular (non-multi-slide) manual alignment: build tiles and run the 3-point
+        // landmark picker to establish the transform from scratch.
+        logger.info("Creating tiles for manual alignment using global inversion preferences");
+        TileHelper.createTilesForAnnotations(
+                state.annotations,
+                state.sample,
+                state.projectInfo.getTempTileDirectory(),
+                state.projectInfo.getImagingModeWithIndex(),
+                state.pixelSize);
+
         return AffineTransformationController.setupAffineTransformationAndValidationGUI(
                         fullResPixelSize, stageInvertedX, stageInvertedY, slotEstimate)
                 .thenApply(transform -> {
                     if (transform == null) {
                         throw new CancellationException("Manual alignment cancelled by user");
                     }
-
                     logger.info("Manual transform created successfully");
-
                     state.transform = transform;
                     MicroscopeController.getInstance().setCurrentTransform(transform);
-
-                    // Save slide-specific transform
-                    @SuppressWarnings("unchecked")
-                    Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
-
-                    // Resolve the canonical macro lookup key (base_image when present, else
-                    // the stripped filename). Keeps load and save in lockstep with
-                    // AlignmentHelper.checkForSlideAlignment + saveRefinedAlignment, which
-                    // both go through resolveMacroLookupKey. A flipped sibling entry's
-                    // file name still resolves to the unflipped base via base_image.
-                    String rawImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
-                    String imageName = rawImageName != null
-                            ? AlignmentHelper.resolveMacroLookupKey(project, gui.getImageData(), rawImageName)
-                            : null;
-
-                    if (imageName != null) {
-                        // Capture the macro flip frame this manual alignment was built in
-                        // by reading the OPEN ENTRY's flip metadata. This must match exactly
-                        // what AlignmentHelper.checkForSlideAlignment reads as
-                        // `currentEntryFlipX/Y` on the next load (it calls
-                        // ImageMetadataManager.isFlippedX/Y on the open entry); otherwise
-                        // the bake-delta `bake = alignFlip XOR currentEntryFlip` either
-                        // over-flips or under-flips. Using preset-driven flip here
-                        // (resolveRequiredFlipFromPreset) can diverge from the entry's
-                        // actual flip metadata -- e.g. when source_microscope is missing
-                        // the preset resolver returns (false, false) even when the open
-                        // entry is the flipped sibling -- and was the cause of the
-                        // 2026-05-18 stage-mirror bug.
-                        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
-                        boolean flipMacroX = openEntry != null
-                                && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedX(openEntry);
-                        boolean flipMacroY = openEntry != null
-                                && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedY(openEntry);
-                        AffineTransformManager.saveSlideAlignment(
-                                project,
-                                imageName, // Use image name without extension for base_image compatibility
-                                state.sample.modality(),
-                                transform,
-                                null,
-                                flipMacroX,
-                                flipMacroY,
-                                AffineTransformManager.PIXEL_FRAME_MACRO,
-                                state.sample.objective(),
-                                state.sample.detector());
-                        logger.info(
-                                "Saved slide-specific transform for image: {} (flipMacroX={}, flipMacroY={}, objective={}, detector={})",
-                                imageName,
-                                flipMacroX,
-                                flipMacroY,
-                                state.sample.objective(),
-                                state.sample.detector());
-                    } else {
-                        logger.warn("Cannot save slide-specific transform - no image name available");
-                    }
-
+                    saveSlideTransform(transform);
                     return state;
                 });
+    }
+
+    /**
+     * Persists {@code transform} as this slide's per-slide alignment JSON, resolving
+     * the canonical macro lookup key and recording the open entry's flip frame so the
+     * next load reads it back consistently (see the AlignmentHelper bake-delta note).
+     */
+    private void saveSlideTransform(AffineTransform transform) {
+        @SuppressWarnings("unchecked")
+        Project<BufferedImage> project = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+
+        // Resolve the canonical macro lookup key (base_image when present, else the
+        // stripped filename). Keeps load and save in lockstep with
+        // AlignmentHelper.checkForSlideAlignment + saveRefinedAlignment.
+        String rawImageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+        String imageName = rawImageName != null
+                ? AlignmentHelper.resolveMacroLookupKey(project, gui.getImageData(), rawImageName)
+                : null;
+        if (imageName == null) {
+            logger.warn("Cannot save slide-specific transform - no image name available");
+            return;
+        }
+
+        // Read the OPEN ENTRY's flip metadata (must match what
+        // AlignmentHelper.checkForSlideAlignment reads on the next load; preset-driven
+        // flip can diverge -- the 2026-05-18 stage-mirror bug).
+        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+        boolean flipMacroX = openEntry != null && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedX(openEntry);
+        boolean flipMacroY = openEntry != null && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedY(openEntry);
+        AffineTransformManager.saveSlideAlignment(
+                project,
+                imageName,
+                state.sample.modality(),
+                transform,
+                null,
+                flipMacroX,
+                flipMacroY,
+                AffineTransformManager.PIXEL_FRAME_MACRO,
+                state.sample.objective(),
+                state.sample.detector());
+        logger.info(
+                "Saved slide-specific transform for image: {} (flipMacroX={}, flipMacroY={}, objective={}, detector={})",
+                imageName,
+                flipMacroX,
+                flipMacroY,
+                state.sample.objective(),
+                state.sample.detector());
     }
 }
