@@ -1,5 +1,6 @@
 package qupath.ext.qpsc.utilities;
 
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -14,6 +15,8 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;
+import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.regions.ImagePlane;
 import qupath.lib.roi.ROIs;
 import qupath.lib.roi.interfaces.ROI;
@@ -335,6 +338,41 @@ public class TilingUtilities {
     }
 
     /**
+     * True when the current acquisition image is rotated 90 or 270 degrees relative to the
+     * camera's native orientation (a {@code RotatedImageServer} duplicate, whose entry name
+     * carries a "(rotated 90)" / "(rotated 270)" suffix set by
+     * {@code QPProjectFunctions.createRotatedDuplicate}). Such a rotation swaps the image
+     * width and height, so the camera FOV -- reported by the config in the SENSOR's native
+     * (unrotated) orientation -- must be swapped before it drives the tile grid. Otherwise the
+     * grid's step in each axis is matched against the wrong camera dimension and the tiles gap
+     * between rows (or columns). A 180-degree rotation does NOT swap dimensions, so it is
+     * excluded. Detected by the deterministic name suffix rather than the server type because
+     * the acquisition image is a chain (rotated + flipped) and getWrappedServer() is not
+     * accessible from this package.
+     */
+    private static boolean isAcquisitionImageRotated90or270(QuPathGUI gui) {
+        if (gui == null || gui.getImageData() == null) {
+            return false;
+        }
+        String name = null;
+        try {
+            Project<BufferedImage> project = gui.getProject();
+            if (project != null) {
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null) {
+                    name = entry.getImageName();
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("Rotation detection: project entry lookup failed ({}), using server name", e.getMessage());
+        }
+        if (name == null) {
+            name = gui.getImageData().getServer().getMetadata().getName();
+        }
+        return name != null && (name.contains("(rotated 90)") || name.contains("(rotated 270)"));
+    }
+
+    /**
      * Creates tiles for annotations using camera FOV from the microscope server.
      *
      * <p>This method:
@@ -381,6 +419,24 @@ public class TilingUtilities {
         double frameHeightMicrons = fovMicrons[1];
 
         logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+
+        // A 90/270-rotated acquisition image (the multi-slide rotated sibling) swaps the image
+        // width/height relative to the camera sensor. getCameraFOV reports the FOV in the
+        // sensor's native (unrotated) orientation, so swap it to match the rotated tile grid --
+        // otherwise each axis' grid step is sized against the wrong camera dimension and the
+        // tiles gap between rows (observed: landscape frames with a gap every row because the
+        // vertical step used the frame WIDTH). 180-degree rotation does not swap dims.
+        if (isAcquisitionImageRotated90or270(gui)) {
+            double rotatedFrameWidth = frameHeightMicrons;
+            double rotatedFrameHeight = frameWidthMicrons;
+            frameWidthMicrons = rotatedFrameWidth;
+            frameHeightMicrons = rotatedFrameHeight;
+            logger.info(
+                    "Acquisition image is rotated 90/270 -- swapped camera FOV to {} x {} microns to match "
+                            + "the rotated tile grid (prevents inter-row gaps)",
+                    frameWidthMicrons,
+                    frameHeightMicrons);
+        }
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
         if (frameWidthMicrons < 100
@@ -493,6 +549,24 @@ public class TilingUtilities {
         double frameHeightMicrons = fovMicrons[1];
 
         logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+
+        // A 90/270-rotated acquisition image (the multi-slide rotated sibling) swaps the image
+        // width/height relative to the camera sensor. getCameraFOV reports the FOV in the
+        // sensor's native (unrotated) orientation, so swap it to match the rotated tile grid --
+        // otherwise each axis' grid step is sized against the wrong camera dimension and the
+        // tiles gap between rows (observed: landscape frames with a gap every row because the
+        // vertical step used the frame WIDTH). 180-degree rotation does not swap dims.
+        if (isAcquisitionImageRotated90or270(gui)) {
+            double rotatedFrameWidth = frameHeightMicrons;
+            double rotatedFrameHeight = frameWidthMicrons;
+            frameWidthMicrons = rotatedFrameWidth;
+            frameHeightMicrons = rotatedFrameHeight;
+            logger.info(
+                    "Acquisition image is rotated 90/270 -- swapped camera FOV to {} x {} microns to match "
+                            + "the rotated tile grid (prevents inter-row gaps)",
+                    frameWidthMicrons,
+                    frameHeightMicrons);
+        }
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
         if (frameWidthMicrons < 100
