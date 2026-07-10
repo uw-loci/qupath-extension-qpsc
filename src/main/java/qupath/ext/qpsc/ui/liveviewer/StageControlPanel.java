@@ -764,6 +764,18 @@ public class StageControlPanel extends VBox {
         stepBlock.setAlignment(Pos.CENTER_LEFT);
         zBarPanel.getControlsColumn().getChildren().add(stepBlock);
 
+        // Seed the Z bar (and Z field) with the last-known stage Z so the
+        // current-Z thumb is shown -- and the fine bar centers on it -- the FIRST
+        // time Navigate is opened. The position poller only fires PROP_POS_Z on a
+        // CHANGE, so if the stage was already polled before this panel was built,
+        // no event arrives until Z next moves; without this seed the thumb stays
+        // hidden and the fine bar sits at the coarse-range midpoint until then.
+        double seedZ = StagePositionManager.getInstance().getZ();
+        if (!Double.isNaN(seedZ)) {
+            zBarPanel.setCurrentZ(seedZ);
+            zField.setText(String.format("%.2f", seedZ));
+        }
+
         Label zBarLabel = new Label("Z Focus");
         zBarLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
 

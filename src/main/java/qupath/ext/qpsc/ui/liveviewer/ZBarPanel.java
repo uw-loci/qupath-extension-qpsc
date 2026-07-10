@@ -186,7 +186,11 @@ public class ZBarPanel extends HBox {
 
         coarseBar.zMin = coarseMin.get();
         coarseBar.zMax = coarseMax.get();
-        double z = stageZMaxSupplier.getAsDouble();
+        // Center the fine bar on the middle of the coarse range as a neutral
+        // default. The host seeds the real current Z immediately after
+        // construction (StageControlPanel), which recenters the fine bar via the
+        // currentZ listener; this midpoint is only visible if no Z is available.
+        double z = (coarseBar.zMin + coarseBar.zMax) / 2.0;
         fineBar.zMin = z - fineHalfWidth.get();
         fineBar.zMax = z + fineHalfWidth.get();
 

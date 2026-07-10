@@ -12,6 +12,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
@@ -168,14 +169,44 @@ public class ManualAlignmentPath {
      * @return CompletableFuture containing the updated workflow state
      */
     private CompletableFuture<WorkflowState> createManualAlignment() {
-        // Get or create annotations
+        // Get or create annotations. On the multi-slide path the currently open
+        // entry is the freshly-created (rotated)(flipped) sibling that matches the
+        // live viewer -- it carries no annotations, so the operator must draw the
+        // tissue ROIs on THIS entry before we build alignment tiles from them.
         state.annotations =
                 AnnotationHelper.ensureAnnotationsExist(gui, state.pixelSize, state.selectedAnnotationClasses);
 
-        if (state.annotations.isEmpty()) {
-            throw new RuntimeException("No annotations available for manual alignment");
+        if (!state.annotations.isEmpty()) {
+            return proceedWithManualAlignment();
         }
 
+        // No annotations on the final entry -- pause and let the operator draw them
+        // (or run tissue detection) in QuPath, then continue. This replaces the old
+        // hard failure that dumped the operator into the Select-Tile picker with no
+        // tiles to pick.
+        logger.info("No annotations on the alignment entry; prompting operator to draw before tile selection");
+        return UIFunctions.showAnnotationWarningDialog(gui, state.selectedAnnotationClasses)
+                .thenCompose(action -> {
+                    if (action != UIFunctions.AnnotationAction.ANNOTATIONS_CONFIRMED) {
+                        throw new CancellationException("No annotations drawn for manual alignment");
+                    }
+                    state.annotations = AnnotationHelper.ensureAnnotationsExist(
+                            gui, state.pixelSize, state.selectedAnnotationClasses);
+                    if (state.annotations.isEmpty()) {
+                        throw new CancellationException("No annotations available for manual alignment");
+                    }
+                    return proceedWithManualAlignment();
+                });
+    }
+
+    /**
+     * Builds alignment tiles from {@code state.annotations} and shows the manual
+     * alignment (Select-Tile) UI. Precondition: {@code state.annotations} is
+     * non-empty.
+     *
+     * @return CompletableFuture containing the updated workflow state
+     */
+    private CompletableFuture<WorkflowState> proceedWithManualAlignment() {
         // Use the same tile creation as acquisition - delegates to TilingUtilities
         // which reads stageInvertedX/Y from global preferences for consistent tile positioning
         logger.info("Creating tiles for manual alignment using global inversion preferences");
