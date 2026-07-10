@@ -117,14 +117,17 @@ See [full documentation](tools/existing-image-acquisition.md) for step-by-step i
 Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the **MS-Existing Image (experimental)** menu entry. The menu item appears and disappears live when you toggle the preference — no restart required. It is a shepherding layer over Workflow 2 for slide carriers that hold multiple slides (currently the 4-slide vertical holder, `quad_v`):
 
 1. Pick the carrier in the assignment dialog.
-2. For each slot, assign one project macro entry and set its **Rotation** to match how the slide is physically mounted:
+2. Configure slide rotations:
+   - **Rotate all slides** (dropdown at the top of the dialog): Set every slot's rotation at once when slides are usually mounted the same way. Individual per-slot pickers below override this for exceptions.
+3. For each slot, assign one project macro entry and set its **Rotation** to match how the slide is physically mounted:
    - **0°** – slide is mounted in its normal orientation
    - **90°** – slide is rotated 90° clockwise
    - **180°** – slide is upside down
    - **270°** – slide is rotated 270° clockwise (or 90° counter-clockwise)
    - Each non-zero rotation creates or reuses a rotated duplicate entry in the project so acquisition aligns correctly to the mounted orientation.
-   - **Live preview:** Open the Stage Map beside this dialog to see all assigned slides at their chosen rotations rendered over the holder's slots. Adjust rotations in real time and watch the Stage Map preview update live, so you can verify placement before starting acquisition. Check the box for "Skip" to leave a slot unoccupied.
-3. Run the slots. There are three ways, and you can mix them:
+   - **Live preview:** Open the Stage Map beside this dialog to see all assigned slides at their chosen rotations rendered over the holder's slots. Adjust rotations in real time and watch the Stage Map preview update live, so you can verify placement before acquisition starts. The preview remains visible after the dialog closes, serving as a layout reference through the per-slide alignments that follow.
+   - Check the box for "Skip" to leave a slot unoccupied.
+4. Run the slots. There are three ways, and you can mix them:
    - **Run All Remaining** (semi-automated single pass) walks every not-yet-done slot in order -- the panel opens each macro entry and runs the full Existing Image workflow on it, advancing the slot to **Done** when acquisition completes and moving on. You still answer each slide's own dialogs (alignment, refinement, acquisition setup) as its turn comes up; the panel automates only the sequencing between slides.
    - **Two-pass (unattended acquire)** -- for a walk-away batch, first click **Set Up All Remaining**: this runs the interactive align + refine + tissue pass on every slot *without acquiring*, so each slot advances to **Set up (ready to acquire)** and remembers its acquisition settings. Then click **Acquire All Set-Up**: the panel acquires every set-up slot **unattended, with no dialogs**, replaying each slot's settings against the alignment saved during setup. Front-load all your decisions in the setup pass, then leave it running. **Tip:** choose **single-tile refinement** during each slot's setup -- the focus Z it establishes is carried into the unattended acquire pass to seed that slot's first-tile autofocus, so acquisition starts near focus instead of hunting. (With no refinement, the acquire pass still autofocuses from the current stage Z; it just has no head-start.)
    - Or drive one slot by hand with its row buttons: **Open** switches to that slot's macro entry, then **Run Single-Slide Workflow** launches the regular workflow on it.
@@ -134,7 +137,7 @@ Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the
    - **Abort All** — Click this button to stop the batch driver immediately and prevent further slides from starting. A currently running acquisition still completes or cancels via its own dialog, but no new slides will be opened after this button is clicked.
    
    A slot advances to **Done** on a successful acquisition, or stays **In Progress** / **Set up** (so you can retry or Skip) if a run is cancelled at a gate or hits a handled error.
-4. Once every slot is Done or Skipped, click **Finish** to see a summary.
+5. Once every slot is Done or Skipped, click **Finish** to see a summary.
 
 **Alignment during multi-slide runs:** During all multi-slide batch passes (Run All Remaining, Set Up All Remaining, or Acquire All Set-Up), each slide's alignment is **always derived fresh via manual (landmark) alignment**, never reused from a saved per-slide alignment or the SIFT/preset path. This is by design: a slide's position in the holder depends on its current mount (slot location, orientation) and a prior alignment from a single-slide layout is meaningless for the holder. The setup pass always creates a fresh per-slide alignment JSON specific to that slide's position in the current holder; the acquire pass then replays that JSON. If you have a saved alignment from a single-slide acquisition, it is not consulted during multi-slide runs.
 
