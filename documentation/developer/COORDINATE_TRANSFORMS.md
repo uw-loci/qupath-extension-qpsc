@@ -309,6 +309,78 @@ graph LR
 
 The `--hint-z` flag tells the server to start its autofocus search near the predicted Z, reducing search time.
 
+## Rotated stage inserts: camera-vs-stage tiling geometry
+
+This is the durable model for **rotated slide holders** (e.g. `quad_v`, where each slide is
+mounted 270 deg from the single-slide preset). It will recur for other inserts and camera setups.
+
+**The fixed anchor:** the camera sensor is bolted to the stage. Its horizontal axis (FOV
+**width**, e.g. 357 um) is along **stage-X**; its vertical axis (FOV **height**, 267 um) is
+along **stage-Y** -- **always**. No QuPath image rotation changes this physical fact. So the
+stage must always step **FOV-width in X** and **FOV-height in Y** for tiles to abut.
+
+**What rotation does:** a slide mounted rotated is represented by a `(rotated N)(flipped XY)`
+QuPath entry so annotations/coordinates live in the slide's microscope orientation. The
+QuPath->stage alignment transform then carries a **genuine rotation**. For 270 (PPM quad_v,
+verified 2026-07-10, `qpsc-session-20260710-154025`):
+
+```
+stage_x = pxSize * qy + c1
+stage_y = -pxSize * qx + c2      (pxSize = QuPath image pixel size, e.g. 0.250552 um/px)
+```
+
+i.e. stage-X is driven by QuPath-**Y**, stage-Y by QuPath-**-X**. This mixes the axes, and two
+consequences bit us repeatedly:
+
+### 1. Tiling (stage moves) -- pre-compensate the grid for the rotation
+
+The tile grid is laid out in QuPath pixel space, then transformed to stage. For the stage steps
+to come out axis-aligned to the camera (FOV-width in X, FOV-height in Y), the QuPath grid step
+must be **pre-compensated** for the rotation. For a 90/270 rotation, **swap
+frameWidth <-> frameHeight** before converting to QuPath pixels (`isAcquisitionImageRotated90or270`
++ the FOV-swap in `TilingUtilities`; commit 70903af6, restored a41f9d87):
+
+- QuPath-X step = frameHeight/pxSize  -> after the 270 transform -> **FOV height in stage-Y** OK
+- QuPath-Y step = frameWidth/pxSize   -> after the 270 transform -> **FOV width in stage-X**  OK
+
+Without the swap, a QuPath-X row step puts the frame **WIDTH** into stage-Y where the frame
+**HEIGHT** belongs -> a `(width - height)`-sized gap every row and an overlap in the other axis
+(the "using the Y distance as the X distance" striping). Worked example: frame 1421x1063 QuPath
+px, camera 357x267 um; 1421 px row step -> 356 um in stage-Y but the tile is only 267 um tall ->
+~89 um gap/row. The swap fixes it exactly.
+
+### 2. Stitching -- assemble in the STAGE frame, never rotate/transpose tile positions
+
+Tiles are captured in camera/stage orientation and the stitcher **cannot rotate tile content**.
+Stitch using the **stage-frame** positions the server actually moved to (`TileConfiguration.txt`).
+The stage-frame mosaic matches the `(rotated N)(flipped XY)` entry **because that entry was built
+to match the camera orientation**. Do **NOT** try to "un-rotate" the stitch positions into the
+QuPath frame -- that **transposes** the output (rows become columns). Verified wrong and reverted
+2026-07-10 (the un-rotation `7d005123` -> revert `a41f9d87`).
+
+### Display note (not a bug)
+
+In a 270-rotated QuPath frame a landscape stage FOV genuinely **appears portrait** (rotate a wide
+rectangle 270 -> tall). So the swapped (portrait) grid rectangles drawn on the rotated entry are
+**geometrically correct**. The instinct that "the tiles should look landscape" assumes the camera
+is axis-aligned with the QuPath image; the alignment transform's rotation disproves that.
+
+### Generalizing to other inserts / cameras
+
+- The FOV-swap applies to **90/270** (axis-swapping) rotations only; **180** does not swap; **0**
+  needs nothing. Drive the decision off the alignment transform's rotation, not the image's
+  apparent orientation.
+- Two INDEPENDENT rotation sources -- do not conflate:
+  - **(A) camera-vs-stage sensor mount** -- `CameraOrientation`, reduced to two axis-aligned flip
+    booleans by `StageImageTransform.stitcherFlipFlags()`. For a normal (non-tilted) mount this is
+    NORMAL/FLIP and needs no tile rotation.
+  - **(B) acquisition-image rotation** -- the `(rotated N)` holder rotation, folded into the
+    alignment transform (the subject of this section).
+- A camera physically mounted at a true 90 deg to the stage (an axis swap in (A)) is the one case
+  the stitcher genuinely cannot express -- `stitcherFlipFlags()` logs an error and falls back to a
+  mirror; correct output would require rotating tile content (deferred). Holder rotation (B) never
+  needs tile-content rotation because it is handled entirely in the stage-move geometry.
+
 ## Key Files
 
 | File | Purpose |
