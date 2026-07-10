@@ -203,6 +203,18 @@ public class TileProcessingUtilities {
         // approximation and log a warning.
         boolean[] stitcherFlags = StageImageTransform.current().stitcherFlipFlags();
 
+        // For a rotated acquisition image (multi-slide "(rotated N)" sibling), un-rotate the
+        // tile positions so the horizontal, sensor-native camera tiles assemble into the
+        // ROTATED image frame (matching QuPath / the eyepiece) rather than the stage frame.
+        // The tile GRID and the stage MOVES keep the full rotation (the slide really is rotated
+        // on the stage); only the stitch ASSEMBLY frame is un-rotated. The server already
+        // consumed the stage-um TileConfiguration.txt for its moves, so overwriting it here is
+        // safe. Idempotent per directory. Camera/stage flip handling is unchanged.
+        int acqRotationDeg = TilingUtilities.acquisitionRotationDegrees(qupathGUI);
+        if (acqRotationDeg != 0) {
+            unrotateTileConfigsForStitch(tileFolder, acqRotationDeg);
+        }
+
         // The direct OME-TIFF writer cannot silently corrupt pyramid levels and
         // writes straight to the final path, so the former tile-write-error
         // detection / retry / OME_TIFF_VIA_ZARR escalation has been removed.
@@ -683,6 +695,86 @@ public class TileProcessingUtilities {
      * time to stamp the entry's {@code acquired_on_microscope} so the Existing
      * Image workflow can refuse cross-scope sub-image acquisition (finding H3).
      */
+    /**
+     * Un-rotates the tile-position files under {@code tileFolder} by {@code -rotationDeg} so a
+     * rotated acquisition image's horizontal camera tiles assemble into the (rotated) image
+     * frame rather than the stage frame. Applies the inverse quarter-rotation to each
+     * {@code N.tif; ; (x, y)} coordinate: 90 -> (y,-x), 180 -> (-x,-y), 270 -> (-y,x). This
+     * exactly removes the acquisition-image rotation carried by {@code fullResToStage} while
+     * preserving its scale and flip (R(-t).R(t).S = S), so the stitcher's um->pixel and flip
+     * handling stay unchanged. Idempotent per directory via a {@code .stitch_unrotated}
+     * sentinel so a re-stitch does not double-rotate. Processes {@code tileFolder} and its
+     * immediate subdirectories (the per-angle/region tile folders).
+     */
+    private static void unrotateTileConfigsForStitch(String tileFolder, int rotationDeg) {
+        if (rotationDeg == 0) {
+            return;
+        }
+        File parent = new File(tileFolder);
+        java.util.List<File> dirs = new java.util.ArrayList<>();
+        dirs.add(parent);
+        File[] subs = parent.listFiles(File::isDirectory);
+        if (subs != null) {
+            java.util.Collections.addAll(dirs, subs);
+        }
+        java.util.regex.Pattern p = java.util.regex.Pattern.compile("(\\d+\\.tif); ; \\((.*?), (.*?)\\)");
+        for (File dir : dirs) {
+            File cfg = new File(dir, "TileConfiguration.txt");
+            if (!cfg.exists()) {
+                continue;
+            }
+            File sentinel = new File(dir, ".stitch_unrotated");
+            if (sentinel.exists()) {
+                continue;
+            }
+            try {
+                java.util.List<String> lines = java.nio.file.Files.readAllLines(cfg.toPath());
+                java.util.List<String> out = new java.util.ArrayList<>(lines.size());
+                int n = 0;
+                for (String line : lines) {
+                    java.util.regex.Matcher m = p.matcher(line);
+                    if (m.find()) {
+                        double x = Double.parseDouble(m.group(2).trim());
+                        double y = Double.parseDouble(m.group(3).trim());
+                        double nx;
+                        double ny;
+                        switch (rotationDeg) {
+                            case 90 -> {
+                                nx = y;
+                                ny = -x;
+                            }
+                            case 180 -> {
+                                nx = -x;
+                                ny = -y;
+                            }
+                            case 270 -> {
+                                nx = -y;
+                                ny = x;
+                            }
+                            default -> {
+                                nx = x;
+                                ny = y;
+                            }
+                        }
+                        out.add(String.format("%s; ; (%.3f, %.3f)", m.group(1), nx, ny));
+                        n++;
+                    } else {
+                        out.add(line);
+                    }
+                }
+                java.nio.file.Files.write(cfg.toPath(), out);
+                sentinel.createNewFile();
+                logger.info(
+                        "Un-rotated {} tile position(s) by -{} deg for image-frame stitching: {}",
+                        n,
+                        rotationDeg,
+                        cfg.getAbsolutePath());
+            } catch (Exception e) {
+                logger.error("Failed to un-rotate tile config {}: {}", cfg.getAbsolutePath(), e.getMessage());
+            }
+        }
+    }
+
     private static String resolveActiveMicroscopeName() {
         try {
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
