@@ -45,8 +45,10 @@ public class RefinementSelectionController {
     public enum RefinementChoice {
         /** Proceed directly without any refinement */
         NONE("Proceed without refinement"),
-        /** Verify position with a single tile acquisition */
+        /** Verify position with a single tile acquisition (translation-only correction) */
         SINGLE_TILE("Single-tile refinement"),
+        /** Correct rotation + scale from 2+ measured tiles (for slide play in a holder slot) */
+        MULTI_TILE("Multi-tile refinement"),
         /** Start completely fresh with full manual alignment */
         FULL_MANUAL("Full manual alignment");
 
@@ -165,6 +167,19 @@ public class RefinementSelectionController {
                         "Accuracy: +/- 5 um | Time: +2-3 minutes",
                         toggleGroup);
 
+                // Option 2b: Multi-tile refinement (corrects rotation + scale)
+                RadioButton multiTileRadio = new RadioButton();
+                multiTileRadio.setTooltip(
+                        new Tooltip("Acquire tiles at 2+ spread positions and solve a rotation + scale correction.\n"
+                                + "Fixes a slide that has shifted/rotated in its holder slot -- which single-tile\n"
+                                + "(offset only) cannot. Faster than full manual; starts from the current alignment."));
+                VBox multiTileOption = createOptionCard(
+                        multiTileRadio,
+                        "Multi-tile refinement",
+                        "Acquire 2+ tiles to correct rotation and scale (slide play in a slot)",
+                        "Accuracy: +/- 3 um | Time: +4-6 minutes",
+                        toggleGroup);
+
                 // Option 3: Full manual alignment
                 RadioButton fullManualRadio = new RadioButton();
                 fullManualRadio.setTooltip(
@@ -178,7 +193,7 @@ public class RefinementSelectionController {
                         "Accuracy: +/- 2 um | Time: +10-15 minutes",
                         toggleGroup);
 
-                optionsBox.getChildren().addAll(noRefineOption, singleTileOption, fullManualOption);
+                optionsBox.getChildren().addAll(noRefineOption, singleTileOption, multiTileOption, fullManualOption);
 
                 // Auto-select based on confidence
                 RefinementChoice recommendedChoice = getRecommendedChoice(alignmentInfo.confidence());
@@ -187,6 +202,7 @@ public class RefinementSelectionController {
                 switch (recommendedChoice) {
                     case NONE -> noRefineRadio.setSelected(true);
                     case SINGLE_TILE -> singleTileRadio.setSelected(true);
+                    case MULTI_TILE -> multiTileRadio.setSelected(true);
                     case FULL_MANUAL -> fullManualRadio.setSelected(true);
                 }
 
@@ -198,6 +214,7 @@ public class RefinementSelectionController {
                         switch (savedChoice) {
                             case NONE -> noRefineRadio.setSelected(true);
                             case SINGLE_TILE -> singleTileRadio.setSelected(true);
+                            case MULTI_TILE -> multiTileRadio.setSelected(true);
                             case FULL_MANUAL -> fullManualRadio.setSelected(true);
                         }
                         autoSelected = false;
@@ -239,6 +256,8 @@ public class RefinementSelectionController {
                             choice = RefinementChoice.NONE;
                         } else if (singleTileRadio.isSelected()) {
                             choice = RefinementChoice.SINGLE_TILE;
+                        } else if (multiTileRadio.isSelected()) {
+                            choice = RefinementChoice.MULTI_TILE;
                         } else {
                             choice = RefinementChoice.FULL_MANUAL;
                         }

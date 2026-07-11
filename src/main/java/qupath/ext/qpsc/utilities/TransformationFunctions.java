@@ -997,6 +997,115 @@ public class TransformationFunctions {
     }
 
     /**
+     * Result of a stage-space similarity fit: the correction transform plus the
+     * diagnostic quantities it recovered. The rotation and scale are the physical
+     * read-out of the slide's play in its slot (rotation != 0 -> the slide sits
+     * rotated relative to the alignment; scale != 1 -> a residual pixel-size /
+     * objective mismatch). {@code rmsResidualUm} is the fit quality: a large value
+     * after 3+ points means the correspondences disagree (bad SIFT match, or the
+     * map is not actually a similarity).
+     *
+     * @param correction stage-space similarity S mapping predicted -> measured
+     * @param rotationDegrees rotation of S in degrees (signed)
+     * @param scale isotropic scale of S (1.0 == no scale change)
+     * @param rmsResidualUm RMS of |measured - S(predicted)| over the points, in um
+     * @param pointCount number of correspondences used
+     */
+    public record SimilarityFit(
+            AffineTransform correction, double rotationDegrees, double scale, double rmsResidualUm, int pointCount) {}
+
+    /**
+     * Least-squares 2D similarity (rotation + isotropic scale + translation, NO
+     * reflection) mapping {@code predicted[i] -> measured[i]}, both in STAGE
+     * micrometers. This is the multi-tile refinement solver: the caller measures
+     * where each reference tile's predicted stage position (from the current
+     * alignment) actually lands (via SIFT / manual nudge), and this recovers the
+     * rigid+scale correction that the slide's play in its slot introduced.
+     *
+     * <p>Both point sets are in stage space with the SAME handedness, so the map
+     * between them is a proper similarity (positive determinant) -- there is no
+     * reflection ambiguity, unlike fitting pixel->stage directly. Closed-form
+     * Umeyama solution: with centered points and
+     * {@code cosTerm = sum(pc.x*qc.x + pc.y*qc.y)}, {@code sinTerm = sum(pc.x*qc.y - pc.y*qc.x)},
+     * {@code denom = sum|pc|^2}, the scaled rotation is
+     * {@code [[cosTerm, -sinTerm],[sinTerm, cosTerm]] / denom} and the translation
+     * anchors the centroids. Compose the result onto the current alignment with
+     * {@code refined = new AffineTransform(fit.correction()); refined.concatenate(initialTransform);}
+     * so {@code refined(pixel) = correction(initialTransform(pixel))}.
+     *
+     * @param predicted stage positions predicted by the current alignment (n x 2), n >= 2
+     * @param measured  stage positions actually measured for the same tiles (n x 2)
+     * @return the fit, or a fit whose correction is the identity when the inputs are
+     *     degenerate (fewer than 2 points, mismatched lengths, or all predicted
+     *     points coincident)
+     */
+    public static SimilarityFit computeStageSpaceSimilarity(double[][] predicted, double[][] measured) {
+        int n = (predicted == null || measured == null) ? 0 : Math.min(predicted.length, measured.length);
+        if (n < 2) {
+            logger.warn("computeStageSpaceSimilarity: need >= 2 points, got {}; returning identity", n);
+            return new SimilarityFit(new AffineTransform(), 0.0, 1.0, 0.0, n);
+        }
+
+        double muPx = 0, muPy = 0, muQx = 0, muQy = 0;
+        for (int i = 0; i < n; i++) {
+            muPx += predicted[i][0];
+            muPy += predicted[i][1];
+            muQx += measured[i][0];
+            muQy += measured[i][1];
+        }
+        muPx /= n;
+        muPy /= n;
+        muQx /= n;
+        muQy /= n;
+
+        double cosTerm = 0, sinTerm = 0, denom = 0;
+        for (int i = 0; i < n; i++) {
+            double pcx = predicted[i][0] - muPx;
+            double pcy = predicted[i][1] - muPy;
+            double qcx = measured[i][0] - muQx;
+            double qcy = measured[i][1] - muQy;
+            cosTerm += pcx * qcx + pcy * qcy;
+            sinTerm += pcx * qcy - pcy * qcx;
+            denom += pcx * pcx + pcy * pcy;
+        }
+
+        if (denom < 1e-9) {
+            logger.warn("computeStageSpaceSimilarity: predicted points are coincident; returning identity");
+            return new SimilarityFit(new AffineTransform(), 0.0, 1.0, 0.0, n);
+        }
+
+        double scaledCos = cosTerm / denom; // s*cos(theta)
+        double scaledSin = sinTerm / denom; // s*sin(theta)
+        double tx = muQx - (scaledCos * muPx - scaledSin * muPy);
+        double ty = muQy - (scaledSin * muPx + scaledCos * muPy);
+
+        // AffineTransform(m00, m10, m01, m11, m02, m12)
+        AffineTransform correction = new AffineTransform(scaledCos, scaledSin, -scaledSin, scaledCos, tx, ty);
+
+        double scale = Math.hypot(scaledCos, scaledSin);
+        double rotationDegrees = Math.toDegrees(Math.atan2(sinTerm, cosTerm));
+
+        double sumSq = 0;
+        for (int i = 0; i < n; i++) {
+            double px = scaledCos * predicted[i][0] - scaledSin * predicted[i][1] + tx;
+            double py = scaledSin * predicted[i][0] + scaledCos * predicted[i][1] + ty;
+            double dx = measured[i][0] - px;
+            double dy = measured[i][1] - py;
+            sumSq += dx * dx + dy * dy;
+        }
+        double rmsResidualUm = Math.sqrt(sumSq / n);
+
+        logger.info(
+                "Stage-space similarity fit ({} pts): rotation={} deg, scale={}, RMS residual={} um",
+                n,
+                String.format("%.3f", rotationDegrees),
+                String.format("%.5f", scale),
+                String.format("%.2f", rmsResidualUm));
+
+        return new SimilarityFit(correction, rotationDegrees, scale, rmsResidualUm, n);
+    }
+
+    /**
      * Picks the tile whose centroid is top-most, then closest to the median X among those.
      */
     public static PathObject getTopCenterTile(Collection<PathObject> detections) {

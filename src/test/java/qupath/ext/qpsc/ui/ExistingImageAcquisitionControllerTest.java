@@ -41,7 +41,13 @@ class ExistingImageAcquisitionControllerTest {
     @Test
     @DisplayName("All RefinementChoice values are present")
     void testRefinementChoiceValuesCount() {
-        assertEquals(3, RefinementChoice.values().length);
+        assertEquals(4, RefinementChoice.values().length);
+    }
+
+    @Test
+    @DisplayName("RefinementChoice.MULTI_TILE has correct display name")
+    void testRefinementChoiceMultiTileDisplayName() {
+        assertEquals("Multi-tile refinement", RefinementChoice.MULTI_TILE.getDisplayName());
     }
 
     // ==================== ExistingImageAcquisitionConfig Tests ====================

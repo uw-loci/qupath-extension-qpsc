@@ -100,6 +100,7 @@ public class ExistingImageAcquisitionController {
     public enum RefinementChoice {
         NONE("Proceed without refinement"),
         SINGLE_TILE("Single-tile refinement"),
+        MULTI_TILE("Multi-tile refinement"),
         FULL_MANUAL("Full manual alignment");
 
         private final String displayName;
@@ -258,6 +259,7 @@ public class ExistingImageAcquisitionController {
         private ToggleGroup refinementGroup;
         private RadioButton noRefineRadio;
         private RadioButton singleTileRadio;
+        private RadioButton multiTileRadio;
         private RadioButton fullManualRadio;
         private Label refinementRecommendationLabel;
         private VBox refinementBox;
@@ -933,6 +935,9 @@ public class ExistingImageAcquisitionController {
             singleTileRadio = new RadioButton("Single-tile refinement (+2-3 min)");
             singleTileRadio.setToggleGroup(refinementGroup);
 
+            multiTileRadio = new RadioButton("Multi-tile refinement (+4-6 min)");
+            multiTileRadio.setToggleGroup(refinementGroup);
+
             fullManualRadio = new RadioButton("Full manual alignment (+10-15 min)");
             fullManualRadio.setToggleGroup(refinementGroup);
 
@@ -943,8 +948,12 @@ public class ExistingImageAcquisitionController {
                             : "    Fastest - use alignment as-is. Accuracy: +/- 20 um");
             noRefineDesc.setStyle(subtleTextStyle());
 
-            Label singleTileDesc = new Label("    Verify position with one tile. Accuracy: +/- 5 um");
+            Label singleTileDesc = new Label("    Verify position with one tile (offset only). Accuracy: +/- 5 um");
             singleTileDesc.setStyle(subtleTextStyle());
+
+            Label multiTileDesc = new Label(
+                    "    2+ tiles - corrects rotation + scale (slide play in a holder slot). Accuracy: +/- 3 um");
+            multiTileDesc.setStyle(subtleTextStyle());
 
             Label fullManualDesc = new Label("    Complete re-alignment. Accuracy: +/- 2 um");
             fullManualDesc.setStyle(subtleTextStyle());
@@ -965,6 +974,8 @@ public class ExistingImageAcquisitionController {
                             noRefineDesc,
                             singleTileRadio,
                             singleTileDesc,
+                            multiTileRadio,
+                            multiTileDesc,
                             fullManualRadio,
                             fullManualDesc,
                             refinementRecommendationLabel);
@@ -2334,6 +2345,8 @@ public class ExistingImageAcquisitionController {
                 RefinementChoice refinement = RefinementChoice.NONE;
                 if (singleTileRadio.isSelected()) {
                     refinement = RefinementChoice.SINGLE_TILE;
+                } else if (multiTileRadio.isSelected()) {
+                    refinement = RefinementChoice.MULTI_TILE;
                 } else if (fullManualRadio.isSelected()) {
                     refinement = RefinementChoice.FULL_MANUAL;
                 }

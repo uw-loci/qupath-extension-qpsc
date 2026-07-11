@@ -33,9 +33,10 @@ class RefinementSelectionControllerTest {
     @DisplayName("RefinementChoice enum has all expected values")
     void testRefinementChoiceValues() {
         RefinementChoice[] values = RefinementChoice.values();
-        assertEquals(3, values.length);
+        assertEquals(4, values.length);
         assertNotNull(RefinementChoice.valueOf("NONE"));
         assertNotNull(RefinementChoice.valueOf("SINGLE_TILE"));
+        assertNotNull(RefinementChoice.valueOf("MULTI_TILE"));
         assertNotNull(RefinementChoice.valueOf("FULL_MANUAL"));
     }
 
@@ -43,6 +44,7 @@ class RefinementSelectionControllerTest {
     @CsvSource({
         "NONE, Proceed without refinement",
         "SINGLE_TILE, Single-tile refinement",
+        "MULTI_TILE, Multi-tile refinement",
         "FULL_MANUAL, Full manual alignment"
     })
     @DisplayName("RefinementChoice display names are correct")

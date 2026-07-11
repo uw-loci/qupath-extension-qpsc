@@ -1204,6 +1204,7 @@ public class ExistingImageWorkflowV2 {
             return switch (choice) {
                 case NONE -> RefinementSelectionController.RefinementChoice.NONE;
                 case SINGLE_TILE -> RefinementSelectionController.RefinementChoice.SINGLE_TILE;
+                case MULTI_TILE -> RefinementSelectionController.RefinementChoice.MULTI_TILE;
                 case FULL_MANUAL -> RefinementSelectionController.RefinementChoice.FULL_MANUAL;
             };
         }
@@ -1532,8 +1533,8 @@ public class ExistingImageWorkflowV2 {
 
             // If we have a slide-specific alignment (including previously refined ones),
             // use it directly -- unless the user wants a full manual re-alignment.
-            // SINGLE_TILE refinement is handled later in handleRefinement() and needs
-            // the saved transform as its starting point.
+            // SINGLE_TILE and MULTI_TILE refinement are handled later in handleRefinement()
+            // and need the saved transform as their starting point.
             if (state.useExistingSlideAlignment
                     && state.refinementChoice != RefinementSelectionController.RefinementChoice.FULL_MANUAL) {
                 logger.info(
@@ -2076,6 +2077,13 @@ public class ExistingImageWorkflowV2 {
                     logger.info("Performing single-tile refinement");
                     return performSingleTileRefinement(state);
 
+                case MULTI_TILE:
+                    // Same tile-creation + sibling re-assert + save path as single-tile; only the
+                    // refiner differs (multi-point similarity vs. translation-only). Dispatched
+                    // inside createRefinementTilesAndRun by state.refinementChoice.
+                    logger.info("Performing multi-tile refinement");
+                    return performSingleTileRefinement(state);
+
                 case FULL_MANUAL:
                     logger.info("Full manual alignment requested - switching to manual path");
                     return processManualAlignmentPath(state);
@@ -2223,7 +2231,15 @@ public class ExistingImageWorkflowV2 {
                         );
             }
 
-            return SingleTileRefinement.performRefinement(gui, state.annotations, state.transform)
+            // Both refiners return SingleTileRefinement.RefinementResult and share this save
+            // path; multi-tile solves a rotation+scale correction (2+ points) where single-tile
+            // only shifts the offset. Multi-tile is required when a slide has play in its holder
+            // slot -- single-tile is zero error at the picked tile but grows with distance.
+            CompletableFuture<SingleTileRefinement.RefinementResult> refineFuture =
+                    state.refinementChoice == RefinementSelectionController.RefinementChoice.MULTI_TILE
+                            ? MultiTileRefinement.performRefinement(gui, state.annotations, state.transform)
+                            : SingleTileRefinement.performRefinement(gui, state.annotations, state.transform);
+            return refineFuture
                     .thenApply(result -> {
                         state.refinementTile = result.selectedTile;
                         // Only consume the refined transform + persist the JSON when the
