@@ -2,7 +2,7 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: a9e7c256
+last_synced_commit: 80328889
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
@@ -186,6 +186,7 @@ acknowledged_stale:
   - "85b5f498: MultiSlide panel gained 'Run All Remaining' -- sequential auto-run over W1.startAsync() across slots (opens each entry, awaits completion, advances). Per-slide dispatch/reads/writes unchanged; still one W1 invocation per slot."
   - "ae3d7c2b: W1 gained startSetupAsync() and startAcquireAsync() for two-pass batch mode; MultiSlide panel dispatches 'Set Up All Remaining' over startSetupAsync() (no acquisition), then 'Acquire All Set-Up' over startAcquireAsync() (unattended replay). Per-slide alignment persists to disk between passes; reads/writes largely unchanged, just split across two invocations per slot."
   - "a9e7c256: rotated holder slots now assign a single composed (rotated N)(flipped XY) entry (QPProjectFunctions.createRotatedFlippedDuplicate, chosen by MultiSlideAssignmentDialog.resolveAssignedEntry via the source/active preset flip) instead of a bare (rotated N) intermediate + later flip. Fixes the ACQUIRE_ONLY defect where alignmentChoice==null made validateAndFlipIfNeeded no-op, leaving acquisition on the annotation-free, wrong-frame intermediate. No dispatch/reads/writes change; the acquire-path annotation guards are now belt-and-suspenders. See COORDINATE_TRANSFORMS.md section 3."
+  - "80328889: new MULTI_TILE refinement (RefinementChoice in both RefinementSelectionController and ExistingImageAcquisitionController). handleRefinement's MULTI_TILE case shares performSingleTileRefinement's tile-creation + save path; createRefinementTilesAndRun dispatches to MultiTileRefinement (2+ tiles -> TransformationFunctions.computeStageSpaceSimilarity -> rotation+scale correction composed onto the alignment) vs SingleTileRefinement (translation only). Same reads/writes as single-tile (per-slide JSON via saveRefinedAlignment). Fixes slide-play-in-slot rotation that single-tile cannot correct."
 ---
 
 # QPSC Workflow Map
