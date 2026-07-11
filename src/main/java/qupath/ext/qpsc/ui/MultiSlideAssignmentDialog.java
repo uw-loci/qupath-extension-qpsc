@@ -545,7 +545,20 @@ public final class MultiSlideAssignmentDialog {
         if (rotation == null) {
             return base;
         }
-        String targetName = base.getImageName() + " (rotated " + rotationDeg + ")";
+        // Resolve the (source-scanner, active-scope) preset flip NOW, so the assigned entry
+        // folds rotation AND flip into ONE (rotated N)(flipped XY) entry. This is the fix for
+        // the acquire-pass defect: the old path created a bare (rotated N) intermediate, then
+        // relied on the workflow to switch to a separate flipped sibling later -- but on the
+        // unattended ACQUIRE_ONLY replay, state.alignmentChoice is null, so that switch
+        // resolves to (false,false) and no-ops, leaving acquisition on the annotation-free,
+        // wrong-frame intermediate. Composing here means both passes open the correct entry
+        // directly (its (flipped ...) suffix makes validateAndFlipIfNeeded a no-op on it).
+        // source_microscope was just stamped on the base above, so preset resolution can run.
+        boolean[] flip = ImageFlipHelper.resolveRequiredFlipFromPreset(base);
+        boolean flipX = flip[0];
+        boolean flipY = flip[1];
+        String flipSuffix = flipX && flipY ? " (flipped XY)" : flipX ? " (flipped X)" : flipY ? " (flipped Y)" : "";
+        String targetName = base.getImageName() + " (rotated " + rotationDeg + ")" + flipSuffix;
         for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
             if (targetName.equals(e.getImageName())) {
                 logger.info("Reusing existing rotated entry '{}'", targetName);
@@ -555,13 +568,15 @@ public final class MultiSlideAssignmentDialog {
         }
         try {
             String sampleName = GeneralTools.stripExtension(base.getImageName());
-            ProjectImageEntry<BufferedImage> rotated =
-                    QPProjectFunctions.createRotatedDuplicate(project, base, rotation, sampleName);
+            ProjectImageEntry<BufferedImage> rotated = (flipX || flipY)
+                    ? QPProjectFunctions.createRotatedFlippedDuplicate(
+                            project, base, rotation, flipX, flipY, sampleName)
+                    : QPProjectFunctions.createRotatedDuplicate(project, base, rotation, sampleName);
             if (rotated != null) {
                 ensureSourceMicroscope(rotated, chosenSource); // belt-and-suspenders (inherits from base too)
                 return rotated;
             }
-            logger.warn("createRotatedDuplicate returned null for '{}'; using base entry", base.getImageName());
+            logger.warn("Rotated-duplicate creation returned null for '{}'; using base entry", base.getImageName());
         } catch (IOException ex) {
             logger.error("Failed to create rotated duplicate for '{}': {}", base.getImageName(), ex.getMessage());
         }

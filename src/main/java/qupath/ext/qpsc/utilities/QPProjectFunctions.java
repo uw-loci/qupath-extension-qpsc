@@ -945,6 +945,149 @@ public class QPProjectFunctions {
     }
 
     /**
+     * Creates a single entry that is BOTH rotated and flipped, in one step, with no
+     * intermediate {@code (rotated N)} entry ever added to the project.
+     *
+     * <p>Why one step: a slide mounted in a rotated holder on a flip-needing scope (e.g.
+     * an Ocus40-scanned macro acquired on PPM) needs both a {@link RotatedImageServer}
+     * rotation AND the {@code (source, target)} preset flip. Building these as two
+     * separate entries -- {@link #createRotatedDuplicate} then {@link #createFlippedDuplicate}
+     * -- persisted an annotation-free {@code (rotated N)} intermediate that the acquire
+     * pass would re-open and, because its flip resolution yields {@code (false,false)} on
+     * the replay path, never switch away from. Acquisition then ran on the wrong pixel
+     * frame (X/Y-mirror) and read zero annotations. Folding both into one
+     * {@code (rotated N)(flipped XY)} entry removes the intermediate entirely, so both the
+     * setup and acquire passes open the same, correct working entry.
+     *
+     * <p>The composition is deliberately identical to the old two-step math: rotate
+     * natively first ({@code RotatedImageServer}), then apply the hand-rolled flip affine
+     * against the ROTATED dimensions (the flip operates in the rotated server's pixel
+     * space -- the same dimensions {@link #createFlippedDuplicate} saw when it was called
+     * with the rotated entry as its input). The output pixels are byte-identical to the
+     * previous {@code (rotated N)(flipped XY)} sibling; only the entry count changes.
+     *
+     * <p>The resulting name contains {@code (rotated N)} (so
+     * {@code TilingUtilities.isRotated90or270} and {@code parseRotationDegrees} still fire)
+     * and ends in a {@code (flipped ...)} suffix (so {@code ImageFlipHelper.isFlippedSiblingName}
+     * is true and {@code validateAndFlipIfNeeded} no-ops on it, keeping both passes on this
+     * entry). Annotations are NOT copied here -- like the flip/rotate siblings, the working
+     * entry's annotations are established during setup (operator draw, or the alignment
+     * path's source-macro transform) and persisted on this same entry.
+     *
+     * @param project the project
+     * @param originalEntry the macro entry to rotate + flip
+     * @param rotation ROTATE_90 / 180 / 270 (ROTATE_NONE / null is a no-op returning null)
+     * @param flipX whether the preset requires a horizontal flip
+     * @param flipY whether the preset requires a vertical flip
+     * @param sampleName the sample name for metadata
+     * @return the new combined entry, or null on failure / no-op. When neither flip axis is
+     *     set, delegates to {@link #createRotatedDuplicate} (a pure rotation needs no flip).
+     */
+    public static ProjectImageEntry<BufferedImage> createRotatedFlippedDuplicate(
+            Project<BufferedImage> project,
+            ProjectImageEntry<BufferedImage> originalEntry,
+            RotatedImageServer.Rotation rotation,
+            boolean flipX,
+            boolean flipY,
+            String sampleName)
+            throws IOException {
+
+        if (project == null || originalEntry == null) {
+            logger.error("Cannot create rotated+flipped duplicate: null project or entry");
+            return null;
+        }
+        if (rotation == null || rotation == RotatedImageServer.Rotation.ROTATE_NONE) {
+            logger.warn("createRotatedFlippedDuplicate: no rotation requested ({}); nothing to do", rotation);
+            return null;
+        }
+        if (!flipX && !flipY) {
+            // No flip needed: a pure rotation is the correct working entry.
+            return createRotatedDuplicate(project, originalEntry, rotation, sampleName);
+        }
+
+        logger.info(
+                "Creating rotated+flipped duplicate of {} ({}, flipX={}, flipY={}) in one step",
+                originalEntry.getImageName(),
+                rotation,
+                flipX,
+                flipY);
+
+        ImageData<BufferedImage> originalData = originalEntry.readImageData();
+        ImageServer<BufferedImage> originalServer = originalData.getServer();
+        ImageData.ImageType imageType = originalData.getImageType();
+
+        // Rotate first (native), then flip against the ROTATED dimensions -- identical to
+        // the previous createRotatedDuplicate -> createFlippedDuplicate chain, minus the
+        // persisted intermediate.
+        ImageServer<BufferedImage> rotatedServer = new RotatedImageServer(originalServer, rotation);
+        int rotatedWidth = rotatedServer.getWidth();
+        int rotatedHeight = rotatedServer.getHeight();
+
+        AffineTransform flip = new AffineTransform();
+        if (flipX && flipY) {
+            flip.scale(-1.0, -1.0);
+            flip.translate(-rotatedWidth, -rotatedHeight);
+        } else if (flipX) {
+            flip.scale(-1.0, 1.0);
+            flip.translate(-rotatedWidth, 0);
+        } else {
+            flip.scale(1.0, -1.0);
+            flip.translate(0, -rotatedHeight);
+        }
+        ImageServer<BufferedImage> composedServer =
+                new TransformedServerBuilder(rotatedServer).transform(flip).build();
+
+        ProjectImageEntry<BufferedImage> composedEntry = project.addImage(composedServer.getBuilder());
+
+        String rotSuffix =
+                switch (rotation) {
+                    case ROTATE_90 -> " (rotated 90)";
+                    case ROTATE_180 -> " (rotated 180)";
+                    case ROTATE_270 -> " (rotated 270)";
+                    default -> " (rotated)";
+                };
+        String flipSuffix = flipX && flipY ? " (flipped XY)" : flipX ? " (flipped X)" : " (flipped Y)";
+        String composedName = originalEntry.getImageName() + rotSuffix + flipSuffix;
+        composedEntry.setImageName(composedName);
+
+        ImageData<BufferedImage> composedData = composedEntry.readImageData();
+        composedData.setImageType(imageType);
+
+        double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+        double composedPixelSize = composedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Math.abs(originalPixelSize - composedPixelSize) > 0.001) {
+            logger.warn(
+                    "Rotated+flipped duplicate pixel-size mismatch: original={} um/px, composed={} um/px",
+                    originalPixelSize,
+                    composedPixelSize);
+        }
+
+        // Share base_image with the original so downstream lookups resolve to the same macro.
+        Map<String, String> originalMetadata = originalEntry.getMetadata();
+        if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
+            String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
+            originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
+            logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
+        }
+
+        double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
+        ImageMetadataManager.applyImageMetadata(
+                composedEntry,
+                originalEntry, // inherit collection + base_image from the original
+                offsets[0],
+                offsets[1],
+                flipX, // record the flip axes so the frame is unambiguous downstream
+                flipY,
+                sampleName);
+
+        composedEntry.saveImageData(composedData);
+        project.syncChanges();
+
+        logger.info("Successfully created rotated+flipped duplicate: {}", composedName);
+        return composedEntry;
+    }
+
+    /**
      * Determines the appropriate image type for a given image file.
      *
      * <p>This method first checks for specific filename patterns that indicate

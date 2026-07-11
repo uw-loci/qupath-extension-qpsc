@@ -358,6 +358,27 @@ to match the camera orientation**. Do **NOT** try to "un-rotate" the stitch posi
 QuPath frame -- that **transposes** the output (rows become columns). Verified wrong and reverted
 2026-07-10 (the un-rotation `7d005123` -> revert `a41f9d87`).
 
+### 3. Entry construction -- ONE composed entry, no `(rotated N)` intermediate
+
+The `(rotated N)(flipped XY)` entry is built in a **single step** at slot-assignment time
+(`MultiSlideAssignmentDialog.resolveAssignedEntry` -> `QPProjectFunctions.createRotatedFlippedDuplicate`):
+a `RotatedImageServer` wrapped by the flip `TransformedServerBuilder` (rotation native first,
+then the flip affine against the **rotated** dimensions -- byte-identical pixels to the old
+two-step output). The required flip is resolved from the base's `(source-scanner, active-scope)`
+preset at assignment, so the assigned entry is already the final working entry.
+
+**Why one step (do not reintroduce the intermediate):** the old path persisted a bare,
+annotation-free `(rotated N)` entry first and left the flip to the workflow. On the unattended
+two-pass ACQUIRE_ONLY replay, `state.alignmentChoice` is null, so
+`processSlideSpecificAlignment` resolves the flip to `(false,false)` and
+`validateAndFlipIfNeeded` **no-ops** -- acquisition then ran on the intermediate: wrong pixel
+frame (X/Y-mirror of the saved transform) and zero annotations ("No annotations detected").
+The composed name ends in `(flipped XY)`, so `validateAndFlipIfNeeded` legitimately no-ops on
+it while keeping BOTH passes on the correct entry; `contains("(rotated 270)")` and
+`parseRotationDegrees` still fire, so tiling geometry (sections 1-2) is unchanged. A non-flip
+scope still gets a pure `(rotated N)` entry (which is itself the working entry). Fixed
+2026-07-11; retired the acquire-path annotation race-guards to belt-and-suspenders.
+
 ### Display note (not a bug)
 
 In a 270-rotated QuPath frame a landscape stage FOV genuinely **appears portrait** (rotate a wide
