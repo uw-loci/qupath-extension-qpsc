@@ -2,7 +2,7 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: 08315b64
+last_synced_commit: a9e7c256
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
@@ -185,6 +185,7 @@ acknowledged_stale:
   - "334f4fda/0f5a7980: W1 gained startAsync() (completion future for batch orchestration); MultiSlide Run button now awaits it. Map's dispatch/reads/writes unchanged."
   - "85b5f498: MultiSlide panel gained 'Run All Remaining' -- sequential auto-run over W1.startAsync() across slots (opens each entry, awaits completion, advances). Per-slide dispatch/reads/writes unchanged; still one W1 invocation per slot."
   - "ae3d7c2b: W1 gained startSetupAsync() and startAcquireAsync() for two-pass batch mode; MultiSlide panel dispatches 'Set Up All Remaining' over startSetupAsync() (no acquisition), then 'Acquire All Set-Up' over startAcquireAsync() (unattended replay). Per-slide alignment persists to disk between passes; reads/writes largely unchanged, just split across two invocations per slot."
+  - "a9e7c256: rotated holder slots now assign a single composed (rotated N)(flipped XY) entry (QPProjectFunctions.createRotatedFlippedDuplicate, chosen by MultiSlideAssignmentDialog.resolveAssignedEntry via the source/active preset flip) instead of a bare (rotated N) intermediate + later flip. Fixes the ACQUIRE_ONLY defect where alignmentChoice==null made validateAndFlipIfNeeded no-op, leaving acquisition on the annotation-free, wrong-frame intermediate. No dispatch/reads/writes change; the acquire-path annotation guards are now belt-and-suspenders. See COORDINATE_TRANSFORMS.md section 3."
 ---
 
 # QPSC Workflow Map
@@ -379,6 +380,7 @@ writes:
 key_invariants:
   - "Adds no new validation gates; each per-slot W1 invocation runs the full validation chain independently."
   - "Menu hidden by default; requires preference flag."
+  - "A rotated slot assigns ONE composed (rotated N)(flipped XY) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. The composed name keeps '(rotated N)' (tiling/parseRotationDegrees) and ends '(flipped XY)' (validateAndFlipIfNeeded no-ops on it), so both passes open the correct working entry. Do not reintroduce the intermediate."
 ```
 
 ### W1c: processSlideSpecificAlignment (sub-route of W1)
