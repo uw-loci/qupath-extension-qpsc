@@ -1085,11 +1085,11 @@ Alternatively, simply un-tick the master "Customize channel selection" checkbox 
 
 ## SIFT Auto-Alignment
 
-Preferences controlling the SIFT feature matching used for automated alignment refinement.
+Preferences controlling the SIFT feature matching used for automated alignment refinement in single-tile and multi-tile refinement modes.
 
 | Preference | Type | Default | Description |
 |------------|------|---------|-------------|
-| Trust SIFT alignment | Boolean | OFF | When enabled, SIFT runs automatically during single-tile refinement without showing the manual dialog. If confidence exceeds the threshold, the refined position is accepted automatically. Falls back to manual if SIFT fails or confidence is too low. |
+| Trust SIFT alignment | Boolean | OFF | When enabled, SIFT runs automatically during single-tile or multi-tile refinement without showing the manual dialog. If confidence exceeds the threshold, the refined position is accepted automatically. Falls back to manual if SIFT fails or confidence is too low. |
 | SIFT confidence threshold | Double | 0.5 | Minimum inlier ratio (0.0-1.0) required to auto-accept alignment when Trust SIFT is enabled. Higher values are stricter. 0.5 means at least 50% of matched features must be RANSAC inliers. |
 | SIFT min pixel size (um) | Double | 1.0 | Minimum resolution for SIFT matching. Both images are downsampled to at least this pixel size before feature detection. Suppresses JPEG compression artifacts and speeds up matching. Lower values for high-magnification objectives (e.g., 63x oil where 1 um/px is a large fraction of the FOV). |
 | SIFT coarse-to-fine enabled | Boolean | ON | When enabled, SIFT auto-align runs a two-pass search: a heavily downsampled coarse pass over the whole search region to find a rough offset, then a full-resolution fine pass over a small crop around the coarse result. Allows larger search margins without paying the cost of full-resolution matching over the whole region. Applies to all SIFT auto-align scopes. |
