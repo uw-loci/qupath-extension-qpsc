@@ -444,6 +444,14 @@ public final class MultiSlideExistingImageWorkflow {
      */
     private static boolean openEntry(QuPathGUI gui, SlotState s, Runnable refreshFinish) {
         try {
+            // Save the currently-open image quietly BEFORE switching. After a slot's acquire pass
+            // the just-stitched/biref image is left open and marked changed (import sets the image
+            // type / renames channels); QuPath's openImageEntry would otherwise pop a modal
+            // "Save changes?" dialog and stall the unattended two-pass run for the whole gap
+            // between slides (observed: a 7.5h pause waiting for the operator). Clearing the dirty
+            // flag here makes the switch silent -- the same pattern TileProcessingUtilities uses
+            // before opening a stitched result.
+            saveCurrentImageDataQuietly(gui);
             gui.openImageEntry(s.assignment.entry());
             s.setStatus(Status.IN_PROGRESS);
             refreshFinish.run();
@@ -453,6 +461,27 @@ public final class MultiSlideExistingImageWorkflow {
                     "MS workflow: failed to open entry {}", s.assignment.entry().getImageName(), ex);
             Dialogs.showErrorMessage("Open failed", ex.getMessage());
             return false;
+        }
+    }
+
+    /**
+     * Saves the currently-open image's data to its project entry, if any, without prompting.
+     * Prevents QuPath's modal "Save changes?" dialog when the workflow switches the open image
+     * between slots (the acquire pass leaves the stitched/biref image open and marked changed).
+     * Best-effort: a failure is logged, not thrown, so a save hiccup never blocks the switch.
+     */
+    private static void saveCurrentImageDataQuietly(QuPathGUI gui) {
+        try {
+            var currentData = gui.getImageData();
+            Project<BufferedImage> project = gui.getProject();
+            ProjectImageEntry<BufferedImage> currentEntry =
+                    (currentData != null && project != null) ? project.getEntry(currentData) : null;
+            if (currentEntry != null) {
+                currentEntry.saveImageData(currentData);
+                logger.info("MS workflow: saved current image data before switching slots (no prompt)");
+            }
+        } catch (Exception ex) {
+            logger.warn("MS workflow: could not pre-save current image before switching: {}", ex.getMessage());
         }
     }
 
