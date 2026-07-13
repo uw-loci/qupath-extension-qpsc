@@ -200,6 +200,10 @@ public class StageMapCanvas extends StackPane {
 
     // Rendering control
     private volatile boolean renderingEnabled = true;
+    // Coalesces interactive redraws (zoom/pan) to at most one per JavaFX pulse. Set when a
+    // redraw is requested, cleared when it runs -- so a burst of scroll/drag events triggers a
+    // single background+overlay repaint instead of one per event.
+    private boolean renderRequested = false;
 
     // ========== Callback ==========
     private BiConsumer<Double, Double> clickHandler;
@@ -388,8 +392,7 @@ public class StageMapCanvas extends StackPane {
             offsetX = cx - (cx - offsetX) * f;
             offsetY = cy - (cy - offsetY) * f;
             scale = newScale;
-            renderBackground();
-            updateOverlays();
+            requestRender();
             e.consume();
         });
 
@@ -418,8 +421,7 @@ public class StageMapCanvas extends StackPane {
             offsetY += dy;
             dragLastX = e.getX();
             dragLastY = e.getY();
-            renderBackground();
-            updateOverlays();
+            requestRender();
         });
         overlayPane.setOnMouseReleased(e -> {
             dragLastX = Double.NaN;
@@ -689,6 +691,24 @@ public class StageMapCanvas extends StackPane {
     }
 
     /**
+     * Requests a background + overlay redraw, coalesced to at most one per JavaFX pulse.
+     * Use this from high-frequency interactive handlers (mouse-wheel zoom, drag-pan) instead
+     * of calling {@link #renderBackground()} directly: a burst of events then produces a single
+     * repaint on the next pulse rather than N synchronous full repaints (which caused the lag).
+     */
+    private void requestRender() {
+        if (renderRequested) {
+            return;
+        }
+        renderRequested = true;
+        Platform.runLater(() -> {
+            renderRequested = false;
+            renderBackground();
+            updateOverlays();
+        });
+    }
+
+    /**
      * Renders the static background elements to the WritableImage.
      */
     private void renderBackground() {
@@ -867,11 +887,35 @@ public class StageMapCanvas extends StackPane {
         int imgW = (int) backgroundImage.getWidth();
         int imgH = (int) backgroundImage.getHeight();
 
-        for (int px = Math.max(0, x); px < Math.min(imgW, x + w); px++) {
-            for (int py = Math.max(0, y); py < Math.min(imgH, y + h); py++) {
-                pixelWriter.setColor(px, py, color);
-            }
+        int x0 = Math.max(0, x);
+        int y0 = Math.max(0, y);
+        int x1 = Math.min(imgW, x + w);
+        int y1 = Math.min(imgH, y + h);
+        int rw = x1 - x0;
+        int rh = y1 - y0;
+        if (rw <= 0 || rh <= 0) {
+            return;
         }
+        // Bulk write via setPixels (one native call per row) instead of per-pixel setColor.
+        // The full-canvas clear + insert fill dominate the per-frame cost; this is ~100-1000x
+        // fewer calls and is what makes zoom/pan smooth. Non-blend solid fills only -- the
+        // blend/circle helpers still need per-pixel read-modify-write.
+        int argb = toArgbInt(color);
+        int[] row = new int[rw];
+        java.util.Arrays.fill(row, argb);
+        javafx.scene.image.PixelFormat<java.nio.IntBuffer> fmt = javafx.scene.image.PixelFormat.getIntArgbInstance();
+        for (int py = y0; py < y1; py++) {
+            pixelWriter.setPixels(x0, py, rw, 1, fmt, row, 0, rw);
+        }
+    }
+
+    /** Packs a JavaFX {@link Color} into a non-premultiplied ARGB int for bulk pixel writes. */
+    private static int toArgbInt(Color color) {
+        int a = (int) Math.round(color.getOpacity() * 255.0);
+        int r = (int) Math.round(color.getRed() * 255.0);
+        int g = (int) Math.round(color.getGreen() * 255.0);
+        int b = (int) Math.round(color.getBlue() * 255.0);
+        return (a << 24) | (r << 16) | (g << 8) | b;
     }
 
     private void fillRectBlend(int x, int y, int w, int h, Color color) {
