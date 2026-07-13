@@ -43,6 +43,9 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
 | Enable Multi-Slide Workflow (experimental) | Boolean | OFF | Adds the MS-Existing Image menu entry for multi-slide carriers (e.g. quad_v) |
 | [Reuse saved alignment (TESTING ONLY)](#reuse-saved-alignment-testing-only) | Boolean | OFF | Multi-slide batch alignment reuse (UNSAFE, testing only) |
+| [Autofocus on slot jump](#autofocus-on-slot-jump) | Boolean | ON | Auto-focus after stage reaches each slot during multi-slide batch |
+| [Force Camera View on alignment start](#force-camera-view-on-alignment-start) | Boolean | ON | Switch Stage Map to Camera View when multi-slide alignment starts |
+| [Zoom Stage Map to tissue on alignment start](#zoom-stage-map-to-tissue-on-alignment-start) | Boolean | ON | Auto-zoom Stage Map to green tissue box at alignment start |
 | [Image name includes: Objective](#image-name-includes-objective) | Boolean | OFF | Add objective to filename |
 | [Image name includes: Modality](#image-name-includes-modality) | Boolean | OFF | Add modality to filename |
 | [Image name includes: Annotation](#image-name-includes-annotation) | Boolean | OFF | Add annotation name to filename |
@@ -711,6 +714,77 @@ Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu. The 
 - Return to single-slide workflows (the regular Bounded Acquisition and Acquire from Existing Image entries remain unaffected)
 
 **See Also:** [MS-Existing Image (experimental)](WORKFLOWS.md#ms-existing-image-experimental) workflow documentation.
+
+---
+
+### Autofocus on slot jump
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | ON |
+| Requires Restart | No |
+
+**Description:**
+When enabled during multi-slide batch acquisition, the microscope automatically focuses after the stage reaches each slot, before the operator aligns. This ensures tissue is in focus at the start of alignment, reducing manual refocus work.
+
+The autofocus-on-slot-jump system reuses the existing Live Viewer autofocus, reading the **Live Viewer: Autofocus Method** preference. When the method is **SWEEP**, the single-shot sweep autofocus runs directly (no live preview needed). When the method is **STREAMING**, slot-jump autofocus currently **falls back to SWEEP** for the batch (standing up a preview stream for a streaming focus mid-batch is not yet implemented); this is logged when it happens. During the batch, the AF status displays in the **Alignment** section: "Moving to slot..." → "Focusing..." → "Ready" on success, or amber "Focus failed -- align manually" on failure.
+
+**When to Enable:**
+- Running unattended multi-slide batches where automatic focusing saves time
+- Tissue is generally well-focused at the slot center
+- Your autofocus configuration (search range, method) is reliable on your scope
+
+**When to Disable:**
+- Samples where autofocus consistently fails or overshoots
+- When you prefer manual focus control for critical acquisitions
+
+**Note:** Failure to autofocus does not block alignment — the panel displays the error on the status line and proceeds to tile selection so the operator can focus manually if needed.
+
+---
+
+### Force Camera View on alignment start
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | ON |
+| Requires Restart | No |
+
+**Description:**
+When enabled during multi-slide batch acquisition, the Stage Map automatically switches to Camera View (showing the image as the microscope sees it, with optical flips applied) when each slot's alignment step begins. This eliminates the need to manually toggle the Camera View checkbox before starting to align.
+
+**When to Enable:**
+- You always align in Camera View on your scope
+- You want a consistent view orientation from slot to slot without manual adjustments
+
+**When to Disable:**
+- You prefer to toggle Camera View manually during alignment
+- Your scope's camera orientation is unusual and Camera View on startup causes confusion
+
+---
+
+### Zoom Stage Map to tissue on alignment start
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | ON |
+| Requires Restart | No |
+
+**Description:**
+When enabled during multi-slide batch acquisition, the Stage Map automatically zooms to the green tissue bounding-box preview when each slot's alignment step begins. This brings the tissue region into close view, reducing the need to manually zoom and navigate the Stage Map.
+
+The zoom is best-effort: if no bounding-box preview is currently set on the Stage Map, or if the Stage Map window is closed, the zoom is silently skipped without blocking the alignment workflow.
+
+**When to Enable:**
+- Your slots typically have green bounding-box previews set (from tissue detection or Stage Map calibration)
+- You want to start each alignment zoomed to tissue so you can see the alignment region clearly
+- You are running an unattended batch and want minimal manual navigation
+
+**When to Disable:**
+- You prefer a full-insert view for alignment navigation
+- Your Stage Map previews are inaccurate for some slots
 
 ---
 
