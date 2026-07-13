@@ -193,14 +193,23 @@ If you choose Single-Tile or Multi-Tile Refinement, the workflow first generates
 
 For **Single-Tile Refinement,** the Refine Alignment dialog shown after the move encourages you to click **Auto-Align (SIFT)** to refine the position automatically. The "Save Refined Position" button is disabled until SIFT has run successfully, preventing accidental skipping of refinement. If SIFT fails, use the microscope controls (joystick or Stage Control dialog) to nudge the stage closer, then try SIFT again. To keep the predicted position without refining, click **Skip Refinement** instead of Save.
 
-For **Multi-Tile Refinement,** a dialog guides you through adding reference points: for each tile you select, the stage automatically moves to its predicted position, SIFT attempts auto-alignment (or you may nudge manually), and the measured stage position is captured. The dialog displays the recovered rotation and scale live as you add points. After 2+ points, you can interpret the values:
+For **Multi-Tile Refinement,** a dialog guides you through adding reference points: for each tile you select, the stage automatically moves to its predicted position, SIFT runs automatically (or you may nudge manually and refine), and the measured stage position is captured. The dialog displays the recovered rotation and scale live as you add points. After 2+ points, you can interpret the values:
 - **Non-zero rotation** (a few degrees) confirms the slide has play in the holder — this is normal and the correction handles it.
 - **Scale far from 1.0** suggests a residual pixel-size or objective mismatch — also correctable.
 - **Implausibly large rotation** (> 10°) or **scale far outside [0.9, 1.1]** indicates the base alignment does NOT match the stage (e.g., axis swap or wrong orientation). In this case, a red warning appears and a log line is written. This suggests you should cancel refinement and re-check the base alignment (or run Microscope Alignment again) before proceeding. You can still click "Solve & Save" if you are confident, but the warning flag should be investigated first.
 
+**SIFT result feedback:** Each refinement point shows the Auto-Align (SIFT) result persistently in the dialog:
+- **SIFT: not run for this point yet.** — Initial state before running Auto-Align.
+- **SIFT: running...** — SIFT is executing; wait for completion.
+- **SIFT: confidence XX%, N inliers, moved (X.X, Y.Y) µm.** — Successful match. Confidence ≥50% (green) is recommended; lower confidence (orange) suggests marginal features. The inlier count and movement offsets help you assess whether the stage moved as expected. Capture if the live view matches the tile.
+- **SIFT: no confident match.** — Insufficient features or stage too far from the target. Nudge manually and try Auto-Align again, or use the joystick to position and click Capture.
+- **SIFT: <error message>** — SIFT encountered an error; see the message for details.
+
+To tune SIFT behavior (search margin, confidence threshold, bit-depth normalization), see [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment).
+
 Once you have 2+ points and are satisfied with the diagnostics, click "Solve & Save" to compute the correction and apply it to the alignment. Spread the reference tiles far apart (not in a line) for the best rotation estimate.
 
-SIFT works best on tissue with visible features and only succeeds when the live view already overlaps the selected tile by at least a few hundred microns. See [Microscope Alignment > Step 4](microscope-alignment.md#step-4-refinement-manual-or-automatic) for the full SIFT walkthrough, and [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment) for the cross-modality bit-depth normalization knobs.
+SIFT works best on tissue with visible features and only succeeds when the live view already overlaps the selected tile by at least a few hundred microns. See [Microscope Alignment > Step 4](microscope-alignment.md#step-4-refinement-manual-or-automatic) for the full SIFT walkthrough.
 
 ### Step 4: Annotation Class Selection
 
