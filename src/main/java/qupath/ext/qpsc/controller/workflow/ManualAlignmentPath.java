@@ -379,25 +379,6 @@ public class ManualAlignmentPath {
         }
     }
 
-    /**
-     * Full-res pixel size (um/px) of the open image, for the alignment scaling
-     * transform. Falls back to {@code state.pixelSize} only if the server has no
-     * calibration (should not happen for a real .svs).
-     */
-    private double resolveFullResPixelSize() {
-        try {
-            double px = gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
-            if (px > 0) {
-                return px;
-            }
-        } catch (Exception e) {
-            logger.warn("Could not read full-res pixel size: {}", e.getMessage());
-        }
-        logger.warn(
-                "Full-res pixel size unavailable; falling back to state.pixelSize ({}) for alignment", state.pixelSize);
-        return state.pixelSize;
-    }
-
     private CompletableFuture<WorkflowState> buildTilesAndShowAlignmentUI() {
         // Get stage inversion settings from preferences for the alignment UI.
         // The UI uses these to interpret the operator's click direction; the
@@ -412,7 +393,7 @@ public class ManualAlignmentPath {
         // transform ~300x too large: the reference point looked fine, but the
         // secondary refinement tile move (transformQuPathFullResToStage) was flung
         // hundreds of mm off, tripping "outside stage bounds".
-        double fullResPixelSize = resolveFullResPixelSize();
+        double fullResPixelSize = WorkflowHelpers.resolveFullResPixelSize(gui, state.pixelSize);
 
         // Slot-center estimate from the holder calibration (multi-slide batch only).
         // Used ONLY as a rough auto-move to get the stage near the slide when the

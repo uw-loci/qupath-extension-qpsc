@@ -7,27 +7,37 @@ import java.util.List;
 import java.util.UUID;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
+import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
+import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.ContextMenu;
 import javafx.scene.control.Label;
+import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.control.TitledPane;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
+import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
+import qupath.ext.qpsc.ui.SectionBuilder;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -220,9 +230,11 @@ public final class MultiSlideExistingImageWorkflow {
         grid.add(boldLabel("Slot"), 0, row);
         grid.add(boldLabel("Entry"), 1, row);
         grid.add(boldLabel("Status"), 2, row);
-        grid.add(boldLabel("Actions"), 3, row);
+        grid.add(boldLabel("Action"), 3, row);
         row++;
         Button finishBtn = new Button("Finish");
+        finishBtn.setTooltip(
+                new Tooltip("Close the batch and show the run summary. Enabled once every slot is Done or Skipped."));
         Runnable refreshFinish = () -> {
             boolean allTerminal = true;
             for (SlotState s : states) {
@@ -252,26 +264,62 @@ public final class MultiSlideExistingImageWorkflow {
             String displayEntryName = suffixIdx > 0 ? fullEntryName.substring(0, suffixIdx) : fullEntryName;
             Label entryLabel = new Label(displayEntryName);
             entryLabel.setMaxWidth(220);
-            entryLabel.setTooltip(new javafx.scene.control.Tooltip(fullEntryName));
-            Label statusLabel = new Label(s.status.label());
-            s.statusLabel = statusLabel;
+            entryLabel.setTooltip(new Tooltip(fullEntryName));
+
+            // Status column: a per-row ChoiceBox<Status> replacing the old Done/Skip buttons.
+            // The driver owns the state machine; the operator may only set Done or Skipped
+            // directly (the two manual overrides). Selecting a system-driven state
+            // (Pending / In progress / Set up) is a no-op advisory that reverts to the
+            // current state. During a live run the row is disabled (read-only) via
+            // setRowButtonsDisabled.
+            ChoiceBox<Status> statusChoice = new ChoiceBox<>(FXCollections.observableArrayList(Status.values()));
+            statusChoice.setConverter(new StringConverter<Status>() {
+                @Override
+                public String toString(Status st) {
+                    return st == null ? "" : st.label();
+                }
+
+                @Override
+                public Status fromString(String str) {
+                    return null;
+                }
+            });
+            statusChoice.setValue(s.status);
+            statusChoice.setPrefWidth(170);
+            statusChoice.setMaxWidth(170);
+            statusChoice.setTooltip(new Tooltip(
+                    "Set this slot's state. Pick Done if you handled it outside the batch, or Skipped to exclude it."));
+            s.statusChoice = statusChoice;
 
             Button openBtn = new Button("Open");
-            Button runBtn = new Button("Run Single");
-            runBtn.setTooltip(new javafx.scene.control.Tooltip("Run the full single-slide workflow for this slot"));
-            Button doneBtn = new Button("Done");
-            doneBtn.setTooltip(new javafx.scene.control.Tooltip(
-                    "Mark this slot complete by hand (e.g. you acquired it outside the batch)"));
-            Button skipBtn = new Button("Skip");
-            skipBtn.setTooltip(
-                    new javafx.scene.control.Tooltip("Exclude this slot from the run; it will not be acquired"));
+            openBtn.setTooltip(new Tooltip("Switch QuPath to this slot's macro image before aligning or running it."));
             s.openBtn = openBtn;
-            s.runBtn = runBtn;
-            s.doneBtn = doneBtn;
-            s.skipBtn = skipBtn;
+
+            // Run Single moved off a per-row button into a right-click context menu on the row,
+            // narrowing the Action column to a single [Open] button.
+            MenuItem runSingleItem = new MenuItem("Run Single");
+            s.runSingleItem = runSingleItem;
+            ContextMenu rowMenu = new ContextMenu(runSingleItem);
+            entryLabel.setContextMenu(rowMenu);
 
             openBtn.setOnAction(e -> openEntry(gui, s, refreshFinish));
-            runBtn.setOnAction(e -> {
+
+            statusChoice.valueProperty().addListener((obs, oldV, newV) -> {
+                if (s.suppressStatusListener || newV == null) {
+                    return;
+                }
+                if (newV == Status.DONE || newV == Status.SKIPPED) {
+                    s.setStatus(newV);
+                    refreshFinish.run();
+                } else if (newV != s.status) {
+                    // System-driven state picked manually: no-op advisory, revert to current.
+                    s.suppressStatusListener = true;
+                    statusChoice.setValue(s.status);
+                    s.suppressStatusListener = false;
+                }
+            });
+
+            runSingleItem.setOnAction(e -> {
                 ProjectImageEntry<BufferedImage> currentEntry = gui.getProject() != null && gui.getImageData() != null
                         ? gui.getProject().getEntry(gui.getImageData())
                         : null;
@@ -283,32 +331,18 @@ public final class MultiSlideExistingImageWorkflow {
                 // Drive the single-slide workflow through its completion future so the
                 // slot advances to Done automatically when acquisition finishes. A null
                 // result means the run short-circuited (cancel / gate / handled error) --
-                // leave the slot In progress so the operator can retry or Skip.
-                runBtn.setDisable(true);
+                // leave the slot In progress so the operator can retry or Skip. The row is
+                // held read-only for the duration of the run.
+                s.setRowButtonsDisabled(true);
                 runSlot(carrier, s, refreshFinish, resolveReuseForBatch(reuseDecision))
-                        .whenComplete((ok, ex) -> Platform.runLater(() -> runBtn.setDisable(false)));
+                        .whenComplete((ok, ex) -> Platform.runLater(() -> s.setRowButtonsDisabled(false)));
             });
-            doneBtn.setOnAction(e -> {
-                s.setStatus(Status.DONE);
-                refreshFinish.run();
-            });
-            skipBtn.setOnAction(e -> {
-                s.setStatus(Status.SKIPPED);
-                refreshFinish.run();
-            });
-
-            HBox actions = new HBox(6, openBtn, runBtn, doneBtn, skipBtn);
-            actions.setAlignment(Pos.CENTER_LEFT);
 
             grid.add(posLabel, 0, rowFinal);
             grid.add(entryLabel, 1, rowFinal);
-            grid.add(statusLabel, 2, rowFinal);
-            grid.add(actions, 3, rowFinal);
+            grid.add(statusChoice, 2, rowFinal);
+            grid.add(openBtn, 3, rowFinal);
         }
-
-        ScrollPane scroll = new ScrollPane(grid);
-        scroll.setFitToWidth(true);
-        VBox.setVgrow(scroll, Priority.ALWAYS);
 
         finishBtn.setOnAction(e -> {
             showSummary(gui, carrier, states, runId);
@@ -318,7 +352,12 @@ public final class MultiSlideExistingImageWorkflow {
         // advances to the next slot. Without this, closing the panel (or aborting one run)
         // left the driver recursing -- each remaining slot still opened and tried to run.
         java.util.concurrent.atomic.AtomicBoolean aborted = new java.util.concurrent.atomic.AtomicBoolean(false);
-        Button abortBtn = new Button("Abort All");
+        Button abortBtn = new Button("ABORT ALL");
+        abortBtn.setTooltip(
+                new Tooltip("Stop the whole batch. If an acquisition is running you will be asked to confirm; "
+                        + "captured tiles are kept, the current tile is discarded."));
+        // Red styling to mark the destructive action; anchored to the footer's right edge.
+        abortBtn.setStyle("-fx-base: #b00020; -fx-text-fill: white;");
         // Always clickable: never added to the disabled-during-run set, so the operator can
         // halt the whole batch at any point (an in-flight single run still finishes/cancels
         // via its own dialog, but NO further slots will start).
@@ -330,6 +369,10 @@ public final class MultiSlideExistingImageWorkflow {
         // ABORTAF/stitching and unwind. When that cancellation hook is built, wire this
         // button (and an always-clickable Abort-all inside the acquisition progress UI) to it.
         // See memory: project_multislide_batch_design (batch Abort-all requirement).
+        // TODO(increment: cancel-token): thread a shared CancellationToken from this button
+        // through ExistingImageWorkflowV2 -> WorkflowOrchestrator -> AcquisitionManager so a mid-
+        // acquire Abort All also sends CANCEL and flips the active DualProgressDialog's cancelled
+        // flag. For this increment the action still only halts the driver (below).
         abortBtn.setOnAction(e -> {
             logger.info("MS workflow: Abort All requested, runId={}", runId);
             aborted.set(true);
@@ -342,9 +385,15 @@ public final class MultiSlideExistingImageWorkflow {
         // cleanly between slides without interrupting an in-flight run, and is shared by all
         // three drivers below.
         Button runAllBtn = new Button("Run All Remaining");
+        runAllBtn.setTooltip(
+                new Tooltip("Run the full workflow on each unfinished slot in turn; you answer each slide's prompts."));
         Button setUpAllBtn = new Button("Set Up All Remaining");
+        setUpAllBtn.setTooltip(new Tooltip("Interactively align and set up every unfinished slot, without acquiring."));
         Button acquireAllBtn = new Button("Acquire All Set-Up");
+        acquireAllBtn.setTooltip(new Tooltip("Acquire every set-up slot unattended (no prompts)."));
         CheckBox stopAfterCurrent = new CheckBox("Stop after current slide");
+        stopAfterCurrent.setTooltip(
+                new Tooltip("Halt cleanly once the running slide finishes; does not interrupt an in-flight slide."));
         List<Button> driverButtons = List.of(runAllBtn, setUpAllBtn, acquireAllBtn);
 
         // Semi-automated single pass: full interactive workflow per slot, sequenced.
@@ -411,30 +460,90 @@ public final class MultiSlideExistingImageWorkflow {
                     });
         });
 
-        HBox autoRow = new HBox(10, runAllBtn, stopAfterCurrent);
-        autoRow.setAlignment(Pos.CENTER_LEFT);
-        Label twoPassLabel = new Label("Two-pass (unattended acquire):");
-        HBox twoPassRow = new HBox(10, twoPassLabel, setUpAllBtn, acquireAllBtn);
-        twoPassRow.setAlignment(Pos.CENTER_LEFT);
-
-        HBox buttons = new HBox(10, abortBtn, finishBtn);
-        buttons.setAlignment(Pos.CENTER_RIGHT);
         refreshFinish.run();
 
-        VBox root = new VBox(
-                10,
-                header,
-                intro,
-                orientationNote,
-                new Separator(),
-                scroll,
-                new Separator(),
-                autoRow,
-                twoPassRow,
-                buttons);
-        root.setPadding(new Insets(14));
-        root.setStyle("-fx-pref-width: 780; -fx-pref-height: 520;");
+        // ---- Consolidated panel: mode banner + section stack (scrolled) + fixed footer ----
+
+        // Mode banner (blue = interactive setup pass). Full-width, above the section stack.
+        Label banner = new Label("SETUP PASS - " + carrier.getName());
+        banner.setMaxWidth(Double.MAX_VALUE);
+        banner.setStyle(
+                "-fx-background-color: #1565c0; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 6 12 6 12;");
+
+        VBox topBox = new VBox(6, banner, header);
+        topBox.setPadding(new Insets(12, 12, 4, 12));
+
+        // Section A: Slots (the per-slot table). Expanded -- the batch's home base.
+        TitledPane slotsSection = SectionBuilder.section("Slots", true, grid);
+        slotsSection.setTooltip(new Tooltip("Every slide in the holder, its status, and per-row controls."));
+
+        // Section B: Alignment. Expanded. Increment-1 placeholder: the alignment controls are
+        // still hosted by the per-step alignment dialog; folding them in is a later increment.
+        Label alignmentPlaceholder =
+                new Label("Alignment for the current slot is handled in the alignment step (Stage Map + SIFT / "
+                        + "manual align). Consolidating those controls into this section is planned for a "
+                        + "later increment.");
+        alignmentPlaceholder.setWrapText(true);
+        alignmentPlaceholder.setMaxWidth(560);
+        alignmentPlaceholder.setMinHeight(Region.USE_PREF_SIZE);
+        // TODO(increment 2: fold-child-dialogs): host the alignment controls + SIFT feedback here.
+        TitledPane alignmentSection = SectionBuilder.section("Alignment", true, alignmentPlaceholder);
+        alignmentSection.setTooltip(new Tooltip("Align the current slot: Stage Map view, SIFT, and manual alignment."));
+
+        // Section C: Refinement. Collapsed. Increment-1 placeholder.
+        Label refinementPlaceholder =
+                new Label("Multi-tile refinement runs in its own step for now. The folded Multi-Tile panel "
+                        + "(reusing a shared SIFT capture pane per point) arrives in a later increment.");
+        refinementPlaceholder.setWrapText(true);
+        refinementPlaceholder.setMaxWidth(560);
+        refinementPlaceholder.setMinHeight(Region.USE_PREF_SIZE);
+        // TODO(increment 2: SiftCapturePane + Multi-Tile fold): embed the refinement panel here.
+        TitledPane refinementSection = SectionBuilder.section("Refinement", false, refinementPlaceholder);
+        refinementSection.setTooltip(new Tooltip("Multi-tile rotation + scale correction for the current slot."));
+
+        // Section D: Advanced / SIFT settings. Collapsed. Increment-1 placeholder.
+        Label advancedPlaceholder =
+                new Label("Autofocus-on-slot-jump, force Camera View, zoom-to-tissue, and SIFT auto-align "
+                        + "options will live here. Wiring these toggles is a later increment.");
+        advancedPlaceholder.setWrapText(true);
+        advancedPlaceholder.setMaxWidth(560);
+        advancedPlaceholder.setMinHeight(Region.USE_PREF_SIZE);
+        // TODO(increment 6: quick items): AF-on-jump, Camera View, zoom-to-box, SIFT toggles.
+        TitledPane advancedSection = SectionBuilder.section("Advanced / SIFT settings", false, advancedPlaceholder);
+        advancedSection.setTooltip(new Tooltip("Autofocus, camera-view, zoom, and SIFT auto-align options."));
+
+        // The batch guidance notes scroll with the section stack (not pinned in the header).
+        VBox sections = new VBox(
+                10, intro, orientationNote, slotsSection, alignmentSection, refinementSection, advancedSection);
+        sections.setPadding(new Insets(12));
+
+        ScrollPane scroll = new ScrollPane(sections);
+        scroll.setFitToWidth(true);
+        scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+        // Fixed footer (never in a section, never scrolls): driver buttons, then Finish / Abort.
+        HBox driverRow = new HBox(10, runAllBtn, setUpAllBtn, acquireAllBtn, stopAfterCurrent);
+        driverRow.setAlignment(Pos.CENTER_LEFT);
+
+        Region footerSpacer = new Region();
+        HBox.setHgrow(footerSpacer, Priority.ALWAYS);
+        HBox finishRow = new HBox(10, finishBtn, footerSpacer, abortBtn);
+        finishRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox footer = new VBox(8, driverRow, new Separator(), finishRow);
+
+        BorderPane root = new BorderPane();
+        root.setStyle("-fx-background-color: -fx-base;");
+        root.setTop(topBox);
+        root.setCenter(scroll);
+        root.setBottom(footer);
+        BorderPane.setMargin(footer, new Insets(0, 12, 12, 12));
+
+        stage.setMinWidth(560);
+        stage.setMinHeight(480);
         stage.setScene(new Scene(root));
+        stage.sizeToScene();
         stage.show();
     }
 
@@ -451,7 +560,7 @@ public final class MultiSlideExistingImageWorkflow {
             // between slides (observed: a 7.5h pause waiting for the operator). Clearing the dirty
             // flag here makes the switch silent -- the same pattern TileProcessingUtilities uses
             // before opening a stitched result.
-            saveCurrentImageDataQuietly(gui);
+            WorkflowHelpers.saveOpenImageDataQuietly(gui);
             gui.openImageEntry(s.assignment.entry());
             s.setStatus(Status.IN_PROGRESS);
             refreshFinish.run();
@@ -461,27 +570,6 @@ public final class MultiSlideExistingImageWorkflow {
                     "MS workflow: failed to open entry {}", s.assignment.entry().getImageName(), ex);
             Dialogs.showErrorMessage("Open failed", ex.getMessage());
             return false;
-        }
-    }
-
-    /**
-     * Saves the currently-open image's data to its project entry, if any, without prompting.
-     * Prevents QuPath's modal "Save changes?" dialog when the workflow switches the open image
-     * between slots (the acquire pass leaves the stitched/biref image open and marked changed).
-     * Best-effort: a failure is logged, not thrown, so a save hiccup never blocks the switch.
-     */
-    private static void saveCurrentImageDataQuietly(QuPathGUI gui) {
-        try {
-            var currentData = gui.getImageData();
-            Project<BufferedImage> project = gui.getProject();
-            ProjectImageEntry<BufferedImage> currentEntry =
-                    (currentData != null && project != null) ? project.getEntry(currentData) : null;
-            if (currentEntry != null) {
-                currentEntry.saveImageData(currentData);
-                logger.info("MS workflow: saved current image data before switching slots (no prompt)");
-            }
-        } catch (Exception ex) {
-            logger.warn("MS workflow: could not pre-save current image before switching: {}", ex.getMessage());
         }
     }
 
@@ -502,7 +590,7 @@ public final class MultiSlideExistingImageWorkflow {
         s.setStatus(Status.IN_PROGRESS);
         refreshFinish.run();
         CompletableFuture<Boolean> acquired = new CompletableFuture<>();
-        double[] slotCenter = resolveSlotCenter(carrier, s.assignment.position());
+        double[] slotCenter = WorkflowHelpers.resolveSlotCenterStageXY(carrier, s.assignment.position());
         // forceFreshAlignment=true: multi-slide runs must re-derive each slide's
         // position/orientation for its current mount via fresh MANUAL alignment, never
         // reuse a prior alignment or the SIFT/preset path (both assume the horizontal
@@ -550,37 +638,6 @@ public final class MultiSlideExistingImageWorkflow {
     }
 
     /**
-     * Absolute stage (X, Y) center (um) of the given carrier slot, read from the
-     * insert's per-slot calibration ({@code slideK_center_x_um/_y_um}). Returns
-     * {@code null} when the holder has no per-slot centers or the config is
-     * unavailable -- the alignment then runs without an auto-move estimate.
-     */
-    private static double[] resolveSlotCenter(StageInsert carrier, int slotPosition) {
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr == null || carrier == null) {
-                return null;
-            }
-            Double cx = mgr.getDouble(
-                    "stage", "inserts", "configurations", carrier.getId(), "slide" + slotPosition + "_center_x_um");
-            Double cy = mgr.getDouble(
-                    "stage", "inserts", "configurations", carrier.getId(), "slide" + slotPosition + "_center_y_um");
-            if (cx == null || cy == null) {
-                logger.info(
-                        "No per-slot center for slot {} of insert '{}'; alignment auto-move disabled",
-                        slotPosition,
-                        carrier.getId());
-                return null;
-            }
-            logger.info("Slot {} of insert '{}' center = ({}, {}) um", slotPosition, carrier.getId(), cx, cy);
-            return new double[] {cx, cy};
-        } catch (Exception e) {
-            logger.warn("Could not resolve slot center for slot {}: {}", slotPosition, e.getMessage());
-            return null;
-        }
-    }
-
-    /**
      * Two-pass PASS 1 for one slot: open + run the interactive setup-only workflow
      * (align + optional refine + tissue), which persists a per-slide alignment JSON but
      * does NOT acquire. On success the slot advances to Set up and stashes the captured
@@ -596,7 +653,7 @@ public final class MultiSlideExistingImageWorkflow {
                 s.assignment.position(),
                 s.assignment.entry().getImageName());
         CompletableFuture<Void> done = new CompletableFuture<>();
-        double[] slotCenter = resolveSlotCenter(carrier, s.assignment.position());
+        double[] slotCenter = WorkflowHelpers.resolveSlotCenterStageXY(carrier, s.assignment.position());
         // TEST-ONLY: reuseAlignment (pref + per-batch confirm) lets the setup pass reuse a
         // saved per-slide JSON (holder assumed untouched) instead of re-aligning; slots
         // without a valid saved alignment still fall back to fresh alignment.
@@ -748,12 +805,14 @@ public final class MultiSlideExistingImageWorkflow {
     private static final class SlotState {
         final MultiSlideAssignmentDialog.SlotAssignment assignment;
         Status status = Status.PENDING;
-        Label statusLabel;
-        // Row action buttons, held so the Run All driver can disable them while it drives.
+        // Per-row status control (replaces the old status Label + Done/Skip buttons).
+        ChoiceBox<Status> statusChoice;
+        // True while the driver sets status programmatically, so the ChoiceBox change
+        // listener does not re-interpret a system-driven update as an operator transition.
+        boolean suppressStatusListener;
+        // Row action controls, held so the drivers can disable them while driving.
         Button openBtn;
-        Button runBtn;
-        Button doneBtn;
-        Button skipBtn;
+        MenuItem runSingleItem;
         // Captured during the two-pass setup pass; replayed unattended in the acquire pass.
         ExistingImageWorkflowV2.SetupResult setup;
 
@@ -763,7 +822,11 @@ public final class MultiSlideExistingImageWorkflow {
 
         void setStatus(Status s) {
             this.status = s;
-            if (statusLabel != null) statusLabel.setText(s.label());
+            if (statusChoice != null) {
+                suppressStatusListener = true;
+                statusChoice.setValue(s);
+                suppressStatusListener = false;
+            }
         }
 
         boolean isTerminal() {
@@ -772,9 +835,8 @@ public final class MultiSlideExistingImageWorkflow {
 
         void setRowButtonsDisabled(boolean disabled) {
             if (openBtn != null) openBtn.setDisable(disabled);
-            if (runBtn != null) runBtn.setDisable(disabled);
-            if (doneBtn != null) doneBtn.setDisable(disabled);
-            if (skipBtn != null) skipBtn.setDisable(disabled);
+            if (statusChoice != null) statusChoice.setDisable(disabled);
+            if (runSingleItem != null) runSingleItem.setDisable(disabled);
         }
     }
 

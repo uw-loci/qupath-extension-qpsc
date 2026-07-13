@@ -328,7 +328,7 @@ public class MultiTileRefinement {
                             tileCoords[1],
                             predictedStage[0],
                             predictedStage[1]);
-                    Platform.runLater(() -> centerViewerOnTile(gui, tile));
+                    Platform.runLater(() -> WorkflowHelpers.centerAndSelectTile(gui, tile));
 
                     // Stage move + SIFT are socket I/O: run off the FX thread.
                     new Thread(
@@ -543,15 +543,5 @@ public class MultiTileRefinement {
         AffineTransform est = new AffineTransform(fit.correction());
         est.concatenate(initialTransform);
         return est;
-    }
-
-    /** Centers the viewer on the tile and selects it (mirrors SingleTileRefinement). */
-    private static void centerViewerOnTile(QuPathGUI gui, PathObject tile) {
-        var viewer = gui.getViewer();
-        if (viewer != null && tile.getROI() != null) {
-            viewer.setCenterPixelLocation(
-                    tile.getROI().getCentroidX(), tile.getROI().getCentroidY());
-            viewer.getHierarchy().getSelectionModel().setSelectedObject(tile);
-        }
     }
 }

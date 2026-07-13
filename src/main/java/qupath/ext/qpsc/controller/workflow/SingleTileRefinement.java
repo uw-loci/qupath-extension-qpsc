@@ -230,7 +230,7 @@ public class SingleTileRefinement {
                 TransformationFunctions.transformQuPathFullResToStage(tileCoords, initialTransform);
 
         // Center viewer on tile
-        centerViewerOnTile(gui, selectedTile);
+        WorkflowHelpers.centerAndSelectTile(gui, selectedTile);
 
         // Move to estimated position
         logger.info("Moving to estimated position: ({}, {})", estimatedStageCoords[0], estimatedStageCoords[1]);
@@ -306,23 +306,6 @@ public class SingleTileRefinement {
     }
 
     /**
-     * Centers the QuPath viewer on the selected tile.
-     *
-     * @param gui QuPath GUI instance
-     * @param tile Tile to center on
-     */
-    private static void centerViewerOnTile(QuPathGUI gui, PathObject tile) {
-        var viewer = gui.getViewer();
-        if (viewer != null && tile.getROI() != null) {
-            double cx = tile.getROI().getCentroidX();
-            double cy = tile.getROI().getCentroidY();
-            viewer.setCenterPixelLocation(cx, cy);
-            viewer.getHierarchy().getSelectionModel().setSelectedObject(tile);
-            logger.debug("Centered viewer on tile at ({}, {})", cx, cy);
-        }
-    }
-
-    /**
      * Shows a non-modal refinement dialog for user interaction.
      *
      * <p>The dialog is non-modal so the user can interact with QuPath while
@@ -385,7 +368,7 @@ public class SingleTileRefinement {
                         + "if you accidentally changed the selection."));
         restoreButton.setOnAction(e -> {
             // Restore selection and center view
-            centerViewerOnTile(gui, selectedTile);
+            WorkflowHelpers.centerAndSelectTile(gui, selectedTile);
             logger.info("Restored target tile selection: {}", tileName);
         });
 

@@ -444,21 +444,26 @@ public class ExistingImageWorkflowV2 {
                 if (gui == null) {
                     return;
                 }
-                ImageData<BufferedImage> imageData = gui.getImageData();
-                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
-                if (imageData == null || project == null) {
-                    return;
-                }
-                ProjectImageEntry<BufferedImage> entry = project.getEntry(imageData);
+                // Save the open (sibling) hierarchy to its entry quietly, then flush the project
+                // so the annotations survive the slot round-trip into the unattended acquire pass.
+                ProjectImageEntry<BufferedImage> entry = WorkflowHelpers.saveOpenImageDataQuietly(gui);
                 if (entry == null) {
                     logger.warn("SETUP_ONLY: no project entry for the open image; annotations not persisted");
                     return;
                 }
-                entry.saveImageData(imageData);
-                project.syncChanges();
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                if (project != null) {
+                    project.syncChanges();
+                }
+                ImageData<BufferedImage> imageData = gui.getImageData();
                 logger.info(
                         "SETUP_ONLY: persisted {} annotation(s) to entry '{}' for the acquire pass",
-                        imageData.getHierarchy().getAnnotationObjects().size(),
+                        imageData != null
+                                ? imageData
+                                        .getHierarchy()
+                                        .getAnnotationObjects()
+                                        .size()
+                                : 0,
                         entry.getImageName());
             } catch (Exception e) {
                 logger.error(
