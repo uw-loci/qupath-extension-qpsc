@@ -58,8 +58,14 @@ public class MultiTileRefinement {
     /** Minimum reference points before a similarity can be solved. */
     private static final int MIN_POINTS = 2;
 
-    /** One measured correspondence: predicted vs. actual stage position for a tile. */
-    private record PointMeasure(double[] predictedStage, double[] measuredStage, PathObject tile) {}
+    /**
+     * One measured correspondence for the similarity solve: the tile's QuPath centroid and
+     * the stage position it actually landed at. The centroid (not a precomputed predicted
+     * stage) is stored so the solve can recompute predicted positions against the ORIGINAL
+     * transform for every point -- consistent even though each point is PREDICTED with a
+     * progressively improved estimate (see {@link #computeWorkingEstimate}).
+     */
+    private record PointMeasure(double[] tileCentroidQP, double[] measuredStage, PathObject tile) {}
 
     /**
      * Multi-tile refinement using the trust-SIFT and confidence preferences.
@@ -105,6 +111,11 @@ public class MultiTileRefinement {
             CompletableFuture<SingleTileRefinement.RefinementResult> future) {
 
         List<PointMeasure> points = new ArrayList<>();
+        // The transform used to PREDICT the next point's stage position. Starts as the
+        // initial alignment and is refined after every captured point (translation-only
+        // after 1 point, full similarity after 2+), so each successive point is predicted
+        // closer to the truth instead of repeating the initial transform's error.
+        final AffineTransform[] workingEstimate = {new AffineTransform(initialTransform)};
 
         Stage stage = new Stage();
         stage.setTitle("Multi-Tile Alignment Refinement");
@@ -119,11 +130,13 @@ public class MultiTileRefinement {
         Label header = new Label("Multi-Tile Alignment Refinement");
         header.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
 
-        Label instructions = new Label("Add 2 or more reference points spread across the slide. For each, pick a "
-                + "tile; the stage moves to its predicted position, then SIFT (or a manual nudge) captures where it "
-                + "actually is. This solves a rotation + scale correction -- unlike single-tile, which fixes only "
-                + "the offset and cannot correct a rotated slide.\n\n"
-                + "Spread the points out (far apart, not in a line) for the best rotation estimate.");
+        Label instructions = new Label(
+                "Add 2 or more reference points spread across the slide. For each, pick a "
+                        + "tile; the stage moves to its predicted position, then SIFT (or a manual nudge) captures where it "
+                        + "actually is. This solves a rotation + scale correction -- unlike single-tile, which fixes only "
+                        + "the offset and cannot correct a rotated slide.\n\n"
+                        + "Each point you capture improves the prediction for the next one, so after the first point the "
+                        + "moves land closer. Spread the points out (far apart, not in a line) for the best rotation estimate.");
         instructions.setWrapText(true);
 
         Label pointsLabel = new Label("Points captured: 0");
@@ -155,7 +168,7 @@ public class MultiTileRefinement {
                 solveButton.setDisable(true);
                 return;
             }
-            TransformationFunctions.SimilarityFit fit = solve(points);
+            TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
             diagLabel.setText(String.format(
                     "Correction from %d points: rotation %.2f deg, scale %.4f, fit RMS %.1f um.%s",
                     fit.pointCount(),
@@ -170,18 +183,23 @@ public class MultiTileRefinement {
             addButton.setDisable(true);
             solveButton.setDisable(true);
             cancelButton.setDisable(true);
-            capturePoint(gui, initialTransform, points.size() + 1, trustSift, confidenceThreshold)
+            // Predict this point with the running estimate (refined by prior points), NOT
+            // the raw initial transform.
+            capturePoint(gui, workingEstimate[0], points.size() + 1, trustSift, confidenceThreshold)
                     .whenComplete((measure, ex) -> Platform.runLater(() -> {
                         if (ex != null) {
                             logger.warn("Multi-tile point capture failed: {}", ex.getMessage());
                         } else if (measure != null) {
                             points.add(measure);
+                            // Fold the new point into the estimate used to predict the next one.
+                            workingEstimate[0] = computeWorkingEstimate(points, initialTransform);
                             logger.info(
-                                    "Captured multi-tile point {} on tile '{}': predicted=({}, {}), measured=({}, {})",
+                                    "Captured multi-tile point {} on tile '{}': centroid=({}, {}), measured=({}, {}); "
+                                            + "estimate updated for next prediction",
                                     points.size(),
                                     measure.tile().getName(),
-                                    measure.predictedStage()[0],
-                                    measure.predictedStage()[1],
+                                    measure.tileCentroidQP()[0],
+                                    measure.tileCentroidQP()[1],
                                     measure.measuredStage()[0],
                                     measure.measuredStage()[1]);
                         }
@@ -192,7 +210,7 @@ public class MultiTileRefinement {
         });
 
         solveButton.setOnAction(e -> {
-            TransformationFunctions.SimilarityFit fit = solve(points);
+            TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
             AffineTransform refined = new AffineTransform(fit.correction());
             refined.concatenate(initialTransform);
             logger.info(
@@ -242,11 +260,7 @@ public class MultiTileRefinement {
      * the operator cancels the tile selection or skips the point.
      */
     private static CompletableFuture<PointMeasure> capturePoint(
-            QuPathGUI gui,
-            AffineTransform initialTransform,
-            int pointNumber,
-            boolean trustSift,
-            double confidenceThreshold) {
+            QuPathGUI gui, AffineTransform estimate, int pointNumber, boolean trustSift, double confidenceThreshold) {
 
         CompletableFuture<PointMeasure> future = new CompletableFuture<>();
 
@@ -264,11 +278,12 @@ public class MultiTileRefinement {
                         tile.getROI().getCentroidX(), tile.getROI().getCentroidY()
                     };
                     double[] predictedStage =
-                            TransformationFunctions.transformQuPathFullResToStage(tileCoords, initialTransform);
+                            TransformationFunctions.transformQuPathFullResToStage(tileCoords, estimate);
                     // DIAGNOSTIC (2026-07-12 diagonal-transform test): the actual QuPath->stage
-                    // mapping for a real tile. With the fix, QuPath-X should drive stage-X (not
-                    // stage-Y). The first predicted move should land the live view on the picked
-                    // tile; 90-deg-off means the transform is still axis-swapped -- stop and re-check.
+                    // mapping for a real tile, using the running estimate. With the diagonal fix,
+                    // QuPath-X should drive stage-X (not stage-Y). The first point's move (raw
+                    // initial transform) should land near the picked tile; 90-deg-off means the
+                    // transform is still axis-swapped -- stop and re-check.
                     logger.info(
                             "Multi-tile point {}: tile '{}' QuPath centroid ({}, {}) -> predicted stage ({}, {})",
                             pointNumber,
@@ -300,7 +315,7 @@ public class MultiTileRefinement {
                                                             "Multi-tile point {}: SIFT auto-accepted (confidence {})",
                                                             pointNumber,
                                                             result[3]);
-                                                    future.complete(new PointMeasure(predictedStage, measured, tile));
+                                                    future.complete(new PointMeasure(tileCoords, measured, tile));
                                                     return;
                                                 }
                                                 logger.info(
@@ -308,14 +323,14 @@ public class MultiTileRefinement {
                                                         pointNumber);
                                             }
                                             Platform.runLater(() ->
-                                                    showCaptureDialog(gui, tile, predictedStage, pointNumber, future));
+                                                    showCaptureDialog(gui, tile, tileCoords, pointNumber, future));
                                         } catch (Exception ex) {
                                             logger.warn(
                                                     "Multi-tile point {} move/SIFT failed: {} -- manual capture",
                                                     pointNumber,
                                                     ex.getMessage());
                                             Platform.runLater(() ->
-                                                    showCaptureDialog(gui, tile, predictedStage, pointNumber, future));
+                                                    showCaptureDialog(gui, tile, tileCoords, pointNumber, future));
                                         }
                                     },
                                     "MultiTile-Point-" + pointNumber)
@@ -333,7 +348,7 @@ public class MultiTileRefinement {
     private static void showCaptureDialog(
             QuPathGUI gui,
             PathObject tile,
-            double[] predictedStage,
+            double[] tileCoords,
             int pointNumber,
             CompletableFuture<PointMeasure> future) {
 
@@ -389,7 +404,7 @@ public class MultiTileRefinement {
                                             MicroscopeController.getInstance().getStagePositionXY();
                                     Platform.runLater(() -> {
                                         dialog.close();
-                                        future.complete(new PointMeasure(predictedStage, measured, tile));
+                                        future.complete(new PointMeasure(tileCoords, measured, tile));
                                     });
                                 } catch (Exception ex) {
                                     logger.error("Failed to read stage position for capture", ex);
@@ -421,15 +436,48 @@ public class MultiTileRefinement {
         dialog.show();
     }
 
-    /** Solves the stage-space similarity from the captured correspondences. */
-    private static TransformationFunctions.SimilarityFit solve(List<PointMeasure> points) {
+    /**
+     * Solves the stage-space similarity from the captured correspondences. Predicted
+     * positions are recomputed against the ORIGINAL {@code initialTransform} (not the
+     * running estimate) so every point is compared on the same footing, regardless of the
+     * progressively-refined estimate each was predicted with.
+     */
+    private static TransformationFunctions.SimilarityFit solve(
+            List<PointMeasure> points, AffineTransform initialTransform) {
         double[][] predicted = new double[points.size()][];
         double[][] measured = new double[points.size()][];
         for (int i = 0; i < points.size(); i++) {
-            predicted[i] = points.get(i).predictedStage();
+            predicted[i] = TransformationFunctions.transformQuPathFullResToStage(
+                    points.get(i).tileCentroidQP(), initialTransform);
             measured[i] = points.get(i).measuredStage();
         }
         return TransformationFunctions.computeStageSpaceSimilarity(predicted, measured);
+    }
+
+    /**
+     * The transform used to PREDICT the next reference point, refined by the points captured
+     * so far. With 1 point it applies a translation-only correction (shift the initial
+     * transform so that point lands exactly), which already removes most of the initial
+     * offset. With 2+ points it applies the full similarity (rotation + scale + translation).
+     * Composed onto {@code initialTransform} so it maps QuPath pixels -> stage.
+     */
+    private static AffineTransform computeWorkingEstimate(List<PointMeasure> points, AffineTransform initialTransform) {
+        if (points.isEmpty()) {
+            return new AffineTransform(initialTransform);
+        }
+        if (points.size() == 1) {
+            double[] centroid = points.get(0).tileCentroidQP();
+            double[] predicted = TransformationFunctions.transformQuPathFullResToStage(centroid, initialTransform);
+            double[] measured = points.get(0).measuredStage();
+            AffineTransform est =
+                    AffineTransform.getTranslateInstance(measured[0] - predicted[0], measured[1] - predicted[1]);
+            est.concatenate(initialTransform);
+            return est;
+        }
+        TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
+        AffineTransform est = new AffineTransform(fit.correction());
+        est.concatenate(initialTransform);
+        return est;
     }
 
     /** Centers the viewer on the tile and selects it (mirrors SingleTileRefinement). */
