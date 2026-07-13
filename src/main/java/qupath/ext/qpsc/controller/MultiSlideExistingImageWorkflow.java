@@ -245,16 +245,26 @@ public final class MultiSlideExistingImageWorkflow {
         for (SlotState s : states) {
             int rowFinal = row++;
             Label posLabel = new Label(s.assignment.slotLabel());
-            Label entryLabel = new Label(s.assignment.entry().getImageName());
+            // Drop the "(rotated N)(flipped XY)" suffix for display -- it is identical on every
+            // row (pure width, no signal); the full entry name stays in the tooltip.
+            String fullEntryName = s.assignment.entry().getImageName();
+            int suffixIdx = fullEntryName.indexOf(" (rotated");
+            String displayEntryName = suffixIdx > 0 ? fullEntryName.substring(0, suffixIdx) : fullEntryName;
+            Label entryLabel = new Label(displayEntryName);
             entryLabel.setMaxWidth(220);
+            entryLabel.setTooltip(new javafx.scene.control.Tooltip(fullEntryName));
             Label statusLabel = new Label(s.status.label());
             s.statusLabel = statusLabel;
 
             Button openBtn = new Button("Open");
             Button runBtn = new Button("Run Single");
             runBtn.setTooltip(new javafx.scene.control.Tooltip("Run the full single-slide workflow for this slot"));
-            Button doneBtn = new Button("Mark Done");
+            Button doneBtn = new Button("Done");
+            doneBtn.setTooltip(new javafx.scene.control.Tooltip(
+                    "Mark this slot complete by hand (e.g. you acquired it outside the batch)"));
             Button skipBtn = new Button("Skip");
+            skipBtn.setTooltip(
+                    new javafx.scene.control.Tooltip("Exclude this slot from the run; it will not be acquired"));
             s.openBtn = openBtn;
             s.runBtn = runBtn;
             s.doneBtn = doneBtn;
