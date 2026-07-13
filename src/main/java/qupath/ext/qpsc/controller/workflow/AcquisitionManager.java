@@ -566,6 +566,14 @@ public class AcquisitionManager {
                 });
                 dialog.show();
                 dualProgressDialog = dialog; // Set field for other method access
+                // Multi-slide "Abort All": register this dialog with the batch cancel token
+                // so a batch-level abort cancels THIS in-flight acquisition. requestCancel()
+                // both sends CANCEL and flips the dialog's cancelled flag, so the acquire
+                // loop's !result && !isCancelled() branch scores a clean cancel, not an
+                // error. Null token in the single-slide menu path -- no registration.
+                if (state.cancellationToken != null) {
+                    state.cancellationToken.registerCancelAction(dialog::requestCancel);
+                }
                 dialogSetup.complete(dialog);
             } catch (Exception e) {
                 dialogSetup.completeExceptionally(e);
@@ -715,6 +723,12 @@ public class AcquisitionManager {
             // (stitching continues in background but does not use the stage)
             MicroscopeController.getInstance().restoreLiveViewState(liveState);
             MicroscopeController.getInstance().setAcquisitionActive(false);
+
+            // Deregister this dialog from the batch cancel token: this slot's acquisition has
+            // settled, so a later Abort All must not trip this (now closing) dialog.
+            if (state.cancellationToken != null) {
+                state.cancellationToken.clearCancelAction();
+            }
 
             // Close dual progress dialog when workflow completes or fails
             if (progressDialog != null) {

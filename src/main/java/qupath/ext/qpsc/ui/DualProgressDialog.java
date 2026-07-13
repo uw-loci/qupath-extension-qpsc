@@ -927,6 +927,24 @@ public class DualProgressDialog {
     }
 
     /**
+     * Externally requests cancellation, exactly as if the operator clicked the dialog's
+     * Cancel button: flips the cancelled flag, fires the cancel callback (which sends the
+     * CANCEL socket command), and closes the dialog after a brief status display. Marshals
+     * to the JavaFX thread and is idempotent.
+     *
+     * <p>Used by the multi-slide "Abort All" button (via a
+     * {@link qupath.ext.qpsc.controller.workflow.CancellationToken}) so a batch-level abort
+     * both sends CANCEL and flips {@link #isCancelled()} true -- the latter is what makes the
+     * acquire loop score a clean cancel instead of an unexpected error.
+     */
+    public void requestCancel() {
+        if (cancelled.get()) {
+            return;
+        }
+        Platform.runLater(this::triggerCancel);
+    }
+
+    /**
      * Returns true if the workflow is complete.
      */
     public boolean isWorkflowComplete() {

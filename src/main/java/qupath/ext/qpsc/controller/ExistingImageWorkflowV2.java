@@ -100,7 +100,7 @@ public class ExistingImageWorkflowV2 {
      *     re-derive this slide's position from scratch
      */
     public static CompletableFuture<WorkflowState> startAsync(boolean forceFreshAlignment) {
-        return startAsync(forceFreshAlignment, null);
+        return startAsync(forceFreshAlignment, null, null);
     }
 
     /**
@@ -112,10 +112,14 @@ public class ExistingImageWorkflowV2 {
      * @param forceFreshAlignment when true, ignore any saved per-slide alignment
      * @param slotCenterStageXY absolute stage (X, Y) center (um) of this slide's holder
      *     slot, or {@code null} (no auto-move hint)
+     * @param cancellationToken optional batch-level cancel signal (multi-slide Abort All),
+     *     or {@code null} in the single-slide menu path
      */
-    public static CompletableFuture<WorkflowState> startAsync(boolean forceFreshAlignment, double[] slotCenterStageXY) {
+    public static CompletableFuture<WorkflowState> startAsync(
+            boolean forceFreshAlignment, double[] slotCenterStageXY, CancellationToken cancellationToken) {
         WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.FULL, null, null, null, forceFreshAlignment);
         o.state.slotCenterStageXY = slotCenterStageXY;
+        o.state.cancellationToken = cancellationToken;
         return o.execute();
     }
 
@@ -154,13 +158,16 @@ public class ExistingImageWorkflowV2 {
      * @param forceFreshAlignment when true, ignore any saved per-slide alignment and
      *     re-derive; when false, reuse a saved per-slide JSON if one exists for this mount
      *     (slots without a valid saved alignment still fall back to fresh alignment)
+     * @param cancellationToken optional batch-level cancel signal (multi-slide Abort All),
+     *     or {@code null}
      * @return a future completing with the captured {@link SetupResult} on success, or
      *     {@code null} on cancel / short-circuit / handled error. Never exceptional.
      */
     public static CompletableFuture<SetupResult> startSetupAsync(
-            double[] slotCenterStageXY, boolean forceFreshAlignment) {
+            double[] slotCenterStageXY, boolean forceFreshAlignment, CancellationToken cancellationToken) {
         WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null, forceFreshAlignment);
         o.state.slotCenterStageXY = slotCenterStageXY;
+        o.state.cancellationToken = cancellationToken;
         return o.execute().thenApply(st -> {
             if (st == null || o.capturedConfig == null) {
                 return null;
@@ -177,19 +184,23 @@ public class ExistingImageWorkflowV2 {
      * {@code processSlideSpecificAlignment} path, then acquires. Annotations are re-read
      * from the freshly opened hierarchy -- no in-memory hand-off from setup.
      *
-     * @param setup the product of {@link #startSetupAsync()} for this slide's entry
+     * @param setup the product of {@link #startSetupAsync} for this slide's entry
+     * @param cancellationToken optional batch-level cancel signal (multi-slide Abort All),
+     *     or {@code null}
      * @return a future completing with the {@link WorkflowState} on a real acquisition,
      *     or {@code null} on short-circuit / handled error. Never exceptional.
      */
-    public static CompletableFuture<WorkflowState> startAcquireAsync(SetupResult setup) {
+    public static CompletableFuture<WorkflowState> startAcquireAsync(
+            SetupResult setup, CancellationToken cancellationToken) {
         if (setup == null || setup.config() == null) {
             return CompletableFuture.completedFuture(null);
         }
         // forceFreshAlignment = false: the acquire pass MUST use the per-slide JSON the
         // setup pass just re-derived for this mount (via processSlideSpecificAlignment).
-        return new WorkflowOrchestrator(
-                        Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ(), false)
-                .execute();
+        WorkflowOrchestrator o = new WorkflowOrchestrator(
+                Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ(), false);
+        o.state.cancellationToken = cancellationToken;
+        return o.execute();
     }
 
     /** Execution mode for {@link WorkflowOrchestrator}. */
@@ -2728,6 +2739,16 @@ public class ExistingImageWorkflowV2 {
          * estimate so selecting a reference tile auto-moves the stage near the tissue.
          */
         public double[] slotCenterStageXY;
+
+        /**
+         * Optional batch-level cancellation signal, set by the multi-slide "Abort All"
+         * button so it can cancel THIS slot's in-flight acquisition (not merely halt the
+         * driver between slots). {@code AcquisitionManager} registers its active
+         * {@code DualProgressDialog} with the token while acquiring and clears it when the
+         * slot settles. Null in the normal single-slide run (menu path), where the dialog's
+         * own Cancel button is the only cancel affordance.
+         */
+        public CancellationToken cancellationToken;
 
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();

@@ -32,6 +32,7 @@ import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.workflow.CancellationToken;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
@@ -254,6 +255,13 @@ public final class MultiSlideExistingImageWorkflow {
         java.util.concurrent.atomic.AtomicReference<Boolean> reuseDecision =
                 new java.util.concurrent.atomic.AtomicReference<>(null);
 
+        // One cancel token for the whole batch. Threaded into every slot's single-slide
+        // workflow so the Abort All button can cancel the currently-acquiring slot (the
+        // active AcquisitionManager registers its DualProgressDialog with this token while
+        // acquiring). Declared before the row loop so the per-row Run Single handler can
+        // reach it, and captured by the driver handlers and the Abort All button below.
+        CancellationToken cancelToken = new CancellationToken();
+
         for (SlotState s : states) {
             int rowFinal = row++;
             Label posLabel = new Label(s.assignment.slotLabel());
@@ -334,7 +342,7 @@ public final class MultiSlideExistingImageWorkflow {
                 // leave the slot In progress so the operator can retry or Skip. The row is
                 // held read-only for the duration of the run.
                 s.setRowButtonsDisabled(true);
-                runSlot(carrier, s, refreshFinish, resolveReuseForBatch(reuseDecision))
+                runSlot(carrier, s, refreshFinish, resolveReuseForBatch(reuseDecision), cancelToken)
                         .whenComplete((ok, ex) -> Platform.runLater(() -> s.setRowButtonsDisabled(false)));
             });
 
@@ -359,25 +367,8 @@ public final class MultiSlideExistingImageWorkflow {
         // Red styling to mark the destructive action; anchored to the footer's right edge.
         abortBtn.setStyle("-fx-base: #b00020; -fx-text-fill: white;");
         // Always clickable: never added to the disabled-during-run set, so the operator can
-        // halt the whole batch at any point (an in-flight single run still finishes/cancels
-        // via its own dialog, but NO further slots will start).
-        //
-        // TODO(batch abort-all): this halts the DRIVER only -- it stops further slots from
-        // starting, but it does NOT cancel an acquisition already running inside
-        // AcquisitionManager (the unattended acquire pass has no per-slide dialog to cancel).
-        // A true Abort-all must signal AcquisitionManager to stop the current tile loop +
-        // ABORTAF/stitching and unwind. When that cancellation hook is built, wire this
-        // button (and an always-clickable Abort-all inside the acquisition progress UI) to it.
-        // See memory: project_multislide_batch_design (batch Abort-all requirement).
-        // TODO(increment: cancel-token): thread a shared CancellationToken from this button
-        // through ExistingImageWorkflowV2 -> WorkflowOrchestrator -> AcquisitionManager so a mid-
-        // acquire Abort All also sends CANCEL and flips the active DualProgressDialog's cancelled
-        // flag. For this increment the action still only halts the driver (below).
-        abortBtn.setOnAction(e -> {
-            logger.info("MS workflow: Abort All requested, runId={}", runId);
-            aborted.set(true);
-            stage.close();
-        });
+        // halt the whole batch at any point. The Abort All handler is wired below (after the
+        // driver buttons exist), since a mid-acquire abort disables them while cancelling.
 
         // Sequential auto-run across every not-yet-terminal slot. Each driver opens the
         // entry and runs a single-slide operation through its completion future, advancing
@@ -396,6 +387,47 @@ public final class MultiSlideExistingImageWorkflow {
                 new Tooltip("Halt cleanly once the running slide finishes; does not interrupt an in-flight slide."));
         List<Button> driverButtons = List.of(runAllBtn, setUpAllBtn, acquireAllBtn);
 
+        // Abort All state machine (design 02_design_uiux.md section 1.4):
+        //   Idle "ABORT ALL" -> (confirm iff acquiring) -> "Cancelling..." (disabled) -> "Aborted".
+        // When no acquisition is in flight, Abort All is the immediate driver halt it always was
+        // (set the aborted flag + close). When an acquisition IS running, it trips the shared
+        // cancel token -- which flips the active DualProgressDialog's cancelled flag AND sends
+        // CANCEL, so the acquire loop scores a clean cancel, not an error -- then waits for the
+        // acquisition to settle before showing the terminal state and the run summary.
+        abortBtn.setOnAction(e -> {
+            boolean acquiring = MicroscopeController.getInstance().isAcquisitionActive();
+            logger.info("MS workflow: Abort All requested, runId={}, acquisitionActive={}", runId, acquiring);
+            if (!acquiring) {
+                // No in-flight acquisition: immediate driver halt + close (today's behavior).
+                aborted.set(true);
+                cancelToken.cancel();
+                stage.close();
+                return;
+            }
+            // Acquisition in flight: destructive confirm (the ONE legitimate app-modal here).
+            boolean confirmed = Dialogs.showConfirmDialog(
+                    "Abort running acquisition",
+                    "Abort the running acquisition? Tiles already captured are kept; the current tile "
+                            + "is discarded and no further slots will start.");
+            if (!confirmed) {
+                return;
+            }
+            // Drive the button to the "Cancelling..." terminal-in-progress state and lock the
+            // panel so nothing else can start while the cancel unwinds.
+            aborted.set(true);
+            abortBtn.setText("Cancelling...");
+            abortBtn.setDisable(true);
+            abortBtn.setTooltip(new Tooltip("Cancelling the running acquisition and landing the stage safely..."));
+            setPanelBusy(states, driverButtons, finishBtn, true);
+            // Trip the token: flips the active DualProgressDialog's cancelled flag + sends CANCEL.
+            cancelToken.cancel();
+            // Wait off-thread for the acquisition to settle (setAcquisitionActive(false) fires
+            // when the acquire loop unwinds), then show the terminal state + summary on the FX
+            // thread. If the server never confirms within the timeout, warn but still mark aborted
+            // (UX honesty: we do not claim a safe stop we cannot verify).
+            waitForAbortToSettle(gui, carrier, states, runId, stage, abortBtn);
+        });
+
         // Semi-automated single pass: full interactive workflow per slot, sequenced.
         runAllBtn.setOnAction(e -> {
             stopAfterCurrent.setSelected(false);
@@ -407,7 +439,7 @@ public final class MultiSlideExistingImageWorkflow {
                     states,
                     0,
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
-                    s -> fullSlot(gui, carrier, s, refreshFinish, reuse),
+                    s -> fullSlot(gui, carrier, s, refreshFinish, reuse, cancelToken),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
@@ -429,7 +461,7 @@ public final class MultiSlideExistingImageWorkflow {
                     states,
                     0,
                     s -> s.status == Status.PENDING || s.status == Status.IN_PROGRESS,
-                    s -> setupSlot(gui, carrier, s, refreshFinish, reuse),
+                    s -> setupSlot(gui, carrier, s, refreshFinish, reuse, cancelToken),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
@@ -450,7 +482,7 @@ public final class MultiSlideExistingImageWorkflow {
                     states,
                     0,
                     s -> s.status == Status.SET_UP,
-                    s -> acquireSlot(gui, s, refreshFinish),
+                    s -> acquireSlot(gui, s, refreshFinish, cancelToken),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
@@ -582,7 +614,11 @@ public final class MultiSlideExistingImageWorkflow {
      * thread and never exceptionally.
      */
     private static CompletableFuture<Boolean> runSlot(
-            StageInsert carrier, SlotState s, Runnable refreshFinish, boolean reuseAlignment) {
+            StageInsert carrier,
+            SlotState s,
+            Runnable refreshFinish,
+            boolean reuseAlignment,
+            CancellationToken cancelToken) {
         logger.info(
                 "MS workflow: launching single-slide workflow for slot {} ({})",
                 s.assignment.position(),
@@ -599,7 +635,7 @@ public final class MultiSlideExistingImageWorkflow {
         // TEST-ONLY: reuseAlignment (pref + per-batch confirm) flips this to false so a
         // saved per-slide JSON is reused (holder assumed untouched); see resolveReuseForBatch.
         boolean forceFresh = !reuseAlignment;
-        ExistingImageWorkflowV2.startAsync(forceFresh, slotCenter)
+        ExistingImageWorkflowV2.startAsync(forceFresh, slotCenter, cancelToken)
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     boolean ok = result != null;
                     if (ok) {
@@ -627,14 +663,19 @@ public final class MultiSlideExistingImageWorkflow {
      * Used by the "Run All Remaining" semi-automated driver.
      */
     private static CompletableFuture<Void> fullSlot(
-            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish, boolean reuseAlignment) {
+            QuPathGUI gui,
+            StageInsert carrier,
+            SlotState s,
+            Runnable refreshFinish,
+            boolean reuseAlignment,
+            CancellationToken cancelToken) {
         if (!openEntry(gui, s, refreshFinish)) {
             return CompletableFuture.completedFuture(null);
         }
         // Force-fresh: a slide's position/orientation in the holder is re-derived, never
         // taken from a prior (e.g. standard-layout) alignment, UNLESS the TEST-ONLY reuse
         // path is active. See runSlot / resolveReuseForBatch.
-        return runSlot(carrier, s, refreshFinish, reuseAlignment).thenApply(ok -> null);
+        return runSlot(carrier, s, refreshFinish, reuseAlignment, cancelToken).thenApply(ok -> null);
     }
 
     /**
@@ -644,7 +685,12 @@ public final class MultiSlideExistingImageWorkflow {
      * config for the acquire pass; otherwise it is left In progress for retry/Skip.
      */
     private static CompletableFuture<Void> setupSlot(
-            QuPathGUI gui, StageInsert carrier, SlotState s, Runnable refreshFinish, boolean reuseAlignment) {
+            QuPathGUI gui,
+            StageInsert carrier,
+            SlotState s,
+            Runnable refreshFinish,
+            boolean reuseAlignment,
+            CancellationToken cancelToken) {
         if (!openEntry(gui, s, refreshFinish)) {
             return CompletableFuture.completedFuture(null);
         }
@@ -658,7 +704,7 @@ public final class MultiSlideExistingImageWorkflow {
         // saved per-slide JSON (holder assumed untouched) instead of re-aligning; slots
         // without a valid saved alignment still fall back to fresh alignment.
         boolean forceFresh = !reuseAlignment;
-        ExistingImageWorkflowV2.startSetupAsync(slotCenter, forceFresh)
+        ExistingImageWorkflowV2.startSetupAsync(slotCenter, forceFresh, cancelToken)
                 .whenComplete((setup, ex) -> Platform.runLater(() -> {
                     if (setup != null) {
                         s.setup = setup;
@@ -680,7 +726,8 @@ public final class MultiSlideExistingImageWorkflow {
      * the alignment JSON persisted during setup. On a real acquisition the slot advances
      * to Done; otherwise it is restored to Set up so the acquire pass can be retried.
      */
-    private static CompletableFuture<Void> acquireSlot(QuPathGUI gui, SlotState s, Runnable refreshFinish) {
+    private static CompletableFuture<Void> acquireSlot(
+            QuPathGUI gui, SlotState s, Runnable refreshFinish, CancellationToken cancelToken) {
         if (s.setup == null) {
             logger.warn("MS workflow: acquireSlot called on slot {} with no setup; skipping", s.assignment.position());
             return CompletableFuture.completedFuture(null);
@@ -696,7 +743,7 @@ public final class MultiSlideExistingImageWorkflow {
                 s.assignment.position(),
                 s.assignment.entry().getImageName());
         CompletableFuture<Void> done = new CompletableFuture<>();
-        ExistingImageWorkflowV2.startAcquireAsync(s.setup)
+        ExistingImageWorkflowV2.startAcquireAsync(s.setup, cancelToken)
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     if (result != null) {
                         s.setStatus(Status.DONE);
@@ -778,6 +825,61 @@ public final class MultiSlideExistingImageWorkflow {
         for (SlotState s : states) {
             s.setRowButtonsDisabled(busy);
         }
+    }
+
+    /** Max time to wait for a mid-acquire Abort All to settle before warning the operator. */
+    private static final long ABORT_SETTLE_TIMEOUT_MS = 60_000L;
+
+    /** Poll interval while waiting for the aborted acquisition to release the acquisition lock. */
+    private static final long ABORT_SETTLE_POLL_MS = 250L;
+
+    /**
+     * After a mid-acquire Abort All trips the cancel token, waits off the FX thread for the
+     * acquisition to settle (the acquire loop clears {@code acquisitionActive} when it unwinds),
+     * then drives the Abort button to its terminal "Aborted" state and shows the run summary on
+     * the FX thread. If the server does not confirm the cancel within
+     * {@link #ABORT_SETTLE_TIMEOUT_MS}, warns the operator (cancel sent but unconfirmed) and
+     * still marks the batch aborted -- the UI must not claim a safe stop it cannot verify.
+     */
+    private static void waitForAbortToSettle(
+            QuPathGUI gui, StageInsert carrier, List<SlotState> states, String runId, Stage stage, Button abortBtn) {
+        Thread waiter = new Thread(
+                () -> {
+                    long deadline = System.currentTimeMillis() + ABORT_SETTLE_TIMEOUT_MS;
+                    boolean settled = false;
+                    while (System.currentTimeMillis() < deadline) {
+                        if (!MicroscopeController.getInstance().isAcquisitionActive()) {
+                            settled = true;
+                            break;
+                        }
+                        try {
+                            Thread.sleep(ABORT_SETTLE_POLL_MS);
+                        } catch (InterruptedException ie) {
+                            Thread.currentThread().interrupt();
+                            break;
+                        }
+                    }
+                    final boolean confirmed = settled;
+                    Platform.runLater(() -> {
+                        abortBtn.setText("Aborted");
+                        abortBtn.setDisable(true);
+                        if (confirmed) {
+                            logger.info("MS workflow: Abort All settled (acquisition released), runId={}", runId);
+                        } else {
+                            logger.warn(
+                                    "MS workflow: Abort All not confirmed within {} ms; marking aborted anyway, runId={}",
+                                    ABORT_SETTLE_TIMEOUT_MS,
+                                    runId);
+                            Dialogs.showWarningNotification(
+                                    "Abort All", "Cancel sent; the microscope did not confirm -- verify stage state.");
+                        }
+                        showSummary(gui, carrier, states, runId);
+                        stage.close();
+                    });
+                },
+                "MS-abort-settle-waiter");
+        waiter.setDaemon(true);
+        waiter.start();
     }
 
     private static void showSummary(QuPathGUI gui, StageInsert carrier, List<SlotState> states, String runId) {
