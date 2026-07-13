@@ -251,7 +251,8 @@ public final class MultiSlideExistingImageWorkflow {
             s.statusLabel = statusLabel;
 
             Button openBtn = new Button("Open");
-            Button runBtn = new Button("Run Single-Slide Workflow");
+            Button runBtn = new Button("Run Single");
+            runBtn.setTooltip(new javafx.scene.control.Tooltip("Run the full single-slide workflow for this slot"));
             Button doneBtn = new Button("Mark Done");
             Button skipBtn = new Button("Skip");
             s.openBtn = openBtn;
