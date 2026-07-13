@@ -49,6 +49,56 @@ public class TileProcessingUtilities {
     private static final Logger logger = LoggerFactory.getLogger(TileProcessingUtilities.class);
     private static final ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
 
+    /** Seconds to wait for a stitched-image import to run on the FX thread before warning. */
+    private static final long IMPORT_AWAIT_TIMEOUT_S = 180;
+
+    /**
+     * Dispatches a stitched-image import body to the JavaFX Application Thread.
+     *
+     * <p>When {@code awaitCompletion} is true (the pipelined multi-slide ACQUIRE pass), the
+     * calling stitch-pool thread BLOCKS until the FX body has finished, so the enclosing stitch
+     * future completes only AFTER the project entry is actually added -- letting the batch tail
+     * await real import completion, not merely the stitch-compute future (imports are otherwise
+     * dispatched fire-and-forget via {@code Platform.runLater} and can lag the compute future).
+     * When false, the classic fire-and-forget dispatch (single-slide / FULL) is used, leaving
+     * pre-pipelining timing unchanged.
+     *
+     * <p>If already on the FX thread the body runs inline (no self-deadlock); stitch pool threads
+     * are never the FX thread, so the await path never blocks the UI.
+     *
+     * @param awaitCompletion block the caller until the FX body has run
+     * @param body the import work to run on the FX thread
+     */
+    public static void runImportOnFxThread(boolean awaitCompletion, Runnable body) {
+        if (Platform.isFxApplicationThread()) {
+            body.run();
+            return;
+        }
+        if (!awaitCompletion) {
+            Platform.runLater(body);
+            return;
+        }
+        java.util.concurrent.CountDownLatch latch = new java.util.concurrent.CountDownLatch(1);
+        Platform.runLater(() -> {
+            try {
+                body.run();
+            } finally {
+                latch.countDown();
+            }
+        });
+        try {
+            if (!latch.await(IMPORT_AWAIT_TIMEOUT_S, java.util.concurrent.TimeUnit.SECONDS)) {
+                logger.warn(
+                        "Timed out ({} s) waiting for stitched-image import to run on the FX thread; "
+                                + "the batch tail may report completion before this entry is imported",
+                        IMPORT_AWAIT_TIMEOUT_S);
+            }
+        } catch (InterruptedException ie) {
+            Thread.currentThread().interrupt();
+            logger.warn("Interrupted while waiting for stitched-image import to run on the FX thread");
+        }
+    }
+
     /**
      * Stitches all tiles under the given imaging mode folder into one or more OME TIFF files,
      * renames them to include sample, mode and annotation/angle information, then imports and opens
@@ -120,6 +170,14 @@ public class TileProcessingUtilities {
                 imagingModeWithIndex,
                 annotationName,
                 matchingString);
+
+        // Pipelined multi-slide ACQUIRE pass: suppress this import's viewer side effects
+        // (open-entry / active-image save / setProject-reopen) so a background import cannot
+        // yank the active viewer out from under the next slot, and dispatch the import so the
+        // stitch future reflects real import completion. Add-to-project + syncChanges still run
+        // (they happen inside addImageToProject*). The multi-slide driver owns the open entry.
+        final boolean pipelinedBatchAcquire =
+                stitchParams != null && Boolean.TRUE.equals(stitchParams.get("pipelinedBatchAcquire"));
 
         // Construct folder paths
         String tileFolder = projectsFolderPath
@@ -317,7 +375,7 @@ public class TileProcessingUtilities {
                     final String pathToImport = lastPath;
                     final StitchingMetadata finalMetadata = batchMetadata;
 
-                    Platform.runLater(() -> {
+                    runImportOnFxThread(pipelinedBatchAcquire, () -> {
                         try {
                             logger.debug("Importing {} to project on FX thread", pathToImport);
 
@@ -349,8 +407,10 @@ public class TileProcessingUtilities {
 
                             logger.info("Successfully imported {} to project", new File(pathToImport).getName());
 
-                            // Optionally open the first image
-                            if (allOmeFiles[0].getName().equals(originalName)) {
+                            // Optionally open the first image (suppressed in the pipelined batch
+                            // acquire pass -- the driver owns the open entry).
+                            if (!pipelinedBatchAcquire
+                                    && allOmeFiles[0].getName().equals(originalName)) {
                                 logger.debug("Opening first image in viewer");
 
                                 // Save current image data before opening new image to prevent save prompts
@@ -389,16 +449,21 @@ public class TileProcessingUtilities {
 
             lastProcessedPath = lastPath;
 
-            // Update project on FX thread
-            Platform.runLater(() -> {
-                logger.info("Refreshing project view");
-                qupathGUI.setProject(project);
-                qupathGUI.refreshProject();
+            // Update project on FX thread. Suppressed in the pipelined batch acquire pass:
+            // setProject/refresh switch active-viewer state, which must not fire under a
+            // background import while the next slot is opening its base entry. The batch driver
+            // refreshes the project view once the whole batch settles.
+            if (!pipelinedBatchAcquire) {
+                Platform.runLater(() -> {
+                    logger.info("Refreshing project view");
+                    qupathGUI.setProject(project);
+                    qupathGUI.refreshProject();
 
-                qupath.fx.dialogs.Dialogs.showInfoNotification(
-                        res.getString("stitching.success.title"),
-                        String.format("Successfully stitched and imported %d images", allOmeFiles.length));
-            });
+                    qupath.fx.dialogs.Dialogs.showInfoNotification(
+                            res.getString("stitching.success.title"),
+                            String.format("Successfully stitched and imported %d images", allOmeFiles.length));
+                });
+            }
 
         } else {
             // Single file processing (original behavior)
@@ -561,7 +626,7 @@ public class TileProcessingUtilities {
             }
 
             // Import & open on the FX thread
-            Platform.runLater(() -> {
+            runImportOnFxThread(pipelinedBatchAcquire, () -> {
                 logger.info("Importing stitched image to project on FX thread");
                 ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
 
@@ -613,35 +678,43 @@ public class TileProcessingUtilities {
                     qupath.ext.qpsc.controller.workflow.StitchingHelper.autoRegisterBoundsTransformIfAvailable(
                             new File(lastProcessedPath), finalMetadata, project);
 
-                    // Save current image data before opening new image to prevent save prompts
-                    try {
-                        var currentData = qupathGUI.getImageData();
-                        var currentEntry = currentData != null ? project.getEntry(currentData) : null;
-                        if (currentData != null && currentEntry != null) {
-                            currentEntry.saveImageData(currentData);
-                            logger.info("Saved current image data before opening stitched image");
+                    // In the pipelined batch acquire pass, suppress the active-image save, the
+                    // open-entry, and the setProject/refresh: switching the active viewer image
+                    // under a background import could yank the hierarchy out from under the next
+                    // slot's workflow. The entry is already persisted (addImageToProject* syncs);
+                    // the driver owns the open entry and refreshes the view when the batch settles.
+                    if (!pipelinedBatchAcquire) {
+                        // Save current image data before opening new image to prevent save prompts
+                        try {
+                            var currentData = qupathGUI.getImageData();
+                            var currentEntry = currentData != null ? project.getEntry(currentData) : null;
+                            if (currentData != null && currentEntry != null) {
+                                currentEntry.saveImageData(currentData);
+                                logger.info("Saved current image data before opening stitched image");
+                            }
+                        } catch (Exception saveEx) {
+                            logger.warn(
+                                    "Could not save current image data before opening stitched image: {}",
+                                    saveEx.getMessage());
                         }
-                    } catch (Exception saveEx) {
-                        logger.warn(
-                                "Could not save current image data before opening stitched image: {}",
-                                saveEx.getMessage());
+
+                        // Find and open the newly added entry
+                        List<ProjectImageEntry<BufferedImage>> images = project.getImageList();
+                        images.stream()
+                                .filter(e -> new File(e.getImageName())
+                                        .getName()
+                                        .equals(new File(lastProcessedPath).getName()))
+                                .findFirst()
+                                .ifPresent(entry -> {
+                                    logger.info("Opening image entry: {}", entry.getImageName());
+                                    qupathGUI.openImageEntry(entry);
+                                });
+
+                        // Ensure project is active & refreshed
+                        qupathGUI.setProject(project);
+                        qupathGUI.refreshProject();
+                        logger.info("Project refreshed successfully");
                     }
-
-                    // Find and open the newly added entry
-                    List<ProjectImageEntry<BufferedImage>> images = project.getImageList();
-                    images.stream()
-                            .filter(e ->
-                                    new File(e.getImageName()).getName().equals(new File(lastProcessedPath).getName()))
-                            .findFirst()
-                            .ifPresent(entry -> {
-                                logger.info("Opening image entry: {}", entry.getImageName());
-                                qupathGUI.openImageEntry(entry);
-                            });
-
-                    // Ensure project is active & refreshed
-                    qupathGUI.setProject(project);
-                    qupathGUI.refreshProject();
-                    logger.info("Project refreshed successfully");
 
                     // Close blocking dialog if provided
                     if (stitchParams != null && stitchParams.containsKey("blockingDialog")) {
@@ -654,9 +727,13 @@ public class TileProcessingUtilities {
                         }
                     }
 
-                    // Notify success
-                    qupath.fx.dialogs.Dialogs.showInfoNotification(
-                            res.getString("stitching.success.title"), res.getString("stitching.success.message"));
+                    // Notify success (suppressed in the pipelined batch acquire pass -- the batch
+                    // driver reports per-batch completion once every slot has drained, so a
+                    // per-slot per-image toast here would be misleading spam).
+                    if (!pipelinedBatchAcquire) {
+                        qupath.fx.dialogs.Dialogs.showInfoNotification(
+                                res.getString("stitching.success.title"), res.getString("stitching.success.message"));
+                    }
 
                 } catch (IOException e) {
                     logger.error("Failed to import stitched image", e);

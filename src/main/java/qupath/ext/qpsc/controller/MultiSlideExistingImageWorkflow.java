@@ -480,19 +480,45 @@ public final class MultiSlideExistingImageWorkflow {
         acquireAllBtn.setOnAction(e -> {
             stopAfterCurrent.setSelected(false);
             setPanelBusy(states, driverButtons, finishBtn, true);
-            logger.info("MS workflow: Acquire All Set-Up started (unattended), runId={}", runId);
+            logger.info("MS workflow: Acquire All Set-Up started (unattended, pipelined), runId={}", runId);
+            // Batch-scoped collector for each slot's stitch+import completion. Pipelining advances
+            // the driver to slot N+1 at slot N's acquisition-complete (while N still stitches), so
+            // the batch tail must await every collected future before declaring the batch done.
+            // Populated on the FX thread (driveSequential runs on FX), so a plain list is safe.
+            List<CompletableFuture<Void>> pendingStitches = new ArrayList<>();
             driveSequential(
                     gui,
                     states,
                     0,
                     s -> s.status == Status.SET_UP,
-                    s -> acquireSlot(gui, s, refreshFinish, cancelToken),
+                    s -> acquireSlot(gui, s, refreshFinish, cancelToken, pendingStitches),
                     stopAfterCurrent::isSelected,
                     aborted::get,
                     () -> {
-                        logger.info("MS workflow: Acquire All Set-Up finished, runId={}", runId);
-                        setPanelBusy(states, driverButtons, finishBtn, false);
-                        refreshFinish.run();
+                        logger.info("MS workflow: Acquire All Set-Up driver finished, runId={}", runId);
+                        if (aborted.get()) {
+                            // Abort All owns teardown (waitForAbortToSettle shows the summary and
+                            // closes the panel). Do NOT block the tail on stitches the abort may
+                            // have left running -- just release the panel controls.
+                            logger.info(
+                                    "MS workflow: acquire pass ended via Abort All; not awaiting pending stitches, runId={}",
+                                    runId);
+                            setPanelBusy(states, driverButtons, finishBtn, false);
+                            refreshFinish.run();
+                            return;
+                        }
+                        // Keep the panel busy (Finish stays disabled) until every slot's stitching
+                        // has drained, then release. This is the point the batch is truly done.
+                        awaitPendingStitches(pendingStitches, runId, () -> {
+                            // Per-slot stitched-image imports suppressed their own project refresh
+                            // (to avoid yanking the active viewer mid-batch), so refresh the project
+                            // view ONCE here now that every stitched entry has been added.
+                            if (gui != null && gui.getProject() != null) {
+                                gui.refreshProject();
+                            }
+                            setPanelBusy(states, driverButtons, finishBtn, false);
+                            refreshFinish.run();
+                        });
                     });
         });
 
@@ -804,11 +830,23 @@ public final class MultiSlideExistingImageWorkflow {
 
     /**
      * Two-pass PASS 2 for one slot: open + replay the captured config unattended against
-     * the alignment JSON persisted during setup. On a real acquisition the slot advances
-     * to Done; otherwise it is restored to Set up so the acquire pass can be retried.
+     * the alignment JSON persisted during setup, PIPELINED. On a real acquisition the slot
+     * advances to Done; otherwise it is restored to Set up so the acquire pass can be retried.
+     *
+     * <p>Pipelining: the returned future (which the driver awaits to advance to the NEXT slot)
+     * completes at acquisition-complete (stage work done), NOT after stitching. Each slot's
+     * stitch+import completion is collected into {@code pendingStitches} so the batch tail can
+     * await every slot's stitching before the run summary. Because the stitched-image import
+     * suppresses its viewer side effects (see {@code ExistingImageWorkflowV2.startAcquireAsync}
+     * pipelined mode), a background import cannot yank the active viewer out from under the next
+     * slot as it opens its base entry.
      */
     private static CompletableFuture<Void> acquireSlot(
-            QuPathGUI gui, SlotState s, Runnable refreshFinish, CancellationToken cancelToken) {
+            QuPathGUI gui,
+            SlotState s,
+            Runnable refreshFinish,
+            CancellationToken cancelToken,
+            List<CompletableFuture<Void>> pendingStitches) {
         if (s.setup == null) {
             logger.warn("MS workflow: acquireSlot called on slot {} with no setup; skipping", s.assignment.position());
             return CompletableFuture.completedFuture(null);
@@ -820,15 +858,22 @@ public final class MultiSlideExistingImageWorkflow {
             return CompletableFuture.completedFuture(null);
         }
         logger.info(
-                "MS workflow: acquire pass (unattended) for slot {} ({})",
+                "MS workflow: acquire pass (unattended, pipelined) for slot {} ({})",
                 s.assignment.position(),
                 s.assignment.entry().getImageName());
         CompletableFuture<Void> done = new CompletableFuture<>();
-        ExistingImageWorkflowV2.startAcquireAsync(s.setup, cancelToken)
+        ExistingImageWorkflowV2.AcquireHandle handle =
+                ExistingImageWorkflowV2.startAcquireAsync(s.setup, cancelToken, true);
+        // Collect this slot's stitch+import completion for the batch tail. Never completes
+        // exceptionally, so allOf(...) over the collected list cannot hang.
+        pendingStitches.add(handle.stitchingComplete());
+        handle.acquisitionComplete()
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     if (result != null) {
                         s.setStatus(Status.DONE);
-                        logger.info("MS workflow: slot {} acquired (unattended)", s.assignment.position());
+                        logger.info(
+                                "MS workflow: slot {} acquired (unattended); advancing while its stitching finishes in the background",
+                                s.assignment.position());
                     } else {
                         s.setStatus(Status.SET_UP);
                         logger.info(
@@ -839,6 +884,39 @@ public final class MultiSlideExistingImageWorkflow {
                     done.complete(null);
                 }));
         return done;
+    }
+
+    /**
+     * Batch tail for the pipelined ACQUIRE pass: waits for every collected slot stitch+import
+     * completion future, then runs {@code onSettled} on the FX thread. Called after the driver
+     * has advanced through all slots (each slot advanced at acquisition-complete, so earlier
+     * slots may still be stitching). The collected futures never complete exceptionally, so the
+     * {@code allOf} cannot hang on a failed stitch. Runs entirely via completion callbacks -- it
+     * does not block the FX thread while waiting.
+     */
+    private static void awaitPendingStitches(
+            List<CompletableFuture<Void>> pendingStitches, String runId, Runnable onSettled) {
+        // Snapshot on the FX thread (the drive is done, so no further adds, but snapshot anyway).
+        CompletableFuture<?>[] snapshot = pendingStitches.toArray(new CompletableFuture<?>[0]);
+        if (snapshot.length == 0) {
+            logger.info("MS workflow: batch tail has no pending stitches, runId={}", runId);
+            onSettled.run();
+            return;
+        }
+        logger.info(
+                "MS workflow: batch tail waiting on {} pending stitch(es) before finishing, runId={}",
+                snapshot.length,
+                runId);
+        CompletableFuture.allOf(snapshot)
+                .whenComplete((v, ex) -> Platform.runLater(() -> {
+                    if (ex != null) {
+                        // Defensive: the collected futures are built to never complete exceptionally.
+                        logger.warn(
+                                "MS workflow: batch tail stitch-await completed with error, runId={}: {}", runId, ex);
+                    }
+                    logger.info("MS workflow: all pending stitches drained; batch done, runId={}", runId);
+                    onSettled.run();
+                }));
     }
 
     /**

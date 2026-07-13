@@ -177,6 +177,21 @@ public class ExistingImageWorkflowV2 {
     }
 
     /**
+     * The two futures a pipelined acquire slot exposes to the multi-slide driver:
+     *
+     * @param acquisitionComplete resolves when the acquisition (stage work) for this slot has
+     *     finished -- non-null {@link WorkflowState} on a real acquisition, {@code null} on
+     *     short-circuit / handled error. The driver advances to the NEXT slot on this future,
+     *     so in pipelined mode it resolves while this slot is still stitching. Never exceptional.
+     * @param stitchingComplete resolves when this slot's stitching + project imports (and
+     *     success-path tile cleanup) have fully settled. The driver collects this into a
+     *     batch-scoped list and awaits all of them before the batch summary. Never exceptional
+     *     (a stitch failure still settles it, logged), so the batch tail cannot hang.
+     */
+    public record AcquireHandle(
+            CompletableFuture<WorkflowState> acquisitionComplete, CompletableFuture<Void> stitchingComplete) {}
+
+    /**
      * Runs the unattended acquire half of the workflow for a slide that was already set
      * up (pass 2 of the two-pass batch). Replays the captured config with refinement
      * forced to NONE, so {@code checkExistingSlideAlignment} finds the per-slide JSON
@@ -187,20 +202,28 @@ public class ExistingImageWorkflowV2 {
      * @param setup the product of {@link #startSetupAsync} for this slide's entry
      * @param cancellationToken optional batch-level cancel signal (multi-slide Abort All),
      *     or {@code null}
-     * @return a future completing with the {@link WorkflowState} on a real acquisition,
-     *     or {@code null} on short-circuit / handled error. Never exceptional.
+     * @param pipelined when true, run the ACQUIRE pass in pipelined mode: the returned
+     *     {@link AcquireHandle#acquisitionComplete} resolves at acquisition-complete (before
+     *     stitching) so the driver can start the next slot while this one stitches, and the
+     *     stitched-image import suppresses its viewer side effects. When false, the acquire
+     *     pass behaves as a normal single-slide run (acquisitionComplete resolves only after
+     *     stitching + imports finish); this preserves the pre-pipelining behavior.
+     * @return an {@link AcquireHandle} carrying the acquisition-complete and stitch-complete
+     *     futures. Both complete normally (never exceptionally).
      */
-    public static CompletableFuture<WorkflowState> startAcquireAsync(
-            SetupResult setup, CancellationToken cancellationToken) {
+    public static AcquireHandle startAcquireAsync(
+            SetupResult setup, CancellationToken cancellationToken, boolean pipelined) {
         if (setup == null || setup.config() == null) {
-            return CompletableFuture.completedFuture(null);
+            return new AcquireHandle(CompletableFuture.completedFuture(null), CompletableFuture.completedFuture(null));
         }
         // forceFreshAlignment = false: the acquire pass MUST use the per-slide JSON the
         // setup pass just re-derived for this mount (via processSlideSpecificAlignment).
         WorkflowOrchestrator o = new WorkflowOrchestrator(
                 Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ(), false);
         o.state.cancellationToken = cancellationToken;
-        return o.execute();
+        o.state.pipelinedBatchAcquire = pipelined;
+        CompletableFuture<WorkflowState> acquisitionComplete = o.execute();
+        return new AcquireHandle(acquisitionComplete, o.stitchingSettled);
     }
 
     /** Execution mode for {@link WorkflowOrchestrator}. */
@@ -230,6 +253,18 @@ public class ExistingImageWorkflowV2 {
         private ExistingImageAcquisitionConfig capturedConfig;
         /** Captured in SETUP_ONLY at the terminal when refinement ran, to seed the acquire pass. */
         private Double capturedFocusZ;
+
+        /**
+         * Completes when THIS slot's stitching + project imports (and success-path tile
+         * cleanup) have fully settled. In the pipelined ACQUIRE pass the driver-advancing
+         * future ({@link #execute()} result) resolves earlier -- at acquisition-complete --
+         * so the multi-slide batch tail collects this future to await every slot's stitching
+         * before declaring the batch done. Always completes normally (never exceptionally);
+         * a stitch failure still settles it (logged) so the batch tail cannot hang. In
+         * non-pipelined / SETUP_ONLY / short-circuit / error paths it is completed by
+         * {@code finishChain} at the same point the run settles.
+         */
+        private final CompletableFuture<Void> stitchingSettled = new CompletableFuture<>();
 
         /**
          * When true, do NOT trust any saved per-slide alignment for this slide -- re-derive
@@ -406,6 +441,32 @@ public class ExistingImageWorkflowV2 {
                 }
                 return CompletableFuture.completedFuture(state);
             }
+            if (mode == Mode.ACQUIRE_ONLY && state != null && state.pipelinedBatchAcquire) {
+                // Pipelined multi-slide acquire: resolve the driver-advancing future as soon as
+                // the acquisition (stage work) is done, and wait for stitching + imports + tile
+                // cleanup in a DETACHED continuation so the driver can start the next slot while
+                // this one is still stitching. The detached tail completes stitchingSettled,
+                // which the batch tail awaits before the run summary.
+                return performAcquisition(state).thenApply(st -> {
+                    logger.info(
+                            "Pipelined acquire: acquisition complete; advancing driver while {} stitching op(s) finish in the background",
+                            st != null ? st.stitchingFutures.size() : 0);
+                    waitForCompletion(st).whenComplete((settledState, ex) -> {
+                        try {
+                            if (ex != null) {
+                                logger.warn(
+                                        "Pipelined acquire: stitching for this slot did not fully complete: {}",
+                                        ex.toString());
+                            } else if (settledState != null) {
+                                cleanupTilesAfterStitching();
+                            }
+                        } finally {
+                            stitchingSettled.complete(null);
+                        }
+                    });
+                    return st;
+                });
+            }
             return performAcquisition(state).thenCompose(this::waitForCompletion);
         }
 
@@ -519,7 +580,20 @@ public class ExistingImageWorkflowV2 {
                         if (result == null) {
                             logger.info("Workflow short-circuited; skipping success notification");
                             cleanup();
+                            // Nothing acquired/stitched: settle the batch stitch future so a
+                            // pipelined driver tail cannot hang on a slot that never ran.
+                            stitchingSettled.complete(null);
                             done.complete(null);
+                            return;
+                        }
+                        if (mode == Mode.ACQUIRE_ONLY && state.pipelinedBatchAcquire) {
+                            // Pipelined acquire: stitching + tile cleanup run in a detached
+                            // continuation (see maybeAcquire), which completes stitchingSettled.
+                            // Do NOT clean tiles or beep here -- tiles are still being stitched
+                            // and the batch driver owns the final summary. Clear the transform /
+                            // acquisitionActive flag and let the driver advance to the next slot.
+                            cleanup();
+                            done.complete(result);
                             return;
                         }
                         if (mode == Mode.SETUP_ONLY) {
@@ -539,16 +613,25 @@ public class ExistingImageWorkflowV2 {
                             // currentTransform singleton + acquisitionActive flag.
                             cleanup();
                             logger.info("SETUP_ONLY run complete; slide alignment is ready for the acquire pass");
+                            stitchingSettled.complete(null);
                             done.complete(result);
                             return;
                         }
+                        // Non-pipelined FULL / ACQUIRE: stitching + imports were already awaited
+                        // by maybeAcquire's thenCompose(waitForCompletion), so settle everything
+                        // here (including the batch stitch future) at the same point.
                         cleanupTilesAfterStitching();
                         cleanup();
                         showSuccessNotification();
+                        stitchingSettled.complete(null);
                         done.complete(result);
                     })
                     .exceptionally(ex -> {
                         handleError(ex);
+                        // Settle the batch stitch future on the error path too, so a pipelined
+                        // driver tail never hangs waiting on a slot that failed before or during
+                        // stitching.
+                        stitchingSettled.complete(null);
                         done.complete(null);
                         return null;
                     });
@@ -2749,6 +2832,26 @@ public class ExistingImageWorkflowV2 {
          * own Cancel button is the only cancel affordance.
          */
         public CancellationToken cancellationToken;
+
+        /**
+         * Pipelined multi-slide ACQUIRE-pass signal. Set true ONLY by
+         * {@link ExistingImageWorkflowV2#startAcquireAsync(SetupResult, CancellationToken, boolean)}
+         * when the multi-slide "Acquire All Set-Up" driver runs in pipelined mode, so slot N+1
+         * can start acquiring while slot N is still stitching. When true:
+         * <ul>
+         *   <li>{@code maybeAcquire} resolves the driver-advancing future at
+         *       acquisition-complete (stage done) and runs stitching-wait + tile cleanup as a
+         *       DETACHED continuation (see {@code stitchingSettled});</li>
+         *   <li>the stitched-image import SUPPRESSES its viewer side effects (no open-entry /
+         *       active-image switch / setProject-reopen) so a background import cannot yank the
+         *       active viewer out from under the next slot -- the driver owns the open entry;</li>
+         *   <li>the import runs synchronously on the FX thread w.r.t. the stitch future, so the
+         *       future the batch tail awaits reflects real import completion.</li>
+         * </ul>
+         * Default false everywhere else (single-slide menu path, FULL / Run All Remaining,
+         * bounded acquisition), leaving their behavior unchanged.
+         */
+        public boolean pipelinedBatchAcquire = false;
 
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();
