@@ -289,6 +289,69 @@ public class StageMapWindow {
         });
     }
 
+    /**
+     * Forces the Stage Map into Camera View (checks the Camera View checkbox and applies
+     * the camera flips), mirroring the internal orientation-check path. Used by the
+     * multi-slide alignment step so the map shows what the operator is aligning against.
+     * No-op if the window is not open. Safe to call from any thread.
+     */
+    public static void forceCameraView() {
+        setCameraView(true);
+    }
+
+    /**
+     * Sets the Stage Map into Camera View ({@code true}) or Stage View ({@code false}), mirroring
+     * a manual toggle of the Camera View checkbox. Used by the multi-slide panel's mirror
+     * checkbox to drive the map two-way. No-op if the window is not open. Safe to call from any
+     * thread.
+     */
+    public static void setCameraView(boolean cameraView) {
+        Platform.runLater(() -> {
+            if (instance == null || instance.applyFlipsCheckbox == null) {
+                return;
+            }
+            if (instance.applyFlipsCheckbox.isSelected() != cameraView) {
+                // Setting selected fires the checkbox listener, which resolves the live flip
+                // axes and calls canvas.setFlipsApplied(cameraView, ...). Same path as a manual toggle.
+                instance.applyFlipsCheckbox.setSelected(cameraView);
+            } else if (cameraView && instance.canvas != null) {
+                // Already Camera View -- re-apply in case the flip axes changed since it was set.
+                boolean[] axes = instance.resolveCurrentFlipAxes();
+                instance.canvas.setFlipsApplied(true, axes[0], axes[1]);
+            }
+        });
+    }
+
+    /**
+     * Zooms the Stage Map so the given stage-coordinate rectangle fills the view (with a
+     * small margin). No-op if the window is not open. Safe to call from any thread.
+     */
+    public static void zoomToStageRegion(double minStageX, double minStageY, double maxStageX, double maxStageY) {
+        Platform.runLater(() -> {
+            if (isVisible() && instance.canvas != null) {
+                instance.canvas.zoomToStageRegion(minStageX, minStageY, maxStageX, maxStageY);
+            }
+        });
+    }
+
+    /**
+     * Best-effort zoom to whatever green bounding-box preview is currently displayed on the
+     * Stage Map (the box set via {@link #setBoundingBoxPreview}). No-op if the window is not
+     * open or no preview box is set. Safe to call from any thread.
+     */
+    public static void zoomToBoundingBoxPreview() {
+        Platform.runLater(() -> {
+            if (isVisible() && instance.canvas != null) {
+                double[] box = instance.canvas.getBoundingBoxPreview();
+                if (box != null && box.length >= 4) {
+                    instance.canvas.zoomToStageRegion(box[0], box[1], box[2], box[3]);
+                } else {
+                    logger.info("zoomToBoundingBoxPreview: no bounding-box preview set; nothing to zoom to");
+                }
+            }
+        });
+    }
+
     /** Hides the bounding-box preview rectangle, if any. */
     public static void clearBoundingBoxPreview() {
         Platform.runLater(() -> {

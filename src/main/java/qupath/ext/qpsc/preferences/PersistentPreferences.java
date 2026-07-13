@@ -81,6 +81,58 @@ public class PersistentPreferences {
     public static void setMultiSlideRotateAll(int deg) {
         multiSlideRotateAllProperty.set(Integer.toString(deg));
     }
+
+    // ---- Multi-slide alignment-step advanced toggles (additive; default ON) ----
+
+    /** When true, autofocus fires automatically after the stage reaches each slot, before
+     * the operator aligns. Reuses the Live Viewer autofocus (honoring LiveViewerAutofocusMethod). */
+    private static final BooleanProperty multiSlideAutofocusOnJumpProperty =
+            PathPrefs.createPersistentPreference("multiSlideAutofocusOnJump", true);
+
+    public static boolean isMultiSlideAutofocusOnJump() {
+        return multiSlideAutofocusOnJumpProperty.get();
+    }
+
+    public static void setMultiSlideAutofocusOnJump(boolean enabled) {
+        multiSlideAutofocusOnJumpProperty.set(enabled);
+    }
+
+    public static BooleanProperty multiSlideAutofocusOnJumpProperty() {
+        return multiSlideAutofocusOnJumpProperty;
+    }
+
+    /** When true, an alignment step start switches the Stage Map to Camera View automatically. */
+    private static final BooleanProperty multiSlideForceCameraViewOnAlignStartProperty =
+            PathPrefs.createPersistentPreference("multiSlideForceCameraViewOnAlignStart", true);
+
+    public static boolean isMultiSlideForceCameraViewOnAlignStart() {
+        return multiSlideForceCameraViewOnAlignStartProperty.get();
+    }
+
+    public static void setMultiSlideForceCameraViewOnAlignStart(boolean enabled) {
+        multiSlideForceCameraViewOnAlignStartProperty.set(enabled);
+    }
+
+    public static BooleanProperty multiSlideForceCameraViewOnAlignStartProperty() {
+        return multiSlideForceCameraViewOnAlignStartProperty;
+    }
+
+    /** When true, an alignment step start zooms the Stage Map to the green tissue box automatically. */
+    private static final BooleanProperty multiSlideZoomToTissueOnAlignStartProperty =
+            PathPrefs.createPersistentPreference("multiSlideZoomToTissueOnAlignStart", true);
+
+    public static boolean isMultiSlideZoomToTissueOnAlignStart() {
+        return multiSlideZoomToTissueOnAlignStartProperty.get();
+    }
+
+    public static void setMultiSlideZoomToTissueOnAlignStart(boolean enabled) {
+        multiSlideZoomToTissueOnAlignStartProperty.set(enabled);
+    }
+
+    public static BooleanProperty multiSlideZoomToTissueOnAlignStartProperty() {
+        return multiSlideZoomToTissueOnAlignStartProperty;
+    }
+
     // ================== BOUNDING BOX WORKFLOW ==================
     private static final StringProperty boundingBoxString =
             PathPrefs.createPersistentPreference("BoundingBox", "27000,7000,20000,10000");

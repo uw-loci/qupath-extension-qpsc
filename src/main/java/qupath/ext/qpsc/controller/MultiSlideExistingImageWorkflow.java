@@ -19,6 +19,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.TitledPane;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.BorderPane;
@@ -33,11 +34,14 @@ import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.CancellationToken;
+import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.SectionBuilder;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
+import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -509,17 +513,50 @@ public final class MultiSlideExistingImageWorkflow {
         TitledPane slotsSection = SectionBuilder.section("Slots", true, grid);
         slotsSection.setTooltip(new Tooltip("Every slide in the holder, its status, and per-row controls."));
 
-        // Section B: Alignment. Expanded. Increment-1 placeholder: the alignment controls are
-        // still hosted by the per-step alignment dialog; folding them in is a later increment.
-        Label alignmentPlaceholder =
-                new Label("Alignment for the current slot is handled in the alignment step (Stage Map + SIFT / "
-                        + "manual align). Consolidating those controls into this section is planned for a "
-                        + "later increment.");
-        alignmentPlaceholder.setWrapText(true);
-        alignmentPlaceholder.setMaxWidth(560);
-        alignmentPlaceholder.setMinHeight(Region.USE_PREF_SIZE);
-        // TODO(increment 2: fold-child-dialogs): host the alignment controls + SIFT feedback here.
-        TitledPane alignmentSection = SectionBuilder.section("Alignment", true, alignmentPlaceholder);
+        // Section B: Alignment. Expanded. Stage Map view controls + autofocus-on-slot-jump status.
+        // (The SIFT / manual-align controls themselves still run in the alignment step; folding
+        // them into this section is a later increment.)
+        CheckBox cameraViewCheck = new CheckBox("Camera View");
+        cameraViewCheck.setSelected(true);
+        cameraViewCheck.setTooltip(
+                new Tooltip(
+                        "Show the Stage Map as the live camera sees it (checked) or as the slides physically sit (unchecked)."));
+        cameraViewCheck.selectedProperty().addListener((obs, oldV, newV) -> StageMapWindow.setCameraView(newV));
+
+        Button zoomTissueBtn = new Button("Zoom to tissue");
+        zoomTissueBtn.setTooltip(new Tooltip("Zoom the Stage Map to this slot's green tissue box."));
+        // Best-effort: zooms to whatever green bounding-box preview is currently set on the Stage
+        // Map. The per-slot tissue box is not tracked at panel scope, so the current preview box is
+        // used. TODO(increment: align-start-hook): pass the active slot's box explicitly.
+        zoomTissueBtn.setOnAction(e -> StageMapWindow.zoomToBoundingBoxPreview());
+
+        HBox alignRow1 = new HBox(8, cameraViewCheck, zoomTissueBtn);
+        alignRow1.setAlignment(Pos.CENTER_LEFT);
+
+        Label afStatusLabel = new Label("AF status: Ready");
+        afStatusLabel.setWrapText(true);
+        afStatusLabel.setMaxWidth(560);
+        afStatusLabel.setTooltip(new Tooltip(
+                "Autofocus after each slot jump: waits for the stage move to finish, then focuses before you align."));
+
+        Label alignmentNote =
+                new Label("These controls drive the Stage Map view and show autofocus-on-slot-jump status. The SIFT / "
+                        + "manual-align step for the current slot still runs in its own dialog.");
+        alignmentNote.setWrapText(true);
+        alignmentNote.setMaxWidth(560);
+        alignmentNote.setMinHeight(Region.USE_PREF_SIZE);
+
+        VBox alignmentBox = new VBox(8, alignRow1, afStatusLabel, alignmentNote);
+
+        // Slot-jump autofocus (fired from the alignment controller after each blocking slot move)
+        // publishes phase text here: "Moving to slot..." -> "Focusing..." -> "Ready", or amber
+        // "Focus failed -- align manually" on failure.
+        SlotJumpAutofocus.setStatusSink((message, error) -> {
+            afStatusLabel.setText("AF status: " + message);
+            afStatusLabel.setStyle(error ? "-fx-text-fill: #E65100; -fx-font-weight: bold;" : "");
+        });
+
+        TitledPane alignmentSection = SectionBuilder.section("Alignment", true, alignmentBox);
         alignmentSection.setTooltip(new Tooltip("Align the current slot: Stage Map view, SIFT, and manual alignment."));
 
         // Section C: Refinement. Collapsed. Increment-1 placeholder.
@@ -533,15 +570,55 @@ public final class MultiSlideExistingImageWorkflow {
         TitledPane refinementSection = SectionBuilder.section("Refinement", false, refinementPlaceholder);
         refinementSection.setTooltip(new Tooltip("Multi-tile rotation + scale correction for the current slot."));
 
-        // Section D: Advanced / SIFT settings. Collapsed. Increment-1 placeholder.
-        Label advancedPlaceholder =
-                new Label("Autofocus-on-slot-jump, force Camera View, zoom-to-tissue, and SIFT auto-align "
-                        + "options will live here. Wiring these toggles is a later increment.");
-        advancedPlaceholder.setWrapText(true);
-        advancedPlaceholder.setMaxWidth(560);
-        advancedPlaceholder.setMinHeight(Region.USE_PREF_SIZE);
-        // TODO(increment 6: quick items): AF-on-jump, Camera View, zoom-to-box, SIFT toggles.
-        TitledPane advancedSection = SectionBuilder.section("Advanced / SIFT settings", false, advancedPlaceholder);
+        // Section D: Advanced / SIFT settings. Collapsed. On/off switches for the items above,
+        // plus the existing SIFT auto-align controls (reusing existing prefs -- no new SIFT pref).
+        CheckBox afOnJumpCheck = new CheckBox("Autofocus on slot jump");
+        afOnJumpCheck.setSelected(PersistentPreferences.isMultiSlideAutofocusOnJump());
+        afOnJumpCheck.setTooltip(new Tooltip(
+                "Automatically focus after the stage reaches each slot, before alignment. Turn off to focus by hand."));
+        afOnJumpCheck
+                .selectedProperty()
+                .addListener((o, ov, nv) -> PersistentPreferences.setMultiSlideAutofocusOnJump(nv));
+
+        CheckBox forceCamCheck = new CheckBox("Force Camera View on alignment start");
+        forceCamCheck.setSelected(PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart());
+        forceCamCheck.setTooltip(
+                new Tooltip("When an alignment step begins, switch the Stage Map to Camera View automatically."));
+        forceCamCheck
+                .selectedProperty()
+                .addListener((o, ov, nv) -> PersistentPreferences.setMultiSlideForceCameraViewOnAlignStart(nv));
+
+        CheckBox zoomOnStartCheck = new CheckBox("Zoom Stage Map to tissue on alignment start");
+        zoomOnStartCheck.setSelected(PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart());
+        zoomOnStartCheck.setTooltip(new Tooltip(
+                "When an alignment step begins, zoom the Stage Map to the green tissue box automatically."));
+        zoomOnStartCheck
+                .selectedProperty()
+                .addListener((o, ov, nv) -> PersistentPreferences.setMultiSlideZoomToTissueOnAlignStart(nv));
+
+        CheckBox trustSiftCheck = new CheckBox("Trust SIFT auto-align");
+        trustSiftCheck.setSelected(PersistentPreferences.isTrustSiftAlignment());
+        trustSiftCheck.setTooltip(
+                new Tooltip("Auto-accept a SIFT match above the confidence threshold without asking for each point."));
+        trustSiftCheck.selectedProperty().addListener((o, ov, nv) -> PersistentPreferences.setTrustSiftAlignment(nv));
+
+        Label confidenceLabel = new Label("Confidence threshold:");
+        confidenceLabel.setTooltip(new Tooltip("Minimum SIFT confidence (0-1) required to auto-accept a match."));
+        Spinner<Double> confidenceSpinner =
+                new Spinner<>(0.0, 1.0, PersistentPreferences.getSiftConfidenceThreshold(), 0.05);
+        confidenceSpinner.setEditable(true);
+        confidenceSpinner.setPrefWidth(90);
+        confidenceSpinner.valueProperty().addListener((o, ov, nv) -> {
+            if (nv != null) {
+                PersistentPreferences.setSiftConfidenceThreshold(nv);
+            }
+        });
+        HBox confidenceRow = new HBox(8, confidenceLabel, confidenceSpinner);
+        confidenceRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox advancedBox = new VBox(
+                8, afOnJumpCheck, forceCamCheck, zoomOnStartCheck, new Separator(), trustSiftCheck, confidenceRow);
+        TitledPane advancedSection = SectionBuilder.section("Advanced / SIFT settings", false, advancedBox);
         advancedSection.setTooltip(new Tooltip("Autofocus, camera-view, zoom, and SIFT auto-align options."));
 
         // The batch guidance notes scroll with the section stack (not pinned in the header).
@@ -571,6 +648,10 @@ public final class MultiSlideExistingImageWorkflow {
         root.setCenter(scroll);
         root.setBottom(footer);
         BorderPane.setMargin(footer, new Insets(0, 12, 12, 12));
+
+        // Drop the AF status sink when the panel closes so slot-jump AF stops pushing status into
+        // a disposed label (and a later panel can register its own).
+        stage.setOnHidden(e -> SlotJumpAutofocus.clearStatusSink());
 
         stage.setMinWidth(560);
         stage.setMinHeight(480);

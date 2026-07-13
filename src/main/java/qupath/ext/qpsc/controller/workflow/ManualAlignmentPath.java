@@ -419,8 +419,11 @@ public class ManualAlignmentPath {
                 state.projectInfo.getImagingModeWithIndex(),
                 state.pixelSize);
 
+        // slotJumpAssist = true only when this manual alignment is a multi-slide slot jump (a
+        // slot-center estimate is present); enables force-Camera-View / zoom / autofocus-on-jump.
+        boolean slotJumpAssist = slotEstimate != null;
         return AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                        fullResPixelSize, stageInvertedX, stageInvertedY, slotEstimate)
+                        fullResPixelSize, stageInvertedX, stageInvertedY, slotEstimate, slotJumpAssist)
                 .thenApply(transform -> {
                     if (transform == null) {
                         throw new CancellationException("Manual alignment cancelled by user");

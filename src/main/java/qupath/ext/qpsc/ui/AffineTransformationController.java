@@ -8,6 +8,9 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -67,7 +70,21 @@ public class AffineTransformationController {
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
             double macroPixelSizeMicrons, boolean stageInvertedX, boolean stageInvertedY) {
-        return setupAffineTransformationAndValidationGUI(macroPixelSizeMicrons, stageInvertedX, stageInvertedY, null);
+        return setupAffineTransformationAndValidationGUI(
+                macroPixelSizeMicrons, stageInvertedX, stageInvertedY, null, false);
+    }
+
+    /**
+     * Backward-compatible overload without the multi-slide slot-jump assist (Camera View / zoom /
+     * autofocus-on-jump). Equivalent to passing {@code slotJumpAssist = false}.
+     */
+    public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
+            double macroPixelSizeMicrons,
+            boolean stageInvertedX,
+            boolean stageInvertedY,
+            AffineTransform existingTransformEstimate) {
+        return setupAffineTransformationAndValidationGUI(
+                macroPixelSizeMicrons, stageInvertedX, stageInvertedY, existingTransformEstimate, false);
     }
 
     /**
@@ -85,13 +102,18 @@ public class AffineTransformationController {
      * @param stageInvertedX           Whether the stage X axis is inverted
      * @param stageInvertedY           Whether the stage Y axis is inverted
      * @param existingTransformEstimate Optional existing fullRes-to-stage transform for auto-move (may be null)
+     * @param slotJumpAssist           When true (multi-slide slot jump), applies the Section-D
+     *                                 assists: force Camera View + zoom-to-tissue at alignment start
+     *                                 and autofocus-on-slot-jump after the (blocking) auto-move.
+     *                                 Standalone alignment passes false so those never fire there.
      * @return CompletableFuture with the user's validated affine transform, or null if cancelled.
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
             double macroPixelSizeMicrons,
             boolean stageInvertedX,
             boolean stageInvertedY,
-            AffineTransform existingTransformEstimate) {
+            AffineTransform existingTransformEstimate,
+            boolean slotJumpAssist) {
 
         boolean hasEstimate = existingTransformEstimate != null;
         CompletableFuture<AffineTransform> future = new CompletableFuture<>();
@@ -114,6 +136,21 @@ public class AffineTransformationController {
                 AffineTransform scalingTransform = TransformationFunctions.setupAffineTransformation(
                         macroPixelSizeMicrons, stageInvertedX, stageInvertedY);
                 logger.info("Initial scaling transform: {}", scalingTransform);
+
+                // Multi-slide alignment-step start (slotJumpAssist == a slide-carrier slot jump):
+                // optionally drive the Stage Map to Camera View and zoom it to the green tissue box,
+                // per the Section-D toggles. Best-effort: no-ops if the Stage Map is closed / no box
+                // is set. Standalone alignment (slotJumpAssist == false) is untouched.
+                // TODO(increment: align-start-hook): a dedicated per-slot alignment-start callback in
+                // the multi-slide panel would be a cleaner trigger than this shared-controller hook.
+                if (slotJumpAssist) {
+                    if (PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart()) {
+                        StageMapWindow.forceCameraView();
+                    }
+                    if (PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart()) {
+                        StageMapWindow.zoomToBoundingBoxPreview();
+                    }
+                }
 
                 // 2. Prompt user to select a reference tile
                 String tileSelectionPrompt;
@@ -155,15 +192,29 @@ public class AffineTransformationController {
                                     refTile.getName(),
                                     Arrays.toString(qpRefCoords));
 
-                            // If we have an existing transform estimate, auto-move the stage
+                            // If we have an existing transform estimate, auto-move the stage.
+                            // afGate defers the confirm dialog until autofocus-on-slot-jump (if any)
+                            // has settled, so the operator cannot start aligning mid-focus.
+                            CompletableFuture<Void> afGate = CompletableFuture.completedFuture(null);
                             if (hasEstimate) {
                                 double[] estimatedStageCoords = TransformationFunctions.transformQuPathFullResToStage(
                                         qpRefCoords, existingTransformEstimate);
                                 logger.info(
                                         "Auto-moving stage to estimated position: {}",
                                         Arrays.toString(estimatedStageCoords));
+                                if (slotJumpAssist) {
+                                    SlotJumpAutofocus.publishMoving();
+                                }
+                                // moveStageXY is a BLOCKING socket round-trip (the MOVE command
+                                // returns its ack only after the stage arrives), so the move is
+                                // COMPLETE here -- the settle-gate for slot-jump AF. AF (if enabled)
+                                // then runs off-thread and afGate holds the confirm dialog until it
+                                // finishes; AF never fires mid-move.
                                 MicroscopeController.getInstance()
                                         .moveStageXY(estimatedStageCoords[0], estimatedStageCoords[1]);
+                                if (slotJumpAssist) {
+                                    afGate = SlotJumpAutofocus.runAfterSlotMove();
+                                }
                             }
 
                             // 3. Non-modal confirmation -- user can interact with QuPath
@@ -177,7 +228,7 @@ public class AffineTransformationController {
                                     : "Drive the stage so the live view matches the selected tile, then click"
                                             + " Confirm. Auto-Align (SIFT) can refine the last few microns once you"
                                             + " are roughly on the tile.";
-                            return UIFunctions.stageAlignmentConfirmAsync(
+                            return afGate.thenCompose(ignored -> UIFunctions.stageAlignmentConfirmAsync(
                                             gui, refTile, "Reference tile alignment", confirmInstruction)
                                     .thenCompose(aligned -> {
                                         if (!aligned) {
@@ -249,7 +300,7 @@ public class AffineTransformationController {
                                         }
 
                                         return CompletableFuture.completedFuture(null);
-                                    });
+                                    }));
                         })
                         .exceptionally(ex -> {
                             logger.error("Tile selection failed", ex);

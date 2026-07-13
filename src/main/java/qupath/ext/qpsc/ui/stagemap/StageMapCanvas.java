@@ -185,6 +185,8 @@ public class StageMapCanvas extends StackPane {
     private static final double MIN_ZOOM = 0.5; // a little wider than fit (see overflowing acquisitions)
     private static final double MAX_ZOOM = 50.0; // deep zoom for inspecting acquired tiles
     private static final double ZOOM_STEP = 1.1; // per wheel notch
+    // Fraction of the available canvas a zoomToStageRegion box fills, leaving a small margin.
+    private static final double ZOOM_TO_REGION_FILL = 0.85;
     // Drag-to-pan state (primary button). NaN = not dragging.
     private double dragLastX = Double.NaN;
     private double dragLastY = Double.NaN;
@@ -2109,6 +2111,101 @@ public class StageMapCanvas extends StackPane {
         calculateScale();
         renderBackground();
         updateOverlays();
+    }
+
+    /**
+     * Zooms and pans the view so the given stage-coordinate rectangle fills the
+     * canvas, leaving a small margin. Unlike {@link #resetView()} (which fits the
+     * whole insert), this frames a sub-region -- used by the "Zoom to tissue"
+     * control to bring a slot's bounding box into close view. Does NOT change the
+     * fit-to-insert baseline ({@code fitScale}); right-click reset still returns to
+     * the whole-insert view. Built from the same {@code screen = offset + insert*scale}
+     * model as {@link #stageToScreen} / {@link #screenToStage} / {@link #calculateScale}.
+     *
+     * @param minStageX minimum stage X (um) of the region
+     * @param minStageY minimum stage Y (um) of the region
+     * @param maxStageX maximum stage X (um) of the region
+     * @param maxStageY maximum stage Y (um) of the region
+     */
+    public void zoomToStageRegion(double minStageX, double minStageY, double maxStageX, double maxStageY) {
+        if (currentInsert == null) {
+            return;
+        }
+        double w = getWidth();
+        double h = getHeight();
+        if (w <= 0 || h <= 0) {
+            return;
+        }
+        if (Double.isNaN(minStageX) || Double.isNaN(minStageY) || Double.isNaN(maxStageX) || Double.isNaN(maxStageY)) {
+            return;
+        }
+
+        double loX = Math.min(minStageX, maxStageX);
+        double hiX = Math.max(minStageX, maxStageX);
+        double loY = Math.min(minStageY, maxStageY);
+        double hiY = Math.max(minStageY, maxStageY);
+
+        // Region size in insert space equals the stage-span magnitude (the stageToScreen
+        // axis inversion is a sign flip, not a scale change), floored to avoid a
+        // divide-by-zero on a zero-area box.
+        double regionWidthUm = Math.max(hiX - loX, 1.0);
+        double regionHeightUm = Math.max(hiY - loY, 1.0);
+
+        double availableWidth = (w - 2 * INSERT_PADDING) * ZOOM_TO_REGION_FILL;
+        double availableHeight = (h - 2 * INSERT_PADDING) * ZOOM_TO_REGION_FILL;
+
+        double targetScale = Math.min(availableWidth / regionWidthUm, availableHeight / regionHeightUm);
+        // Clamp to the same zoom envelope the mouse wheel uses so we never exceed the
+        // deepest allowed zoom or fall below the fit baseline.
+        targetScale = Math.max(fitScale * MIN_ZOOM, Math.min(fitScale * MAX_ZOOM, targetScale));
+
+        // Region center in insert space (mirrors the screenToStage inversion).
+        double centerStageX = (loX + hiX) / 2.0;
+        double centerStageY = (loY + hiY) / 2.0;
+        double insertCenterX = currentInsert.isXAxisInverted()
+                ? currentInsert.getOriginXUm() - centerStageX
+                : centerStageX - currentInsert.getOriginXUm();
+        double insertCenterY = currentInsert.isYAxisInverted()
+                ? currentInsert.getOriginYUm() - centerStageY
+                : centerStageY - currentInsert.getOriginYUm();
+
+        scale = targetScale;
+        // screen = offset + insert*scale; place the region center at the canvas center.
+        offsetX = w / 2.0 - insertCenterX * scale;
+        offsetY = h / 2.0 - insertCenterY * scale;
+
+        logger.info(
+                "zoomToStageRegion: region=[{}, {}, {}, {}] um ({} x {} um), scale={} (fit={}), offset=({}, {})",
+                String.format("%.0f", loX),
+                String.format("%.0f", loY),
+                String.format("%.0f", hiX),
+                String.format("%.0f", hiY),
+                String.format("%.0f", regionWidthUm),
+                String.format("%.0f", regionHeightUm),
+                String.format("%.6f", scale),
+                String.format("%.6f", fitScale),
+                String.format("%.1f", offsetX),
+                String.format("%.1f", offsetY));
+
+        renderBackground();
+        updateOverlays();
+    }
+
+    /**
+     * Returns the current green bounding-box preview as
+     * {@code [minStageX, minStageY, maxStageX, maxStageY]} in stage microns, or
+     * {@code null} if no preview box is set. Lets a caller (e.g. the multi-slide
+     * panel's "Zoom to tissue" button) zoom to whatever box is currently displayed
+     * without tracking it separately.
+     */
+    public double[] getBoundingBoxPreview() {
+        if (Double.isNaN(bboxPreviewMinX)
+                || Double.isNaN(bboxPreviewMinY)
+                || Double.isNaN(bboxPreviewMaxX)
+                || Double.isNaN(bboxPreviewMaxY)) {
+            return null;
+        }
+        return new double[] {bboxPreviewMinX, bboxPreviewMinY, bboxPreviewMaxX, bboxPreviewMaxY};
     }
 
     /**
