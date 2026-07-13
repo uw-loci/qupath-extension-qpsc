@@ -1254,7 +1254,8 @@ public class AcquisitionManager {
                             final String[] userChoice = {"cancel"};
                             Platform.runLater(() -> {
                                 try {
-                                    userChoice[0] = showHardwareErrorDialog(errorMessage);
+                                    userChoice[0] = showHardwareErrorDialog(
+                                            errorMessage, progressDialog != null ? progressDialog.getStage() : null);
                                 } finally {
                                     latch.countDown();
                                 }
@@ -1319,7 +1320,9 @@ public class AcquisitionManager {
                             final String[] userChoice = {"cancel"};
                             Platform.runLater(() -> {
                                 try {
-                                    userChoice[0] = showSaturationDecisionDialog(saturationMessage);
+                                    userChoice[0] = showSaturationDecisionDialog(
+                                            saturationMessage,
+                                            progressDialog != null ? progressDialog.getStage() : null);
                                 } finally {
                                     latch.countDown();
                                 }
@@ -1374,6 +1377,13 @@ public class AcquisitionManager {
                                 satText.setPrefHeight(200);
                                 satAlert.getDialogPane().setContent(satText);
                                 satAlert.getDialogPane().setMinWidth(500);
+                                // Scope modality to the acquire progress dialog so this
+                                // fires DURING acquisition without grabbing app-wide input
+                                // and blocking the multi-slide panel's Abort All.
+                                if (progressDialog != null && progressDialog.getStage() != null) {
+                                    satAlert.initModality(javafx.stage.Modality.WINDOW_MODAL);
+                                    satAlert.initOwner(progressDialog.getStage());
+                                }
                                 satAlert.showAndWait();
                             });
                         }
@@ -1537,7 +1547,7 @@ public class AcquisitionManager {
      * @param errorMessage The hardware error details
      * @return User's choice: "retry", "skip", or "cancel"
      */
-    private static String showHardwareErrorDialog(String errorMessage) {
+    private static String showHardwareErrorDialog(String errorMessage, javafx.stage.Window owner) {
         // System beep
         try {
             java.awt.Toolkit.getDefaultToolkit().beep();
@@ -1586,6 +1596,13 @@ public class AcquisitionManager {
                 "Cancel Acquisition", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(retryButton, skipButton, cancelButton);
 
+        // Scope modality to the acquire progress dialog so this pause-and-decide
+        // prompt blocks only that window, not the whole app -- the multi-slide
+        // panel's Abort All stays reachable while acquisition is paused.
+        if (owner != null) {
+            alert.initModality(javafx.stage.Modality.WINDOW_MODAL);
+            alert.initOwner(owner);
+        }
         java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
         if (result.isPresent()) {
             if (result.get() == retryButton) return "retry";
@@ -1602,7 +1619,7 @@ public class AcquisitionManager {
      * @param saturationMessage The saturation-abort reason from the server
      * @return User's choice: "continue" (acquire anyway) or "cancel"
      */
-    private static String showSaturationDecisionDialog(String saturationMessage) {
+    private static String showSaturationDecisionDialog(String saturationMessage, javafx.stage.Window owner) {
         try {
             java.awt.Toolkit.getDefaultToolkit().beep();
         } catch (Exception e) {
@@ -1654,6 +1671,13 @@ public class AcquisitionManager {
             cancelNode.setDefaultButton(true);
         }
 
+        // Scope modality to the acquire progress dialog so this pause-and-decide
+        // prompt blocks only that window, not the whole app -- the multi-slide
+        // panel's Abort All stays reachable while acquisition is paused.
+        if (owner != null) {
+            alert.initModality(javafx.stage.Modality.WINDOW_MODAL);
+            alert.initOwner(owner);
+        }
         java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == continueButton) {
             return "continue";

@@ -335,7 +335,13 @@ public class SingleTileRefinement {
         dialogStage.setTitle("Refine Alignment");
         dialogStage.initModality(Modality.NONE); // Non-modal - allows QuPath interaction
         dialogStage.setResizable(false);
-        dialogStage.setAlwaysOnTop(true);
+        // Dropped setAlwaysOnTop(true): floating over the multi-slide panel occluded
+        // its Abort All. Own the QuPath main window instead so this co-floats.
+        // TODO(increment: owner=panel) own the consolidated MS panel Stage once
+        // reachable; the SiftCapturePane extraction (later increment) folds this in.
+        if (gui != null && gui.getStage() != null) {
+            dialogStage.initOwner(gui.getStage());
+        }
 
         // Main content
         VBox content = new VBox(15);

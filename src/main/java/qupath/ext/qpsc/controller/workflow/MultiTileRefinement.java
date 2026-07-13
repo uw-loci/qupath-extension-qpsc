@@ -133,7 +133,13 @@ public class MultiTileRefinement {
 
         Stage stage = new Stage();
         stage.setTitle("Multi-Tile Alignment Refinement");
-        stage.setAlwaysOnTop(true);
+        // Dropped setAlwaysOnTop(true): floating over the multi-slide panel occluded
+        // its Abort All. Own the QuPath main window instead so this co-floats.
+        // TODO(increment: owner=panel) own the consolidated MS panel Stage once
+        // reachable; the body fold into Section C is a later increment.
+        if (gui != null && gui.getStage() != null) {
+            stage.initOwner(gui.getStage());
+        }
         stage.setResizable(false);
 
         VBox content = new VBox(12);
@@ -390,7 +396,13 @@ public class MultiTileRefinement {
 
         Stage dialog = new Stage();
         dialog.setTitle("Capture Point #" + pointNumber);
-        dialog.setAlwaysOnTop(true);
+        // Dropped setAlwaysOnTop(true): floating over the multi-slide panel occluded
+        // its Abort All. Own the QuPath main window instead so this co-floats.
+        // TODO(increment: owner=panel) own the consolidated MS panel Stage once
+        // reachable; the per-point body fold is a later increment.
+        if (gui != null && gui.getStage() != null) {
+            dialog.initOwner(gui.getStage());
+        }
         dialog.setResizable(false);
 
         VBox content = new VBox(12);

@@ -455,7 +455,18 @@ public class ExistingImageAcquisitionController {
 
         Optional<ExistingImageAcquisitionConfig> buildAndShow() {
             dialog = new Dialog<>();
-            dialog.initModality(Modality.APPLICATION_MODAL);
+            // Modality downgraded from APPLICATION_MODAL to NONE so this data-entry
+            // step no longer grabs app-wide input and occludes the multi-slide panel's
+            // Abort All. showAndWait() below still blocks synchronously (nested event
+            // loop), so the workflow future completes on the same button action; NONE
+            // only lets the other windows (panel, Stage Map) stay interactive.
+            dialog.initModality(Modality.NONE);
+            // TODO(increment: owner=panel) owner is the QuPath main window; thread the
+            // consolidated MS panel Stage here once it is reachable so this co-floats.
+            QuPathGUI ownerGui = QuPathGUI.getInstance();
+            if (ownerGui != null && ownerGui.getStage() != null) {
+                dialog.initOwner(ownerGui.getStage());
+            }
             dialog.setTitle("Acquire from Existing Image");
             dialog.setHeaderText("Configure acquisition from the current image");
             dialog.setGraphic(DocumentationHelper.createHelpButton("existingImage"));

@@ -125,7 +125,15 @@ public class AlignmentSelectionController {
 
                 // Create dialog
                 Dialog<AlignmentChoice> dialog = new Dialog<>();
-                dialog.initModality(Modality.APPLICATION_MODAL);
+                // Modality downgraded from APPLICATION_MODAL to NONE: this is a
+                // future-gated choice, not a destructive confirm, so it must not grab
+                // app-wide input and block the multi-slide panel's Abort All.
+                dialog.initModality(Modality.NONE);
+                // TODO(increment: owner=panel) owner is the QuPath main window for now;
+                // thread the consolidated MS panel Stage here once reachable to co-float.
+                if (gui != null && gui.getStage() != null) {
+                    dialog.initOwner(gui.getStage());
+                }
                 dialog.setTitle("Alignment Selection");
                 dialog.setHeaderText("Choose alignment method for " + modality);
                 dialog.setGraphic(DocumentationHelper.createHelpButton("microscopeAlignment"));

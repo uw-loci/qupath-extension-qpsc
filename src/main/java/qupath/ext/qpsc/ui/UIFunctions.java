@@ -779,7 +779,15 @@ public class UIFunctions {
             Stage stage = new Stage();
             stage.initModality(Modality.NONE);
             stage.setTitle("Select Tile");
-            stage.setAlwaysOnTop(true);
+            // Dropped setAlwaysOnTop(true): floating over the multi-slide panel
+            // occluded its Abort All. Own the QuPath main window instead so this
+            // co-floats with the panel rather than covering it.
+            // TODO(increment: owner=panel) own the consolidated MS panel Stage once
+            // reachable so it co-floats with the panel specifically.
+            QuPathGUI ownerGui = QuPathGUI.getInstance();
+            if (ownerGui != null && ownerGui.getStage() != null) {
+                stage.initOwner(ownerGui.getStage());
+            }
 
             VBox layout = new VBox(10);
             layout.setPadding(new Insets(20));

@@ -119,7 +119,15 @@ public class RefinementSelectionController {
         Platform.runLater(() -> {
             try {
                 Dialog<RefinementResult> dialog = new Dialog<>();
-                dialog.initModality(Modality.APPLICATION_MODAL);
+                // Modality downgraded from APPLICATION_MODAL to NONE: this is a
+                // future-gated pick-a-mode step, not a destructive confirm, so it must
+                // not grab app-wide input and block the multi-slide panel's Abort All.
+                dialog.initModality(Modality.NONE);
+                // TODO(increment: owner=panel) owner is the QuPath main window for now;
+                // thread the consolidated MS panel Stage here once reachable to co-float.
+                if (gui != null && gui.getStage() != null) {
+                    dialog.initOwner(gui.getStage());
+                }
                 dialog.setTitle("Alignment Refinement");
                 dialog.setHeaderText("Choose refinement level for alignment");
                 dialog.setGraphic(DocumentationHelper.createHelpButton("existingImage"));

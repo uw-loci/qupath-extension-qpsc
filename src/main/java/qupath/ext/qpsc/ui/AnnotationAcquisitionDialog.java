@@ -51,19 +51,18 @@ public class AnnotationAcquisitionDialog {
         Platform.runLater(() -> {
             Dialog<AcquisitionResult> dialog = new Dialog<>();
             dialog.initModality(Modality.NONE);
+            // Dropped setAlwaysOnTop(true): floating over the multi-slide panel
+            // occluded its Abort All. Instead own the QuPath main window so this
+            // co-floats with the panel rather than covering it while the operator
+            // edits annotations.
+            // TODO(increment: owner=panel) thread the consolidated MS panel Stage
+            // here once reachable so it co-floats with the panel specifically.
+            QuPathGUI ownerGui = QuPathGUI.getInstance();
+            if (ownerGui != null && ownerGui.getStage() != null) {
+                dialog.initOwner(ownerGui.getStage());
+            }
             dialog.setTitle("Annotation Acquisition");
             dialog.setHeaderText(null);
-
-            // Set always-on-top to keep dialog visible during annotation editing
-            // Use setOnShown to ensure stage is available when we set alwaysOnTop
-            dialog.setOnShown(e -> {
-                if (dialog.getDialogPane().getScene() != null
-                        && dialog.getDialogPane().getScene().getWindow() instanceof javafx.stage.Stage stage) {
-                    stage.setAlwaysOnTop(true);
-                    stage.toFront();
-                    logger.info("Set annotation dialog to always on top");
-                }
-            });
 
             // Create observable list for selected classes
             // If no preselected classes, default to selecting any available default classes that have annotations
