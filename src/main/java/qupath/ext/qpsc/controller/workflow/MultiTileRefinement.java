@@ -162,6 +162,14 @@ public class MultiTileRefinement {
         Label pointsLabel = new Label("Points captured: 0");
         pointsLabel.setStyle("-fx-font-weight: bold;");
 
+        // The "Point N capture" slot from the folded wireframe: a per-point
+        // SiftCapturePane is swapped in here while a point is being captured,
+        // then cleared. Embedding it (rather than opening a separate always-on-top
+        // Stage per point, as showCaptureDialog used to) is what eliminates the
+        // stacked capture dialogs.
+        VBox captureSlot = new VBox();
+        captureSlot.setFillWidth(true);
+
         Label diagLabel = new Label("Add at least 2 points to solve a correction.");
         diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
         diagLabel.setWrapText(true);
@@ -178,7 +186,7 @@ public class MultiTileRefinement {
         HBox buttons = new HBox(10, addButton, solveButton, cancelButton);
         buttons.setAlignment(Pos.CENTER_LEFT);
 
-        content.getChildren().addAll(header, instructions, pointsLabel, diagLabel, buttons);
+        content.getChildren().addAll(header, instructions, pointsLabel, captureSlot, diagLabel, buttons);
         stage.setScene(new Scene(content));
 
         Runnable refreshDiagnostics = () -> {
@@ -227,7 +235,7 @@ public class MultiTileRefinement {
             cancelButton.setDisable(true);
             // Predict this point with the running estimate (refined by prior points), NOT
             // the raw initial transform.
-            capturePoint(gui, workingEstimate[0], points.size() + 1, trustSift, confidenceThreshold)
+            capturePoint(gui, workingEstimate[0], points.size() + 1, trustSift, confidenceThreshold, captureSlot)
                     .whenComplete((measure, ex) -> Platform.runLater(() -> {
                         if (ex != null) {
                             logger.warn("Multi-tile point capture failed: {}", ex.getMessage());
@@ -297,12 +305,24 @@ public class MultiTileRefinement {
 
     /**
      * Captures one reference point: prompt for a tile, move to its predicted stage
-     * position, SIFT auto-align (or fall back to a manual capture dialog), and
-     * return the predicted/measured correspondence. Completes with {@code null} if
-     * the operator cancels the tile selection or skips the point.
+     * position, then hand off to an embedded {@link SiftCapturePane} (SIFT auto-align
+     * or manual nudge + capture) hosted in {@code captureSlot}. Returns the
+     * predicted/measured correspondence, or {@code null} if the operator cancels the
+     * tile selection or skips the point.
+     *
+     * <p>The pane is embedded in the refinement panel's own capture slot rather than
+     * opened as a separate always-on-top Stage per point, which removes the stacked
+     * capture dialogs. The trust-SIFT auto-accept gate now lives in the pane
+     * ({@code capture(trustSift, confidenceThreshold)}) -- same predicate as before
+     * ({@code confidence >= confidenceThreshold}).
      */
     private static CompletableFuture<PointMeasure> capturePoint(
-            QuPathGUI gui, AffineTransform estimate, int pointNumber, boolean trustSift, double confidenceThreshold) {
+            QuPathGUI gui,
+            AffineTransform estimate,
+            int pointNumber,
+            boolean trustSift,
+            double confidenceThreshold,
+            VBox captureSlot) {
 
         CompletableFuture<PointMeasure> future = new CompletableFuture<>();
 
@@ -336,43 +356,40 @@ public class MultiTileRefinement {
                             predictedStage[1]);
                     Platform.runLater(() -> WorkflowHelpers.centerAndSelectTile(gui, tile));
 
-                    // Stage move + SIFT are socket I/O: run off the FX thread.
+                    // Stage move is socket I/O: run off the FX thread. Then embed the shared
+                    // capture pane on the FX thread and let it drive SIFT / manual capture.
                     new Thread(
                                     () -> {
                                         try {
                                             MicroscopeController.getInstance()
                                                     .moveStageXY(predictedStage[0], predictedStage[1]);
                                             Thread.sleep(500);
-                                            Platform.runLater(() -> SiftAutoAlignHelper.drawSearchRangeOnStageMap(
-                                                    gui, tile, predictedStage[0], predictedStage[1]));
-
-                                            if (trustSift) {
-                                                double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
-                                                if (result != null
-                                                        && result.length >= 4
-                                                        && result[3] >= confidenceThreshold) {
-                                                    double[] measured = MicroscopeController.getInstance()
-                                                            .getStagePositionXY();
-                                                    logger.info(
-                                                            "Multi-tile point {}: SIFT auto-accepted (confidence {})",
-                                                            pointNumber,
-                                                            result[3]);
-                                                    future.complete(new PointMeasure(tileCoords, measured, tile));
-                                                    return;
-                                                }
-                                                logger.info(
-                                                        "Multi-tile point {}: SIFT below threshold / failed -- manual capture",
-                                                        pointNumber);
-                                            }
-                                            Platform.runLater(() ->
-                                                    showCaptureDialog(gui, tile, tileCoords, pointNumber, future));
+                                            Platform.runLater(() -> {
+                                                SiftAutoAlignHelper.drawSearchRangeOnStageMap(
+                                                        gui, tile, predictedStage[0], predictedStage[1]);
+                                                hostCapturePane(
+                                                        captureSlot,
+                                                        gui,
+                                                        tile,
+                                                        tileCoords,
+                                                        trustSift,
+                                                        confidenceThreshold,
+                                                        future);
+                                            });
                                         } catch (Exception ex) {
                                             logger.warn(
-                                                    "Multi-tile point {} move/SIFT failed: {} -- manual capture",
+                                                    "Multi-tile point {} stage move failed: {} -- manual capture",
                                                     pointNumber,
                                                     ex.getMessage());
-                                            Platform.runLater(() ->
-                                                    showCaptureDialog(gui, tile, tileCoords, pointNumber, future));
+                                            // Move failed: present the pane in manual mode (no auto-SIFT).
+                                            Platform.runLater(() -> hostCapturePane(
+                                                    captureSlot,
+                                                    gui,
+                                                    tile,
+                                                    tileCoords,
+                                                    false,
+                                                    confidenceThreshold,
+                                                    future));
                                         }
                                     },
                                     "MultiTile-Point-" + pointNumber)
@@ -383,134 +400,36 @@ public class MultiTileRefinement {
     }
 
     /**
-     * Manual capture dialog: the operator nudges the stage (or re-runs SIFT) so the
-     * live view matches the selected tile, then captures the stage position for this
-     * point, or skips it.
+     * Embeds a fresh {@link SiftCapturePane} into {@code captureSlot} and wires its
+     * result to {@code future}: a captured/auto-accepted stage position becomes a
+     * {@link PointMeasure} (with the tile's QuPath centroid preserved for the solve),
+     * a skip completes with {@code null}. Clears the slot when the pane settles. Must
+     * be called on the FX thread.
      */
-    private static void showCaptureDialog(
+    private static void hostCapturePane(
+            VBox captureSlot,
             QuPathGUI gui,
             PathObject tile,
             double[] tileCoords,
-            int pointNumber,
+            boolean autoRunSift,
+            double confidenceThreshold,
             CompletableFuture<PointMeasure> future) {
-
-        Stage dialog = new Stage();
-        dialog.setTitle("Capture Point #" + pointNumber);
-        // Dropped setAlwaysOnTop(true): floating over the multi-slide panel occluded
-        // its Abort All. Own the QuPath main window instead so this co-floats.
-        // TODO(increment: owner=panel) own the consolidated MS panel Stage once
-        // reachable; the per-point body fold is a later increment.
-        if (gui != null && gui.getStage() != null) {
-            dialog.initOwner(gui.getStage());
-        }
-        dialog.setResizable(false);
-
-        VBox content = new VBox(12);
-        content.setPadding(new Insets(16));
-        content.setPrefWidth(420);
-
-        Label header = new Label("Capture reference point #" + pointNumber);
-        header.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
-
-        Label instructions = new Label("Nudge the stage (or use Stage Control) so the live view matches the "
-                + "selected tile, then click Capture. Or run Auto-Align (SIFT) to snap to it automatically. "
-                + "Skip to leave this point out.");
-        instructions.setWrapText(true);
-
-        // Persistent SIFT result. autoAlign returns [offsetX, offsetY, inliers, confidence];
-        // surface all of it here (single-tile only toasts the confidence). SIFT tuning lives in
-        // Preferences > SIFT Auto-Alignment.
-        Label siftResultLabel = new Label("SIFT: not run for this point yet.");
-        siftResultLabel.setWrapText(true);
-        siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
-        Label settingsHint = new Label(
-                "SIFT settings: Preferences > SIFT Auto-Alignment (search margin, confidence threshold, normalization).");
-        settingsHint.setWrapText(true);
-        settingsHint.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
-
-        Button siftButton = new Button("Auto-Align (SIFT)");
-        siftButton.setOnAction(e -> {
-            siftButton.setDisable(true);
-            siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
-            siftResultLabel.setText("SIFT: running...");
-            new Thread(
-                            () -> {
-                                try {
-                                    double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
-                                    Platform.runLater(() -> {
-                                        if (result != null && result.length >= 4) {
-                                            double conf = result[3];
-                                            siftResultLabel.setStyle(
-                                                    conf >= 0.5
-                                                            ? "-fx-text-fill: #1c8552; -fx-font-weight: bold;"
-                                                            : "-fx-text-fill: #a5640c; -fx-font-weight: bold;");
-                                            siftResultLabel.setText(String.format(
-                                                    "SIFT: confidence %.0f%%, %d inliers, moved (%.1f, %.1f) um. "
-                                                            + "Capture if the live view matches the tile.",
-                                                    conf * 100, (int) result[2], result[0], result[1]));
-                                        } else {
-                                            siftResultLabel.setStyle("-fx-text-fill: #c0362c; -fx-font-weight: bold;");
-                                            siftResultLabel.setText(
-                                                    "SIFT: no confident match. Nudge the stage manually, "
-                                                            + "then Capture -- or try Auto-Align again.");
-                                        }
-                                        siftButton.setDisable(false);
-                                    });
-                                } catch (Exception ex) {
-                                    logger.warn("Manual-dialog SIFT failed: {}", ex.getMessage());
-                                    Platform.runLater(() -> {
-                                        siftResultLabel.setStyle("-fx-text-fill: #c0362c;");
-                                        siftResultLabel.setText("SIFT failed: " + ex.getMessage()
-                                                + " -- nudge manually, then Capture.");
-                                        siftButton.setDisable(false);
-                                    });
-                                }
-                            },
-                            "MultiTile-ManualSIFT-" + pointNumber)
-                    .start();
-        });
-
-        Button captureButton = new Button("Capture position");
-        captureButton.setDefaultButton(true);
-        captureButton.setStyle("-fx-font-weight: bold; -fx-base: #4CAF50; -fx-text-fill: white;");
-        captureButton.setOnAction(e -> {
-            new Thread(
-                            () -> {
-                                try {
-                                    double[] measured =
-                                            MicroscopeController.getInstance().getStagePositionXY();
-                                    Platform.runLater(() -> {
-                                        dialog.close();
-                                        future.complete(new PointMeasure(tileCoords, measured, tile));
-                                    });
-                                } catch (Exception ex) {
-                                    logger.error("Failed to read stage position for capture", ex);
-                                    Platform.runLater(() -> Dialogs.showErrorMessage(
-                                            "Capture Error", "Could not read stage position: " + ex.getMessage()));
-                                }
-                            },
-                            "MultiTile-Capture-" + pointNumber)
-                    .start();
-        });
-
-        Button skipButton = new Button("Skip point");
-        skipButton.setOnAction(e -> {
-            logger.info("Multi-tile point {} skipped", pointNumber);
-            dialog.close();
-            future.complete(null);
-        });
-
-        HBox buttons = new HBox(10, siftButton, captureButton, skipButton);
-        buttons.setAlignment(Pos.CENTER_LEFT);
-
-        content.getChildren().addAll(header, instructions, siftResultLabel, buttons, settingsHint);
-        dialog.setScene(new Scene(content));
-        dialog.setOnCloseRequest(e -> {
-            if (!future.isDone()) {
-                future.complete(null);
-            }
-        });
-        dialog.show();
+        // gateCaptureOnSift=false: multi-tile allows a manual nudge + capture without
+        // a prior SIFT run (unlike single-tile's Save-after-SIFT gate).
+        SiftCapturePane pane = new SiftCapturePane(gui, tile, false);
+        captureSlot.getChildren().setAll(pane);
+        pane.capture(autoRunSift, confidenceThreshold)
+                .whenComplete((measured, ex) -> Platform.runLater(() -> {
+                    captureSlot.getChildren().clear();
+                    if (ex != null) {
+                        logger.warn("Multi-tile capture pane failed: {}", ex.getMessage());
+                        future.complete(null);
+                    } else if (measured != null) {
+                        future.complete(new PointMeasure(tileCoords, measured, tile));
+                    } else {
+                        future.complete(null);
+                    }
+                }));
     }
 
     /**

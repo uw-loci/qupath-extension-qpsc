@@ -1,7 +1,6 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.geom.AffineTransform;
-import java.io.IOException;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
@@ -362,64 +361,14 @@ public class SingleTileRefinement {
                         + "If you want to keep the predicted position without refining, click 'Skip Refinement'.");
         instructionLabel.setWrapText(true);
 
-        // Tile info label
-        String tileName = selectedTile.getName() != null ? selectedTile.getName() : "unnamed tile";
-        Label tileInfoLabel = new Label("Target tile: " + tileName);
-        tileInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        // Shared capture pane: tile info + Restore + Auto-Align(SIFT) + color-coded
+        // result label + Capture/Skip. gateCaptureOnSift=true preserves single-tile's
+        // "Capture (Save) is disabled until Auto-Align (SIFT) has run successfully" gate,
+        // so a quick click can't silently accept the predicted (unrefined) position.
+        SiftCapturePane capturePane = new SiftCapturePane(gui, selectedTile, true);
 
-        // Restore tile button
-        Button restoreButton = new Button("Restore Target Tile Selection");
-        restoreButton.setTooltip(
-                new javafx.scene.control.Tooltip("Re-select and center view on the original target tile\n"
-                        + "if you accidentally changed the selection."));
-        restoreButton.setOnAction(e -> {
-            // Restore selection and center view
-            WorkflowHelpers.centerAndSelectTile(gui, selectedTile);
-            logger.info("Restored target tile selection: {}", tileName);
-        });
-
-        // Action buttons. Save is disabled until SIFT has run successfully so a
-        // quick click can't silently skip refinement -- if the user wants the
-        // predicted (unrefined) position they must use Skip Refinement.
-        Button saveButton = new Button("Save Refined Position");
-        saveButton.setDefaultButton(true);
-        saveButton.setStyle(
-                "-fx-font-weight: bold; -fx-font-size: 13px; " + "-fx-base: #4CAF50; -fx-text-fill: white;");
-        saveButton.setDisable(true);
-        saveButton.setTooltip(new javafx.scene.control.Tooltip("Enabled after Auto-Align (SIFT) has run successfully.\n"
-                + "To keep the predicted position without refinement, click Skip Refinement instead."));
-        saveButton.setOnAction(e -> {
-            try {
-                // Get refined position
-                double[] refinedStageCoords = MicroscopeController.getInstance().getStagePositionXY();
-                logger.info("Refined stage position: ({}, {})", refinedStageCoords[0], refinedStageCoords[1]);
-
-                // Calculate refined transform
-                AffineTransform refinedTransform = TransformationFunctions.addTranslationToScaledAffine(
-                        initialTransform, tileCoords, refinedStageCoords);
-
-                logger.info("Calculated refined transform");
-
-                Dialogs.showInfoNotification(
-                        "Refine Alignment", "The alignment has been refined and saved for this slide.");
-
-                SiftAutoAlignHelper.clearSearchRangeOnStageMap();
-                dialogStage.close();
-                future.complete(new RefinementResult(refinedTransform, selectedTile, true));
-            } catch (IOException ex) {
-                logger.error("Failed to get stage position", ex);
-                Dialogs.showErrorMessage("Error", "Failed to read stage position: " + ex.getMessage());
-            }
-        });
-
-        Button skipButton = new Button("Skip Refinement");
-        skipButton.setOnAction(e -> {
-            logger.info("User skipped refinement");
-            SiftAutoAlignHelper.clearSearchRangeOnStageMap();
-            dialogStage.close();
-            future.complete(new RefinementResult(initialTransform, selectedTile));
-        });
-
+        // "Create New Alignment" is a single-tile-only third outcome (switch to manual
+        // alignment), so it stays outside the shared pane.
         Button newAlignmentButton = new Button("Create New Alignment");
         newAlignmentButton.setOnAction(e -> {
             logger.info("User requested new alignment");
@@ -438,35 +387,47 @@ public class SingleTileRefinement {
         siftDescription.setWrapText(true);
         siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
 
-        Label autoAlignStatus = new Label();
-        autoAlignStatus.setWrapText(true);
-        autoAlignStatus.setStyle("-fx-font-size: 10px;");
+        // Capture -> translation-only refined transform; Skip -> pass through. The pane
+        // returns the measured stage position; the transform math stays here, unchanged
+        // (addTranslationToScaledAffine), so single-tile's apply/save contract is
+        // preserved exactly. Auto-run is left OFF: the trust-SIFT auto-accept fast path
+        // is still handled in performTileRefinement before this dialog is built.
+        capturePane
+                .capture(false, 0.0)
+                .whenComplete((measured, ex) -> Platform.runLater(() -> {
+                    if (ex != null) {
+                        logger.warn("Single-tile capture pane failed: {}", ex.getMessage());
+                        return;
+                    }
+                    SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                    dialogStage.close();
+                    if (measured != null) {
+                        AffineTransform refinedTransform = TransformationFunctions.addTranslationToScaledAffine(
+                                initialTransform, tileCoords, measured);
+                        logger.info(
+                                "Refined stage position: ({}, {}); calculated refined transform",
+                                measured[0],
+                                measured[1]);
+                        Dialogs.showInfoNotification(
+                                "Refine Alignment", "The alignment has been refined and saved for this slide.");
+                        future.complete(new RefinementResult(refinedTransform, selectedTile, true));
+                    } else {
+                        logger.info("User skipped refinement");
+                        future.complete(new RefinementResult(initialTransform, selectedTile));
+                    }
+                }));
 
-        // Auto-Align (SIFT) + Settings... button row provided by the
-        // shared helper so this dialog and the alignment-workflow confirm
-        // dialog stay visually consistent. The callback enables Save once SIFT
-        // has run successfully.
-        HBox siftButtonRow = SiftAutoAlignHelper.buildSiftButtonRow(
-                gui, selectedTile, dialogStage, autoAlignStatus, () -> saveButton.setDisable(false));
-
-        // Layout
-        HBox restoreBox = new HBox(restoreButton);
-        restoreBox.setAlignment(Pos.CENTER_LEFT);
-
-        HBox buttonBox = new HBox(10, saveButton, skipButton, newAlignmentButton);
-        buttonBox.setAlignment(Pos.CENTER_RIGHT);
+        HBox newAlignmentBox = new HBox(newAlignmentButton);
+        newAlignmentBox.setAlignment(Pos.CENTER_RIGHT);
 
         content.getChildren()
                 .addAll(
                         headerLabel,
                         SiftAutoAlignHelper.buildFocusSaturationWarning(),
                         instructionLabel,
-                        tileInfoLabel,
-                        siftButtonRow,
                         siftDescription,
-                        autoAlignStatus,
-                        restoreBox,
-                        buttonBox);
+                        capturePane,
+                        newAlignmentBox);
 
         // Handle window close (X button)
         dialogStage.setOnCloseRequest(e -> {
