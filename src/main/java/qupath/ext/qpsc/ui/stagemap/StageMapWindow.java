@@ -594,22 +594,29 @@ public class StageMapWindow {
             }
         });
 
-        // Apply Flips checkbox -- flips the map, overlay, and coordinate system
-        applyFlipsCheckbox = new CheckBox("Apply Flips");
+        // Apply Flips checkbox -- flips the map, overlay, and coordinate system.
+        // Label reflects the resulting view rather than the mechanism: CHECKED = "Camera View"
+        // (map oriented like the live camera / the acquisition entry), UNCHECKED = "Stage View"
+        // (slides as they physically sit on the stage). Bound to the selected state so it stays
+        // correct for both manual toggles and the programmatic setSelected paths.
+        applyFlipsCheckbox = new CheckBox();
+        applyFlipsCheckbox
+                .textProperty()
+                .bind(javafx.beans.binding.Bindings.when(applyFlipsCheckbox.selectedProperty())
+                        .then("Camera View")
+                        .otherwise("Stage View"));
         applyFlipsCheckbox.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; "
                 + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-border-radius: 2; "
                 + "-fx-padding: 2 4;");
-        applyFlipsCheckbox.setTooltip(new Tooltip("Flip the Stage Map to match the Live Viewer orientation.\n\n"
-                + "Default state composes:\n"
-                + "  - Active scope's Camera Orientation (the map already\n"
-                + "    applies Stage Polarity, so only the camera flip is\n"
-                + "    needed to reach Live Viewer orientation)\n"
-                + "  - The macro overlay's per-scanner flipMacroX/Y from\n"
-                + "    the source picked in the Source dropdown\n"
-                + "XOR'd per-axis so the whole map -- including the macro\n"
-                + "overlay -- ends up oriented like the Live Viewer.\n\n"
-                + "Independent of which project image is open. Toggleable\n"
-                + "if you want to compare against the un-flipped view."));
+        applyFlipsCheckbox.setTooltip(new Tooltip("How the Stage Map is oriented:\n\n"
+                + "  Camera View (checked) -- oriented like the Live Viewer\n"
+                + "    and the acquisition image (what the camera sees).\n"
+                + "  Stage View (unchecked) -- oriented like the slides as\n"
+                + "    they physically sit on the stage.\n\n"
+                + "Camera View composes the active scope's Camera Orientation\n"
+                + "(the map already applies Stage Polarity) with the macro\n"
+                + "overlay's per-scanner flipMacroX/Y from the Source dropdown,\n"
+                + "XOR'd per-axis. Independent of which project image is open."));
 
         // Initial checked state -- pulled from open entry metadata if any. Preset dropdown
         // is not yet populated at this point in construction, so the dropdown leg of
@@ -622,7 +629,7 @@ public class StageMapWindow {
             // already calls canvas.setFlipsApplied directly with the resolved axes;
             // re-running here would just repeat the work and log an extra "toggled" line.
             if (suppressFlipCheckboxListener) return;
-            logger.info("Apply Flips toggled: {}", newVal);
+            logger.info("Stage Map view toggled to: {}", newVal ? "Camera View" : "Stage View");
             if (canvas != null) {
                 // Resolve actual flip axes from the live context so the canvas uses the right
                 // mirror direction. Priority: open image entry metadata, then active preset.
