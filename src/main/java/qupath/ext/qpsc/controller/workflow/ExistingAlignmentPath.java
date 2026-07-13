@@ -386,62 +386,71 @@ public class ExistingAlignmentPath {
         AffineTransform fullResToStage = new AffineTransform(macroToStage);
         fullResToStage.concatenate(fullResToMacro);
 
-        // Multi-slide: rebuild macro->stage as PURE SCALE (diagonal) anchored at the
-        // captured slot center. NO rotation is applied here.
+        // Multi-slide: the (rotated N)(flipped XY) acquisition entry is already in CAMERA
+        // orientation (camera-X = QuPath-X = stage-X, verified on-scope against the live camera
+        // / flipped Stage Map), so the FINAL entry->stage transform must be DIAGONAL -- never an
+        // axis swap. The on-scope multi-tile ground truth confirms it: the refined transform is a
+        // POSITIVE diagonal at ~0.2509 um/px.
         //
-        // Why no rotation: the holder rotation (Ocus40 scan -> portrait slide on the stage)
-        // is ALREADY baked into the (rotated N)(flipped XY) acquisition entry's pixels. That
-        // entry is in CAMERA orientation (verified on-scope: the entry matches the live
-        // camera view / the flipped Stage Map, not the raw physical-stage view), and the
-        // camera is bolted with camera-X = stage-X. So on that entry QuPath-X = stage-X and
-        // the entry->stage map is DIAGONAL -- scale plus the preset's flip SIGN, never an
-        // axis swap.
+        // BUT the holder rotation still does real POSITIONAL work. The slide's tissue sits away
+        // from the macro center, and the R270 rotation is what places that off-center content
+        // near its true stage position (the ef9926e5 anchor landed within ~mm). The earlier fix
+        // stripped the R270 to kill the axis swap, but that also removed the positioning: the
+        // image landed ~22 mm off in X, out of stage bounds -> validation crash.
         //
-        // The earlier build (ef9926e5) added an explicit R270 here. But fullResToMacro above
-        // is pure scale -- it does NOT un-rotate the already-rotated entry -- so that R270
-        // landed on the ENTRY coordinates as a spurious axis swap (measured on-scope from
-        // annotation 11581_35306: QuPath-X -> stage-Y at 0.2505 um/px). TilingUtilities'
-        // name-based FOV-swap then compensated it at the level of stage STEPS: correct stitch
-        // but portrait (90-deg-rotated) tiles that do not match the landscape camera FOV.
-        // Removing the R270 here AND the FOV-swap in TilingUtilities collapses both
-        // compensating errors into one correct result: a diagonal transform (QuPath-X ->
-        // stage-X) and landscape tiles. Keep the slot-center anchor + the preset's scale
-        // magnitude/sign; single-/multi-tile refinement corrects the few-mm residual.
+        // Do the two jobs SEPARATELY:
+        //   (1) use the R270 anchor ONLY to find where the full-res image CENTER lands -- a good
+        //       tissue-center estimate -- then
+        //   (2) build a pure DIAGONAL transform at the full-res pixel size (preset sign), anchored
+        //       on that center.
+        // Result: no axis swap (QuPath-X -> stage-X) AND a good, in-bounds position. Single-/
+        // multi-tile refinement corrects the few-mm residual.
         if (state.slotCenterStageXY != null && state.slotCenterStageXY.length >= 2) {
             BufferedImage macroImg = context.macroContext.displayImage;
             if (macroImg != null) {
                 double macroCx = macroImg.getWidth() / 2.0;
                 double macroCy = macroImg.getHeight() / 2.0;
-                double scaleX = macroToStage.getScaleX(); // preset scale magnitude + sign (flip)
+                double scaleX = macroToStage.getScaleX(); // preset scale magnitude + sign
                 double scaleY = macroToStage.getScaleY();
 
-                // p -> translate(-macroCenter) -> scale(S) -> translate(slotCenter)
-                //   == slotCenter + S * (p - macroCenter).  Diagonal, no rotation.
-                AffineTransform geoMacroToStage = new AffineTransform();
-                geoMacroToStage.translate(state.slotCenterStageXY[0], state.slotCenterStageXY[1]);
-                geoMacroToStage.scale(scaleX, scaleY);
-                geoMacroToStage.translate(-macroCx, -macroCy);
+                // (1) R270 anchor: place off-center content correctly, then read where the
+                // full-res image center lands. Used ONLY for position, not orientation.
+                AffineTransform anchorMacroToStage = new AffineTransform();
+                anchorMacroToStage.translate(state.slotCenterStageXY[0], state.slotCenterStageXY[1]);
+                anchorMacroToStage.rotate(Math.toRadians(270));
+                anchorMacroToStage.scale(scaleX, scaleY);
+                anchorMacroToStage.translate(-macroCx, -macroCy);
+                AffineTransform anchorFullResToStage = new AffineTransform(anchorMacroToStage);
+                anchorFullResToStage.concatenate(fullResToMacro);
 
-                macroToStage = geoMacroToStage;
-                fullResToStage = new AffineTransform(macroToStage);
-                fullResToStage.concatenate(fullResToMacro);
+                double fullResCx = reportedWidth / 2.0;
+                double fullResCy = reportedHeight / 2.0;
+                Point2D imageCenterStage =
+                        anchorFullResToStage.transform(new Point2D.Double(fullResCx, fullResCy), null);
 
-                Point2D macroCenterStage = new Point2D.Double();
-                macroToStage.transform(new Point2D.Double(macroCx, macroCy), macroCenterStage);
+                // (2) DIAGONAL entry->stage at the full-res pixel size (preset sign), anchored on
+                // that image-center position. No axis swap: QuPath-X -> stage-X.
+                double sX = Math.signum(scaleX) * fullResPixelSize;
+                double sY = Math.signum(scaleY) * fullResPixelSize;
+                AffineTransform diagFullResToStage = new AffineTransform();
+                diagFullResToStage.translate(imageCenterStage.getX(), imageCenterStage.getY());
+                diagFullResToStage.scale(sX, sY);
+                diagFullResToStage.translate(-fullResCx, -fullResCy);
+                fullResToStage = diagFullResToStage;
+
                 logger.info(
-                        "Multi-slide DIAGONAL macro->stage (no rotation): macroCenter ({}, {}) -> slotCenter ({}, {}); "
-                                + "scale ({}, {}) [check: macroCenter maps to ({}, {})]",
-                        macroCx,
-                        macroCy,
+                        "Multi-slide DIAGONAL entry->stage: image center ({}, {}) -> stage ({}, {}) via R270 anchor; "
+                                + "diagonal scale ({}, {}) [slotCenter=({}, {})]",
+                        fullResCx,
+                        fullResCy,
+                        imageCenterStage.getX(),
+                        imageCenterStage.getY(),
+                        sX,
+                        sY,
                         state.slotCenterStageXY[0],
-                        state.slotCenterStageXY[1],
-                        scaleX,
-                        scaleY,
-                        macroCenterStage.getX(),
-                        macroCenterStage.getY());
-                // DIAGNOSTIC: the full entry->stage matrix. Off-diagonal shear terms near 0
-                // mean it is diagonal (QuPath-X -> stage-X) as intended; large shear terms
-                // mean a rotation is still leaking in.
+                        state.slotCenterStageXY[1]);
+                // DIAGNOSTIC: the full entry->stage matrix. Off-diagonal shear terms near 0 mean
+                // it is diagonal (QuPath-X -> stage-X) as intended.
                 logger.info(
                         "Multi-slide fullRes->stage matrix: m00={}, m01(shearX)={}, m10(shearY)={}, m11={}, "
                                 + "tx={}, ty={} [diagonal when shearX/shearY ~= 0]",

@@ -324,6 +324,15 @@ The `--hint-z` flag tells the server to start its autofocus search near the pred
 > sections 1-2** to describe the diagonal transform as canonical and delete the FOV-swap/Display-note
 > reasoning. Until then, sections 1-2 record the superseded (compensating-pair) model. Entry
 > construction (section 3) and the stage-frame stitch rule are unaffected.
+>
+> **Refinement (2026-07-13).** The R270 does TWO jobs: it fixes orientation AND positions the
+> off-center tissue (the slide sits away from the macro center; the rotation places it near its true
+> stage spot, ~mm). Removing it entirely fixed orientation but threw the image ~22mm out of stage
+> bounds -> validation crash. Corrected `ExistingAlignmentPath` build: use the R270 anchor ONLY to
+> find where the full-res image CENTER lands (~1.3mm-accurate tissue-center estimate), then build a
+> pure DIAGONAL transform (scale = full-res pixel size, preset sign) anchored on that center.
+> Diagonal orientation (QuPath-X -> stage-X) + in-bounds position; refinement corrects the ~1.3mm.
+> On-scope multi-tile ground truth: refined transform is a POSITIVE diagonal at ~0.2509 um/px.
 
 This is the durable model for **rotated slide holders** (e.g. `quad_v`, where each slide is
 mounted 270 deg from the single-slide preset). It will recur for other inserts and camera setups.
