@@ -51,16 +51,6 @@ import qupath.lib.roi.interfaces.ROI;
 public class ExistingAlignmentPath {
     private static final Logger logger = LoggerFactory.getLogger(ExistingAlignmentPath.class);
 
-    /**
-     * Rotation (degrees) applied when rebuilding macro->stage for a multi-slide holder.
-     * Each slide in the quad_v (4-vertical) holder is mounted rotated 270 deg relative to
-     * the single-slide preset's calibration orientation: the landscape Ocus40 macro
-     * (width ~= the slide's 75mm length) maps to the portrait slide on the stage. Applied
-     * only on the multi-slide path (WorkflowState.slotCenterStageXY set); single-slide
-     * alignment keeps the un-rotated preset.
-     */
-    private static final double MULTI_SLIDE_HOLDER_ROTATION_DEG = 270.0;
-
     private final QuPathGUI gui;
     private final WorkflowState state;
 
@@ -396,39 +386,39 @@ public class ExistingAlignmentPath {
         AffineTransform fullResToStage = new AffineTransform(macroToStage);
         fullResToStage.concatenate(fullResToMacro);
 
-        // Multi-slide: rebuild macro->stage from slide geometry instead of using the
-        // single-slide preset's translation.
+        // Multi-slide: rebuild macro->stage as PURE SCALE (diagonal) anchored at the
+        // captured slot center. NO rotation is applied here.
         //
-        // The preset's macro->stage is PURE SCALE (no rotation): stage = S*(macro) + b,
-        // calibrated with one slide in the single-slide holder. Two things are wrong for
-        // a slide in the quad_v (4-vertical) holder:
-        //   1. Position: slide K sits at its own captured slot center, not the preset's
-        //      calibration spot (off by tens of mm -> lands on a different slide).
-        //   2. Orientation: each slide is mounted rotated 270 deg (the landscape macro,
-        //      938x312 ~= the slide's 75mm LENGTH, maps to the PORTRAIT slide on stage),
-        //      which the pure-scale preset does not encode.
-        // A pure-translation re-anchor (commit 813ba8a3) fixed only (1) and put the tissue
-        // ~25mm off, out of bounds. Rebuild the whole macro->stage geometrically:
-        //   stage = slotCenter + R270 * S * (macroPx - macroCenter)
-        // keeping the preset's SCALE magnitude+sign S (same optics/flip), adding the 270
-        // rotation, and anchoring the macro (whole-slide) center to the captured slot
-        // center. Verified numerically against on-scope ground truth: the green box and a
-        // selected tile land INSIDE slide K's green box, within single-tile-refinement
-        // range; single-tile refinement then corrects the few-mm residual.
+        // Why no rotation: the holder rotation (Ocus40 scan -> portrait slide on the stage)
+        // is ALREADY baked into the (rotated N)(flipped XY) acquisition entry's pixels. That
+        // entry is in CAMERA orientation (verified on-scope: the entry matches the live
+        // camera view / the flipped Stage Map, not the raw physical-stage view), and the
+        // camera is bolted with camera-X = stage-X. So on that entry QuPath-X = stage-X and
+        // the entry->stage map is DIAGONAL -- scale plus the preset's flip SIGN, never an
+        // axis swap.
+        //
+        // The earlier build (ef9926e5) added an explicit R270 here. But fullResToMacro above
+        // is pure scale -- it does NOT un-rotate the already-rotated entry -- so that R270
+        // landed on the ENTRY coordinates as a spurious axis swap (measured on-scope from
+        // annotation 11581_35306: QuPath-X -> stage-Y at 0.2505 um/px). TilingUtilities'
+        // name-based FOV-swap then compensated it at the level of stage STEPS: correct stitch
+        // but portrait (90-deg-rotated) tiles that do not match the landscape camera FOV.
+        // Removing the R270 here AND the FOV-swap in TilingUtilities collapses both
+        // compensating errors into one correct result: a diagonal transform (QuPath-X ->
+        // stage-X) and landscape tiles. Keep the slot-center anchor + the preset's scale
+        // magnitude/sign; single-/multi-tile refinement corrects the few-mm residual.
         if (state.slotCenterStageXY != null && state.slotCenterStageXY.length >= 2) {
             BufferedImage macroImg = context.macroContext.displayImage;
             if (macroImg != null) {
                 double macroCx = macroImg.getWidth() / 2.0;
                 double macroCy = macroImg.getHeight() / 2.0;
-                double scaleX = macroToStage.getScaleX(); // preset scale magnitude + sign (~ +macroPixelSize)
+                double scaleX = macroToStage.getScaleX(); // preset scale magnitude + sign (flip)
                 double scaleY = macroToStage.getScaleY();
 
-                // AffineTransform applies calls in reverse: point p ->
-                //   translate(-macroCenter) -> scale(S) -> rotate(270) -> translate(slotCenter)
-                // == slotCenter + R270 * S * (p - macroCenter).
+                // p -> translate(-macroCenter) -> scale(S) -> translate(slotCenter)
+                //   == slotCenter + S * (p - macroCenter).  Diagonal, no rotation.
                 AffineTransform geoMacroToStage = new AffineTransform();
                 geoMacroToStage.translate(state.slotCenterStageXY[0], state.slotCenterStageXY[1]);
-                geoMacroToStage.rotate(Math.toRadians(MULTI_SLIDE_HOLDER_ROTATION_DEG)); // R270: (x,y)->(y,-x)
                 geoMacroToStage.scale(scaleX, scaleY);
                 geoMacroToStage.translate(-macroCx, -macroCy);
 
@@ -439,17 +429,28 @@ public class ExistingAlignmentPath {
                 Point2D macroCenterStage = new Point2D.Double();
                 macroToStage.transform(new Point2D.Double(macroCx, macroCy), macroCenterStage);
                 logger.info(
-                        "Multi-slide geometric macro->stage: macroCenter ({}, {}) -> slotCenter ({}, {}); "
-                                + "scale ({}, {}), rotation {} deg [check: macroCenter maps to ({}, {})]",
+                        "Multi-slide DIAGONAL macro->stage (no rotation): macroCenter ({}, {}) -> slotCenter ({}, {}); "
+                                + "scale ({}, {}) [check: macroCenter maps to ({}, {})]",
                         macroCx,
                         macroCy,
                         state.slotCenterStageXY[0],
                         state.slotCenterStageXY[1],
                         scaleX,
                         scaleY,
-                        MULTI_SLIDE_HOLDER_ROTATION_DEG,
                         macroCenterStage.getX(),
                         macroCenterStage.getY());
+                // DIAGNOSTIC: the full entry->stage matrix. Off-diagonal shear terms near 0
+                // mean it is diagonal (QuPath-X -> stage-X) as intended; large shear terms
+                // mean a rotation is still leaking in.
+                logger.info(
+                        "Multi-slide fullRes->stage matrix: m00={}, m01(shearX)={}, m10(shearY)={}, m11={}, "
+                                + "tx={}, ty={} [diagonal when shearX/shearY ~= 0]",
+                        fullResToStage.getScaleX(),
+                        fullResToStage.getShearX(),
+                        fullResToStage.getShearY(),
+                        fullResToStage.getScaleY(),
+                        fullResToStage.getTranslateX(),
+                        fullResToStage.getTranslateY());
             } else {
                 logger.warn("Multi-slide geometric macro->stage skipped: no display macro image for center reference");
             }

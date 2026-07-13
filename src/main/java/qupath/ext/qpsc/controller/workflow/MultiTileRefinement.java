@@ -265,6 +265,18 @@ public class MultiTileRefinement {
                     };
                     double[] predictedStage =
                             TransformationFunctions.transformQuPathFullResToStage(tileCoords, initialTransform);
+                    // DIAGNOSTIC (2026-07-12 diagonal-transform test): the actual QuPath->stage
+                    // mapping for a real tile. With the fix, QuPath-X should drive stage-X (not
+                    // stage-Y). The first predicted move should land the live view on the picked
+                    // tile; 90-deg-off means the transform is still axis-swapped -- stop and re-check.
+                    logger.info(
+                            "Multi-tile point {}: tile '{}' QuPath centroid ({}, {}) -> predicted stage ({}, {})",
+                            pointNumber,
+                            tile.getName(),
+                            tileCoords[0],
+                            tileCoords[1],
+                            predictedStage[0],
+                            predictedStage[1]);
                     Platform.runLater(() -> centerViewerOnTile(gui, tile));
 
                     // Stage move + SIFT are socket I/O: run off the FX thread.

@@ -311,6 +311,20 @@ The `--hint-z` flag tells the server to start its autofocus search near the pred
 
 ## Rotated stage inserts: camera-vs-stage tiling geometry
 
+> **CORRECTION IN PROGRESS (2026-07-12, pending on-scope verification).** Sections 1-2 below
+> describe a `genuine rotation` in the QuPath->stage transform, a FOV-swap to pre-compensate it,
+> and portrait tiles as "correct." On-scope measurement (session `2026-07-12`, annotation
+> `11581_35306`: QuPath-X -> stage-Y at 0.2505 um/px) showed that rotation is **spurious**: the
+> `(rotated N)(flipped XY)` entry is in **camera orientation** (camera-X = QuPath-X = stage-X), so
+> entry->stage should be **diagonal**, not axis-swapped. The axis swap came from an explicit `R270`
+> in `ExistingAlignmentPath` (`ef9926e5`) landing on the already-rotated entry via a pure-scale
+> `fullResToMacro`; `TilingUtilities`' FOV-swap then cancelled it at the level of stage *steps* ->
+> correct stitch but **portrait tiles rotated 90 deg from the camera**. Both were removed together
+> (diagonal transform + no FOV-swap => landscape tiles). **If the 2026-07-12 test confirms, rewrite
+> sections 1-2** to describe the diagonal transform as canonical and delete the FOV-swap/Display-note
+> reasoning. Until then, sections 1-2 record the superseded (compensating-pair) model. Entry
+> construction (section 3) and the stage-frame stitch rule are unaffected.
+
 This is the durable model for **rotated slide holders** (e.g. `quad_v`, where each slide is
 mounted 270 deg from the single-slide preset). It will recur for other inserts and camera setups.
 
