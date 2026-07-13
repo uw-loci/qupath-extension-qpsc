@@ -190,7 +190,7 @@ Select your preferred method (Streaming or Sweep) via the radio buttons in the A
 - **Streaming** on rigs with stages capable of slow continuous motion (e.g., PPM)
 - **Sweep** on rigs with stages that cannot move slowly (e.g., OWS3), or for long-exposure modalities where Streaming's blur budget is restrictive
 
-**Live Viewer dropdown behavior:** The focus range dropdown ("Config" or explicit µm values) affects Streaming AF only. Streaming AF honors explicit dropdown overrides to let you widen the scan window on-the-fly. Sweep Autofocus always reads `sweep_range_um` from the YAML and ignores dropdown overrides.
+**Live Viewer dropdown behavior:** The focus range dropdown ("Config" or explicit um values) affects Streaming AF only. Streaming AF honors explicit dropdown overrides to let you widen the scan window on-the-fly. Sweep Autofocus always reads `sweep_range_um` from the YAML and ignores dropdown overrides.
 
 **YAML setting (server-side):** `stage.streaming_af.enabled: false` in `config_<scope>.yml` is a separate, server-side guard, independent of the dialog radio. When false, the server refuses streaming-AF requests outright. The dialog radio controls which method the *client* Live Viewer button sends; the YAML flag controls what the *server* does with a streaming request. On a rig where streaming AF genuinely cannot work (e.g. OWS3, whose stage cannot do slow continuous motion), keep the YAML flag false *and* set the dialog radio to Sweep.
 
@@ -364,7 +364,7 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `texture_threshold` | Min texture for tissue detection | 0.005-0.030 |
 | `tissue_area_threshold` | Min tissue coverage fraction | 0.05-0.30 |
 | `sweep_range_um` | Z range for sweep autofocus | 6-10 |
-| `sweep_n_steps` | Steps in sweep autofocus | 6-10 |
+| `sweep_n_steps` | Steps in sweep autofocus | 4-8 (per 10 um), scale up ~1 per um for wider ranges |
 | `edge_retries` | Additional sweep attempts on boundary peaks. Applies to BOTH the dense pre-acquisition AF and the mid-acquisition sweep autofocus. Each retry doubles the search range and shifts the center toward the inferred peak direction; sweeps are clamped to the configured stage Z limits, and retries that have nowhere new to search are skipped. (0=disable, 2=default) | 0-3 |
 | `gap_index_multiplier` | Force AF after this x `n_tiles` without AF (safety net) | 2-5 (default 3) |
 | `gap_spatial_multiplier` | Force AF when nearest AF exceeds this x grid spacing (fragment safety net) | 1.5-3.0 (default 2.0) |

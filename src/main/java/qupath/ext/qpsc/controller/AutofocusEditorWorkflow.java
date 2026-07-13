@@ -196,7 +196,8 @@ public class AutofocusEditorWorkflow {
             if (sweepNSteps < 3) {
                 warnings.add("sweep_n_steps must be at least 3 for peak detection");
             } else if (sweepNSteps > 50) {
-                warnings.add("sweep_n_steps > 50 may be unnecessarily slow (typical: 4-8 for a 10 um sweep, ~1 per um for wider sweeps)");
+                warnings.add(
+                        "sweep_n_steps > 50 may be unnecessarily slow (typical: 4-8 for a 10 um sweep, ~1 per um for wider sweeps)");
             }
 
             if (edgeRetries < 0) {

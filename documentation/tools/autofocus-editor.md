@@ -76,7 +76,7 @@ The Sweep Autofocus section configures a periodic Z sweep that monitors focus dr
 | Parameter | Type | Default | Description |
 |-----------|------|---------|-------------|
 | Sweep range (um) | Spinner | 10 | Total Z range for the sweep (`sweep_range_um`) |
-| Z samples | Spinner | 6 | Number of Z positions to sample during each sweep (`sweep_n_steps`) |
+| Z samples | Spinner | 6 | Number of Z positions to sample during each sweep (`sweep_n_steps`). Typical range: 4-50. Use ~1 sample per um for wider sweeps (e.g., 20-30 samples for a 20-30 um range). |
 | Edge retries | Spinner | 2 | Extra attempts when the best focus is at the sweep boundary (`edge_retries`) |
 | Score metric | ComboBox | normalized_variance | Focus quality metric used to evaluate each Z position |
 
