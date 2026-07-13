@@ -170,6 +170,8 @@ If streaming fails on any gate, the failure dialog appears with the diagnostic r
 
 If no peak is found but a focus slope is detected (monotonic profile after edge retries), the stage is left at the best Z found rather than returning to the starting position.
 
+**What you see during an edge retry (the "pop out of focus").** When the metric peaks at a window edge, the true focus is outside the scanned range, so the retry shifts the whole search window one full range in the inferred direction (no overlap with the previous window) and scans there. In the Live Viewer you watch the stage physically travel away from your current focus and the image go badly out of focus mid-scan, then snap back sharp when a peak is found (or bracketed between two windows). That transient excursion is normal -- it is the scan exploring Z it has not seen yet. It should **end sharp**; if the image instead *settles* out of focus, that is a genuine miss (a large XY move can put focus well outside the configured window -- widen the range or use Sweep Autofocus for far-from-focus recovery, per below). This is also why the excursion is larger the wider your `sweep_range_um` and the farther focus has drifted.
+
 ### When it helps
 
 - **Tilted samples** where the current sweep window is marginal but a wider range would be prohibitively slow stepped
