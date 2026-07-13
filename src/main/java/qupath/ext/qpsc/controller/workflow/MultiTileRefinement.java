@@ -401,28 +401,57 @@ public class MultiTileRefinement {
         header.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
 
         Label instructions = new Label("Nudge the stage (or use Stage Control) so the live view matches the "
-                + "selected tile, then click Capture. Or run Auto-Align (SIFT) again. Skip to leave this point out.");
+                + "selected tile, then click Capture. Or run Auto-Align (SIFT) to snap to it automatically. "
+                + "Skip to leave this point out.");
         instructions.setWrapText(true);
+
+        // Persistent SIFT result. autoAlign returns [offsetX, offsetY, inliers, confidence];
+        // surface all of it here (single-tile only toasts the confidence). SIFT tuning lives in
+        // Preferences > SIFT Auto-Alignment.
+        Label siftResultLabel = new Label("SIFT: not run for this point yet.");
+        siftResultLabel.setWrapText(true);
+        siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
+        Label settingsHint = new Label(
+                "SIFT settings: Preferences > SIFT Auto-Alignment (search margin, confidence threshold, normalization).");
+        settingsHint.setWrapText(true);
+        settingsHint.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
 
         Button siftButton = new Button("Auto-Align (SIFT)");
         siftButton.setOnAction(e -> {
             siftButton.setDisable(true);
+            siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
+            siftResultLabel.setText("SIFT: running...");
             new Thread(
                             () -> {
                                 try {
                                     double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
-                                    String msg = (result != null && result.length >= 4)
-                                            ? String.format(
-                                                    "SIFT ran (confidence %.0f%%). Capture if it looks right.",
-                                                    result[3] * 100)
-                                            : "SIFT did not find a confident match; nudge manually.";
                                     Platform.runLater(() -> {
-                                        Dialogs.showInfoNotification("Auto-Align", msg);
+                                        if (result != null && result.length >= 4) {
+                                            double conf = result[3];
+                                            siftResultLabel.setStyle(
+                                                    conf >= 0.5
+                                                            ? "-fx-text-fill: #1c8552; -fx-font-weight: bold;"
+                                                            : "-fx-text-fill: #a5640c; -fx-font-weight: bold;");
+                                            siftResultLabel.setText(String.format(
+                                                    "SIFT: confidence %.0f%%, %d inliers, moved (%.1f, %.1f) um. "
+                                                            + "Capture if the live view matches the tile.",
+                                                    conf * 100, (int) result[2], result[0], result[1]));
+                                        } else {
+                                            siftResultLabel.setStyle("-fx-text-fill: #c0362c; -fx-font-weight: bold;");
+                                            siftResultLabel.setText(
+                                                    "SIFT: no confident match. Nudge the stage manually, "
+                                                            + "then Capture -- or try Auto-Align again.");
+                                        }
                                         siftButton.setDisable(false);
                                     });
                                 } catch (Exception ex) {
                                     logger.warn("Manual-dialog SIFT failed: {}", ex.getMessage());
-                                    Platform.runLater(() -> siftButton.setDisable(false));
+                                    Platform.runLater(() -> {
+                                        siftResultLabel.setStyle("-fx-text-fill: #c0362c;");
+                                        siftResultLabel.setText("SIFT failed: " + ex.getMessage()
+                                                + " -- nudge manually, then Capture.");
+                                        siftButton.setDisable(false);
+                                    });
                                 }
                             },
                             "MultiTile-ManualSIFT-" + pointNumber)
@@ -462,7 +491,7 @@ public class MultiTileRefinement {
         HBox buttons = new HBox(10, siftButton, captureButton, skipButton);
         buttons.setAlignment(Pos.CENTER_LEFT);
 
-        content.getChildren().addAll(header, instructions, buttons);
+        content.getChildren().addAll(header, instructions, siftResultLabel, buttons, settingsHint);
         dialog.setScene(new Scene(content));
         dialog.setOnCloseRequest(e -> {
             if (!future.isDone()) {
