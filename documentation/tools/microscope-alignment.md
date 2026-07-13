@@ -137,7 +137,7 @@ The slot-center seed (from holder calibration) speeds up multi-slide runs by mov
 
 SIFT auto-alignment works best on tissue with visible structural features. It can struggle on blank areas, very uniform tissue, or regions with repetitive patterns; in those cases use manual alignment.
 
-The same Auto-Align (SIFT) helper is also available in the post-alignment single-tile refinement step of the **Existing Image Workflow**. That dialog offers "Save Refined Position" (disabled until SIFT runs), "Skip Refinement" (keeps the predicted position without refining), and "New Alignment" buttons, since that step writes the per-slide alignment JSON.
+The same Auto-Align (SIFT) helper is also available in the post-alignment single-tile refinement step of the **Existing Image Workflow**. An embedded capture pane appears with "Capture position" (disabled until SIFT runs), "Skip point" (keeps the predicted position without refining), and "Create New Alignment" buttons, since that step writes the per-slide alignment JSON.
 
 **Trust SIFT mode** (advanced): Enable via the `trustSiftAlignment` preference (see [Preferences](../PREFERENCES.md#sift-auto-alignment)). When enabled, the post-alignment single-tile refinement step runs SIFT automatically without showing the manual dialog. If confidence (inlier ratio) exceeds the configurable threshold (default 50%), the position is auto-accepted and the workflow continues unattended. Falls back to manual if SIFT fails or confidence is too low. (The 3-point alignment confirm step always shows the dialog -- there are no auto-accept semantics there because each click is the human committing a calibration point.)
 

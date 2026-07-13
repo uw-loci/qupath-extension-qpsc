@@ -46,9 +46,9 @@ public class SingleTileRefinement {
     /**
      * Result of refinement containing both the transform and the selected tile.
      *
-     * <p>{@code accepted} distinguishes a user-confirmed refinement (Save Refined
-     * Position, or SIFT auto-accept above the confidence threshold) from a
-     * pass-through (Skip Refinement, X-close, or tile-deselection): pass-through
+     * <p>{@code accepted} distinguishes a user-confirmed refinement (Capture
+     * position, or SIFT auto-accept above the confidence threshold) from a
+     * pass-through (Skip point, X-close, or tile-deselection): pass-through
      * returns the initial transform unchanged. Consumers must check
      * {@code accepted} before persisting state -- writing the per-slide JSON on a
      * skip overwrites its {@code flipMacroX/Y} provenance and the alignment
@@ -357,8 +357,8 @@ public class SingleTileRefinement {
                         + "Click 'Auto-Align (SIFT)' to refine the position automatically.\n"
                         + "If matching fails, use the microscope controls (or Stage Control dialog)\n"
                         + "to nudge the stage so the live view matches the tile, then run SIFT again.\n\n"
-                        + "'Save Refined Position' becomes available once SIFT has run successfully.\n"
-                        + "If you want to keep the predicted position without refining, click 'Skip Refinement'.");
+                        + "'Capture position' becomes available once SIFT has run successfully.\n"
+                        + "If you want to keep the predicted position without refining, click 'Skip point'.");
         instructionLabel.setWrapText(true);
 
         // Shared capture pane: tile info + Restore + Auto-Align(SIFT) + color-coded
