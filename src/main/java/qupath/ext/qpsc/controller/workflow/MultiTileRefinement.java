@@ -59,6 +59,20 @@ public class MultiTileRefinement {
     private static final int MIN_POINTS = 2;
 
     /**
+     * Plausibility thresholds for the recovered correction. A refinement of genuine slide
+     * play in a holder slot is a few degrees of rotation and ~1.0 scale. A much larger
+     * correction means the base alignment does not match the stage -- most importantly, a
+     * rotation near 90/180/270 deg is the signature of a transform that is still axis-swapped
+     * (e.g. a stale pre-fix per-slide JSON, or the diagonal-transform fix not taking). Warn at
+     * the 2-point mark (the earliest the rotation/scale are known) so the operator can stop
+     * before wasting more points. Warn-only, not a hard block -- the operator may know better.
+     */
+    private static final double ROTATION_WARN_DEG = 10.0;
+
+    private static final double SCALE_WARN_LOW = 0.9;
+    private static final double SCALE_WARN_HIGH = 1.1;
+
+    /**
      * One measured correspondence for the similarity solve: the tile's QuPath centroid and
      * the stage position it actually landed at. The centroid (not a precomputed predicted
      * stage) is stored so the solve can recompute predicted positions against the ORIGINAL
@@ -169,13 +183,35 @@ public class MultiTileRefinement {
                 return;
             }
             TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
-            diagLabel.setText(String.format(
-                    "Correction from %d points: rotation %.2f deg, scale %.4f, fit RMS %.1f um.%s",
-                    fit.pointCount(),
-                    fit.rotationDegrees(),
-                    fit.scale(),
-                    fit.rmsResidualUm(),
-                    fit.rmsResidualUm() > 25.0 ? "  High RMS -- check the captured points before saving." : ""));
+            boolean rotationSuspect = Math.abs(fit.rotationDegrees()) > ROTATION_WARN_DEG;
+            boolean scaleSuspect = fit.scale() < SCALE_WARN_LOW || fit.scale() > SCALE_WARN_HIGH;
+            if (rotationSuspect || scaleSuspect) {
+                // The correction is far larger than slide play -> the base alignment does not
+                // match the stage. Flag it hard (red) at the earliest point it is knowable.
+                logger.warn(
+                        "Multi-tile correction implausible after {} points: rotation {} deg, scale {} "
+                                + "-- base alignment likely does not match the stage (axis swap / wrong orientation)",
+                        fit.pointCount(),
+                        String.format("%.2f", fit.rotationDegrees()),
+                        String.format("%.4f", fit.scale()));
+                diagLabel.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold;");
+                diagLabel.setText(String.format(
+                        "WARNING: correction is rotation %.1f deg, scale %.3f -- much larger than slide play. "
+                                + "The base alignment likely does NOT match the stage (a rotation near 90/180/270 "
+                                + "means the transform is still axis-swapped -- e.g. a stale per-slide alignment, or "
+                                + "the wrong entry orientation). Re-check the alignment before saving; Solve is still "
+                                + "available if you are sure.",
+                        fit.rotationDegrees(), fit.scale()));
+            } else {
+                diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+                diagLabel.setText(String.format(
+                        "Correction from %d points: rotation %.2f deg, scale %.4f, fit RMS %.1f um.%s",
+                        fit.pointCount(),
+                        fit.rotationDegrees(),
+                        fit.scale(),
+                        fit.rmsResidualUm(),
+                        fit.rmsResidualUm() > 25.0 ? "  High RMS -- check the captured points before saving." : ""));
+            }
             solveButton.setDisable(false);
         };
 
