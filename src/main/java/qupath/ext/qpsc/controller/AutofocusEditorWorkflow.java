@@ -195,8 +195,8 @@ public class AutofocusEditorWorkflow {
 
             if (sweepNSteps < 3) {
                 warnings.add("sweep_n_steps must be at least 3 for peak detection");
-            } else if (sweepNSteps > 20) {
-                warnings.add("sweep_n_steps > 20 may be unnecessarily slow (typical range: 4-8)");
+            } else if (sweepNSteps > 50) {
+                warnings.add("sweep_n_steps > 50 may be unnecessarily slow (typical: 4-8 for a 10 um sweep, ~1 per um for wider sweeps)");
             }
 
             if (edgeRetries < 0) {
@@ -1460,7 +1460,7 @@ public class AutofocusEditorWorkflow {
         sweepRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
 
         Label sweepNStepsLabel = new Label("Z samples:");
-        Spinner<Integer> sweepNStepsSpinner = new Spinner<>(3, 20, 6, 1);
+        Spinner<Integer> sweepNStepsSpinner = new Spinner<>(3, 100, 6, 1);
         sweepNStepsSpinner.setEditable(true);
         sweepNStepsSpinner.setPrefWidth(100);
         sweepNStepsSpinner.setTooltip(new Tooltip("Number of Z positions sampled during sweep autofocus.\n\n"
