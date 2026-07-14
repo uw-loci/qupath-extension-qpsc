@@ -120,7 +120,7 @@ Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the
 
 1. Pick the carrier in the assignment dialog.
 2. Configure slide rotations:
-   - **Rotate all slides** (dropdown at the top of the dialog): Set every slot's rotation at once when slides are usually mounted the same way. Individual per-slot pickers below override this for exceptions.
+   - **Rotate all slides** (dropdown at the top of the dialog): Set every slot's rotation at once when slides are usually mounted the same way. The dropdown defaults based on the insert type: **horizontal inserts** (e.g. `single_h`) default to **0°**, while **vertical inserts** (e.g. `quad_v`, `single_v`) use your last-saved quarter-turn choice. Individual per-slot pickers below override this for exceptions.
 3. For each slot, assign one project macro entry and set its **Rotation** to match how the slide is physically mounted:
    - **0°** – slide is mounted in its normal orientation
    - **90°** – slide is rotated 90° clockwise

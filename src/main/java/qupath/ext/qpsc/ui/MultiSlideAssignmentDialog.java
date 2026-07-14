@@ -186,6 +186,11 @@ public final class MultiSlideAssignmentDialog {
         // rotation at once; the per-slot pickers below override individual exceptions.
         // suppressPreview coalesces the bulk update into a single preview refresh.
         boolean[] suppressPreview = {false};
+        // Guards programmatic, insert-driven updates of "Rotate all" so they do NOT persist:
+        // the saved rotation is reserved for the user's explicit quarter-turn choice (used as
+        // the default for VERTICAL inserts), and must not be clobbered when switching to a
+        // horizontal insert auto-resets the control to 0.
+        boolean[] suppressRotatePersist = {false};
         ChoiceBox<Integer> rotateAllBox = new ChoiceBox<>();
         rotateAllBox.getItems().addAll(0, 90, 180, 270);
         // Restore the last-used rotation (slides are usually mounted the same way).
@@ -268,7 +273,9 @@ public final class MultiSlideAssignmentDialog {
         // Rotate all: set every slot's rotation at once (coalesced into one preview refresh).
         rotateAllBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> {
             if (nv == null) return;
-            PersistentPreferences.setMultiSlideRotateAll(nv);
+            if (!suppressRotatePersist[0]) {
+                PersistentPreferences.setMultiSlideRotateAll(nv);
+            }
             suppressPreview[0] = true;
             for (SlotRow r : slotRows) {
                 r.rotationBox.getSelectionModel().select(nv);
@@ -282,6 +289,18 @@ public final class MultiSlideAssignmentDialog {
             slotRows.clear();
             StageInsert selected = carrierBox.getValue();
             if (selected == null) return;
+            // Default the macro rotation to what THIS insert's slot orientation implies: a
+            // landscape Ocus40 macro needs no rotation for a horizontal slot (single_h) but a
+            // quarter-turn for a vertical slot (single_v, quad_v). Sync the "Rotate all"
+            // control (rows below inherit it) WITHOUT persisting, so switching to a horizontal
+            // insert stops re-applying a sticky 270 from earlier quad_v setup. The picker stays
+            // editable for physical exceptions.
+            int insertDefaultRot = defaultRotationForInsert(selected);
+            if (!java.util.Objects.equals(rotateAllBox.getValue(), Integer.valueOf(insertDefaultRot))) {
+                suppressRotatePersist[0] = true;
+                rotateAllBox.getSelectionModel().select(Integer.valueOf(insertDefaultRot));
+                suppressRotatePersist[0] = false;
+            }
             int row = 0;
             slotGrid.add(new Label("Slot"), 0, row);
             slotGrid.add(new Label("Project image"), 1, row);
@@ -492,6 +511,35 @@ public final class MultiSlideAssignmentDialog {
      * render time. Returns null if the entry has no macro. Opens the server, so call off the
      * FX thread.
      */
+    /**
+     * The macro rotation an insert's slots naturally imply for a landscape (Ocus40) macro.
+     *
+     * <p>Slot orientation comes from the insert geometry itself (a slot's own width vs
+     * height): a HORIZONTAL slot (wider than tall, e.g. single_h) fits the landscape macro
+     * with no rotation, so the default is {@code 0}; a VERTICAL slot (taller than wide, e.g.
+     * single_v, quad_v) needs a quarter-turn. Which quarter-turn (90 vs 270) depends on how
+     * the slide is physically mounted and cannot be derived from geometry, so the last-used
+     * quarter-turn preference is reused for vertical inserts (falling back to 270 when the
+     * saved value is not a quarter-turn). This is only a DEFAULT; the per-slot picker still
+     * overrides it for exceptions.
+     */
+    static int defaultRotationForInsert(StageInsert insert) {
+        if (insert == null) {
+            return 0;
+        }
+        List<StageInsert.SlidePosition> slots = insert.getSlideSamples();
+        if (slots == null || slots.isEmpty()) {
+            return 0;
+        }
+        StageInsert.SlidePosition first = slots.get(0);
+        boolean verticalSlot = first.getHeightUm() > first.getWidthUm();
+        if (!verticalSlot) {
+            return 0;
+        }
+        int saved = PersistentPreferences.getMultiSlideRotateAll();
+        return (saved == 90 || saved == 270) ? saved : 270;
+    }
+
     private static BufferedImage loadSlotMacro(ProjectImageEntry<BufferedImage> entry) {
         BufferedImage raw = MacroImageUtility.readMacroFromEntry(entry);
         if (raw == null) {
