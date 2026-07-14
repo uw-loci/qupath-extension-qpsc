@@ -6,7 +6,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -50,6 +49,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.AutofocusEditorWorkflow;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
+import qupath.ext.qpsc.controller.workflow.SweepAutofocusRunner;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -1558,27 +1558,20 @@ public class LiveViewerWindow {
         Thread sweepThread = new Thread(() -> {
             String errorMsg = null;
             try {
-                controller.withAllLiveViewingOff(() -> {
-                    Map<String, String> result =
-                            controller.getSocketClient().testAdaptiveAutofocus(configPath, outputPath, objective);
-                    if ("true".equals(result.get("cancelled"))) {
-                        // User cancelled; server restored Z. Not a failure.
-                        Platform.runLater(() -> updateStatusHeld("Sweep Autofocus cancelled (Z restored)"));
-                        return;
-                    }
-                    String z0 = result.get("initial_z");
-                    String z1 = result.get("final_z");
-                    String dz = result.get("z_shift");
-                    // Record AF result on the Z-bar tic history
-                    if (z1 != null) {
-                        try {
-                            AfHistoryService.add(Double.parseDouble(z1));
-                        } catch (NumberFormatException ignored) {
-                        }
-                    }
+                // Shared sweep run + parse + AF-history core. The button-state management, cancel
+                // path, and status text below are the only Live-Viewer-specific shell.
+                SweepAutofocusRunner.SweepResult result =
+                        SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
+                if (result.cancelled()) {
+                    // User cancelled; server restored Z. Not a failure.
+                    Platform.runLater(() -> updateStatusHeld("Sweep Autofocus cancelled (Z restored)"));
+                } else {
+                    String z0 = result.initialZ();
+                    String z1 = result.finalZ();
+                    String dz = result.zShift();
                     Platform.runLater(() -> updateStatusHeld(
                             String.format("Sweep Autofocus complete: Z shifted %s um (%s -> %s)", dz, z0, z1)));
-                });
+                }
             } catch (IOException ex) {
                 errorMsg = ex.getMessage();
                 logger.error("Sweep Autofocus failed: {}", errorMsg, ex);

@@ -177,22 +177,23 @@ class SiftCapturePane extends VBox {
         new Thread(
                         () -> {
                             try {
-                                double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
-                                boolean accept =
-                                        autoAccept && result != null && result.length >= 4 && result[3] >= threshold;
-                                double[] measured = accept
-                                        ? MicroscopeController.getInstance().getStagePositionXY()
-                                        : null;
-                                final double[] fMeasured = measured;
+                                // Shared trust-SIFT core. When not auto-accepting, an unreachable
+                                // threshold yields the raw SIFT result for the label without reading
+                                // (or accepting) a stage position -- exactly the previous
+                                // "accept = autoAccept && ..." semantics.
+                                AutoAlignOutcome outcome =
+                                        attemptAutoAccept(gui, tile, autoAccept ? threshold : Double.POSITIVE_INFINITY);
+                                double[] result = outcome.siftResult();
+                                double[] measured = outcome.measuredStageXY();
                                 Platform.runLater(() -> {
                                     renderSiftResult(result);
                                     siftButton.setDisable(false);
                                     if (gateCaptureOnSift && result != null && result.length >= 2) {
                                         captureButton.setDisable(false);
                                     }
-                                    if (accept && !resultFuture.isDone()) {
+                                    if (measured != null && !resultFuture.isDone()) {
                                         logger.info("SiftCapturePane: SIFT auto-accepted (confidence {})", result[3]);
-                                        resultFuture.complete(fMeasured);
+                                        resultFuture.complete(measured);
                                     }
                                 });
                             } catch (Exception ex) {
@@ -207,6 +208,45 @@ class SiftCapturePane extends VBox {
                         },
                         "SiftCapturePane-SIFT")
                 .start();
+    }
+
+    /**
+     * Outcome of {@link #attemptAutoAccept}: the raw SIFT result and, when the match was accepted,
+     * the measured stage position.
+     *
+     * @param siftResult raw {@code [offsetX, offsetY, inliers, confidence]} from
+     *     {@link SiftAutoAlignHelper#autoAlign} (may be {@code null} on no match)
+     * @param measuredStageXY the stage {@code [x, y]} read after an accepted match, or {@code null}
+     *     when confidence was below threshold (or there was no match)
+     */
+    record AutoAlignOutcome(double[] siftResult, double[] measuredStageXY) {
+        boolean accepted() {
+            return measuredStageXY != null;
+        }
+    }
+
+    /**
+     * Shared trust-SIFT core: runs {@link SiftAutoAlignHelper#autoAlign}, applies the confidence
+     * gate ({@code result[3] >= threshold}), and -- only when the gate passes -- reads the resulting
+     * stage position. This is the single home for the run + threshold + measure logic that this
+     * pane's auto-accept path and {@link SingleTileRefinement}'s pre-dialog trust-SIFT fast path
+     * both use. Blocking (SIFT match + a stage read); call it off the FX thread.
+     *
+     * @param gui QuPath GUI (for the WSI server / SIFT)
+     * @param tile the target reference tile
+     * @param threshold minimum SIFT confidence (0.0-1.0) to accept; pass an unreachable value (e.g.
+     *     {@link Double#POSITIVE_INFINITY}) to run SIFT for its raw result without accepting or
+     *     reading a stage position
+     * @return an {@link AutoAlignOutcome} carrying the raw result and (when accepted) the measured
+     *     stage {@code [x, y]}
+     * @throws Exception if the SIFT match or stage read fails (propagated for the caller to handle,
+     *     exactly as the inline versions did inside their {@code catch (Exception)} blocks)
+     */
+    static AutoAlignOutcome attemptAutoAccept(QuPathGUI gui, PathObject tile, double threshold) throws Exception {
+        double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
+        boolean accept = result != null && result.length >= 4 && result[3] >= threshold;
+        double[] measured = accept ? MicroscopeController.getInstance().getStagePositionXY() : null;
+        return new AutoAlignOutcome(result, measured);
     }
 
     /** Reads the stage position off the FX thread and completes with it (manual Capture). */

@@ -1,7 +1,6 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.io.IOException;
-import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import org.slf4j.Logger;
@@ -10,7 +9,6 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.ui.liveviewer.AfHistoryService;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -151,34 +149,21 @@ public final class SlotJumpAutofocus {
         Thread afThread = new Thread(
                 () -> {
                     String errorMsg = null;
-                    // Per-run holder for the server "cancelled" result across the lambda boundary.
-                    boolean[] cancelledHolder = {false};
+                    boolean cancelled = false;
                     try {
-                        // Mirror the Live Viewer sweep path: run with all live viewing off so the
-                        // server has exclusive camera access. Safe with no live viewer open (it
-                        // stops nothing and restores nothing).
-                        controller.withAllLiveViewingOff(() -> {
-                            Map<String, String> result = controller
-                                    .getSocketClient()
-                                    .testAdaptiveAutofocus(configPath, outputPath, objective);
-                            if ("true".equals(result.get("cancelled"))) {
-                                cancelledHolder[0] = true;
-                                return;
-                            }
-                            String z1 = result.get("final_z");
-                            if (z1 != null) {
-                                try {
-                                    AfHistoryService.add(Double.parseDouble(z1));
-                                } catch (NumberFormatException ignored) {
-                                    // history is advisory only
-                                }
-                            }
+                        // Shared sweep run + parse + AF-history core (identical to the Live Viewer
+                        // autofocus button). This thread + the StatusSink phases below are the only
+                        // slot-jump-specific shell.
+                        SweepAutofocusRunner.SweepResult result =
+                                SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
+                        cancelled = result.cancelled();
+                        if (!cancelled) {
                             logger.info(
                                     "Slot-jump AF complete: z_shift={} um ({} -> {})",
-                                    result.get("z_shift"),
-                                    result.get("initial_z"),
-                                    z1);
-                        });
+                                    result.zShift(),
+                                    result.initialZ(),
+                                    result.finalZ());
+                        }
                     } catch (IOException ex) {
                         errorMsg = ex.getMessage();
                         logger.error("Slot-jump AF failed: {}", errorMsg, ex);
@@ -186,7 +171,7 @@ public final class SlotJumpAutofocus {
                         errorMsg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
                         logger.error("Slot-jump AF failed: {}", errorMsg, ex);
                     }
-                    if (errorMsg != null || cancelledHolder[0]) {
+                    if (errorMsg != null || cancelled) {
                         publish("Focus failed -- align manually", true);
                     } else {
                         publish("Ready", false);

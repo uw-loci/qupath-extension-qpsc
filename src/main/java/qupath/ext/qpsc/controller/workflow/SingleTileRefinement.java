@@ -250,7 +250,13 @@ public class SingleTileRefinement {
             new Thread(
                             () -> {
                                 try {
-                                    double[] result = SiftAutoAlignHelper.autoAlign(gui, selectedTile);
+                                    // Shared trust-SIFT core (same run + threshold + measure the
+                                    // embedded capture pane uses). Kept on a pre-dialog thread so a
+                                    // successful auto-accept completes WITHOUT building the refinement
+                                    // dialog -- no dialog flash.
+                                    SiftCapturePane.AutoAlignOutcome outcome =
+                                            SiftCapturePane.attemptAutoAccept(gui, selectedTile, confidenceThreshold);
+                                    double[] result = outcome.siftResult();
                                     if (result != null && result.length >= 4) {
                                         double confidence = result[3]; // 4th element = confidence
                                         logger.info(
@@ -258,10 +264,9 @@ public class SingleTileRefinement {
                                                 result[0],
                                                 result[1],
                                                 confidence);
-                                        if (confidence >= confidenceThreshold) {
+                                        double[] refinedPos = outcome.measuredStageXY();
+                                        if (refinedPos != null) {
                                             // Auto-accept: compute refined transform and complete
-                                            double[] refinedPos = MicroscopeController.getInstance()
-                                                    .getStagePositionXY();
                                             AffineTransform refined =
                                                     TransformationFunctions.addTranslationToScaledAffine(
                                                             initialTransform, tileCoords, refinedPos);
@@ -390,8 +395,10 @@ public class SingleTileRefinement {
         // Capture -> translation-only refined transform; Skip -> pass through. The pane
         // returns the measured stage position; the transform math stays here, unchanged
         // (addTranslationToScaledAffine), so single-tile's apply/save contract is
-        // preserved exactly. Auto-run is left OFF: the trust-SIFT auto-accept fast path
-        // is still handled in performTileRefinement before this dialog is built.
+        // preserved exactly. Auto-run is left OFF here: the trust-SIFT auto-accept fast path
+        // runs in performTileRefinement BEFORE this dialog is built (so a successful
+        // auto-accept never flashes the dialog), sharing SiftCapturePane.attemptAutoAccept
+        // -- the same run + threshold + measure core this pane's auto-run path uses.
         capturePane
                 .capture(false, 0.0)
                 .whenComplete((measured, ex) -> Platform.runLater(() -> {
