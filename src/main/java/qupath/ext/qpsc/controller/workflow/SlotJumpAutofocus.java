@@ -9,6 +9,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -16,9 +17,14 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  * Autofocus-on-slot-jump for the multi-slide alignment step.
  *
  * <p>Fires the Live Viewer's autofocus once the stage has reached a slot, BEFORE the operator
- * aligns, so the tissue is already in focus. Reuses the existing SWEEP autofocus socket call
- * ({@code testAdaptiveAutofocus} / TESTADAF) -- no command-server change. It honors the same
- * {@code LiveViewerAutofocusMethod} preference the Live Viewer button reads.
+ * aligns, so the tissue is already in focus. Honors the {@code LiveViewerAutofocusMethod}
+ * preference the Live Viewer button reads: when it is STREAMING and a Live Viewer stream is open,
+ * it runs the STREAMING focus scan ({@code streamingFocus} / STRMAFZ) -- a full focus SEARCH,
+ * which is what a slot jump needs since each slide can be at a very different Z. When the
+ * preference is SWEEP, or no stream is open, it falls back to the SWEEP call
+ * ({@code testAdaptiveAutofocus} / TESTADAF), which is only a narrow-range DRIFT CHECK and will
+ * report success without finding focus if the current Z is far off. Neither path changes the
+ * command server.
  *
  * <p><b>Settle-gate.</b> The caller ({@code AffineTransformationController}) issues the slot
  * auto-move via {@link MicroscopeController#moveStageXY} immediately before calling
@@ -32,9 +38,9 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  * <p>Autofocus is an aid, not a gate: the returned future ALWAYS completes (even on AF failure),
  * so the alignment step proceeds to tile selection regardless.
  *
- * <p>STREAMING method note: if the pref is STREAMING, this increment falls back to SWEEP and
- * logs it. Standing up a preview stream for a streaming focus during the batch is deferred --
- * see {@code TODO(increment: streaming-af-preview)}.
+ * <p>Streaming path keeps the live stream RUNNING (the server-side scan analyzes streamed frames),
+ * unlike the SWEEP path which stops all live viewing for exclusive camera access. Both run on the
+ * same {@code MultiSlide-SlotJumpAF} daemon thread and complete the returned future when done.
  */
 public final class SlotJumpAutofocus {
 
@@ -129,40 +135,85 @@ public final class SlotJumpAutofocus {
         String outputPath = TestAutofocusWorkflow.getDefaultOutputPath();
 
         String method = PersistentPreferences.getLiveViewerAutofocusMethod();
-        if (!"SWEEP".equals(method)) {
-            // STREAMING (or anything non-SWEEP): fall back to SWEEP for the batch. Reusing an
-            // already-open Live Viewer streaming-focus path (and standing up a new preview stream)
-            // is deferred -- there is no clean synchronous completion hook to gate the settle
-            // sequence on, and the streaming controller lives inside the LiveViewerWindow instance.
-            // TODO(increment: streaming-af-preview): reuse an open Live Viewer stream's
-            // streaming-focus path when LiveViewerWindow.isStreamingActive() is true.
+        // A slot jump can land far from the previous slide's focus, so a full focus SEARCH is
+        // needed -- not a drift check. STREAMING autofocus (STRMAFZ) does a real scan; SWEEP
+        // (TESTADAF) is only a narrow-range drift check that reports success WITHOUT finding focus
+        // when the current Z is far off (observed on slot jumps: SWEEP landing ~8 um off, or
+        // reporting 0.00 um shift on a fresh slide). So when the configured method is STREAMING
+        // AND a Live Viewer stream is open, run the streaming scan -- which needs the stream
+        // RUNNING, so it must NOT stop live viewing. Fall back to SWEEP only when the method is
+        // SWEEP or no stream is open (streaming AF has no frames to analyze without a stream).
+        boolean useStreaming = "STREAMING".equals(method) && LiveViewerWindow.isStreamingActive();
+
+        String streamingModality = null;
+        if (useStreaming) {
+            // Resolve the active modality so the server applies the right focus metric / thresholds
+            // (matches the Live Viewer autofocus button). Best-effort: null lets the server pick.
+            try {
+                MicroscopeSocketClient.CapabilityResult cap =
+                        controller.getSocketClient().getCapabilities(null);
+                if (cap != null && cap.modality != null && cap.modality.name != null) {
+                    streamingModality = cap.modality.name;
+                }
+            } catch (Exception capEx) {
+                logger.warn(
+                        "Slot-jump streaming AF: GETCAP failed ({}); proceeding with modality=null",
+                        capEx.getMessage());
+            }
+        } else if (!"SWEEP".equals(method)) {
             logger.info(
-                    "Slot-jump AF: pref method is {} but this increment uses SWEEP (streamOpen={}); "
-                            + "falling back to SWEEP autofocus",
+                    "Slot-jump AF: method is {} but no Live Viewer stream is open (streamOpen={}); "
+                            + "using the SWEEP drift check as fallback",
                     method,
                     LiveViewerWindow.isStreamingActive());
         }
 
         publish("Focusing...", false);
         CompletableFuture<Void> done = new CompletableFuture<>();
+        final boolean runStreaming = useStreaming;
+        final String modalityForStreaming = streamingModality;
 
         Thread afThread = new Thread(
                 () -> {
                     String errorMsg = null;
                     boolean cancelled = false;
                     try {
-                        // Shared sweep run + parse + AF-history core (identical to the Live Viewer
-                        // autofocus button). This thread + the StatusSink phases below are the only
-                        // slot-jump-specific shell.
-                        SweepAutofocusRunner.SweepResult result =
-                                SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
-                        cancelled = result.cancelled();
-                        if (!cancelled) {
-                            logger.info(
-                                    "Slot-jump AF complete: z_shift={} um ({} -> {})",
-                                    result.zShift(),
-                                    result.initialZ(),
-                                    result.finalZ());
+                        if (runStreaming) {
+                            // Streaming scan: MUST keep the live stream running (no
+                            // withAllLiveViewingOff). Blocking; returns a typed result. Objective is
+                            // null -- the server auto-detects it from the live pixel size, exactly as
+                            // the Live Viewer streaming-focus button does.
+                            MicroscopeSocketClient.StreamingFocusResult result = controller
+                                    .getSocketClient()
+                                    .streamingFocus(configPath, null, modalityForStreaming, Double.NaN);
+                            if (result.status == MicroscopeSocketClient.StreamingFocusResult.Status.ABORTED) {
+                                cancelled = true;
+                            } else if (result.status != MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
+                                errorMsg = result.reason == null ? result.status.name() : result.reason;
+                                logger.warn("Slot-jump streaming AF did not succeed: {} ({})", result.status, errorMsg);
+                            } else {
+                                logger.info(
+                                        "Slot-jump streaming AF complete: z_shift={} um ({} -> {}), n={}, span={}",
+                                        result.zShift,
+                                        result.initialZ,
+                                        result.finalZ,
+                                        result.nSamples,
+                                        result.zSpan);
+                            }
+                        } else {
+                            // Shared sweep run + parse + AF-history core (identical to the Live Viewer
+                            // SWEEP autofocus button). Narrow-range drift check -- used only as the
+                            // no-stream / SWEEP-pref fallback.
+                            SweepAutofocusRunner.SweepResult result =
+                                    SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
+                            cancelled = result.cancelled();
+                            if (!cancelled) {
+                                logger.info(
+                                        "Slot-jump AF (SWEEP) complete: z_shift={} um ({} -> {})",
+                                        result.zShift(),
+                                        result.initialZ(),
+                                        result.finalZ());
+                            }
                         }
                     } catch (IOException ex) {
                         errorMsg = ex.getMessage();

@@ -74,6 +74,14 @@ class SiftCapturePane extends VBox {
      * @param gateCaptureOnSift disable Capture until a SIFT run has produced a valid offset
      */
     SiftCapturePane(QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift) {
+        this(gui, tile, gateCaptureOnSift, "Capture position");
+    }
+
+    /**
+     * @param captureLabel label for the capture/accept button -- "Capture position" for single-tile,
+     *     "Add reference point" for multi-tile (so the button reads as its numbered alignment step).
+     */
+    SiftCapturePane(QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift, String captureLabel) {
         super(10);
         this.gui = gui;
         this.tile = tile;
@@ -106,6 +114,8 @@ class SiftCapturePane extends VBox {
         siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
 
         siftButton = new Button("Auto-Align (SIFT)");
+        // Amber = the "SIFT" step in the numbered alignment-step list (matches its step label).
+        siftButton.setStyle("-fx-font-weight: bold; -fx-base: #E65100; -fx-text-fill: white;");
         siftButton.setTooltip(new Tooltip("Run SIFT to snap the stage to the selected tile automatically."));
         siftButton.setOnAction(e -> runSift(false, 0.0));
 
@@ -114,9 +124,10 @@ class SiftCapturePane extends VBox {
         settingsButton.setOnAction(e -> SiftAutoAlignHelper.showSettingsDialog(
                 settingsButton.getScene() != null ? settingsButton.getScene().getWindow() : null));
 
-        captureButton = new Button("Capture position");
+        captureButton = new Button(captureLabel);
         captureButton.setDefaultButton(true);
-        captureButton.setStyle("-fx-font-weight: bold; -fx-base: #4CAF50; -fx-text-fill: white;");
+        // Teal = the "Add reference point" / capture step in the numbered step list.
+        captureButton.setStyle("-fx-font-weight: bold; -fx-base: #00695C; -fx-text-fill: white;");
         captureButton.setTooltip(new Tooltip("Record the current stage position for this reference point."));
         captureButton.setOnAction(e -> captureStagePosition());
         captureButton.setDisable(gateCaptureOnSift);

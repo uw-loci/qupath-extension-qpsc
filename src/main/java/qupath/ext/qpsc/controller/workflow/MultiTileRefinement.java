@@ -9,7 +9,9 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
+import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
@@ -19,6 +21,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -151,14 +154,29 @@ public class MultiTileRefinement {
         Label header = new Label("Multi-Tile Alignment Refinement");
         header.setStyle("-fx-font-size: 15px; -fx-font-weight: bold;");
 
-        Label instructions = new Label(
-                "Add 2 or more reference points spread across the slide. For each, pick a "
-                        + "tile; the stage moves to its predicted position, then SIFT (or a manual nudge) captures where it "
-                        + "actually is. This solves a rotation + scale correction -- unlike single-tile, which fixes only "
-                        + "the offset and cannot correct a rotated slide.\n\n"
-                        + "Each point you capture improves the prediction for the next one, so after the first point the "
-                        + "moves land closer. Spread the points out (far apart, not in a line) for the best rotation estimate.");
-        instructions.setWrapText(true);
+        // Numbered, color-coded alignment steps. Each step's color matches its button so the
+        // operator can associate a step with the control that performs it. Spread points out (far
+        // apart, not in a line) for the best rotation estimate; each captured point improves the
+        // prediction for the next.
+        Label stepsHeader = new Label("Alignment steps (repeat 1-3 for each point, then 4):");
+        stepsHeader.setStyle("-fx-font-weight: bold;");
+        Label step1 = stepLabel(
+                "1.  Select a tile on the QuPath image where you want to image -- the blue \"Select tile\" "
+                        + "button moves the stage to its predicted position.",
+                "#1565C0");
+        Label step2 =
+                stepLabel("2.  Click the amber \"Auto-Align (SIFT)\" to snap the stage onto that tile.", "#E65100");
+        Hyperlink siftHelp = new Hyperlink("SIFT struggling? Open the alignment docs, then adjust \"Settings...\"");
+        siftHelp.setStyle("-fx-text-fill: #E65100;");
+        siftHelp.setOnAction(e -> DocumentationHelper.openDocumentation("microscopeAlignment"));
+        Label step2b = stepLabel(
+                "2b. If it lands off-target, nudge the stage toward the tile via the Stage Map, then run "
+                        + "SIFT again.",
+                "#E65100");
+        Label step3 =
+                stepLabel("3.  Click the teal \"Add reference point\" once the live view matches the tile.", "#00695C");
+        Label step4 = stepLabel("4.  With 2 or more points captured, click the green \"Solve & Save\".", "#2E7D32");
+        VBox instructions = new VBox(4, stepsHeader, step1, step2, siftHelp, step2b, step3, step4);
 
         Label pointsLabel = new Label("Points captured: 0");
         pointsLabel.setStyle("-fx-font-weight: bold;");
@@ -175,8 +193,11 @@ public class MultiTileRefinement {
         diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
         diagLabel.setWrapText(true);
 
-        Button addButton = new Button("Add reference point");
+        Button addButton = new Button("Select tile");
         addButton.setDefaultButton(true);
+        // Blue = step 1 "Select tile" in the numbered step list.
+        addButton.setStyle("-fx-font-weight: bold; -fx-base: #1565C0; -fx-text-fill: white;");
+        addButton.setTooltip(new Tooltip("Pick the next reference tile on the QuPath image; the stage moves to it."));
 
         Button solveButton = new Button("Solve & Save");
         solveButton.setStyle("-fx-font-weight: bold; -fx-base: #4CAF50; -fx-text-fill: white;");
@@ -420,6 +441,14 @@ public class MultiTileRefinement {
      * a skip completes with {@code null}. Clears the slot when the pane settles. Must
      * be called on the FX thread.
      */
+    /** A wrapped, bold, color-coded step label (color matches the step's button). */
+    private static Label stepLabel(String text, String colorHex) {
+        Label l = new Label(text);
+        l.setWrapText(true);
+        l.setStyle("-fx-text-fill: " + colorHex + "; -fx-font-weight: bold;");
+        return l;
+    }
+
     private static void hostCapturePane(
             VBox captureSlot,
             QuPathGUI gui,
@@ -430,7 +459,7 @@ public class MultiTileRefinement {
             CompletableFuture<PointMeasure> future) {
         // gateCaptureOnSift=false: multi-tile allows a manual nudge + capture without
         // a prior SIFT run (unlike single-tile's Save-after-SIFT gate).
-        SiftCapturePane pane = new SiftCapturePane(gui, tile, false);
+        SiftCapturePane pane = new SiftCapturePane(gui, tile, false, "Add reference point");
         captureSlot.getChildren().setAll(pane);
         pane.capture(autoRunSift, confidenceThreshold)
                 .whenComplete((measured, ex) -> Platform.runLater(() -> {
