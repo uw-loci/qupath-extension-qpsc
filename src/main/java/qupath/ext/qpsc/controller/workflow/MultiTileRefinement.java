@@ -364,6 +364,13 @@ public class MultiTileRefinement {
                                             MicroscopeController.getInstance()
                                                     .moveStageXY(predictedStage[0], predictedStage[1]);
                                             Thread.sleep(500);
+                                            // Autofocus-on-jump before capture, so the tile is in
+                                            // focus when the capture pane appears. Honors the same
+                                            // multiSlideAutofocusOnJump preference as the slot jump
+                                            // (default on; no-op when disabled/disconnected). We are
+                                            // off the FX thread here, so block until AF settles -- the
+                                            // returned future always completes.
+                                            SlotJumpAutofocus.runAfterSlotMove().join();
                                             Platform.runLater(() -> {
                                                 SiftAutoAlignHelper.drawSearchRangeOnStageMap(
                                                         gui, tile, predictedStage[0], predictedStage[1]);

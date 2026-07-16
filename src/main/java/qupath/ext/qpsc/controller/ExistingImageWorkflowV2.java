@@ -1623,10 +1623,12 @@ public class ExistingImageWorkflowV2 {
                         && state.alignmentChoice.selectedTransform() != null) {
                     logger.info("Force-fresh alignment: green-box + preset path (re-detects the tissue green box "
                             + "per slide); single-tile refinement then corrects the per-slot offset");
+                    reassertIntendedSlotEntry();
                     return processExistingAlignmentPath(state);
                 }
                 logger.info("Force-fresh alignment: no usable scanner preset -- falling back to MANUAL landmark "
                         + "alignment (the 3 measured points solve position AND rotation for the current mount)");
+                reassertIntendedSlotEntry();
                 return processManualAlignmentPath(state);
             }
 
@@ -2253,6 +2255,38 @@ public class ExistingImageWorkflowV2 {
             return reassertFlippedSiblingForRefinement(state)
                     .thenCompose(this::reReadAnnotationsAfterRouting)
                     .thenCompose(this::createRefinementTilesAndRun);
+        }
+
+        /**
+         * Multi-slide guard: if the multi-slide driver published an intended slot entry (see
+         * {@link MultiSlideExistingImageWorkflow#getIntendedSlotEntry}) and the operator has since
+         * clicked a different entry in the project browser -- e.g. a stale non-rotated
+         * {@code (flipped XY)} sibling left over from an earlier single-slide run -- re-select the
+         * intended entry so the fresh-alignment pipeline reads the correct rotated holder image
+         * rather than a landscape sibling (which maps out of stage bounds). No-op outside a
+         * multi-slide batch or when the open entry already matches. Runs on the FX thread (the
+         * routing method executes there).
+         */
+        private void reassertIntendedSlotEntry() {
+            ProjectImageEntry<BufferedImage> intended = MultiSlideExistingImageWorkflow.getIntendedSlotEntry();
+            if (intended == null || gui.getProject() == null || gui.getImageData() == null) {
+                return;
+            }
+            ProjectImageEntry<BufferedImage> open = gui.getProject().getEntry(gui.getImageData());
+            if (intended.equals(open)) {
+                return;
+            }
+            logger.warn(
+                    "Multi-slide setup: open entry '{}' differs from the slot's intended entry '{}' "
+                            + "(operator likely switched images mid-dialog); re-selecting the intended entry",
+                    open != null ? open.getImageName() : "<none>",
+                    intended.getImageName());
+            WorkflowHelpers.saveOpenImageDataQuietly(gui);
+            try {
+                gui.openImageEntry(intended);
+            } catch (Exception e) {
+                logger.error("Failed to re-select intended slot entry '{}'", intended.getImageName(), e);
+            }
         }
 
         /**

@@ -41,6 +41,8 @@ import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
 import qupath.ext.qpsc.service.mda.TileStagePos;
+import qupath.ext.qpsc.ui.stagemap.StageInsert;
+import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
@@ -1838,6 +1840,20 @@ public class ExistingImageAcquisitionController {
             // verifying the fresh alignment with a single tile (which also captures the focus Z
             // that seeds the unattended acquire pass), not "proceed without refinement".
             if (forceFreshAlignment) {
+                // Multi-slot vertical holder (e.g. quad_v): each slide sits loosely in a tall slot,
+                // so its true orientation carries rotation + scale "play" that translation-only
+                // single-tile refinement cannot correct. Default to MULTI_TILE (solves a stage-space
+                // similarity from 2+ tiles). Horizontal inserts and single vertical slides keep the
+                // single-tile default. The radio stays user-overridable either way.
+                if (isMultiSlotVerticalHolder()) {
+                    multiTileRadio.setSelected(true);
+                    refinementRecommendationLabel.setText("[i] Recommendation: Multi-tile refinement -- "
+                            + "this slide is aligned fresh in a multi-slide vertical holder, where slot "
+                            + "play adds rotation and scale that single-tile (translation-only) cannot "
+                            + "correct. Multi-tile solves rotation + scale from 2+ tiles and also captures "
+                            + "the focus depth for unattended acquisition.");
+                    return;
+                }
                 singleTileRadio.setSelected(true);
                 refinementRecommendationLabel.setText("[i] Recommendation: Single-tile refinement -- "
                         + "this slide is aligned fresh for the holder; any saved alignment was for a "
@@ -1882,6 +1898,35 @@ public class ExistingImageAcquisitionController {
             }
 
             refinementRecommendationLabel.setText(recommendation);
+        }
+
+        /**
+         * True when the active Stage Map insert is a multi-slide holder whose slots are vertically
+         * oriented (e.g. quad_v). Such holders hold each slide loosely in a tall slot, so a fresh
+         * alignment needs multi-tile refinement (rotation + scale) rather than translation-only
+         * single-tile. Single vertical slides and horizontal inserts return false. Best-effort: any
+         * lookup failure falls back to false (keeping the single-tile default).
+         */
+        private boolean isMultiSlotVerticalHolder() {
+            try {
+                String insertId = PersistentPreferences.getStageMapInsert();
+                if (insertId == null || insertId.isBlank()) {
+                    return false;
+                }
+                StageInsert insert = StageInsertRegistry.getInsert(insertId);
+                if (insert == null) {
+                    return false;
+                }
+                List<StageInsert.SlidePosition> slots = insert.getSlides();
+                if (slots == null || slots.size() <= 1) {
+                    return false;
+                }
+                StageInsert.SlidePosition first = slots.get(0);
+                return first.isVerticallyOriented() || first.getHeightUm() > first.getWidthUm();
+            } catch (RuntimeException e) {
+                logger.debug("Could not determine holder orientation for refinement default: {}", e.getMessage());
+                return false;
+            }
         }
 
         private void setupPreviewUpdateListeners() {

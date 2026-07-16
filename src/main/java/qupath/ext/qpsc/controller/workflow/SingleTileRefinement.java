@@ -9,13 +9,17 @@ import javafx.geometry.Pos;
 import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -238,6 +242,50 @@ public class SingleTileRefinement {
         // Wait for stage to settle
         Thread.sleep(500);
 
+        // Autofocus-on-jump before the operator aligns, so the tile is already in focus when
+        // the refinement UI appears. Honors the same multiSlideAutofocusOnJump preference as the
+        // slot jump (default on) and no-ops when disabled/disconnected. moveStageXY above is a
+        // blocking socket round-trip, so the stage has arrived -- the settle-gate contract
+        // SlotJumpAutofocus documents. AF runs off-thread; the returned future ALWAYS completes,
+        // and we resume the refinement UI on the FX thread once focus settles (or is skipped).
+        SlotJumpAutofocus.runAfterSlotMove()
+                .whenComplete((ignored, afEx) -> Platform.runLater(() -> {
+                    try {
+                        continueRefinementAfterFocus(
+                                gui,
+                                selectedTile,
+                                tileCoords,
+                                estimatedStageCoords,
+                                initialTransform,
+                                future,
+                                trustSift,
+                                confidenceThreshold);
+                    } catch (Exception ex) {
+                        logger.error("Error resuming refinement after autofocus", ex);
+                        UIFunctions.notifyUserOfError(
+                                "Error during refinement: " + ex.getMessage(), "Refinement Error");
+                        future.complete(new RefinementResult(initialTransform, selectedTile));
+                    }
+                }));
+    }
+
+    /**
+     * Resumes single-tile refinement after the autofocus-on-jump settle: draws the SIFT search
+     * range, then either runs the trust-SIFT auto-accept fast path or shows the manual refinement
+     * dialog. Extracted from {@link #performTileRefinement} so the stage move and autofocus can
+     * complete before the refinement UI is built.
+     */
+    private static void continueRefinementAfterFocus(
+            QuPathGUI gui,
+            PathObject selectedTile,
+            double[] tileCoords,
+            double[] estimatedStageCoords,
+            AffineTransform initialTransform,
+            CompletableFuture<RefinementResult> future,
+            boolean trustSift,
+            double confidenceThreshold)
+            throws Exception {
+
         // Show the SIFT search range on the Stage Map (no-op if it isn't open)
         // centered on the predicted position, so the user can see the area that
         // will be searched for the whole refinement, not just during the match.
@@ -424,7 +472,31 @@ public class SingleTileRefinement {
                     }
                 }));
 
-        HBox newAlignmentBox = new HBox(newAlignmentButton);
+        // When a multi-slide batch is running, this long-lived refinement dialog can cover the
+        // batch panel's Abort All. Surface an "Abort Batch" affordance here so the whole batch
+        // stays stoppable without hunting for the panel behind the dialog: it preserves this
+        // slide's current alignment (treated as a skip), closes this dialog, then trips the batch
+        // abort. Absent for single-slide runs (no batch action registered).
+        Runnable batchAbort = MultiSlideExistingImageWorkflow.getBatchAbortAction();
+        HBox newAlignmentBox;
+        if (batchAbort != null) {
+            Button abortBatchButton = new Button("Abort Batch");
+            abortBatchButton.setStyle("-fx-base: #b00020; -fx-text-fill: white;");
+            abortBatchButton.setTooltip(new Tooltip(
+                    "Stop the whole multi-slide batch. Keeps this slide's current alignment; no further slots run."));
+            abortBatchButton.setOnAction(e -> {
+                logger.info("Refinement dialog: Abort Batch requested");
+                SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                dialogStage.close();
+                future.complete(new RefinementResult(initialTransform, selectedTile));
+                batchAbort.run();
+            });
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            newAlignmentBox = new HBox(8, abortBatchButton, spacer, newAlignmentButton);
+        } else {
+            newAlignmentBox = new HBox(newAlignmentButton);
+        }
         newAlignmentBox.setAlignment(Pos.CENTER_RIGHT);
 
         content.getChildren()

@@ -132,6 +132,36 @@ public final class MultiSlideExistingImageWorkflow {
         return confirmed;
     }
 
+    /**
+     * The slot entry the multi-slide driver most recently opened. The setup pipeline
+     * ({@code ExistingImageWorkflowV2}) re-asserts this as the open viewer entry before building
+     * a fresh alignment, so that if the operator clicks a different entry in the project browser
+     * mid-dialog -- e.g. a stale non-rotated {@code (flipped XY)} sibling left over from an earlier
+     * single-slide run -- the transform is still built from the correct rotated holder entry
+     * rather than the landscape sibling (which maps out of stage bounds). Cleared when the panel
+     * closes; null outside a batch (single-slide runs are unaffected).
+     */
+    private static volatile ProjectImageEntry<BufferedImage> intendedSlotEntry;
+
+    /** Returns the slot entry the multi-slide driver last opened, or null when no batch is active. */
+    static ProjectImageEntry<BufferedImage> getIntendedSlotEntry() {
+        return intendedSlotEntry;
+    }
+
+    /**
+     * A hook that trips the whole batch's Abort All. A long-lived refinement/alignment dialog can
+     * cover the batch panel's Abort All button (the dialogs are non-modal but owned by the main
+     * window, so they can stack over the panel), leaving the operator unable to stop the run. The
+     * dialog surfaces its own "Abort Batch" affordance that invokes this. Non-null only while a
+     * batch panel is showing.
+     */
+    private static volatile Runnable batchAbortAction;
+
+    /** Returns the batch Abort-All hook, or null when no batch panel is active. */
+    public static Runnable getBatchAbortAction() {
+        return batchAbortAction;
+    }
+
     /** Entry point invoked from the menu. */
     public static void start() {
         QuPathGUI gui = QuPathGUI.getInstance();
@@ -169,7 +199,18 @@ public final class MultiSlideExistingImageWorkflow {
                 logger.warn("MS workflow: failed to sync project after slot metadata", e);
             }
 
-            Platform.runLater(() -> showShepherdingPanel(gui, project, result.carrier(), result.assignments(), runId));
+            Platform.runLater(() -> {
+                // The assignment dialog created the rotated+flipped duplicate entries via
+                // addImage() + syncChanges() but could not refresh the project browser (it has no
+                // QuPathGUI). Refresh here so the new entries are visible before the setup pass --
+                // otherwise the correct rotated entries are on disk but invisible, and the operator
+                // can land on a stale non-rotated sibling that is still shown (which then aligns
+                // out of frame). Must run on the FX thread.
+                if (gui.getProject() != null) {
+                    gui.refreshProject();
+                }
+                showShepherdingPanel(gui, project, result.carrier(), result.assignments(), runId);
+            });
         });
     }
 
@@ -194,12 +235,14 @@ public final class MultiSlideExistingImageWorkflow {
         Label header = new Label("Multi-Slide Existing Image -- " + carrier.getName());
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
 
-        Label intro = new Label(
-                "- Run All Remaining: full workflow on each unfinished slot in turn (you answer each slide's dialogs).\n"
-                        + "- Set Up All Remaining: interactive align + tissue pass on every slot, no acquisition.\n"
-                        + "- Acquire All Set-Up: acquires all set-up slots unattended (no dialogs).\n"
-                        + "- Stop after current slide: halts cleanly once the running slide finishes.\n"
-                        + "- Per-row Open / Run / Skip: drive one slot by hand. Finish when all are Done or Skipped.");
+        Label intro = new Label("AUTOMATED RUN (blue frame, at the bottom) -- run every slide unattended, in order:\n"
+                + "   Step 1 (Set Up All Remaining): interactive align + tissue pass on every slot, no acquisition.\n"
+                + "   Step 2 (Acquire All Set-Up): acquires all set-up slots unattended (no dialogs).\n"
+                + "   Or, in one pass (Run All Remaining): full workflow on each slot in turn "
+                + "(you answer each slide's dialogs).\n"
+                + "   Stop after current slide: halts cleanly once the running slide finishes.\n"
+                + "ONE SLIDE AT A TIME (green frame, the Slots table) -- per-row Open / Run Single / Skip to drive "
+                + "one slot by hand. Finish when all slots are Done or Skipped.");
         intro.setWrapText(true);
         intro.setMaxWidth(640);
         intro.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
@@ -382,10 +425,13 @@ public final class MultiSlideExistingImageWorkflow {
         Button runAllBtn = new Button("Run All Remaining");
         runAllBtn.setTooltip(
                 new Tooltip("Run the full workflow on each unfinished slot in turn; you answer each slide's prompts."));
-        Button setUpAllBtn = new Button("Set Up All Remaining");
-        setUpAllBtn.setTooltip(new Tooltip("Interactively align and set up every unfinished slot, without acquiring."));
-        Button acquireAllBtn = new Button("Acquire All Set-Up");
-        acquireAllBtn.setTooltip(new Tooltip("Acquire every set-up slot unattended (no prompts)."));
+        Button setUpAllBtn = new Button("Step 1: Set Up All Remaining");
+        setUpAllBtn.setTooltip(new Tooltip(
+                "Step 1 of the unattended two-pass run: interactively align and set up every unfinished slot, "
+                        + "without acquiring."));
+        Button acquireAllBtn = new Button("Step 2: Acquire All Set-Up");
+        acquireAllBtn.setTooltip(new Tooltip(
+                "Step 2 of the unattended two-pass run: acquire every set-up slot unattended (no prompts)."));
         CheckBox stopAfterCurrent = new CheckBox("Stop after current slide");
         stopAfterCurrent.setTooltip(
                 new Tooltip("Halt cleanly once the running slide finishes; does not interrupt an in-flight slide."));
@@ -431,6 +477,10 @@ public final class MultiSlideExistingImageWorkflow {
             // (UX honesty: we do not claim a safe stop we cannot verify).
             waitForAbortToSettle(gui, carrier, states, runId, stage, abortBtn);
         });
+        // Expose the Abort All action to long-lived alignment/refinement dialogs that can stack
+        // over this panel (see getBatchAbortAction). Firing the button reuses the exact Abort All
+        // logic, including the confirm-if-acquiring path. Cleared on panel hide.
+        batchAbortAction = abortBtn::fire;
 
         // Semi-automated single pass: full interactive workflow per slot, sequenced.
         runAllBtn.setOnAction(e -> {
@@ -535,8 +585,18 @@ public final class MultiSlideExistingImageWorkflow {
         VBox topBox = new VBox(6, banner, header);
         topBox.setPadding(new Insets(12, 12, 4, 12));
 
-        // Section A: Slots (the per-slot table). Expanded -- the batch's home base.
-        TitledPane slotsSection = SectionBuilder.section("Slots", true, grid);
+        // Section A: Slots (the per-slot table). Expanded -- the batch's home base. Green frame +
+        // heading marks the MANUAL "one slide at a time" controls, distinct from the blue AUTOMATED
+        // RUN group in the footer (run every slide unattended).
+        Label manualHint = new Label("ONE SLIDE AT A TIME -- Open a row (or right-click a row > Run Single) to drive "
+                + "a single slide by hand. To run every slide, use the blue AUTOMATED RUN controls at the bottom.");
+        manualHint.setWrapText(true);
+        manualHint.setMaxWidth(560);
+        manualHint.setMinHeight(Region.USE_PREF_SIZE);
+        manualHint.setStyle("-fx-font-weight: bold; -fx-text-fill: #2E7D32;");
+        VBox slotsContent = new VBox(8, manualHint, grid);
+        slotsContent.setStyle("-fx-border-color: #2E7D32; -fx-border-width: 2; -fx-border-radius: 6; -fx-padding: 10;");
+        TitledPane slotsSection = SectionBuilder.section("Slots", true, slotsContent);
         slotsSection.setTooltip(new Tooltip("Every slide in the holder, its status, and per-row controls."));
 
         // Section B: Alignment. Expanded. Stage Map view controls + autofocus-on-slot-jump status.
@@ -657,16 +717,29 @@ public final class MultiSlideExistingImageWorkflow {
         scroll.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
         scroll.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
 
-        // Fixed footer (never in a section, never scrolls): driver buttons, then Finish / Abort.
-        HBox driverRow = new HBox(10, runAllBtn, setUpAllBtn, acquireAllBtn, stopAfterCurrent);
-        driverRow.setAlignment(Pos.CENTER_LEFT);
+        // Fixed footer (never in a section, never scrolls): a blue-framed AUTOMATED RUN group
+        // (numbered two-pass steps first, then the one-pass alternative + stop toggle), then the
+        // Finish / Abort row. The blue frame pairs with the green MANUAL Slots section above: blue
+        // = run every slide unattended, green = drive one slide by hand.
+        Label autoTitle = new Label("AUTOMATED RUN -- every slide in the holder");
+        autoTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: #1565C0;");
+
+        HBox stepRow = new HBox(10, setUpAllBtn, acquireAllBtn);
+        stepRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label onePassNote = new Label("or, in a single pass:");
+        HBox onePassRow = new HBox(10, onePassNote, runAllBtn, stopAfterCurrent);
+        onePassRow.setAlignment(Pos.CENTER_LEFT);
+
+        VBox autoBox = new VBox(8, autoTitle, stepRow, onePassRow);
+        autoBox.setStyle("-fx-border-color: #1565C0; -fx-border-width: 2; -fx-border-radius: 6; -fx-padding: 10;");
 
         Region footerSpacer = new Region();
         HBox.setHgrow(footerSpacer, Priority.ALWAYS);
         HBox finishRow = new HBox(10, finishBtn, footerSpacer, abortBtn);
         finishRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox footer = new VBox(8, driverRow, new Separator(), finishRow);
+        VBox footer = new VBox(8, autoBox, finishRow);
 
         BorderPane root = new BorderPane();
         root.setStyle("-fx-background-color: -fx-base;");
@@ -676,8 +749,13 @@ public final class MultiSlideExistingImageWorkflow {
         BorderPane.setMargin(footer, new Insets(0, 12, 12, 12));
 
         // Drop the AF status sink when the panel closes so slot-jump AF stops pushing status into
-        // a disposed label (and a later panel can register its own).
-        stage.setOnHidden(e -> SlotJumpAutofocus.clearStatusSink());
+        // a disposed label (and a later panel can register its own). Also clear the intended-slot
+        // entry so a later single-slide run is not re-asserted against a stale batch entry.
+        stage.setOnHidden(e -> {
+            SlotJumpAutofocus.clearStatusSink();
+            intendedSlotEntry = null;
+            batchAbortAction = null;
+        });
 
         stage.setMinWidth(560);
         stage.setMinHeight(480);
@@ -701,6 +779,9 @@ public final class MultiSlideExistingImageWorkflow {
             // before opening a stitched result.
             WorkflowHelpers.saveOpenImageDataQuietly(gui);
             gui.openImageEntry(s.assignment.entry());
+            // Publish the intended entry so the setup pipeline can re-assert it if the operator
+            // clicks a different (e.g. stale non-rotated sibling) entry in the browser mid-dialog.
+            intendedSlotEntry = s.assignment.entry();
             s.setStatus(Status.IN_PROGRESS);
             refreshFinish.run();
             return true;

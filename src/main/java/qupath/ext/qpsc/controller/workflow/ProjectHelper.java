@@ -260,7 +260,16 @@ public class ProjectHelper {
                 // Pass actualSampleName so acquisition uses the correct path
                 final String finalSampleName = actualSampleName;
                 PauseTransition pause = new PauseTransition(Duration.millis(500));
-                pause.setOnFinished(e -> future.complete(new ProjectInfo(projectDetails, finalSampleName)));
+                // Complete on a fresh FX tick, NOT inline in the animation pulse.
+                // The downstream non-async CompletableFuture chain (validateAndFlipImage
+                // -> createTransform -> detectDataBounds -> UIFunctions.executeWithProgress)
+                // runs synchronously in whatever thread completes this future. Completing
+                // directly from PauseTransition.onFinished runs it during the animation
+                // pulse, where showAndWait throws "not allowed during animation or layout
+                // processing" -- which silently degraded data-bounds detection to the
+                // approximate green-box fallback. Deferring via runLater hops off the pulse.
+                pause.setOnFinished(e ->
+                        Platform.runLater(() -> future.complete(new ProjectInfo(projectDetails, finalSampleName))));
                 pause.play();
 
             } catch (Exception e) {
