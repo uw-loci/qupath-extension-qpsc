@@ -23,6 +23,9 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.assembly.ChannelMerger;
 import qupath.ext.basicstitching.assembly.PyramidImageWriter;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.basicstitching.registration.RegistrationMode;
+import qupath.ext.basicstitching.registration.RegistrationSettings;
+import qupath.ext.basicstitching.registration.TileRegistrationSolution;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
@@ -406,70 +409,111 @@ public class StitchingHelper {
             Map<String, Object> stitchParams) {
 
         int total = targetSubdirs.size();
-        int concurrency = Math.max(1, Math.min(total, QPPreferenceDialog.getStitchingConcurrency()));
+        if (total == 0) {
+            return new ArrayList<>();
+        }
+
+        // Content-based registration, when enabled, forces one target to go first: it measures the
+        // grid and writes the solution the others reuse. That barrier is the whole point rather
+        // than an inconvenience -- angles and channels are captured at the SAME stage position per
+        // tile, so letting each solve its own grid would misregister them against each other, which
+        // is worse than leaving them all on a shared nominal grid.
+        boolean register = QPPreferenceDialog.getTileRegistrationEnabled();
+        List<String> results = new ArrayList<>(total);
+        List<String> remaining = targetSubdirs;
+
+        if (register) {
+            Path solutionFile = tileBaseDir.resolve(TileRegistrationSolution.DEFAULT_FILENAME);
+            String reference = targetSubdirs.get(0);
+            logger.info(
+                    "Tile registration enabled: solving on {} {} first, then reusing that solve for "
+                            + "the remaining {} {}(s)",
+                    targetKind,
+                    reference,
+                    total - 1,
+                    targetKind);
+
+            results.add(stitchOne(
+                    reference,
+                    targetKind,
+                    1,
+                    total,
+                    withRegistrationMode(
+                            stitchParams,
+                            new RegistrationMode.Solve(solutionFile, RegistrationSettings.defaults(), null)),
+                    tileBaseDir,
+                    projectsFolder,
+                    sampleName,
+                    modeWithIndex,
+                    annotationName,
+                    compression,
+                    pixelSize,
+                    downsampleFactor,
+                    gui,
+                    project,
+                    handler));
+
+            // If the solve failed or the grid was unregisterable, no solution file exists. The
+            // remaining targets then log a warning and stitch at nominal -- which still leaves every
+            // target consistent with every other, because none of them moved.
+            stitchParams = withRegistrationMode(stitchParams, new RegistrationMode.Apply(solutionFile));
+            remaining = targetSubdirs.subList(1, total);
+        }
+
+        int concurrency = Math.max(1, Math.min(remaining.size(), QPPreferenceDialog.getStitchingConcurrency()));
+        if (remaining.isEmpty()) {
+            return results;
+        }
         logger.info(
                 "Stitching {} {}(s) for {} with up to {} concurrent writer(s)",
-                total,
+                remaining.size(),
                 targetKind,
                 annotationName,
                 concurrency);
 
+        final Map<String, Object> params = stitchParams;
+        final int offset = results.size();
+        final List<String> batch = remaining;
         ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
             Thread t = new Thread(r, "stitch-" + targetKind);
             t.setDaemon(true);
             return t;
         });
         try {
-            List<CompletableFuture<String>> futures = new ArrayList<>(total);
-            for (int i = 0; i < total; i++) {
-                String sub = targetSubdirs.get(i);
-                final int idx = i;
+            List<CompletableFuture<String>> futures = new ArrayList<>(batch.size());
+            for (int i = 0; i < batch.size(); i++) {
+                String sub = batch.get(i);
+                final int position = offset + i + 1;
                 futures.add(CompletableFuture.supplyAsync(
-                        () -> {
-                            logger.info("Stitching {} {} ({}/{})", targetKind, sub, idx + 1, total);
-                            try {
-                                return processAngleWithIsolation(
-                                        tileBaseDir,
-                                        sub,
-                                        projectsFolder,
-                                        sampleName,
-                                        modeWithIndex,
-                                        annotationName,
-                                        compression,
-                                        pixelSize,
-                                        downsampleFactor,
-                                        gui,
-                                        project,
-                                        handler,
-                                        stitchParams);
-                            } catch (Exception e) {
-                                logger.error(
-                                        "Failed to stitch {} {} ({}/{}): {}",
-                                        targetKind,
-                                        sub,
-                                        idx + 1,
-                                        total,
-                                        e.getMessage(),
-                                        e);
-                                return null;
-                            }
-                        },
+                        () -> stitchOne(
+                                sub,
+                                targetKind,
+                                position,
+                                total,
+                                params,
+                                tileBaseDir,
+                                projectsFolder,
+                                sampleName,
+                                modeWithIndex,
+                                annotationName,
+                                compression,
+                                pixelSize,
+                                downsampleFactor,
+                                gui,
+                                project,
+                                handler),
                         pool));
             }
 
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
 
-            List<String> results = new ArrayList<>(total);
-            for (int i = 0; i < total; i++) {
+            for (int i = 0; i < batch.size(); i++) {
                 String out = null;
                 try {
                     out = futures.get(i).get();
                 } catch (Exception e) {
                     logger.error(
-                            "Failed to retrieve stitch result for {} {}: {}",
-                            targetKind,
-                            targetSubdirs.get(i),
-                            e.getMessage());
+                            "Failed to retrieve stitch result for {} {}: {}", targetKind, batch.get(i), e.getMessage());
                 }
                 results.add(out);
             }
@@ -477,6 +521,58 @@ public class StitchingHelper {
         } finally {
             pool.shutdown();
         }
+    }
+
+    /** Stitch one target, converting any failure into a null result so siblings still complete. */
+    private static String stitchOne(
+            String sub,
+            String targetKind,
+            int position,
+            int total,
+            Map<String, Object> stitchParams,
+            Path tileBaseDir,
+            String projectsFolder,
+            String sampleName,
+            String modeWithIndex,
+            String annotationName,
+            String compression,
+            double pixelSize,
+            int downsampleFactor,
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            ModalityHandler handler) {
+        logger.info("Stitching {} {} ({}/{})", targetKind, sub, position, total);
+        try {
+            return processAngleWithIsolation(
+                    tileBaseDir,
+                    sub,
+                    projectsFolder,
+                    sampleName,
+                    modeWithIndex,
+                    annotationName,
+                    compression,
+                    pixelSize,
+                    downsampleFactor,
+                    gui,
+                    project,
+                    handler,
+                    stitchParams);
+        } catch (Exception e) {
+            logger.error("Failed to stitch {} {} ({}/{}): {}", targetKind, sub, position, total, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
+     * Copy the stitch parameters with a registration mode attached.
+     *
+     * <p>Copied rather than mutated because the map is shared across the concurrent targets, which
+     * need different modes.
+     */
+    private static Map<String, Object> withRegistrationMode(Map<String, Object> stitchParams, RegistrationMode mode) {
+        Map<String, Object> copy = stitchParams == null ? new HashMap<>() : new HashMap<>(stitchParams);
+        copy.put(TileProcessingUtilities.REGISTRATION_MODE_KEY, mode);
+        return copy;
     }
 
     private static CompletableFuture<Void> performStitchingInternal(
@@ -2108,6 +2204,16 @@ public class StitchingHelper {
         List<String> suffixes = handler.getPostProcessingDirectorySuffixes();
         if (suffixes.isEmpty()) {
             return;
+        }
+
+        // Post-processing outputs (.biref / .sum) are computed from the angles and share their
+        // grid, but they stitch here, separately from the angle loop. If registration corrected the
+        // angles and these were left at nominal, they would be the one output misregistered against
+        // everything else -- and misregistered against the very angles they were derived from.
+        if (QPPreferenceDialog.getTileRegistrationEnabled()) {
+            stitchParams = withRegistrationMode(
+                    stitchParams,
+                    new RegistrationMode.Apply(tileBaseDir.resolve(TileRegistrationSolution.DEFAULT_FILENAME)));
         }
 
         for (String suffix : suffixes) {

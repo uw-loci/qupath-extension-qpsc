@@ -11,6 +11,7 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.basicstitching.registration.RegistrationMode;
 import qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.modality.ModalityHandler;
@@ -47,6 +48,18 @@ import qupath.lib.projects.ProjectImageEntry;
  */
 public class TileProcessingUtilities {
     private static final Logger logger = LoggerFactory.getLogger(TileProcessingUtilities.class);
+
+    /**
+     * {@code stitchParams} key carrying an optional
+     * {@link qupath.ext.basicstitching.registration.RegistrationMode} for this stitch.
+     *
+     * <p>Absent, tiles are placed at nominal stage positions -- the historical behaviour.
+     * {@link qupath.ext.qpsc.controller.workflow.StitchingHelper} sets it so the first target of an
+     * annotation solves the grid and the rest reuse that solve, which is what keeps every
+     * angle/channel of a co-captured set registered to each other.
+     */
+    public static final String REGISTRATION_MODE_KEY = "registrationMode";
+
     private static final ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
 
     /** Seconds to wait for a stitched-image import to run on the FX thread before warning. */
@@ -254,6 +267,17 @@ public class TileProcessingUtilities {
                 zSpacingMicrons,
                 outputFormat);
         config.setOutputFilename(outputName);
+
+        // Optional content-based tile registration. The caller decides whether this target solves
+        // the grid or reuses a sibling's solve (see StitchingHelper.stitchTargetsBounded); absent
+        // the key, the stitcher places tiles at nominal stage positions exactly as before.
+        if (stitchParams != null && stitchParams.get(REGISTRATION_MODE_KEY) instanceof RegistrationMode mode) {
+            config.setRegistrationMode(mode);
+            logger.info(
+                    "Tile registration mode for {}: {}",
+                    matchingString,
+                    mode.getClass().getSimpleName());
+        }
 
         // Pass the composite stage/camera transform to the tile-config stitching
         // strategy via the flip flags. StageImageTransform folds stage polarity and

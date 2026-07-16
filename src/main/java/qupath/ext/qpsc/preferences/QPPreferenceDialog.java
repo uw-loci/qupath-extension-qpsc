@@ -121,6 +121,13 @@ public class QPPreferenceDialog {
     // and more concurrent writers. 1 = fully sequential.
     private static final IntegerProperty stitchingConcurrencyProperty =
             PathPrefs.createPersistentPreference("stitchingConcurrency", 4);
+
+    // Content-based tile registration. Off by default until validated on the scope: it changes
+    // where every tile lands, and a nominal mosaic is a known quantity. Enabling it also serializes
+    // the first target of each annotation (it has to solve before the rest can reuse the result),
+    // so it trades stitch time for accuracy.
+    private static final BooleanProperty tileRegistrationEnabledProperty =
+            PathPrefs.createPersistentPreference("tileRegistrationEnabled", false);
     // LZW default: J2K (DEFAULT) produces corrupt codestreams at lower pyramid
     // levels with certain tile grid dimensions (Bio-Formats OMEPyramidWriter bug).
     // LZW is lossless, universally readable, and slightly larger files.
@@ -454,6 +461,19 @@ public class QPPreferenceDialog {
                         + "more concurrent writers. Set to 1 for fully sequential stitching.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(tileRegistrationEnabledProperty, Boolean.class)
+                .name("Register tiles on image content")
+                .category(CATEGORY)
+                .description("Correct tile positions by matching the image content in their overlap, "
+                        + "instead of trusting the stage coordinates alone (default: off). Corrects "
+                        + "backlash and drift, which nominal placement leaves in the mosaic as seams.\n\n"
+                        + "Requires a non-zero Tile Overlap Percent: tiles placed edge to edge share no "
+                        + "content, so there is nothing to match. ~10% is a good starting point.\n\n"
+                        + "Slower: the first angle/channel of each annotation is solved on its own before "
+                        + "the rest can reuse the result. The remaining ones are then quick. All angles "
+                        + "receive the same correction, so they stay aligned with each other.")
+                .build());
+
         items.add(new PropertyItemBuilder<>(microscopeServerHostProperty, String.class)
                 .name("Microscope Server Host")
                 .category(CATEGORY)
@@ -771,6 +791,19 @@ public class QPPreferenceDialog {
      */
     public static int getStitchingConcurrency() {
         return Math.max(1, stitchingConcurrencyProperty.get());
+    }
+
+    /**
+     * Whether stitching should correct tile positions against the tiles' own image content rather
+     * than trusting nominal stage coordinates.
+     *
+     * <p>Needs a non-zero tile overlap to have anything to correlate, and serializes the first
+     * target of each annotation so its solve can be reused by the rest. Default false.
+     *
+     * @return whether content-based tile registration is enabled
+     */
+    public static boolean getTileRegistrationEnabled() {
+        return tileRegistrationEnabledProperty.get();
     }
 
     public static void setMicroscopeServerPort(int port) {

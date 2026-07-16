@@ -34,6 +34,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Compression type](#compression-type) | Choice | LZW | OME pyramid compression |
 | [Stitching output format](#stitching-output-format) | Choice | OME_TIFF | Output format for stitched images |
 | [Stitching concurrency](#stitching-concurrency) | Integer | 4 | Max angles/channels stitched at once per annotation |
+| [Register tiles on image content](#register-tiles-on-image-content) | Boolean | false | Correct tile positions by matching overlap content instead of trusting the stage |
 | [Microscope Server Host](#microscope-server-host) | String | 127.0.0.1 | Server IP address |
 | [Microscope Server Port](#microscope-server-port) | Integer | 5000 | Server port number |
 | [Auto-connect to Server](#auto-connect-to-server) | Boolean | ON | Connect on QuPath startup |
@@ -690,6 +691,35 @@ Maximum number of angles (PPM) or channels (fluorescence) stitched **simultaneou
 - This bounds parallelism **within** an annotation only. Different annotations still stitch one at a time (their acquisition is inherently sequential because the stage moves between them), so stitching of one annotation overlaps acquisition of the next without piling up unbounded work.
 
 Applies to both OME-TIFF and OME-ZARR output. The default of 4 is a balance that speeds up the common 4-angle PPM and ~4-channel IF cases while keeping peak memory bounded.
+
+Note: when **Register tiles on image content** is enabled, the first angle/channel of each annotation is stitched on its own regardless of this setting, because it has to solve the tile positions before the others can reuse the result. The remaining angles/channels then stitch concurrently up to this limit.
+
+---
+
+### Register tiles on image content
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | false |
+| Requires Restart | No |
+
+**Description:**
+Correct tile positions by matching the image content in the overlap between neighbouring tiles, rather than placing tiles purely where the stage said it was.
+
+Stage coordinates are *nominal*. Real stages have backlash, finite encoder resolution, and thermal drift over a long acquisition, so tiles placed from reported coordinates alone can leave thin seams or soft double images along every tile boundary. With this enabled, the stitcher measures where adjacent tiles actually line up and adjusts them before compositing.
+
+**Requires a non-zero [Tile Overlap Percent](#tile-overlap-percent).** Tiles placed edge to edge share no content, so there is nothing to match: registration will warn and change nothing. Around 10% is a good starting point. (A 0% overlap is also the most common cause of visible seams in the first place, so setting an overlap is worth doing regardless.)
+
+**It is slower.** The first angle/channel of each annotation is stitched on its own to solve the tile positions; the rest then reuse that solve and are quick. Expect the first target of each annotation to take noticeably longer.
+
+**All angles/channels receive the same correction.** PPM angles and fluorescence channels are captured at the same stage position for a given tile, so they are solved once and share the result. That keeps them registered to each other -- solving each independently would misalign the channels of a single field, which is worse than leaving everything on the nominal grid. Derived `.biref` / `.sum` outputs get the same correction.
+
+**Failure is safe.** Featureless or blown-out overlaps, dust specks, and repeating texture are all detected and refused rather than guessed at, and no tile may move further than the overlap band. The worst case is that a tile keeps its nominal position, never that it is thrown across the mosaic. `TileConfiguration.txt` is never modified.
+
+The solve is written to `TileRegistration.txt` beside the tile subdirectories, so it can be inspected if a mosaic looks wrong.
+
+Off by default: it changes where every tile lands, and is worth confirming on your scope before relying on it. Translation only -- rotation and scale are not corrected.
 
 ---
 
