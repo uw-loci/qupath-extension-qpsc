@@ -207,6 +207,12 @@ public final class MultiSlideExistingImageWorkflow {
             for (MultiSlideAssignmentDialog.SlotAssignment a : result.assignments()) {
                 ImageMetadataManager.setSlideAssignment(
                         a.baseEntry(), a.position(), result.carrier().getId(), runId);
+                logger.info(
+                        "MS workflow: stamped slide_position={} carrier='{}' on base entry '{}' (assigned entry '{}')",
+                        a.position(),
+                        result.carrier().getId(),
+                        a.baseEntry() == null ? "<null>" : a.baseEntry().getImageName(),
+                        a.entry() == null ? "<null>" : a.entry().getImageName());
             }
             try {
                 project.syncChanges();
@@ -614,11 +620,25 @@ public final class MultiSlideExistingImageWorkflow {
 
         // Mode banner (blue = interactive setup pass). Full-width, above the section stack.
         Label banner = new Label("SETUP PASS - " + carrier.getName());
+        HBox.setHgrow(banner, Priority.ALWAYS);
         banner.setMaxWidth(Double.MAX_VALUE);
         banner.setStyle(
                 "-fx-background-color: #1565c0; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 6 12 6 12;");
 
-        VBox topBox = new VBox(6, banner, header);
+        // Collapse toggle: shrink the panel to just this banner so it is out of the way while the
+        // operator performs (and checks) per-slide alignment in the Stage Map / refinement dialogs.
+        // Standard window chrome stays, so the thin collapsed bar is still draggable/closable, and
+        // Abort Batch remains available inside the refinement dialog while collapsed.
+        Button collapseBtn = new Button("Collapse");
+        collapseBtn.setStyle("-fx-background-color: transparent; -fx-text-fill: white; -fx-font-weight: bold;");
+        collapseBtn.setTooltip(
+                new Tooltip("Collapse this panel to a thin bar so it does not cover the alignment views. "
+                        + "Click again to expand."));
+        HBox bannerRow = new HBox(banner, collapseBtn);
+        bannerRow.setAlignment(Pos.CENTER_LEFT);
+        bannerRow.setStyle("-fx-background-color: #1565c0;");
+
+        VBox topBox = new VBox(6, bannerRow, header);
         topBox.setPadding(new Insets(12, 12, 4, 12));
 
         // Section A: Slots (the per-slot table). Expanded -- the batch's home base. Green frame +
@@ -779,6 +799,24 @@ public final class MultiSlideExistingImageWorkflow {
         root.setCenter(scroll);
         root.setBottom(footer);
         BorderPane.setMargin(footer, new Insets(0, 12, 12, 12));
+
+        // Collapse/expand: hide the section stack + footer, leaving just the banner bar. The window
+        // shrinks to the bar (min-height relaxed while collapsed) so it can be tucked into a corner
+        // during alignment, then restored.
+        boolean[] collapsed = {false};
+        collapseBtn.setOnAction(e -> {
+            collapsed[0] = !collapsed[0];
+            boolean show = !collapsed[0];
+            header.setVisible(show);
+            header.setManaged(show);
+            scroll.setVisible(show);
+            scroll.setManaged(show);
+            footer.setVisible(show);
+            footer.setManaged(show);
+            collapseBtn.setText(collapsed[0] ? "Expand" : "Collapse");
+            stage.setMinHeight(collapsed[0] ? 0 : 480);
+            stage.sizeToScene();
+        });
 
         // Drop the AF status sink when the panel closes so slot-jump AF stops pushing status into
         // a disposed label (and a later panel can register its own). Also clear the intended-slot

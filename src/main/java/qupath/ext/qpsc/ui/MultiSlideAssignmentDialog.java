@@ -347,7 +347,32 @@ public final class MultiSlideAssignmentDialog {
                         break;
                     }
                 }
-                if (entryBox.getSelectionModel().getSelectedItem() == null) {
+                boolean prefilled = entryBox.getSelectionModel().getSelectedItem() != null;
+                logger.info(
+                        "MS assignment pre-fill: slot {} (carrier '{}') -> {}",
+                        pos,
+                        selected.getId(),
+                        prefilled
+                                ? "'"
+                                        + entryBox.getSelectionModel()
+                                                .getSelectedItem()
+                                                .getImageName() + "'"
+                                : "none");
+                if (!prefilled) {
+                    // Diagnostic: dump every candidate that carries ANY slide_position so we can see
+                    // whether the metadata is absent (never persisted) or present-but-mismatched
+                    // (wrong position/carrier). Only the un-matched slots log this, so it stays quiet
+                    // once assignments are being remembered.
+                    for (ProjectImageEntry<BufferedImage> e : macroCandidates) {
+                        int sp = ImageMetadataManager.getSlidePosition(e);
+                        if (sp != -1) {
+                            logger.info(
+                                    "  candidate '{}' has slide_position={} carrier='{}'",
+                                    e.getImageName(),
+                                    sp,
+                                    ImageMetadataManager.getSlideCarrier(e));
+                        }
+                    }
                     entryBox.getSelectionModel().select(null);
                 }
                 // Rotation picker (clockwise degrees) applied to the slide's macro to match
