@@ -38,10 +38,14 @@ import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.notification.NotificationEvent;
+import qupath.ext.qpsc.service.notification.NotificationPriority;
+import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.AttentionPulse;
 import qupath.ext.qpsc.ui.DialogPlacement;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.SectionBuilder;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -609,6 +613,7 @@ public final class MultiSlideExistingImageWorkflow {
                             if (gui != null && gui.getProject() != null) {
                                 gui.refreshProject();
                             }
+                            notifyBatchComplete(carrier, states, runId);
                             setBusy.accept(false);
                             refreshFinish.run();
                         });
@@ -1011,6 +1016,12 @@ public final class MultiSlideExistingImageWorkflow {
                         logger.info(
                                 "MS workflow: slot {} acquired (unattended); advancing while its stitching finishes in the background",
                                 s.assignment.position());
+                        // Per-slide success alert. The pipelined batch path suppresses
+                        // ExistingImageWorkflowV2.showSuccessNotification() (the batch driver owns the
+                        // tail), so emit the beep + toast + ntfy push here instead -- otherwise an
+                        // unattended multi-slide run is silent per slide. Fires at acquisition-complete
+                        // (matches the row's DONE semantics); stitching finishes in the background.
+                        notifySlideAcquired(s);
                     } else {
                         s.setStatus(Status.SET_UP);
                         logger.info(
@@ -1176,6 +1187,40 @@ public final class MultiSlideExistingImageWorkflow {
                 "MS-abort-settle-waiter");
         waiter.setDaemon(true);
         waiter.start();
+    }
+
+    /**
+     * Per-slide success alert for the unattended (pipelined) acquire pass: completion beep, a QuPath
+     * toast, and an ntfy push. Mirrors {@code ExistingImageWorkflowV2.showSuccessNotification()},
+     * which the pipelined path skips because the batch driver owns the tail. Fires when a slide's
+     * acquisition completes (its stitching may still be running in the background).
+     */
+    private static void notifySlideAcquired(SlotState s) {
+        String slot = s.assignment.slotLabel();
+        String name = s.assignment.entry().getImageName();
+        UIFunctions.playWorkflowCompletionBeep();
+        Dialogs.showInfoNotification("Slide Acquired", slot + " (" + name + ") acquired.");
+        NotificationService.getInstance()
+                .notify(
+                        "Slide Acquired",
+                        slot + " - \"" + name + "\" acquisition finished (stitching in progress)",
+                        NotificationPriority.DEFAULT,
+                        NotificationEvent.ACQUISITION_COMPLETE);
+    }
+
+    /**
+     * Batch-complete alert once every slot's stitching has drained. Sent in addition to the per-slide
+     * alerts so an operator away from the scope gets one "batch done" ping with the tally.
+     */
+    private static void notifyBatchComplete(StageInsert carrier, List<SlotState> states, String runId) {
+        long done = states.stream().filter(st -> st.status == Status.DONE).count();
+        NotificationService.getInstance()
+                .notify(
+                        "Multi-Slide Run Complete",
+                        carrier.getName() + ": " + done + " of " + states.size() + " slide(s) acquired (run " + runId
+                                + ")",
+                        NotificationPriority.DEFAULT,
+                        NotificationEvent.ALL_ANGLES_COMPLETE);
     }
 
     private static void showSummary(QuPathGUI gui, StageInsert carrier, List<SlotState> states, String runId) {
