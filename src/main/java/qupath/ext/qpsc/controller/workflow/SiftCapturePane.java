@@ -66,6 +66,9 @@ class SiftCapturePane extends VBox {
     private final Button captureButton;
     private final Button skipButton;
 
+    /** Points the operator at the next action within the pane: SIFT first, then capture. */
+    private final qupath.ext.qpsc.ui.AttentionPulse pulse = new qupath.ext.qpsc.ui.AttentionPulse();
+
     private final CompletableFuture<double[]> resultFuture = new CompletableFuture<>();
 
     /**
@@ -148,6 +151,11 @@ class SiftCapturePane extends VBox {
         actionRow.setAlignment(Pos.CENTER_LEFT);
 
         getChildren().addAll(tileRow, siftRow, siftResultLabel, actionRow);
+
+        // Guide the next action: pulse SIFT first; runSift moves the pulse to Capture on a good
+        // match. Clear the pulse whenever the pane finishes (capture / skip / auto-accept).
+        pulse.highlight(siftButton, "#E65100");
+        resultFuture.whenComplete((r, ex) -> Platform.runLater(pulse::clear));
     }
 
     /**
@@ -199,12 +207,19 @@ class SiftCapturePane extends VBox {
                                 Platform.runLater(() -> {
                                     renderSiftResult(result);
                                     siftButton.setDisable(false);
-                                    if (gateCaptureOnSift && result != null && result.length >= 2) {
+                                    boolean validMatch = result != null && result.length >= 2;
+                                    if (gateCaptureOnSift && validMatch) {
                                         captureButton.setDisable(false);
                                     }
                                     if (measured != null && !resultFuture.isDone()) {
                                         logger.info("SiftCapturePane: SIFT auto-accepted (confidence {})", result[3]);
                                         resultFuture.complete(measured);
+                                    } else if (validMatch) {
+                                        // Good match -- point the operator at Capture / Add reference point.
+                                        pulse.highlight(captureButton, "#00695C");
+                                    } else {
+                                        // No usable match -- keep pointing at SIFT (nudge + re-run).
+                                        pulse.highlight(siftButton, "#E65100");
                                     }
                                 });
                             } catch (Exception ex) {
@@ -214,6 +229,7 @@ class SiftCapturePane extends VBox {
                                     siftResultLabel.setText(
                                             "SIFT failed: " + ex.getMessage() + " -- nudge manually, then Capture.");
                                     siftButton.setDisable(false);
+                                    pulse.highlight(siftButton, "#E65100");
                                 });
                             }
                         },

@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.ui.AttentionPulse;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -211,11 +212,18 @@ public class MultiTileRefinement {
         content.getChildren().addAll(header, instructions, pointsLabel, captureSlot, diagLabel, buttons);
         stage.setScene(new Scene(content));
 
+        // Guides the operator to the next OUTER action: pulse "Select tile" (blue) until 2 points
+        // are captured, then pulse "Solve & Save" (green). The embedded SiftCapturePane guides the
+        // SIFT/capture sub-steps within a point; the outer pulse is cleared while a point is being
+        // captured so the two never compete.
+        AttentionPulse outerPulse = new AttentionPulse();
+
         Runnable refreshDiagnostics = () -> {
             pointsLabel.setText("Points captured: " + points.size());
             if (points.size() < MIN_POINTS) {
                 diagLabel.setText("Add at least " + MIN_POINTS + " points to solve a correction.");
                 solveButton.setDisable(true);
+                outerPulse.highlight(addButton, "#1565C0");
                 return;
             }
             TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
@@ -249,12 +257,15 @@ public class MultiTileRefinement {
                         fit.rmsResidualUm() > 25.0 ? "  High RMS -- check the captured points before saving." : ""));
             }
             solveButton.setDisable(false);
+            outerPulse.highlight(solveButton, "#2E7D32");
         };
 
         addButton.setOnAction(e -> {
             addButton.setDisable(true);
             solveButton.setDisable(true);
             cancelButton.setDisable(true);
+            // A point is being captured -- the pane guides SIFT/capture; drop the outer pulse.
+            outerPulse.clear();
             // Predict this point with the running estimate (refined by prior points), NOT
             // the raw initial transform.
             capturePoint(gui, workingEstimate[0], points.size() + 1, trustSift, confidenceThreshold, captureSlot)
@@ -282,6 +293,7 @@ public class MultiTileRefinement {
         });
 
         solveButton.setOnAction(e -> {
+            outerPulse.clear();
             TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
             AffineTransform refined = new AffineTransform(fit.correction());
             refined.concatenate(initialTransform);
@@ -303,6 +315,7 @@ public class MultiTileRefinement {
         });
 
         cancelButton.setOnAction(e -> {
+            outerPulse.clear();
             logger.info(
                     "Multi-tile refinement cancelled ({} points captured); preserving prior alignment", points.size());
             SiftAutoAlignHelper.clearSearchRangeOnStageMap();
@@ -312,6 +325,7 @@ public class MultiTileRefinement {
         });
 
         stage.setOnCloseRequest(e -> {
+            outerPulse.clear();
             if (!future.isDone()) {
                 logger.info("Multi-tile refinement window closed; preserving prior alignment");
                 SiftAutoAlignHelper.clearSearchRangeOnStageMap();
@@ -322,6 +336,7 @@ public class MultiTileRefinement {
             }
         });
 
+        refreshDiagnostics.run();
         stage.show();
     }
 
