@@ -413,25 +413,50 @@ public class ExistingAlignmentPath {
                 double scaleX = macroToStage.getScaleX(); // preset scale magnitude + sign
                 double scaleY = macroToStage.getScaleY();
 
-                // (1) R270 anchor: place off-center content correctly, then read where the
-                // full-res image center lands. Used ONLY for position, not orientation.
+                // (1) R270 anchor (macro -> stage): places the macro at the slot with the holder's
+                // 270deg rotation. Used ONLY for positioning the tissue (via the green box center
+                // below), never for the final entry orientation.
                 AffineTransform anchorMacroToStage = new AffineTransform();
                 anchorMacroToStage.translate(state.slotCenterStageXY[0], state.slotCenterStageXY[1]);
                 anchorMacroToStage.rotate(Math.toRadians(270));
                 anchorMacroToStage.scale(scaleX, scaleY);
                 anchorMacroToStage.translate(-macroCx, -macroCy);
-                AffineTransform anchorFullResToStage = new AffineTransform(anchorMacroToStage);
-                anchorFullResToStage.concatenate(fullResToMacro);
 
                 double fullResCx = reportedWidth / 2.0;
                 double fullResCy = reportedHeight / 2.0;
-                Point2D imageCenterStage =
-                        anchorFullResToStage.transform(new Point2D.Double(fullResCx, fullResCy), null);
 
-                // (2) DIAGONAL entry->stage at the full-res pixel size (preset sign), anchored on
-                // that image-center position. No axis swap: QuPath-X -> stage-X.
+                // (2) DIAGONAL entry->stage at the full-res pixel size (preset sign). No axis swap:
+                // QuPath-X -> stage-X. Only the anchor position is derived below.
                 double sX = Math.signum(scaleX) * fullResPixelSize;
                 double sY = Math.signum(scaleY) * fullResPixelSize;
+
+                // Position the tissue via the GREEN BOX CENTER through the R270 anchor (the correct,
+                // rotation-aware macro->stage mapping), then place the full-res image so its OWN
+                // dataBounds centroid lands on that stage point via the diagonal scale.
+                //
+                // The previous code instead ran the full-res image CENTER through fullResToMacro,
+                // which applies NO rotation between the rotated (portrait) acquisition entry and the
+                // un-rotated (landscape) macro. For a TALL slide that mismatch mislocated the image
+                // center in macro-Y, and the R270 anchor (macro-Y -> stage-X) turned it into a
+                // multi-mm stage-X error that pushed the image out of stage bounds (validation
+                // crash). Short slides masked it because the mapped image still fit the macro.
+                //
+                // Anchoring the green-box center and the dataBounds centroid SEPARATELY is
+                // rotation-clean: the green-box center -> stage carries the tissue's along-slot
+                // position, and (imageCenter - dataBoundsCentroid) is a full-res-frame delta scaled
+                // by the diagonal (no macro rotation). Verified numerically to reproduce a known-good
+                // run's placement for short slides AND to land a tall slide's tissue at the same
+                // stage position the un-rotated sibling produced (in bounds). Refinement corrects the
+                // few-mm residual.
+                double greenBoxCx = greenBox.getBoundsX() + greenBox.getBoundsWidth() / 2.0;
+                double greenBoxCy = greenBox.getBoundsY() + greenBox.getBoundsHeight() / 2.0;
+                Point2D tissueStage = anchorMacroToStage.transform(new Point2D.Double(greenBoxCx, greenBoxCy), null);
+                double dataCentroidX = dataBounds.x + dataBounds.width / 2.0;
+                double dataCentroidY = dataBounds.y + dataBounds.height / 2.0;
+                Point2D imageCenterStage = new Point2D.Double(
+                        tissueStage.getX() + sX * (fullResCx - dataCentroidX),
+                        tissueStage.getY() + sY * (fullResCy - dataCentroidY));
+
                 AffineTransform diagFullResToStage = new AffineTransform();
                 diagFullResToStage.translate(imageCenterStage.getX(), imageCenterStage.getY());
                 diagFullResToStage.scale(sX, sY);
@@ -439,8 +464,12 @@ public class ExistingAlignmentPath {
                 fullResToStage = diagFullResToStage;
 
                 logger.info(
-                        "Multi-slide DIAGONAL entry->stage: image center ({}, {}) -> stage ({}, {}) via R270 anchor; "
-                                + "diagonal scale ({}, {}) [slotCenter=({}, {})]",
+                        "Multi-slide DIAGONAL entry->stage: green-box center ({}, {}) -> tissue stage ({}, {}); "
+                                + "image center ({}, {}) -> stage ({}, {}); diagonal scale ({}, {}) [slotCenter=({}, {})]",
+                        greenBoxCx,
+                        greenBoxCy,
+                        tissueStage.getX(),
+                        tissueStage.getY(),
                         fullResCx,
                         fullResCy,
                         imageCenterStage.getX(),
