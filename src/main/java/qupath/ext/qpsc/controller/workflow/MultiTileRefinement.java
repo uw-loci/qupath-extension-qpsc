@@ -16,6 +16,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -372,6 +373,12 @@ public class MultiTileRefinement {
                                             // returned future always completes.
                                             SlotJumpAutofocus.runAfterSlotMove().join();
                                             Platform.runLater(() -> {
+                                                // Multi-slide alignment-step start: force Camera View
+                                                // + zoom to tissue once, at the first point (no-op
+                                                // outside a batch / when the map is closed).
+                                                if (pointNumber == 1) {
+                                                    MultiSlideExistingImageWorkflow.applyAlignStartViewAssists();
+                                                }
                                                 SiftAutoAlignHelper.drawSearchRangeOnStageMap(
                                                         gui, tile, predictedStage[0], predictedStage[1]);
                                                 hostCapturePane(

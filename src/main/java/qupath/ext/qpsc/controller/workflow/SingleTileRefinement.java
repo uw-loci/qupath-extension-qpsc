@@ -286,6 +286,12 @@ public class SingleTileRefinement {
             double confidenceThreshold)
             throws Exception {
 
+        // Multi-slide alignment-step start: force the Stage Map to Camera View and zoom to the
+        // tissue box per the batch toggles (no-op outside a multi-slide batch / when the map is
+        // closed). The green-box + preset flow drives the stage HERE (not via the manual landmark
+        // controller), so this is the alignment-start hook for it.
+        MultiSlideExistingImageWorkflow.applyAlignStartViewAssists();
+
         // Show the SIFT search range on the Stage Map (no-op if it isn't open)
         // centered on the predicted position, so the user can see the area that
         // will be searched for the whole refinement, not just during the match.

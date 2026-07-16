@@ -162,6 +162,28 @@ public final class MultiSlideExistingImageWorkflow {
         return batchAbortAction;
     }
 
+    /**
+     * Applies the multi-slide "alignment start" Stage Map view assists -- force Camera View and
+     * zoom to the tissue box -- per the Advanced / SIFT-settings toggles, but ONLY while a
+     * multi-slide batch is active (an intended slot entry is set). The manual landmark path
+     * (AffineTransformationController) already does this on its slot jump; the green-box + preset
+     * flow instead drives the stage in the single-/multi-tile REFINEMENT step, so those call this
+     * when the operator arrives at a refinement tile. Best-effort: no-op for standalone
+     * single-slide refinement, when the Stage Map is closed, or when no tissue box is set. Must be
+     * called on the FX thread.
+     */
+    public static void applyAlignStartViewAssists() {
+        if (intendedSlotEntry == null) {
+            return; // not in a multi-slide batch -- leave the Stage Map view as the user set it
+        }
+        if (PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart()) {
+            StageMapWindow.forceCameraView();
+        }
+        if (PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart()) {
+            StageMapWindow.zoomToBoundingBoxPreview();
+        }
+    }
+
     /** Entry point invoked from the menu. */
     public static void start() {
         QuPathGUI gui = QuPathGUI.getInstance();
