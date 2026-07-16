@@ -39,6 +39,7 @@ import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AttentionPulse;
+import qupath.ext.qpsc.ui.DialogPlacement;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.SectionBuilder;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
@@ -826,12 +827,16 @@ public final class MultiSlideExistingImageWorkflow {
             intendedSlotEntry = null;
             batchAbortAction = null;
             nextStepPulse.clear();
+            DialogPlacement.clearBatchAnchor();
         });
 
         stage.setMinWidth(560);
         stage.setMinHeight(480);
         stage.setScene(new Scene(root));
         stage.sizeToScene();
+        // Anchor the per-slot dialog chain (acquisition config, green box, tile select, refinement)
+        // beside this panel so they dock next to it instead of piling on the alignment views.
+        DialogPlacement.setBatchAnchor(stage);
         stage.show();
     }
 

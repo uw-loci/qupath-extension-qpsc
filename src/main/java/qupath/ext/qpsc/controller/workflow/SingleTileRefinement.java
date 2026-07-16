@@ -400,6 +400,9 @@ public class SingleTileRefinement {
         if (gui != null && gui.getStage() != null) {
             dialogStage.initOwner(gui.getStage());
         }
+        // In a multi-slide batch, dock beside the progress panel so this dialog does not cover the
+        // Stage Map / live view during refinement (no-op for single-slide runs).
+        dialogStage.setOnShown(e -> qupath.ext.qpsc.ui.DialogPlacement.dockBesideBatchAnchor(dialogStage));
 
         // Main content
         VBox content = new VBox(15);

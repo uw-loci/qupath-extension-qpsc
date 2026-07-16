@@ -788,6 +788,8 @@ public class UIFunctions {
             if (ownerGui != null && ownerGui.getStage() != null) {
                 stage.initOwner(ownerGui.getStage());
             }
+            // In a multi-slide batch, dock beside the progress panel (no-op for single-slide runs).
+            stage.setOnShown(e -> DialogPlacement.dockBesideBatchAnchor(stage));
 
             VBox layout = new VBox(10);
             layout.setPadding(new Insets(20));

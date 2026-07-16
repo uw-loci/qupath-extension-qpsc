@@ -112,6 +112,9 @@ public class GreenBoxPreviewController {
                 dialog.setTitle("Green Box Detection");
                 dialog.setHeaderText("Detecting slide boundary for alignment");
                 dialog.setResizable(true);
+                // In a multi-slide batch, dock beside the progress panel (no-op for single-slide runs).
+                dialog.setOnShown(e -> DialogPlacement.dockBesideBatchAnchor(
+                        dialog.getDialogPane().getScene().getWindow()));
 
                 // Use saved params or defaults
                 GreenBoxDetector.DetectionParams params =

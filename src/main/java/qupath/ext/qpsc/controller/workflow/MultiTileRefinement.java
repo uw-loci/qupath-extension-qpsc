@@ -145,6 +145,9 @@ public class MultiTileRefinement {
         if (gui != null && gui.getStage() != null) {
             stage.initOwner(gui.getStage());
         }
+        // In a multi-slide batch, dock beside the progress panel so this dialog does not cover the
+        // Stage Map / live view during refinement (no-op for single-slide runs).
+        stage.setOnShown(e -> qupath.ext.qpsc.ui.DialogPlacement.dockBesideBatchAnchor(stage));
         stage.setResizable(false);
 
         VBox content = new VBox(12);

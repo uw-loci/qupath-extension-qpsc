@@ -469,6 +469,9 @@ public class ExistingImageAcquisitionController {
             if (ownerGui != null && ownerGui.getStage() != null) {
                 dialog.initOwner(ownerGui.getStage());
             }
+            // In a multi-slide batch, dock beside the progress panel (no-op for single-slide runs).
+            dialog.setOnShown(e -> DialogPlacement.dockBesideBatchAnchor(
+                    dialog.getDialogPane().getScene().getWindow()));
             dialog.setTitle("Acquire from Existing Image");
             dialog.setHeaderText("Configure acquisition from the current image");
             dialog.setGraphic(DocumentationHelper.createHelpButton("existingImage"));
