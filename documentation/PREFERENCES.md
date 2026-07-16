@@ -721,6 +721,8 @@ The solve is written to `TileRegistration.txt` beside the tile subdirectories, s
 
 Off by default: it changes where every tile lands, and is worth confirming on your scope before relying on it. Translation only -- rotation and scale are not corrected.
 
+**Needs `qupath-extension-tiles-to-pyramid` 0.6.0 or newer.** That extension installs separately from QPSC, so the two versions can drift. On an older one this preference has no effect: QPSC logs a warning and stitches at nominal stage positions (exactly as it did before this feature existed) rather than failing.
+
 ---
 
 ### Enable Multi-Slide Workflow (experimental)
