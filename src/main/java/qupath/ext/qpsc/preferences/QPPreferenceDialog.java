@@ -46,6 +46,9 @@ public class QPPreferenceDialog {
     /** False if qupath-extension-tiles-to-pyramid is not installed. */
     private static boolean stitchingAvailable = true;
 
+    /** Whether the installed tiles-to-pyramid exposes the tile-registration API. */
+    private static final boolean tileRegistrationSupported = isTileRegistrationSupported();
+
     // --- Preference definitions ---
 
     // NOTE: Macro flip is no longer a persistent preference. It is captured per-alignment via
@@ -803,7 +806,18 @@ public class QPPreferenceDialog {
      * @return whether content-based tile registration is enabled
      */
     public static boolean getTileRegistrationEnabled() {
-        return tileRegistrationEnabledProperty.get();
+        if (!tileRegistrationEnabledProperty.get()) {
+            return false;
+        }
+        if (!tileRegistrationSupported) {
+            // Warn rather than fail: an older tiles-to-pyramid still stitches perfectly well, just
+            // at nominal stage positions. Losing a refinement is a far better outcome than losing
+            // the stitch.
+            logger.warn("Tile registration is enabled but the installed tiles-to-pyramid does not "
+                    + "support it (needs 0.6.0 or newer); stitching at nominal stage positions");
+            return false;
+        }
+        return true;
     }
 
     public static void setMicroscopeServerPort(int port) {
@@ -1017,6 +1031,31 @@ public class QPPreferenceDialog {
         try {
             Class.forName(
                     "qupath.ext.basicstitching.config.StitchingConfig",
+                    false,
+                    QPPreferenceDialog.class.getClassLoader());
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Whether the installed tiles-to-pyramid is new enough to register tiles on image content.
+     *
+     * <p>tiles-to-pyramid ships separately from QPSC, so a current QPSC can be running against a
+     * version from before registration existed. {@link #isStitchingExtensionPresent()} cannot tell
+     * the difference -- it probes a type that has always been there -- so this probes the
+     * registration API specifically. Without it, every stitch would fail with a
+     * {@link NoClassDefFoundError} the moment it touched a registration type, instead of simply
+     * stitching at nominal stage positions as QPSC always used to.
+     *
+     * <p>Reflective and {@code initialize=false} for the same reason as the presence check: this
+     * class must carry no static reference to types that may be absent.
+     */
+    private static boolean isTileRegistrationSupported() {
+        try {
+            Class.forName(
+                    qupath.ext.qpsc.utilities.TileRegistrationSupport.PROBE_CLASS,
                     false,
                     QPPreferenceDialog.class.getClassLoader());
             return true;

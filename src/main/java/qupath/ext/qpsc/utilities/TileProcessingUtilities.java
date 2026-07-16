@@ -11,7 +11,6 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
-import qupath.ext.basicstitching.registration.RegistrationMode;
 import qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.modality.ModalityHandler;
@@ -271,12 +270,13 @@ public class TileProcessingUtilities {
         // Optional content-based tile registration. The caller decides whether this target solves
         // the grid or reuses a sibling's solve (see StitchingHelper.stitchTargetsBounded); absent
         // the key, the stitcher places tiles at nominal stage positions exactly as before.
-        if (stitchParams != null && stitchParams.get(REGISTRATION_MODE_KEY) instanceof RegistrationMode mode) {
-            config.setRegistrationMode(mode);
-            logger.info(
-                    "Tile registration mode for {}: {}",
-                    matchingString,
-                    mode.getClass().getSimpleName());
+        // Deliberately typed as Object and handed to TileRegistrationSupport: an
+        // `instanceof RegistrationMode` here would resolve that class on EVERY stitch, including
+        // against an older tiles-to-pyramid that does not have it. StitchingHelper only sets this
+        // key once the class is known to be present.
+        Object registrationMode = stitchParams == null ? null : stitchParams.get(REGISTRATION_MODE_KEY);
+        if (registrationMode != null) {
+            TileRegistrationSupport.apply(config, registrationMode, matchingString);
         }
 
         // Pass the composite stage/camera transform to the tile-config stitching

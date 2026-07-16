@@ -23,9 +23,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.assembly.ChannelMerger;
 import qupath.ext.basicstitching.assembly.PyramidImageWriter;
 import qupath.ext.basicstitching.config.StitchingConfig;
-import qupath.ext.basicstitching.registration.RegistrationMode;
-import qupath.ext.basicstitching.registration.RegistrationSettings;
-import qupath.ext.basicstitching.registration.TileRegistrationSolution;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
@@ -45,6 +42,7 @@ import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
+import qupath.ext.qpsc.utilities.TileRegistrationSupport;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -423,7 +421,7 @@ public class StitchingHelper {
         List<String> remaining = targetSubdirs;
 
         if (register) {
-            Path solutionFile = tileBaseDir.resolve(TileRegistrationSolution.DEFAULT_FILENAME);
+            Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
             String reference = targetSubdirs.get(0);
             logger.info(
                     "Tile registration enabled: solving on {} {} first, then reusing that solve for "
@@ -438,9 +436,7 @@ public class StitchingHelper {
                     targetKind,
                     1,
                     total,
-                    withRegistrationMode(
-                            stitchParams,
-                            new RegistrationMode.Solve(solutionFile, RegistrationSettings.defaults(), null)),
+                    withRegistrationMode(stitchParams, TileRegistrationSupport.solveMode(solutionFile)),
                     tileBaseDir,
                     projectsFolder,
                     sampleName,
@@ -456,7 +452,7 @@ public class StitchingHelper {
             // If the solve failed or the grid was unregisterable, no solution file exists. The
             // remaining targets then log a warning and stitch at nominal -- which still leaves every
             // target consistent with every other, because none of them moved.
-            stitchParams = withRegistrationMode(stitchParams, new RegistrationMode.Apply(solutionFile));
+            stitchParams = withRegistrationMode(stitchParams, TileRegistrationSupport.applyMode(solutionFile));
             remaining = targetSubdirs.subList(1, total);
         }
 
@@ -569,7 +565,7 @@ public class StitchingHelper {
      * <p>Copied rather than mutated because the map is shared across the concurrent targets, which
      * need different modes.
      */
-    private static Map<String, Object> withRegistrationMode(Map<String, Object> stitchParams, RegistrationMode mode) {
+    private static Map<String, Object> withRegistrationMode(Map<String, Object> stitchParams, Object mode) {
         Map<String, Object> copy = stitchParams == null ? new HashMap<>() : new HashMap<>(stitchParams);
         copy.put(TileProcessingUtilities.REGISTRATION_MODE_KEY, mode);
         return copy;
@@ -2213,7 +2209,7 @@ public class StitchingHelper {
         if (QPPreferenceDialog.getTileRegistrationEnabled()) {
             stitchParams = withRegistrationMode(
                     stitchParams,
-                    new RegistrationMode.Apply(tileBaseDir.resolve(TileRegistrationSolution.DEFAULT_FILENAME)));
+                    TileRegistrationSupport.applyMode(tileBaseDir.resolve(TileRegistrationSupport.solutionFileName())));
         }
 
         for (String suffix : suffixes) {
