@@ -188,10 +188,14 @@ public final class MultiSlideExistingImageWorkflow {
                     runId,
                     result.assignments().size());
 
-            // Persist slot metadata so partial runs are recoverable
+            // Persist slot metadata so partial runs are recoverable AND the assignment dialog can
+            // restore the slide->position picks next time. Stamp the BASE macro entry: the dialog's
+            // dropdown lists base macros and pre-fills by reading their slide_position. Stamping the
+            // rotated duplicate (a.entry()) instead left the base without the metadata, so
+            // assignments were forgotten once vertical holders defaulted to a 270 rotation.
             for (MultiSlideAssignmentDialog.SlotAssignment a : result.assignments()) {
                 ImageMetadataManager.setSlideAssignment(
-                        a.entry(), a.position(), result.carrier().getId(), runId);
+                        a.baseEntry(), a.position(), result.carrier().getId(), runId);
             }
             try {
                 project.syncChanges();

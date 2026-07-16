@@ -61,7 +61,20 @@ public final class MultiSlideAssignmentDialog {
     private static final Logger logger = LoggerFactory.getLogger(MultiSlideAssignmentDialog.class);
 
     /** Result of one slot assignment row. */
-    public record SlotAssignment(int position, String slotLabel, ProjectImageEntry<BufferedImage> entry) {}
+    /**
+     * A resolved slot assignment. {@code entry} is the entry the batch runs on (a rotated+flipped
+     * duplicate when a non-zero rotation was chosen, else the base). {@code baseEntry} is the base
+     * macro entry the operator picked in the dropdown -- the run persists {@code slide_position} on
+     * IT (not on the rotated duplicate) so the dialog can restore the assignment next time: the
+     * dropdown lists base macros and pre-fills by reading their {@code slide_position}. Stamping the
+     * rotated duplicate instead left the base without the metadata, so assignments were forgotten
+     * once vertical holders started defaulting to a 270 rotation.
+     */
+    public record SlotAssignment(
+            int position,
+            String slotLabel,
+            ProjectImageEntry<BufferedImage> entry,
+            ProjectImageEntry<BufferedImage> baseEntry) {}
 
     /** Result of the whole dialog: a chosen carrier + a list of per-slot assignments. */
     public record Result(StageInsert carrier, List<SlotAssignment> assignments) {}
@@ -420,7 +433,7 @@ public final class MultiSlideAssignmentDialog {
                 Integer rotDeg = r.rotationBox.getValue();
                 ProjectImageEntry<BufferedImage> assigned =
                         resolveAssignedEntry(project, entry, rotDeg == null ? 0 : rotDeg, chosenSource);
-                assignments.add(new SlotAssignment(r.position, r.slotLabel, assigned));
+                assignments.add(new SlotAssignment(r.position, r.slotLabel, assigned, entry));
             }
             if (assignments.isEmpty()) {
                 hint.setText("Assign at least one slot before starting.");
