@@ -57,6 +57,7 @@ import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
+import qupath.ext.qpsc.utilities.TilingUtilities;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.ext.qpsc.utilities.ZFocusPredictionModel;
 import qupath.fx.dialogs.Dialogs;
@@ -1740,29 +1741,21 @@ public class AcquisitionManager {
             double fovWidthMicrons = fovMicrons[0];
             double fovHeightMicrons = fovMicrons[1];
 
-            // Get overlap percentage
+            // Get overlap percentage and delegate to the shared grid math (same formula the tiler uses)
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-            double effectiveWidth = fovWidthMicrons * (1 - overlapPercent / 100.0);
-            double effectiveHeight = fovHeightMicrons * (1 - overlapPercent / 100.0);
-
-            // Calculate tile grid
-            int tilesX = (int) Math.ceil(annWidthMicrons / effectiveWidth);
-            int tilesY = (int) Math.ceil(annHeightMicrons / effectiveHeight);
-            int totalTiles = tilesX * tilesY;
+            int totalTiles = TilingUtilities.estimateTileCount(
+                    annWidthMicrons, annHeightMicrons, fovWidthMicrons, fovHeightMicrons, overlapPercent);
 
             logger.info(
-                    "Tile estimate: annotation {}x{} um, FOV {}x{} um, overlap {}%, grid {}x{} = {} tiles",
+                    "Tile estimate: annotation {}x{} um, FOV {}x{} um, overlap {}% = {} tiles",
                     Math.round(annWidthMicrons),
                     Math.round(annHeightMicrons),
                     Math.round(fovWidthMicrons),
                     Math.round(fovHeightMicrons),
                     Math.round(overlapPercent),
-                    tilesX,
-                    tilesY,
                     totalTiles);
 
-            // Return at least 1 tile to avoid division by zero
-            return Math.max(1, totalTiles);
+            return totalTiles;
 
         } catch (Exception e) {
             logger.error("Failed to estimate tile count, defaulting to 1", e);

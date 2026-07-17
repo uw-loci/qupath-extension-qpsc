@@ -50,6 +50,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MultiSlideAcquisitionEstimator;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -470,6 +471,48 @@ public final class MultiSlideExistingImageWorkflow {
                 new Tooltip("Halt cleanly once the running slide finishes; does not interrupt an in-flight slide."));
         List<Button> driverButtons = List.of(setUpAllBtn, acquireAllBtn);
 
+        // Whole-run acquisition-time estimate. Populated once slides have been SET UP (each slot's
+        // captured config + confirmed annotations are what the estimate needs); it reads each set-up
+        // entry's hierarchy off the FX thread, so it is recomputed at pass boundaries, not on every
+        // state tick. Uses this scope's learned per-tile timing when available (self-calibrating).
+        Label estimateLabel = new Label("Estimated run time: set up slides to see an estimate.");
+        estimateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #444;");
+        estimateLabel.setWrapText(true);
+        estimateLabel.setMinHeight(Region.USE_PREF_SIZE);
+        Runnable recomputeEstimate = () -> {
+            List<MultiSlideAcquisitionEstimator.SlotInput> inputs = new ArrayList<>();
+            for (SlotState s : states) {
+                if (s.setup == null) {
+                    continue; // only set-up slots have a captured config + confirmed annotations
+                }
+                var cfg = s.setup.config();
+                java.util.Set<String> classes = s.setup.selectedAnnotationClasses() == null
+                        ? java.util.Set.of()
+                        : new java.util.HashSet<>(s.setup.selectedAnnotationClasses());
+                inputs.add(new MultiSlideAcquisitionEstimator.SlotInput(
+                        s.assignment.slotLabel(),
+                        s.assignment.entry(),
+                        cfg.modality(),
+                        cfg.objective(),
+                        cfg.detector(),
+                        classes));
+            }
+            if (inputs.isEmpty()) {
+                estimateLabel.setText("Estimated run time: set up slides to see an estimate.");
+                return;
+            }
+            estimateLabel.setText("Estimated run time: computing...");
+            Thread t = new Thread(
+                    () -> {
+                        MultiSlideAcquisitionEstimator.BatchEstimate est =
+                                MultiSlideAcquisitionEstimator.estimate(inputs);
+                        Platform.runLater(() -> estimateLabel.setText("Estimated acquire time: " + est.summary()));
+                    },
+                    "MS-run-estimate");
+            t.setDaemon(true);
+            t.start();
+        };
+
         // Concrete next-step updater (buttons now exist). Idle-gated: a run in progress clears the
         // pulse. Recommends Step 1 while any slot still needs setup, then Step 2 once slots are set
         // up, then Finish once all are terminal.
@@ -570,6 +613,9 @@ public final class MultiSlideExistingImageWorkflow {
                         logger.info("MS workflow: Set Up All Remaining finished, runId={}", runId);
                         setBusy.accept(false);
                         refreshFinish.run();
+                        // Every set-up slot now has a captured config + confirmed annotations, so a
+                        // whole-run acquire estimate can be computed (reads hierarchies off-thread).
+                        recomputeEstimate.run();
                     });
         });
 
@@ -809,7 +855,7 @@ public final class MultiSlideExistingImageWorkflow {
         HBox stepRow = new HBox(10, setUpAllBtn, acquireAllBtn);
         stepRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox autoBox = new VBox(8, autoTitle, stepRow, stopAfterCurrent);
+        VBox autoBox = new VBox(8, autoTitle, stepRow, stopAfterCurrent, estimateLabel);
         autoBox.setStyle("-fx-border-color: #1565C0; -fx-border-width: 2; -fx-border-radius: 6; -fx-padding: 10;");
 
         Region footerSpacer = new Region();
@@ -884,6 +930,8 @@ public final class MultiSlideExistingImageWorkflow {
         // beside this panel so they dock next to it instead of piling on the alignment views.
         DialogPlacement.setBatchAnchor(stage);
         stage.show();
+        // If the panel opens with slots already set up (e.g. a resumed run), show an estimate now.
+        recomputeEstimate.run();
     }
 
     /**

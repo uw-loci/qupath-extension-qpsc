@@ -627,4 +627,25 @@ public class TilingUtilities {
             }
         }
     }
+
+    /**
+     * Pure tiles-per-annotation count: how many camera frames a rectangular region needs at the
+     * given overlap. {@code annWidth}/{@code annHeight} and {@code frameWidth}/{@code frameHeight}
+     * MUST be in the same unit (both microns, or both pixels). Mirrors the acquisition grid math
+     * ({@code nCols = ceil(annW / (frameW*(1-overlap)))}, likewise for rows). Returns at least 1.
+     *
+     * <p>Shared by the acquisition tile-count estimate ({@code AcquisitionManager}) and the
+     * multi-slide run-time estimate so both agree with the grid the tiler actually generates.
+     */
+    public static int estimateTileCount(
+            double annWidth, double annHeight, double frameWidth, double frameHeight, double overlapPercent) {
+        double effW = frameWidth * (1 - overlapPercent / 100.0);
+        double effH = frameHeight * (1 - overlapPercent / 100.0);
+        if (effW <= 0 || effH <= 0 || annWidth <= 0 || annHeight <= 0) {
+            return 1;
+        }
+        int tilesX = (int) Math.ceil(annWidth / effW);
+        int tilesY = (int) Math.ceil(annHeight / effH);
+        return Math.max(1, tilesX * tilesY);
+    }
 }
