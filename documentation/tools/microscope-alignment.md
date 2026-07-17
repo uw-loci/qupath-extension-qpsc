@@ -115,7 +115,8 @@ This workflow already drives 3-point refinement implicitly: after you select a r
 
 For each tile-confirm step:
 
-1. The stage is automatically moved to the predicted position (or you drive it manually if no estimate exists yet).
+1. Select a tile with tissue on the QuPath image where you want to image. The blue **Select tile** button moves the stage to its predicted position.
+1b. Autofocus then runs automatically at that position (no click needed).
 2. Either click **Auto-Align (SIFT)** to refine, or use the joystick to position manually.
 3. Click **Current Position is Accurate** to commit the measurement; click **Cancel acquisition** to abort.
 

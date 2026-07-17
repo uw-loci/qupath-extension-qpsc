@@ -166,9 +166,11 @@ public class MultiTileRefinement {
         Label stepsHeader = new Label("Alignment steps (repeat 1-3 for each point, then 4):");
         stepsHeader.setStyle("-fx-font-weight: bold;");
         Label step1 = stepLabel(
-                "1.  Select a tile on the QuPath image where you want to image -- the blue \"Select tile\" "
-                        + "button moves the stage to its predicted position.",
+                "1.  Select a tile with tissue on the QuPath image where you want to image -- the blue "
+                        + "\"Select tile\" button moves the stage to its predicted position.",
                 "#1565C0");
+        Label step1b =
+                stepLabel("1b. Autofocus then runs automatically at that position (no click needed).", "#555555");
         Label step2 =
                 stepLabel("2.  Click the amber \"Auto-Align (SIFT)\" to snap the stage onto that tile.", "#E65100");
         Hyperlink siftHelp = new Hyperlink("SIFT struggling? Open the alignment docs, then adjust \"Settings...\"");
@@ -181,7 +183,7 @@ public class MultiTileRefinement {
         Label step3 =
                 stepLabel("3.  Click the teal \"Add reference point\" once the live view matches the tile.", "#00695C");
         Label step4 = stepLabel("4.  With 2 or more points captured, click the green \"Solve & Save\".", "#2E7D32");
-        VBox instructions = new VBox(4, stepsHeader, step1, step2, siftHelp, step2b, step3, step4);
+        VBox instructions = new VBox(4, stepsHeader, step1, step1b, step2, siftHelp, step2b, step3, step4);
 
         Label pointsLabel = new Label("Points captured: 0");
         pointsLabel.setStyle("-fx-font-weight: bold;");
