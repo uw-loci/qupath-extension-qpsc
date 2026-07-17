@@ -573,11 +573,19 @@ public final class MultiSlideExistingImageWorkflow {
                     });
         });
 
+        // Auto-collapse-on-focus-loss is wanted during the interactive SETUP/alignment pass (the panel
+        // is in the way of the alignment dialogs), but NOT during the unattended ACQUIRE pass -- there
+        // the operator wants the live progress list visible while focus sits on the viewer/stitching.
+        // The acquire pass toggles this off for its duration.
+        boolean[] autoCollapseEnabled = {true};
+
         // Two-pass PASS 2: unattended acquisition on every Set-up slot, replaying its
         // captured config against the alignment JSON persisted during setup.
         acquireAllBtn.setOnAction(e -> {
             stopAfterCurrent.setSelected(false);
             setBusy.accept(true);
+            // Keep the panel visible for the whole unattended pass (see autoCollapseEnabled above).
+            autoCollapseEnabled[0] = false;
             logger.info("MS workflow: Acquire All Set-Up started (unattended, pipelined), runId={}", runId);
             // Collect every slot's saturation report into ONE combined dialog at batch end instead of
             // popping a per-acquisition dialog (a 4-slide run otherwise pops 4+). Paired with
@@ -607,6 +615,7 @@ public final class MultiSlideExistingImageWorkflow {
                                     runId);
                             // Still surface whatever saturation was collected before the abort.
                             SaturationSummaryDialog.endBatchAndShow();
+                            autoCollapseEnabled[0] = true;
                             setBusy.accept(false);
                             refreshFinish.run();
                             return;
@@ -624,6 +633,7 @@ public final class MultiSlideExistingImageWorkflow {
                             // One combined saturation dialog for the whole run (worst samples flagged
                             // at the top), instead of the per-acquisition popups collected above.
                             SaturationSummaryDialog.endBatchAndShow();
+                            autoCollapseEnabled[0] = true;
                             setBusy.accept(false);
                             refreshFinish.run();
                         });
@@ -850,7 +860,7 @@ public final class MultiSlideExistingImageWorkflow {
         // explicit (the Expand button) rather than on focus-regain, so clicking the bar to reposition
         // or expand it does not immediately fight the child dialogs for focus.
         stage.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
-            if (Boolean.FALSE.equals(isFocused) && !collapsed[0]) {
+            if (Boolean.FALSE.equals(isFocused) && !collapsed[0] && autoCollapseEnabled[0]) {
                 applyCollapsed.accept(true);
             }
         });
