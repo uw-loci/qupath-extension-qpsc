@@ -46,6 +46,20 @@ public final class SlotJumpAutofocus {
 
     private static final Logger logger = LoggerFactory.getLogger(SlotJumpAutofocus.class);
 
+    /**
+     * Edge-retry attempt budget for the slot-jump streaming scan, passed as {@code --max-attempts}.
+     *
+     * <p>This is deliberately higher than the server default (MAX_EDGE_RETRIES + 1 = 3) BECAUSE this
+     * is the slide-change case: we have just travelled to a fresh slide whose true focus depends on
+     * its mounting-media thickness and can sit well beyond one narrow sweep from the previous slide's
+     * Z. Rather than widen the per-scan {@code sweep_range_um} (which the config intentionally keeps
+     * small, and which the operator is warned against enlarging globally), we let the designed
+     * edge-retry march take MORE narrow steps toward focus. Extra attempts cost time only when focus
+     * is actually far -- a near-seed scan still commits on attempt 1 and stops. Worst-case wall time
+     * stays within the 180 s STRMAFZ read timeout (each attempt ~5-6 s, so 6 attempts + Brent ~40 s).
+     */
+    private static final int SLOT_JUMP_MAX_AF_ATTEMPTS = 6;
+
     /** Sink for the AF-phase status line (Section B of the multi-slide panel). */
     public interface StatusSink {
         /**
@@ -185,7 +199,13 @@ public final class SlotJumpAutofocus {
                             // the Live Viewer streaming-focus button does.
                             MicroscopeSocketClient.StreamingFocusResult result = controller
                                     .getSocketClient()
-                                    .streamingFocus(configPath, null, modalityForStreaming, Double.NaN);
+                                    .streamingFocus(
+                                            configPath,
+                                            null,
+                                            modalityForStreaming,
+                                            Double.NaN,
+                                            false,
+                                            SLOT_JUMP_MAX_AF_ATTEMPTS);
                             if (result.status == MicroscopeSocketClient.StreamingFocusResult.Status.ABORTED) {
                                 cancelled = true;
                             } else if (result.status != MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
