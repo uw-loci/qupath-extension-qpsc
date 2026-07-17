@@ -13,6 +13,7 @@ import javafx.scene.control.Hyperlink;
 import javafx.scene.control.Label;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
@@ -196,6 +197,8 @@ public class MultiTileRefinement {
         Label diagLabel = new Label("Add at least 2 points to solve a correction.");
         diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
         diagLabel.setWrapText(true);
+        diagLabel.setMaxWidth(420);
+        diagLabel.setMinHeight(Region.USE_PREF_SIZE);
 
         Button addButton = new Button("Select tile");
         addButton.setDefaultButton(true);
@@ -271,7 +274,7 @@ public class MultiTileRefinement {
             outerPulse.clear();
             // Predict this point with the running estimate (refined by prior points), NOT
             // the raw initial transform.
-            capturePoint(gui, workingEstimate[0], points.size() + 1, trustSift, confidenceThreshold, captureSlot)
+            capturePoint(stage, gui, workingEstimate[0], points.size() + 1, trustSift, confidenceThreshold, captureSlot)
                     .whenComplete((measure, ex) -> Platform.runLater(() -> {
                         if (ex != null) {
                             logger.warn("Multi-tile point capture failed: {}", ex.getMessage());
@@ -357,6 +360,7 @@ public class MultiTileRefinement {
      * ({@code confidence >= confidenceThreshold}).
      */
     private static CompletableFuture<PointMeasure> capturePoint(
+            Stage stage,
             QuPathGUI gui,
             AffineTransform estimate,
             int pointNumber,
@@ -421,6 +425,7 @@ public class MultiTileRefinement {
                                                 SiftAutoAlignHelper.drawSearchRangeOnStageMap(
                                                         gui, tile, predictedStage[0], predictedStage[1]);
                                                 hostCapturePane(
+                                                        stage,
                                                         captureSlot,
                                                         gui,
                                                         tile,
@@ -436,6 +441,7 @@ public class MultiTileRefinement {
                                                     ex.getMessage());
                                             // Move failed: present the pane in manual mode (no auto-SIFT).
                                             Platform.runLater(() -> hostCapturePane(
+                                                    stage,
                                                     captureSlot,
                                                     gui,
                                                     tile,
@@ -463,11 +469,18 @@ public class MultiTileRefinement {
     private static Label stepLabel(String text, String colorHex) {
         Label l = new Label(text);
         l.setWrapText(true);
+        // Constrain the wrap width so the label's preferred HEIGHT is computed for the wrapped
+        // (multi-line) layout up front, and pin minHeight to that pref so the VBox can never shrink
+        // the label back to one ellipsized line when a tall SiftCapturePane is embedded below it
+        // (the "text cut off on the 2nd point" symptom, since the window is non-resizable).
+        l.setMaxWidth(420);
+        l.setMinHeight(Region.USE_PREF_SIZE);
         l.setStyle("-fx-text-fill: " + colorHex + "; -fx-font-weight: bold;");
         return l;
     }
 
     private static void hostCapturePane(
+            Stage stage,
             VBox captureSlot,
             QuPathGUI gui,
             PathObject tile,
@@ -479,9 +492,13 @@ public class MultiTileRefinement {
         // a prior SIFT run (unlike single-tile's Save-after-SIFT gate).
         SiftCapturePane pane = new SiftCapturePane(gui, tile, false, "Add reference point");
         captureSlot.getChildren().setAll(pane);
+        // The window is non-resizable, so grow it to fit the embedded pane instead of squeezing the
+        // instruction labels above it. Paired with the clear() below to shrink back when the pane exits.
+        stage.sizeToScene();
         pane.capture(autoRunSift, confidenceThreshold)
                 .whenComplete((measured, ex) -> Platform.runLater(() -> {
                     captureSlot.getChildren().clear();
+                    stage.sizeToScene();
                     if (ex != null) {
                         logger.warn("Multi-tile capture pane failed: {}", ex.getMessage());
                         future.complete(null);

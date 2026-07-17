@@ -117,6 +117,9 @@ public final class MultiSlideAssignmentDialog {
                 + "Pass 2 acquires across all assigned slides.");
         intro.setWrapText(true);
         intro.setMaxWidth(620);
+        // Pin the wrapped intro to its full height so an over-full root VBox shrinks the scrollable
+        // slot list (which has Vgrow) rather than squeezing the intro down to an ellipsized 3 lines.
+        intro.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
         // Build the carrier dropdown -- only slide_holder kinds with >1 slot
         List<StageInsert> carriers = new ArrayList<>();
