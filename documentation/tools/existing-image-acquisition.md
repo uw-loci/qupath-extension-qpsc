@@ -133,7 +133,7 @@ The same MDA export action is also available in the per-modality hardware config
 
 ## Behavior
 
-When acquiring from a multi-slide project, the progress panel displays the active plan and per-axis counters. The panel automatically **collapses** when you click into another window (such as an alignment dialog or the Stage Map) and automatically **expands** when it regains focus. This allows the panel to tuck itself out of the way during alignment without manually clicking the collapse button. You can also click the **Collapse** button to manually collapse or expand at any time.
+When acquiring from a multi-slide project, the progress panel displays the active plan and per-axis counters. The panel automatically **collapses** when you click into another window (such as an alignment dialog or the Stage Map). When collapsed, the panel floats on top as a thin bar so it can never be buried behind other windows — the **Expand** button is always reachable with one click. This allows the panel to tuck itself out of the way during alignment without manually clicking the collapse button, and stay accessible without fighting child dialogs for focus. You can also click the **Collapse** button to manually collapse or expand at any time.
 
 ## Workflow
 

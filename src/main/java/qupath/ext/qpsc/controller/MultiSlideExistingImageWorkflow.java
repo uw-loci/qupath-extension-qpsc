@@ -816,9 +816,13 @@ public final class MultiSlideExistingImageWorkflow {
         root.setBottom(footer);
         BorderPane.setMargin(footer, new Insets(0, 12, 12, 12));
 
-        // Collapse/expand: hide the section stack + footer, leaving just the banner bar. The window
-        // shrinks to the bar (min-height relaxed while collapsed) so it can be tucked into a corner
-        // during alignment, then restored.
+        // Collapse/expand: shrink to just the banner bar, and float THAT bar above other windows so
+        // it can never be buried by the alignment dialogs / Stage Map / QuPath ("other modality
+        // things block it"). Only the tiny COLLAPSED bar is always-on-top; the expanded panel is
+        // never always-on-top. The documented no-always-on-top invariant is about the full expanded
+        // panel deadlocking app-modal CHILD dialogs (an Alert opened FROM it sinks behind it) -- the
+        // collapsed bar parents no dialog, so it cannot deadlock, and the expanded panel stays
+        // non-on-top exactly as before.
         boolean[] collapsed = {false};
         java.util.function.Consumer<Boolean> applyCollapsed = doCollapse -> {
             if (collapsed[0] == doCollapse) {
@@ -834,17 +838,22 @@ public final class MultiSlideExistingImageWorkflow {
             footer.setManaged(show);
             collapseBtn.setText(doCollapse ? "Expand" : "Collapse");
             stage.setMinHeight(doCollapse ? 0 : 480);
+            // Keep the collapsed bar on top and reachable; drop always-on-top the instant it expands.
+            stage.setAlwaysOnTop(doCollapse);
             stage.sizeToScene();
         };
         collapseBtn.setOnAction(e -> applyCollapsed.accept(!collapsed[0]));
 
         // Auto-collapse when the panel loses focus (a child alignment dialog, the Stage Map, or the
-        // QuPath viewer takes over) and auto-expand when it regains focus -- mirrors the Acquisition
-        // Wizard so the panel tucks itself out of the way during alignment without a manual click.
-        // The panel is intentionally NOT always-on-top (that deadlocks against the app-modal child
-        // dialogs), so unlike the wizard's floating pill the collapsed bar is a normal window; that
-        // is fine -- it just shrinks to the banner. The manual Collapse button still works too.
-        stage.focusedProperty().addListener((obs, wasFocused, isFocused) -> applyCollapsed.accept(!isFocused));
+        // QuPath viewer takes over) so it gets out of the way exactly when you want it gone -- the
+        // collapsed bar is always-on-top, so Expand is always one reachable click away. Re-expand is
+        // explicit (the Expand button) rather than on focus-regain, so clicking the bar to reposition
+        // or expand it does not immediately fight the child dialogs for focus.
+        stage.focusedProperty().addListener((obs, wasFocused, isFocused) -> {
+            if (Boolean.FALSE.equals(isFocused) && !collapsed[0]) {
+                applyCollapsed.accept(true);
+            }
+        });
 
         // Drop the AF status sink when the panel closes so slot-jump AF stops pushing status into
         // a disposed label (and a later panel can register its own). Also clear the intended-slot
