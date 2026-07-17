@@ -191,8 +191,12 @@ class SiftCapturePane extends VBox {
      */
     private void runSift(boolean autoAccept, double threshold) {
         siftButton.setDisable(true);
+        // Stop pulsing the SIFT button while SIFT is actually running -- a glowing button reads as
+        // "click me again," which is the opposite of what we want mid-run. The pulse is re-pointed
+        // (at Capture on a good match, or back at SIFT on no match) when the run returns.
+        pulse.clear();
         siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
-        siftResultLabel.setText("SIFT: running...");
+        siftResultLabel.setText("SIFTing for gold...");
         new Thread(
                         () -> {
                             try {
