@@ -54,6 +54,31 @@ class MultiSlideEstimateTest {
     }
 
     @Test
+    void slotCost_manySmallRegionsCostMoreThanOneBigRegion() {
+        // Same 100 files, same per-file time: 20 regions must cost 19 extra region-focus passes
+        // more than 1 region (the whole point of costing per-annotation, not just per-tile).
+        double twenty = MultiSlideAcquisitionEstimator.slotSeconds(100, 20, 1000);
+        double one = MultiSlideAcquisitionEstimator.slotSeconds(100, 1, 1000);
+        assertTrue(twenty > one, "20 regions should cost more than 1 region at equal tiles");
+        assertEquals(
+                19 * MultiSlideAcquisitionEstimator.PER_ANNOTATION_OVERHEAD_S,
+                twenty - one,
+                1e-9,
+                "difference should be exactly the per-region overhead x (20-1)");
+    }
+
+    @Test
+    void slotCost_scalesWithFilesAndClampsNegatives() {
+        double base = MultiSlideAcquisitionEstimator.slotSeconds(0, 0, 1000);
+        // 0 files, 0 regions -> just the per-slide startup.
+        assertEquals(MultiSlideAcquisitionEstimator.PER_SLIDE_OVERHEAD_S, base, 1e-9);
+        // 100 files at 1000 ms/file adds 100 s.
+        assertEquals(base + 100.0, MultiSlideAcquisitionEstimator.slotSeconds(100, 0, 1000), 1e-9);
+        // Negative guards: never below the per-slide startup.
+        assertEquals(base, MultiSlideAcquisitionEstimator.slotSeconds(-5, -5, 1000), 1e-9);
+    }
+
+    @Test
     void batchSummary_emptyIsGraceful() {
         var empty = new MultiSlideAcquisitionEstimator.BatchEstimate(List.of(), 0, 0, 0, 0, false);
         assertTrue(empty.summary().toLowerCase().contains("no set-up slides"));

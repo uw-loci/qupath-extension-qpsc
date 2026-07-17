@@ -48,7 +48,35 @@ public final class MultiSlideAcquisitionEstimator {
      */
     static final double FALLBACK_MS_PER_FILE = 900.0;
 
+    /**
+     * Per-annotation (region) overhead: the region move + a focus pass at the start of each region.
+     * This is why the estimate MUST see the annotation count, not just the tile count -- 20 small
+     * regions of 5 tiles cost 20 of these focus passes, whereas 1 region of 100 tiles costs one, even
+     * though both are 100 tiles. The per-file mean folds in only the PERIODIC (every-N-tiles) AF, not
+     * this per-region startup focus, so it is added explicitly.
+     */
+    static final double PER_ANNOTATION_OVERHEAD_S = 6.0;
+
+    /** Per-slide overhead: open the entry, settle at the slot, and the first full focus of the slide. */
+    static final double PER_SLIDE_OVERHEAD_S = 25.0;
+
     private MultiSlideAcquisitionEstimator() {}
+
+    /**
+     * Pure per-slot cost model: capture time (the per-file mean already folds in periodic AF) plus a
+     * per-region startup focus plus a per-slide startup. The per-region term is what makes many small
+     * annotations cost more than one large annotation at equal tile count.
+     *
+     * @param totalImages files this slot writes (tiles x captures-per-tile)
+     * @param annotationCount number of regions acquired on this slot
+     * @param msPerFile per-file wall time (learned mean, or fallback)
+     * @return estimated wall-clock seconds for this slot
+     */
+    static double slotSeconds(long totalImages, int annotationCount, double msPerFile) {
+        return (msPerFile / 1000.0) * Math.max(0, totalImages)
+                + Math.max(0, annotationCount) * PER_ANNOTATION_OVERHEAD_S
+                + PER_SLIDE_OVERHEAD_S;
+    }
 
     /** One slot's inputs. {@code annotationClasses} empty/null means "all annotations count". */
     public record SlotInput(
@@ -163,7 +191,7 @@ public final class MultiSlideAcquisitionEstimator {
             }
 
             long totalImages = tiles * captures;
-            double seconds = (msPerFile / 1000.0) * totalImages;
+            double seconds = slotSeconds(totalImages, annCount, msPerFile);
             return new SlotEstimate(in.label(), annCount, tiles, captures, totalImages, seconds, null);
         } catch (Exception e) {
             logger.warn("Multi-slide estimate: could not estimate slot '{}': {}", in.label(), e.getMessage());

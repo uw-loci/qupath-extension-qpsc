@@ -36,6 +36,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.CancellationToken;
 import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
+import qupath.ext.qpsc.model.AcquisitionTimeEstimator;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
@@ -305,6 +306,12 @@ public final class MultiSlideExistingImageWorkflow {
         AttentionPulse nextStepPulse = new AttentionPulse();
         boolean[] panelBusy = {false};
         Runnable[] nextStepHolder = {() -> {}};
+        // Forward reference (like nextStepHolder): refreshFinish runs on every state change and
+        // re-sums the cached per-slot estimates for the REMAINING (not-yet-Done) slots, so the
+        // whole-run prediction shrinks live as each slide finishes. Pointed at the real updater once
+        // the estimate label exists (below). This re-sum is cheap (no I/O); the I/O read that builds
+        // the cache runs only at pass boundaries.
+        Runnable[] estimateRefreshHolder = {() -> {}};
 
         GridPane grid = new GridPane();
         grid.setHgap(8);
@@ -331,6 +338,7 @@ public final class MultiSlideExistingImageWorkflow {
             }
             finishBtn.setDisable(!allTerminal);
             nextStepHolder[0].run();
+            estimateRefreshHolder[0].run();
         };
 
         // TEST-ONLY per-batch alignment-reuse decision, resolved once (pref on -> confirm)
@@ -479,7 +487,62 @@ public final class MultiSlideExistingImageWorkflow {
         estimateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #444;");
         estimateLabel.setWrapText(true);
         estimateLabel.setMinHeight(Region.USE_PREF_SIZE);
+        boolean[] estimateLearned = {false};
+
+        // Cheap re-sum (no I/O) of the cached per-slot estimates: REMAINING = slots not yet Done or
+        // Skipped, TOTAL = every estimated slot. Runs on every state change (via refreshFinish) so
+        // the prediction shrinks live as each slide finishes acquiring.
+        Runnable refreshEstimateLabel = () -> {
+            long remTiles = 0;
+            long totTiles = 0;
+            double remSec = 0;
+            double totSec = 0;
+            int remSlides = 0;
+            int totSlides = 0;
+            for (SlotState s : states) {
+                if (s.estimate == null) {
+                    continue;
+                }
+                totTiles += s.estimate.tiles();
+                totSec += s.estimate.seconds();
+                totSlides++;
+                if (s.status != Status.DONE && s.status != Status.SKIPPED) {
+                    remTiles += s.estimate.tiles();
+                    remSec += s.estimate.seconds();
+                    remSlides++;
+                }
+            }
+            if (totSlides == 0) {
+                estimateLabel.setText("Estimated run time: set up slides to see an estimate.");
+                return;
+            }
+            String qualifier = estimateLearned[0] ? " (measured timing)" : " (rough -- no measured timing yet)";
+            if (remSlides == 0) {
+                estimateLabel.setText(String.format(
+                        "Run complete -- estimated %s for %d slide%s, %,d tiles%s",
+                        AcquisitionTimeEstimator.formatDuration(totSec),
+                        totSlides,
+                        totSlides == 1 ? "" : "s",
+                        totTiles,
+                        qualifier));
+                return;
+            }
+            estimateLabel.setText(String.format(
+                    "Remaining ~%s of ~%s  --  %d of %d slides, %,d of %,d tiles left%s",
+                    AcquisitionTimeEstimator.formatDuration(remSec),
+                    AcquisitionTimeEstimator.formatDuration(totSec),
+                    remSlides,
+                    totSlides,
+                    remTiles,
+                    totTiles,
+                    qualifier));
+        };
+        estimateRefreshHolder[0] = refreshEstimateLabel;
+
+        // Heavy path (I/O): read each set-up slot's hierarchy off the FX thread to count tiles/regions,
+        // cache the per-slot estimate on the SlotState, then re-sum. Run at pass boundaries only.
         Runnable recomputeEstimate = () -> {
+            List<SlotState> setUpSlots = new ArrayList<>();
             List<MultiSlideAcquisitionEstimator.SlotInput> inputs = new ArrayList<>();
             for (SlotState s : states) {
                 if (s.setup == null) {
@@ -489,6 +552,7 @@ public final class MultiSlideExistingImageWorkflow {
                 java.util.Set<String> classes = s.setup.selectedAnnotationClasses() == null
                         ? java.util.Set.of()
                         : new java.util.HashSet<>(s.setup.selectedAnnotationClasses());
+                setUpSlots.add(s);
                 inputs.add(new MultiSlideAcquisitionEstimator.SlotInput(
                         s.assignment.slotLabel(),
                         s.assignment.entry(),
@@ -498,7 +562,7 @@ public final class MultiSlideExistingImageWorkflow {
                         classes));
             }
             if (inputs.isEmpty()) {
-                estimateLabel.setText("Estimated run time: set up slides to see an estimate.");
+                refreshEstimateLabel.run();
                 return;
             }
             estimateLabel.setText("Estimated run time: computing...");
@@ -506,7 +570,15 @@ public final class MultiSlideExistingImageWorkflow {
                     () -> {
                         MultiSlideAcquisitionEstimator.BatchEstimate est =
                                 MultiSlideAcquisitionEstimator.estimate(inputs);
-                        Platform.runLater(() -> estimateLabel.setText("Estimated acquire time: " + est.summary()));
+                        Platform.runLater(() -> {
+                            estimateLearned[0] = est.learned();
+                            for (int i = 0;
+                                    i < setUpSlots.size() && i < est.slots().size();
+                                    i++) {
+                                setUpSlots.get(i).estimate = est.slots().get(i);
+                            }
+                            refreshEstimateLabel.run();
+                        });
                     },
                     "MS-run-estimate");
             t.setDaemon(true);
@@ -1347,6 +1419,9 @@ public final class MultiSlideExistingImageWorkflow {
         MenuItem runSingleItem;
         // Captured during the two-pass setup pass; replayed unattended in the acquire pass.
         ExistingImageWorkflowV2.SetupResult setup;
+        // Cached whole-run estimate contribution for this slot (tiles + seconds), computed off the FX
+        // thread after setup; re-summed cheaply for the live "remaining" prediction.
+        MultiSlideAcquisitionEstimator.SlotEstimate estimate;
 
         SlotState(MultiSlideAssignmentDialog.SlotAssignment a) {
             this.assignment = a;
