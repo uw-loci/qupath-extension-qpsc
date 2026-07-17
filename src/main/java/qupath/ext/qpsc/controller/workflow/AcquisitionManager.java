@@ -1374,7 +1374,13 @@ public class AcquisitionManager {
                                 .toString();
                         String reportPath = tileDir + java.io.File.separator + "saturation_report.json";
                         java.io.File reportFile = new java.io.File(reportPath);
-                        if (reportFile.exists()) {
+                        // Multi-run batch: collect into one combined dialog shown at batch end instead
+                        // of popping a per-acquisition dialog (a 4-slide run otherwise pops 4+).
+                        if (SaturationSummaryDialog.isBatchActive()) {
+                            String sampleLabel = state.sample.sampleName() + " (" + annotation.getName() + ")";
+                            SaturationSummaryDialog.collect(
+                                    sampleLabel, reportPath, satSummary, state.sample.modality());
+                        } else if (reportFile.exists()) {
                             // Show detailed scrollable dialog with per-tile data
                             SaturationSummaryDialog.show(reportPath, satSummary, state.sample.modality());
                         } else {

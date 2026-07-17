@@ -44,6 +44,7 @@ import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.AttentionPulse;
 import qupath.ext.qpsc.ui.DialogPlacement;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
+import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.SectionBuilder;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
@@ -578,6 +579,10 @@ public final class MultiSlideExistingImageWorkflow {
             stopAfterCurrent.setSelected(false);
             setBusy.accept(true);
             logger.info("MS workflow: Acquire All Set-Up started (unattended, pipelined), runId={}", runId);
+            // Collect every slot's saturation report into ONE combined dialog at batch end instead of
+            // popping a per-acquisition dialog (a 4-slide run otherwise pops 4+). Paired with
+            // endBatchAndShow() (normal end) / endBatchAndShow() after abort settles.
+            SaturationSummaryDialog.beginBatch();
             // Batch-scoped collector for each slot's stitch+import completion. Pipelining advances
             // the driver to slot N+1 at slot N's acquisition-complete (while N still stitches), so
             // the batch tail must await every collected future before declaring the batch done.
@@ -600,6 +605,8 @@ public final class MultiSlideExistingImageWorkflow {
                             logger.info(
                                     "MS workflow: acquire pass ended via Abort All; not awaiting pending stitches, runId={}",
                                     runId);
+                            // Still surface whatever saturation was collected before the abort.
+                            SaturationSummaryDialog.endBatchAndShow();
                             setBusy.accept(false);
                             refreshFinish.run();
                             return;
@@ -614,6 +621,9 @@ public final class MultiSlideExistingImageWorkflow {
                                 gui.refreshProject();
                             }
                             notifyBatchComplete(carrier, states, runId);
+                            // One combined saturation dialog for the whole run (worst samples flagged
+                            // at the top), instead of the per-acquisition popups collected above.
+                            SaturationSummaryDialog.endBatchAndShow();
                             setBusy.accept(false);
                             refreshFinish.run();
                         });

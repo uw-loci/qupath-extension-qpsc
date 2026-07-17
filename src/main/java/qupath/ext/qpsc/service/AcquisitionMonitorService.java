@@ -137,7 +137,10 @@ public final class AcquisitionMonitorService {
             String reportPath = tileDirPath + java.io.File.separator + "saturation_report.json";
             java.io.File reportFile = new java.io.File(reportPath);
 
-            if (reportFile.exists()) {
+            if (SaturationSummaryDialog.isBatchActive()) {
+                // Multi-run batch: fold into the one combined dialog (label derives from the tile dir).
+                SaturationSummaryDialog.collect(null, reportPath, satSummary, modality);
+            } else if (reportFile.exists()) {
                 SaturationSummaryDialog.show(reportPath, satSummary, modality);
             } else {
                 Platform.runLater(() -> {

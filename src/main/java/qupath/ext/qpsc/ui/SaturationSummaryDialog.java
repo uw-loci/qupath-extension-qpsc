@@ -53,6 +53,83 @@ public class SaturationSummaryDialog {
      *  tolerance (0.10) on the Python side. */
     private static final double AF_SATURATION_WARN_PCT = 10.0;
 
+    // ---- Batch (multi-run) collection ---------------------------------------------------------
+    // A single multi-slide run acquires many samples; each one previously popped its own saturation
+    // dialog. When a batch is active, per-acquisition reports are COLLECTED here instead and shown
+    // as one combined, scrollable summary at the end (with the worst samples flagged at the top).
+
+    /** One collected per-acquisition saturation report awaiting the combined batch dialog. */
+    private record BatchEntry(String sampleLabel, String reportPath, String summaryText, String modality) {}
+
+    private static volatile boolean batchActive = false;
+    private static final List<BatchEntry> batchEntries = java.util.Collections.synchronizedList(new ArrayList<>());
+
+    /**
+     * Enters batch mode: subsequent {@link #collect} calls accumulate instead of popping a dialog.
+     * Call at the start of a multi-run acquire pass; pair with {@link #endBatchAndShow} (normal end)
+     * or {@link #cancelBatch} (abort).
+     */
+    public static void beginBatch() {
+        batchActive = true;
+        batchEntries.clear();
+        logger.info("Saturation summary: batch mode ON (per-slide reports collected into one dialog)");
+    }
+
+    /** True while a multi-run acquire pass is collecting saturation reports. */
+    public static boolean isBatchActive() {
+        return batchActive;
+    }
+
+    /** Discards any collected reports without showing a dialog (use on abort). */
+    public static void cancelBatch() {
+        batchActive = false;
+        batchEntries.clear();
+    }
+
+    /**
+     * Collects one acquisition's saturation report for the combined batch dialog. No-op with a
+     * warning if called while not in batch mode (callers should gate on {@link #isBatchActive}).
+     *
+     * @param sampleLabel human label for this acquisition (e.g. "SlideA (Tissue-1)")
+     * @param reportPath  path to that acquisition's saturation_report.json (may not exist -- then
+     *                    only {@code summaryText} is shown for it)
+     * @param summaryText server-formatted summary text (fallback when the report file is absent)
+     * @param modality    modality id for per-tile role / channel display
+     */
+    public static void collect(String sampleLabel, String reportPath, String summaryText, String modality) {
+        if (!batchActive) {
+            logger.warn("SaturationSummaryDialog.collect called outside batch mode; showing single dialog instead");
+            show(reportPath, summaryText, modality);
+            return;
+        }
+        batchEntries.add(new BatchEntry(sampleLabel, reportPath, summaryText, modality));
+        logger.info("Saturation report collected for batch: sample='{}' report={}", sampleLabel, reportPath);
+    }
+
+    /**
+     * Leaves batch mode and shows the combined dialog for everything collected. No dialog if nothing
+     * had saturation. Safe to call even if {@link #beginBatch} was never called (no-op).
+     */
+    public static void endBatchAndShow() {
+        if (!batchActive) {
+            return;
+        }
+        batchActive = false;
+        List<BatchEntry> entries = new ArrayList<>(batchEntries);
+        batchEntries.clear();
+        if (entries.isEmpty()) {
+            logger.info("Saturation batch: no saturation across the run; no combined dialog");
+            return;
+        }
+        Platform.runLater(() -> {
+            try {
+                showBatchImpl(entries);
+            } catch (Exception e) {
+                logger.error("Failed to show combined saturation summary dialog", e);
+            }
+        });
+    }
+
     /**
      * Show the saturation summary dialog from a saturation_report.json file.
      *
@@ -82,12 +159,34 @@ public class SaturationSummaryDialog {
         });
     }
 
+    /** Parsed saturation report: tiles split into concerning vs expected-bright, plus display context. */
+    private record Parsed(
+            List<Map<String, Object>> concerning,
+            List<Map<String, Object>> expectedBright,
+            ModalityHandler handler,
+            ModalityHandler.ChannelDisplay channelDisplay) {
+
+        /** Worst concerning saturation percent across all concerning tiles (0 if none). */
+        double worstConcerningPct() {
+            return concerning.stream()
+                    .map(t -> t.get("worst_pct"))
+                    .filter(v -> v instanceof Number)
+                    .mapToDouble(v -> ((Number) v).doubleValue())
+                    .max()
+                    .orElse(0);
+        }
+    }
+
+    /**
+     * Reads and classifies a saturation_report.json. Returns {@code null} when the file is missing
+     * or has no saturated tiles (nothing to show).
+     */
     @SuppressWarnings("unchecked")
-    private static void showImpl(String reportPath, String summaryText, String modality) throws IOException {
+    private static Parsed parseReport(String reportPath, String modality) throws IOException {
         File reportFile = new File(reportPath);
         if (!reportFile.exists()) {
             logger.warn("Saturation report file not found: {}", reportPath);
-            return;
+            return null;
         }
 
         String json = Files.readString(reportFile.toPath(), StandardCharsets.UTF_8);
@@ -97,7 +196,7 @@ public class SaturationSummaryDialog {
         List<Map<String, Object>> tiles = (List<Map<String, Object>>) report.get("saturated_tiles");
         if (tiles == null || tiles.isEmpty()) {
             logger.info("No saturated tiles in report");
-            return;
+            return null;
         }
 
         ModalityHandler handler = (modality != null && !modality.isBlank())
@@ -124,6 +223,18 @@ public class SaturationSummaryDialog {
                 concerning.add(tile);
             }
         }
+        return new Parsed(concerning, expectedBright, handler, channelDisplay);
+    }
+
+    private static void showImpl(String reportPath, String summaryText, String modality) throws IOException {
+        Parsed parsed = parseReport(reportPath, modality);
+        if (parsed == null) {
+            return;
+        }
+        List<Map<String, Object>> concerning = parsed.concerning();
+        List<Map<String, Object>> expectedBright = parsed.expectedBright();
+        ModalityHandler handler = parsed.handler();
+        ModalityHandler.ChannelDisplay channelDisplay = parsed.channelDisplay();
 
         Stage stage = new Stage();
         stage.setTitle("Saturation Summary" + (modality != null && !modality.isBlank() ? " -- " + modality : ""));
@@ -205,6 +316,184 @@ public class SaturationSummaryDialog {
                 concerning.size(),
                 expectedBright.size(),
                 modality);
+    }
+
+    /** One collected report plus its parsed content (null when the report was missing/empty). */
+    private record SampleParsed(BatchEntry entry, Parsed parsed) {}
+
+    /**
+     * Combined dialog for a whole multi-run acquire pass: a top warning listing every acquisition
+     * that had concerning saturation (worst-first), then a scrollable per-sample list -- flagged
+     * samples expanded, clean ones collapsed.
+     */
+    private static void showBatchImpl(List<BatchEntry> entries) {
+        List<SampleParsed> samples = new ArrayList<>();
+        for (BatchEntry e : entries) {
+            Parsed p = null;
+            try {
+                p = parseReport(e.reportPath(), e.modality());
+            } catch (Exception ex) {
+                logger.warn("Batch saturation: failed to parse report for '{}': {}", e.sampleLabel(), ex.getMessage());
+            }
+            samples.add(new SampleParsed(e, p));
+        }
+
+        // Samples with concerning saturation, worst-first -- these drive the top warning.
+        List<SampleParsed> concerningSamples = samples.stream()
+                .filter(s -> s.parsed() != null && !s.parsed().concerning().isEmpty())
+                .sorted(java.util.Comparator.comparingDouble(
+                                (SampleParsed s) -> s.parsed().worstConcerningPct())
+                        .reversed())
+                .toList();
+
+        Stage stage = new Stage();
+        stage.setTitle("Saturation Summary -- Multi-Slide Run (" + samples.size() + " acquisitions)");
+        stage.initModality(Modality.NONE);
+
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(10));
+
+        Label header = new Label("Saturation summary for this run");
+        header.setStyle("-fx-font-weight: bold; -fx-font-size: 14px;");
+        root.getChildren().add(header);
+
+        Label banner = new Label();
+        banner.setWrapText(true);
+        banner.setMaxWidth(Double.MAX_VALUE);
+        if (concerningSamples.isEmpty()) {
+            banner.setText("No concerning saturation in any acquisition this run.");
+            banner.setStyle("-fx-font-size: 12px; -fx-text-fill: #4a7c4a; -fx-background-color: #eef6ee; "
+                    + "-fx-padding: 6 8 6 8; -fx-border-color: #bcd8bc; -fx-border-width: 0 0 0 3;");
+        } else {
+            double worstOverall = concerningSamples.get(0).parsed().worstConcerningPct();
+            boolean bad = worstOverall >= AF_SATURATION_WARN_PCT;
+            StringBuilder sb = new StringBuilder();
+            sb.append(concerningSamples.size())
+                    .append(" of ")
+                    .append(samples.size())
+                    .append(" acquisition(s) had concerning saturation:");
+            for (SampleParsed s : concerningSamples) {
+                sb.append("\n  - ")
+                        .append(labelFor(s.entry()))
+                        .append("  (")
+                        .append(s.parsed().concerning().size())
+                        .append(" tile(s), worst ")
+                        .append(String.format("%.1f%%", s.parsed().worstConcerningPct()))
+                        .append(")");
+            }
+            if (bad) {
+                sb.append("\n\nWARNING: saturation this high degrades autofocus -- a saturated channel inverts "
+                        + "the focus metric and can walk the stage off focus. Lower the exposure (or illumination) "
+                        + "for the flagged samples so no channel clips.");
+            }
+            banner.setText(sb.toString());
+            banner.setStyle("-fx-font-size: 12px; -fx-text-fill: " + (bad ? "#b00020" : "#7a5c00")
+                    + "; -fx-background-color: " + (bad ? "#fbeaea" : "#fdf6e3")
+                    + "; -fx-padding: 6 8 6 8; -fx-border-color: " + (bad ? "#e0a0a0" : "#d8cfb4")
+                    + "; -fx-border-width: 0 0 0 3;");
+        }
+        root.getChildren().add(banner);
+
+        Label instruction = new Label("Double-click a row to move stage to that tile (requires microscope connection)");
+        instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+        root.getChildren().add(instruction);
+
+        // Scrollable per-sample list: flagged samples first, then the clean/unavailable ones.
+        VBox list = new VBox(8);
+        list.setPadding(new Insets(2));
+        List<SampleParsed> ordered = new ArrayList<>(concerningSamples);
+        for (SampleParsed s : samples) {
+            if (!concerningSamples.contains(s)) {
+                ordered.add(s);
+            }
+        }
+        for (SampleParsed s : ordered) {
+            list.getChildren().add(buildSampleSection(s.entry(), s.parsed()));
+        }
+        ScrollPane scroll = new ScrollPane(list);
+        scroll.setFitToWidth(true);
+        VBox.setVgrow(scroll, Priority.ALWAYS);
+        root.getChildren().add(scroll);
+
+        Scene scene = new Scene(root, 760, 620);
+        stage.setScene(scene);
+        stage.setMinWidth(560);
+        stage.setMinHeight(360);
+        stage.show();
+
+        logger.info(
+                "Combined saturation dialog: {} acquisitions, {} with concerning saturation",
+                samples.size(),
+                concerningSamples.size());
+    }
+
+    /** Builds one collapsible per-sample section for the combined dialog. */
+    private static TitledPane buildSampleSection(BatchEntry entry, Parsed parsed) {
+        TitledPane pane = new TitledPane();
+        String label = labelFor(entry);
+
+        if (parsed == null) {
+            pane.setText(label + " -- report unavailable");
+            pane.setExpanded(false);
+            Label txt =
+                    new Label(entry.summaryText() != null ? entry.summaryText() : "No detailed report was written.");
+            txt.setWrapText(true);
+            txt.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+            pane.setContent(txt);
+            return pane;
+        }
+
+        int concerningN = parsed.concerning().size();
+        int brightN = parsed.expectedBright().size();
+        if (concerningN > 0) {
+            pane.setText(String.format(
+                    "%s -- %d concerning tile(s), worst %.1f%%", label, concerningN, parsed.worstConcerningPct()));
+            pane.setExpanded(true);
+        } else {
+            pane.setText(
+                    label + " -- no concerning saturation" + (brightN > 0 ? " (" + brightN + " expected-bright)" : ""));
+            pane.setExpanded(false);
+        }
+
+        VBox body = new VBox(6);
+        if (concerningN > 0) {
+            TableView<Map<String, Object>> t =
+                    buildTable(parsed.concerning(), parsed.channelDisplay(), parsed.handler());
+            t.setPrefHeight(Math.min(240, 40 + concerningN * 26));
+            body.getChildren().add(t);
+        } else {
+            Label ok = new Label("No concerning saturation detected.");
+            ok.setStyle("-fx-font-style: italic; -fx-text-fill: #4a7c4a;");
+            body.getChildren().add(ok);
+        }
+        if (brightN > 0) {
+            TitledPane bright = new TitledPane();
+            bright.setText("Expected bright tiles (" + brightN + " -- normal for this modality)");
+            bright.setExpanded(false);
+            TableView<Map<String, Object>> bt =
+                    buildTable(parsed.expectedBright(), parsed.channelDisplay(), parsed.handler());
+            bt.setPrefHeight(Math.min(180, 40 + brightN * 26));
+            bright.setContent(bt);
+            body.getChildren().add(bright);
+        }
+        pane.setContent(body);
+        return pane;
+    }
+
+    /** Human label for a collected entry: the passed sample label, else the report's folder name. */
+    private static String labelFor(BatchEntry e) {
+        if (e.sampleLabel() != null && !e.sampleLabel().isBlank()) {
+            return e.sampleLabel();
+        }
+        try {
+            File parent = new File(e.reportPath()).getParentFile();
+            if (parent != null) {
+                return parent.getName();
+            }
+        } catch (Exception ignore) {
+            // fall through
+        }
+        return e.modality() != null ? e.modality() : "acquisition";
     }
 
     /**
