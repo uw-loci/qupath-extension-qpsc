@@ -131,6 +131,10 @@ The dialog remains open after export, so you can still Start Acquisition or Canc
 
 The same MDA export action is also available in the per-modality hardware configuration panels (in the modality TitledPane), but the footer button provides a more discoverable entry point.
 
+## Behavior
+
+When acquiring from a multi-slide project, the progress panel displays the active plan and per-axis counters. The panel automatically **collapses** when you click into another window (such as an alignment dialog or the Stage Map) and automatically **expands** when it regains focus. This allows the panel to tuck itself out of the way during alignment without manually clicking the collapse button. You can also click the **Collapse** button to manually collapse or expand at any time.
+
 ## Workflow
 
 ### Startup Check: Source Microscope Mismatch

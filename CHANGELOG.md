@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Multi-Slide Existing Image: auto-collapse progress panel on focus loss**
+- The progress panel in the Multi-Slide Existing Image workflow now automatically collapses when focus shifts to another window (e.g., an alignment dialog or the Stage Map) and automatically expands when the panel regains focus. This mirrors the Acquisition Wizard's behavior, letting the panel tuck itself out of the way during alignment steps without a manual click. The manual **Collapse** button still works as before.
+
 ### Fixed
 
 **Bug reporter: issue titles came from the first line of the description**

@@ -820,19 +820,31 @@ public final class MultiSlideExistingImageWorkflow {
         // shrinks to the bar (min-height relaxed while collapsed) so it can be tucked into a corner
         // during alignment, then restored.
         boolean[] collapsed = {false};
-        collapseBtn.setOnAction(e -> {
-            collapsed[0] = !collapsed[0];
-            boolean show = !collapsed[0];
+        java.util.function.Consumer<Boolean> applyCollapsed = doCollapse -> {
+            if (collapsed[0] == doCollapse) {
+                return; // already in that state -- avoid redundant sizeToScene churn / flicker
+            }
+            collapsed[0] = doCollapse;
+            boolean show = !doCollapse;
             header.setVisible(show);
             header.setManaged(show);
             scroll.setVisible(show);
             scroll.setManaged(show);
             footer.setVisible(show);
             footer.setManaged(show);
-            collapseBtn.setText(collapsed[0] ? "Expand" : "Collapse");
-            stage.setMinHeight(collapsed[0] ? 0 : 480);
+            collapseBtn.setText(doCollapse ? "Expand" : "Collapse");
+            stage.setMinHeight(doCollapse ? 0 : 480);
             stage.sizeToScene();
-        });
+        };
+        collapseBtn.setOnAction(e -> applyCollapsed.accept(!collapsed[0]));
+
+        // Auto-collapse when the panel loses focus (a child alignment dialog, the Stage Map, or the
+        // QuPath viewer takes over) and auto-expand when it regains focus -- mirrors the Acquisition
+        // Wizard so the panel tucks itself out of the way during alignment without a manual click.
+        // The panel is intentionally NOT always-on-top (that deadlocks against the app-modal child
+        // dialogs), so unlike the wizard's floating pill the collapsed bar is a normal window; that
+        // is fine -- it just shrinks to the banner. The manual Collapse button still works too.
+        stage.focusedProperty().addListener((obs, wasFocused, isFocused) -> applyCollapsed.accept(!isFocused));
 
         // Drop the AF status sink when the panel closes so slot-jump AF stops pushing status into
         // a disposed label (and a later panel can register its own). Also clear the intended-slot
