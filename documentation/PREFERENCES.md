@@ -762,6 +762,8 @@ When enabled during multi-slide batch acquisition, the microscope automatically 
 
 The autofocus-on-slot-jump system reuses the existing Live Viewer autofocus, reading the **Live Viewer: Autofocus Method** preference. When the method is **STREAMING** and a Live Viewer stream is open, slot-jump autofocus runs the **streaming focus scan** (STRMAFZ) — a full focus **search** while the stream stays running, which is what a slot jump needs since each slide can be at a very different Z. When the method is **SWEEP**, or when **STREAMING** is selected but no stream is open, it falls back to the **Sweep** drift-check (TESTADAF), which is a narrow-range check and can report success without finding focus if the stage starts far from focus. During the batch, the AF status displays in the **Alignment** section: "Moving to slot..." → "Focusing..." → "Ready" on success, or amber "Focus failed -- align manually" on failure. To ensure reliable slot-jump autofocus, keep a Live Viewer stream open during multi-slide alignment.
 
+Because a fresh slide's true focus depends on its mounting-media thickness and can sit well beyond one narrow sweep from the previous slide's Z, the slot-jump streaming search uses an **extended attempt budget** (6 edge-retry attempts, versus the default 3) so its narrow-step focus march can reach a far focus without widening the per-sweep range. This is specific to the slide-change case and does not change the global autofocus sweep/search ranges. Extra attempts cost time only when focus is actually far; a near-seed scan still commits on the first attempt.
+
 **When to Enable:**
 - Running unattended multi-slide batches where automatic focusing saves time
 - Tissue is generally well-focused at the slot center

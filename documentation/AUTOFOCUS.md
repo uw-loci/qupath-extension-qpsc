@@ -134,6 +134,8 @@ The server-side sweep:
 
 The sweep is designed for corrections of 1-5um per attempt, with the retry loop extending reach to ~15um (bounded by the total-drift cap above).
 
+**Multi-slide slot-jump override (2026-07-20):** the streaming focus search (STRMAFZ) accepts a per-request `--max-attempts` cap on its edge-retry march (default 3). The multi-slide **slot-jump** autofocus passes **6** for this call only, because a fresh slide's focus depends on its mounting-media thickness and can sit well beyond one narrow sweep from the previous slide's Z; the extra narrow-step attempts let the march reach a far focus without widening the global `sweep_range_um`/`search_range_um` (which operators are warned against enlarging). This is a single-call override, not a config change; see [Autofocus on slot jump](PREFERENCES.md#autofocus-on-slot-jump) and `claude-reports/2026-07-20_multislide-alerts-af-saturation-estimate-session.md`.
+
 In the Live Viewer, when you select Sweep Autofocus, clicking the Autofocus button sends a `TESTADAF` command to the server and displays "Sweeping..." on the button while the server performs the scan. The focus range dropdown always defers to the `sweep_range_um` YAML setting for Sweep Autofocus (unlike Streaming AF, where explicit um values override the YAML).
 
 **Speed note (2026-04-14):** The internal Z-wait path in `microscope_control/hardware/stage.py` now uses a tight `device_busy` poll instead of `wait_for_device`. On the Prior ProScan this cut the blocking round-trip for a 20 um move from ~240 ms to ~80 ms (~3x) with no behavioral change. Per-sweep savings are ~900 ms across a 6-step check, which adds up to ~11 minutes across a 750-sweep acquisition. Other stages see smaller but still positive gains.
