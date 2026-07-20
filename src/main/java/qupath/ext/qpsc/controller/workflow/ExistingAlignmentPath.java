@@ -494,18 +494,8 @@ public class ExistingAlignmentPath {
             }
         }
 
-        // Test if the saved transform expects unflipped macro coordinates
-
         logger.info("Green box in flipped macro: ({}, {})", greenBox.getBoundsX(), greenBox.getBoundsY());
-        //
-        //// Calculate where this would be in unflipped coordinates
-        //        double unflippedX = context.macroContext.croppedResult.getCroppedImage().getWidth() -
-        // greenBox.getBoundsX() - greenBox.getBoundsWidth();
-        //        double unflippedY = context.macroContext.croppedResult.getCroppedImage().getHeight() -
-        // greenBox.getBoundsY() - greenBox.getBoundsHeight();
-        //        logger.info("Green box in unflipped macro would be: ({}, {})", unflippedX, unflippedY);
 
-        // Test both versions
         Point2D flippedGreenBoxCenter = new Point2D.Double(greenBox.getCentroidX(), greenBox.getCentroidY());
 
         Point2D stageFlipped = new Point2D.Double();

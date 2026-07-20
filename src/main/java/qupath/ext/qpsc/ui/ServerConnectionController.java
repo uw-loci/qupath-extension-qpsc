@@ -4,6 +4,7 @@ import java.text.SimpleDateFormat;
 import java.util.Date;
 import java.util.ResourceBundle;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -652,9 +653,17 @@ public class ServerConnectionController {
 
         CompletableFuture.runAsync(() -> {
             try {
-                // Save settings first
-                Platform.runLater(this::saveSettings);
-                Thread.sleep(100); // Let settings save
+                // Save settings on the FX thread and wait for it to finish before
+                // disconnecting -- correct ordering instead of a fixed-delay guess.
+                CountDownLatch saveLatch = new CountDownLatch(1);
+                Platform.runLater(() -> {
+                    try {
+                        saveSettings();
+                    } finally {
+                        saveLatch.countDown();
+                    }
+                });
+                saveLatch.await();
 
                 MicroscopeController controller = MicroscopeController.getInstance();
 

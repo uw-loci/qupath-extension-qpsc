@@ -1,7 +1,6 @@
 package qupath.ext.qpsc.controller;
 
 import java.io.IOException;
-import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.AcquisitionWizardDialog;
@@ -70,58 +69,6 @@ public class QPScopeController {
             instance = new QPScopeController();
         }
         return instance;
-    }
-
-    /**
-     * Initializes the controller and optionally starts user interaction flow.
-     * <p>This method can be called during extension initialization if automatic
-     * workflow startup is desired. Currently starts a basic user interaction flow
-     * for demonstration purposes.
-     */
-    public void init() {
-        logger.info("Starting QPScopeController initialization and interactive flow");
-        // Kick off the first step of the flow if desired.
-        startUserInteraction();
-        logger.debug("QPScopeController initialization completed");
-    }
-
-    /**
-     * Initiates a basic user interaction flow for testing purposes.
-     * <p>This method demonstrates the asynchronous dialog pattern used throughout
-     * the application. In practice, specific workflows handle their own dialog sequences.
-     */
-    private void startUserInteraction() {
-        logger.debug("Starting basic user interaction flow");
-        CompletableFuture<Void> userInputFuture = showUserDialog("Initial settings", "Please confirm settings.");
-        userInputFuture.thenRunAsync(() -> {
-            logger.debug("User interaction dialog completed");
-        });
-    }
-
-    /**
-     * Shows a user dialog asynchronously and returns a CompletableFuture for the result.
-     * <p>This is a demonstration method that simulates dialog interaction. Real workflows
-     * use JavaFX dialog controllers for actual user interaction.
-     *
-     * @param title the dialog title
-     * @param message the dialog message content
-     * @return CompletableFuture that completes when the simulated dialog closes
-     */
-    private CompletableFuture<Void> showUserDialog(String title, String message) {
-        CompletableFuture<Void> future = new CompletableFuture<>();
-        logger.info("Showing dialog: {} - {}", title, message);
-        new Thread(() -> {
-                    try {
-                        Thread.sleep(1000); // Simulate a delay for user confirmation.
-                    } catch (InterruptedException e) {
-                        logger.warn("User dialog thread interrupted", e);
-                        Thread.currentThread().interrupt();
-                    }
-                    future.complete(null);
-                    logger.debug("Dialog '{}' simulation completed", title);
-                })
-                .start();
-        return future;
     }
 
     /**

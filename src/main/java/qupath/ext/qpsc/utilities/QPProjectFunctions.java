@@ -361,38 +361,6 @@ public class QPProjectFunctions {
         return null;
     }
 
-    //    /**
-    //     * Import an image file to the project and open it in the GUI.
-    //     */
-    //    private static ProjectImageEntry<BufferedImage> importCurrentImageToNewProject(
-    //            QuPathGUI qupathGUI,
-    //            Project<BufferedImage> project,
-    //            File imageFile,
-    //            boolean flipX,
-    //            boolean flipY) throws IOException {
-    //
-    //        // Add image with flips
-    //        addImageToProject(imageFile, project, flipX, flipY);
-    //
-    //        // Find the newly added entry
-    //        String baseName = imageFile.getName();
-    //        ProjectImageEntry<BufferedImage> entry = project.getImageList().stream()
-    //                .filter(e -> baseName.equals(e.getImageName()))
-    //                .findFirst()
-    //                .orElse(null);
-    //
-    //        if (entry != null) {
-    //            // Open the image
-    //            qupathGUI.openImageEntry(entry);
-    //            qupathGUI.refreshProject();
-    //            logger.info("Opened image in GUI: {}", baseName);
-    //        } else {
-    //            logger.warn("Could not find newly added image in project: {}", baseName);
-    //        }
-    //
-    //        return entry;
-    //    }
-
     /**
      * Build a unique subfolder for this sample + modality, and compute the
      * temp--tiles directory path.
