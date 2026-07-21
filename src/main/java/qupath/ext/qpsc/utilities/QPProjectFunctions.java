@@ -139,21 +139,21 @@ public class QPProjectFunctions {
         // Set the project as active
         qupathGUI.setProject(project);
 
-        // Setting the project can clear the current image, so ensure we reopen it
-        if (matchingImage != null) {
-            logger.info("Reopening image after project set: {}", matchingImage.getImageName());
-            qupathGUI.openImageEntry(matchingImage);
-            // Wait briefly for image to load
-            try {
-                Thread.sleep(1000);
-            } catch (InterruptedException e) {
-                logger.debug("Interrupted while waiting for image load");
-            }
-
-            // Verify image loaded successfully
-            if (qupathGUI.getImageData() == null) {
-                logger.error("Failed to reopen image after setting project");
-            }
+        // Setting the project can clear the current image, so ensure we reopen it.
+        // openImageEntry installs the ImageData on a background thread and returns
+        // before it commits, so wait for the real install signal (imageDataProperty)
+        // instead of a fixed sleep. Non-blocking: this method may run on the FX
+        // thread, where blocking would deadlock the very install it waits for.
+        final ProjectImageEntry<BufferedImage> reopenEntry = matchingImage;
+        if (reopenEntry != null) {
+            logger.info("Reopening image after project set: {}", reopenEntry.getImageName());
+            ImageFlipHelper.openEntryAndAwaitInstall(qupathGUI, reopenEntry).whenComplete((installed, err) -> {
+                if (err != null || !Boolean.TRUE.equals(installed)) {
+                    logger.error("Failed to reopen image after setting project: {}", reopenEntry.getImageName(), err);
+                } else {
+                    logger.info("Image installed after project set: {}", reopenEntry.getImageName());
+                }
+            });
         }
 
         // 4) Package results

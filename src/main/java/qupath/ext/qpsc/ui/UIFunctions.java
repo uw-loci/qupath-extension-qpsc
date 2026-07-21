@@ -113,6 +113,7 @@ public class UIFunctions {
             int stepsPerPosition) {
 
         final ProgressHandle[] handleHolder = new ProgressHandle[1];
+        final CountDownLatch handleReady = new CountDownLatch(1);
         final int stepsPerPositionFinal = Math.max(1, stepsPerPosition);
         final int totalPositions = totalFiles / stepsPerPositionFinal;
 
@@ -302,14 +303,16 @@ public class UIFunctions {
 
             logger.info("Starting progress Timeline on FX thread");
             timeline.play();
+            // Signal the calling thread that the handle is published.
+            handleReady.countDown();
         });
 
-        // Wait for handle to be set before returning
-        while (handleHolder[0] == null) {
-            try {
-                Thread.sleep(10);
-            } catch (InterruptedException ignored) {
-            }
+        // Wait for the FX thread to build and publish the handle (this method
+        // is called off the FX thread; a latch replaces the former busy-wait spin).
+        try {
+            handleReady.await();
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
         }
 
         logger.info("Progress bar initialized for {} files with {} ms timeout", totalFiles, timeoutMs);

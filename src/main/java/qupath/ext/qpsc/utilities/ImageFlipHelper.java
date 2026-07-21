@@ -631,6 +631,23 @@ public final class ImageFlipHelper {
     }
 
     /**
+     * Open {@code entry} in the viewer and return a future that completes when the
+     * entry's {@code ImageData} is actually installed (not when
+     * {@code openImageEntry} returns -- it kicks off loading on a background thread).
+     * Use this instead of a fixed sleep after {@code openImageEntry}. Safe to call
+     * from any thread (the open is always deferred to an FX pulse); the future
+     * completes on the FX thread, and resolves to {@code false}/exceptionally via a
+     * 5-second timeout if the install never commits. Do NOT block on the returned
+     * future from the FX thread -- attach a continuation instead.
+     */
+    public static CompletableFuture<Boolean> openEntryAndAwaitInstall(
+            QuPathGUI gui, ProjectImageEntry<BufferedImage> entry) {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        switchOpenEntry(gui, entry, future);
+        return future;
+    }
+
+    /**
      * Switch the QuPath viewer to {@code targetEntry} and complete
      * {@code future} when the target entry's {@code ImageData} is
      * actually installed in the viewer. Always defers to a
