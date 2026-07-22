@@ -28,9 +28,11 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: uw-loci/qupath-extension-tiles-to-pyramid
-          # Keep in sync with the shadow("...tiles-to-pyramid:X.Y.Z") version in
-          # build.gradle.kts; pinned so a tiles main bump can't desync the build.
-          ref: v0.4.4
+          # Must build tiles at the version qpsc's shadow("...tiles-to-pyramid:X.Y.Z")
+          # in build.gradle.kts requires (currently 0.6.0). No v0.6.0 tag exists yet, so
+          # pin the tiles main commit that IS version 0.6.0 (stable + reproducible).
+          # Bump this whenever the shadow version bumps; switch to ref: vX.Y.Z once tagged.
+          ref: 14dbe895100a8c7d1de2fe34052124e328908418
           path: tiles-to-pyramid
 
       - name: Grant execute permission for gradlew
