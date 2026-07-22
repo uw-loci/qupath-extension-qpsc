@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.7.2] - 2026-07-22
+
+_Bundles all work merged to `main` since 0.7.1 (the items below), plus the stitching fix._
+
+### Fixed
+
+**Stitching: NPE crashed the stitch after a completed acquisition (null transform)**
+- Stitching runs asynchronously after an acquisition finishes. `AcquisitionManager.launchStitching` was passing the *live* microscope transform (`MicroscopeController.getCurrentTransform()`) into the async stitch, but the workflow's cleanup nulls that transform (`setCurrentTransform(null)`) once the run winds down. On a long acquisition the cleanup won the race, so the stitch-metadata step dereferenced a null transform and threw a `NullPointerException` -- failing the stitch *after* the tiles had been fully acquired. The fix passes the immutable transform captured in the workflow state (the same value every other site in `AcquisitionManager` uses), and adds a defensive null guard so a missing transform degrades to a zero metadata offset instead of crashing an already-completed acquisition's stitch. The acquired tiles on disk are unaffected; only the automatic stitch+import was lost, and can be re-run on the tile folder without re-acquiring.
+
 ### Added
 
 **Multi-Slide Existing Image: auto-collapse progress panel on focus loss**
