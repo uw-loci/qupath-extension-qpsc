@@ -7,3 +7,4 @@ Docs_mainmenu.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Only the s
 Docs_BoundedAcquisition.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Projection dropdown gained a 'None' item plus paste-split X/Y handling; no layout change vs the figure.
 Docs_AnnotationAcquisition.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Added projection 'None' and an output-organization dropdown; existing figure still represents the dialog adequately.
 Docs_ExistingImage_ConsolidatedDialog.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-26	Added projection 'None' and an output-organization dropdown; not worth a re-shoot.
+Docs_LiveViewer_SavedPoints.png	211eeb27683f7bfa7091eaf5a556d5dd11c456ee	2026-07-22	False positive: shares StageControlPanel.java with Navigate; no visible change (user-confirmed 2026-07-22)
