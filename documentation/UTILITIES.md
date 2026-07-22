@@ -296,9 +296,19 @@ Easily submit bug reports directly from QuPath without needing a GitHub account 
    - **System info** (OS version, Java version, QuPath version)
    - **QPSC session log** (activity from the current session)
    - **Microscope server log** (the Python command server's session log, fetched over the socket; only available when connected to the server)
-   - **QuPath log** (QuPath's own application log)
+   - **QuPath log** (QuPath's own application log) — see below for enabling if unavailable
    - **Screenshot** (of the QuPath window; you will be shown a preview before sending)
 5. Click **Submit**
+
+**If "Include QuPath log" is disabled:**
+
+QuPath only writes a log file when logging is enabled. To enable and attach QuPath's application log:
+
+1. Go to **Edit > Preferences > General** (in QuPath)
+2. Check **"Create log files"**
+3. QuPath may prompt you to set a user directory — if so, choose or create a location and confirm
+4. Restart QuPath — the log file is created on next startup
+5. When you reopen the Report a Bug dialog, "Include QuPath log" will be enabled and ready to attach
 
 Large logs are trimmed to fit GitHub's issue size limit: the version/startup banner is always kept (for provenance) along with the most recent lines (where errors usually appear), with an `[N chars omitted]` note in between.
 
