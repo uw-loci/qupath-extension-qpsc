@@ -1543,7 +1543,13 @@ public class AcquisitionManager {
                 project,
                 STITCH_EXECUTOR,
                 handler,
-                MicroscopeController.getInstance().getCurrentTransform(),
+                // Use the transform CAPTURED in the workflow state, not the live
+                // MicroscopeController transform. Stitching runs asynchronously and the
+                // workflow's cleanup nulls the live transform (setCurrentTransform(null)),
+                // so re-fetching it here races with cleanup and NPEs on long acquisitions.
+                // state.transform is immutable for the run and is what every other site
+                // in this class uses (e.g. the offset calc just above at line ~1524).
+                state.transform,
                 state.projectInfo.getSampleName(),
                 projectsFolder.toString(),
                 dualProgressDialog,

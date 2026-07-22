@@ -946,6 +946,15 @@ public class TransformationFunctions {
             return new double[] {0, 0};
         }
 
+        // Guard a null transform: this offset is metadata-only, so a missing transform
+        // must degrade to a zero offset rather than crash the whole (already-completed)
+        // acquisition's stitch. The caller (StitchingHelper.calculateMetadata) already
+        // null-guards the stage-bounds computation; keep this consistent.
+        if (fullResToStage == null) {
+            logger.warn("calculateAnnotationOffsetFromSlideCorner: null transform, returning zero offset");
+            return new double[] {0, 0};
+        }
+
         ROI roi = annotation.getROI();
 
         // Get the top-left corner of the annotation in full-res pixels
