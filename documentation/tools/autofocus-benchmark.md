@@ -1,6 +1,6 @@
 # Autofocus Parameter Benchmark
 
-> Menu: Extensions > QP Scope > Utilities > Autofocus Parameter Benchmark...
+> Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Parameter Benchmark...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ![Autofocus Parameter Benchmark dialog](../images/Docs_AutofocusParameterBenchmark.png)

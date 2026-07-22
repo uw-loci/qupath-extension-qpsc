@@ -1,7 +1,7 @@
 # Setup Wizard
 
 **Menu:** Extensions > QP Scope > Setup Wizard (Start Here)...
-*(Moves to Extensions > QP Scope > Utilities > Setup Wizard... once configured)*
+*(Moves to Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... once configured)*
 
 **Purpose:** Create all required microscope YAML configuration files through a guided step-by-step process. Designed for first-time setup when no valid microscope configuration exists.
 

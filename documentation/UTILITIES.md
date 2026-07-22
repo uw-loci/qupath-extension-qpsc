@@ -20,23 +20,29 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
 | [Stage Map](tools/stage-map.md) | Visual map with slide positions and macro overlay | Extensions > QP Scope > Stage Map |
 | [Report a Bug...](#report-a-bug) | Submit a bug report directly to the issue tracker | Extensions > QP Scope > Report a Bug... |
-| **Utilities Submenu** | | |
+| **Utilities Submenu** -- standalone tools | | |
 | Microscope Alignment | Semi-automated alignment between QuPath and microscope | Extensions > QP Scope > Utilities > Microscope Alignment... |
-| [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Utilities > Collect Background Images |
-| [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side | Extensions > QP Scope > Utilities > WB Comparison Test... |
-| [Autofocus Editor](tools/autofocus-editor.md) | Configure per-objective autofocus parameters | Extensions > QP Scope > Utilities > Autofocus Configuration Editor... |
-| [Autofocus Benchmark](tools/autofocus-benchmark.md) | Find optimal autofocus settings systematically | Extensions > QP Scope > Utilities > Autofocus Parameter Benchmark... |
-| [Parfocality Calibration](tools/parfocality-calibration.md) | Capture per-profile Z offsets so the stage refocuses when switching modality | Extensions > QP Scope > Utilities > Calibrate Parfocality... |
 | [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse acquisition | Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... |
-| [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Propagation Manager... |
-| Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Re-stitch Tiles... |
-| Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Stitch MicroManager Folder... |
-| [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Setup Wizard... |
-| [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Communication Settings... |
-| Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Make Project Portable... |
-| **JAI Camera Submenu** (conditional -- only when JAI detected) | | |
-| [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > Utilities > JAI Camera > White Balance... |
-| [JAI Noise Characterization](tools/noise-characterization.md) | Measure camera noise statistics | Extensions > QP Scope > Utilities > JAI Camera > Noise Characterization... |
+| **Utilities > Image Quality** | | |
+| [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Utilities > Image Quality > Collect Background Images |
+| [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side | Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test... |
+| [Autofocus Editor](tools/autofocus-editor.md) | Configure per-objective autofocus parameters | Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor... |
+| [Autofocus Benchmark](tools/autofocus-benchmark.md) | Find optimal autofocus settings systematically | Extensions > QP Scope > Utilities > Image Quality > Autofocus Parameter Benchmark... |
+| Re-probe Stage AF | Re-run the streaming-AF stage probe and rewrite `stage.streaming_af.*` | Extensions > QP Scope > Utilities > Image Quality > Re-probe Stage AF... |
+| **Utilities > Image Quality > JAI Camera** (conditional -- only when JAI detected) | | |
+| [White Balance Calibration](tools/white-balance-calibration.md) | Calibrate JAI 3-CCD camera white balance | Extensions > QP Scope > Utilities > Image Quality > JAI Camera > White Balance... |
+| [JAI Noise Characterization](tools/noise-characterization.md) | Measure camera noise statistics | Extensions > QP Scope > Utilities > Image Quality > JAI Camera > Noise Characterization... |
+| **Utilities > Project Tools** | | |
+| [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... |
+| Migrate Flipped Duplicates | Consolidate annotations from legacy `(flipped X\|Y\|XY)` duplicate entries onto the base | Extensions > QP Scope > Utilities > Project Tools > Migrate Flipped Duplicates... |
+| Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... |
+| Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... |
+| Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... |
+| **Utilities > Microscope Configuration** | | |
+| [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... |
+| [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Microscope Configuration > Communication Settings... |
+| Register Current Objective | Add the objective in the light path to the config (reads MM pixel size) | Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... |
+| [Parfocality Calibration](tools/parfocality-calibration.md) | Capture per-profile Z offsets so the stage refocuses when switching modality | Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality... |
 | **PPM Modality Submenu** (conditional -- only with PPM modality) | | |
 | [Polarizer Calibration](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/polarizer-calibration.md) | Calibrate polarizer rotation stage | Scope > PPM > Polarizer Calibration (PPM)... |
 | [PPM Reference Slide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide | Scope > PPM > PPM Reference Slide... |
@@ -245,7 +251,7 @@ Standalone stitching utility for tile folders acquired with MicroManager 2.0. Un
 - Selectable output format: OME-TIFF (single file) or OME-ZARR (directory-based).
 - Selectable compression (LZW, JPEG, etc.) with format-specific options.
 
-**Access:** Extensions > QP Scope > Utilities > Stitch MicroManager Folder...
+**Access:** Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder...
 
 ---
 

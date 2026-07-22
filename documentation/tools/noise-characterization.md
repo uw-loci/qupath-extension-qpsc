@@ -1,6 +1,6 @@
 # JAI Noise Characterization
 
-> Menu: Extensions > QP Scope > Utilities > JAI Camera > Noise Characterization...
+> Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > Noise Characterization...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ![JAI Noise Characterization dialog](../images/Docs_NoiseCharacterization.png)

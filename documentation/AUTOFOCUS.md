@@ -144,7 +144,7 @@ In the Live Viewer, when you select Sweep Autofocus, clicking the Autofocus butt
 
 ## Autofocus (Live Viewer)
 
-The [Live Viewer](tools/live-viewer.md) contains a single **Autofocus** button that runs either **Streaming** or **Sweep** autofocus depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). The choice is stored per QuPath installation, so each rig naturally tracks its own preferred method.
+The [Live Viewer](tools/live-viewer.md) contains a single **Autofocus** button that runs either **Streaming** or **Sweep** autofocus depending on your selection in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration). The choice is stored per QuPath installation, so each rig naturally tracks its own preferred method.
 
 ### Streaming Autofocus
 
@@ -192,7 +192,7 @@ If no peak is found but a focus slope is detected (monotonic profile after edge 
 
 Both Streaming and Sweep autofocus read `sweep_range_um` from `autofocus_<scope>.yml` per objective. There is no separate range field -- both methods share the same range knob. Change it in the [Autofocus Configuration Editor](tools/autofocus-editor.md) and both paths use the new value.
 
-Select your preferred method (Streaming or Sweep) via the radio buttons in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Autofocus Configuration). The choice is stored per QuPath installation. Each rig typically has one preferred method:
+Select your preferred method (Streaming or Sweep) via the radio buttons in the Autofocus Configuration dialog (Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration). The choice is stored per QuPath installation. Each rig typically has one preferred method:
 - **Streaming** on rigs with stages capable of slow continuous motion (e.g., PPM)
 - **Sweep** on rigs with stages that cannot move slowly (e.g., OWS3), or for long-exposure modalities where Streaming's blur budget is restrictive
 
@@ -266,7 +266,7 @@ When a tile scheduled for AF lands at the end of the position list (e.g. spatial
 
 ## Modality-Aware Autofocus
 
-**Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile sweep autofocus) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. This redesign was driven by autofocus failures on sparse-fluorescence samples (pollen, beads, FISH) where the old `has_sufficient_tissue` area gate was the wrong question to ask.
+**Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile sweep autofocus) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. This redesign was driven by autofocus failures on sparse-fluorescence samples (pollen, beads, FISH) where the old `has_sufficient_tissue` area gate was the wrong question to ask.
 
 ### Why
 

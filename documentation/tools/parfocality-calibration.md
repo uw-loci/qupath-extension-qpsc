@@ -1,6 +1,6 @@
 # Parfocality Calibration
 
-> Menu: Extensions > QP Scope > Utilities > Calibrate Parfocality...
+> Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ## Purpose
@@ -36,8 +36,8 @@ concern (and will eventually be handled by motorized turret support).
 
 ## Workflow
 
-1. **Open the dialog** from `Extensions > QP Scope > Utilities > Calibrate
-   Parfocality...`. The dialog is non-modal, so you can interact with the
+1. **Open the dialog** from `Extensions > QP Scope > Utilities > Microscope
+   Configuration > Calibrate Parfocality...`. The dialog is non-modal, so you can interact with the
    Live Viewer while it is open.
 
 2. **Pick objective + reference profile** at the top. The reference combo

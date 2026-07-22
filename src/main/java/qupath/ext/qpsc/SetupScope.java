@@ -502,24 +502,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // Add items to utilities submenu (grouped by function)
-        utilitiesMenu
-                .getItems()
-                .addAll(
-                        // Alignment
-                        alignmentOption,
-                        new SeparatorMenuItem(),
-                        // Camera calibration
-                        backgroundCollectionOption,
-                        wbComparisonOption,
-                        new SeparatorMenuItem(),
-                        // Autofocus tools
-                        autofocusEditorOption,
-                        autofocusBenchmarkOption,
-                        probeStageAfOption,
-                        new SeparatorMenuItem(),
-                        // Parfocality calibration
-                        parfocalityCalibrationOption);
+        // Utilities is assembled into functional submenus at the end of this
+        // method (see "ASSEMBLE UTILITIES SUBMENUS" below); the MenuItems are
+        // only constructed here.
 
         // Z-Stack / Time-Lapse (needs microscope)
         // Routes to SinglePointAcquisitionController -- it honors the selected
@@ -634,24 +619,25 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // Server settings and wizard (always last in utilities)
-        utilitiesMenu
+        // === ASSEMBLE UTILITIES SUBMENUS ===
+        // Utilities is organized into three functional submenus plus two
+        // frequently-used standalone tools. Keep this in sync with
+        // documentation/UTILITIES.md.
+
+        // Image Quality: autofocus, white balance / camera calibration, background.
+        Menu imageQualityMenu = new Menu("Image Quality");
+        imageQualityMenu
                 .getItems()
                 .addAll(
+                        backgroundCollectionOption,
+                        wbComparisonOption,
                         new SeparatorMenuItem(),
-                        stackTimeLapseOption,
-                        new SeparatorMenuItem(),
-                        propagationManagerOption,
-                        migrateFlippedOption,
-                        stitchingRecoveryOption,
-                        stitchMicroManagerFolderOption,
-                        makePortableOption,
-                        new SeparatorMenuItem(),
-                        registerObjectiveOption,
-                        setupWizardOption,
-                        serverConnectionOption);
+                        autofocusEditorOption,
+                        autofocusBenchmarkOption,
+                        probeStageAfOption);
 
-        // Conditionally add JAI Camera submenu when a JAI camera is configured
+        // JAI Camera (white balance + noise) belongs under Image Quality; only
+        // shown when a JAI camera is configured.
         if (hasJAICamera) {
             Menu jaiCameraMenu = new Menu("JAI Camera");
 
@@ -689,12 +675,44 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             });
 
             jaiCameraMenu.getItems().addAll(jaiWhiteBalanceOption, noiseCharOption);
-
-            // Insert JAI Camera submenu before the final separator + serverConnection
-            int insertIdx = utilitiesMenu.getItems().size() - 2;
-            utilitiesMenu.getItems().add(insertIdx, new SeparatorMenuItem());
-            utilitiesMenu.getItems().add(insertIdx + 1, jaiCameraMenu);
+            imageQualityMenu.getItems().addAll(new SeparatorMenuItem(), jaiCameraMenu);
         }
+
+        // Project Tools: annotation propagation, cleanup, stitching, portability.
+        Menu projectToolsMenu = new Menu("Project Tools");
+        projectToolsMenu
+                .getItems()
+                .addAll(
+                        propagationManagerOption,
+                        migrateFlippedOption,
+                        new SeparatorMenuItem(),
+                        stitchingRecoveryOption,
+                        stitchMicroManagerFolderOption,
+                        new SeparatorMenuItem(),
+                        makePortableOption);
+
+        // Microscope Configuration: one-time / occasional scope setup.
+        Menu microscopeConfigMenu = new Menu("Microscope Configuration");
+        microscopeConfigMenu
+                .getItems()
+                .addAll(
+                        setupWizardOption,
+                        serverConnectionOption,
+                        new SeparatorMenuItem(),
+                        registerObjectiveOption,
+                        parfocalityCalibrationOption);
+
+        // Standalone tools kept one click away (frequent use / acquisition),
+        // then the three functional submenus.
+        utilitiesMenu
+                .getItems()
+                .addAll(
+                        alignmentOption,
+                        stackTimeLapseOption,
+                        new SeparatorMenuItem(),
+                        imageQualityMenu,
+                        projectToolsMenu,
+                        microscopeConfigMenu);
 
         // === BUILD FINAL MENU ===
 

@@ -29,7 +29,7 @@
 - [ ] **Configuration files exist** in the correct location (config_<name>.yml, resources_LOCI.yml)
 - [ ] **Project folder exists** or you have permission to create one
 
-**Quick Test:** Use Extensions > QPSC > Utilities > Communication Settings to verify communication between all components.
+**Quick Test:** Use Extensions > QPSC > Utilities > Microscope Configuration > Communication Settings to verify communication between all components.
 
 ---
 
@@ -120,7 +120,7 @@ running the Setup Wizard) replaces it and re-enables acquisition.
 #### Q: How do I run the Setup Wizard?
 
 **A:** On a fresh install QPSC runs in Offline / Analysis mode (see above); open
-the Setup Wizard from Extensions > QP Scope > Utilities > Setup Wizard to
+the Setup Wizard from Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard to
 configure a microscope. (If a configuration is present but *invalid*, the wizard
 also appears as the first menu item, "Setup Wizard (Start Here)...".) Once a
 valid real config is selected, the wizard stays under Utilities.
@@ -131,7 +131,7 @@ valid real config is selected, the wizard stays under Utilities.
 
 #### Q: Can I re-run the Setup Wizard to modify my configuration?
 
-**A:** Yes. After initial setup, find it under Extensions > QP Scope > Utilities > Setup Wizard. It will create new config files -- back up your existing ones first if you want to preserve them.
+**A:** Yes. After initial setup, find it under Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard. It will create new config files -- back up your existing ones first if you want to preserve them.
 
 #### Q: The wizard doesn't show my hardware in the catalog
 
@@ -209,7 +209,7 @@ taskkill /PID <process_id> /F
 1. **Firewall:** Windows Firewall might be blocking Python - allow it
 2. **Port number:** Verify config file has same port as server (default: 5000)
 3. **Server running:** Make sure server console is still open and not showing errors
-4. **Test connection:** Use Extensions > QPSC > Utilities > Communication Settings
+4. **Test connection:** Use Extensions > QPSC > Utilities > Microscope Configuration > Communication Settings
 
 #### Q: "Not connected to microscope server" but Live Viewer works fine
 
@@ -784,7 +784,7 @@ See [UTILITIES.md -- Exporting to Micro-Manager MDA](UTILITIES.md#exporting-to-m
 
 **Now:** the direct writer drives Bio-Formats with only the safe `Math.min`-clamped tile loop, so partial edge tiles are correct by construction; the bug cannot occur. The error monitor, the retry/escalation logic, and the `OME_TIFF_VIA_ZARR` format have all been removed. The writer also writes straight to its final path (no temp-file rename), which removed the separate Windows "being used by another process" rename failures.
 
-If you have *old* stitched files with black upper levels from before this fix, re-stitch them with **Extensions > QPSC > Utilities > Re-stitch Tiles** (tiles in `TempTiles/` are preserved).
+If you have *old* stitched files with black upper levels from before this fix, re-stitch them with **Extensions > QPSC > Utilities > Project Tools > Re-stitch Tiles** (tiles in `TempTiles/` are preserved).
 
 #### Q: Stitching failed but my tiles were acquired - how do I re-stitch?
 
@@ -793,7 +793,7 @@ If you have *old* stitched files with black upper levels from before this fix, r
 **Recommended method - QPSC Re-stitch utility (adds images to project):**
 
 1. Open the QuPath project where you want the stitched images
-2. Go to **Extensions > QPSC > Utilities > Re-stitch Tiles**
+2. Go to **Extensions > QPSC > Utilities > Project Tools > Re-stitch Tiles**
 3. Browse to your tile directory (the folder containing angle subdirectories or TileConfiguration.txt)
 4. Verify the pixel size (auto-populated from your microscope config)
 5. Select **Output format**: OME_TIFF (standard, single file) or OME_ZARR (faster, directory format)
@@ -866,7 +866,7 @@ Only the angle that was being processed when stitching failed will be stuck -- a
 - Or collect new background images with matching exposures
 
 To fix permanently:
-1. Run Extensions > QPSC > Utilities > Background Collection
+1. Run Extensions > QPSC > Utilities > Image Quality > Background Collection
 2. Use the same angles and exposures you plan to use for acquisitions
 3. System will use these backgrounds automatically in future acquisitions
 
@@ -1027,7 +1027,7 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 
 **How to collect:**
 1. Remove your slide (focus on empty stage or coverslip)
-2. Extensions > QPSC > Utilities > Background Collection
+2. Extensions > QPSC > Utilities > Image Quality > Background Collection
 3. Select modality and objective
 4. Set exposure times (use same as your sample acquisitions)
 5. Acquire - takes 30-60 seconds
@@ -1056,7 +1056,7 @@ Flat-field division would then correct for the wrong illumination level.
 
 This is a **non-blocking warning** -- the Background step turns orange and the
 pre-acquisition confirmation lists it, but you can still proceed. To clear it:
-- Re-collect backgrounds (Extensions > QPSC > Utilities > Background Collection)
+- Re-collect backgrounds (Extensions > QPSC > Utilities > Image Quality > Background Collection)
   with the current profile selected, **or**
 - Restore the profile's `illumination_intensity` to the value the backgrounds
   were collected at.
@@ -1246,7 +1246,7 @@ If you see a stale modality somewhere, it is a bug -- report it with which dialo
 
 **A:** The optical path shifts the focal plane when you switch modality even on the same detector -- filter cubes, LED-vs-lamp illumination, and condenser changes all move focus. Without calibrated parfocality the stage Z does not move when you switch modalities, so the new path starts out of focus.
 
-**Fix:** Run [Calibrate Parfocality](tools/parfocality-calibration.md) (`Extensions > QP Scope > Utilities > Calibrate Parfocality...`). Capture a reference Z under one profile, then refocus and capture each other profile on the same objective. Save. Subsequent modality switches via the Live Viewer Camera tab Modality dropdown will refocus automatically.
+**Fix:** Run [Calibrate Parfocality](tools/parfocality-calibration.md) (`Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality...`). Capture a reference Z under one profile, then refocus and capture each other profile on the same objective. Save. Subsequent modality switches via the Live Viewer Camera tab Modality dropdown will refocus automatically.
 
 If the dialog says a switch was "skipped" in the log, the most common reasons are: (1) one of the two profiles has no calibrated offset, (2) the profiles are on different objectives (cross-objective is handled by the [turret design](../../claude-reports/design/2026-05-23_motorized-objective-turret-design.md), not parfocality), or (3) the very first switch of a session establishes the baseline -- subsequent switches apply deltas.
 
@@ -2046,7 +2046,7 @@ python -m microscope_command_server.server
 ```
 
 **Test Microscope Connection:**
-QuPath: Extensions > QPSC > Utilities > Communication Settings
+QuPath: Extensions > QPSC > Utilities > Microscope Configuration > Communication Settings
 
 **Check Logs:**
 QuPath: Help > Show log file location

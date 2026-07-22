@@ -536,7 +536,7 @@ file: src/main/java/qupath/ext/qpsc/controller/BackgroundCollectionWorkflow.java
 entry: run() / executeBackgroundAcquisitionDirect()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Background Collection (dispatch 'backgroundCollection')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Background Collection (dispatch 'backgroundCollection')"
 reads:
   - DS3 (pixel size, modality FOV)
   - DS22 (WB mode validity via BackgroundValidityChecker)
@@ -557,7 +557,7 @@ file: src/main/java/qupath/ext/qpsc/controller/AutofocusBenchmarkWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Autofocus Benchmark (dispatch 'autofocusBenchmark')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Benchmark (dispatch 'autofocusBenchmark')"
 reads:
   - DS3 (autofocus YAML section)
   - DS17
@@ -576,7 +576,7 @@ file: src/main/java/qupath/ext/qpsc/controller/AutofocusEditorWorkflow.java
 entry: run() / showValidationResultStatic()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Autofocus Editor (dispatch 'autofocusEditor')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Editor (dispatch 'autofocusEditor')"
 reads:
   - DS3 (autofocus YAML)
 writes:
@@ -629,7 +629,7 @@ file: src/main/java/qupath/ext/qpsc/controller/WhiteBalanceWorkflow.java
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > JAI Camera > JAI White Balance (when hasJAICamera; dispatch 'whiteBalance')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI White Balance (when hasJAICamera; dispatch 'whiteBalance')"
 reads:
   - DS3 (pixel size)
   - DS24 (last objective / detector)
@@ -648,7 +648,7 @@ file: src/main/java/qupath/ext/qpsc/controller/WBComparisonWorkflow.java
 entry: run()
 category: comparison
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > WB Comparison (dispatch 'wbComparison')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > WB Comparison (dispatch 'wbComparison')"
 reads:
   - DS3
   - DS21
@@ -686,7 +686,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ForwardPropagationWorkflow.java
 entry: run(qupath)
 category: propagation
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Propagation Manager (SetupScope.java:469)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager (SetupScope.java:469)"
 reads:
   - DS5 (tier 1 lookup: macro-frame JSON via AlignmentHelper)
   - DS6 (tier 2 lookup: derived/ sub-frame JSON)
@@ -754,7 +754,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MakePortableWorkflow.java
 entry: run(qupath)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Make Project Portable (SetupScope.java:536)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable (SetupScope.java:536)"
 reads:
   - DS27 (project image list; entries with .zarr backing)
   - DS28 (raw tile folders, when ZARR is absent)
@@ -775,7 +775,7 @@ file: src/main/java/qupath/ext/qpsc/controller/StitchingRecoveryWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Stitching Recovery (dispatch 'stitchingRecovery')"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Stitching Recovery (dispatch 'stitchingRecovery')"
 reads:
   - DS28 (user-selected tile folder; TileConfiguration.txt)
   - DS25 (compression / output format)
@@ -795,7 +795,7 @@ file: src/main/java/qupath/ext/qpsc/utilities/FlippedDuplicateMigrator.java
 entry: migrate(typedProject)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Migrate Flipped Duplicates (SetupScope.java:479)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Migrate Flipped Duplicates (SetupScope.java:479)"
 reads:
   - DS27 (project list)
   - DS9 (BASE_IMAGE / sibling chains; isFlippedX/Y)
@@ -816,7 +816,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MicroManagerStitchWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Stitch MicroManager Folder (dispatch 'stitchMicroManagerFolder')"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder (dispatch 'stitchMicroManagerFolder')"
 reads:
   - user-selected MicroManager tile folder (OME-TIFF with MMStack sidecars)
 writes:
@@ -860,7 +860,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ProbeStageAfWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Re-probe Stage AF (dispatch 'probeStageAf')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Re-probe Stage AF (dispatch 'probeStageAf')"
 reads:
   - DS3 (stage YAML)
   - DS17 (live stage probe)
@@ -905,7 +905,7 @@ file: src/main/java/qupath/ext/qpsc/ui/setupwizard/SetupWizardDialog.java
 entry: show()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Setup Wizard (dispatch 'setupWizard')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard (dispatch 'setupWizard')"
   - "Top-level when !configValid: 'Setup Wizard (Start Here)' inserted before main wizard (SetupScope.java:624)"
 reads:
   - DS3 (loading existing config if any)
@@ -992,7 +992,7 @@ file: src/main/java/qupath/ext/qpsc/controller/NoiseCharacterizationWorkflow.jav
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > JAI Camera > JAI Noise Characterization (when hasJAICamera; dispatch 'noiseCharacterization')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI Noise Characterization (when hasJAICamera; dispatch 'noiseCharacterization')"
 reads:
   - DS3
 writes:
@@ -1032,7 +1032,7 @@ file: src/main/java/qupath/ext/qpsc/ui/ServerConnectionController.java
 entry: showDialog()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Server Connection (dispatch 'serverConnection')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Server Connection (dispatch 'serverConnection')"
 reads:
   - DS25 (server host/port preferences)
   - DS17 (connection probe)
@@ -1049,7 +1049,7 @@ file: src/main/java/qupath/ext/qpsc/ui/CameraControlController.java
 entry: showCameraControlDialog()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Camera Control (dispatch 'cameraControl')"
+  - "Menu: Extensions > QP Scope > Camera Control (dispatch 'cameraControl')"
 reads:
   - DS3 (imaging profiles)
   - DS17 (live exposures/gains)
@@ -1066,7 +1066,7 @@ file: src/main/java/qupath/ext/qpsc/ui/ParfocalityCalibrationController.java
 entry: show()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Parfocality Calibration (dispatch 'parfocalityCalibration')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Parfocality Calibration (dispatch 'parfocalityCalibration')"
 reads:
   - DS3
   - DS17 (current Z under each profile)

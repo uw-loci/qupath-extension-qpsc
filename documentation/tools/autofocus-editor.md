@@ -1,6 +1,6 @@
 # Autofocus Configuration Editor
 
-> Menu: Extensions > QP Scope > Utilities > Autofocus Configuration Editor...
+> Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ## Purpose
@@ -30,7 +30,7 @@ custom strategy to a scope-specific modality.
 
 The Autofocus Configuration Editor can be opened in two ways:
 
-1. **From the menu:** Extensions > QP Scope > Utilities > Autofocus Configuration Editor...
+1. **From the menu:** Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor...
 2. **From the Live Viewer:** Right-click the **Autofocus** button in the Live Viewer's focus controls toolbar. This shortcut is useful when you want to switch autofocus methods while the button is greyed out (e.g. during acquisition or between live frames).
 
 ## Options

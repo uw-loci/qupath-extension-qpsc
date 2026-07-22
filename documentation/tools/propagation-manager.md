@@ -1,6 +1,6 @@
 # Propagation Manager
 
-> Menu: Extensions > QP Scope > Utilities > Propagation Manager...
+> Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ![Propagation Manager dialog](../images/Docs_PropagationManager.png)

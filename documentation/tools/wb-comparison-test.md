@@ -1,5 +1,5 @@
 # WB Comparison Test
-> Menu: Extensions > QP Scope > Utilities > WB Comparison Test...
+> Menu: Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ![WB Comparison Test dialog](../images/Docs_WBComparisonTest.png)
