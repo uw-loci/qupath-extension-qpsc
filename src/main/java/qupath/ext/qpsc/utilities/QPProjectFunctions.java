@@ -11,6 +11,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import org.slf4j.Logger;
@@ -145,9 +146,11 @@ public class QPProjectFunctions {
         // instead of a fixed sleep. Non-blocking: this method may run on the FX
         // thread, where blocking would deadlock the very install it waits for.
         final ProjectImageEntry<BufferedImage> reopenEntry = matchingImage;
+        CompletableFuture<Boolean> imageInstallFuture = null;
         if (reopenEntry != null) {
             logger.info("Reopening image after project set: {}", reopenEntry.getImageName());
-            ImageFlipHelper.openEntryAndAwaitInstall(qupathGUI, reopenEntry).whenComplete((installed, err) -> {
+            imageInstallFuture = ImageFlipHelper.openEntryAndAwaitInstall(qupathGUI, reopenEntry);
+            imageInstallFuture.whenComplete((installed, err) -> {
                 if (err != null || !Boolean.TRUE.equals(installed)) {
                     logger.error("Failed to reopen image after setting project: {}", reopenEntry.getImageName(), err);
                 } else {
@@ -162,6 +165,10 @@ public class QPProjectFunctions {
         result.put("imagingModeWithIndex", setup.imagingModeWithIndex);
         result.put("currentQuPathProject", project);
         result.put("tempTileDirectory", setup.tempTileDirectory);
+        // The reopened image installs asynchronously (see above). Callers that touch the
+        // installed ImageData (e.g. annotation restore, macro dimensions) MUST chain on this
+        // future rather than reading getImageData() immediately. Null when no image was reopened.
+        result.put("imageInstallFuture", imageInstallFuture);
 
         logger.info(
                 "Project setup complete. Mode: {}, Tile acquisition parent dir: {}",

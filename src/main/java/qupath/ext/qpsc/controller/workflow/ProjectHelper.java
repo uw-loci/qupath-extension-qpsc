@@ -137,7 +137,6 @@ public class ProjectHelper {
 
         Platform.runLater(() -> {
             try {
-                Map<String, Object> projectDetails;
                 // Project setup runs before any image entry exists, so resolver falls through to
                 // detector config (if known) and finally the global pref.
                 boolean flippedX = FlipResolver.resolveFlipX(null, null, null);
@@ -145,14 +144,11 @@ public class ProjectHelper {
 
                 logger.debug("Flip settings - X: {}, Y: {}", flippedX, flippedY);
 
-                // Track the actual sample name (may differ from user-entered name for existing projects)
-                String actualSampleName;
-
                 if (gui.getProject() == null) {
                     logger.info("Creating new project");
 
                     // For new projects, use the user-entered sample name
-                    actualSampleName = sample.sampleName();
+                    final String actualSampleName = sample.sampleName();
 
                     // Use enhanced modality name for consistent folder structure
                     String enhancedModality =
@@ -164,7 +160,7 @@ public class ProjectHelper {
                     // Passing flip=true here would apply a virtual TransformedServer flip
                     // AND set flip metadata, causing validateAndFlipIfNeeded to skip the
                     // duplicate creation (it sees "already flipped" and returns early).
-                    projectDetails = QPProjectFunctions.createAndOpenQuPathProject(
+                    final Map<String, Object> projectDetails = QPProjectFunctions.createAndOpenQuPathProject(
                             gui,
                             sample.projectsFolder().getAbsolutePath(),
                             actualSampleName,
@@ -172,46 +168,75 @@ public class ProjectHelper {
                             false,
                             false);
 
-                    // Restore preserved annotations if any (from standalone image workflow)
-                    // This handles the case where user drew annotations before starting workflow
-                    if (preservation != null && preservation.hasPreservedAnnotations()) {
-                        logger.info(
-                                "Restoring {} preserved annotations after project creation",
-                                preservation.getPreservedAnnotationCount());
+                    // createAndOpenQuPathProject reopens the image on a background thread. Anything
+                    // that reads the installed ImageData (annotation restore, macro dimensions) must
+                    // wait for the install to commit -- reading getImageData() synchronously here
+                    // races the background install and would see the OLD image. Chain the rest of
+                    // new-project setup onto the install future instead of a fixed delay.
+                    @SuppressWarnings("unchecked")
+                    CompletableFuture<Boolean> installFutureRaw =
+                            (CompletableFuture<Boolean>) projectDetails.get("imageInstallFuture");
+                    CompletableFuture<Boolean> installFuture = installFutureRaw != null
+                            ? installFutureRaw
+                            : CompletableFuture.completedFuture(Boolean.TRUE);
 
-                        // Restore WITHOUT flip - the image was imported unflipped.
-                        // Annotations will be transformed when the flipped duplicate is created
-                        // by ImageFlipHelper.validateAndFlipIfNeeded() later in the workflow.
-                        boolean restored = preservation.restoreAnnotations(gui, false, false);
+                    installFuture.whenComplete((installed, installErr) -> Platform.runLater(() -> {
+                        try {
+                            if (installErr != null || !Boolean.TRUE.equals(installed)) {
+                                logger.warn("Reopened image did not confirm install before annotation"
+                                        + " restore; proceeding, restore may target a stale hierarchy");
+                            }
 
-                        if (restored) {
-                            // Save the annotations to the project entry
-                            try {
-                                var project = gui.getProject();
-                                var imageData = gui.getImageData();
-                                if (project != null && imageData != null) {
-                                    var entry = project.getEntry(imageData);
-                                    if (entry != null) {
-                                        entry.saveImageData(imageData);
-                                        project.syncChanges();
-                                        logger.info("Saved restored annotations to project");
+                            // Restore preserved annotations if any (from standalone image workflow).
+                            // This handles the case where user drew annotations before starting workflow.
+                            if (preservation != null && preservation.hasPreservedAnnotations()) {
+                                logger.info(
+                                        "Restoring {} preserved annotations after project creation",
+                                        preservation.getPreservedAnnotationCount());
+
+                                // Restore WITHOUT flip - the image was imported unflipped.
+                                // Annotations will be transformed when the flipped duplicate is created
+                                // by ImageFlipHelper.validateAndFlipIfNeeded() later in the workflow.
+                                boolean restored = preservation.restoreAnnotations(gui, false, false);
+
+                                if (restored) {
+                                    // Save the annotations to the project entry
+                                    try {
+                                        var project = gui.getProject();
+                                        var imageData = gui.getImageData();
+                                        if (project != null && imageData != null) {
+                                            var entry = project.getEntry(imageData);
+                                            if (entry != null) {
+                                                entry.saveImageData(imageData);
+                                                project.syncChanges();
+                                                logger.info("Saved restored annotations to project");
+                                            }
+                                        }
+                                    } catch (Exception e) {
+                                        logger.warn("Failed to save restored annotations: {}", e.getMessage());
                                     }
                                 }
-                            } catch (Exception e) {
-                                logger.warn("Failed to save restored annotations: {}", e.getMessage());
+
+                                // Clear preserved annotations after restoration
+                                preservation.clearPreservedAnnotations();
                             }
+
+                            // Save macro dimensions if available (also needs the installed image)
+                            BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
+                            if (macroImage != null) {
+                                projectDetails.put("macroWidth", macroImage.getWidth());
+                                projectDetails.put("macroHeight", macroImage.getHeight());
+                            }
+
+                            // Install already awaited above -- no arbitrary settle needed.
+                            finalizeAndComplete(gui, projectDetails, actualSampleName, future, 0);
+                        } catch (Exception e) {
+                            logger.error("Failed to finalize new-project setup after image install", e);
+                            UIFunctions.notifyUserOfError(
+                                    "Failed to setup project: " + e.getMessage(), "Project Error");
+                            future.complete(null);
                         }
-
-                        // Clear preserved annotations after restoration
-                        preservation.clearPreservedAnnotations();
-                    }
-
-                    // Save macro dimensions if available
-                    BufferedImage macroImage = MacroImageUtility.retrieveMacroImage(gui);
-                    if (macroImage != null) {
-                        projectDetails.put("macroWidth", macroImage.getWidth());
-                        projectDetails.put("macroHeight", macroImage.getHeight());
-                    }
+                    }));
                 } else {
                     logger.info("Using existing project");
 
@@ -220,7 +245,7 @@ public class ProjectHelper {
                     // the existing project structure, not in a separate location
                     Path projectFilePath = gui.getProject().getPath();
                     Path projectDir = projectFilePath.getParent();
-                    actualSampleName = projectDir.getFileName().toString();
+                    final String actualSampleName = projectDir.getFileName().toString();
                     Path projectsFolder = projectDir.getParent();
 
                     logger.info("Actual project location: {}", projectDir);
@@ -234,43 +259,18 @@ public class ProjectHelper {
                             sample.modality(),
                             enhancedModality);
 
-                    projectDetails = QPProjectFunctions.getCurrentProjectInformation(
+                    final Map<String, Object> projectDetails = QPProjectFunctions.getCurrentProjectInformation(
                             projectsFolder.toString(), actualSampleName, enhancedModality);
 
                     // Handle image import if needed
                     handleExistingProjectImageImport(gui, flippedX, flippedY);
+
+                    // handleExistingProjectImageImport may kick off an async flip-reopen with no
+                    // awaited install signal; keep the legacy 500ms settle for this path.
+                    // TODO(existing-project-reopen): thread that reopen through openEntryAndAwaitInstall
+                    // like the new-project path, then drop this settle.
+                    finalizeAndComplete(gui, projectDetails, actualSampleName, future, 500);
                 }
-
-                logger.info("Project setup complete with sample name: {}", actualSampleName);
-
-                // Copy microscope configuration files into the project for provenance
-                try {
-                    MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
-                    Path projDir = gui.getProject() != null && gui.getProject().getPath() != null
-                            ? gui.getProject().getPath().getParent()
-                            : null;
-                    if (configMgr != null && projDir != null) {
-                        configMgr.copyConfigsToProject(projDir);
-                    }
-                } catch (Exception e) {
-                    logger.debug("Could not copy configs to project: {}", e.getMessage());
-                }
-
-                // Give GUI time to update before proceeding
-                // Pass actualSampleName so acquisition uses the correct path
-                final String finalSampleName = actualSampleName;
-                PauseTransition pause = new PauseTransition(Duration.millis(500));
-                // Complete on a fresh FX tick, NOT inline in the animation pulse.
-                // The downstream non-async CompletableFuture chain (validateAndFlipImage
-                // -> createTransform -> detectDataBounds -> UIFunctions.executeWithProgress)
-                // runs synchronously in whatever thread completes this future. Completing
-                // directly from PauseTransition.onFinished runs it during the animation
-                // pulse, where showAndWait throws "not allowed during animation or layout
-                // processing" -- which silently degraded data-bounds detection to the
-                // approximate green-box fallback. Deferring via runLater hops off the pulse.
-                pause.setOnFinished(e ->
-                        Platform.runLater(() -> future.complete(new ProjectInfo(projectDetails, finalSampleName))));
-                pause.play();
 
             } catch (Exception e) {
                 logger.error("Failed to setup project", e);
@@ -280,6 +280,52 @@ public class ProjectHelper {
         });
 
         return future;
+    }
+
+    /**
+     * Shared tail for both setup paths: copy microscope config files into the project for
+     * provenance, then complete {@code future} on a fresh FX tick.
+     *
+     * <p>Completion is deferred via {@link Platform#runLater(Runnable)} so it does not run
+     * inside an animation/layout pulse. The downstream non-async CompletableFuture chain
+     * (validateAndFlipImage -> createTransform -> detectDataBounds ->
+     * UIFunctions.executeWithProgress) runs synchronously in whatever thread completes this
+     * future, and {@code showAndWait} throws "not allowed during animation or layout
+     * processing" if that runs inside a pulse -- which had silently degraded data-bounds
+     * detection to the approximate green-box fallback.
+     */
+    private static void finalizeAndComplete(
+            QuPathGUI gui,
+            Map<String, Object> projectDetails,
+            String actualSampleName,
+            CompletableFuture<ProjectInfo> future,
+            long settleMillis) {
+        logger.info("Project setup complete with sample name: {}", actualSampleName);
+
+        // Copy microscope configuration files into the project for provenance
+        try {
+            MicroscopeConfigManager configMgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            Path projDir = gui.getProject() != null && gui.getProject().getPath() != null
+                    ? gui.getProject().getPath().getParent()
+                    : null;
+            if (configMgr != null && projDir != null) {
+                configMgr.copyConfigsToProject(projDir);
+            }
+        } catch (Exception e) {
+            logger.debug("Could not copy configs to project: {}", e.getMessage());
+        }
+
+        // settleMillis > 0 gives the GUI time to settle when the image was reopened WITHOUT an
+        // awaited install signal (existing-project flip-reopen path). The new-project path passes
+        // 0 because it already awaited the real install future before calling here.
+        if (settleMillis > 0) {
+            PauseTransition pause = new PauseTransition(Duration.millis(settleMillis));
+            pause.setOnFinished(
+                    e -> Platform.runLater(() -> future.complete(new ProjectInfo(projectDetails, actualSampleName))));
+            pause.play();
+        } else {
+            Platform.runLater(() -> future.complete(new ProjectInfo(projectDetails, actualSampleName)));
+        }
     }
 
     /**
