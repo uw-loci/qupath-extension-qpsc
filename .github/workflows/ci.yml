@@ -60,6 +60,12 @@ jobs:
     runs-on: ubuntu-latest
     needs: build
     if: github.event_name == 'push'
+    # Advisory only: documentation-screenshot staleness must NOT fail the run. A hard-failing
+    # doc-freshness gate stays chronically red on accumulated figure drift, which makes a red CI
+    # uninformative and masks real build/test breaks (this happened -- a dependency-resolution
+    # failure went unnoticed behind a red screenshot-check). continue-on-error keeps the staleness
+    # report visible while letting overall CI status mean "the build actually broke".
+    continue-on-error: true
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
