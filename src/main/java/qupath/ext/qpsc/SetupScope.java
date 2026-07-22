@@ -21,6 +21,7 @@ import qupath.ext.qpsc.controller.RegisterObjectiveWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.SessionLogBuffer;
 import qupath.ext.qpsc.ui.BugReportDialog;
 import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
@@ -96,6 +97,10 @@ public class SetupScope implements QuPathExtension, GitHubProject {
     @Override
     public void installExtension(QuPathGUI qupath) {
         logger.info("Installing extension: " + EXTENSION_NAME);
+
+        // Start capturing QuPath's live log in memory so the bug reporter can
+        // attach it even when file logging is disabled (the default).
+        SessionLogBuffer.init();
 
         // 1) Register all our persistent preferences
         QPPreferenceDialog.installPreferences(qupath);

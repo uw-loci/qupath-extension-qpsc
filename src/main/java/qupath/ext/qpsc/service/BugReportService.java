@@ -157,8 +157,13 @@ public class BugReportService {
         }
 
         if (includeQuPathLog) {
+            // Prefer QuPath's on-disk log (complete, includes startup) when file
+            // logging is enabled; otherwise fall back to the in-memory capture of
+            // the live log, which is present even when no log file is written.
             Path quPathLog = findQuPathLogFile();
-            String content = readCappedLog(quPathLog, MAX_QUPATH_LOG_CHARS, null);
+            String content = quPathLog != null
+                    ? readCappedLog(quPathLog, MAX_QUPATH_LOG_CHARS, null)
+                    : scrubPaths(capWithHeadTail(SessionLogBuffer.getText(), MAX_QUPATH_LOG_CHARS, null));
             if (!content.isEmpty()) {
                 artifacts.put("qupath_log", content);
             }
@@ -167,9 +172,13 @@ public class BugReportService {
         return artifacts;
     }
 
-    /** True if a QuPath-side log file could be located on disk (drives a checkbox state). */
+    /**
+     * True if a QuPath log can be attached -- either an on-disk log file exists,
+     * or the in-memory session buffer has captured the live log (the usual case,
+     * since QuPath writes no file by default). Drives a checkbox state.
+     */
     public static boolean isQuPathLogAvailable() {
-        return findQuPathLogFile() != null;
+        return findQuPathLogFile() != null || SessionLogBuffer.hasContent();
     }
 
     /** True if the microscope command server is connected (drives a checkbox state). */

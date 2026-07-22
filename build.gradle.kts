@@ -74,6 +74,10 @@ dependencies {
     shadow(libs.bundles.qupath)
     shadow(libs.bundles.logging)
     shadow(libs.qupath.fxtras)
+
+    // QuPath's log-viewer API (provided at runtime by QuPath) -- lets the bug
+    // reporter capture the live log in memory when file logging is disabled.
+    shadow("io.github.qupath:logviewer-api:0.2.0")
     //shadow(libs.slf4j)
     shadow(libs.snakeyaml)
     shadow(libs.gson)
@@ -106,6 +110,7 @@ dependencies {
 
     // For testing
     testImplementation(libs.bundles.qupath)
+    testImplementation("io.github.qupath:logviewer-api:0.2.0")
     testImplementation("io.github.qupath:qupath-app:0.7.0")
     // snakeyaml is shadow(provided) for main; tests that parse YAML directly
     // (e.g. ConfigYamlEditorAppendTest) need it on the test compile classpath.
