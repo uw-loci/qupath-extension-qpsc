@@ -42,6 +42,8 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_WhiteBalanceCalibration.png` | `ui/WhiteBalanceDialog.java` | 2026-05-27 | OK |
 | `Docs_mainmenu.png` | `SetupScope.java` | -- | CHECK -- menu changes since 2026-05-27 |
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |
+| `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | -- | PLACEHOLDER -- needs first real capture on Windows |
+| `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | -- | PLACEHOLDER -- needs first real capture on Windows |
 
 ## Missing Screenshots (UI exists but no image)
 
@@ -55,8 +57,6 @@ This file tracks the relationship between documentation screenshots and the Java
 | Alignment Refinement with SIFT | `controller/workflow/SingleTileRefinement.java` | `Docs_AlignmentRefinementSIFT.png` |
 | Propagation Manager | `controller/ForwardPropagationWorkflow.java` | `Docs_PropagationManager.png` |
 | Z-Stack / Time-Lapse Dialog | `controller/StackTimeLapseWorkflow.java` | `Docs_ZStackTimeLapse.png` |
-| Multi-slide batch assignment dialog | `ui/MultiSlideAssignmentDialog.java` | `Docs_MultiSlide_Assignment.png` |
-| Multi-slide batch progress panel | `controller/MultiSlideExistingImageWorkflow.java` (Slots / Alignment / Advanced sections) | `Docs_MultiSlide_BatchPanel.png` |
 | PPM modality options (angles) in acquisition dialog | `modality/ppm/*` UI section | `Docs_PPM_ModalityOptions.png` |
 | PPM Polarizer Calibration dialog | qupath-extension-ppm | `Docs_PPM_PolarizerCalibration.png` |
 | PPM Birefringence Optimization dialog | qupath-extension-ppm | `Docs_PPM_BirefringenceOptimization.png` |

@@ -272,7 +272,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
 entry: start() | startAsync() -> CompletableFuture<WorkflowState> (full run; non-null = acquired, null = short-circuit/cancel/handled-error; never exceptional -- for batch orchestrators) | startSetupAsync() -> CompletableFuture<SetupResult> (setup-only: align + refine + tissue without acquisition, persists per-slide alignment JSON) | startAcquireAsync(SetupResult) -> CompletableFuture<WorkflowState> (acquire-only: replays captured config unattended against persisted alignment JSON)
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquire from Existing Image (SetupScope.java:200, dispatch 'existingImage')"
+  - "Menu: Extensions > QP Scope > Acquire from Existing Image (SetupScope.java:291, dispatch 'existingImage')"
   - "Wizard: Acquisition Wizard Start Existing-Image Acquisition (AcquisitionWizardDialog)"
   - "Per-slot driver: MultiSlideExistingImageWorkflow shepherds one invocation per slide-carrier slot"
 dispatches_to:
@@ -456,7 +456,7 @@ file: src/main/java/qupath/ext/qpsc/controller/BoundedAcquisitionWorkflow.java
 entry: run()
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Bounded Acquisition (SetupScope.java:185, dispatch 'boundedAcquisition')"
+  - "Menu: Extensions > QP Scope > Bounded Acquisition (SetupScope.java:272, dispatch 'boundedAcquisition')"
 reads:
   - DS3 (modality FOV, pixel size, detector dimensions)
   - DS17 (isConnected; auto-connect if not)
@@ -503,7 +503,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MicroscopeAlignmentWorkflow.java
 entry: run()
 category: alignment
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Alignment (SetupScope.java:246, dispatch 'microscopeAlignment')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Alignment (SetupScope.java:342, dispatch 'microscopeAlignment')"
   - "Disabled unless MacroImageUtility.isMacroImageAvailable(qupath) returns true"
 reads:
   - DS3
@@ -594,7 +594,7 @@ file: src/main/java/qupath/ext/qpsc/controller/StackTimeLapseWorkflow.java
 entry: show(qupath)
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse (SetupScope.java:453)"
+  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse (SetupScope.java:520)"
   - "When QPPreferenceDialog.isSinglePointDialogEnabled(): SinglePointAcquisitionController.show() instead (default)"
 reads:
   - DS3
@@ -686,7 +686,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ForwardPropagationWorkflow.java
 entry: run(qupath)
 category: propagation
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager (SetupScope.java:469)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager (SetupScope.java:528)"
 reads:
   - DS5 (tier 1 lookup: macro-frame JSON via AlignmentHelper)
   - DS6 (tier 2 lookup: derived/ sub-frame JSON)
@@ -754,7 +754,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MakePortableWorkflow.java
 entry: run(qupath)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable (SetupScope.java:536)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable (SetupScope.java:595)"
 reads:
   - DS27 (project image list; entries with .zarr backing)
   - DS28 (raw tile folders, when ZARR is absent)
@@ -795,7 +795,7 @@ file: src/main/java/qupath/ext/qpsc/utilities/FlippedDuplicateMigrator.java
 entry: migrate(typedProject)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Migrate Flipped Duplicates (SetupScope.java:479)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Migrate Flipped Duplicates (SetupScope.java:539)"
 reads:
   - DS27 (project list)
   - DS9 (BASE_IMAGE / sibling chains; isFlippedX/Y)
@@ -879,7 +879,7 @@ file: src/main/java/qupath/ext/qpsc/ui/stagemap/StageMapWindow.java
 entry: show() / hide() / setBoundingBoxPreview() / clearBoundingBoxPreview()
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Stage Map (SetupScope.java:270)"
+  - "Menu: Extensions > QP Scope > Stage Map (SetupScope.java:355)"
 reads:
   - DS44 (StageInsertRegistry: carrier definitions)
   - DS9 (entry metadata: BASE_IMAGE chain ancestry walk to macro-owning ancestor; SOURCE_MICROSCOPE)
@@ -906,7 +906,7 @@ entry: show()
 category: configuration
 ui_entries:
   - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard (dispatch 'setupWizard')"
-  - "Top-level when !configValid: 'Setup Wizard (Start Here)' inserted before main wizard (SetupScope.java:624)"
+  - "Top-level when !configValid: 'Setup Wizard (Start Here)' inserted before main wizard (SetupScope.java:729)"
 reads:
   - DS3 (loading existing config if any)
   - DS17 (server connection probe)
@@ -1008,7 +1008,7 @@ file: src/main/java/qupath/ext/qpsc/ui/AcquisitionWizardDialog.java
 entry: show()
 category: ui_router
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition Wizard (SetupScope.java:168, dispatch 'acquisitionWizard')"
+  - "Menu: Extensions > QP Scope > Acquisition Wizard (SetupScope.java:255, dispatch 'acquisitionWizard')"
 dispatches_to:
   - "W1 'Start Existing-Image Acquisition' button"
   - "W2 bounded acquisition entry"
@@ -1083,7 +1083,7 @@ file: src/main/java/qupath/ext/qpsc/ui/SinglePointAcquisitionController.java
 entry: show()
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse -- default path (SetupScope.java:460-465 selects this when isSinglePointDialogEnabled())"
+  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse -- default path (SetupScope.java:520, stackTimeLapseOption -> SinglePointAcquisitionController.show())"
 reads:
   - DS3
   - DS17

@@ -116,6 +116,8 @@ See [full documentation](tools/existing-image-acquisition.md) for step-by-step i
 
 ### MS-Existing Image (experimental)
 
+> See the [Multi-Slide Acquisition tool page](tools/multi-slide-acquisition.md) for a step-by-step version of everything below.
+
 Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the **MS-Existing Image (experimental)** menu entry. The menu item appears and disappears live when you toggle the preference — no restart required. It is a shepherding layer over Workflow 2 for slide carriers that hold multiple slides (currently the 4-slide vertical holder, `quad_v`):
 
 1. Pick the carrier in the assignment dialog.
