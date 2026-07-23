@@ -75,7 +75,7 @@ Then restart QuPath.
 **A:** Check the Extensions menu - you should see "QPSC" with options like "Bounded Acquisition", "Acquire from Existing Image", etc. If not:
 1. Check the extensions folder contains the .jar file
 2. Look at QuPath console for error messages on startup
-3. Verify you're using QuPath 0.6.0-rc4 or newer
+3. Verify you're using QuPath 0.7.0 or newer
 
 #### Q: I see a "Stitching unavailable" warning dialog at startup
 
@@ -1641,7 +1641,7 @@ because the check was a literal `pos >= low && pos <= high`.
 
 **Check:**
 1. Extension .jar file in extensions folder
-2. QuPath version 0.6.0-rc4 or newer
+2. QuPath version 0.7.0 or newer
 3. No error messages on QuPath startup
 4. Dependencies installed (tiles-to-pyramid extension)
 

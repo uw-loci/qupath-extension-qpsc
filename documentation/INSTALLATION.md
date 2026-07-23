@@ -7,7 +7,7 @@
 **What you will need:**
 
 - A Windows PC connected to your microscope (primary platform)
-- QuPath 0.6.0+
+- QuPath 0.7.0+
 - Micro-Manager 2.0+ configured for your hardware
 - Python 3.10+
 - About 30 minutes for full setup (assuming Micro-Manager is already configured)
@@ -19,8 +19,8 @@
 | Component           | Minimum Version | Notes                                           |
 |---------------------|-----------------|--------------------------------------------------|
 | Operating System    | Windows 10+     | Primary platform. Linux has limited testing. macOS is untested. |
-| Java (JDK)         | 21+             | Required for QuPath 0.6.0 and for building from source |
-| QuPath              | 0.6.0+          | Download from https://qupath.github.io/          |
+| Java (JDK)         | 21+             | Required for QuPath 0.7.0 and for building from source |
+| QuPath              | 0.7.0+          | Download from https://qupath.github.io/          |
 | Micro-Manager       | 2.0+            | Download from https://micro-manager.org/          |
 | Python              | 3.10+           | Required for the microscope server and all Python packages |
 | pip                 | Latest           | Python package installer (comes with Python)     |
@@ -37,7 +37,7 @@
 
 ## Step 1: Install QuPath
 
-1. Download QuPath 0.6.0 or later from https://qupath.github.io/
+1. Download QuPath 0.7.0 or later from https://qupath.github.io/
 2. Run the installer for your platform.
 3. Launch QuPath to confirm it opens correctly.
 
