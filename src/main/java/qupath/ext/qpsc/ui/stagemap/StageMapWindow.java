@@ -216,7 +216,19 @@ public class StageMapWindow {
     /** Prior Apply Flips state saved while a slot preview forces it off; null when inactive. */
     private Boolean savedApplyFlipsState;
 
+    /**
+     * Insert id the active multi-slide slot previews were built for; null when no previews are
+     * active. Lets the insert-change handler clear the previews when the user switches the Stage
+     * Map to a DIFFERENT carrier (the rotated previews are meaningless on another insert), while
+     * keeping them if the same carrier is re-selected.
+     */
+    private String slotPreviewCarrierId;
+
     private void applySlotPreviews(StageInsert carrier, java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
+        // Record which carrier these previews belong to BEFORE selecting it below, so the
+        // insert-change handler that select() fires sees a matching id and does not clear the
+        // previews we are about to draw.
+        slotPreviewCarrierId = carrier != null ? carrier.getId() : null;
         // Sync the map to the carrier so slot indices/rects in the previews match what is
         // drawn. Prefer selecting the matching dropdown item (fires the canvas + overlay
         // update); fall back to setting the insert directly.
@@ -257,6 +269,7 @@ public class StageMapWindow {
             applyFlipsCheckbox.setSelected(savedApplyFlipsState);
         }
         savedApplyFlipsState = null;
+        slotPreviewCarrierId = null;
     }
 
     /**
@@ -526,6 +539,20 @@ public class StageMapWindow {
             // Re-evaluate macro overlay availability: multi-slot holders disable it (the
             // single-macro overlay would span all slots), single-slide inserts re-enable it.
             checkMacroOverlayAvailability();
+            // Multi-slide slot previews (rotated macros over a specific carrier's slots) are
+            // otherwise only cleared by the assignment dialog, so they linger when the user
+            // manually switches the Stage Map to another insert -- e.g. a quad_v vertical
+            // layout staying "still vertical" over a single-horizontal insert. Clear them when
+            // switching AWAY from the carrier they were built for; re-selecting the same carrier
+            // keeps them as the intended layout reference. (applySlotPreviews sets
+            // slotPreviewCarrierId before it selects the carrier, so this does not fight it.)
+            if (slotPreviewCarrierId != null && (selected == null || !slotPreviewCarrierId.equals(selected.getId()))) {
+                logger.info(
+                        "Insert changed to '{}' away from slot-preview carrier '{}' -- clearing multi-slide previews",
+                        selected != null ? selected.getId() : "(none)",
+                        slotPreviewCarrierId);
+                clearSlotPreviews();
+            }
         });
 
         // Source microscope/scanner selector. Lists distinct source scanners that have an
