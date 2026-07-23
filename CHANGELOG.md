@@ -7,6 +7,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-07-22
+
+### Changed
+
+**QuPath 0.7.0 is now required**
+- The extension declares and builds against QuPath 0.7.0 (was 0.6.0). Install QuPath 0.7.0 or later. Docs updated to match.
+
+**Multi-Slide Acquisition promoted out of experimental**
+- The former "MS-Existing Image (experimental)" workflow is now **"Multi-Slide Acquisition..."**, shown directly beneath "Acquisition Wizard..." at the top of the QP Scope menu. The opt-in "Enable Multi-Slide Workflow (experimental)" preference has been removed: the menu entry appears automatically whenever the active microscope config defines a multi-slide holder (a `slide_holder` insert with more than one slot) and is hidden otherwise. Launching it now auto-opens the Live Viewer and Stage Map (like the Acquisition Wizard) so the stage/insert context is visible while assigning slides to slots.
+
+### Added
+
+**"Restart QuPath" advisory after an install or update**
+- When the extension jar is installed or updated in a running QuPath session, the old classes stay loaded until a restart -- which can look like the update did not take effect. On the first launch after the packaged version changes, a one-time modal now advises restarting QuPath. It does not appear on normal relaunches, and unpackaged IDE/dev builds are skipped. (Added to QP-CAT and the DL Pixel Classifier as well.)
+
+### Fixed
+
+**Stage Map: multi-slide macro previews lingered after switching inserts**
+- After a multi-slide run, the rotated per-slot macro previews (e.g. a vertical `quad_v` layout) stayed on the Stage Map when you manually switched the insert dropdown back to a single-slide holder, so the macro appeared "still vertical" over the wrong insert. The previews are now cleared when the Stage Map is switched to a different carrier (re-selecting the same carrier keeps them as a layout reference). No flip/rotation math changed.
+
+**Multi-Slide assignment: diagnostic logging for eligible-macro selection**
+- The assignment dialog now logs each project entry it considers -- name, `base_image`, source scanner, and the include/exclude reason -- plus a final eligible-of-total tally, so a "no eligible macro entries" result is diagnosable from the log instead of silent.
+
 ## [0.7.2] - 2026-07-22
 
 _Bundles all work merged to `main` since 0.7.1 (the items below), plus the stitching fix._
