@@ -12,7 +12,7 @@ This file tracks the relationship between documentation screenshots and the Java
 |------------|-------------------|---------------|--------|
 | `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-05-27 | OK |
 | `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-05-27 | OK |
-| `Docs_AnnotationAcquisition.png` | `ui/ExistingImageAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_AnnotationAcquisition.png` | `ui/AnnotationAcquisitionDialog.java` | 2026-07-23 | OK -- re-mapped from the broad ExistingImageAcquisitionController to the actual class selection dialog; the multi-tile refinement radio lives in the consolidated dialog, not here, so this no longer false-flags |
 | `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | 2026-05-27 | OK |
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
 | `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | OK |
@@ -29,7 +29,9 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` | 2026-07-22 | OK -- drift check false-flagged it on 2026-07-22 (shared source with Navigate); no visible change, no re-capture needed |
 | `Docs_LiveViewer_Camera.png` | `ui/liveviewer/LiveViewerWindow.java` (camera tab) | -- | CHECK -- previously untracked |
 | `Docs_MicroscopeAlignment_SelectSourceMicroscope.png` | `ui/MicroscopeSelectionDialog.java` | -- | CHECK |
-| `Docs_MicroscopeAlignment_RefineAlignment.png` | `controller/workflow/SingleTileRefinement.java` (refinement dialog) | -- | CHECK -- previously untracked |
+| `Docs_MicroscopeAlignment_RefineAlignment.png` | `controller/workflow/SingleTileRefinement.java` (3-point / single-tile refinement dialog) | -- | CHECK -- SIFT refinement dialogs changed substantially; verify or re-capture |
+| `Docs_MultiTileRefinement.png` | `controller/workflow/MultiTileRefinement.java` (numbered multi-tile SIFT panel) | -- | PLACEHOLDER -- new dialog, needs first real capture on Windows |
+| `Docs_SiftCapturePane.png` | `controller/workflow/SiftCapturePane.java` / `ui/SiftAutoAlignHelper.java` | -- | PLACEHOLDER -- Auto-Align (SIFT) capture pane, needs first real capture on Windows |
 | `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | -- | CHECK -- new "Calibrate..." button since 2026-05-27 |
 | `Docs_DishCoverslipCalibration.png` | Diagram / `ui/stagemap/StageMapWindow.java` insert calibration | -- | CHECK -- previously untracked |
 | `Docs_PropagationManager.png` | `controller/ForwardPropagationWorkflow.java` | -- | CHECK -- previously untracked |

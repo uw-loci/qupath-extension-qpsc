@@ -23,6 +23,14 @@ slides once and then let the run proceed on its own.
 
 ![Multi-slide batch progress panel](../images/Docs_MultiSlide_BatchPanel.png)
 
+> **Dialogs you will see.** Two are specific to this workflow -- the **carrier /
+> slot assignment** dialog and the **batch progress panel** (above). The rest
+> are the *same* dialogs as the single-slide
+> [Existing Image Acquisition](existing-image-acquisition.md): the acquisition
+> config dialog, the green-box tissue preview, tile selection, and the
+> [refinement / Auto-Align (SIFT) dialogs](microscope-alignment.md#step-4-refinement-manual-or-automatic).
+> This page does not re-screenshot those shared dialogs; see their own pages.
+
 ## Enabling the menu
 
 The **MS-Existing Image (experimental)** menu item is hidden by default. Turn on
@@ -156,6 +164,9 @@ for unattended acquisition:
   single vertical slides default to single-tile. If acquisition is accurate near
   one spot but drifts with distance after a single-tile refine, switch that slot
   to multi-tile.
+
+  ![Multi-tile refinement panel with numbered SIFT steps](../images/Docs_MultiTileRefinement.png)
+
 - **Autofocus on slot jump** (Advanced / SIFT settings, default on) autofocuses
   after the stage jumps to each refinement tile, before the capture pane
   appears. Keep a Live Viewer stream open during multi-slide alignment so the
