@@ -52,7 +52,6 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Image name includes: Annotation](#image-name-includes-annotation) | Boolean | OFF | Add annotation name to filename |
 | [Image name includes: Angle](#image-name-includes-angle) | Boolean | ON | Add angle to filename |
 | [Metadata Propagation Prefix](#metadata-propagation-prefix) | String | OCR | Prefix for inherited metadata |
-| [Live Viewer: Show Position Overlay](#live-viewer-show-position-overlay) | Boolean | OFF | Overlay the current XYZ(R) stage position on the live image |
 | [Live Viewer: Position Overlay Text Size](#live-viewer-position-overlay-text-size) | Choice | (QuPath location size) | Text size for the position overlay |
 | [Live Viewer: Dock Histogram Right](#live-viewer-dock-histogram-right) | Boolean | OFF | Dock the histogram + noise stats on the right (vertical) instead of below the image |
 
@@ -1054,18 +1053,16 @@ Viewer itself (the **XYZ** toolbar button toggles the overlay).
 
 ### Live Viewer: Show Position Overlay
 
-| Property | Value |
-|----------|-------|
-| Type | Boolean |
-| Default | OFF |
-| Requires Restart | No |
+**Not a Preferences-pane entry -- controlled from the Live Viewer toolbar.**
+The overlay is toggled with the **XYZ** button on the Live Viewer toolbar, and
+its on/off state **persists across sessions** (stored as a persistent
+preference the button binds to). There is intentionally no separate Preferences
+row for it.
 
-**Description:**
 Overlays the current stage position on a corner of the live image as a monospace
 readout: `X ... Y ... Z ...`, and `R ...` on rotation scopes (PPM). The value
 updates ~2 Hz from the shared stage-position poller (no extra hardware polling).
-This preference is bound to the **XYZ** toggle button on the Live Viewer toolbar,
-so toggling either one updates the other.
+The **Position Overlay Text Size** preference below still controls its font.
 
 ### Live Viewer: Position Overlay Text Size
 

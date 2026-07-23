@@ -517,12 +517,11 @@ public class QPPreferenceDialog {
                         + "Wizard shows a read-only status reflecting this preference.")
                 .build());
 
-        items.add(new PropertyItemBuilder<>(showLiveViewerPositionOverlayProperty, Boolean.class)
-                .name("Live Viewer: Show Position Overlay")
-                .category(CATEGORY)
-                .description("Overlay the current XYZ (and R, on rotation scopes) stage position on the "
-                        + "Live Viewer image. Also toggleable from the Live Viewer toolbar.")
-                .build());
+        // Show Position Overlay is intentionally NOT exposed as a Preferences-pane
+        // entry: the Live Viewer toolbar's XYZ toggle controls it and its state is
+        // persisted via showLiveViewerPositionOverlayProperty (a persistent
+        // preference the toggle binds to bidirectionally). Keep the property; do
+        // not re-add a duplicate Preferences row.
 
         items.add(new PropertyItemBuilder<>(liveViewerPositionFontSizeProperty, PathPrefs.FontSize.class)
                 .propertyType(PropertyItemBuilder.PropertyType.CHOICE)

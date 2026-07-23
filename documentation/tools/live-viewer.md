@@ -37,9 +37,9 @@ A **green border** is drawn around the image whenever Live is ON, as an at-a-gla
 The **XYZ** toggle button on the toolbar overlays the current stage position on a
 corner of the live image: `X ... Y ... Z ...`, plus `R ...` on rotation scopes
 (PPM). It reuses the shared stage-position poller (updates ~2 Hz; no extra
-hardware polling) and is mouse-transparent so it never blocks clicks. The toggle
-is bound to the [Live Viewer: Show Position Overlay](../PREFERENCES.md#live-viewer-show-position-overlay)
-preference, and its text size follows
+hardware polling) and is mouse-transparent so it never blocks clicks. The
+toggle's on/off state **persists across sessions** (there is no separate
+Preferences entry for it), and its text size follows
 [Live Viewer: Position Overlay Text Size](../PREFERENCES.md#live-viewer-position-overlay-text-size)
 (which defaults to QuPath's viewer location-text size). Use it to keep an eye on
 position while the Stage Control panel is hidden.
