@@ -195,15 +195,6 @@ public class QPPreferenceDialog {
     private static final BooleanProperty warnOnLowDiskSpaceProperty =
             PathPrefs.createPersistentPreference("warnOnLowDiskSpace", true);
 
-    // Experimental: enable the Multi-Slide Existing Image workflow menu entry.
-    // Default off because the workflow is still maturing -- the orchestration is
-    // a shepherding panel rather than fully automated, the assignment dialog
-    // only handles slide_holder carriers, and the acquisition path itself is
-    // unchanged from the single-slide workflow. Operators who want to try it
-    // on the 4-slide vertical holder can opt in here.
-    private static final BooleanProperty enableMultiSlideWorkflowProperty =
-            PathPrefs.createPersistentPreference("enableMultiSlideWorkflow", false);
-
     // Suppress the exposure-too-long warning dialog in the Live Viewer Autofocus button.
     // Controlled by the "don't show again" checkbox in the dialog, not the preferences pane.
     private static final BooleanProperty suppressExposureWarningProperty =
@@ -541,17 +532,6 @@ public class QPPreferenceDialog {
                         + "with modality, compression, and per-tile metadata.\n\n"
                         + "Disable only for unattended workflows where you have manually "
                         + "verified that disk space is sufficient.")
-                .build());
-
-        items.add(new PropertyItemBuilder<>(enableMultiSlideWorkflowProperty, Boolean.class)
-                .name("Enable Multi-Slide Workflow (experimental)")
-                .category(CATEGORY)
-                .description("Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu "
-                        + "(appears immediately, no restart). The workflow assigns project macro images to "
-                        + "slot positions in a multi-slide carrier (e.g. the 4-slide vertical holder), then "
-                        + "walks you through the Existing Image workflow on each slot -- one at a time, or as "
-                        + "a semi-automated / fully unattended two-pass batch. Acquisition and alignment logic "
-                        + "are unchanged; this is an orchestration layer on top. Disable to hide the menu entry.")
                 .build());
 
         // Image name contents -- what metadata to include in generated filenames.
@@ -928,19 +908,6 @@ public class QPPreferenceDialog {
 
     public static void setAutofocusEditorAdvancedMode(boolean advanced) {
         autofocusEditorAdvancedModeProperty.set(advanced);
-    }
-
-    /** Returns true if the experimental Multi-Slide Existing Image menu entry should be shown. */
-    public static boolean getEnableMultiSlideWorkflow() {
-        return enableMultiSlideWorkflowProperty.get();
-    }
-
-    /**
-     * The backing property for the Multi-Slide Workflow toggle, so the menu entry's
-     * visibility can bind to it and update live (no QuPath restart needed).
-     */
-    public static BooleanProperty enableMultiSlideWorkflowProperty() {
-        return enableMultiSlideWorkflowProperty;
     }
 
     /**

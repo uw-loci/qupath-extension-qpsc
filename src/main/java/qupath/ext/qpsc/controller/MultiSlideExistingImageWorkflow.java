@@ -58,7 +58,7 @@ import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
- * Experimental Multi-Slide Existing Image workflow.
+ * Multi-Slide Acquisition workflow.
  *
  * <p>Drives the user through the regular single-slide existing-image workflow across
  * each occupied slot of a slide-carrier insert (e.g. {@code quad_v}). The user assigns
@@ -253,7 +253,7 @@ public final class MultiSlideExistingImageWorkflow {
         Stage stage = new Stage();
         stage.initModality(Modality.NONE);
         stage.initOwner(gui.getStage());
-        stage.setTitle("MS Workflow Progress (experimental)");
+        stage.setTitle("Multi-Slide Acquisition Progress");
         // NOT always-on-top: every driver launches the single-slide workflow, which shows
         // application-modal dialogs (annotation selection, acquisition setup) owned by the
         // main window. An always-on-top panel would float over those dialogs while the modal

@@ -48,7 +48,7 @@ import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Modal dialog for assigning QuPath project entries to slide-carrier slot positions
- * for the experimental Multi-Slide Existing Image workflow.
+ * for the Multi-Slide Acquisition workflow.
  *
  * <p>Lets the user pick a slide-holder carrier (filtered to multi-slot slide_holder
  * inserts) and assign one project entry to each slot. Empty/"skip" slots are
@@ -104,7 +104,7 @@ public final class MultiSlideAssignmentDialog {
         if (owner != null) {
             stage.initOwner(owner);
         }
-        stage.setTitle("Multi-Slide Existing Image (experimental)");
+        stage.setTitle("Multi-Slide Acquisition");
 
         Label header = new Label("Assign project images to slide carrier positions");
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
@@ -516,23 +516,41 @@ public final class MultiSlideAssignmentDialog {
      */
     private static List<ProjectImageEntry<BufferedImage>> collectMacroCandidates(Project<BufferedImage> project) {
         List<ProjectImageEntry<BufferedImage>> out = new ArrayList<>();
-        if (project == null) return out;
+        if (project == null) {
+            logger.warn("collectMacroCandidates: project is null -> no candidates");
+            return out;
+        }
+        int total = 0;
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            total++;
+            String name = entry.getImageName();
+            String base = ImageMetadataManager.getBaseImage(entry);
+            String source = ImageMetadataManager.getSourceMicroscope(entry);
+            String ownName = GeneralTools.stripExtension(name);
             // Skip the (flipped X|Y|XY) visual-UX siblings -- they carry no macro.
-            if (ImageFlipHelper.isFlippedSiblingName(entry.getImageName())) {
+            if (ImageFlipHelper.isFlippedSiblingName(name)) {
+                logger.info(
+                        "collectMacroCandidates: EXCLUDE '{}' (flipped-sibling) base='{}' source='{}'",
+                        name,
+                        base,
+                        source);
                 continue;
             }
             // Skip true sub-acquisitions: base_image set AND != own name. Root macros
             // (base_image == own name) fall through and remain eligible.
-            String base = ImageMetadataManager.getBaseImage(entry);
-            if (base != null && !base.isEmpty()) {
-                String ownName = GeneralTools.stripExtension(entry.getImageName());
-                if (!base.equals(ownName)) {
-                    continue;
-                }
+            if (base != null && !base.isEmpty() && !base.equals(ownName)) {
+                logger.info(
+                        "collectMacroCandidates: EXCLUDE '{}' (sub-acquisition: base_image '{}' != own name '{}') source='{}'",
+                        name,
+                        base,
+                        ownName,
+                        source);
+                continue;
             }
+            logger.info("collectMacroCandidates: INCLUDE '{}' base='{}' source='{}'", name, base, source);
             out.add(entry);
         }
+        logger.info("collectMacroCandidates: {} eligible of {} project entries", out.size(), total);
         return out;
     }
 

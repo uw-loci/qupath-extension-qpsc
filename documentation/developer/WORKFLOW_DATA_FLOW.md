@@ -179,7 +179,7 @@ who want to acquire from a sub-image on a different scope should open
 the parent macro entry and let the cross-scope alignment path compose a
 fresh active-scope transform there.
 
-### Multi-Slide Existing Image (`MultiSlideExistingImageWorkflow`, experimental)
+### Multi-Slide Acquisition (`MultiSlideExistingImageWorkflow`)
 
 | Step | What |
 |---|---|
@@ -188,7 +188,7 @@ fresh active-scope transform there.
 | Write | Per-assigned-entry metadata: `slide_position` (1..N), `slide_carrier` (carrier id like `quad_v`), `ms_run_id` (UUID). Stored via `ImageMetadataManager.setSlideAssignment`. Project synced once after assignment. |
 | Gate | Same gates as the single-slide workflow, one set per invoked slot. The MS controller adds no new gates. |
 
-Notes: this is an experimental shepherding layer over `ExistingImageWorkflowV2`. The MS panel does not modify the underlying acquisition or alignment logic; it tracks which carrier slot each project entry maps to and walks the user through running the single-slide workflow on each one. The menu entry only appears when `Enable Multi-Slide Workflow (experimental)` is on in QuPath preferences.
+Notes: this is a shepherding layer over `ExistingImageWorkflowV2`. The MS panel does not modify the underlying acquisition or alignment logic; it tracks which carrier slot each project entry maps to and walks the user through running the single-slide workflow on each one. The menu entry only appears when the active microscope config defines a multi-slide holder (carrier); there is no preference toggle.
 
 ### Bounded Acquisition (`BoundedAcquisitionWorkflow`)
 

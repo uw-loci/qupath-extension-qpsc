@@ -372,7 +372,7 @@ entry: start() / startAsync()
 category: acquisition_shepherd
 status: experimental
 ui_entries:
-  - "Menu: Extensions > QP Scope > Multi-Slide Existing Image (when QPPreferenceDialog.getEnableMultiSlideWorkflow())"
+  - "Menu: Extensions > QP Scope > Multi-Slide Acquisition... (shown when the config defines a multi-slide holder; no preference toggle)"
 dispatches_to:
   - "W1 (per-slot ExistingImageWorkflowV2.start)"
 reads:
@@ -1577,7 +1577,7 @@ fields_examples:
   includeObjective/Modality/Annotation/Angle InFilename
   metadataPropagationPrefix
   skipManualAutofocus, disableAllAutofocus
-  warnOnLowDiskSpace, enableMultiSlideWorkflow
+  warnOnLowDiskSpace
   suppressExposureWarning, streamingMaxExposureMs
   streamingAfMigrationAcknowledged, autofocusYamlMigrationAcknowledged, autofocusEditorAdvancedMode
   notificationsEnabled, notificationTopic, notificationServer
@@ -2181,8 +2181,9 @@ real outages. Each item names the surface(s) and workflow(s) it applies to.
     Pre-fix JSONs (field absent) trigger a Continue/Cancel advisory at load.
     Don't silently fix-up old JSONs. Affects: DS5, DS6.
 
-30. **`MultiSlideExistingImageWorkflow` (W1b) is experimental and gated by
-    preference.** It adds no new validation gates; each per-slot W1 invocation
+30. **`MultiSlideExistingImageWorkflow` (W1b) is gated by holder availability**
+    (shown only when the config defines a multi-slide holder; no preference).
+    It adds no new validation gates; each per-slot W1 invocation
     runs the full validation chain independently. Don't bypass per-slot gates
     for "performance". Affects: W1b.
 

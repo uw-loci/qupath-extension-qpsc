@@ -100,7 +100,25 @@ public class QPScopeController {
                 ExistingImageWorkflowV2.start();
             }
             case "multiSlideExistingImage" -> {
-                logger.debug("Launching multi-slide existing image workflow (experimental)");
+                logger.debug("Launching multi-slide acquisition workflow");
+                // Auto-open the companion windows (Live Viewer + Stage Map) if not already
+                // open, matching the Acquisition Wizard so the operator sees the stage / insert
+                // context while assigning slides to carrier slots. Same code paths as the menu
+                // items; show() focuses an existing window rather than opening a duplicate.
+                javafx.application.Platform.runLater(() -> {
+                    try {
+                        qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.show();
+                        logger.info("Auto-opened Live Viewer from Multi-Slide Acquisition");
+                    } catch (Exception ex) {
+                        logger.debug("Could not auto-open Live Viewer: {}", ex.getMessage());
+                    }
+                    try {
+                        qupath.ext.qpsc.ui.stagemap.StageMapWindow.show();
+                        logger.info("Auto-opened Stage Map from Multi-Slide Acquisition");
+                    } catch (Exception ex) {
+                        logger.debug("Could not auto-open Stage Map: {}", ex.getMessage());
+                    }
+                });
                 MultiSlideExistingImageWorkflow.start();
             }
             case "microscopeAlignment" -> {

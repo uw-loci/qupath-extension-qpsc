@@ -24,6 +24,8 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.SessionLogBuffer;
 import qupath.ext.qpsc.ui.BugReportDialog;
 import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
+import qupath.ext.qpsc.ui.stagemap.StageInsert;
+import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.FlippedDuplicateMigrator;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
@@ -56,7 +58,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
     private static final ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
     private static final String EXTENSION_NAME = res.getString("name");
     private static final String EXTENSION_DESCRIPTION = res.getString("description");
-    private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.6.0");
+    private static final Version EXTENSION_QUPATH_VERSION = Version.parse("v0.7.0");
     private static final GitHubRepo EXTENSION_REPOSITORY =
             GitHubRepo.create(EXTENSION_NAME, "uw-loci", "qupath-extension-qpsc");
 
@@ -294,13 +296,14 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // 2b) Multi-Slide Existing Image (experimental) - visibility bound to the preference so
-        // it appears / disappears live when the toggle changes (the menu is built once at startup,
-        // so gating creation on the preference would require a restart -- bind visibleProperty
-        // instead). Drives the user through the regular Existing Image workflow across each slot of
-        // a multi-slide carrier (e.g. quad_v). Requires an open project containing the macro entries.
+        // 2b) Multi-Slide Acquisition - drives the user through the regular Existing Image
+        // workflow across each slot of a multi-slide carrier (e.g. quad_v). The menu item is
+        // shown only when the active config actually defines a multi-slide holder (a slide_holder
+        // insert with >1 slot); on a single-slide-only scope it stays hidden. The menu is built
+        // once at startup, so this is a static visibility decision (no live preference toggle).
+        // Requires an open project containing the macro entries (enforced via disableProperty).
         MenuItem multiSlideOption = new MenuItem(res.getString("menu.multiSlideExistingImage"));
-        multiSlideOption.visibleProperty().bind(QPPreferenceDialog.enableMultiSlideWorkflowProperty());
+        multiSlideOption.setVisible(configHasMultiSlideHolder(configValid, offlineScope));
         multiSlideOption
                 .disableProperty()
                 .bind(Bindings.createBooleanBinding(
@@ -309,9 +312,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         qupath.projectProperty()));
         setMenuItemTooltip(
                 multiSlideOption,
-                "Experimental: assign project macro entries to slide-carrier slot positions, "
-                        + "then walk through the Existing Image workflow on each slot. "
-                        + "Enable in Preferences > QuPath Scope > Enable Multi-Slide Workflow (experimental).");
+                "Assign project macro entries to the slots of a multi-slide carrier (e.g. the "
+                        + "4-slide vertical holder), then walk through the Existing Image workflow on "
+                        + "each slot -- one at a time, or as a semi-automated / unattended batch.");
         multiSlideOption.setOnAction(e -> {
             try {
                 QPScopeController.getInstance().startWorkflow("multiSlideExistingImage");
@@ -734,14 +737,14 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             extensionMenu.getItems().addAll(topLevelWizard, new SeparatorMenuItem());
         }
 
-        // 0. Wizard (top of menu)
-        extensionMenu.getItems().addAll(wizardOption, new SeparatorMenuItem());
+        // 0. Wizard (top of menu). Multi-Slide Acquisition sits directly beneath it when
+        // visible (a multi-slide holder is configured); it stays hidden on single-slide scopes.
+        extensionMenu.getItems().add(wizardOption);
+        extensionMenu.getItems().add(multiSlideOption);
+        extensionMenu.getItems().add(new SeparatorMenuItem());
 
         // 1. Acquisition
         extensionMenu.getItems().addAll(boundedAcquisitionOption, existingImageOption);
-        // Always added; its visibleProperty is bound to the Multi-Slide preference so it
-        // shows/hides live without a restart.
-        extensionMenu.getItems().add(multiSlideOption);
         extensionMenu.getItems().add(new SeparatorMenuItem());
 
         // 2. Viewers & Controls
@@ -815,6 +818,36 @@ public class SetupScope implements QuPathExtension, GitHubProject {
      * @param menuItem the menu item to add tooltip to
      * @param tooltipText the tooltip text to display
      */
+    /**
+     * True if the active microscope config defines at least one multi-slide holder -- a
+     * {@code slide_holder} insert with more than one slot (e.g. {@code quad_v}). Drives the
+     * visibility of the Multi-Slide Acquisition menu entry: a single-slide-only scope hides it.
+     *
+     * <p>The insert registry is otherwise lazily loaded (defaults) until the Stage Map opens, so
+     * this loads it from the config first, then applies the SAME filter the assignment dialog uses
+     * ({@code kind == SLIDE_HOLDER && slots > 1}) -- note a missing {@code kind} parses as
+     * SLIDE_HOLDER, so the slot-count check is what distinguishes a real carrier from a single slide.
+     */
+    private static boolean configHasMultiSlideHolder(boolean configValid, boolean offlineScope) {
+        if (!configValid || offlineScope) {
+            return false;
+        }
+        try {
+            MicroscopeConfigManager cm = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (cm == null) {
+                return false;
+            }
+            StageInsertRegistry.loadFromConfig(cm);
+            return StageInsertRegistry.getAvailableInserts().stream()
+                    .anyMatch(i -> i.getKind() == StageInsert.Kind.SLIDE_HOLDER
+                            && i.getSlideSamples() != null
+                            && i.getSlideSamples().size() > 1);
+        } catch (Exception e) {
+            logger.debug("Multi-slide holder check failed; hiding menu entry: {}", e.getMessage());
+            return false;
+        }
+    }
+
     private void setMenuItemTooltip(MenuItem menuItem, String tooltipText) {
         Tooltip tooltip = new Tooltip(tooltipText);
         tooltip.setShowDelay(Duration.millis(500));

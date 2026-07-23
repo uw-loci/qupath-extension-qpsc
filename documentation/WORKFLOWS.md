@@ -114,11 +114,11 @@ When you run this workflow on an image that was previously acquired through QPSC
 
 See [full documentation](tools/existing-image-acquisition.md) for step-by-step instructions, all options, and troubleshooting.
 
-### MS-Existing Image (experimental)
+### Multi-Slide Acquisition
 
 > See the [Multi-Slide Acquisition tool page](tools/multi-slide-acquisition.md) for a step-by-step version of everything below.
 
-Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the **MS-Existing Image (experimental)** menu entry. The menu item appears and disappears live when you toggle the preference — no restart required. It is a shepherding layer over Workflow 2 for slide carriers that hold multiple slides (currently the 4-slide vertical holder, `quad_v`):
+The **Multi-Slide Acquisition...** menu entry appears automatically when the active microscope config defines a multi-slide holder (carrier); it is hidden otherwise (no preference to toggle). It is a shepherding layer over Workflow 2 for slide carriers that hold multiple slides (currently the 4-slide vertical holder, `quad_v`):
 
 1. Pick the carrier in the assignment dialog.
 2. Configure slide rotations:
@@ -174,7 +174,7 @@ Enable **Enable Multi-Slide Workflow (experimental)** in Preferences to show the
 
 **Slide orientation (label on either end):** each slot's orientation is established by *its own alignment during setup*, not by the holder calibration. The holder calibration is just a slot **center** (the midpoint of two diagonal corners), which is invariant to how the slide is rotated. Placing a slide with its label at the opposite end is a pure **180-degree rotation** about the slot center -- no mirror or inversion -- so tissue at the center stays centered and off-center tissue moves to the opposite end. A **manual (landmark) alignment** measures that rotation directly, so a rotated slide is handled correctly. The slot center feeds the alignment workflow's auto-move feature: when you select the first reference tile, the stage moves roughly to the slot region (the calibration knows where the slot is, not where the tissue smear sits within it), so you drive a short distance to the tissue rather than navigating from scratch.
 
-Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2 -- the two-pass mode just splits that same workflow into a setup half (which persists the per-slide alignment) and an acquire half (which replays it). This is an early experimental release.
+Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id` metadata so the run is auditable and partial runs are recoverable after a crash. The acquisition and alignment logic of each slot is unchanged from the single-slide Workflow 2 -- the two-pass mode just splits that same workflow into a setup half (which persists the per-slide alignment) and an acquire half (which replays it).
 
 ---
 
