@@ -42,7 +42,6 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Disable All Autofocus (Danger)](#disable-all-autofocus-danger) | Boolean | OFF | Send `--af-disabled` on the wire so server runs zero AF |
 | Save Raw Tiles | Boolean | OFF | Save unprocessed tiles alongside corrected |
 | Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
-| Enable Multi-Slide Workflow (experimental) | Boolean | OFF | Adds the MS-Existing Image menu entry for multi-slide carriers (e.g. quad_v) |
 | [Reuse saved alignment (TESTING ONLY)](#reuse-saved-alignment-testing-only) | Boolean | OFF | Multi-slide batch alignment reuse (UNSAFE, testing only) |
 | [Autofocus on slot jump](#autofocus-on-slot-jump) | Boolean | ON | Auto-focus after stage reaches each slot during multi-slide batch |
 | [Force Camera View on alignment start](#force-camera-view-on-alignment-start) | Boolean | ON | Switch Stage Map to Camera View when multi-slide alignment starts |
@@ -724,29 +723,6 @@ Off by default: it changes where every tile lands, and is worth confirming on yo
 
 ---
 
-### Enable Multi-Slide Workflow (experimental)
-
-| Property | Value |
-|----------|-------|
-| Type | Boolean |
-| Default | OFF |
-| Requires Restart | No |
-
-**Description:**
-Adds an experimental Multi-Slide Existing Image entry to the QP Scope menu. The menu item appears and disappears **live** when you toggle this preference — **no restart required**. When enabled, the workflow assigns project macro images to slot positions in a multi-slide carrier (e.g. the 4-slide vertical holder) and guides you through acquisition on each slot. You can run slots one at a time manually, or use semi-automated or fully unattended two-pass batch modes.
-
-**When to Enable:**
-- You are using a multi-slide carrier (quad_v or similar)
-- You have a project with macro entries (one per slide) that are ready to acquire from
-- You want to run the same acquisition workflow on multiple slides in sequence
-
-**When to Disable:**
-- Hide the MS-Existing Image menu entry when you don't need multi-slide batch acquisition
-- Return to single-slide workflows (the regular Bounded Acquisition and Acquire from Existing Image entries remain unaffected)
-
-**See Also:** [MS-Existing Image (experimental)](WORKFLOWS.md#ms-existing-image-experimental) workflow documentation.
-
----
 
 ### Autofocus on slot jump
 
@@ -850,7 +826,7 @@ The zoom is best-effort: if no bounding-box preview is currently set on the Stag
 - **Always OFF for real acquisition** — any slide remount invalidates the transforms
 - Default production setting; only toggle ON for specific test scenarios
 
-**See Also:** [MS-Existing Image (experimental)](WORKFLOWS.md#ms-existing-image-experimental) workflow documentation.
+**See Also:** [Multi-Slide Acquisition](WORKFLOWS.md#multi-slide-acquisition) workflow documentation.
 
 ---
 

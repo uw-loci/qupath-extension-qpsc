@@ -1,6 +1,6 @@
-# Multi-Slide Acquisition (experimental)
+# Multi-Slide Acquisition
 
-> Menu: Extensions > QP Scope > MS-Existing Image (experimental)
+> Menu: Extensions > QP Scope > Multi-Slide Acquisition...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md) | [All Workflows](../WORKFLOWS.md)
 
 ## Purpose
@@ -14,11 +14,6 @@ an **acquire pass** (walk-away, no dialogs). Use it when you have a multi-slide
 holder (currently the 4-slide vertical holder, `quad_v`) and want to set up all
 slides once and then let the run proceed on its own.
 
-> **Experimental.** This is an early release. The per-slot acquisition and
-> alignment logic is identical to single-slide Workflow 2; the two-pass mode
-> just splits that workflow into a setup half (which persists each per-slide
-> alignment) and an acquire half (which replays it).
-
 ![Multi-slide carrier assignment dialog](../images/Docs_MultiSlide_Assignment.png)
 
 ![Multi-slide batch progress panel](../images/Docs_MultiSlide_BatchPanel.png)
@@ -31,12 +26,13 @@ slides once and then let the run proceed on its own.
 > [refinement / Auto-Align (SIFT) dialogs](microscope-alignment.md#step-4-refinement-manual-or-automatic).
 > This page does not re-screenshot those shared dialogs; see their own pages.
 
-## Enabling the menu
+## When the menu appears
 
-The **MS-Existing Image (experimental)** menu item is hidden by default. Turn on
-**Enable Multi-Slide Workflow (experimental)** in
-[Preferences](../PREFERENCES.md) to show it. The menu item appears and
-disappears live when you toggle the preference -- no restart required.
+The **Multi-Slide Acquisition...** menu item appears automatically when the
+active microscope config defines a multi-slide holder (carrier) -- e.g. the
+4-slide vertical holder, `quad_v`. If your config has no multi-slide holder, the
+entry is hidden. (There is no preference to toggle; it follows the config. See
+[Stage carrier schema](../developer/CARRIER_SCHEMA.md) for defining a holder.)
 
 ## Prerequisites
 
@@ -47,9 +43,13 @@ disappears live when you toggle the preference -- no restart required.
 - A microscope connection for acquisition (the assignment and alignment steps
   are interactive; the acquire pass runs against the saved per-slide alignments).
 
+## Before you start
+
+When you launch **Multi-Slide Acquisition...**, the **Live Viewer** and **Stage Map** are automatically opened (if not already visible). These show the camera feed and stage context while you assign slides to carrier slots. If either window is already open, it is brought to focus instead of opening a duplicate.
+
 ## Step 1 -- Assign slides to slots
 
-Open **MS-Existing Image (experimental)**. In the assignment dialog:
+In the assignment dialog:
 
 1. **Pick the carrier** for the holder you have mounted.
 2. **Set rotations.** Use **Rotate all slides** at the top to set every slot at
@@ -67,11 +67,13 @@ Open **MS-Existing Image (experimental)**. In the assignment dialog:
    Each non-zero rotation creates or reuses a rotated duplicate entry so
    acquisition aligns to the mounted orientation. Check **Skip** to leave a slot
    empty.
-4. **Preview placement.** Open the [Stage Map](stage-map.md) beside this dialog
-   to see all assigned slides rendered at their chosen rotations over the
+4. **Preview placement.** The [Stage Map](stage-map.md) is displayed alongside this
+   dialog and shows all assigned slides rendered at their chosen rotations over the
    holder's slots, updating live as you change rotations. The preview stays
    visible after the dialog closes, as a layout reference through the alignments
    that follow.
+
+   ![Stage Map preview of a 4-slide vertical holder with tissue bounding boxes](../images/Docs_MultiSlide_StageMap.png)
 
 > **Slide orientation note.** Each slot's true orientation comes from *its own
 > alignment during setup*, not from the holder calibration (which only knows the

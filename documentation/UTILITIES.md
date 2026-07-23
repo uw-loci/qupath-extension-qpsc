@@ -16,7 +16,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup for new acquisitions | Extensions > QP Scope > Acquisition Wizard... |
 | Bounded Acquisition | Direct bounding-box acquisition from stage coordinates | Extensions > QP Scope > Bounded Acquisition |
 | Existing Image Acquisition | Targeted acquisition from annotations on existing images | Extensions > QP Scope > Acquire from Existing Image |
-| [Multi-Slide Acquisition](tools/multi-slide-acquisition.md) (experimental) | Batch-acquire several slides in one holder (setup pass + walk-away acquire) | Extensions > QP Scope > MS-Existing Image (experimental) |
+| [Multi-Slide Acquisition](tools/multi-slide-acquisition.md) | Batch-acquire several slides in one holder (setup pass + walk-away acquire); appears when config has a multi-slide holder | Extensions > QP Scope > Multi-Slide Acquisition... |
 | [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
 | [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
 | [Stage Map](tools/stage-map.md) | Visual map with slide positions and macro overlay | Extensions > QP Scope > Stage Map |

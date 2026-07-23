@@ -150,6 +150,10 @@ The same Auto-Align (SIFT) helper is also available in the post-alignment single
 
 **Cross-modality matching (16-bit camera vs 8-bit WSI):** When the microscope camera produces 16-bit images and the reference is an 8-bit H&E or PPM WSI, SIFT collapses if the camera range is naively bit-shifted to 8-bit. The SIFT Settings dialog exposes mono-normalization mode (`PERCENTILE` / `MIN_MAX` / `BIT_SHIFT`), percentile clip points, and CLAHE settings. Defaults (`PERCENTILE` 2/98 + CLAHE on, clipLimit=2.0) are tuned for that case. See [Preferences > SIFT Auto-Alignment](../PREFERENCES.md#sift-auto-alignment) for tuning guidance.
 
+The multi-tile refinement panel mid-capture (after a tile is selected, showing **Auto-Align (SIFT)** / **Add reference point** / **Skip point**), with the **SIFT Matching Settings** dialog opened via **Settings...**:
+
+![Multi-tile refinement per-point state alongside the SIFT Matching Settings dialog](../images/Docs_MultiTileRefinement2.png)
+
 ### Step 5: Validation
 
 Test the calculated transform:

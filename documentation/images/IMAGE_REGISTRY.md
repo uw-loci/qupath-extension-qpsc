@@ -30,8 +30,9 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_LiveViewer_Camera.png` | `ui/liveviewer/LiveViewerWindow.java` (camera tab) | -- | CHECK -- previously untracked |
 | `Docs_MicroscopeAlignment_SelectSourceMicroscope.png` | `ui/MicroscopeSelectionDialog.java` | -- | CHECK |
 | `Docs_MicroscopeAlignment_RefineAlignment.png` | `controller/workflow/SingleTileRefinement.java` (3-point / single-tile refinement dialog) | -- | CHECK -- SIFT refinement dialogs changed substantially; verify or re-capture |
-| `Docs_MultiTileRefinement.png` | `controller/workflow/MultiTileRefinement.java` (numbered multi-tile SIFT panel) | -- | PLACEHOLDER -- new dialog, needs first real capture on Windows |
-| `Docs_SiftCapturePane.png` | `controller/workflow/SiftCapturePane.java` / `ui/SiftAutoAlignHelper.java` | -- | PLACEHOLDER -- Auto-Align (SIFT) capture pane, needs first real capture on Windows |
+| `Docs_MultiTileRefinement.png` | `controller/workflow/MultiTileRefinement.java` (numbered multi-tile SIFT panel, initial state) | 2026-07-23 | OK |
+| `Docs_MultiTileRefinement2.png` | `controller/workflow/MultiTileRefinement.java` (per-point capture state) + SIFT Matching Settings dialog (`ui/SiftAutoAlignHelper.java`) | 2026-07-23 | OK |
+| `Docs_SiftCapturePane.png` | `controller/workflow/SiftCapturePane.java` / `ui/SiftAutoAlignHelper.java` | -- | PLACEHOLDER -- single-tile Auto-Align capture pane, needs first real capture on Windows |
 | `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | -- | CHECK -- new "Calibrate..." button since 2026-05-27 |
 | `Docs_DishCoverslipCalibration.png` | Diagram / `ui/stagemap/StageMapWindow.java` insert calibration | -- | CHECK -- previously untracked |
 | `Docs_PropagationManager.png` | `controller/ForwardPropagationWorkflow.java` | -- | CHECK -- previously untracked |
@@ -44,8 +45,9 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_WhiteBalanceCalibration.png` | `ui/WhiteBalanceDialog.java` | 2026-05-27 | OK |
 | `Docs_mainmenu.png` | `SetupScope.java` | -- | CHECK -- menu changes since 2026-05-27 |
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |
-| `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | -- | PLACEHOLDER -- needs first real capture on Windows |
-| `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | -- | PLACEHOLDER -- needs first real capture on Windows |
+| `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | 2026-07-23 | OK |
+| `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | 2026-07-23 | OK |
+| `Docs_MultiSlide_StageMap.png` | `ui/stagemap/StageMapWindow.java` (multi-slide holder preview) | 2026-07-23 | OK |
 
 ## Missing Screenshots (UI exists but no image)
 
