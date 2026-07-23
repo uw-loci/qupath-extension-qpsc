@@ -140,8 +140,6 @@ SIFT auto-alignment works best on tissue with visible structural features. It ca
 
 The same Auto-Align (SIFT) helper is also available in the post-alignment single-tile refinement step of the **Existing Image Workflow**. An embedded capture pane appears with "Capture position" (disabled until SIFT runs), "Skip point" (keeps the predicted position without refining), and "Create New Alignment" buttons, since that step writes the per-slide alignment JSON.
 
-![SIFT capture pane / Auto-Align](../images/Docs_SiftCapturePane.png)
-
 **Multi-tile refinement panel:** For slides that may sit rotated in their slot (common with the multi-slide vertical holder), the **multi-tile** refinement mode shows a numbered-steps panel that solves a rotation + scale correction from 2 or more reference points. Each step is color-matched to its button -- **1. Select tile** (blue), **2. Auto-Align (SIFT)** (amber), **3. Add reference point** (teal), **4. Solve & Save** (green) -- and an attention pulse glows the next action. Spread the points far apart (not in a line) for the best rotation estimate.
 
 ![Multi-tile refinement panel with numbered SIFT steps](../images/Docs_MultiTileRefinement.png)

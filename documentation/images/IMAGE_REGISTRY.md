@@ -32,7 +32,6 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_MicroscopeAlignment_RefineAlignment.png` | `controller/workflow/SingleTileRefinement.java` (3-point / single-tile refinement dialog) | -- | CHECK -- SIFT refinement dialogs changed substantially; verify or re-capture |
 | `Docs_MultiTileRefinement.png` | `controller/workflow/MultiTileRefinement.java` (numbered multi-tile SIFT panel, initial state) | 2026-07-23 | OK |
 | `Docs_MultiTileRefinement2.png` | `controller/workflow/MultiTileRefinement.java` (per-point capture state) + SIFT Matching Settings dialog (`ui/SiftAutoAlignHelper.java`) | 2026-07-23 | OK |
-| `Docs_SiftCapturePane.png` | `controller/workflow/SiftCapturePane.java` / `ui/SiftAutoAlignHelper.java` | -- | PLACEHOLDER -- single-tile Auto-Align capture pane, needs first real capture on Windows |
 | `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | -- | CHECK -- new "Calibrate..." button since 2026-05-27 |
 | `Docs_DishCoverslipCalibration.png` | Diagram / `ui/stagemap/StageMapWindow.java` insert calibration | -- | CHECK -- previously untracked |
 | `Docs_PropagationManager.png` | `controller/ForwardPropagationWorkflow.java` | -- | CHECK -- previously untracked |
