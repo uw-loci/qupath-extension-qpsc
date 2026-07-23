@@ -33,6 +33,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.OfflineScopeInstaller;
 import qupath.ext.qpsc.utilities.ProjectLogger;
 import qupath.ext.qpsc.utilities.StageImageTransform;
+import qupath.ext.qpsc.utilities.VersionInfo;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.Version;
 import qupath.lib.gui.QuPathGUI;
@@ -149,6 +150,14 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 alert.showAndWait();
             });
         }
+
+        // Detect a fresh install / update of THIS extension (version changed since the last
+        // launch) and advise a restart. When QuPath's Extension Manager installs or updates a jar
+        // in a running session, the new code does not fully take effect until restart, and a mixed
+        // old/new state is easy to mistake for the update having applied (which is exactly how an
+        // "installed but still running the old version" confusion arises). Fires once at install
+        // time, not on every launch; skipped for unpackaged IDE/dev runs.
+        warnIfExtensionRecentlyUpdated();
 
         // 1b) On a fresh install (no microscope config chosen), auto-install and
         // select the bundled "Offline / Analysis" placeholder so the extension
@@ -846,6 +855,54 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             logger.debug("Multi-slide holder check failed; hiding menu entry: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * Shows a one-time "restart QuPath" advisory when the packaged extension version differs from
+     * the version recorded on the previous launch -- i.e. the extension was just installed or
+     * updated. QuPath can install/update an extension jar in a running session without a restart,
+     * leaving the old classes loaded; this nudges the user to restart so the new code actually
+     * takes effect. The current version is always persisted (even when the dialog shows) so the
+     * advisory fires once per install/update, not on every launch. Unpackaged IDE/dev runs report
+     * "dev" (no manifest version) and are skipped so developers are not nagged.
+     */
+    private void warnIfExtensionRecentlyUpdated() {
+        String current = VersionInfo.getQpscVersion();
+        if (current == null || current.isBlank() || "dev".equals(current)) {
+            return;
+        }
+        String last = PersistentPreferences.getLastLoadedQpscVersion();
+        PersistentPreferences.setLastLoadedQpscVersion(current);
+        if (current.equals(last)) {
+            return; // normal relaunch of an already-recorded version
+        }
+        boolean firstInstall = last == null || last.isBlank();
+        logger.info("Extension version changed ('{}' -> '{}'); showing restart advisory", last, current);
+        Platform.runLater(() -> {
+            Alert alert = new Alert(Alert.AlertType.INFORMATION);
+            alert.setTitle(EXTENSION_NAME + " - restart recommended");
+            alert.setHeaderText(
+                    firstInstall
+                            ? EXTENSION_NAME + " " + current + " was installed"
+                            : EXTENSION_NAME + " was updated to " + current);
+            String body = firstInstall
+                    ? "If you installed " + EXTENSION_NAME + " while QuPath was already running, please "
+                            + "restart QuPath once so the extension loads completely before you use it."
+                    : "You were previously running " + last + "; the installed version is now " + current
+                            + ". Please restart QuPath so the updated extension loads completely before you "
+                            + "use it. Running without restarting can mix old and new code and cause "
+                            + "confusing errors.\n\nIf you also updated companion extensions (e.g. "
+                            + "tiles-to-pyramid) or QuPath itself, restart once more so everything loads "
+                            + "together.";
+            alert.setContentText(body);
+            alert.getButtonTypes().setAll(ButtonType.OK);
+            alert.getDialogPane().setMinWidth(500);
+            Label content = (Label) alert.getDialogPane().lookup(".content");
+            if (content != null) {
+                content.setWrapText(true);
+            }
+            alert.showAndWait();
+        });
     }
 
     private void setMenuItemTooltip(MenuItem menuItem, String tooltipText) {

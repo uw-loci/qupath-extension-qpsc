@@ -30,6 +30,20 @@ public class PersistentPreferences {
         slideLabelSaved.setValue(slideLabel);
     }
 
+    // Last QPSC extension version that completed installExtension. Lets the extension detect a
+    // fresh install / update (version changed since last launch) so a one-time "restart QuPath"
+    // advisory fires at install time -- not on every normal launch. Empty until first recorded.
+    private static final StringProperty lastLoadedQpscVersion =
+            PathPrefs.createPersistentPreference("lastLoadedQpscVersion", "");
+
+    public static String getLastLoadedQpscVersion() {
+        return lastLoadedQpscVersion.get();
+    }
+
+    public static void setLastLoadedQpscVersion(String version) {
+        lastLoadedQpscVersion.set(version != null ? version : "");
+    }
+
     private static final StringProperty selectedScannerProperty =
             PathPrefs.createPersistentPreference("selectedScanner", "Generic");
 
