@@ -41,6 +41,7 @@ import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.service.mda.MdaRequestBuilder;
 import qupath.ext.qpsc.service.mda.MdaSettingsWriter;
 import qupath.ext.qpsc.service.mda.MdaWriteResult;
+import qupath.ext.qpsc.service.mda.MmStageDevices;
 import qupath.ext.qpsc.service.mda.TileStagePos;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
@@ -651,6 +652,11 @@ public class AcquisitionManager {
                                     MicroscopeSocketClient socketClient =
                                             MicroscopeController.getInstance().getSocketClient();
                                     Double finalZ = socketClient.getLastAcquisitionFinalZ();
+                                    // Focal plane to stamp into the MDA position list (.pos), which
+                                    // was written up-front with placeholder Z=0. The accepted AF Z is
+                                    // the real plane; on a rejected runaway we fall back to the last
+                                    // good plane (same value the next AF hint uses). Null -> leave 0.
+                                    Double zForMda = null;
                                     if (finalZ != null
                                             && lastAcquisitionZ != null
                                             && Math.abs(finalZ - lastAcquisitionZ) > MAX_FOCUS_STEP_UM) {
@@ -672,9 +678,13 @@ public class AcquisitionManager {
                                                 String.format("%.1f", Math.abs(finalZ - lastAcquisitionZ)),
                                                 String.format("%.2f", lastAcquisitionZ),
                                                 String.format("%.1f", MAX_FOCUS_STEP_UM));
+                                        // AF result untrusted; the last good plane is the best
+                                        // focal-plane estimate we have for the exported positions.
+                                        zForMda = lastAcquisitionZ;
                                     } else if (finalZ != null) {
                                         // Persist across annotation resets for Z-hint fallback
                                         lastAcquisitionZ = finalZ;
+                                        zForMda = finalZ;
 
                                         if (state.transform != null) {
                                             double[] stageCoords =
@@ -697,6 +707,12 @@ public class AcquisitionManager {
                                     }
                                     // Clear for next acquisition
                                     socketClient.clearLastAcquisitionFinalZ();
+
+                                    // Backfill the achieved focal plane into the MDA position list,
+                                    // which was written up-front with Z=0 before AF ran.
+                                    if (zForMda != null) {
+                                        updateMdaPositionsWithZ(annotation, zForMda);
+                                    }
                                 } catch (Exception e) {
                                     logger.warn("Could not update Z-focus model: {}", e.getMessage());
                                 }
@@ -2017,6 +2033,50 @@ public class AcquisitionManager {
         } catch (IOException ioe) {
             logger.warn("Could not read TileConfiguration.txt at {}: {}", configFile, ioe.getMessage());
             return List.of();
+        }
+    }
+
+    /**
+     * Rewrites the MDA position list ({@code MDA_<region>.pos}) for a completed region with the
+     * achieved focus Z, replacing the placeholder Z=0 written before acquisition. The MDA files are
+     * written up-front (when tile centroids are known) but the focal plane is only known after
+     * autofocus runs, so this backfills it once the acquisition succeeds. Best available granularity
+     * is one Z per region: the server reports a single {@code final_z} per acquisition, not per tile,
+     * so every position gets the same plane. Failures are non-fatal -- the region already stitched.
+     *
+     * @param annotation the region whose {@code .pos} to update (its name is the region label)
+     * @param zUm        achieved focal plane in stage micrometers
+     */
+    private void updateMdaPositionsWithZ(PathObject annotation, double zUm) {
+        try {
+            Path regionDir = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName());
+            Path posFile = regionDir.resolve("MDA_" + annotation.getName() + ".pos");
+            if (!Files.exists(posFile)) {
+                logger.debug(
+                        "No MDA .pos file for {}; skipping Z backfill (MDA export may have failed)",
+                        annotation.getName());
+                return;
+            }
+            List<TileStagePos> tiles = readTilesFromConfig(regionDir);
+            if (tiles.isEmpty()) {
+                logger.debug("No tiles to backfill MDA Z for {}", annotation.getName());
+                return;
+            }
+            List<TileStagePos> tilesWithZ = new ArrayList<>(tiles.size());
+            for (TileStagePos t : tiles) {
+                tilesWithZ.add(new TileStagePos(t.label(), t.xUm(), t.yUm(), zUm));
+            }
+            MicroscopeConfigManager mgr =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            MmStageDevices devices = mgr != null ? mgr.getMmStageDevices() : new MmStageDevices("XYStage", "ZStage");
+            MdaSettingsWriter.updatePositionListZ(regionDir, annotation.getName(), tilesWithZ, devices);
+            logger.info(
+                    "Backfilled MDA position list Z for {} to {} um ({} tiles)",
+                    annotation.getName(),
+                    String.format("%.2f", zUm),
+                    tilesWithZ.size());
+        } catch (Exception e) {
+            logger.warn("Could not backfill MDA position list Z for {}: {}", annotation.getName(), e.getMessage());
         }
     }
 

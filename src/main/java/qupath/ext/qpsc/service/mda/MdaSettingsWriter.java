@@ -62,7 +62,7 @@ public final class MdaSettingsWriter {
         boolean ppm = isPpm(req.modalityBaseName());
 
         MdaSequenceSettings settings = buildSequenceSettings(req, ppm);
-        MdaPositionList positions = buildPositionList(req);
+        MdaPositionList positions = buildPositionList(req.tiles(), req.stageDevices());
         String notes = buildNotes(req, ppm);
 
         Path settingsFile = req.regionDir().resolve("MDA_" + req.regionName() + ".txt");
@@ -74,6 +74,44 @@ public final class MdaSettingsWriter {
         writeAtomic(notesFile, notes);
 
         return new MdaWriteResult(settingsFile, positionsFile, notesFile);
+    }
+
+    /**
+     * Rewrites ONLY the {@code MDA_<region>.pos} position list for a region whose
+     * MDA files were written up-front with placeholder Z (0). Called after a
+     * successful acquisition, once the achieved focus Z is known, so the exported
+     * position list carries the real focal plane instead of 0. The
+     * {@code MDA_<region>.txt} settings and {@code MDA_NOTES.txt} are left untouched
+     * (their Z-stack range is relative to each position's Z, so only the .pos needs
+     * the achieved plane).
+     *
+     * <p>Written atomically via the same {@code .tmp} -> {@code move} path as
+     * {@link #write}, so a concurrent MM read never sees a half-formed file.
+     *
+     * @param regionDir  region directory containing the existing .pos file
+     * @param regionName region label (drives the {@code MDA_<region>.pos} filename)
+     * @param tiles      per-tile stage centroids with the achieved Z filled in
+     * @param devices    MM stage device labels (falls back to XYStage/ZStage if null)
+     * @return the rewritten .pos path
+     * @throws IOException if the write fails
+     */
+    public static Path updatePositionListZ(
+            Path regionDir, String regionName, List<TileStagePos> tiles, MmStageDevices devices) throws IOException {
+        if (regionDir == null) {
+            throw new IllegalArgumentException("regionDir must be non-null");
+        }
+        if (regionName == null) {
+            throw new IllegalArgumentException("regionName must be non-null");
+        }
+        Gson gson = new GsonBuilder()
+                .setPrettyPrinting()
+                .disableHtmlEscaping()
+                .serializeNulls()
+                .create();
+        MdaPositionList positions = buildPositionList(tiles, devices);
+        Path positionsFile = regionDir.resolve("MDA_" + regionName + ".pos");
+        writeAtomic(positionsFile, gson.toJson(positions));
+        return positionsFile;
     }
 
     private static boolean isPpm(String modalityBaseName) {
@@ -191,9 +229,8 @@ public final class MdaSettingsWriter {
         return out;
     }
 
-    private static MdaPositionList buildPositionList(MdaWriteRequest req) {
-        List<TileStagePos> tiles = req.tiles() == null ? List.of() : req.tiles();
-        MmStageDevices dev = req.stageDevices();
+    private static MdaPositionList buildPositionList(List<TileStagePos> tilesIn, MmStageDevices dev) {
+        List<TileStagePos> tiles = tilesIn == null ? List.of() : tilesIn;
         String xy = dev != null && dev.xyStage() != null ? dev.xyStage() : "XYStage";
         String z = dev != null && dev.zStage() != null ? dev.zStage() : "ZStage";
 
