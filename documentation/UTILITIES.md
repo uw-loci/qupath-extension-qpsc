@@ -253,6 +253,7 @@ Standalone stitching utility for tile folders acquired with MicroManager 2.0. Un
 - Preserves channel names, MicroManager version, user/computer name, and acquisition comments in the metadata sidecar.
 - Selectable output format: OME-TIFF (single file) or OME-ZARR (directory-based).
 - Selectable compression (LZW, JPEG, etc.) with format-specific options.
+- **Axis inversion controls:** If the microscope's MicroManager configuration inverts an axis (X or Y), the tiles are laid out mirrored unless you negate that coordinate before stitching. Two checkboxes ("Invert X axis", "Invert Y axis") default to the current scope's stage polarity but can be overridden to match the original acquisition hardware configuration (useful when stitching data acquired on a different microscope).
 
 **Access:** Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder...
 

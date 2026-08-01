@@ -33,6 +33,7 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
+import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.TileFolderInspector;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
@@ -58,7 +59,12 @@ public class MicroManagerStitchWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(MicroManagerStitchWorkflow.class);
 
-    private static final String STRATEGY_NAME = "MicroManager metadata (MMStack)";
+    // Must match a case in tiles-to-pyramid's StitchingStrategyFactory EXACTLY -- it does a literal
+    // switch and throws on no match. tiles-to-pyramid 0.5.0 renamed this from "(MMStack)" to
+    // "(MMStack or TIFF series)" when single-plane TIFF series support was added; this string was
+    // not updated in step, so MDA stitch throws "Unknown stitching strategy" against t2p 0.5.0+.
+    // Kept working only because OWS3 still ran an older t2p where the old name matched.
+    private static final String STRATEGY_NAME = "MicroManager metadata (MMStack or TIFF series)";
 
     /** Entry point - shows the dialog and runs the stitch. */
     public static void run() {
@@ -187,6 +193,39 @@ public class MicroManagerStitchWorkflow {
         infoLabel.setWrapText(true);
         infoLabel.setStyle("-fx-font-style: italic;");
 
+        // ---- axis inversion ----
+        // MMStack sidecars carry absolute stage positions. A scope whose X (or Y) axis is inverted
+        // in its MicroManager config records positions that run opposite to pixel space, so the
+        // mosaic comes out mirrored (tiles in reversed order) unless we negate that coordinate.
+        //
+        // Seed each box from the current scope's stage polarity (the same source the live
+        // acquisition stitch trusts) so the common "stitch the scope I just used" case is right on
+        // open; once the user makes a choice it is remembered and wins thereafter. Because MMStack
+        // data can come from a different config than the one currently loaded, the boxes are always
+        // overridable -- the checkbox is the authority, the seed is only a convenience.
+        boolean[] scopeFlip;
+        try {
+            scopeFlip = StageImageTransform.current().stitcherFlipFlags();
+        } catch (RuntimeException e) {
+            logger.debug("Could not derive stage flip flags; defaulting axis inversion to off: {}", e.toString());
+            scopeFlip = new boolean[] {false, false};
+        }
+        Boolean rememberedX = PersistentPreferences.getMmStitchInvertX();
+        Boolean rememberedY = PersistentPreferences.getMmStitchInvertY();
+        CheckBox invertXBox = new CheckBox("Invert X axis");
+        CheckBox invertYBox = new CheckBox("Invert Y axis");
+        invertXBox.setSelected(rememberedX != null ? rememberedX : scopeFlip[0]);
+        invertYBox.setSelected(rememberedY != null ? rememberedY : scopeFlip[1]);
+        String invertTip = "Negate this stage axis before stitching. Needed when the scope's "
+                + "MicroManager config inverts the axis, which otherwise lays tiles out mirrored. "
+                + "Pre-set from the current scope's stage polarity; override if this data was "
+                + "captured under a different configuration.";
+        invertXBox.setTooltip(new Tooltip(invertTip));
+        invertYBox.setTooltip(new Tooltip(invertTip));
+        Label invertLabel = new Label("Axis inversion:");
+        HBox invertBox = new HBox(16, invertXBox, invertYBox);
+        invertBox.setAlignment(Pos.CENTER_LEFT);
+
         int r = 0;
         grid.add(infoLabel, 0, r++, 3, 1);
         grid.add(inLabel, 0, r);
@@ -202,6 +241,8 @@ public class MicroManagerStitchWorkflow {
         grid.add(fmtCombo, 1, r++);
         grid.add(compLabel, 0, r);
         grid.add(compCombo, 1, r++);
+        grid.add(invertLabel, 0, r);
+        grid.add(invertBox, 1, r++, 2, 1);
 
         dialog.getDialogPane().setContent(grid);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
@@ -238,11 +279,16 @@ public class MicroManagerStitchWorkflow {
             String compression = compCombo.getValue().name();
             StitchingConfig.OutputFormat outputFormat = fmtCombo.getValue();
 
+            boolean invertX = invertXBox.isSelected();
+            boolean invertY = invertYBox.isSelected();
+
             PersistentPreferences.setMmStitchInputDir(inFolder);
             PersistentPreferences.setMmStitchOutputDir(outFolder);
+            PersistentPreferences.setMmStitchInvertX(invertX);
+            PersistentPreferences.setMmStitchInvertY(invertY);
 
-            Thread t = new Thread(
-                    () -> executeStitch(inFolder, outFolder, baseName, pixelSize, compression, outputFormat));
+            Thread t = new Thread(() -> executeStitch(
+                    inFolder, outFolder, baseName, pixelSize, compression, outputFormat, invertX, invertY));
             t.setDaemon(true);
             t.setName("MicroManagerStitch");
             t.start();
@@ -304,7 +350,9 @@ public class MicroManagerStitchWorkflow {
             String baseName,
             double pixelSize,
             String compression,
-            StitchingConfig.OutputFormat outputFormat) {
+            StitchingConfig.OutputFormat outputFormat,
+            boolean invertX,
+            boolean invertY) {
 
         logger.info(
                 "MicroManager stitch: in={}, out={}, base={}, pxSize={}, fmt={}, comp={}",
@@ -339,12 +387,21 @@ public class MicroManagerStitchWorkflow {
 
         String label = baseName;
         String stitchedOutPath;
-        // The direct OME-TIFF writer cannot silently corrupt pyramid levels and
-        // writes straight to the final path, so no tile-write-error retry / ZARR
-        // escalation is needed. MMStack tiles carry their own positions; no flip.
+        // The direct OME-TIFF writer cannot silently corrupt pyramid levels and writes straight to
+        // the final path, so no tile-write-error retry / ZARR escalation is needed.
+        //
+        // Axis inversion: MMStack sidecars carry ABSOLUTE stage positions, so these flags go on
+        // MicroManagerMetadataStrategy -- the strategy this workflow actually uses -- NOT on
+        // TileConfigurationTxtStrategy (an earlier version set the wrong class, and hardcoded false,
+        // which is why an inverted-axis scope stitched mirrored with no way to correct it). The
+        // flags are process-global volatile statics, so reset them in a finally the way the
+        // acquisition stitch path does, or they leak into an unrelated later stitch.
+        boolean prevFlipX = qupath.ext.basicstitching.stitching.MicroManagerMetadataStrategy.flipStitchingX;
+        boolean prevFlipY = qupath.ext.basicstitching.stitching.MicroManagerMetadataStrategy.flipStitchingY;
         try {
-            qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
-            qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
+            qupath.ext.basicstitching.stitching.MicroManagerMetadataStrategy.flipStitchingX = invertX;
+            qupath.ext.basicstitching.stitching.MicroManagerMetadataStrategy.flipStitchingY = invertY;
+            logger.info("MicroManager stitch axis inversion: X={}, Y={}", invertX, invertY);
             stitchedOutPath = qupath.ext.basicstitching.workflow.StitchingWorkflow.run(cfg);
             if (stitchedOutPath == null) {
                 throw new IllegalStateException("Stitching produced no output");
@@ -361,6 +418,9 @@ public class MicroManagerStitchWorkflow {
                             NotificationPriority.HIGH,
                             NotificationEvent.STITCHING_ERROR);
             return;
+        } finally {
+            qupath.ext.basicstitching.stitching.MicroManagerMetadataStrategy.flipStitchingX = prevFlipX;
+            qupath.ext.basicstitching.stitching.MicroManagerMetadataStrategy.flipStitchingY = prevFlipY;
         }
 
         // Rename "<baseName>_<sourceFolderName>.ext" to just "<baseName>.ext"

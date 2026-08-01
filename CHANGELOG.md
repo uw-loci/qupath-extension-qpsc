@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**MicroManager Folder Stitch: axis inversion controls**
+- New checkboxes **"Invert X axis"** and **"Invert Y axis"** in the Stitch MicroManager Folder dialog allow correcting for stage-axis inversion that occurs when a microscope's MicroManager configuration inverts an axis. When inverted, MicroManager records stage positions that run opposite to pixel space, causing tiles to be laid out mirrored; negating that coordinate before stitching corrects the mirroring. Checkboxes default to the current microscope's stage polarity (for the common case of stitching data just acquired on that same scope) and can be overridden to match different hardware configurations when stitching data from a different microscope. User choices are remembered across sessions.
+
 ## [0.8.0] - 2026-07-22
 
 ### Changed
