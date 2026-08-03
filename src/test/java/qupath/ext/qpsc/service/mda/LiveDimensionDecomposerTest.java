@@ -177,4 +177,22 @@ class LiveDimensionDecomposerTest {
         Decomposition negative = LiveDimensionDecomposer.decompose(-1, plan);
         assertThat(negative.drifted()).isTrue();
     }
+
+    @Test
+    void completionTick_kEqualsTotal_isNotDriftAndShowsLastImage() {
+        // progress.current is a 1-based count and the server reports current == total
+        // on the final tile while still RUNNING. That terminal count must decompose to
+        // the last image (not report drift). Regression for the PPM "Dimension counters
+        // out of sync; showing aggregate only" notice appearing at completion.
+        AcquisitionPlan ppm = AcquisitionPlan.compute(
+                10, 0, 1, 6, 1, "angle", true, List.of(), List.of(-5.0, 0.0, 5.0, 10.0, 15.0, 20.0));
+        assertThat(ppm.totalImages()).isEqualTo(60L);
+
+        Decomposition atTotal = LiveDimensionDecomposer.decompose(ppm.totalImages(), ppm);
+        assertThat(atTotal.drifted()).isFalse();
+        Decomposition lastValid = LiveDimensionDecomposer.decompose(ppm.totalImages() - 1, ppm);
+        assertThat(atTotal.posIdx()).isEqualTo(lastValid.posIdx());
+        assertThat(atTotal.angleIdx()).isEqualTo(lastValid.angleIdx());
+        assertThat(atTotal.zIdx()).isEqualTo(lastValid.zIdx());
+    }
 }

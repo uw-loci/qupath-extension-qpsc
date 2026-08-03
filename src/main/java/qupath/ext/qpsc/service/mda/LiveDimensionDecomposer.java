@@ -9,8 +9,19 @@ public final class LiveDimensionDecomposer {
     public record Decomposition(int tIdx, int posIdx, int chIdx, int zIdx, int angleIdx, boolean drifted) {}
 
     public static Decomposition decompose(long k, AcquisitionPlan plan) {
-        if (k < 0 || plan == null || plan.totalImages() <= 0 || k >= plan.totalImages()) {
+        if (k < 0 || plan == null || plan.totalImages() <= 0 || k > plan.totalImages()) {
             return new Decomposition(0, 0, 0, 0, 0, true);
+        }
+        // The live progress feed (progress.current) is a 1-based count of images
+        // acquired, and the server emits current == total on the final tile WHILE
+        // still RUNNING (the COMPLETED transition happens later). decompose() below
+        // treats k as a 0-based aggregate index (valid 0..total-1), so k == total is
+        // the terminal "all done" count, not desync. Clamp it to the last image so
+        // the panel shows the final tile/angle/z at completion. Only k > total (the
+        // server wrote MORE files than the plan predicted) is genuine drift, handled
+        // by the guard above.
+        if (k == plan.totalImages()) {
+            k = plan.totalImages() - 1;
         }
 
         int innerCount;
