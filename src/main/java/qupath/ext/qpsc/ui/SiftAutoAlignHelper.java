@@ -161,6 +161,7 @@ public final class SiftAutoAlignHelper {
             double claheClip = PersistentPreferences.getSiftClaheClipLimit();
             boolean coarseToFine = PersistentPreferences.isSiftCoarseToFineEnabled();
             double coarsePx = PersistentPreferences.getSiftCoarsePixelSizeUm();
+            String rgbConversion = PersistentPreferences.getSiftRgbConversion();
             String response = mc.getSocketClient()
                     .siftAutoAlign(
                             tempFile.getAbsolutePath(),
@@ -179,7 +180,8 @@ public final class SiftAutoAlignHelper {
                             claheEnabled,
                             claheClip,
                             coarseToFine,
-                            coarsePx);
+                            coarsePx,
+                            rgbConversion);
 
             if (!response.startsWith("SUCCESS:")) {
                 logger.warn("SIFT auto-align did not succeed: {}", response);
@@ -548,6 +550,10 @@ public final class SiftAutoAlignHelper {
 
         void setMonoNormalization(String v);
 
+        String getRgbConversion();
+
+        void setRgbConversion(String v);
+
         double getPercentileLow();
 
         void setPercentileLow(double v);
@@ -621,6 +627,14 @@ public final class SiftAutoAlignHelper {
 
         public void setMonoNormalization(String v) {
             PersistentPreferences.setSiftMonoNormalization(v);
+        }
+
+        public String getRgbConversion() {
+            return PersistentPreferences.getSiftRgbConversion();
+        }
+
+        public void setRgbConversion(String v) {
+            PersistentPreferences.setSiftRgbConversion(v);
         }
 
         public double getPercentileLow() {
@@ -712,6 +726,14 @@ public final class SiftAutoAlignHelper {
 
         public void setMonoNormalization(String v) {
             PersistentPreferences.setPropSiftMonoNormalization(v);
+        }
+
+        public String getRgbConversion() {
+            return PersistentPreferences.getPropSiftRgbConversion();
+        }
+
+        public void setRgbConversion(String v) {
+            PersistentPreferences.setPropSiftRgbConversion(v);
         }
 
         public double getPercentileLow() {
@@ -868,6 +890,27 @@ public final class SiftAutoAlignHelper {
         confHelp.setWrapText(true);
         grid.add(confHelp, 0, ++row, 2, 1);
 
+        // ---- Colour (H&E) conversion ----
+        Label rgbHeader = new Label("Colour reference conversion");
+        rgbHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        grid.add(rgbHeader, 0, ++row, 2, 1);
+
+        ChoiceBox<String> rgbConvChoice = new ChoiceBox<>();
+        rgbConvChoice.getItems().addAll("GREEN", "LUMINANCE");
+        String currentRgb = prefs.getRgbConversion();
+        rgbConvChoice.setValue(rgbConvChoice.getItems().contains(currentRgb) ? currentRgb : "GREEN");
+        rgbConvChoice.setPrefWidth(150);
+        grid.add(new Label("RGB -> gray:"), 0, ++row);
+        grid.add(rgbConvChoice, 1, row);
+        Label rgbHelp = new Label("How to collapse a colour (H&E) reference image to one channel. Only affects colour "
+                + "images -- the mono camera snapshot is untouched. GREEN (default) takes the green channel: both "
+                + "H&E stains absorb green, so it carries the most tissue structure and keeps the same "
+                + "tissue-dark polarity as a brightfield mono camera. LUMINANCE is the legacy weighting, which "
+                + "brightens eosin and washes out cytoplasm contrast -- match against a mono camera is worse.");
+        rgbHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        rgbHelp.setWrapText(true);
+        grid.add(rgbHelp, 0, ++row, 2, 1);
+
         // ---- Bit-depth normalization controls ----
         Label normHeader = new Label("Bit-depth normalization");
         normHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
@@ -940,6 +983,7 @@ public final class SiftAutoAlignHelper {
                 PersistentPreferences.setSiftCoarseToFineEnabled(coarseToFineCheckbox.isSelected());
                 PersistentPreferences.setSiftCoarsePixelSizeUm(coarsePxSpinner.getValue());
                 prefs.setConfidenceThreshold(confSpinner.getValue());
+                prefs.setRgbConversion(rgbConvChoice.getValue());
                 prefs.setMonoNormalization(monoNormChoice.getValue());
                 prefs.setPercentileLow(pctLowSpinner.getValue());
                 prefs.setPercentileHigh(pctHighSpinner.getValue());

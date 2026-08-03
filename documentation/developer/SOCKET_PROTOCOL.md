@@ -307,7 +307,7 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | TESTAF | `testaf__` | params + ENDOFSTR | AF result |
 | TESTADAF | `testadaf` | params + ENDOFSTR | adaptive AF result |
 | AFBENCH | `afbench_` | params + ENDOFSTR | benchmark results |
-| SIFTAL | `siftal__` | `--wsi-region <path> --micro-px <f> --wsi-px <f> --min-px <f> --ratio <f> --min-matches <n> --contrast <f> [--nfeatures <n>] [--mono-norm PERCENTILE\|MIN_MAX\|BIT_SHIFT] [--pct-low <f>] [--pct-high <f>] [--clahe true\|false] [--clahe-clip <f>] [--flip-x] [--flip-y] ENDOFSTR` | `SUCCESS:x,y\|inliers:N\|confidence:C` or `FAILED:<reason>` |
+| SIFTAL | `siftal__` | `--wsi-region <path> --micro-px <f> --wsi-px <f> --min-px <f> --ratio <f> --min-matches <n> --contrast <f> [--nfeatures <n>] [--mono-norm PERCENTILE\|MIN_MAX\|BIT_SHIFT] [--pct-low <f>] [--pct-high <f>] [--clahe true\|false] [--clahe-clip <f>] [--rgb-conv GREEN\|LUMINANCE] [--flip-x] [--flip-y] ENDOFSTR` | `SUCCESS:x,y\|inliers:N\|confidence:C` or `FAILED:<reason>` |
 | PPMBIREF | `ppmbiref` | params + ENDOFSTR | optimization result |
 | SBCALIB | `sbcalib_` | params + ENDOFSTR | calibration result |
 | WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
@@ -371,6 +371,7 @@ Optional bit-depth / cross-modality preprocessing (defaults shown):
 | `--pct-high <f>` | 98.0 | Upper percentile clip used by `PERCENTILE` mode. |
 | `--clahe true\|false` | `true` | Apply Contrast-Limited Adaptive Histogram Equalisation to both grayscale images before SIFT. Standard cross-modality robustness trick when matching monochrome brightfield against 8-bit H&E. |
 | `--clahe-clip <f>` | 2.0 | CLAHE clipLimit. Higher = more aggressive equalisation. |
+| `--rgb-conv GREEN\|LUMINANCE` | `GREEN` | How a colour (RGB, e.g. H&E) reference image is collapsed to one channel. Only affects colour images -- the monochrome camera snapshot is untouched. `GREEN` (default) takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). Do NOT add an absorbance/OD mode here -- it inverts polarity and its gradients run opposite the intensity microscope image. |
 
 Response formats:
 

@@ -418,7 +418,7 @@ For multi-channel IF / BF+IF acquisitions where the merge failed and each per-ch
 
 **A:** The most common cause is a bit-depth mismatch between a 16-bit monochrome microscope camera (e.g. OWS3) and an 8-bit reference WSI (typical H&E or PPM scan). Most cameras only use 12-14 of their 16 bits, so the legacy `gray / 256` bit-shift compresses the camera's useful range to a sliver of 8-bit, leaving SIFT with one near-black image and one full-contrast reference. The fix landed 2026-05-06 (Java commit `0f13ca2`, server commit `59c8d41`).
 
-Defaults now handle this correctly: `Bit-depth normalization` = `PERCENTILE` 2/98 with `CLAHE` on (clipLimit 2.0). Both knobs live in the SIFT Settings dialog (open via the **Settings...** button next to **Auto-Align (SIFT)**).
+Defaults now handle this correctly: `Bit-depth normalization` = `PERCENTILE` 2/98 with `CLAHE` on (clipLimit 2.0), and `RGB conversion` = `GREEN` (for H&E and colour brightfield references). All knobs live in the SIFT Settings dialog (open via the **Settings...** button next to **Auto-Align (SIFT)**).
 
 If matching still fails on a tile that visually overlaps the camera's live view:
 

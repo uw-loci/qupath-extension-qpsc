@@ -1517,6 +1517,28 @@ public class PersistentPreferences {
         return siftMonoNormalizationProperty;
     }
 
+    private static final StringProperty siftRgbConversionProperty =
+            PathPrefs.createPersistentPreference("siftRgbConversion", "GREEN");
+
+    /**
+     * How a colour (RGB, e.g. H&E) reference image is collapsed to one channel
+     * before SIFT matching. Only affects colour images -- the monochrome camera
+     * snapshot is untouched. Valid values: "GREEN" (default; best H&E structure
+     * and keeps intensity polarity commensurate with a brightfield mono camera),
+     * "LUMINANCE" (legacy BGR2GRAY weighting).
+     */
+    public static String getSiftRgbConversion() {
+        return siftRgbConversionProperty.get();
+    }
+
+    public static void setSiftRgbConversion(String mode) {
+        siftRgbConversionProperty.set(mode);
+    }
+
+    public static StringProperty siftRgbConversionProperty() {
+        return siftRgbConversionProperty;
+    }
+
     private static final DoubleProperty siftPercentileLowProperty =
             PathPrefs.createPersistentPreference("siftPercentileLow", 2.0);
 
@@ -1682,6 +1704,17 @@ public class PersistentPreferences {
 
     public static void setPropSiftMonoNormalization(String v) {
         propSiftMonoNormalizationProperty.set(v);
+    }
+
+    private static final StringProperty propSiftRgbConversionProperty =
+            PathPrefs.createPersistentPreference("propSiftRgbConversion", "GREEN");
+
+    public static String getPropSiftRgbConversion() {
+        return propSiftRgbConversionProperty.get();
+    }
+
+    public static void setPropSiftRgbConversion(String v) {
+        propSiftRgbConversionProperty.set(v);
     }
 
     private static final DoubleProperty propSiftPercentileLowProperty =

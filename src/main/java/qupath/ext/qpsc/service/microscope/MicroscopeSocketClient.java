@@ -7256,7 +7256,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             boolean claheEnabled,
             double claheClipLimit,
             boolean coarseToFineEnabled,
-            double coarsePixelSizeUm)
+            double coarsePixelSizeUm,
+            String rgbConversion)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--wsi-region ").append(wsiRegionPath);
@@ -7276,6 +7277,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         msg.append(" --clahe-clip ").append(claheClipLimit);
         msg.append(" --coarse-to-fine ").append(coarseToFineEnabled ? "true" : "false");
         msg.append(" --coarse-px ").append(coarsePixelSizeUm);
+        if (rgbConversion != null && !rgbConversion.isBlank()) {
+            msg.append(" --rgb-conv ").append(rgbConversion);
+        }
         if (flipX) msg.append(" --flip-x");
         if (flipY) msg.append(" --flip-y");
         msg.append(" ENDOFSTR");

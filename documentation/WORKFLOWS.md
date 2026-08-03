@@ -201,7 +201,7 @@ An **Auto-Align (SIFT)** button is available in two places:
 
 SIFT works best on tissue with visible structural features and handles different pixel sizes between the WSI and microscope automatically. It is a *refinement*, not a search -- the live view must already partially overlap the target tile (rule of thumb: a few hundred microns) for matching to succeed. Falls back to manual alignment if SIFT cannot find enough features.
 
-Cross-modality matching (16-bit monochrome camera against 8-bit H&E WSI, the typical OWS3 / PPM brightfield case) is handled by configurable bit-depth normalization (`PERCENTILE` / `MIN_MAX` / `BIT_SHIFT`) plus optional CLAHE in the SIFT Settings dialog. Defaults are tuned for that scenario.
+Cross-modality matching (16-bit monochrome camera against 8-bit H&E WSI, the typical OWS3 / PPM brightfield case) is handled by configurable colour-to-grayscale conversion (`GREEN` for H&E; default) plus bit-depth normalization (`PERCENTILE` / `MIN_MAX` / `BIT_SHIFT`) plus optional CLAHE in the SIFT Settings dialog. Defaults are tuned for that scenario.
 
 See [full documentation](tools/microscope-alignment.md) for step-by-step instructions, point distribution guidelines, flip/invert settings, and troubleshooting.
 

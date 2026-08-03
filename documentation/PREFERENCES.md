@@ -1185,6 +1185,7 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 | SIFT percentile high | Double | 98.0 | Upper clip percentile (0-100) used by `PERCENTILE` mode. Pixels above this map to 255. |
 | SIFT CLAHE enabled | Boolean | ON | Apply Contrast-Limited Adaptive Histogram Equalisation to both microscope and WSI grayscale images before SIFT. Standard cross-modality robustness trick; dramatically improves matching of monochrome brightfield against H&E references. |
 | SIFT CLAHE clip limit | Double | 2.0 | CLAHE `clipLimit`. Higher values produce more aggressive equalisation. |
+| SIFT RGB conversion | Enum | `GREEN` | How a colour (RGB, e.g. H&E) reference image is collapsed to one channel before SIFT. Only affects colour images -- the monochrome camera snapshot is untouched. `GREEN` takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). |
 
 **When to adjust these:**
 - **Trust SIFT**: Enable when alignment is reliable and you want fully unattended acquisition
@@ -1193,6 +1194,7 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 - **Coarse-to-fine enabled**: Keep enabled for large WSI regions or wide search margins. Disable if you have a fast computer and want a single-pass search (marginally simpler debugging).
 - **Coarse pixel size**: Raise (e.g., 8.0) to search faster and further, at the cost of a coarser initial estimate. Lower (e.g., 2.0) for more precision on smaller regions. The Stage Map shows the search range as a bright-orange dashed rectangle while the refinement dialog is open, updating live as you change the search margin.
 - **Search margin**: Raise to enlarge the area SIFT searches around the predicted position (how far off the stage can be and still match). Coarse-to-fine keeps large margins fast. The bright-orange box on the Stage Map shows the resulting area; range 50-5000 um.
+- **RGB conversion**: Leave on `GREEN` for H&E (and colour brightfield) references -- it is the lever that makes an H&E scan match against a monochrome brightfield camera. Switch to `LUMINANCE` only to reproduce legacy alignment runs. Do not expect an absorbance/optical-density option: it would invert tissue polarity and fight the intensity microscope image.
 - **Mono normalization**: Leave on `PERCENTILE` unless you have a specific calibrated reason. Switch to `BIT_SHIFT` only when reproducing legacy alignment runs.
 - **Percentile low/high**: Tighten (e.g., 5/95) to suppress speckle/noise; widen (e.g., 0.5/99.5) when matching very faint features against a bright reference.
 - **CLAHE clip limit**: Raise (e.g., 3.0-4.0) for very low-contrast samples; lower (e.g., 1.0) when CLAHE is amplifying noise into spurious feature matches.
