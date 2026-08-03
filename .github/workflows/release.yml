@@ -32,7 +32,7 @@ jobs:
           # publishes a version mavenLocal can't match to our pinned dependency and the
           # release build fails to resolve it. Bump BOTH this ref and the build.gradle.kts
           # dependency together.
-          ref: v0.6.0
+          ref: v0.6.2
           path: tiles-to-pyramid
 
       - name: Build and publish tiles-to-pyramid to mavenLocal

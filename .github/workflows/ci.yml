@@ -31,7 +31,7 @@ jobs:
           # Keep in sync with the shadow("...tiles-to-pyramid:X.Y.Z") version in
           # build.gradle.kts; pinned to the matching release tag so a tiles main bump
           # can't desync the build. Bump BOTH together.
-          ref: v0.6.0
+          ref: v0.6.2
           path: tiles-to-pyramid
 
       - name: Grant execute permission for gradlew
