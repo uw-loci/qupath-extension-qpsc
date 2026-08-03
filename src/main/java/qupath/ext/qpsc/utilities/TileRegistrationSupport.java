@@ -7,6 +7,7 @@ import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.registration.RegistrationMode;
 import qupath.ext.basicstitching.registration.RegistrationSettings;
 import qupath.ext.basicstitching.registration.TileRegistrationSolution;
+import qupath.ext.basicstitching.utilities.RegistrationPreferences;
 
 /**
  * The only place QPSC touches the tile-registration types from tiles-to-pyramid.
@@ -47,7 +48,28 @@ public final class TileRegistrationSupport {
      * @return a mode that measures the grid and writes its solution
      */
     public static Object solveMode(Path solutionOut) {
-        return new RegistrationMode.Solve(solutionOut, RegistrationSettings.defaults(), null);
+        return new RegistrationMode.Solve(solutionOut, currentSettings(), null);
+    }
+
+    /**
+     * The user's registration tuning, read from tiles-to-pyramid's shared "Tiles-to-pyramid"
+     * preferences so a value set there applies to a QPSC acquisition too.
+     *
+     * <p>Falls back to the built-in defaults if the installed tiles-to-pyramid predates those
+     * preferences: an older jar can carry {@code RegistrationMode} (so the reflective probe passes
+     * and this class loads) but not {@code RegistrationPreferences}, and resolving it would then
+     * throw. Catching that here means a version skew degrades to defaults rather than failing the
+     * stitch.
+     *
+     * @return the user-configured settings, or {@link RegistrationSettings#defaults()} on any failure
+     */
+    private static RegistrationSettings currentSettings() {
+        try {
+            return RegistrationPreferences.toSettings();
+        } catch (Throwable t) {
+            logger.debug("Tile-registration preferences unavailable ({}); using defaults", t.toString());
+            return RegistrationSettings.defaults();
+        }
     }
 
     /**

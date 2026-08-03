@@ -93,7 +93,7 @@ dependencies {
     // 0.6.0 adds the RegistrationMode API that StitchingHelper drives to correct tile positions
     // against image content. QPSC only sets the mode; the algorithm lives in tiles-to-pyramid so it
     // is usable outside QPSC too.
-    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.6.0")
+    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.6.2")
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
     compileOnly("io.github.qupath:qupath-extension-bioformats:0.7.0")
