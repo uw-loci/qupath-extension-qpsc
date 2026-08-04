@@ -99,10 +99,19 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         selZero = new CheckBox("zero");
         selPlus = new CheckBox("plus");
         selUncrossed = new CheckBox("uncrossed");
-        selMinus.setSelected(true);
-        selZero.setSelected(true);
-        selPlus.setSelected(true);
-        selUncrossed.setSelected(true);
+        // Restore the last-used angle selection, and persist changes. These prefs
+        // were left orphaned when angle selection moved from the per-image popup
+        // into this modality panel (the checkboxes were hard-coded to true and
+        // never read/wrote the prefs), so the selection reset every run. Wiring
+        // them back makes it stick run-to-run.
+        selMinus.setSelected(PPMPreferences.getMinusSelected());
+        selZero.setSelected(PPMPreferences.getZeroSelected());
+        selPlus.setSelected(PPMPreferences.getPlusSelected());
+        selUncrossed.setSelected(PPMPreferences.getUncrossedSelected());
+        selMinus.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setMinusSelected(sel));
+        selZero.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setZeroSelected(sel));
+        selPlus.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setPlusSelected(sel));
+        selUncrossed.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setUncrossedSelected(sel));
         HBox angleSelRow = new HBox(10, selMinus, selZero, selPlus, selUncrossed);
         angleSelRow.setAlignment(Pos.CENTER_LEFT);
         Label expNote = new Label("Exposures are auto-derived per angle (background flat-field -> config -> prefs).");

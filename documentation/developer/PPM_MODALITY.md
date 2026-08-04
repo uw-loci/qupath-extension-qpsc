@@ -223,7 +223,7 @@ graph LR
     AAO --> RES["PPMExposureResolver<br/>(non-interactive)"]
 ```
 
-The angle selection determines *which* angles are included. The override spinners only affect the positive and negative angles when the override checkbox is enabled; crossed (0) and uncrossed (90) are always preserved because they are physically meaningful reference positions. Exposure for each angle is resolved non-interactively (background → config → preferences).
+The angle selection determines *which* angles are included. The override spinners only affect the positive and negative angles when the override checkbox is enabled; crossed (0) and uncrossed (90) are always preserved because they are physically meaningful reference positions. **Angle selections and overrides persist across QuPath sessions**, so users' angle preferences are automatically restored when the acquisition dialog reopens. Exposure for each angle is resolved non-interactively (background → config → preferences).
 
 ## Background Validation
 
