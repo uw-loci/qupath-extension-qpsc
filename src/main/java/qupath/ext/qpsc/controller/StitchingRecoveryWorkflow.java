@@ -10,9 +10,6 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import java.util.Properties;
-import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 import java.util.concurrent.atomic.AtomicInteger;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -24,6 +21,7 @@ import javafx.stage.DirectoryChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.qpsc.controller.workflow.StitchingRegistration;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -469,61 +467,41 @@ public class StitchingRecoveryWorkflow {
         // Determine thread pool size: all angles in parallel, or 1 for sequential
         int threadCount = parallel ? angleDirs.size() : 1;
         logger.info("Processing {} angle(s) with {} thread(s)", angleDirs.size(), threadCount);
-        ExecutorService stitchPool = Executors.newFixedThreadPool(threadCount, r -> {
-            Thread t = new Thread(r);
-            t.setDaemon(true);
-            t.setName("recovery-stitch");
-            return t;
-        });
+        // The registration barrier (solve the first angle, reuse that solve for the rest) and the
+        // bounded-parallel stitch live in StitchingRegistration -- the single gate every stitch path
+        // shares. Routing recovery through it means a re-stitch applies the SAME content-based
+        // registration the acquisition did (when the preference is on), instead of silently dropping
+        // to nominal positions.
+        java.util.List<String> stitchedPaths = StitchingRegistration.stitchTargets(
+                angleDirs, tileFolderFile.toPath(), threadCount, (angleDir, registrationMode, angleNum, total) -> {
+                    final String angleName = angleDir.getName();
+                    final boolean isRootDir = angleDir.equals(tileFolderFile);
+                    logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);
 
-        // Submit all angles to the pool
-        java.util.List<Future<?>> futures = new java.util.ArrayList<>();
-        for (int i = 0; i < angleDirs.size(); i++) {
-            final File angleDir = angleDirs.get(i);
-            final String angleName = angleDir.getName();
-            final boolean isRootDir = angleDir.equals(tileFolderFile);
-            final int angleNum = i + 1;
-
-            // Capture loop-scoped copies for filename generation
-            final String fnSampleName = sampleName;
-            final String fnModality = modality;
-            final String fnObjective = objective;
-            final String fnAnnotationName = annotationName;
-            final int fnImageIndex = imageIndex;
-            final String fnOutputFolder = outputFolder;
-
-            futures.add(stitchPool.submit(() -> {
-                logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, totalAngles, angleName);
-
-                try {
-                    // The stitcher appends "_<subdirName>" (the angle dir name) so
-                    // it produces "<sampleName>_<angle>.<ext>"; the user-pattern
-                    // rename happens after the stitch (below). Pushing the full
-                    // ImageNameGenerator name in here caused duplication because
-                    // the index landed before the appended subdir name.
+                    // The stitcher appends "_<subdirName>" (the angle dir name); the user-pattern
+                    // rename happens after the stitch (below).
                     StitchingConfig config = new StitchingConfig(
                             "Coordinates in TileConfiguration.txt file",
                             angleDir.getAbsolutePath(),
-                            fnOutputFolder,
+                            outputFolder,
                             compression,
                             pixelSize,
                             1, // downsample
                             ".", // match everything in this single-angle directory
                             1.0, // zSpacingMicrons
                             outputFormat);
-                    config.outputFilename = ImageNameGenerator.sanitizeForFilename(fnSampleName);
+                    config.outputFilename = ImageNameGenerator.sanitizeForFilename(finalSampleName);
+                    // The mode the barrier chose for this angle: solve on the first, apply on the
+                    // rest, so the angles stay co-registered.
+                    StitchingRegistration.attachMode(config, registrationMode, ".");
 
-                    // Composite stage/camera transform; must match the
-                    // TileProcessingUtilities main-acquisition path so
+                    // Composite stage/camera transform; must match the acquisition path so
                     // re-stitching reproduces the original layout.
                     boolean[] stitcherFlags = qupath.ext.qpsc.utilities.StageImageTransform.current()
                             .stitcherFlipFlags();
                     final String outputStem =
-                            ImageNameGenerator.sanitizeForFilename(fnSampleName) + "_" + angleDir.getName();
+                            ImageNameGenerator.sanitizeForFilename(finalSampleName) + "_" + angleDir.getName();
 
-                    // The direct OME-TIFF writer cannot silently corrupt pyramid
-                    // levels and writes straight to the final path, so the former
-                    // tile-write-error detection / retry / ZARR escalation is gone.
                     String stitchedOutPath;
                     try {
                         qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
@@ -536,31 +514,27 @@ public class StitchingRecoveryWorkflow {
                         qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
                     }
                     if (stitchedOutPath == null) {
-                        deleteStitchOutputs(new File(fnOutputFolder), outputStem);
+                        deleteStitchOutputs(new File(outputFolder), outputStem);
                         throw new IllegalStateException("Stitching produced no output for " + angleName);
                     }
 
                     String extension = stitchedOutPath.endsWith(".ome.zarr") ? ".ome.zarr" : ".ome.tif";
                     String desiredName = ImageNameGenerator.generateImageName(
-                            fnSampleName,
-                            fnImageIndex,
-                            fnModality,
-                            fnObjective,
-                            fnAnnotationName,
+                            finalSampleName,
+                            finalImageIndex,
+                            finalModality,
+                            finalObjective,
+                            finalAnnotationName,
                             isRootDir ? null : angleName,
                             extension);
                     final String outPath = renameStitchedOutput(stitchedOutPath, desiredName, extension);
-
                     logger.info("Stitching completed for '{}': {}", angleName, outPath);
-                    successCount.incrementAndGet();
-                    successfulOutputs.add(outPath);
 
-                    // Import to project with metadata
+                    // Import to project with metadata (async).
                     final String finalAngle = isRootDir ? null : angleName;
                     Platform.runLater(() -> {
                         try {
                             File outputFile = new File(outPath);
-
                             QPProjectFunctions.addImageToProjectWithMetadata(
                                     project,
                                     outputFile,
@@ -576,33 +550,27 @@ public class StitchingRecoveryWorkflow {
                                     finalAnnotationName,
                                     finalImageIndex,
                                     modalityHandler);
-
                             gui.refreshProject();
-
-                            logger.info("Imported angle '{}' to project ({}/{})", finalAngle, angleNum, totalAngles);
+                            logger.info("Imported angle '{}' to project ({}/{})", finalAngle, angleNum, total);
                             Dialogs.showInfoNotification(
                                     "Angle Imported",
-                                    String.format("Imported %s (%d/%d)", outputFile.getName(), angleNum, totalAngles));
+                                    String.format("Imported %s (%d/%d)", outputFile.getName(), angleNum, total));
                         } catch (IOException e) {
                             logger.error("Failed to import {}: {}", outPath, e.getMessage());
                         }
                     });
-                } catch (Exception e) {
-                    logger.error("Exception processing angle '{}': {}", angleName, e.getMessage(), e);
-                    failureCount.incrementAndGet();
-                }
-            }));
-        }
+                    return outPath;
+                });
 
-        // Wait for all angles to complete
-        for (Future<?> future : futures) {
-            try {
-                future.get();
-            } catch (Exception e) {
-                logger.error("Angle stitching future failed: {}", e.getMessage());
+        // Count from the barrier's ordered results (null = that angle failed).
+        for (String stitched : stitchedPaths) {
+            if (stitched != null) {
+                successCount.incrementAndGet();
+                successfulOutputs.add(stitched);
+            } else {
+                failureCount.incrementAndGet();
             }
         }
-        stitchPool.shutdown();
 
         // Final summary
         final int finalSuccess = successCount.get();

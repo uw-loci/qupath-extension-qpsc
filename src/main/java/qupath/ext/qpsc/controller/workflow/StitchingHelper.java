@@ -15,7 +15,6 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
-import java.util.concurrent.Executors;
 import java.util.concurrent.TimeUnit;
 import javafx.application.Platform;
 import org.slf4j.Logger;
@@ -406,117 +405,31 @@ public class StitchingHelper {
             ModalityHandler handler,
             Map<String, Object> stitchParams) {
 
-        int total = targetSubdirs.size();
-        if (total == 0) {
-            return new ArrayList<>();
-        }
-
-        // Content-based registration, when enabled, forces one target to go first: it measures the
-        // grid and writes the solution the others reuse. That barrier is the whole point rather
-        // than an inconvenience -- angles and channels are captured at the SAME stage position per
-        // tile, so letting each solve its own grid would misregister them against each other, which
-        // is worse than leaving them all on a shared nominal grid.
-        boolean register = QPPreferenceDialog.getTileRegistrationEnabled();
-        List<String> results = new ArrayList<>(total);
-        List<String> remaining = targetSubdirs;
-
-        if (register) {
-            Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
-            String reference = targetSubdirs.get(0);
-            logger.info(
-                    "Tile registration enabled: solving on {} {} first, then reusing that solve for "
-                            + "the remaining {} {}(s)",
-                    targetKind,
-                    reference,
-                    total - 1,
-                    targetKind);
-
-            results.add(stitchOne(
-                    reference,
-                    targetKind,
-                    1,
-                    total,
-                    withRegistrationMode(stitchParams, TileRegistrationSupport.solveMode(solutionFile)),
-                    tileBaseDir,
-                    projectsFolder,
-                    sampleName,
-                    modeWithIndex,
-                    annotationName,
-                    compression,
-                    pixelSize,
-                    downsampleFactor,
-                    gui,
-                    project,
-                    handler));
-
-            // If the solve failed or the grid was unregisterable, no solution file exists. The
-            // remaining targets then log a warning and stitch at nominal -- which still leaves every
-            // target consistent with every other, because none of them moved.
-            stitchParams = withRegistrationMode(stitchParams, TileRegistrationSupport.applyMode(solutionFile));
-            remaining = targetSubdirs.subList(1, total);
-        }
-
-        int concurrency = Math.max(1, Math.min(remaining.size(), QPPreferenceDialog.getStitchingConcurrency()));
-        if (remaining.isEmpty()) {
-            return results;
-        }
-        logger.info(
-                "Stitching {} {}(s) for {} with up to {} concurrent writer(s)",
-                remaining.size(),
-                targetKind,
-                annotationName,
-                concurrency);
-
-        final Map<String, Object> params = stitchParams;
-        final int offset = results.size();
-        final List<String> batch = remaining;
-        ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
-            Thread t = new Thread(r, "stitch-" + targetKind);
-            t.setDaemon(true);
-            return t;
-        });
-        try {
-            List<CompletableFuture<String>> futures = new ArrayList<>(batch.size());
-            for (int i = 0; i < batch.size(); i++) {
-                String sub = batch.get(i);
-                final int position = offset + i + 1;
-                futures.add(CompletableFuture.supplyAsync(
-                        () -> stitchOne(
-                                sub,
-                                targetKind,
-                                position,
-                                total,
-                                params,
-                                tileBaseDir,
-                                projectsFolder,
-                                sampleName,
-                                modeWithIndex,
-                                annotationName,
-                                compression,
-                                pixelSize,
-                                downsampleFactor,
-                                gui,
-                                project,
-                                handler),
-                        pool));
-            }
-
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-
-            for (int i = 0; i < batch.size(); i++) {
-                String out = null;
-                try {
-                    out = futures.get(i).get();
-                } catch (Exception e) {
-                    logger.error(
-                            "Failed to retrieve stitch result for {} {}: {}", targetKind, batch.get(i), e.getMessage());
-                }
-                results.add(out);
-            }
-            return results;
-        } finally {
-            pool.shutdown();
-        }
+        // The registration barrier (solve the first target, reuse that solve for the rest) and the
+        // bounded-parallel stitch are centralised in StitchingRegistration, so every stitch path --
+        // acquisition, recovery, MicroManager folder -- goes through the same gate and no path can
+        // silently skip registration.
+        return StitchingRegistration.stitchTargets(
+                targetSubdirs,
+                tileBaseDir,
+                QPPreferenceDialog.getStitchingConcurrency(),
+                (sub, mode, position, count) -> stitchOne(
+                        sub,
+                        targetKind,
+                        position,
+                        count,
+                        withRegistrationMode(stitchParams, mode),
+                        tileBaseDir,
+                        projectsFolder,
+                        sampleName,
+                        modeWithIndex,
+                        annotationName,
+                        compression,
+                        pixelSize,
+                        downsampleFactor,
+                        gui,
+                        project,
+                        handler));
     }
 
     /** Stitch one target, converting any failure into a null result so siblings still complete. */

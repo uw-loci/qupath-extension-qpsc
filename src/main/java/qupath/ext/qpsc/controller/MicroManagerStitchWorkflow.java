@@ -381,6 +381,11 @@ public class MicroManagerStitchWorkflow {
                 STRATEGY_NAME, inFolder, outFolder, compression, pixelSize, 1, ".", finalZ, outputFormat);
         cfg.outputFilename = baseName;
 
+        // Content-based registration, when enabled, through the same shared gate as every other
+        // stitch path. A single MMStack folder is one grid, so there is no barrier -- just solve it
+        // (or reuse an existing solution beside the tiles).
+        qupath.ext.qpsc.controller.workflow.StitchingRegistration.applyTo(cfg, inDir.toPath(), ".");
+
         // The stitcher emits "<baseName>_<sourceFolderName>.<ext>" because the
         // MMStack strategy uses the input folder name as the subdir name.
         String stitcherStem = baseName + "_" + inDir.getName();
