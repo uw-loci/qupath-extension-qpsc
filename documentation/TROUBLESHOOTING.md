@@ -802,6 +802,8 @@ If you have *old* stitched files with black upper levels from before this fix, r
 8. **Stitch duplicate image types in parallel** (checkbox): PPM angles and fluorescence channels are both "duplicate image types" — multiple captures of the same field at one stage position, captured with different settings. When checked, angles/channels stitch simultaneously (faster on SSDs); when unchecked, they stitch sequentially (safer for spinning-disk HDDs)
 9. Click **Stitch & Import**
 
+A progress dialog appears and updates as each angle (for PPM) or channel (for fluorescence) is stitched. The dialog shows which angle/channel is currently being processed and the count (e.g., "Stitching angle_1 (1/3)..."). For large acquisitions this can take several minutes—do not dismiss the dialog or interact with QuPath during stitching.
+
 The stitched images will be created in `<projectDir>/SlideImages` (project-anchored, matching the regular acquisition path) and automatically imported into your project. Filenames follow your configured naming pattern (respecting Objective, Annotation, Angle, and other preferences).
 
 **Alternative method - standalone stitching (file only, no project import):**

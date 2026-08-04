@@ -30,6 +30,7 @@ import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -470,6 +471,31 @@ public class StitchingRecoveryWorkflow {
         final int finalImageIndex = imageIndex;
         final int totalAngles = angleDirs.size();
 
+        // Progress feedback. Without this the user clicks OK and sees nothing until the run ends --
+        // a re-stitch of a large acquisition takes minutes, and a notification that fires only at the
+        // start and end reads as "nothing is happening". Reuse the same blocking dialog the
+        // acquisition stitch uses (singleton, must be constructed on the FX thread), so the two paths
+        // look identical to the user.
+        final String operationId = "Re-stitch: " + displaySampleName;
+        final StitchingBlockingDialog[] dialogRef = {null};
+        final java.util.concurrent.CountDownLatch dialogLatch = new java.util.concurrent.CountDownLatch(1);
+        try {
+            Platform.runLater(() -> {
+                try {
+                    dialogRef[0] = StitchingBlockingDialog.show(operationId, operationId);
+                } finally {
+                    dialogLatch.countDown();
+                }
+            });
+            if (!dialogLatch.await(5, java.util.concurrent.TimeUnit.SECONDS)) {
+                logger.warn("Timeout waiting for re-stitch progress dialog creation");
+            }
+        } catch (Exception e) {
+            // Never let the progress UI stop the stitch itself.
+            logger.warn("Failed to create re-stitch progress dialog", e);
+        }
+        final StitchingBlockingDialog progressDialog = dialogRef[0];
+
         // Determine thread pool size: all angles in parallel, or 1 for sequential
         int threadCount = parallel ? angleDirs.size() : 1;
         logger.info("Processing {} angle(s) with {} thread(s)", angleDirs.size(), threadCount);
@@ -483,6 +509,10 @@ public class StitchingRecoveryWorkflow {
                     final String angleName = angleDir.getName();
                     final boolean isRootDir = angleDir.equals(tileFolderFile);
                     logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);
+                    if (progressDialog != null) {
+                        progressDialog.updateStatus(
+                                operationId, String.format("Stitching %s (%d/%d)...", angleName, angleNum, total));
+                    }
 
                     // The stitcher appends "_<subdirName>" (the angle dir name); the user-pattern
                     // rename happens after the stitch (below).
@@ -582,6 +612,21 @@ public class StitchingRecoveryWorkflow {
         final int finalSuccess = successCount.get();
         final int finalFailure = failureCount.get();
         logger.info("=== STITCHING RECOVERY COMPLETE: {} succeeded, {} failed ===", finalSuccess, finalFailure);
+
+        // Release the progress dialog. failOperation when nothing succeeded, so the user is told
+        // rather than left with a dialog that simply vanishes; a partial run still counts as
+        // complete because its outputs are usable and the summary below reports the failures.
+        if (progressDialog != null) {
+            if (finalSuccess == 0) {
+                progressDialog.failOperation(
+                        operationId,
+                        String.format("No angles stitched (%d failed). See the log for details.", finalFailure));
+            } else {
+                progressDialog.updateStatus(
+                        operationId, String.format("Importing %d stitched image(s)...", finalSuccess));
+                progressDialog.completeOperation(operationId);
+            }
+        }
 
         Platform.runLater(() -> {
             if (finalSuccess > 0 && finalFailure == 0) {
