@@ -369,6 +369,22 @@ public class StitchingRecoveryWorkflow {
             sampleName = info.getProperty("sample_name", tileFolderFile.getName());
             modality = info.getProperty("modality");
             objective = info.getProperty("objective");
+            // acquisition_info.txt stores the FULL objective id ("LOCI_OBJECTIVE_OLYMPUS_20X_POL_001"),
+            // but the acquisition stitch names files with the SHORT token it parses out of the
+            // imaging-mode folder ("ppm_20x_9" -> "20x"). Using the full id verbatim produced correct
+            // but unusably long filenames that did not match the acquisition path, so prefer the short
+            // form whenever the folder layout supplies one.
+            String shortObjective = shortObjectiveFromLayout(tileFolderFile);
+            if (shortObjective != null) {
+                if (objective != null && !shortObjective.equalsIgnoreCase(objective)) {
+                    logger.info(
+                            "Naming with short objective '{}' from the imaging-mode folder rather than the "
+                                    + "full id '{}' recorded in acquisition_info.txt",
+                            shortObjective,
+                            objective);
+                }
+                objective = shortObjective;
+            }
             String parentImageName = info.getProperty("parent_image");
             parentEntry = findParentEntry(project, parentImageName);
             logger.info(
@@ -775,6 +791,36 @@ public class StitchingRecoveryWorkflow {
      * @param extension    expected extension, either {@code .ome.tif} or
      *                     {@code .ome.zarr}
      */
+    /**
+     * The short objective token ("20x") that the acquisition stitch names files with, recovered from
+     * the imaging-mode directory holding the selected tile folder
+     * ({@code .../<sample>/ppm_20x_9/<region>/<angle>}).
+     *
+     * <p>Only a magnification-shaped token is accepted ({@code 20x}, {@code 1.25x}). The region
+     * folders in this layout are numeric and underscore-separated ({@code 53426_46338}), so without
+     * that guard a coordinate could be mistaken for an objective. Returns null when the layout
+     * supplies nothing usable, leaving the caller's value untouched.
+     *
+     * @param tileFolderFile the folder the user selected (the one holding the angle/channel dirs)
+     * @return the short objective token, or null
+     */
+    private static String shortObjectiveFromLayout(File tileFolderFile) {
+        if (tileFolderFile == null) {
+            return null;
+        }
+        // Parent first: that is the imaging-mode directory in the standard layout.
+        for (File dir : new File[] {tileFolderFile.getParentFile(), tileFolderFile}) {
+            if (dir == null || dir.getName().isEmpty()) {
+                continue;
+            }
+            String[] parts = ImageNameGenerator.parseImagingMode(dir.getName());
+            if (parts != null && parts.length > 1 && parts[1] != null && parts[1].matches("(?i)\\d+(\\.\\d+)?x")) {
+                return parts[1];
+            }
+        }
+        return null;
+    }
+
     private static String renameStitchedOutput(String stitchedPath, String desiredName, String extension) {
         File initial = new File(stitchedPath);
         File desired = new File(initial.getParent(), desiredName);
