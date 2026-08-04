@@ -239,6 +239,34 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 
 ---
 
+## Re-stitch Tiles
+
+Re-run stitching on previously acquired tiles when the initial stitching failed or you want to change output format/compression. Tiles are preserved after a stitching failure, so this tool recovers them with optional parallel processing.
+
+**When You Need It:**
+
+- Stitching failed but tiles were successfully acquired (they're in TempTiles/)
+- You want to change the output format (OME_TIFF vs OME_ZARR) or compression method
+- You want to stitch a subset of angles/channels (use the Matching String filter)
+
+**Key Features:**
+
+- **Parallel stitching:** Angles (PPM) and channels (fluorescence) stitch simultaneously on SSDs for speed, or sequentially on spinning-disk drives to avoid I/O thrashing
+- **Matching string filter:** Use `"."` for all subdirectories, or filter to a specific angle/channel (e.g., `"0.0"` for PPM 0-degree angle, `"DAPI"` for DAPI channel)
+- **Output format selection:** OME_TIFF (single file) or OME_ZARR (directory format)
+- **Compression tuning:** Options filtered by format (TIFF: LZW, JPEG, J2K, zstd; ZARR: LZW, ZLIB, Uncompressed)
+- **Automatic project import:** Stitched images are added to the project using your configured naming conventions
+
+**Access:** Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles...
+
+**Tile Recovery After Crashes:**
+
+When parallel stitching exits unexpectedly, angles/channels are temporarily isolated into `_temp_<angle>_<hash>` folders. If stitching crashes before cleanup, tiles remain stuck there. To recover:
+- Point the tool at the `_temp_*` folder and use matching string `"."` to re-stitch that angle/channel
+- Or manually move the subdirectory back to the annotation folder and delete the empty `_temp_*` folder
+
+---
+
 ## Stitch MicroManager Folder
 
 Standalone stitching utility for tile folders acquired with MicroManager 2.0. Unlike the project-based **Re-stitch Tiles**, this tool operates independently without requiring a QuPath project or existing QPSC acquisition metadata.

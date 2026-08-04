@@ -200,14 +200,20 @@ public class StitchingRecoveryWorkflow {
         matchField.setPromptText(". = all subdirs, or specific angle like 0.0");
         matchField.setPrefWidth(200);
 
-        // Parallel angles checkbox
-        CheckBox parallelCheck = new CheckBox("Stitch angles in parallel");
+        // Parallel duplicate-image-type checkbox. The sibling subdirectories are polarization angles
+        // (PPM) or fluorescence channels -- same thing to the stitcher: images of one field captured
+        // at one stage position, which share a single registration solve.
+        CheckBox parallelCheck = new CheckBox("Stitch duplicate image types (angles/channels) in parallel");
         parallelCheck.setSelected(PersistentPreferences.getRestitchParallelAngles());
-        parallelCheck.setTooltip(new Tooltip("Stitch all angle directories simultaneously. Faster on SSDs.\n"
-                + "Disable for spinning disk HDDs to avoid I/O thrashing."));
+        parallelCheck.setTooltip(
+                new Tooltip("Stitch the sibling subdirectories (polarization angles, or fluorescence channels) "
+                        + "simultaneously. Faster on SSDs;\n"
+                        + "disable for spinning-disk HDDs to avoid I/O thrashing.\n"
+                        + "With tile registration on, the first subdirectory is solved first and the rest "
+                        + "reuse that solve, so they stay co-registered."));
 
         // Info label
-        Label infoLabel = new Label("Select the folder that contains tile subdirectories (e.g., angle folders)\n"
+        Label infoLabel = new Label("Select the folder that contains tile subdirectories (angle or channel folders)\n"
                 + "with TileConfiguration.txt files. Use \".\" as matching string to stitch\n"
                 + "all subdirectories, or enter a specific name to stitch one.\n\n"
                 + "If you see _temp_* folders from a crash, select the _temp_* folder\n"

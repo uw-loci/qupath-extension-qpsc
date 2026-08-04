@@ -794,12 +794,13 @@ If you have *old* stitched files with black upper levels from before this fix, r
 
 1. Open the QuPath project where you want the stitched images
 2. Go to **Extensions > QPSC > Utilities > Project Tools > Re-stitch Tiles**
-3. Browse to your tile directory (the folder containing angle subdirectories or TileConfiguration.txt)
+3. Browse to your tile directory (the folder containing angle or channel subdirectories or TileConfiguration.txt)
 4. Verify the pixel size (auto-populated from your microscope config)
 5. Select **Output format**: OME_TIFF (standard, single file) or OME_ZARR (faster, directory format)
 6. Select **Compression**: available options are filtered by format. TIFF allows all compression types (LZW, JPEG, J2K, zstd, etc.), while ZARR-based formats are restricted to LZW, ZLIB, Uncompressed, and Default
-7. For **Matching String**: use `"."` to stitch all subdirectories, or a specific angle like `"0.0"`
-8. Click **Stitch & Import**
+7. For **Matching String**: use `"."` to stitch all subdirectories, or a specific angle or channel name like `"0.0"` or `"DAPI"`
+8. **Stitch duplicate image types in parallel** (checkbox): PPM angles and fluorescence channels are both "duplicate image types" — multiple captures of the same field at one stage position, captured with different settings. When checked, angles/channels stitch simultaneously (faster on SSDs); when unchecked, they stitch sequentially (safer for spinning-disk HDDs)
+9. Click **Stitch & Import**
 
 The stitched images will be created in `<projectDir>/SlideImages` (project-anchored, matching the regular acquisition path) and automatically imported into your project. Filenames follow your configured naming pattern (respecting Objective, Annotation, Angle, and other preferences).
 
