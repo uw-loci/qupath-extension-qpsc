@@ -168,6 +168,11 @@ public class StitchingBlockingDialog {
                         + "Please wait for stitching to complete.");
         warningMessage.setWrapText(true);
         warningMessage.setMaxWidth(400);
+        // A wrapped Label's minHeight is about one line, so when the VBox is short on vertical space
+        // JavaFX compresses the label and ellipsizes it rather than growing it -- which is why both
+        // of these truncated with "..." despite already wrapping. USE_PREF_SIZE makes the wrapped
+        // height the floor instead.
+        warningMessage.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         warningMessage.setStyle("-fx-text-fill: orange; -fx-font-style: italic; -fx-text-alignment: center;");
 
         // Instructions
@@ -175,6 +180,7 @@ public class StitchingBlockingDialog {
                 + "You may dismiss it at your own risk if necessary.");
         instructions.setWrapText(true);
         instructions.setMaxWidth(400);
+        instructions.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         instructions.setStyle("-fx-text-fill: gray; -fx-font-size: 11px; -fx-text-alignment: center;");
 
         content.getChildren()

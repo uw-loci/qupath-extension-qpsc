@@ -492,13 +492,21 @@ public class StitchingRecoveryWorkflow {
         // start and end reads as "nothing is happening". Reuse the same blocking dialog the
         // acquisition stitch uses (singleton, must be constructed on the FX thread), so the two paths
         // look identical to the user.
-        final String operationId = "Re-stitch: " + displaySampleName;
+        // One dialog operation PER angle/channel, not one for the whole run: they stitch
+        // concurrently, so a single aggregate entry made the dialog report "1 operation in progress"
+        // while several were actually running, which reads as the parallel setting being ignored.
+        final java.util.Map<File, String> operationIds = new java.util.LinkedHashMap<>();
+        for (File dir : angleDirs) {
+            operationIds.put(dir, displaySampleName + " - " + dir.getName());
+        }
         final StitchingBlockingDialog[] dialogRef = {null};
         final java.util.concurrent.CountDownLatch dialogLatch = new java.util.concurrent.CountDownLatch(1);
         try {
             Platform.runLater(() -> {
                 try {
-                    dialogRef[0] = StitchingBlockingDialog.show(operationId, operationId);
+                    for (String id : operationIds.values()) {
+                        dialogRef[0] = StitchingBlockingDialog.show(id, id);
+                    }
                 } finally {
                     dialogLatch.countDown();
                 }
@@ -525,9 +533,10 @@ public class StitchingRecoveryWorkflow {
                     final String angleName = angleDir.getName();
                     final boolean isRootDir = angleDir.equals(tileFolderFile);
                     logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);
-                    if (progressDialog != null) {
+                    final String opId = operationIds.get(angleDir);
+                    if (progressDialog != null && opId != null) {
                         progressDialog.updateStatus(
-                                operationId, String.format("Stitching %s (%d/%d)...", angleName, angleNum, total));
+                                opId, String.format("Stitching %s (%d/%d)...", angleName, angleNum, total));
                     }
 
                     // The stitcher appends "_<subdirName>" (the angle dir name); the user-pattern
@@ -581,6 +590,9 @@ public class StitchingRecoveryWorkflow {
                             extension);
                     final String outPath = renameStitchedOutput(stitchedOutPath, desiredName, extension);
                     logger.info("Stitching completed for '{}': {}", angleName, outPath);
+                    if (progressDialog != null && opId != null) {
+                        progressDialog.completeOperation(opId);
+                    }
 
                     // Import to project with metadata (async).
                     final String finalAngle = isRootDir ? null : angleName;
@@ -632,15 +644,16 @@ public class StitchingRecoveryWorkflow {
         // Release the progress dialog. failOperation when nothing succeeded, so the user is told
         // rather than left with a dialog that simply vanishes; a partial run still counts as
         // complete because its outputs are usable and the summary below reports the failures.
+        // Close out any angle whose stitch failed: its operation was never completed above, and a
+        // dialog that never empties would hang on screen.
         if (progressDialog != null) {
-            if (finalSuccess == 0) {
-                progressDialog.failOperation(
-                        operationId,
-                        String.format("No angles stitched (%d failed). See the log for details.", finalFailure));
-            } else {
-                progressDialog.updateStatus(
-                        operationId, String.format("Importing %d stitched image(s)...", finalSuccess));
-                progressDialog.completeOperation(operationId);
+            for (int i = 0; i < angleDirs.size(); i++) {
+                if (i < stitchedPaths.size() && stitchedPaths.get(i) == null) {
+                    String opId = operationIds.get(angleDirs.get(i));
+                    if (opId != null) {
+                        progressDialog.failOperation(opId, "Stitching failed; see the log for details.");
+                    }
+                }
             }
         }
 
