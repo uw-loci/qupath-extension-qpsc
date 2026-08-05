@@ -14,6 +14,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.state.ObjectiveState;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -530,14 +531,41 @@ public class MicroscopeController implements StagePositionProvider {
      * @throws IOException if communication fails
      */
     public double[] getCameraFOV() throws IOException {
+        double[] fov = null;
         try {
-            double[] fov = socketClient.getCameraFOV();
+            fov = socketClient.getCameraFOV();
+        } catch (IOException e) {
+            logger.warn("GETFOV socket query failed ({}); falling back to config", e.getMessage());
+        }
+        if (fov != null && fov.length >= 2 && fov[0] > 0 && fov[1] > 0) {
             logger.info("Camera FOV: {} x {} microns", fov[0], fov[1]);
             return fov;
-        } catch (IOException e) {
-            logger.error("Failed to get camera FOV: {}", e.getMessage());
-            throw new IOException("Failed to get camera FOV via socket", e);
         }
+
+        // The server returned a non-physical FOV (0 or negative). On OWS3 this
+        // happens when Micro-Manager has no pixel-size calibration preset bound
+        // to the active objective/detector: core.getPixelSizeUm() returns 0, so
+        // GETFOV reports width*0 = 0 x 0. Rather than propagate a zero FOV (which
+        // silently breaks FOV-relative stepping, click-to-center, and half-FOV
+        // propagation offsets), fall back to the config, which is authoritative.
+        if (fov != null) {
+            logger.warn(
+                    "Server reported a non-physical camera FOV ({} x {}); falling back to config. "
+                            + "Check the Micro-Manager pixel-size calibration for the active objective.",
+                    fov[0],
+                    fov[1]);
+        }
+        String objective = ObjectiveState.getInstance().getObjective();
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+        String detector = mgr.getActiveDetector();
+        if (objective != null && !objective.isBlank() && detector != null && !detector.isBlank()) {
+            // modality is used only for logging inside getCameraFOVFromConfig.
+            String modality = mgr.getString("microscope", "modality");
+            return getCameraFOVFromConfig(modality != null ? modality : "", objective, detector);
+        }
+        throw new IOException("Camera FOV unavailable: the server returned a non-physical value and "
+                + "the active objective/detector could not be resolved for a config fallback");
     }
 
     /**

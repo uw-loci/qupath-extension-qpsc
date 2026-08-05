@@ -725,8 +725,36 @@ public class QPProjectFunctions {
         int imageWidth = originalServer.getWidth();
         int imageHeight = originalServer.getHeight();
 
-        // Get the original image type
+        // Get the original image type. readImageData() above returns the
+        // PERSISTED state on disk, but QuPath's first-open "Set image type"
+        // prompt writes only to the in-memory ImageData until the entry is
+        // saved. If this original entry is the one currently open in the viewer
+        // and its persisted type is UNSET, prefer the live type so the flipped
+        // sibling does not inherit "Not set" -- which makes stain-based tissue
+        // detection throw ("Cannot set color deconvolution stains for image type
+        // Not set"). Mirrors the live-vs-persisted handling ImageFlipHelper
+        // already applies when mirroring annotations to the sibling.
         ImageData.ImageType imageType = originalData.getImageType();
+        if (imageType == null || imageType == ImageData.ImageType.UNSET) {
+            try {
+                QuPathGUI gui = QuPathGUI.getInstance();
+                if (gui != null && gui.getImageData() != null && gui.getProject() == project) {
+                    ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                    if (openEntry == originalEntry) {
+                        ImageData.ImageType liveType = gui.getImageData().getImageType();
+                        if (liveType != null && liveType != ImageData.ImageType.UNSET) {
+                            logger.info(
+                                    "Original entry's persisted image type is UNSET but the live viewer has "
+                                            + "type {}; using the live type for the flipped duplicate",
+                                    liveType);
+                            imageType = liveType;
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                logger.debug("Could not consult live image type for flipped duplicate: {}", e.getMessage());
+            }
+        }
 
         // Build the transformed server using the correct transform order for TransformedServerBuilder
         // Based on QuPath forum example: https://forum.image.sc/t/flipping-an-image-in-qupaths-gui/85110

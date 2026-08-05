@@ -829,8 +829,10 @@ public class MicroscopeAlignmentWorkflow {
                 logger.info(
                         "Existing annotations found ({} total), skipping tissue detection",
                         gui.getViewer().getHierarchy().getAnnotationObjects().size());
-            } else {
-                runTissueDetectionScript(gui);
+            } else if (!runTissueDetectionScript(gui)) {
+                // Image type unset -- actionable message already shown; abort
+                // cleanly instead of proceeding to an empty tile-selection step.
+                return;
             }
 
             // Get stage axis inversion settings (not optical flip -- see CLAUDE.md).
@@ -876,8 +878,11 @@ public class MicroscopeAlignmentWorkflow {
             String tempTileDirectory = (String) projectDetails.get("tempTileDirectory");
             String modeWithIndex = (String) projectDetails.get("imagingModeWithIndex");
 
-            // Create tiles for alignment (in full resolution coordinates)
-            createAlignmentTiles(
+            // Create tiles for alignment (in full resolution coordinates).
+            // If no annotation matched (or tile creation was cancelled/failed),
+            // abort here with a single actionable message rather than advancing
+            // to tile selection with an empty grid.
+            boolean tilesCreated = createAlignmentTiles(
                     gui,
                     sampleSetup,
                     tempTileDirectory,
@@ -887,6 +892,20 @@ public class MicroscopeAlignmentWorkflow {
                     null, // Pass null for bounds
                     selectedScannerConfigPath,
                     macroFlip);
+            if (!tilesCreated) {
+                logger.warn("Alignment aborted: no alignment tiles were created.");
+                removeAlignmentTiles(gui);
+                List<String> collectionClasses = PersistentPreferences.getSelectedAnnotationClasses();
+                String classHint = (collectionClasses != null && !collectionClasses.isEmpty())
+                        ? collectionClasses.toString()
+                        : VALID_ANNOTATION_CLASSES.toString();
+                UIFunctions.notifyUserOfError(
+                        "No annotations are available to tile for alignment.\n\n"
+                                + "Draw a Tissue annotation (or classify an existing annotation as one of "
+                                + classHint + "), then re-run Microscope Alignment.",
+                        "Alignment: no annotations");
+                return;
+            }
 
             // Build an existing transform estimate for auto-move (if refining an existing transform)
             AffineTransform existingTransformEstimate = null;
@@ -985,7 +1004,14 @@ public class MicroscopeAlignmentWorkflow {
      * Creates tiles for alignment based on available annotations.
      * ENHANCED: Now accepts bounds parameter for proper tile placement.
      */
-    private static void createAlignmentTiles(
+    /**
+     * @return {@code true} when alignment tiles were created for at least one
+     *         matching annotation; {@code false} when no annotation matched the
+     *         configured collection / tissue / valid classes, or tile creation
+     *         was cancelled/failed. On {@code false} the caller must abort rather
+     *         than advance to tile selection with an empty grid.
+     */
+    private static boolean createAlignmentTiles(
             QuPathGUI gui,
             SampleSetupResult sampleSetup,
             String tempTileDirectory,
@@ -1039,7 +1065,7 @@ public class MicroscopeAlignmentWorkflow {
                         "Found {} annotation(s) matching configured collection classes {} for tiling",
                         collectionAnnotations.size(),
                         collectionClasses);
-                createTilesForAnnotations(
+                return createTilesForAnnotations(
                         gui,
                         collectionAnnotations,
                         sampleSetup,
@@ -1047,7 +1073,6 @@ public class MicroscopeAlignmentWorkflow {
                         modeWithIndex,
                         stageInvertedX,
                         stageInvertedY);
-                return;
             }
             logger.info(
                     "No annotations match configured collection classes {} -- falling back to Tissue / valid classes",
@@ -1062,7 +1087,7 @@ public class MicroscopeAlignmentWorkflow {
                 .toList();
         if (!tissueAnnotations.isEmpty()) {
             logger.info("Found {} tissue annotations for tiling", tissueAnnotations.size());
-            createTilesForAnnotations(
+            return createTilesForAnnotations(
                     gui,
                     tissueAnnotations,
                     sampleSetup,
@@ -1070,7 +1095,6 @@ public class MicroscopeAlignmentWorkflow {
                     modeWithIndex,
                     stageInvertedX,
                     stageInvertedY);
-            return;
         }
 
         // Otherwise fall back to any valid (Tissue / Scanned Area /
@@ -1084,24 +1108,29 @@ public class MicroscopeAlignmentWorkflow {
                 .toList();
         if (!annotations.isEmpty()) {
             logger.info("Found {} annotations for tiling (non-tissue)", annotations.size());
-            createTilesForAnnotations(
+            return createTilesForAnnotations(
                     gui, annotations, sampleSetup, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
-            return;
         }
 
+        // No matching annotation of any accepted class. Return false so the caller
+        // aborts cleanly and shows a single, actionable message. Deliberately do
+        // NOT notify here: this method used to raise an APPLICATION_MODAL error
+        // that fired AFTER the workflow had already opened the always-on-top
+        // tile-selection stage, so it sank behind that stage while the caller
+        // pressed on with an empty tile grid. Messaging now lives at the call
+        // site, before any tile-selection window exists.
         logger.warn(
                 "No annotations match collection classes or {}; alignment tiles not created", VALID_ANNOTATION_CLASSES);
-        Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                "No annotations match the configured collection classes "
-                        + (collectionClasses != null && !collectionClasses.isEmpty()
-                                ? collectionClasses.toString()
-                                : VALID_ANNOTATION_CLASSES.toString())
-                        + ".\n\nEither create a Tissue annotation, update the class selection, "
-                        + "or classify existing annotations as one of: " + VALID_ANNOTATION_CLASSES,
-                "No annotations to tile"));
+        return false;
     }
 
-    private static void createTilesForAnnotations(
+    /**
+     * @return {@code true} only when detection tiles were actually created;
+     *         {@code false} when the operator cancelled a validation dialog or
+     *         tile creation failed. The caller must not proceed to the
+     *         tile-selection step on {@code false}.
+     */
+    private static boolean createTilesForAnnotations(
             QuPathGUI gui,
             List<PathObject> annotations,
             SampleSetupResult sampleSetup,
@@ -1120,11 +1149,11 @@ public class MicroscopeAlignmentWorkflow {
             if (!QPScopeChecks.validateObjectivePixelSize(
                     sampleSetup.objective(), sampleSetup.detector(), sampleSetup.modality(), configPx)) {
                 logger.info("Alignment cancelled by objective pixel-size mismatch");
-                return;
+                return false;
             }
             if (!QPScopeChecks.validateCameraRoi(sampleSetup.detector())) {
                 logger.info("Alignment cancelled by camera ROI mismatch");
-                return;
+                return false;
             }
         } catch (Exception ex) {
             logger.warn("Could not validate pixel size before alignment tiling: {}", ex.getMessage());
@@ -1141,13 +1170,16 @@ public class MicroscopeAlignmentWorkflow {
                     "Created detection tiles for alignment (stageInvertedX={}, stageInvertedY={})",
                     stageInvertedX,
                     stageInvertedY);
+            return true;
 
         } catch (IOException e) {
             logger.error("Failed to create tiles", e);
             UIFunctions.notifyUserOfError("Failed to create tiles: " + e.getMessage(), "Tiling Error");
+            return false;
         } catch (IllegalArgumentException e) {
             logger.error("Invalid tile configuration", e);
             UIFunctions.notifyUserOfError("Invalid tile configuration: " + e.getMessage(), "Configuration Error");
+            return false;
         }
     }
 
@@ -1728,11 +1760,37 @@ public class MicroscopeAlignmentWorkflow {
     /**
      * Runs the tissue detection script if configured.
      */
-    private static void runTissueDetectionScript(QuPathGUI gui) {
+    /**
+     * @return {@code true} to continue the workflow (detection ran, or none was
+     *         configured), {@code false} to abort because the image type is not
+     *         set -- in which case an actionable message has already been shown.
+     */
+    private static boolean runTissueDetectionScript(QuPathGUI gui) {
         String tissueScript = QPPreferenceDialog.getTissueDetectionScriptProperty();
         if (tissueScript == null || tissueScript.isBlank()) {
             logger.info("No tissue detection script configured");
-            return;
+            return true;
+        }
+
+        // Stain-based tissue detection (setColorDeconvolutionStains) requires a
+        // set image type. When the type is UNSET the script throws an opaque core
+        // error ("Cannot set color deconvolution stains for image type Not set").
+        // This is hit most often on a freshly-created flipped duplicate whose
+        // persisted image type had not been written when the sibling was built.
+        // Guard with an actionable message and abort rather than surfacing the
+        // raw exception.
+        var imageData = gui.getImageData();
+        if (imageData == null
+                || imageData.getImageType() == null
+                || imageData.getImageType() == qupath.lib.images.ImageData.ImageType.UNSET) {
+            logger.warn("Image type is not set; cannot run stain-based tissue detection");
+            Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                    "The image type is not set for the current image, so automatic tissue "
+                            + "detection cannot run (stain-based detection needs a set type, e.g. H&E).\n\n"
+                            + "Set the image type (Image tab -> Set image type), or draw a Tissue "
+                            + "annotation manually, then re-run Microscope Alignment.",
+                    "Tissue detection: image type not set"));
+            return false;
         }
 
         logger.info("Running tissue detection script");
@@ -1777,5 +1835,6 @@ public class MicroscopeAlignmentWorkflow {
         } catch (Exception e) {
             logger.error("Error running tissue detection script", e);
         }
+        return true;
     }
 }

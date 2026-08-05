@@ -1411,10 +1411,16 @@ public class MicroscopeConfigManager {
     public double[] getModalityFOV(String modality, String objective, String detector) {
         logger.debug("Calculating FOV for modality: {}, objective: {}, detector: {}", modality, objective, detector);
 
-        if (detector == null) {
-            detector = getDefaultDetector();
-            if (detector.isEmpty()) {
-                logger.error("No detector specified and no default detector configured");
+        if (detector == null || detector.isBlank()) {
+            // No explicit detector: resolve the active one. getActiveDetector()
+            // returns the sole hardware.detectors entry when only one is
+            // configured (the common single-camera case), then the last
+            // user-picked detector; it refuses to guess among several. This
+            // replaces getDefaultDetector(), whose microscope.default_detector
+            // key is absent from every shipped config.
+            detector = getActiveDetector();
+            if (detector == null || detector.isBlank()) {
+                logger.error("No detector specified and active detector could not be resolved");
                 return null;
             }
         }
@@ -3106,6 +3112,38 @@ public class MicroscopeConfigManager {
         }
 
         return false;
+    }
+
+    /**
+     * Determines whether a detector produces color output.
+     *
+     * <p>A detector is "color" if it is a JAI 3-CCD prism camera, or a Bayer
+     * sensor that gets debayered. A "laser_scanning" (PMT) detector and a plain
+     * monochrome sCMOS are NOT color. This mirrors the inference in
+     * {@code AcquisitionSpaceCheck} and is the shared gate for features that are
+     * only meaningful on a color camera (e.g. white-balance calibration/presets).
+     *
+     * <p>Resolves entirely from config -- no live frame or socket connection is
+     * required, so it is safe to call during UI construction.
+     *
+     * @param detectorId The detector identifier
+     * @return true if the detector produces color output, false for monochrome
+     *         (or when the detector is unknown/unset)
+     */
+    public boolean isColorDetector(String detectorId) {
+        if (detectorId == null || detectorId.isEmpty()) {
+            return false;
+        }
+        if (isJAICamera(detectorId)) {
+            return true;
+        }
+        String type = getDetectorCameraType(detectorId);
+        if ("laser_scanning".equals(type)) {
+            return false;
+        }
+        // "generic" and unset fall through to the debayer flag: a debayered Bayer
+        // sensor is color, a plain monochrome sCMOS (no requires_debayering) is not.
+        return detectorRequiresDebayering(detectorId);
     }
 
     // ========== HARDWARE SECTION ACCESS METHODS ==========

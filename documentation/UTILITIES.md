@@ -26,7 +26,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse acquisition | Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... |
 | **Utilities > Image Quality** | | |
 | [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Utilities > Image Quality > Collect Background Images |
-| [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side | Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test... |
+| [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side (JAI cameras only) | Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test... |
 | [Autofocus Editor](tools/autofocus-editor.md) | Configure per-objective autofocus parameters | Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor... |
 | [Autofocus Benchmark](tools/autofocus-benchmark.md) | Find optimal autofocus settings systematically | Extensions > QP Scope > Utilities > Image Quality > Autofocus Parameter Benchmark... |
 | Re-probe Stage AF | Re-run the streaming-AF stage probe and rewrite `stage.streaming_af.*` | Extensions > QP Scope > Utilities > Image Quality > Re-probe Stage AF... |

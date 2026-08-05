@@ -586,7 +586,11 @@ public final class SnapAction {
                 objective = readString(cfg, "microscope", "objective_in_use");
                 detector = readString(cfg, "microscope", "detector_in_use");
                 if (detector == null || detector.isEmpty()) {
-                    detector = cfg.getDefaultDetector();
+                    // getActiveDetector() resolves the sole configured detector
+                    // (single-camera scopes never populate detector_in_use);
+                    // getDefaultDetector() would log an ERROR since no config
+                    // declares microscope.default_detector.
+                    detector = cfg.getActiveDetector();
                 }
                 if (objective != null && detector != null) {
                     double p = cfg.getPixelSize(objective, detector);

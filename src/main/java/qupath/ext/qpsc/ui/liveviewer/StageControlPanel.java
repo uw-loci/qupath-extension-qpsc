@@ -1439,7 +1439,8 @@ public class StageControlPanel extends VBox {
         // Save/Load preset buttons
         cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
 
-        if (!anyPresets) addNoPresetsLabel();
+        // Only prompt for WB calibration on a COLOR camera (see brightfield note).
+        if (!anyPresets && mgr.isColorDetector(resolveDetector(modality))) addNoPresetsLabel();
     }
 
     /** Brightfield modality: exposure + illumination + WB preset + presets. */
@@ -1462,8 +1463,8 @@ public class StageControlPanel extends VBox {
 
         // WB preset (if calibrated)
         boolean anyPresets = false;
+        String det = resolveDetector(modality);
         try {
-            String det = resolveDetector(modality);
             var exposures = mgr.getModalityExposures(modality, currentCameraObjectiveId, det);
             var gainsObj = mgr.getModalityGains(modality, currentCameraObjectiveId, det);
 
@@ -1499,7 +1500,11 @@ public class StageControlPanel extends VBox {
         // Save/Load preset buttons
         cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
 
-        if (!anyPresets) addNoPresetsLabel();
+        // Only prompt for WB calibration on a COLOR camera. On a monochrome
+        // detector (e.g. OWS3's Hamamatsu) white balance is meaningless and the
+        // WB-calibration menu is already hidden, so the "run WB calibration"
+        // label would point at an action the user cannot take.
+        if (!anyPresets && mgr.isColorDetector(det)) addNoPresetsLabel();
     }
 
     /**
@@ -3782,6 +3787,12 @@ public class StageControlPanel extends VBox {
     private void queryFov() {
         try {
             double[] fov = MicroscopeController.getInstance().getCameraFOV();
+            if (fov == null || fov.length < 2 || fov[0] <= 0 || fov[1] <= 0) {
+                // A non-physical FOV (e.g. Micro-Manager reports pixel size 0)
+                // must not render as "0 x 0" -- show it as unavailable so the
+                // user knows the value is missing rather than genuinely zero.
+                throw new IllegalStateException("non-physical FOV from server/config");
+            }
             cachedFovUm[0] = fov[0];
             cachedFovUm[1] = fov[1];
             fovInfoLabel.setText(String.format(res.getString("stageMovement.fov.format"), fov[0], fov[1]));

@@ -638,15 +638,17 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Image Quality: autofocus, white balance / camera calibration, background.
         Menu imageQualityMenu = new Menu("Image Quality");
+        imageQualityMenu.getItems().add(backgroundCollectionOption);
+        // WB Comparison compares JAI-only white-balance modes (camera_awb /
+        // simple / per_angle); only meaningful on a JAI 3-CCD camera. Gate it the
+        // same way as the "JAI Camera" submenu below so a monochrome scope
+        // (e.g. OWS3) does not surface an inapplicable tool.
+        if (hasJAICamera) {
+            imageQualityMenu.getItems().add(wbComparisonOption);
+        }
         imageQualityMenu
                 .getItems()
-                .addAll(
-                        backgroundCollectionOption,
-                        wbComparisonOption,
-                        new SeparatorMenuItem(),
-                        autofocusEditorOption,
-                        autofocusBenchmarkOption,
-                        probeStageAfOption);
+                .addAll(new SeparatorMenuItem(), autofocusEditorOption, autofocusBenchmarkOption, probeStageAfOption);
 
         // JAI Camera (white balance + noise) belongs under Image Quality; only
         // shown when a JAI camera is configured.

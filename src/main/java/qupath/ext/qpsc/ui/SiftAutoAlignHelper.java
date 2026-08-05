@@ -85,6 +85,18 @@ public final class SiftAutoAlignHelper {
 
         MicroscopeController mc = MicroscopeController.getInstance();
         double microPixelSize = mc.getSocketClient().getMicroscopePixelSize();
+        if (Double.isNaN(microPixelSize) || microPixelSize <= 0) {
+            // GETPXSZ returns 0.0 when Micro-Manager has no pixel-size
+            // calibration preset for the active objective/detector. Without a
+            // real microscope pixel size the server scales the camera image by
+            // ratio 0 -- collapsing it to 1x1 px, which yields zero SIFT
+            // keypoints and a misleading "insufficient features" failure. Fail
+            // fast with an actionable message instead.
+            throw new IllegalStateException("Micro-Manager reports no pixel-size calibration (0 um/px) for the active "
+                    + "objective/detector, so SIFT cannot scale the camera image against the WSI. "
+                    + "Set the pixel-size calibration in Micro-Manager (or use Register Objective) "
+                    + "for this objective and retry.");
+        }
 
         double marginUm = PersistentPreferences.getSiftSearchMarginUm();
         double marginPx = marginUm / wsiPixelSize;

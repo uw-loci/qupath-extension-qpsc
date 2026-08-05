@@ -81,6 +81,24 @@ public class AnnotationHelper {
         }
 
         if (tissueScript != null && !tissueScript.isBlank()) {
+            // Stain-based tissue detection (setColorDeconvolutionStains) requires
+            // a set image type. When it is UNSET the script throws an opaque core
+            // error ("Cannot set color deconvolution stains for image type Not
+            // set"); surface an actionable message instead. Most often seen on a
+            // flipped duplicate whose persisted type had not been written yet --
+            // see QPProjectFunctions.createFlippedDuplicate.
+            if (gui.getImageData() == null
+                    || gui.getImageData().getImageType() == null
+                    || gui.getImageData().getImageType() == qupath.lib.images.ImageData.ImageType.UNSET) {
+                logger.warn("Image type is not set; cannot run stain-based tissue detection");
+                Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                        "The image type is not set for the current image, so automatic tissue "
+                                + "detection cannot run (stain-based detection needs a set type, e.g. H&E).\n\n"
+                                + "Set the image type (Image tab -> Set image type), or draw annotations "
+                                + "manually, then continue.",
+                        "Tissue detection: image type not set"));
+                return Collections.emptyList();
+            }
             try {
                 logger.info("Running tissue detection script: {}", tissueScript);
 
@@ -284,6 +302,24 @@ public class AnnotationHelper {
         }
 
         if (tissueScript != null && !tissueScript.isBlank()) {
+            // Stain-based tissue detection (setColorDeconvolutionStains) requires
+            // a set image type. When it is UNSET the script throws an opaque core
+            // error ("Cannot set color deconvolution stains for image type Not
+            // set"); surface an actionable message instead. Most often seen on a
+            // flipped duplicate whose persisted type had not been written yet --
+            // see QPProjectFunctions.createFlippedDuplicate.
+            if (gui.getImageData() == null
+                    || gui.getImageData().getImageType() == null
+                    || gui.getImageData().getImageType() == qupath.lib.images.ImageData.ImageType.UNSET) {
+                logger.warn("Image type is not set; cannot run stain-based tissue detection");
+                Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                        "The image type is not set for the current image, so automatic tissue "
+                                + "detection cannot run (stain-based detection needs a set type, e.g. H&E).\n\n"
+                                + "Set the image type (Image tab -> Set image type), or draw annotations "
+                                + "manually, then continue.",
+                        "Tissue detection: image type not set"));
+                return Collections.emptyList();
+            }
             try {
                 logger.info("Running tissue detection script: {}", tissueScript);
 

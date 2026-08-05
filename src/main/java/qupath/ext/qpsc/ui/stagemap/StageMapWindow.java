@@ -703,14 +703,16 @@ public class StageMapWindow {
                 + "    and the acquisition image (what the camera sees).\n"
                 + "  Stage View (unchecked) -- oriented like the slides as\n"
                 + "    they physically sit on the stage.\n\n"
-                + "Camera View composes the active scope's Camera Orientation\n"
-                + "(the map already applies Stage Polarity) with the macro\n"
-                + "overlay's per-scanner flipMacroX/Y from the Source dropdown,\n"
-                + "XOR'd per-axis. Independent of which project image is open."));
+                + "Camera View applies the active scope's Camera Orientation only\n"
+                + "(the map already applies Stage Polarity). The macro overlay's\n"
+                + "per-scanner flipMacroX/Y is applied to the macro image itself,\n"
+                + "not to this whole-canvas flip. Independent of which project\n"
+                + "image is open."));
 
-        // Initial checked state -- pulled from open entry metadata if any. Preset dropdown
-        // is not yet populated at this point in construction, so the dropdown leg of
-        // resolveCurrentFlipAxes() is a no-op until applyInitialFlipState runs after show().
+        // Initial checked state -- the whole-canvas flip is the active scope's
+        // camera orientation only, so it is stable regardless of the (not-yet-
+        // populated) Source dropdown. The macro overlay's own preset flip is
+        // applied separately once applySourceSelection runs after show().
         boolean[] initialAxes = resolveCurrentFlipAxes();
         applyFlipsCheckbox.setSelected(initialAxes[0] || initialAxes[1]);
 
@@ -1650,63 +1652,60 @@ public class StageMapWindow {
     }
 
     /**
-     * Resolve the currently-effective {flipX, flipY} for the Stage Map view.
+     * Resolve the {flipX, flipY} that transforms the whole Stage Map canvas from
+     * the sample frame into the displayed (Live Viewer) frame.
      *
-     * <p>Composes two fixed hardware-side properties of the active microscope
-     * setup; the open project entry has no influence on the result.
-     * <ol>
-     *   <li><b>Camera flip</b> -- the active scope's
-     *       {@link qupath.ext.qpsc.utilities.CameraOrientation} only, via
-     *       {@link StageImageTransform#cameraFlipFlags()}. The map geometry is
-     *       drawn through {@code stageToScreen}, which already applies the
-     *       insert's axis inversion (= {@link qupath.ext.qpsc.utilities.StagePolarity}),
-     *       so the unflipped map is already in the sample frame. Only the camera
-     *       orientation separates the sample frame from the displayed (Live
-     *       Viewer) frame -- so we must NOT fold polarity in again here. Using
-     *       {@code stitcherFlipFlags()} (stage+camera) double-counted polarity
-     *       and made Apply Flips 180 deg wrong on inverted-stage scopes (OWS3).</li>
-     *   <li><b>Macro overlay flip</b> -- if a macro is being shown, its source
-     *       scanner's preset records {@code flipMacroX/Y} (the orientation of
-     *       that scanner's macro relative to the stage). Read from
-     *       {@link #activePreset}, which the user picks in the Source dropdown.
-     *       If no preset is selected (active-scope identity), this contributes
-     *       {@code (false, false)}.</li>
-     * </ol>
+     * <p>This is the active scope's <b>camera orientation only</b>
+     * ({@link qupath.ext.qpsc.utilities.CameraOrientation}, via
+     * {@link StageImageTransform#cameraFlipFlags()}). The map geometry is drawn
+     * through {@code stageToScreen}, which already applies the insert's axis
+     * inversion (= {@link qupath.ext.qpsc.utilities.StagePolarity}), so the
+     * unflipped canvas is already in the sample frame; only the camera
+     * orientation separates the sample frame from the displayed frame. We must
+     * NOT fold polarity in again here -- {@code stitcherFlipFlags()} (stage+camera)
+     * double-counted polarity and made Apply Flips 180 deg wrong on inverted-stage
+     * scopes (OWS3).
      *
-     * <p>The two are XOR'd per-axis so that everything on the canvas -- the
-     * insert/slides/crosshair/FOV box AND the macro overlay -- ends up in the
-     * same orientation as the Live Viewer.
+     * <p><b>The macro-preset flip is deliberately NOT included here.</b>
+     * {@code flipMacroX/Y} describes the orientation of the macro <em>image</em>
+     * relative to the stage frame, not a camera-vs-stage relationship. It applies
+     * to the macro overlay pixels alone (see {@link #resolveMacroPresetFlip()} and
+     * the macro overlay builder) -- folding it into this whole-canvas mirror
+     * rotated the insert/slides/crosshair/FOV box out of both the stage and camera
+     * frames, which is the OWS3 X-mirror (the Ocus40 source preset has
+     * {@code flipMacroX=true}). After the macro overlay gets its own preset flip,
+     * this camera flip carries it the rest of the way to the displayed frame.
      *
      * @return a 2-element array {@code {flipX, flipY}}; never null
      */
     private boolean[] resolveCurrentFlipAxes() {
-        // CAMERA flip only -- NOT stitcherFlipFlags(). The Stage Map geometry is
-        // drawn through stageToScreen, which already applies the insert's axis
-        // inversion (= stage polarity). stitcherFlipFlags() folds polarity in a
-        // second time, which double-counted it and made "Apply Flips" 180 deg
-        // wrong on inverted-stage scopes (OWS3: polarity (true,true), camera
-        // NORMAL -> stitcher (true,true) but the map already matched the Live
-        // Viewer unflipped, so the correct flip is (false,false)). The map is in
-        // the sample frame; only the camera orientation separates it from the
-        // displayed (Live Viewer) frame. See COORDINATE_TRANSFORMS.md.
-        boolean[] stageFlags = StageImageTransform.current().cameraFlipFlags();
-        boolean macroFlipX = false;
-        boolean macroFlipY = false;
-        if (activePreset != null && activePreset.hasFlipState()) {
-            macroFlipX = Boolean.TRUE.equals(activePreset.getFlipMacroX());
-            macroFlipY = Boolean.TRUE.equals(activePreset.getFlipMacroY());
-        }
-        boolean[] axes = {stageFlags[0] ^ macroFlipX, stageFlags[1] ^ macroFlipY};
-        logger.info(
-                "resolveCurrentFlipAxes: camera=({}, {}) XOR macroPreset='{}'=({}, {}) -> ({}, {})",
-                stageFlags[0],
-                stageFlags[1],
-                activePreset != null ? activePreset.getName() : "(none)",
-                macroFlipX,
-                macroFlipY,
-                axes[0],
-                axes[1]);
+        boolean[] cam = StageImageTransform.current().cameraFlipFlags();
+        boolean[] axes = {cam[0], cam[1]};
+        logger.info("resolveCurrentFlipAxes: camera flip only = ({}, {})", axes[0], axes[1]);
         return axes;
+    }
+
+    /**
+     * Resolve the {flipX, flipY} optical flip for the macro overlay <em>image</em>
+     * from the active source preset ({@code flipMacroX/Y}).
+     *
+     * <p>This is the macro image's orientation relative to the stage frame and is
+     * applied to the macro pixels only; the whole-canvas camera flip
+     * ({@link #resolveCurrentFlipAxes()}) then carries the placed overlay into the
+     * displayed frame. Kept separate from the camera flip because optical flip and
+     * stage/camera orientation are independent (see the module CLAUDE.md
+     * "Coordinate system terminology"); conflating them via XOR was the prior bug.
+     *
+     * @return {@code {flipMacroX, flipMacroY}} from {@link #activePreset}, or
+     *         {@code {false, false}} when no preset with flip state is selected
+     */
+    private boolean[] resolveMacroPresetFlip() {
+        if (activePreset != null && activePreset.hasFlipState()) {
+            return new boolean[] {
+                Boolean.TRUE.equals(activePreset.getFlipMacroX()), Boolean.TRUE.equals(activePreset.getFlipMacroY())
+            };
+        }
+        return new boolean[] {false, false};
     }
 
     private void startPositionPolling() {
@@ -2436,10 +2435,17 @@ public class StageMapWindow {
         // happen to line up with the inversion booleans (today on PPM, where opening
         // the unflipped MetroHealth_142.svs base produced an unflipped macro overlay
         // even though Ocus40_PPM correctly says flipMacroX=Y=true).
-        boolean[] resolved = resolveCurrentFlipAxes();
+        // Macro IMAGE optical flip = the source preset's flipMacroX/Y ONLY (not
+        // the camera flip). This orients the raw macro pixels into the stage
+        // frame; the whole-canvas camera mirror (resolveCurrentFlipAxes) then
+        // carries the placed overlay into the displayed frame. Using the
+        // camera-XOR-macro composite here (the previous code) flipped the macro
+        // twice and left it effectively unflipped even when the preset says
+        // flipMacroX=Y=true (the PPM MetroHealth_142 case described above).
+        boolean[] resolved = resolveMacroPresetFlip();
         boolean flipX = resolved[0];
         boolean flipY = resolved[1];
-        logger.info("Macro overlay: optical flip from preset/entry = ({}, {})", flipX, flipY);
+        logger.info("Macro overlay: optical flip from preset = ({}, {})", flipX, flipY);
 
         if (flipX || flipY) {
             macroImage = MacroImageUtility.flipMacroImage(macroImage, flipX, flipY);
