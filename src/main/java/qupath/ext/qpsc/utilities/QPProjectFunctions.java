@@ -46,6 +46,16 @@ public class QPProjectFunctions {
     private static final Logger logger = LoggerFactory.getLogger(QPProjectFunctions.class);
 
     /**
+     * Attempts made to open a freshly-written image before giving up. With the doubling backoff
+     * below this waits about 16 s in total, which is far longer than any observed Windows file-lock
+     * release and still short enough that a genuinely broken file fails promptly.
+     */
+    private static final int SERVER_OPEN_ATTEMPTS = 7;
+
+    /** First backoff between open attempts, in ms; doubles each attempt. */
+    private static final long SERVER_OPEN_BASE_WAIT_MS = 250;
+
+    /**
      * Result container for creating/loading a project.
      */
     private static class ProjectSetup {
@@ -1088,6 +1098,87 @@ public class QPProjectFunctions {
      * @param imageData The image data for automatic type estimation
      * @return The determined ImageType
      */
+    /**
+     * Opens an ImageServer for a file we have just finished writing, retrying while the OS still
+     * reports the file as locked.
+     *
+     * <p>On Windows a stitched OME-TIFF can stay locked for a short time after its writer closed.
+     * Bio-Formats reads and writes through {@code loci.common.NIOFileHandle}, whose mapped byte
+     * buffers are only released when the JVM garbage-collects them, so the handle can outlive the
+     * {@code close()} call by an arbitrary interval. Opening the file in that window fails with
+     * "The process cannot access the file because it is being used by another process".
+     *
+     * <p>Observed on a 2026-08-05 whole-slide run: the -7.0 angle finished stitching and tried to
+     * import its own 6 GB output 8 ms later, while a second angle was still stitching in parallel,
+     * and the import failed. The other two angles happened to wait ~25 ms and succeeded. Nothing
+     * was wrong with the file -- it imported by hand afterwards -- so this is purely a race against
+     * the OS releasing the handle, and waiting is the correct response.
+     *
+     * <p>Between attempts we hint a GC, because that is what actually releases the mapping, and
+     * back off so a genuinely bad file fails in bounded time rather than spinning.
+     *
+     * @param imageUri  URI passed to {@link ImageServers#buildServer}
+     * @param imageFile the same file, used for logging
+     * @return the opened server
+     * @throws IOException if the file could not be opened on any attempt
+     */
+    private static ImageServer<BufferedImage> buildServerWithRetry(String imageUri, File imageFile) throws IOException {
+        IOException last = null;
+        for (int attempt = 1; attempt <= SERVER_OPEN_ATTEMPTS; attempt++) {
+            try {
+                return ImageServers.buildServer(imageUri);
+            } catch (IOException e) {
+                last = e;
+                if (!isFileLockFailure(e) || attempt == SERVER_OPEN_ATTEMPTS) {
+                    break;
+                }
+                long waitMs = SERVER_OPEN_BASE_WAIT_MS * (1L << (attempt - 1));
+                logger.warn(
+                        "Could not open {} on attempt {}/{} (file still locked by another process); "
+                                + "retrying in {} ms",
+                        imageFile.getName(),
+                        attempt,
+                        SERVER_OPEN_ATTEMPTS,
+                        waitMs);
+                // The lock is a memory-mapped buffer awaiting collection, so prompt a GC rather
+                // than only sleeping.
+                System.gc();
+                try {
+                    Thread.sleep(waitMs);
+                } catch (InterruptedException ie) {
+                    Thread.currentThread().interrupt();
+                    throw e;
+                }
+            }
+        }
+        logger.error(
+                "Giving up opening {} after {} attempts. The stitched file is on disk and is "
+                        + "probably fine -- re-import it with Utilities -> Re-stitch, or add it by hand and "
+                        + "set the image type, so it does not land in the project untyped.",
+                imageFile.getName(),
+                SERVER_OPEN_ATTEMPTS);
+        throw last;
+    }
+
+    /**
+     * True when a failure looks like a transient OS file lock rather than a corrupt or missing file.
+     * Bio-Formats wraps the underlying {@link java.io.FileNotFoundException} several layers deep, and
+     * on Windows the distinguishing text is in the message rather than the exception type -- a
+     * genuinely absent file and a locked one both surface as FileNotFoundException.
+     */
+    private static boolean isFileLockFailure(Throwable t) {
+        for (Throwable cause = t; cause != null; cause = cause.getCause()) {
+            String message = cause.getMessage();
+            if (message != null && message.contains("being used by another process")) {
+                return true;
+            }
+            if (cause.getCause() == cause) {
+                break;
+            }
+        }
+        return false;
+    }
+
     private static ImageData.ImageType determineImageType(
             File imageFile,
             ImageServer<BufferedImage> server,
@@ -1264,7 +1355,7 @@ public class QPProjectFunctions {
 
         // Build an ImageServer for the image file
         String imageUri = imageFile.toURI().toString();
-        ImageServer<BufferedImage> server = ImageServers.buildServer(imageUri);
+        ImageServer<BufferedImage> server = buildServerWithRetry(imageUri, imageFile);
 
         // Check if we need to apply any transformations
         if (!isSlideFlippedX && !isSlideFlippedY) {

@@ -760,10 +760,23 @@ public class TileProcessingUtilities {
                     }
 
                 } catch (IOException e) {
-                    logger.error("Failed to import stitched image", e);
-                    Dialogs.showErrorNotification(
+                    // The stitch itself succeeded -- only the project import failed, so the pyramid
+                    // is intact on disk. Say so, and say what to do about it: an image added by
+                    // hand afterwards has no QPSC metadata and, more subtly, no image TYPE, which
+                    // makes QuPath guess Fluorescence for an RGB pyramid and then poison the
+                    // channel selection of every other image with the same channel names. Use a
+                    // blocking dialog rather than a notification: this happens at the end of a
+                    // multi-hour unattended run, where a toast has long since faded by the time
+                    // anyone looks at the screen.
+                    File failed = new File(lastProcessedPath);
+                    logger.error("Failed to import stitched image {}", failed.getAbsolutePath(), e);
+                    Dialogs.showErrorMessage(
                             res.getString("stitching.error.title"),
-                            "Failed to import stitched image:\n" + e.getMessage());
+                            "Stitching finished, but the image could not be added to the project.\n\n"
+                                    + "File (intact, on disk):\n" + failed.getAbsolutePath() + "\n\n"
+                                    + "Reason: " + e.getMessage() + "\n\n"
+                                    + "Re-import it with Utilities -> Re-stitch existing tiles rather than "
+                                    + "dragging it in, so it keeps its acquisition metadata and image type.");
                 }
             });
         }
