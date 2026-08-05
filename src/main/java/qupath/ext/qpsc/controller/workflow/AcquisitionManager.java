@@ -53,6 +53,7 @@ import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AcquisitionSpaceCheck;
+import qupath.ext.qpsc.utilities.BackgroundIlluminationCheck;
 import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -215,6 +216,7 @@ public class AcquisitionManager {
                 })
                 .thenCompose(this::prepareForAcquisition)
                 .thenCompose(this::checkDiskSpace)
+                .thenCompose(this::checkBackgroundIllumination)
                 .thenCompose(this::processAnnotations)
                 .thenApply(success -> {
                     if (success) {
@@ -457,6 +459,44 @@ public class AcquisitionManager {
 
             if (!result.proceed()) {
                 logger.warn("Acquisition cancelled by user after low-disk-space warning");
+                return null;
+            }
+            return angleExposures;
+        });
+    }
+
+    /**
+     * Warns (non-blocking) when the stored flat-field background was collected at a
+     * different profile / lamp level than the acquisition about to run will use.
+     *
+     * <p>This mirrors the check {@link BoundedAcquisitionWorkflow} already runs, but
+     * for the Existing-Image and multi-slide-batch paths, which apply the same
+     * background correction and previously ran no such check -- the "doesn't always
+     * warn me" gap. Only fires when correction will actually run. Returns {@code null}
+     * to cancel (user declined), matching the {@link #checkDiskSpace} contract so
+     * {@link #processAnnotations} short-circuits.
+     */
+    private CompletableFuture<List<AngleExposure>> checkBackgroundIllumination(List<AngleExposure> angleExposures) {
+        if (angleExposures == null) {
+            // Upstream step already cancelled -- pass the signal through.
+            return CompletableFuture.completedFuture(null);
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            MicroscopeConfigManager cfg =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            String modality = state.sample.modality();
+            String objective = state.sample.objective();
+            String detector = state.sample.detector();
+            // Only relevant when flat-field correction will actually run for this
+            // modality/detector; otherwise there is no reference to be stale against.
+            if (!AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(cfg, modality, detector)) {
+                return angleExposures;
+            }
+            String bgBaseFolder = cfg.getBackgroundCorrectionFolder(modality);
+            boolean proceed = BackgroundIlluminationCheck.checkAndWarn(
+                    cfg, modality, objective, detector, state.wbMode, bgBaseFolder);
+            if (!proceed) {
+                logger.warn("Acquisition cancelled by user after background/profile illumination mismatch warning");
                 return null;
             }
             return angleExposures;
