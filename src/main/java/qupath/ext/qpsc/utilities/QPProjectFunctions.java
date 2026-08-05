@@ -1114,8 +1114,8 @@ public class QPProjectFunctions {
      * was wrong with the file -- it imported by hand afterwards -- so this is purely a race against
      * the OS releasing the handle, and waiting is the correct response.
      *
-     * <p>Between attempts we hint a GC, because that is what actually releases the mapping, and
-     * back off so a genuinely bad file fails in bounded time rather than spinning.
+     * <p>Attempts back off geometrically so a genuinely bad file fails in bounded time rather than
+     * spinning.
      *
      * @param imageUri  URI passed to {@link ImageServers#buildServer}
      * @param imageFile the same file, used for logging
@@ -1140,9 +1140,10 @@ public class QPProjectFunctions {
                         attempt,
                         SERVER_OPEN_ATTEMPTS,
                         waitMs);
-                // The lock is a memory-mapped buffer awaiting collection, so prompt a GC rather
-                // than only sleeping.
-                System.gc();
+                // Deliberately no System.gc() here. Prompting a collection would release a mapped
+                // buffer sooner, but a forced full GC on a JVM that is holding gigabytes -- and
+                // often still compositing a second pyramid on another thread -- costs more than the
+                // wait it saves. Backing off is enough: the longest observed lock was milliseconds.
                 try {
                     Thread.sleep(waitMs);
                 } catch (InterruptedException ie) {
