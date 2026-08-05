@@ -1705,6 +1705,18 @@ public class StageMapWindow {
                 Boolean.TRUE.equals(activePreset.getFlipMacroX()), Boolean.TRUE.equals(activePreset.getFlipMacroY())
             };
         }
+        // Falling through to no-flip is only correct when the scope genuinely has no optical flip.
+        // On a flip-needing scope it silently renders the macro mirrored against the camera, which
+        // looks exactly like a broken Camera View checkbox rather than a missing preset -- so say
+        // which of the two situations produced the (false, false).
+        logger.warn(
+                "Macro overlay: no macro flip resolved -- activePreset={}, hasFlipState={}. "
+                        + "The macro will render UNFLIPPED. If this scope has an optical flip "
+                        + "(any preset with flipMacroX/Y set), the macro will not match the camera; "
+                        + "pick the source scanner in the Stage Map Source dropdown, or re-save the "
+                        + "preset so it records both flipMacroX and flipMacroY.",
+                activePreset != null ? activePreset.getName() : "(none)",
+                activePreset != null && activePreset.hasFlipState());
         return new boolean[] {false, false};
     }
 
