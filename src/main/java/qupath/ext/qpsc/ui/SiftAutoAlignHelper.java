@@ -26,6 +26,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
@@ -132,20 +133,58 @@ public final class SiftAutoAlignHelper {
                 wsiRegion.getWidth(),
                 wsiRegion.getHeight());
 
-        ProjectImageEntry<?> entry = gui.getProject() != null && gui.getImageData() != null
+        ProjectImageEntry<BufferedImage> entry = gui.getProject() != null && gui.getImageData() != null
                 ? gui.getProject().getEntry(gui.getImageData())
                 : null;
-        boolean flipX = entry != null && ImageMetadataManager.isFlippedX(entry);
-        boolean flipY = entry != null && ImageMetadataManager.isFlippedY(entry);
 
+        // Flip to send to the server = the RESIDUAL flip still needed to bring the
+        // open entry's pixels into the live-camera orientation, NOT the flip that
+        // is already baked into them.
+        //
+        // FLIP_X/FLIP_Y on an entry record the flip already APPLIED to its pixels
+        // (createFlippedDuplicate wraps a TransformedServerBuilder), so on a flipped
+        // sibling the server already returns camera-oriented pixels. During manual
+        // alignment the open entry IS that sibling (validateAndFlipIfNeeded switched
+        // to it), so re-applying its FLIP term mirrors the WSI against the camera
+        // image -- and SIFT descriptors are not mirror-invariant, which is why OWS3
+        // saw 44k keypoints collapse to 5 inliers. The residual is:
+        //   required(base->camera, from preset) XOR alreadyApplied(entry pixels)
+        // For a correctly-built sibling required == applied, so the residual is
+        // (false,false) -- no server flip. For the unflipped base (entry-switch
+        // timed out) it is the full required flip. On a non-flipped scope both terms
+        // are (false,false), byte-identical to the previous behaviour.
+        boolean[] required =
+                entry != null ? ImageFlipHelper.resolveRequiredFlipFromPreset(entry) : new boolean[] {false, false};
+        boolean appliedX = entry != null && ImageMetadataManager.isFlippedX(entry);
+        boolean appliedY = entry != null && ImageMetadataManager.isFlippedY(entry);
+        boolean flipX = required[0] ^ appliedX;
+        boolean flipY = required[1] ^ appliedY;
+
+        boolean detectorFlipX = false;
+        boolean detectorFlipY = false;
         String siftDetectorId = entry != null ? ImageMetadataManager.getDetectorId(entry) : null;
         if (siftDetectorId != null) {
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
             if (mgr != null) {
-                flipX ^= mgr.getDetectorFlipX(siftDetectorId);
-                flipY ^= mgr.getDetectorFlipY(siftDetectorId);
+                detectorFlipX = mgr.getDetectorFlipX(siftDetectorId);
+                detectorFlipY = mgr.getDetectorFlipY(siftDetectorId);
+                flipX ^= detectorFlipX;
+                flipY ^= detectorFlipY;
             }
         }
+        // Four-term boolean chain -- log every term so a wrong flip can be traced to
+        // the responsible one instead of guessing which produced a True.
+        logger.info(
+                "SIFT flip resolve: requiredPreset=({}, {}) XOR alreadyApplied=({}, {}) XOR detector=({}, {}) "
+                        + "-> net sent to server=({}, {})",
+                required[0],
+                required[1],
+                appliedX,
+                appliedY,
+                detectorFlipX,
+                detectorFlipY,
+                flipX,
+                flipY);
 
         // (Re)draw the SIFT search range on the Stage Map (no-op if it isn't
         // open), centered on the current stage position. The box is left

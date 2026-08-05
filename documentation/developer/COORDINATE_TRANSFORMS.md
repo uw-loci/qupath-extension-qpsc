@@ -210,17 +210,21 @@ Therefore `StageMapWindow.resolveCurrentFlipAxes` returns **`StageImageTransform
 
 The prior OWS3 "Apply Flips" bug (2026-06-23) was the *polarity* half of this: polarity `(true, true)`, camera `NORMAL` → `stitcherFlipFlags()` = `(true, true)`, but the unflipped map already matched the Live Viewer (and the stitched acquisition, and the arrows were correct), so the correct Apply-Flips value was `(false, false)`. That fix swapped the base term from `stitcherFlipFlags()` to `cameraFlipFlags()`. On non-inverted scopes (polarity `false, false`) the two methods are identical, so only inverted-stage scopes changed behavior. Cross-scope macro overlays should be re-verified on scopes whose presets have `flipMacroX/Y = true` (e.g. PPM's `Ocus40` presets are `flipMacroX = flipMacroY = true`), since the macro overlay now receives its preset flip directly instead of via the canvas XOR.
 
+> **Derivation frame vs consumption frame (do not fold them together).** `flipMacroX/Y` is *derived* by agreement with the live camera (that is what the sibling reconciles), but the Stage Map *consumes* it by applying it to the macro image and letting the **separate** whole-canvas `cameraFlipFlags()` carry the result to the displayed frame. Those two readings coincide only because every current scope has an un-rotated camera (`cameraFlipFlags() = (false, false)`). On a scope whose Camera Orientation is not `NORMAL` they diverge, and the correct fix is to re-derive the macro flip and the camera flip **together** — **not** to fold `cameraFlipFlags()` into `resolveMacroPresetFlip()`, which would re-break OWS3 and PPM (both correct today precisely because the macro flip is kept out of the canvas mirror).
+
 **Ground truth to check any future change against (observed on the instruments, 2026-08-05).**
 
 | Scope | `cameraFlipFlags()` | preset `flipMacroX/Y` | What must match on screen |
 |---|---|---|---|
-| OWS3 | `(false, false)` | `(true, false)` | Stage View, Camera View, the live camera, and the `(flipped X)` Ocus40 image **all agree**. Confirmed working. |
+| OWS3 | `(false, false)` | `(true, false)` | The two app views, the live camera, and the `(flipped X)` Ocus40 macro all agree **with each other** (all camera-oriented) — the SIFT-relevant fact, and confirmed working. **But** the app's "Stage View" does **not** match the *physical* slide orientation on the stage: it is ~180deg off (reported 2026-08-05, see below). |
 | PPM | `(false, false)` | `(true, true)` | The live camera matches the `(flipped XY)` Ocus40 image, so the Stage Map macro must render flipped-XY in **both** views. |
 
 Two consequences worth stating because they read as bugs and are not:
 
 1. **The displayed macro is `flipMacro(raw)` in both views, on both scopes.** The canvas mirror is `cameraFlipFlags()`, which is `(false, false)` on both, so the checkbox does not change the macro's orientation on either. A Camera View toggle that appears inert is therefore expected on any scope whose camera is not rotated relative to its stage — it is *not* evidence that the flip is broken.
 2. **A macro that renders unflipped on a flip-needing scope means the preset did not resolve**, not that the flip math is wrong. `resolveMacroPresetFlip()` returns `(false, false)` when `activePreset` is null or lacks flip state (`hasFlipState()` requires **both** `flipMacroX` and `flipMacroY` to be non-null, so a half-populated legacy preset silently disables the flip). That case now logs a WARN naming the preset — check the log before touching sign math.
+
+**Open item — OWS3 "Stage View" is ~180deg from the physical slide (2026-08-05).** With `cameraFlipFlags() = (false, false)` the two app views are identical, and both are camera-oriented (Camera View correct). "Stage View" is *supposed* to show the slide as it physically sits on the stage, but because the OWS3 camera is mounted rotated relative to the stage and the Camera Orientation preference is `NORMAL`, the two views have nothing to differ by, so "Stage View" shows the camera orientation instead — ~180deg from physical. This is a **calibration** matter (Camera Orientation, coordinated with the preset), not a code regression, and it does **not** affect SIFT (which compares against the camera, and the sibling is already camera-oriented). Resolving it must not break the two-app-views-agree property above, which the SIFT path depends on.
 
 ### Per-slide JSON `flipMacroX/Y` — records the pixel frame each transform was saved in
 
@@ -288,25 +292,36 @@ There is no `stageInvertedZ` preference today, and the calibration tool does not
 
 ## SIFT Alignment with Per-Detector Flip
 
-When refining stage position via SIFT feature matching, the WSI region must be oriented to match the microscope's live view. The WSI region is read from the open project entry — post-Step-B that is the unflipped base, so the entry's `FLIP_X/FLIP_Y` metadata is `0/0` for new projects. The detector's optical flip still matters: if the camera mirrors the image, SIFT has to flip the WSI region the same way to make the features comparable. Hence the XOR (legacy projects with non-zero per-entry flip metadata also resolve correctly):
+When refining stage position via SIFT feature matching, the WSI region must be oriented to match the microscope's **live camera** view. SIFT descriptors are rotation-invariant but **not** mirror-invariant, so a wrong-parity flip (an odd number of axis mirrors) makes matching structurally impossible — abundant keypoints, near-zero inliers.
+
+The WSI region is read from **the currently open entry's** server (`SiftAutoAlignHelper.autoAlign`). The subtlety that bit OWS3 (2026-08-05): during manual alignment the open entry is the **flipped sibling**, not the unflipped base — `ImageFlipHelper.validateAndFlipIfNeeded` switched to it on purpose. An entry's `FLIP_X/FLIP_Y` metadata records the flip **already baked into its pixels** (`createFlippedDuplicate` wraps a `TransformedServerBuilder`), so the sibling's server already returns **camera-oriented** pixels. Therefore SIFT must send only the **residual** flip still needed to reach camera orientation — never the flip that is already applied:
 
 ```
-sift_flip_x = entry_flip_x XOR detector_flip_x
-sift_flip_y = entry_flip_y XOR detector_flip_y
+required  = preset flipMacroX/Y for (sourceScanner, activeMicroscope)   # base -> camera
+applied   = entry FLIP_X/FLIP_Y                                          # already in the pixels
+sift_flip = required XOR applied XOR detector_flip
 ```
+
+- **Open entry = flipped sibling** (the normal manual-alignment case): the sibling was built from `required`, so `applied == required` and `required XOR applied = (false, false)`. No server flip — correct, because the sibling pixels are already camera-oriented.
+- **Open entry = unflipped base** (the `awaitOpenEntry` timeout "proceeding anyway" path): `applied = (false, false)`, so `sift_flip = required` — the base is flipped up to camera orientation. Correct.
+- **Non-flipped scope**: `required = applied = detector = (false, false)` → `(false, false)`. Identical to earlier behaviour.
+
+The earlier formula `sift_flip = entry_flip XOR detector_flip` assumed the open entry was always the unflipped base (`FLIP = 0/0`). That assumption is false for **every** SIFT caller — all run downstream of `validateAndFlipIfNeeded` — so on a flipped scope it **re-applied** the flip already in the sibling's pixels, mirroring the WSI against the camera (OWS3: 44k keypoints → 5 inliers → FAILED). This is the same error class as the 2026-08-05 Stage Map fix, where the source preset's `flipMacroX` was double-counted into a canvas mirror that had already applied it.
+
+> **Second-order caveat.** The matched offset is applied directly as a stage delta with no `StageImageTransform` (camera-orientation / stage-polarity) composition. Before this fix SIFT never matched on flipped scopes, so that assumption was never exercised there. If a *high-confidence* match moves the stage the wrong direction on a flipped scope, that is a separate missing-composition bug, not a regression of the residual-flip fix.
 
 ```mermaid
 graph TB
-    subgraph "Example: Both flipped"
-        M1["Macro flip_x = true<br/>(WSI is displayed flipped)"]
-        D1["Detector flip_x = true<br/>(camera image is flipped)"]
-        R1["SIFT flip_x = true XOR true = false<br/>(no SIFT flip needed!)"]
+    subgraph "Flipped sibling open (normal manual-alignment case)"
+        A1["required (preset) = true"]
+        B1["applied (entry pixels) = true"]
+        R1["sift_flip = true XOR true = false<br/>(pixels already camera-oriented)"]
     end
 
-    subgraph "Example: Only macro flipped"
-        M2["Macro flip_x = true"]
-        D2["Detector flip_x = false"]
-        R2["SIFT flip_x = true XOR false = true<br/>(SIFT must flip WSI region)"]
+    subgraph "Unflipped base open (entry-switch timed out)"
+        A2["required (preset) = true"]
+        B2["applied (entry pixels) = false"]
+        R2["sift_flip = true XOR false = true<br/>(flip base up to camera)"]
     end
 ```
 
