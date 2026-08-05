@@ -138,27 +138,36 @@ public final class SiftAutoAlignHelper {
                 : null;
 
         // Flip to send to the server = the RESIDUAL flip still needed to bring the
-        // open entry's pixels into the live-camera orientation, NOT the flip that
-        // is already baked into them.
+        // open entry's pixels into the live-camera orientation.
         //
-        // FLIP_X/FLIP_Y on an entry record the flip already APPLIED to its pixels
-        // (createFlippedDuplicate wraps a TransformedServerBuilder), so on a flipped
-        // sibling the server already returns camera-oriented pixels. During manual
-        // alignment the open entry IS that sibling (validateAndFlipIfNeeded switched
-        // to it), so re-applying its FLIP term mirrors the WSI against the camera
-        // image -- and SIFT descriptors are not mirror-invariant, which is why OWS3
-        // saw 44k keypoints collapse to 5 inliers. The residual is:
-        //   required(base->camera, from preset) XOR alreadyApplied(entry pixels)
-        // For a correctly-built sibling required == applied, so the residual is
-        // (false,false) -- no server flip. For the unflipped base (entry-switch
-        // timed out) it is the full required flip. On a non-flipped scope both terms
-        // are (false,false), byte-identical to the previous behaviour.
-        boolean[] required =
-                entry != null ? ImageFlipHelper.resolveRequiredFlipFromPreset(entry) : new boolean[] {false, false};
+        // An entry's FLIP_X/FLIP_Y record the flip ALREADY baked into its pixels
+        // (createFlippedDuplicate wraps a TransformedServerBuilder). During manual
+        // alignment the open entry is the flipped SIBLING, created by applying
+        // exactly the base->camera flip -- so its pixels are ALREADY camera-oriented
+        // and the residual is ZERO. This holds even when the preset cannot be
+        // resolved (e.g. the sibling has no SOURCE_MICROSCOPE metadata): the
+        // sibling's own baked-in flip is authoritative, so we must NOT try to
+        // re-derive a "required" flip and XOR it back in. Doing so re-introduced the
+        // mirror on exactly that no-source case (OWS3 2026-08-05:
+        // 'MetroHealth_393.svs (flipped X)', no source -> preset unresolved -> net
+        // (true,false) -> 37k keypoints, 5 inliers -> FAILED, because SIFT
+        // descriptors are not mirror-invariant). Only the unflipped BASE needs the
+        // preset's base->camera flip.
         boolean appliedX = entry != null && ImageMetadataManager.isFlippedX(entry);
         boolean appliedY = entry != null && ImageMetadataManager.isFlippedY(entry);
-        boolean flipX = required[0] ^ appliedX;
-        boolean flipY = required[1] ^ appliedY;
+        boolean flipX;
+        boolean flipY;
+        if (appliedX || appliedY) {
+            // Flipped sibling: pixels are already camera-oriented -- no residual flip.
+            flipX = false;
+            flipY = false;
+        } else {
+            // Unflipped base: send the preset's base->camera flip (if the scope needs one).
+            boolean[] required =
+                    entry != null ? ImageFlipHelper.resolveRequiredFlipFromPreset(entry) : new boolean[] {false, false};
+            flipX = required[0];
+            flipY = required[1];
+        }
 
         boolean detectorFlipX = false;
         boolean detectorFlipY = false;
@@ -172,13 +181,9 @@ public final class SiftAutoAlignHelper {
                 flipY ^= detectorFlipY;
             }
         }
-        // Four-term boolean chain -- log every term so a wrong flip can be traced to
-        // the responsible one instead of guessing which produced a True.
         logger.info(
-                "SIFT flip resolve: requiredPreset=({}, {}) XOR alreadyApplied=({}, {}) XOR detector=({}, {}) "
-                        + "-> net sent to server=({}, {})",
-                required[0],
-                required[1],
+                "SIFT flip resolve: entryAlreadyFlipped=({}, {}) (residual 0 for a flipped sibling), "
+                        + "detector=({}, {}) -> net sent to server=({}, {})",
                 appliedX,
                 appliedY,
                 detectorFlipX,
