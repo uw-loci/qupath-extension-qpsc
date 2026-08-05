@@ -3,6 +3,7 @@ package qupath.ext.qpsc.controller.workflow;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.ExecutorService;
@@ -10,6 +11,7 @@ import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.TileRegistrationSupport;
 
@@ -107,66 +109,129 @@ public final class StitchingRegistration {
      * Stitch a set of sibling targets (angle/channel subdirs) that share one grid, applying the
      * registration barrier when enabled and a plain bounded-parallel stitch otherwise.
      *
-     * @param targets the sibling targets in order; the first is the registration reference
+     * @param targets the sibling targets in order
      * @param tileBaseDir directory the shared solution file is written to / read from
      * @param maxConcurrency cap on parallel writers for the non-reference targets
+     * @param referenceIndex index into {@code targets} of the one to SOLVE on; every other target
+     *     reuses that solve. Out-of-range values fall back to 0. Use
+     *     {@link #referenceIndexFor(List, ModalityHandler)} to derive it.
      * @param stitcher builds and runs the stitch for one target with the mode this method supplies
      * @param <X> the caller's target type (e.g. a subdir name or a directory)
      * @return each target's output path (null where a target failed), in input order
      */
     public static <X> List<String> stitchTargets(
-            List<X> targets, Path tileBaseDir, int maxConcurrency, TargetStitcher<X> stitcher) {
+            List<X> targets, Path tileBaseDir, int maxConcurrency, int referenceIndex, TargetStitcher<X> stitcher) {
         int total = targets.size();
-        List<String> results = new ArrayList<>(total);
+        // Results are filled BY INDEX, not appended: the reference is no longer necessarily the
+        // first target, and callers that pair targets with outputs positionally (channel
+        // split/merge) would otherwise silently mis-associate them.
+        List<String> results = new ArrayList<>(Collections.nCopies(total, null));
         if (total == 0) {
             return results;
         }
 
-        List<X> remaining = targets;
+        int reference = (referenceIndex >= 0 && referenceIndex < total) ? referenceIndex : 0;
+        List<Integer> remaining = new ArrayList<>(total);
         Object applyMode = null;
         if (enabled()) {
             Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
             logger.info(
-                    "Tile registration enabled: solving on the first of {} target(s), then reusing that solve", total);
-            results.add(runOne(stitcher, targets.get(0), TileRegistrationSupport.solveMode(solutionFile), 1, total));
+                    "Tile registration enabled: solving on target {} of {} ('{}'), then reusing that solve",
+                    reference + 1,
+                    total,
+                    targets.get(reference));
+            results.set(
+                    reference,
+                    runOne(
+                            stitcher,
+                            targets.get(reference),
+                            TileRegistrationSupport.solveMode(solutionFile),
+                            1,
+                            total));
             // If the solve failed the solution file will be absent; the remaining targets then warn
             // and stitch at nominal, which still leaves every target mutually consistent (none moved).
             applyMode = TileRegistrationSupport.applyMode(solutionFile);
-            remaining = targets.subList(1, total);
+            for (int i = 0; i < total; i++) {
+                if (i != reference) {
+                    remaining.add(i);
+                }
+            }
+        } else {
+            for (int i = 0; i < total; i++) {
+                remaining.add(i);
+            }
         }
         if (remaining.isEmpty()) {
             return results;
         }
 
         int concurrency = Math.max(1, Math.min(remaining.size(), maxConcurrency));
-        int offset = results.size();
+        int offset = total - remaining.size();
         final Object mode = applyMode;
-        final List<X> batch = remaining;
         ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
             Thread t = new Thread(r, "stitch-target");
             t.setDaemon(true);
             return t;
         });
         try {
-            List<CompletableFuture<String>> futures = new ArrayList<>(batch.size());
-            for (int i = 0; i < batch.size(); i++) {
-                X target = batch.get(i);
+            List<CompletableFuture<String>> futures = new ArrayList<>(remaining.size());
+            for (int i = 0; i < remaining.size(); i++) {
+                X target = targets.get(remaining.get(i));
                 int position = offset + i + 1;
                 futures.add(CompletableFuture.supplyAsync(() -> runOne(stitcher, target, mode, position, total), pool));
             }
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-            for (CompletableFuture<String> f : futures) {
+            for (int i = 0; i < futures.size(); i++) {
                 try {
-                    results.add(f.get());
+                    results.set(remaining.get(i), futures.get(i).get());
                 } catch (Exception e) {
                     logger.error("Failed to retrieve a stitch result: {}", e.getMessage());
-                    results.add(null);
+                    results.set(remaining.get(i), null);
                 }
             }
             return results;
         } finally {
             pool.shutdown();
         }
+    }
+
+    /**
+     * Asks the modality which sibling target registration should be solved on, falling back to the
+     * first when it has no preference.
+     *
+     * <p>Centralised here rather than at each call site so every stitch path -- acquisition,
+     * recovery, MicroManager folder -- makes the same choice, for the same reason the barrier
+     * itself lives here.
+     *
+     * @param targetNames sibling target names in the same order as the targets being stitched
+     * @param handler the active modality handler, may be null
+     * @return index into {@code targetNames}, always in range
+     */
+    public static int referenceIndexFor(List<String> targetNames, ModalityHandler handler) {
+        if (targetNames == null || targetNames.isEmpty()) {
+            return 0;
+        }
+        if (handler != null) {
+            java.util.OptionalInt preferred = handler.registrationReferenceIndex(targetNames);
+            if (preferred.isPresent()) {
+                int index = preferred.getAsInt();
+                if (index >= 0 && index < targetNames.size()) {
+                    logger.info(
+                            "Registration reference: '{}' selected by {}",
+                            targetNames.get(index),
+                            handler.getClass().getSimpleName());
+                    return index;
+                }
+                logger.warn(
+                        "{} asked to solve on out-of-range target index {} of {}; using the first instead",
+                        handler.getClass().getSimpleName(),
+                        index,
+                        targetNames.size());
+            }
+        }
+        logger.info(
+                "Registration reference: '{}' (first target; modality expressed no preference)", targetNames.get(0));
+        return 0;
     }
 
     /** Run one target's stitch, turning any failure into a null result so siblings still complete. */

@@ -125,6 +125,12 @@ dependencies {
     testImplementation("org.openjfx:javafx-graphics:$javafxVersion")
     testImplementation("org.openjfx:javafx-controls:$javafxVersion")
     testImplementation("org.mockito:mockito-core:5.21.0")
+    // Bioformats is compileOnly for main (QuPath provides it at runtime, and pulling the OME
+    // transitives into the build was worth avoiding). Tests that touch the stitching gate load
+    // OMEPyramidWriter$CompressionType through the compression preference, so they need it on the
+    // test runtime classpath specifically -- testRuntimeOnly keeps it out of test compilation and
+    // out of the shipped jar.
+    testRuntimeOnly("io.github.qupath:qupath-extension-bioformats:0.7.0")
     testImplementation("org.mockito:mockito-junit-jupiter:5.21.0")
 }
 

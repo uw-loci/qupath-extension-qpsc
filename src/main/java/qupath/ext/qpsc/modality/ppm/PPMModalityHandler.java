@@ -69,6 +69,52 @@ public class PPMModalityHandler implements ModalityHandler {
     }
 
     /**
+     * Solve tile registration on the 90-degree angle whenever it was acquired.
+     *
+     * <p>The crossed angles sit near extinction: dark, low-contrast images of tissue that is
+     * perfectly well textured. Registration correlates overlap content, so solving there measures
+     * the polariser setting as much as the tissue and yields low-confidence or rejected edges on
+     * material that would match easily at 90 degrees. The size of the effect is measurable rather
+     * than theoretical -- on the 2026-08-05 whole-slide run the identical 2175 tiles wrote 6 GB
+     * losslessly at 7 degrees against 10.5 GB at 90 degrees.
+     *
+     * <p>{@link #classifyAngleSaturation} already encodes "near 90 is the high-signal angle"; this
+     * reuses that definition rather than introducing a second one.
+     *
+     * <p>Returning empty when no 90-degree angle was acquired is deliberate: among crossed angles
+     * only there is no principled winner, so the caller keeps its first-target default.
+     */
+    @Override
+    public java.util.OptionalInt registrationReferenceIndex(List<String> targetNames) {
+        if (targetNames == null) {
+            return java.util.OptionalInt.empty();
+        }
+        for (int i = 0; i < targetNames.size(); i++) {
+            Double angle = parseAngle(targetNames.get(i));
+            if (angle != null && classifyAngleSaturation(angle) == SaturationRole.SIGNAL_HIGH) {
+                return java.util.OptionalInt.of(i);
+            }
+        }
+        return java.util.OptionalInt.empty();
+    }
+
+    /**
+     * Reads the rotation angle out of a target name such as {@code "90.0"}, {@code "-7.0"} or a
+     * directory named after one. Returns null when the name is not an angle at all, which is normal
+     * -- channel-split targets and post-processing directories flow through the same list.
+     */
+    private static Double parseAngle(String targetName) {
+        if (targetName == null) {
+            return null;
+        }
+        try {
+            return Double.valueOf(targetName.trim());
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
      * PPM treats the JAI's R/G/B as three filtered views of the same field;
      * the user does not care which channel saturated, only that any did.
      * Aggregating into a single worst-channel column matches that mental

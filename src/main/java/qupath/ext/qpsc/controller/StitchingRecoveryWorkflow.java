@@ -528,8 +528,17 @@ public class StitchingRecoveryWorkflow {
         // shares. Routing recovery through it means a re-stitch applies the SAME content-based
         // registration the acquisition did (when the preference is on), instead of silently dropping
         // to nominal positions.
+        // Which angle to solve on is the modality's call, not "whichever directory listed first" --
+        // on PPM the crossed angles are near extinction and make well-textured tissue look
+        // featureless to the matcher.
+        java.util.List<String> angleNames =
+                angleDirs.stream().map(java.io.File::getName).toList();
         java.util.List<String> stitchedPaths = StitchingRegistration.stitchTargets(
-                angleDirs, tileFolderFile.toPath(), threadCount, (angleDir, registrationMode, angleNum, total) -> {
+                angleDirs,
+                tileFolderFile.toPath(),
+                threadCount,
+                StitchingRegistration.referenceIndexFor(angleNames, modalityHandler),
+                (angleDir, registrationMode, angleNum, total) -> {
                     final String angleName = angleDir.getName();
                     final boolean isRootDir = angleDir.equals(tileFolderFile);
                     logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);

@@ -413,6 +413,7 @@ public class StitchingHelper {
                 targetSubdirs,
                 tileBaseDir,
                 QPPreferenceDialog.getStitchingConcurrency(),
+                StitchingRegistration.referenceIndexFor(targetSubdirs, handler),
                 (sub, mode, position, count) -> stitchOne(
                         sub,
                         targetKind,

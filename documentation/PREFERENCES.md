@@ -690,7 +690,7 @@ Maximum number of angles (PPM) or channels (fluorescence) stitched **simultaneou
 
 Applies to both OME-TIFF and OME-ZARR output. The default of 4 is a balance that speeds up the common 4-angle PPM and ~4-channel IF cases while keeping peak memory bounded.
 
-Note: when **Register tiles on image content** is enabled, the first angle/channel of each annotation is stitched on its own regardless of this setting, because it has to solve the tile positions before the others can reuse the result. The remaining angles/channels then stitch concurrently up to this limit.
+Note: when **Register tiles on image content** is enabled, one angle/channel of each annotation is stitched on its own to solve the tile positions before the others reuse that result. The remaining angles/channels then stitch concurrently up to this limit. On PPM the solve runs on the 90-degree (open) angle; on other modalities, the first target is used.
 
 ---
 
@@ -709,7 +709,9 @@ Stage coordinates are *nominal*. Real stages have backlash, finite encoder resol
 
 **Requires a non-zero [Tile Overlap Percent](#tile-overlap-percent).** Tiles placed edge to edge share no content, so there is nothing to match: registration will warn and change nothing. Around 10% is a good starting point. (A 0% overlap is also the most common cause of visible seams in the first place, so setting an overlap is worth doing regardless.)
 
-**It is slower.** The first angle/channel of each annotation is stitched on its own to solve the tile positions; the rest then reuse that solve and are quick. Expect the first target of each annotation to take noticeably longer.
+**It is slower.** One angle/channel of each annotation is stitched on its own to solve the tile positions; the rest then reuse that solve and are quick. Expect the registration-solving target to take noticeably longer than the others.
+
+**Which target is solved on matters.** Registration matches the *image* content in each overlap, so it is only as good as the contrast in that image -- and sibling angles of the very same tissue can differ enormously. PPM's crossed angles sit near extinction: dark and low-contrast pictures of tissue that is perfectly well textured. QPSC therefore solves on the **90-degree (open) angle** whenever it was acquired, and falls back to the first target otherwise. Fluorescence currently uses the first channel; a better rule there is likely per-overlap rather than per-channel, since different channels carry the structure in different places.
 
 **All angles/channels receive the same correction.** PPM angles and fluorescence channels are captured at the same stage position for a given tile, so they are solved once and share the result. That keeps them registered to each other -- solving each independently would misalign the channels of a single field, which is worse than leaving everything on the nominal grid. Derived `.biref` / `.sum` outputs get the same correction.
 

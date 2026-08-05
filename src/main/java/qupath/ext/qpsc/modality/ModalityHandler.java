@@ -424,6 +424,37 @@ public interface ModalityHandler {
     }
 
     /**
+     * Chooses which of a set of sibling targets (angles, or channels) content-based tile
+     * registration should be SOLVED on. Every other target then reuses that solve, so this picks
+     * the one image whose content decides where all of them are placed.
+     *
+     * <p>It matters more than it looks. Registration correlates the overlap between neighbouring
+     * tiles, so it can only work as well as the contrast in that overlap -- and sibling targets of
+     * the same tiles can differ enormously in contrast. On a PPM acquisition the near-extinction
+     * angles are dark and low-contrast while the open one is bright and detailed; measured on a
+     * 2026-08-05 whole-slide run, the same 2175 tiles compressed losslessly to 6 GB at 7 degrees
+     * and 10.5 GB at 90 degrees, i.e. the open angle carries roughly 75% more information for
+     * exactly the same tissue. Solving on the dark angle throws that away and produces
+     * low-confidence or rejected edges on tissue that is not remotely featureless.
+     *
+     * <p>The default returns empty, meaning "no preference" -- the caller falls back to the first
+     * target, which is the historical behaviour and is correct for single-target modalities.
+     *
+     * <p>Not yet implemented for fluorescence, where the right choice is likely per-edge rather
+     * than per-target: different channels carry the structure in different places, so a sum
+     * projection across channels, or picking the most informative channel for each overlap band
+     * individually, would beat any single fixed channel. Until that exists, fluorescence falls
+     * through to the default and solves on the first channel.
+     *
+     * @param targetNames the sibling target names, in order (e.g. angle names {@code "7.0"},
+     *     {@code "-7.0"}, {@code "90.0"}, or channel names)
+     * @return index into {@code targetNames} of the target to solve on, or empty for no preference
+     */
+    default java.util.OptionalInt registrationReferenceIndex(List<String> targetNames) {
+        return java.util.OptionalInt.empty();
+    }
+
+    /**
      * Allows the modality to configure its own processing pipeline flags on
      * the command builder.
      *
