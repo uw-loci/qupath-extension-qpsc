@@ -1051,22 +1051,36 @@ If `base_gain` is set higher than 4.0, the R/B channels are clamped to 4.0x whil
 - System will warn you if exposures don't match
 - Use the same exposure times you plan to use for your samples
 
-#### Q: Acquisition Wizard shows an orange "Background lamp ... != profile ..." warning
+#### Q: Background / Acquisition Settings Mismatch warning dialog appears during acquisition
 
-**A:** The background images were collected at a lamp (illumination) intensity
-that no longer matches the active acquisition profile's `illumination_intensity`.
-Flat-field division would then correct for the wrong illumination level.
+**A:** Flat-field background correction divides each tile by a reference image 
+captured at known settings. When acquisition settings differ from those recorded 
+in the background, the correction is applied against the wrong reference, 
+causing intensity/vignetting seams in tiles.
 
-This is a **non-blocking warning** -- the Background step turns orange and the
-pre-acquisition confirmation lists it, but you can still proceed. To clear it:
+The warning can be triggered by:
+
+1. **Illumination intensity mismatch (brightfield/lamp-based only):** The lamp 
+   intensity at background collection no longer matches the active acquisition 
+   profile's `illumination_intensity` setting.
+
+2. **Exposure mismatch (brightfield + PPM, angle-based):** Per-angle exposures 
+   differ from those recorded when the background was collected. Common causes:
+   - Overriding an angle's exposure in the acquisition dialog
+   - Selecting an angle that has no background reference
+   
+   (Fluorescence per-channel exposures are not covered by this check.)
+
+This is a **non-blocking warning** -- you can click "Proceed anyway" to continue 
+acquisition, but flat-field correction will not be valid. Recommended solution:
 - Re-collect backgrounds (Extensions > QPSC > Utilities > Image Quality > Background Collection)
-  with the current profile selected, **or**
-- Restore the profile's `illumination_intensity` to the value the backgrounds
-  were collected at.
+  at the current acquisition settings, **or**
+- Revert the acquisition setting (profile, exposure, lamp intensity) to match 
+  the background collection settings.
 
 Lamp intensity is sourced from the acquisition profile and is shown read-only in
-the Background Collection dialog. Scopes with no adjustable lamp (e.g. PPM) never
-show this warning -- there is nothing to be inconsistent.
+the Background Collection dialog. PPM and non-lamp scopes do not show illumination
+intensity warnings but will still warn on exposure mismatches.
 
 #### Q: Fluorescence Background step says "Missing backgrounds for channel(s): ..."
 

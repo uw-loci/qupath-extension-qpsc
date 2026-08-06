@@ -348,7 +348,8 @@ public class BoundedAcquisitionWorkflow {
                                     result.objective(),
                                     result.detector(),
                                     result.wbMode(),
-                                    bgBaseFolder);
+                                    bgBaseFolder,
+                                    angleExposures);
                             if (!proceed) {
                                 logger.warn("Acquisition cancelled by user after background/profile "
                                         + "illumination mismatch warning");

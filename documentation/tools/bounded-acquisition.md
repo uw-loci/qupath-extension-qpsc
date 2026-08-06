@@ -80,7 +80,7 @@ When using a brightfield modality, an exposure panel appears showing:
 - **Resolution rule:** How the exposure is determined at acquisition time (background-collection exposure when background correction is on and calibrated; otherwise the last unified exposure)
 - **Override exposure (ms):** An optional field to pin a specific camera exposure for this run, bypassing the resolved value. Use this to correct an over-exposed ("blinding") acquisition without leaving the dialog.
 
-⚠️ **Warning:** Overriding the exposure bypasses the saved background/flat-field profile. The background reference was captured at the calibrated exposure, so it no longer matches the override value. Background correction will not be valid for this run—re-run Background Collection at the new exposure if you need flat-field correction.
+⚠️ **Active warning dialog:** When acquisition starts, if the exposures differ from what the background was collected at, a confirmation dialog appears showing the mismatch. This is **non-blocking** — you can click "Proceed anyway" to continue, but flat-field correction will be applied against the wrong reference and tiles may show intensity/vignetting seams. Recommended: re-run Background Collection at the new exposure if you need proper flat-field correction.
 
 **PPM Angle Selection & Exposure:**
 

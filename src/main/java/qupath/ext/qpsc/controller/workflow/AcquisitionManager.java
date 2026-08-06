@@ -498,7 +498,7 @@ public class AcquisitionManager {
             }
             String bgBaseFolder = cfg.getBackgroundCorrectionFolder(modality);
             boolean proceed = BackgroundIlluminationCheck.checkAndWarn(
-                    cfg, modality, objective, detector, state.wbMode, bgBaseFolder);
+                    cfg, modality, objective, detector, state.wbMode, bgBaseFolder, angleExposures);
             if (!proceed) {
                 logger.warn("Acquisition cancelled by user after background/profile illumination mismatch warning");
                 return null;
