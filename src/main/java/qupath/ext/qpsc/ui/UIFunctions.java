@@ -1364,15 +1364,18 @@ public class UIFunctions {
      * <p>Uses {@code showAndWait} so existing blocking call sites can
      * migrate with a minimal diff.
      *
-     * @param alert  the alert to display (already configured with title,
-     *               header, content, buttons)
+     * @param alert  the alert or dialog to display (already configured with
+     *               title, header, content, buttons). Typed as {@link Dialog}
+     *               rather than {@link Alert} so custom-content dialogs (e.g.
+     *               the EDF settings pane) get the same co-floating behaviour
+     *               instead of growing a second copy of it
      * @param parent the parent window (typically the always-on-top stage);
      *               may be null, in which case no owner is set but
      *               always-on-top is still applied
      * @return the user's chosen button, or empty if the alert was closed
      *         without a selection
      */
-    public static Optional<ButtonType> showAlertOverParent(Alert alert, Window parent) {
+    public static Optional<ButtonType> showAlertOverParent(Dialog<ButtonType> alert, Window parent) {
         if (parent != null) {
             alert.initOwner(parent);
         }

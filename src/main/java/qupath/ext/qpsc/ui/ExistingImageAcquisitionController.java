@@ -1085,6 +1085,25 @@ public class ExistingImageAcquisitionController {
                     + "Choose \"None\" to preserve the full Z-stack (and time series, if any) as a single "
                     + "multi-dimensional stitched image instead of projecting to 2D."));
 
+            // EDF is the only projection with settings, so the button appears
+            // beside the dropdown and enables only for it -- the alternative was
+            // three more controls on a dialog that is already dense, permanently
+            // greyed out for everyone using max intensity.
+            Button edfSettingsButton = new Button("EDF settings...");
+            edfSettingsButton.setTooltip(
+                    new Tooltip("Sharpness metric, averaging window and focal-surface smoothing for the "
+                            + "Extended Depth of Field projection. Only available when that projection "
+                            + "is selected; the others have nothing to tune."));
+            edfSettingsButton.setOnAction(e -> EdfSettingsDialog.show(
+                    edfSettingsButton.getScene() == null
+                            ? null
+                            : edfSettingsButton.getScene().getWindow()));
+            Runnable syncEdfButton = () -> edfSettingsButton.setDisable(
+                    !"Extended Depth of Field".equals(projectionCombo.getValue()) || projectionCombo.isDisabled());
+            projectionCombo.valueProperty().addListener((obs, o, n) -> syncEdfButton.run());
+            projectionCombo.disabledProperty().addListener((obs, o, n) -> syncEdfButton.run());
+            syncEdfButton.run();
+
             Label infoLabel = new Label();
             infoLabel.setStyle("-fx-font-style: italic; -fx-font-size: 11;");
 
@@ -1138,6 +1157,7 @@ public class ExistingImageAcquisitionController {
             grid.add(stepSpinner, 1, 1);
             grid.add(new Label("Projection:"), 0, 2);
             grid.add(projectionCombo, 1, 2);
+            grid.add(edfSettingsButton, 2, 2);
             grid.add(infoLabel, 0, 3, 2, 1);
             grid.add(new Label("Stitched output:"), 0, 4);
             grid.add(outputOrganizationCombo, 1, 4);

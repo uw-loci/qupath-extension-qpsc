@@ -35,6 +35,9 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Stitching output format](#stitching-output-format) | Choice | OME_TIFF | Output format for stitched images |
 | [Stitching concurrency](#stitching-concurrency) | Integer | 4 | Max angles/channels stitched at once per annotation |
 | [Register tiles on image content](#register-tiles-on-image-content) | Boolean | false | Correct tile positions by matching overlap content instead of trusting the stage |
+| [EDF Sharpness Metric](#edf-sharpness-metric) | Enum | tenengrad | EDF sharpness measurement method. **Not in the Preferences pane** -- edited via the "EDF settings..." button in the acquisition dialog |
+| [EDF Averaging Window](#edf-averaging-window) | Integer | 9 | EDF local averaging window, in pixels. **Dialog only**, as above |
+| [EDF Focal-Surface Smoothing](#edf-focal-surface-smoothing) | Integer | 5 | EDF median-filter size for the plane-selection map; 0 disables. **Dialog only**, as above |
 | [Microscope Server Host](#microscope-server-host) | String | 127.0.0.1 | Server IP address |
 | [Microscope Server Port](#microscope-server-port) | Integer | 5000 | Server port number |
 | [Auto-connect to Server](#auto-connect-to-server) | Boolean | ON | Connect on QuPath startup |
@@ -539,6 +542,71 @@ Settings that control image acquisition and stitching behavior.
 ### Z-Stack Options
 
 Z-stack settings (enable, range, step, projection) are configured per-acquisition in the acquisition dialog under **Z-STACK OPTIONS**. These settings persist between sessions. See [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) for details.
+
+---
+
+## Extended Depth of Field (EDF)
+
+Settings that control Extended Depth of Field (EDF) Z-stack projection. EDF is used only when the Z-Stack Projection is set to **"Extended Depth of Field"** in an acquisition dialog. EDF parameters are exposed through an **"EDF settings..."** button next to the projection dropdown in the Bounded Acquisition and Existing Image Acquisition dialogs.
+
+### EDF Sharpness Metric
+
+| Property | Value |
+|----------|-------|
+| Type | Enum (choice) |
+| Default | tenengrad |
+| Values | "tenengrad", "modified_laplacian", "variance" |
+| Requires Restart | No |
+
+**Description:**
+Method used to measure sharpness at each pixel to select which Z-plane is sharpest for that pixel.
+
+| Metric | When to use | Trade-offs |
+|--------|-------------|-----------|
+| **tenengrad** (default) | Most use cases, especially stained tissue | Gradient strength; matches the autofocus metric of the same name, so fused output agrees with what autofocus was optimizing. Good default for H&E and other histology. |
+| **modified_laplacian** | Fibres, filaments, elongated structures | Second differences per axis; peaks more sharply in Z than tenengrad. More sensitive to noise; good when the sample has elongated features and you want crisp selection. |
+| **variance** | Noisy samples or high-bit-depth data | Local contrast; cheapest to compute and most forgiving of camera noise. Responds to any blob regardless of edge sharpness; try this when the others chase noise. |
+
+---
+
+### EDF Averaging Window
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 9 |
+| Range | 1-99 (pixels) |
+| Requires Restart | No |
+
+**Description:**
+Size of the local averaging window applied to the sharpness measurement before plane selection. Raw per-pixel sharpness is too noisy to choose a plane from, so it is smoothed over this window. **This is the most impactful setting.**
+
+**When to adjust** — judge from the output, not from a table:
+- **Fused output looks blocky or speckled**, with flat areas stitched from several planes at random: the window is too small. Raise it.
+- **Boundaries between in-focus regions look smeared:** the window is too large. Lower it.
+- **It scales with pixel size.** The window is in pixels, so covering the same physical area takes *more* pixels at a finer pixel size. Halving the pixel size roughly doubles the window you want.
+
+The default 9 was chosen for roughly 0.65 µm/px. No sweep has been run against real stacks at any magnification, so there are deliberately no per-objective recommendations here — measure on your own sample rather than trusting a number someone guessed.
+
+---
+
+### EDF Focal-Surface Smoothing
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 5 |
+| Range | 0-99 (pixels) |
+| Requires Restart | No |
+
+**Description:**
+Size of the median filter applied to the map of which Z-plane each pixel chose. Filters out pixels that picked an odd plane for no physical reason. Set to 0 to disable smoothing.
+
+**When to adjust** — the question is whether the sample's focal surface is *smooth*, not whether it is tilted:
+- **Raise it** for a smooth focal surface, including a tilted but flat sample. A tilt is still a plane, so heavier smoothing is safe and removes spurious plane-selection noise.
+- **Lower it, or set 0,** where focus genuinely *steps* — a fold, a torn section, a detached region. A large median bridges the step and picks a plane that is in focus on neither side of it.
+
+Tilt alone is not a reason to lower this. Like the window, the default has not been swept against real stacks.
 
 ---
 

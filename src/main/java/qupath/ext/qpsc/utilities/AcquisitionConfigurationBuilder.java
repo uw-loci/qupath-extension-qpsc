@@ -338,7 +338,25 @@ public class AcquisitionConfigurationBuilder {
                         default -> "max";
                     };
             acquisitionBuilder.zProjection(code);
-            logger.info("Z-stack enabled: range=+/-{} um, step={} um, projection={}", halfRange, step, code);
+            if ("edf".equals(code)) {
+                // Only EDF has tuning; the builder drops these for any other
+                // projection, so passing them unconditionally would be harmless
+                // but misleading in the log.
+                acquisitionBuilder.edfSettings(
+                        PersistentPreferences.getEdfMetric(),
+                        PersistentPreferences.getEdfWindow(),
+                        PersistentPreferences.getEdfIndexSmooth());
+                logger.info(
+                        "Z-stack enabled: range=+/-{} um, step={} um, projection=edf "
+                                + "(metric={}, window={}, indexSmooth={})",
+                        halfRange,
+                        step,
+                        PersistentPreferences.getEdfMetric(),
+                        PersistentPreferences.getEdfWindow(),
+                        PersistentPreferences.getEdfIndexSmooth());
+            } else {
+                logger.info("Z-stack enabled: range=+/-{} um, step={} um, projection={}", halfRange, step, code);
+            }
         }
 
         // Time-lapse configuration from persistent preferences

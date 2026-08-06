@@ -106,7 +106,15 @@ public class AcquisitionCommandBuilder {
     private Double zEnd;
     private Double zStep;
     private Double zPixelSize; // Z pixel size in um (for OME-TIFF metadata)
-    private String zProjection; // Projection type: "max", "min", "sum", "mean", "std"
+    private String zProjection; // Projection type: "max", "min", "sum", "mean", "std", "edf"
+
+    // Extended-depth-of-field tuning. Only meaningful when zProjection is
+    // "edf"; every other projection has nothing to tune. Null = omit the flag
+    // and take the server-side default, which keeps command lines
+    // byte-identical for callers that never touch EDF.
+    private String edfMetric = null;
+    private Integer edfWindow = null;
+    private Integer edfIndexSmooth = null;
 
     // Loop-order toggle for the per-tile snap loop. Null = omit the flag and
     // let the server fall back to its per-modality default (z-inner for
@@ -430,7 +438,23 @@ public class AcquisitionCommandBuilder {
         return this;
     }
 
-    /** Set Z-stack projection type ("max", "min", "sum", "mean", "std"). Default: "max". */
+    /**
+     * Set the extended-depth-of-field tuning, used only when the projection is
+     * {@code "edf"}. Any argument may be null to leave that setting at the
+     * server default.
+     *
+     * @param metric sharpness map: "tenengrad", "modified_laplacian" or "variance"
+     * @param window local averaging window for the sharpness map, in pixels
+     * @param indexSmooth median-filter size for the chosen-plane map; 0 disables
+     */
+    public AcquisitionCommandBuilder edfSettings(String metric, Integer window, Integer indexSmooth) {
+        this.edfMetric = metric;
+        this.edfWindow = window;
+        this.edfIndexSmooth = indexSmooth;
+        return this;
+    }
+
+    /** Set Z-stack projection type ("max", "min", "sum", "mean", "std", "edf"). Default: "max". */
     public AcquisitionCommandBuilder zProjection(String projection) {
         this.zProjection = projection;
         return this;
@@ -860,6 +884,20 @@ public class AcquisitionCommandBuilder {
         }
         if (zStackEnabled && zProjection != null && !zProjection.isEmpty()) {
             args.addAll(Arrays.asList("--z-projection", zProjection));
+            // EDF tuning rides along only with EDF. Emitting it for other
+            // projections would be noise the server ignores, and would break
+            // the byte-identical guarantee for unrelated callers.
+            if ("edf".equals(zProjection)) {
+                if (edfMetric != null && !edfMetric.isEmpty()) {
+                    args.addAll(Arrays.asList("--edf-metric", edfMetric));
+                }
+                if (edfWindow != null) {
+                    args.addAll(Arrays.asList("--edf-window", String.valueOf(edfWindow)));
+                }
+                if (edfIndexSmooth != null) {
+                    args.addAll(Arrays.asList("--edf-index-smooth", String.valueOf(edfIndexSmooth)));
+                }
+            }
         }
         // Loop-order toggle: only emit when explicitly set. Omission keeps
         // wire-format byte-identical with pre-toggle builds for callers that

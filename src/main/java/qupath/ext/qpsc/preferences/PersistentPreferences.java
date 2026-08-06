@@ -1811,6 +1811,17 @@ public class PersistentPreferences {
     private static final StringProperty zStackProjectionProperty =
             PathPrefs.createPersistentPreference("qpscZStackProjection", "Max Intensity");
 
+    // Extended-depth-of-field tuning, edited through the "EDF settings..."
+    // button beside the projection dropdown. Defaults mirror the Python
+    // library's, which are reasoned starting points rather than measured
+    // optima -- the right window scales with pixel size and camera noise,
+    // which is exactly why they are exposed rather than fixed.
+    private static final StringProperty edfMetricProperty =
+            PathPrefs.createPersistentPreference("qpscEdfMetric", "tenengrad");
+    private static final IntegerProperty edfWindowProperty = PathPrefs.createPersistentPreference("qpscEdfWindow", 9);
+    private static final IntegerProperty edfIndexSmoothProperty =
+            PathPrefs.createPersistentPreference("qpscEdfIndexSmooth", 5);
+
     public static boolean isZStackEnabled() {
         return zStackEnabledProperty.get();
     }
@@ -1841,6 +1852,33 @@ public class PersistentPreferences {
 
     public static void setZStackProjection(String v) {
         zStackProjectionProperty.set(v);
+    }
+
+    /** EDF sharpness map: "tenengrad", "modified_laplacian" or "variance". */
+    public static String getEdfMetric() {
+        return edfMetricProperty.get();
+    }
+
+    public static void setEdfMetric(String v) {
+        edfMetricProperty.set(v);
+    }
+
+    /** EDF local averaging window for the sharpness map, in pixels. */
+    public static int getEdfWindow() {
+        return edfWindowProperty.get();
+    }
+
+    public static void setEdfWindow(int v) {
+        edfWindowProperty.set(v);
+    }
+
+    /** EDF median-filter size for the chosen-plane map; 0 disables smoothing. */
+    public static int getEdfIndexSmooth() {
+        return edfIndexSmoothProperty.get();
+    }
+
+    public static void setEdfIndexSmooth(int v) {
+        edfIndexSmoothProperty.set(v);
     }
 
     // --- Time-lapse acquisition preferences ---
