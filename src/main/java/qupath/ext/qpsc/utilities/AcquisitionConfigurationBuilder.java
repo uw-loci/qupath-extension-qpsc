@@ -325,6 +325,12 @@ public class AcquisitionConfigurationBuilder {
                         case "Sum" -> "sum";
                         case "Mean" -> "mean";
                         case "Std Deviation" -> "std";
+                        // Focus-aware fusion: takes each pixel from the Z-plane where that
+                        // pixel is sharpest. The only projection here that is correct for
+                        // brightfield -- max/min/mean assume the wanted signal is the
+                        // brightest or darkest, and in transmitted light the brightest
+                        // pixels are empty background and the most defocused tissue.
+                        case "Extended Depth of Field" -> "edf";
                         // "None" preserves every Z-plane (and, with time-lapse, every
                         // timepoint) so the stitcher assembles a 5D mosaic instead of a
                         // projected 2D image. The server keys preserve-mode off "none".

@@ -1064,10 +1064,24 @@ public class ExistingImageAcquisitionController {
                     + "Smaller steps give finer Z sampling but more planes."));
 
             ComboBox<String> projectionCombo = new ComboBox<>();
-            projectionCombo.getItems().addAll("Max Intensity", "Min Intensity", "Sum", "Mean", "Std Deviation", "None");
+            projectionCombo
+                    .getItems()
+                    .addAll(
+                            "Max Intensity",
+                            "Min Intensity",
+                            "Sum",
+                            "Mean",
+                            "Std Deviation",
+                            "Extended Depth of Field",
+                            "None");
             projectionCombo.setValue(PersistentPreferences.getZStackProjection());
             projectionCombo.setTooltip(new Tooltip("How to combine Z-planes for stitching. "
                     + "Max intensity is standard for fluorescence and SHG. "
+                    + "Extended Depth of Field takes each pixel from the plane where it is "
+                    + "sharpest -- use it for brightfield, and wherever one field spans more "
+                    + "than a depth of field in Z (a tilted sample, or thick/uneven tissue), "
+                    + "which no amount of autofocus can fix because autofocus picks a single "
+                    + "Z for the whole field. "
                     + "Choose \"None\" to preserve the full Z-stack (and time series, if any) as a single "
                     + "multi-dimensional stitched image instead of projecting to 2D."));
 

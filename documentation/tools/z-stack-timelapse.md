@@ -138,7 +138,18 @@ When Z-stack parameters are included in an acquisition command (`--z-stack --z-s
 | **Sum** | `--z-projection sum` | Total signal across Z (overflow-safe) | Thick-section fluorescence |
 | **Mean** | `--z-projection mean` | Average across Z (noise reduction) | General denoising |
 | **Std deviation** | `--z-projection std` | Variability across Z | Highlighting Z-localized structures |
+| **Extended Depth of Field** | `--z-projection edf` | Each pixel is taken from the Z-plane where that pixel is sharpest. A focus-aware fusion that preserves fine detail across the entire field when the sample spans more Z than the microscope's depth of field. | Brightfield, tilted samples, thick or uneven tissue |
 | **None** | `--z-projection none` | *Preserve every Z-plane* — produces a multi-dimensional mosaic instead of projecting to 2D | 3D imaging, volumetric analysis, preserving depth information |
+
+#### Choosing between Max and Extended Depth of Field
+
+**Max is wrong for brightfield.** It selects the brightest pixel across Z, and in transmitted light the brightest pixels are the empty background and the *most defocused* tissue — so it preferentially discards the in-focus signal. Use EDF for any transmitted-light modality. Max remains correct for fluorescence and SHG, where the wanted signal genuinely is the brightest.
+
+**EDF addresses something autofocus cannot.** Autofocus picks a single Z for an entire field. When one field spans more than a depth of field — a tilted sample or stage, thick or uneven tissue — part of that field is defocused whichever Z is chosen, and running autofocus more often does not change that. EDF acquires a few planes and takes each pixel from the one where it is sharpest.
+
+A worked case (OWS3, 2026-08-05): a 0.5 NA air 10x objective gives a 1337 µm field with roughly 3 µm depth of field. Every tile came out blurred at the left edge and sharp at the right — about 0.13° of tilt. The acquisition was running a 15-step autofocus sweep on *every* tile and could not fix it; three Z-planes plus EDF costs less than that sweep and does.
+
+If the tilt is mechanical, correcting it is still the better fix — EDF is mitigation. The per-pixel focal surface (`focus_height_map` in `microscope_imageprocessing.zstack`) shows the tilt's magnitude and direction, which helps diagnose it: a smooth ramp means tilt, a flat map means the field is genuinely within one depth of field, and a noisy map means there is too little contrast for the measurement to mean anything.
 
 ### Output Layout
 
