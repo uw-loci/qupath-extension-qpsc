@@ -354,7 +354,12 @@ public class StitchingHelper {
      *       parallel for OME-ZARR (independent chunks) and sequential for OME-TIFF
      *       (BioFormats TiffWriter concurrency bug)</li>
      *   <li>single-pass (brightfield, fluorescence without channel library, single-angle
-     *       PPM degenerate case) -> direct call to {@link TileProcessingUtilities#stitchImagesAndUpdateProject}</li>
+     *       PPM degenerate case) -> direct call to {@link TileProcessingUtilities#stitchImagesAndUpdateProject},
+     *       with the single-grid registration mode from
+     *       {@link StitchingRegistration#modeForReuse(java.nio.file.Path)} attached to
+     *       {@code stitchParams}. Attaching it is not optional: a missing mode is
+     *       indistinguishable from registration being switched off, so omitting it stitches at
+     *       nominal positions and logs nothing (the OWS3 2026-08-05 bug).</li>
      * </ol>
      *
      * <p>Callers pre-compute {@link StitchingMetadata} and pass it in along with an
@@ -789,6 +794,20 @@ public class StitchingHelper {
                                 matchingString =
                                         String.valueOf(angleExposures.get(0).ticks());
                                 logger.info("Single angle acquisition - looking in subfolder: {}", matchingString);
+                            }
+
+                            // Single-acquisition stitches have no sibling targets to barrier against,
+                            // so they take the single-grid mode rather than the solve/apply split.
+                            // Without this the branch called the stitcher with no registrationMode at
+                            // all and silently stitched at nominal positions -- which is every
+                            // single-angle acquisition, i.e. all brightfield and fluorescence work.
+                            // The whole point of routing stitching through StitchingRegistration is
+                            // that a path cannot skip registration by omission; this one did.
+                            java.nio.file.Path singleTileBaseDir =
+                                    java.nio.file.Paths.get(projectsFolder, sampleName, modeWithIndex, annotationName);
+                            Object singleMode = StitchingRegistration.modeForReuse(singleTileBaseDir);
+                            if (singleMode != null) {
+                                stitchParams.put(TileProcessingUtilities.REGISTRATION_MODE_KEY, singleMode);
                             }
 
                             String outPath = TileProcessingUtilities.stitchImagesAndUpdateProject(

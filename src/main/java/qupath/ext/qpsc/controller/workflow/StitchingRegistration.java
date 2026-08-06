@@ -27,6 +27,19 @@ import qupath.ext.qpsc.utilities.TileRegistrationSupport;
  * and single-grid paths call {@link #modeForReuse}, and both honour the one "Register tiles on image
  * content" preference and the version-support probe (via {@link #enabled()}).
  *
+ * <p><b>That claim was false for six weeks and is worth stating plainly.</b> The single-acquisition
+ * branch of {@code StitchingHelper} -- the one every brightfield and fluorescence acquisition takes,
+ * and any single-angle PPM run -- called the stitcher directly with a {@code stitchParams} map that
+ * never carried a registration mode, so it stitched at nominal positions no matter what the
+ * preference said, and logged nothing to say so (found on OWS3, 2026-08-05). Only the multi-angle
+ * and channel paths went through the barrier. The lesson for anyone adding a stitch entry point:
+ * the absence of a registration mode is indistinguishable from registration being switched off, so
+ * a new path that forgets one fails silently and looks like a preference problem. Grep for
+ * {@code stitchImagesAndUpdateProject} callers when auditing.
+ *
+ * <p>{@code WBComparisonWorkflow} deliberately does not register: it stitches a small
+ * white-balance comparison strip to compare exposure settings, not a mosaic anyone measures.
+ *
  * <h2>The barrier</h2>
  *
  * Angles and channels are captured at the <b>same</b> stage position per tile, so they must share
