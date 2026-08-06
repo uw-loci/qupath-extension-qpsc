@@ -823,8 +823,13 @@ public class DualProgressDialog {
             logger.warn("Insufficient timing data to save ({} tiles)", allTileTimes.size());
             return -1;
         }
+        // "per-tile cycle", not "save time": this is the wall-clock gap between consecutive tile
+        // completions, so it covers stage move, settling, autofocus, exposure, readout AND write.
+        // The old wording ("Final timing for save") meant "the timing being saved to preferences"
+        // and was read as "time spent saving", which points diagnosis at the wrong subsystem.
         logger.info(
-                "Final timing for save: {} ms/file (mean across {} tiles, first tile excluded)",
+                "Mean per-tile cycle time (move + AF + expose + write): {} ms/tile "
+                        + "(mean across {} tiles, first tile excluded) -- saving to preferences",
                 mean,
                 allTileTimes.size());
         return mean;

@@ -253,7 +253,11 @@ public class AcquisitionManager {
 
         PersistentPreferences.updateTimingData(meanTileTimeMs, modality, objective);
 
-        logger.info("Saved timing data for {}/{}: {} ms/file", modality, objective, meanTileTimeMs);
+        logger.info(
+                "Saved timing data for {}/{}: {} ms per tile CYCLE (move + AF + expose + write, not write alone)",
+                modality,
+                objective,
+                meanTileTimeMs);
     }
 
     /**
