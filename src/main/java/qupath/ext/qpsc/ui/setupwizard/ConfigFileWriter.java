@@ -191,16 +191,22 @@ public final class ConfigFileWriter {
         // YAML reader on the Python side can distinguish "no probe yet"
         // from "block missing entirely".
         Map<String, Object> streamingAf = new LinkedHashMap<>();
+        // "enabled" is a policy choice -- whether we want the feature on --
+        // so defaulting it is fine. The other three are NOT: they are the
+        // stage's measured speeds and the device property values that
+        // produce them, which only the probe step can know. Substituting
+        // "1" / 11.5 / "100" wrote invented numbers into a generated config
+        // that then reads as though it had been probed, and defeated the
+        // contract stated in the comment above. PPM has already shipped a
+        // stale slow_speed_um_per_s once (1.422 against a real ~10.85), so
+        // a plausible-looking placeholder here is exactly the failure mode.
+        // The Python side already initialises all three to None in
+        // handlers/probe_stage_af.py, so null is the expected "not probed".
         streamingAf.put("enabled", data.streamingAfEnabled != null ? data.streamingAfEnabled : true);
         streamingAf.put("speed_property", data.streamingAfSpeedProperty);
-        streamingAf.put(
-                "slow_speed_value", data.streamingAfSlowSpeedValue != null ? data.streamingAfSlowSpeedValue : "1");
-        streamingAf.put(
-                "slow_speed_um_per_s",
-                data.streamingAfSlowSpeedUmPerS != null ? data.streamingAfSlowSpeedUmPerS : 11.5);
-        streamingAf.put(
-                "normal_speed_value",
-                data.streamingAfNormalSpeedValue != null ? data.streamingAfNormalSpeedValue : "100");
+        streamingAf.put("slow_speed_value", data.streamingAfSlowSpeedValue);
+        streamingAf.put("slow_speed_um_per_s", data.streamingAfSlowSpeedUmPerS);
+        streamingAf.put("normal_speed_value", data.streamingAfNormalSpeedValue);
         stage.put("streaming_af", streamingAf);
 
         config.put("stage", stage);

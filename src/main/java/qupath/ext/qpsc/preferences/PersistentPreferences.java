@@ -460,8 +460,24 @@ public class PersistentPreferences {
     }
 
     // ================== EXISTING IMAGE WORKFLOW ==================
+    /**
+     * Macro-image pixel size, in microns per pixel.
+     *
+     * <p><b>Defaults to empty on purpose.</b> This is a measured property of
+     * the slide scanner that produced the macro image, not a preference we
+     * are entitled to pick. It previously defaulted to {@code "7.2"}, which
+     * made {@code ExistingImageWorkflowV2}'s own null-or-empty guard
+     * unreachable -- so the workflow silently used 7.2 while the only shipped
+     * scanner config declares 81.0, an 11x error applied to every coordinate
+     * derived from the macro image, with no warning.</p>
+     *
+     * <p>Empty means "not set", and callers must refuse rather than
+     * substitute. {@code MicroscopeAlignmentWorkflow} shows the better
+     * pattern: read {@code macro: pixel_size_um} from the selected scanner
+     * config and fail with a remedy when it is absent.</p>
+     */
     private static final StringProperty macroImagePixelSizeInMicrons =
-            PathPrefs.createPersistentPreference("macroImagePixelSizeInMicrons", "7.2");
+            PathPrefs.createPersistentPreference("macroImagePixelSizeInMicrons", "");
 
     public static String getMacroImagePixelSizeInMicrons() {
         return macroImagePixelSizeInMicrons.getValue();

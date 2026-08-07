@@ -74,6 +74,20 @@ id_detector:
         sensor_pixel_width_um: 4.54
         sensor_pixel_height_um: 4.54
         requires_debayering: true
+        # Required whenever requires_debayering is true: the sensor's mosaic
+        # order and full-scale bit depth. They set the R/B channel order and
+        # the value every pixel is scaled against, and neither can be
+        # guessed, so microscope_control refuses to debayer without them.
+        # NOT YET CONFIRMED ON THE RIG -- carried forward from the hardcoded
+        # fallback removed 2026-08-07. Verify before trusting colour.
+        bayer_pattern: 'GRBG'
+        bit_depth: 14
+        # This camera debayers in firmware by default; ask for the raw
+        # mosaic around the snap instead.
+        raw_mode:
+            property: 'Color'
+            raw_value: 'OFF'
+            normal_value: 'ON'
         flip_x: false
         flip_y: false
         description: null

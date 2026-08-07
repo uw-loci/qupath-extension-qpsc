@@ -1782,10 +1782,19 @@ public class ExistingImageWorkflowV2 {
         private double getPixelSizeFromPreferences() {
             String pixelSizeStr = PersistentPreferences.getMacroImagePixelSizeInMicrons();
 
+            // This guard was unreachable until 2026-08-07: the preference
+            // defaulted to "7.2", so it was never empty and the workflow
+            // silently used 7.2 while the shipped scanner config declares
+            // 81.0. The default is now empty, which makes this fire.
             if (pixelSizeStr == null || pixelSizeStr.trim().isEmpty()) {
                 logger.error("Macro image pixel size is not configured in preferences");
-                throw new IllegalStateException("Macro image pixel size is not configured.\n"
-                        + "This value must be set before running the workflow.");
+                throw new IllegalStateException("Macro image pixel size is not set.\n\n"
+                        + "This is the macro image's pixel size in microns, a measured property "
+                        + "of the slide scanner that produced it. It cannot be guessed: every "
+                        + "stage coordinate derived from the macro image scales directly with it.\n\n"
+                        + "Set it in Preferences -> QPSC -> 'Macro image pixel size in microns'. "
+                        + "The value is on the scanner's configuration under 'macro: pixel_size_um' "
+                        + "(for example, 81.0 for the Ocus40).");
             }
 
             try {
