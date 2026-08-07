@@ -113,6 +113,10 @@ Select All / Deselect All buttons are available for convenience.
 
 When using a brightfield modality, a live readout appears showing the resolved acquisition values — the profile name, the exposure that will be used (with its source: Background Collection, last used, or override), and the illumination intensity. These values update live as you change the objective or detector, so you can verify what the acquisition will actually use before starting. A red warning appears in the readout if background correction is ON but not calibrated — in that case, acquisition will fail until Background Collection is run.
 
+**PPM Angle Selection & Exposure:**
+
+When using a PPM modality, the hardware configuration pane includes angle selection checkboxes and a **live readout** showing the resolved acquisition values — the exposure (in milliseconds) that will be used for each selected angle. These values update live as you change the objective, detector, white-balance mode, or angle selections, so you can verify what the acquisition will actually use before starting.
+
 ### Acquisition & Stitching Options
 
 | Option | Type | Default | Description |

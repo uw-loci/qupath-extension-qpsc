@@ -22,8 +22,10 @@ public final class AcquisitionReadout {
     /**
      * The current dialog selection a panel needs to resolve its readout. Supplied
      * lazily by the host dialog so the panel can refresh when the selection changes.
+     * {@code wbMode} is the protocol name (e.g. {@code "off"}, {@code "per_angle"});
+     * used by PPM to target the matching background subfolder, ignored by brightfield.
      */
-    public record Context(String modality, String objective, String detector) {}
+    public record Context(String modality, String objective, String detector, String wbMode) {}
 
     /** The acquisition-profile name the objective resolves to, or {@code null} if none. */
     public static String resolveProfileName(MicroscopeConfigManager cfg, String modality, String objective) {

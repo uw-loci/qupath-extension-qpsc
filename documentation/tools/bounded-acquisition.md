@@ -88,6 +88,7 @@ When using a brightfield modality, an exposure panel appears showing:
 When using a PPM modality, the acquisition dialog includes a **PPM Polarization Angles** panel with:
 
 - **Angles to acquire (checkboxes):** Select which polarization angles are captured -- minus, zero, plus, and/or uncrossed. On first launch minus, zero, and plus are selected and uncrossed is off. Your angle selections persist across QuPath sessions, so your choices are automatically restored when the acquisition dialog reopens.
+- **Live readout:** A display of the resolved acquisition values — the exposure (in milliseconds) that will be used for each selected angle. These values update live as you change the objective, detector, white-balance mode, or angle selections, so you can verify what the acquisition will actually use before starting.
 - **Exposure times (auto-derived):** Exposure for each angle is automatically resolved using this priority: background flat-field exposure (so divide-correction matches) → config file exposure → persistent preferences. Users do not manually set exposures per angle.
 - **Angle overrides (optional):** If "Override default angles for this acquisition" is checked, spinners for plus and minus angles allow one-time adjustment without changing the configuration.
 

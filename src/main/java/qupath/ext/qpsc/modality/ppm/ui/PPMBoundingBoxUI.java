@@ -55,6 +55,12 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
     private final Button saveMdaButton;
     private Supplier<MdaExportContext> mdaContextSupplier;
 
+    /** Live "what will be used" readout: resolved per-angle exposure for the selected angles. */
+    private Label readoutLabel;
+
+    /** Supplies the current dialog selection so the readout can refresh on change. */
+    private Supplier<qupath.ext.qpsc.modality.AcquisitionReadout.Context> readoutContextSupplier;
+
     @SuppressWarnings("unchecked")
     public PPMBoundingBoxUI() {
         root = new VBox(5);
@@ -108,14 +114,30 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         selZero.setSelected(PPMPreferences.getZeroSelected());
         selPlus.setSelected(PPMPreferences.getPlusSelected());
         selUncrossed.setSelected(PPMPreferences.getUncrossedSelected());
-        selMinus.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setMinusSelected(sel));
-        selZero.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setZeroSelected(sel));
-        selPlus.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setPlusSelected(sel));
-        selUncrossed.selectedProperty().addListener((obs, old, sel) -> PPMPreferences.setUncrossedSelected(sel));
+        selMinus.selectedProperty().addListener((obs, old, sel) -> {
+            PPMPreferences.setMinusSelected(sel);
+            refreshReadout();
+        });
+        selZero.selectedProperty().addListener((obs, old, sel) -> {
+            PPMPreferences.setZeroSelected(sel);
+            refreshReadout();
+        });
+        selPlus.selectedProperty().addListener((obs, old, sel) -> {
+            PPMPreferences.setPlusSelected(sel);
+            refreshReadout();
+        });
+        selUncrossed.selectedProperty().addListener((obs, old, sel) -> {
+            PPMPreferences.setUncrossedSelected(sel);
+            refreshReadout();
+        });
         HBox angleSelRow = new HBox(10, selMinus, selZero, selPlus, selUncrossed);
         angleSelRow.setAlignment(Pos.CENTER_LEFT);
         Label expNote = new Label("Exposures are auto-derived per angle (background flat-field -> config -> prefs).");
         expNote.setStyle("-fx-font-style: italic;");
+
+        readoutLabel = new Label();
+        readoutLabel.setStyle("-fx-font-size: 11px; -fx-font-family: monospace;");
+        readoutLabel.setWrapText(true);
 
         overrideAngles = new CheckBox("Override default angles for this acquisition");
         overrideAngles.setTooltip(new Tooltip("When checked, the plus and minus angles below will be used\n"
@@ -160,17 +182,20 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         overrideAngles.selectedProperty().addListener((obs, old, sel) -> {
             grid.setDisable(!sel);
             PPMPreferences.setAngleOverrideEnabled(sel);
+            refreshReadout();
         });
 
         plusSpinner.valueProperty().addListener((obs, old, newVal) -> {
             if (newVal != null) {
                 PPMPreferences.setOverridePlusAngle(newVal);
+                refreshReadout();
             }
         });
 
         minusSpinner.valueProperty().addListener((obs, old, newVal) -> {
             if (newVal != null) {
                 PPMPreferences.setOverrideMinusAngle(newVal);
+                refreshReadout();
             }
         });
 
@@ -185,7 +210,77 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         HBox mdaBar = new HBox(8, saveMdaButton);
         mdaBar.setAlignment(Pos.CENTER_LEFT);
 
-        root.getChildren().addAll(new Separator(), label, selLabel, angleSelRow, expNote, overrideAngles, grid, mdaBar);
+        root.getChildren()
+                .addAll(
+                        new Separator(),
+                        label,
+                        selLabel,
+                        angleSelRow,
+                        expNote,
+                        readoutLabel,
+                        overrideAngles,
+                        grid,
+                        mdaBar);
+    }
+
+    /**
+     * Installs a supplier of the current dialog selection (modality/objective/detector/wbMode)
+     * so the readout reflects the per-angle exposures the acquisition will use, and refreshes now.
+     * The host dialog should also call {@link #refreshReadout()} when objective/detector/wbMode change.
+     */
+    public void installReadoutContext(Supplier<qupath.ext.qpsc.modality.AcquisitionReadout.Context> supplier) {
+        this.readoutContextSupplier = supplier;
+        refreshReadout();
+    }
+
+    /** Recomputes the per-angle exposure readout for the selected angles. PPM has no illumination intensity. */
+    public void refreshReadout() {
+        if (readoutLabel == null) {
+            return;
+        }
+        if (readoutContextSupplier == null) {
+            readoutLabel.setText("");
+            return;
+        }
+        qupath.ext.qpsc.modality.AcquisitionReadout.Context ctx = readoutContextSupplier.get();
+        if (ctx == null || ctx.modality() == null || ctx.objective() == null || ctx.detector() == null) {
+            readoutLabel.setText("");
+            return;
+        }
+        boolean override = overrideAngles.isSelected();
+        double plus = override && plusSpinner.getValue() != null ? plusSpinner.getValue() : plusTick;
+        double minus = override && minusSpinner.getValue() != null ? minusSpinner.getValue() : minusTick;
+
+        StringBuilder sb = new StringBuilder("Per-angle exposure (will be used):");
+        int shown = 0;
+        shown += appendAngle(sb, ctx, "minus", minus, selMinus.isSelected());
+        shown += appendAngle(sb, ctx, "zero", zeroTick, selZero.isSelected());
+        shown += appendAngle(sb, ctx, "plus", plus, selPlus.isSelected());
+        shown += appendAngle(sb, ctx, "uncrossed", uncrossedTick, selUncrossed.isSelected());
+        if (shown == 0) {
+            sb.append("\n  (no angles selected)");
+        }
+        readoutLabel.setText(sb.toString());
+    }
+
+    /** Appends one selected angle's resolved exposure; returns 1 if appended, 0 if not selected. */
+    private int appendAngle(
+            StringBuilder sb,
+            qupath.ext.qpsc.modality.AcquisitionReadout.Context ctx,
+            String name,
+            double tick,
+            boolean selected) {
+        if (!selected) {
+            return 0;
+        }
+        double ms = qupath.ext.qpsc.modality.ppm.PPMExposureResolver.getDefaultExposureTime(
+                tick, ctx.modality(), ctx.objective(), ctx.detector(), ctx.wbMode());
+        sb.append(String.format("%n  %-9s (%s): %s ms", name, fmtNum(tick), fmtNum(ms)));
+        return 1;
+    }
+
+    private static String fmtNum(double v) {
+        return (v == Math.rint(v)) ? String.valueOf((long) v) : String.valueOf(v);
     }
 
     /**

@@ -505,6 +505,7 @@ public class UnifiedAcquisitionController {
                 if (newVal != null) {
                     PersistentPreferences.setLastWhiteBalanceMode(newVal);
                 }
+                refreshModalityReadout(); // wbMode targets the background subfolder PPM exposures resolve from
             });
         }
 
@@ -1495,13 +1496,25 @@ public class UnifiedAcquisitionController {
             String modality = modalityBox != null ? modalityBox.getValue() : null;
             String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
             String detector = extractIdFromDisplayString(detectorBox != null ? detectorBox.getValue() : null);
-            return new qupath.ext.qpsc.modality.AcquisitionReadout.Context(modality, objective, detector);
+            return new qupath.ext.qpsc.modality.AcquisitionReadout.Context(
+                    modality, objective, detector, currentWbModeProtocol());
+        }
+
+        /** The internal white-balance protocol name for the current selection ({@code "off"} when hidden). */
+        private String currentWbModeProtocol() {
+            if (wbModeComboBox == null || !wbModeComboBox.isVisible()) {
+                return "off";
+            }
+            String display = wbModeComboBox.getValue();
+            return WbMode.fromDisplayName(display != null ? display : "Off").getProtocolName();
         }
 
         /** Refresh the current modality panel's resolved-values readout, if it has one. */
         private void refreshModalityReadout() {
             if (modalityUI instanceof qupath.ext.qpsc.modality.BrightfieldExposureBoundingBoxUI bfUi) {
                 bfUi.refreshReadout();
+            } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
+                ppmUi.refreshReadout();
             }
         }
 
@@ -1523,6 +1536,8 @@ public class UnifiedAcquisitionController {
                     wfUi.installMdaExportContext(supplier);
                 } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
                     ppmUi.installMdaExportContext(supplier);
+                    // Live "what will be used" readout: resolved per-angle exposures.
+                    ppmUi.installReadoutContext(this::currentReadoutContext);
                 } else if (modalityUI instanceof qupath.ext.qpsc.modality.BrightfieldExposureBoundingBoxUI bfUi) {
                     // Live "what will be used" readout: resolved profile / exposure / illumination.
                     bfUi.installReadoutContext(this::currentReadoutContext);
