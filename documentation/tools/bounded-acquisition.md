@@ -77,7 +77,8 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 **Brightfield Exposure Override:**
 
 When using a brightfield modality, an exposure panel appears showing:
-- **Resolution rule:** How the exposure is determined at acquisition time (background-collection exposure when background correction is on and calibrated; otherwise the last unified exposure)
+- **Live readout:** A display of the resolved acquisition values — the profile name, the exposure that will be used (with its source: Background Collection, last used, or override), and the illumination intensity. These values update live as you change the objective or detector, so you can verify what the acquisition will actually use before starting.
+- **Resolution rule:** How the exposure is determined at acquisition time (background-collection exposure when background correction is on and calibrated; otherwise the last unified exposure). A red warning appears in the readout if background correction is ON but not calibrated — in that case, acquisition will fail until Background Collection is run.
 - **Override exposure (ms):** An optional field to pin a specific camera exposure for this run, bypassing the resolved value. Use this to correct an over-exposed ("blinding") acquisition without leaving the dialog.
 
 ⚠️ **Active warning dialog:** When acquisition starts, if the exposures differ from what the background was collected at, a confirmation dialog appears showing the mismatch. This is **non-blocking** — you can click "Proceed anyway" to continue, but flat-field correction will be applied against the wrong reference and tiles may show intensity/vignetting seams. Recommended: re-run Background Collection at the new exposure if you need proper flat-field correction.

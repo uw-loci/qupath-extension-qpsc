@@ -2,6 +2,7 @@ package qupath.ext.qpsc.modality;
 
 import java.util.HashMap;
 import java.util.Map;
+import java.util.function.Supplier;
 import javafx.scene.Node;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
@@ -12,6 +13,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Bounding-box dialog panel for the Brightfield modality.
@@ -53,11 +55,21 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
     private final TextField exposureField;
     private final Label warningLabel;
 
+    /** Live "what will be used" readout: resolved profile / exposure / illumination. */
+    private final Label readoutLabel;
+
+    /** Supplies the current dialog selection so the readout can refresh on change. */
+    private Supplier<AcquisitionReadout.Context> readoutContextSupplier;
+
     public BrightfieldExposureBoundingBoxUI() {
         root = new VBox(5);
 
         Label title = new Label("Brightfield Exposure");
         title.setStyle("-fx-font-weight: bold;");
+
+        readoutLabel = new Label();
+        readoutLabel.setStyle("-fx-font-size: 11px; -fx-font-family: monospace;");
+        readoutLabel.setWrapText(true);
 
         Label explanation = new Label("Brightfield acquires a single exposure, resolved at acquisition time:\n"
                 + "  - Background correction ON + calibrated  ->  the Background Collection exposure\n"
@@ -77,7 +89,9 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
         overrideCheck.selectedProperty().addListener((obs, was, now) -> {
             exposureField.setDisable(!now);
             updateWarningVisibility();
+            refreshReadout();
         });
+        exposureField.textProperty().addListener((obs, was, now) -> refreshReadout());
 
         HBox overrideRow = new HBox(8, overrideCheck, exposureField);
 
@@ -91,13 +105,87 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
         warning.setManaged(false);
         this.warningLabel = warning;
 
-        root.getChildren().addAll(new Separator(), title, explanation, overrideRow, warning);
+        root.getChildren().addAll(new Separator(), title, readoutLabel, explanation, overrideRow, warning);
     }
 
     private void updateWarningVisibility() {
         boolean show = overrideCheck.isSelected();
         warningLabel.setVisible(show);
         warningLabel.setManaged(show);
+    }
+
+    /**
+     * Installs a supplier of the current dialog selection (modality/objective/detector)
+     * so the readout reflects what the acquisition will actually use, and refreshes now.
+     * The host dialog should also call {@link #refreshReadout()} when the objective or
+     * detector changes.
+     */
+    public void installReadoutContext(Supplier<AcquisitionReadout.Context> supplier) {
+        this.readoutContextSupplier = supplier;
+        refreshReadout();
+    }
+
+    /** Recomputes the profile / exposure / illumination readout from the current selection. */
+    public void refreshReadout() {
+        if (readoutContextSupplier == null) {
+            readoutLabel.setText("");
+            return;
+        }
+        AcquisitionReadout.Context ctx = readoutContextSupplier.get();
+        if (ctx == null || ctx.modality() == null || ctx.objective() == null) {
+            readoutLabel.setText("");
+            return;
+        }
+        MicroscopeConfigManager cfg = MicroscopeConfigManager.getInstanceIfAvailable();
+        String profile = AcquisitionReadout.resolveProfileName(cfg, ctx.modality(), ctx.objective());
+        Double intensity = AcquisitionReadout.resolveIlluminationIntensity(cfg, ctx.modality(), ctx.objective());
+        AcquisitionReadout.Exposure exp =
+                AcquisitionReadout.resolveBrightfieldExposure(cfg, ctx.modality(), ctx.objective(), ctx.detector());
+
+        Double overrideMs = parseOverride();
+        StringBuilder sb = new StringBuilder();
+        sb.append("Profile:      ").append(profile != null ? profile : "(none resolved)");
+        sb.append("\nExposure:     ");
+        if (overrideMs != null) {
+            sb.append(fmt(overrideMs)).append(" ms  (override)");
+        } else if (exp.exposureMs() != null) {
+            sb.append(fmt(exp.exposureMs()))
+                    .append(" ms  (")
+                    .append(exp.source())
+                    .append(")");
+        } else {
+            sb.append(exp.source());
+        }
+        if (intensity != null) {
+            sb.append("\nIllumination: ").append(fmt(intensity));
+        }
+        readoutLabel.setText(sb.toString());
+        boolean warn = exp.warning() && overrideMs == null;
+        readoutLabel.setStyle(
+                warn
+                        ? "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: #C62828;"
+                        : "-fx-font-size: 11px; -fx-font-family: monospace;");
+    }
+
+    /** Parses the override exposure silently (for the readout); null when absent/invalid. */
+    private Double parseOverride() {
+        if (!overrideCheck.isSelected()) {
+            return null;
+        }
+        String text = exposureField.getText();
+        if (text == null || text.isBlank()) {
+            return null;
+        }
+        try {
+            double ms = Double.parseDouble(text.trim());
+            return ms > 0 ? ms : null;
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    private static String fmt(double v) {
+        return (v == Math.rint(v)) ? String.valueOf((long) v) : String.valueOf(v);
     }
 
     @Override

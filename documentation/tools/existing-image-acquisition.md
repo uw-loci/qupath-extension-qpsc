@@ -109,6 +109,10 @@ Select All / Deselect All buttons are available for convenience.
 | WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Listed under hardware (rather than under acquisition options) because the choice is camera-specific and matches the underlying calibration set. |
 | Angle Overrides | Various | - | Modality-specific angle controls (if applicable) |
 
+**Brightfield Exposure Readout:**
+
+When using a brightfield modality, a live readout appears showing the resolved acquisition values — the profile name, the exposure that will be used (with its source: Background Collection, last used, or override), and the illumination intensity. These values update live as you change the objective or detector, so you can verify what the acquisition will actually use before starting. A red warning appears in the readout if background correction is ON but not calibrated — in that case, acquisition will fail until Background Collection is run.
+
 ### Acquisition & Stitching Options
 
 | Option | Type | Default | Description |

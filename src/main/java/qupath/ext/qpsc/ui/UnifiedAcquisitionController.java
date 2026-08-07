@@ -543,10 +543,14 @@ public class UnifiedAcquisitionController {
 
             // Trigger preview update on any hardware change
             modalityBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
-            objectiveBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
+            objectiveBox.valueProperty().addListener((obs, old, newVal) -> {
+                triggerPreviewUpdate();
+                refreshModalityReadout(); // objective drives the resolved profile / exposure / intensity
+            });
             detectorBox.valueProperty().addListener((obs, old, newVal) -> {
                 triggerPreviewUpdate();
                 updateWhiteBalanceVisibility(); // Update WB section visibility when detector changes
+                refreshModalityReadout();
             });
 
             int row = 0;
@@ -1486,6 +1490,21 @@ public class UnifiedAcquisitionController {
             }
         }
 
+        /** Current dialog selection for the modality panel's "what will be used" readout. */
+        private qupath.ext.qpsc.modality.AcquisitionReadout.Context currentReadoutContext() {
+            String modality = modalityBox != null ? modalityBox.getValue() : null;
+            String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
+            String detector = extractIdFromDisplayString(detectorBox != null ? detectorBox.getValue() : null);
+            return new qupath.ext.qpsc.modality.AcquisitionReadout.Context(modality, objective, detector);
+        }
+
+        /** Refresh the current modality panel's resolved-values readout, if it has one. */
+        private void refreshModalityReadout() {
+            if (modalityUI instanceof qupath.ext.qpsc.modality.BrightfieldExposureBoundingBoxUI bfUi) {
+                bfUi.refreshReadout();
+            }
+        }
+
         private void updateModalityUI(String modality) {
             ModalityHandler handler = ModalityRegistry.getHandler(modality);
             Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI();
@@ -1504,6 +1523,9 @@ public class UnifiedAcquisitionController {
                     wfUi.installMdaExportContext(supplier);
                 } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
                     ppmUi.installMdaExportContext(supplier);
+                } else if (modalityUI instanceof qupath.ext.qpsc.modality.BrightfieldExposureBoundingBoxUI bfUi) {
+                    // Live "what will be used" readout: resolved profile / exposure / illumination.
+                    bfUi.installReadoutContext(this::currentReadoutContext);
                 }
             } else {
                 modalityUI = null;
