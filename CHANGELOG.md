@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+**Stage Map: per-microscope light path configuration**
+- The Stage Map's **Stage View** orientation is now derived from per-microscope YAML configuration (`light_path` block) instead of a global pref. Three separate dropdowns replace the single "Stage view" AUTO/FLIP_H/FLIP_V/ROT_180 combo: **Scope type** (Upright | Inverted), **Slide insertion** (A | B, for the two ways a slide fits in a holder), and **Inverted flip axis** (Vertical | Horizontal, which axis the slide is turned over about on inverted scopes). These capture factor 1 of the orientation stack — the unencoded hardware difference between how the camera sees the image and how the slide sits physically on the stage. Changes write directly to the microscope config, so the Stage Map and Setup Wizard share one source of truth. Defaults (Upright + A) reduce to identity, so Stage View == Camera View until the rig is described — no regression for unconfigured microscopes.
+
 **Live Viewer Camera tab: Profile default now matches current objective**
 - The Profile dropdown in the Camera tab now defaults to the profile matching the currently-active objective (e.g., showing `Brightfield_20x` when the objective is 20x), using the same resolution rule as acquisition workflows. Previously the dropdown defaulted to the first profile in the list regardless of objective, which could show `Brightfield_10x` on a 20x objective and require a manual selection change. A user's manual selection is still retained across rebuilds (e.g., when switching modalities).
 
