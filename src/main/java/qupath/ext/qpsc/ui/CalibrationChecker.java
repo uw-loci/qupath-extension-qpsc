@@ -119,19 +119,22 @@ public class CalibrationChecker {
                 msg = "Simple WB calibrated";
             }
 
-            // Check if ALL background modes are stale (not just any)
-            // If at least one mode is valid, the user can still acquire with that mode
+            // Warn if ANY WB mode is stale (not only when ALL are). A stale mode must
+            // not read as green just because a sibling mode is valid -- the operator
+            // may acquire with the stale one. Name the stale mode(s) so it is clear
+            // which needs re-collecting. Non-blocking (WARNING).
             String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
             if (bgFolder != null) {
                 var allResults = BackgroundValidityChecker.checkAllModes(bgFolder, modality, objective, detector, mgr);
-                boolean anyValid =
-                        allResults.stream().anyMatch(r -> r.status() == BackgroundValidityChecker.ValidityStatus.VALID);
-                boolean allStale = allResults.stream()
-                        .filter(r -> r.status() != BackgroundValidityChecker.ValidityStatus.NOT_NEEDED
-                                && r.status() != BackgroundValidityChecker.ValidityStatus.NO_BACKGROUNDS)
-                        .allMatch(r -> r.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE);
-                if (allStale && !anyValid) {
-                    return new StepStatus(Status.WARNING, msg + " -- re-collect backgrounds");
+                StringBuilder staleNames = new StringBuilder();
+                for (var r : allResults) {
+                    if (r.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE) {
+                        if (staleNames.length() > 0) staleNames.append(", ");
+                        staleNames.append(r.mode().getDisplayName());
+                    }
+                }
+                if (staleNames.length() > 0) {
+                    return new StepStatus(Status.WARNING, msg + " -- stale: " + staleNames + "; re-collect");
                 }
             }
 
@@ -237,7 +240,10 @@ public class CalibrationChecker {
             }
 
             if (anyValid && anyStale) {
-                // Some modes valid, some stale -- report ready with names
+                // Some modes valid, some stale -> WARNING, not READY. A stale WB mode
+                // must NOT read as green just because a sibling mode is valid (the
+                // operator may acquire with the stale one). Name both sets so it is
+                // clear which mode is stale.
                 StringBuilder validNames = new StringBuilder();
                 StringBuilder staleNames = new StringBuilder();
                 for (var result : allModeResults) {
@@ -249,12 +255,7 @@ public class CalibrationChecker {
                         staleNames.append(result.mode().getDisplayName());
                     }
                 }
-                return applyLampCheck(
-                        new StepStatus(Status.READY, String.format("Valid: %s; Stale: %s", validNames, staleNames)),
-                        modality,
-                        objective,
-                        detector,
-                        mgr);
+                return new StepStatus(Status.WARNING, String.format("Valid: %s; Stale: %s", validNames, staleNames));
             }
 
             if (anyStale && !anyValid) {
