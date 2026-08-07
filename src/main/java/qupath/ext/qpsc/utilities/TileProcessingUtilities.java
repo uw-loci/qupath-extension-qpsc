@@ -1161,10 +1161,28 @@ public class TileProcessingUtilities {
                 logger.debug("Modified pixel size line: {}", modified);
                 modificationsCount++;
             } else if (ln.startsWith("createAnnotationsFromPixelClassifier")) {
-                String modified = ln.replaceFirst("\"[^\"]*\"", "\"" + jsonFilePathString + "\"");
-                out.add(modified);
-                logger.debug("Modified classifier path line: {}", modified);
-                modificationsCount++;
+                // Only rewrite the classifier path when a sibling tissue.json actually
+                // exists next to the script. The old behavior ALWAYS rewrote this line
+                // to <scriptDir>/tissue.json, which silently clobbered the script's own
+                // classifier reference and pointed detection at a file that may not
+                // exist -- surprising users whose classifier is named/located
+                // differently ("tissue detection is looking for something not set in
+                // preferences"). When no tissue.json is present, keep the script's own
+                // createAnnotationsFromPixelClassifier(...) path unchanged.
+                if (jsonFilePathString != null
+                        && !jsonFilePathString.isBlank()
+                        && Files.exists(Paths.get(jsonFilePathString))) {
+                    String modified = ln.replaceFirst("\"[^\"]*\"", "\"" + jsonFilePathString + "\"");
+                    out.add(modified);
+                    logger.debug("Modified classifier path line: {}", modified);
+                    modificationsCount++;
+                } else {
+                    out.add(ln);
+                    logger.warn(
+                            "Tissue classifier '{}' not found next to the detection script; keeping the "
+                                    + "script's own createAnnotationsFromPixelClassifier path unchanged.",
+                            jsonFilePathString);
+                }
             } else {
                 out.add(ln);
             }
