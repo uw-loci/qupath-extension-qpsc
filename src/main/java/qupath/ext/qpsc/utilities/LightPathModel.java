@@ -23,12 +23,16 @@ import qupath.lib.projects.ProjectImageEntry;
  *
  * <h2>The orientation stack (light path, slide to pixels)</h2>
  * <ol>
- *   <li><b>Slide placement</b> -- inverted scope (objective below, slide face-down) vs upright
- *       (objective above, face-up). Changes the naked-eye view of the slide on the stage, NOT the
- *       eyepiece/camera view (the coverslip always faces the objective).
- *       <b>Not encoded anywhere</b> in QPSC hardware config today. The operator supplies its effect
- *       on the Stage Map by eye via {@link PersistentPreferences#getStageViewOrientation()} (a
- *       display-only proxy, not a per-microscope hardware fact).</li>
+ *   <li><b>Slide placement</b> -- two independent sub-parts, both physical and both unencoded:
+ *       <b>(1a) scope type</b> -- inverted scope (objective below, coverslip down) vs upright
+ *       (objective above, coverslip up), which mirrors the naked-eye stage view relative to the
+ *       camera; and <b>(1b) slide insertion</b> -- a slide can be slotted into the holder two ways
+ *       (an in-plane 180-degree rotation, frosted label at either end). Neither changes the
+ *       eyepiece/camera view of a given feature (the coverslip always faces the objective), but
+ *       together they set how the slide reads on the stage. <b>Not encoded anywhere</b> in QPSC
+ *       config today. The operator supplies the net effect on the Stage Map by eye via
+ *       {@link PersistentPreferences#getStageViewOrientation()} (a display-only proxy, not a
+ *       per-microscope hardware fact).</li>
  *   <li><b>Optical flip</b> -- objective + tube-lens parity, nominally the per-detector
  *       {@code flip_x/flip_y} in the microscope YAML, read via
  *       {@link MicroscopeConfigManager#getDetectorFlipX(String)} /

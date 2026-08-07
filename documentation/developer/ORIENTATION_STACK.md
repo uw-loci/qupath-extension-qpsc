@@ -24,7 +24,8 @@ Four factors stack along the light path, plus the macro-image flip that orients 
 
 | # | Factor | What it is | Authoritative source | Status |
 |---|--------|-----------|----------------------|--------|
-| 1 | **Slide placement** | Inverted scope (objective below, slide face-down) vs upright (objective above, face-up). Mirrors the *naked-eye* view of the slide on the stage; leaves the eyepiece/camera view unchanged (coverslip always faces the objective). | **Not encoded** (see below) | **GAP** |
+| 1a | **Scope type** | Inverted scope (objective below, coverslip faces down) vs upright (objective above, coverslip faces up). Mirrors the *naked-eye* view of the slide on the stage relative to the camera view; leaves the eyepiece/camera view of a given feature unchanged (coverslip always faces the objective). | **Not encoded** (see below) | **GAP** |
+| 1b | **Slide insertion** | A slide can be slotted into the holder **two ways** -- an in-plane 180-degree rotation (frosted label at one end or the other). This rotates both the bench view and the camera view of the whole slide by 180. | **Not encoded** (per-slide, physical) | **GAP** |
 | 2 | **Optical flip** | Objective + tube-lens parity. | Per-detector YAML `id_detector.flip_x/flip_y` -> `MicroscopeConfigManager.getDetectorFlipX/Y(detectorId)` | false on both rigs |
 | 3 | **Camera orientation** | Camera mounting rotation on the port. | `CameraOrientation` pref -> `QPPreferenceDialog.getCameraOrientationProperty()` | pref |
 | 4 | **Stage polarity** | Physical stage direction for a `+X/+Y` command. **Net of MicroManager's own axis inversion** (e.g. OWS3 inverts X in MM) plus wiring -- detected from behaviour, so never add a QPSC flip to compensate for the MM invert. | `StagePolarity` pref -> `QPPreferenceDialog.getStagePolarityProperty()` | pref |
