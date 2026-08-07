@@ -224,11 +224,19 @@ public class StageMapWindow {
      */
     private String slotPreviewCarrierId;
 
+    /**
+     * The slot previews last applied, retained while active so that switching the Stage Map to a
+     * different insert and back to the preview carrier RESTORES the macro layout (switch-away only
+     * hides them). Nulled only by a full {@link #clearSlotPreviews()} (run end).
+     */
+    private java.util.List<StageMapCanvas.SlotMacroPreview> retainedSlotPreviews;
+
     private void applySlotPreviews(StageInsert carrier, java.util.List<StageMapCanvas.SlotMacroPreview> previews) {
         // Record which carrier these previews belong to BEFORE selecting it below, so the
         // insert-change handler that select() fires sees a matching id and does not clear the
         // previews we are about to draw.
         slotPreviewCarrierId = carrier != null ? carrier.getId() : null;
+        retainedSlotPreviews = previews;
         // Sync the map to the carrier so slot indices/rects in the previews match what is
         // drawn. Prefer selecting the matching dropdown item (fires the canvas + overlay
         // update); fall back to setting the insert directly.
@@ -270,6 +278,7 @@ public class StageMapWindow {
         }
         savedApplyFlipsState = null;
         slotPreviewCarrierId = null;
+        retainedSlotPreviews = null;
     }
 
     /**
@@ -540,18 +549,31 @@ public class StageMapWindow {
             // single-macro overlay would span all slots), single-slide inserts re-enable it.
             checkMacroOverlayAvailability();
             // Multi-slide slot previews (rotated macros over a specific carrier's slots) are
-            // otherwise only cleared by the assignment dialog, so they linger when the user
-            // manually switches the Stage Map to another insert -- e.g. a quad_v vertical
-            // layout staying "still vertical" over a single-horizontal insert. Clear them when
-            // switching AWAY from the carrier they were built for; re-selecting the same carrier
-            // keeps them as the intended layout reference. (applySlotPreviews sets
-            // slotPreviewCarrierId before it selects the carrier, so this does not fight it.)
-            if (slotPreviewCarrierId != null && (selected == null || !slotPreviewCarrierId.equals(selected.getId()))) {
-                logger.info(
-                        "Insert changed to '{}' away from slot-preview carrier '{}' -- clearing multi-slide previews",
-                        selected != null ? selected.getId() : "(none)",
-                        slotPreviewCarrierId);
-                clearSlotPreviews();
+            // meaningless on another insert, so HIDE them when the user switches the Stage Map to
+            // a different carrier -- but RETAIN the data so switching back to the preview carrier
+            // RESTORES the macro layout (previously they were fully cleared on switch-away, so
+            // e.g. single-slide -> back-to-quad_v-vertical mid-run left the macro gone). A true
+            // discard only happens via clearSlotMacroPreviews() (run end). (applySlotPreviews sets
+            // slotPreviewCarrierId + retainedSlotPreviews before it selects the carrier, so the
+            // re-draw branch below does not fight it.)
+            if (slotPreviewCarrierId != null) {
+                boolean sameCarrier = selected != null && slotPreviewCarrierId.equals(selected.getId());
+                if (sameCarrier) {
+                    if (canvas != null && retainedSlotPreviews != null) {
+                        logger.info(
+                                "Insert re-selected preview carrier '{}' -- restoring multi-slide previews",
+                                slotPreviewCarrierId);
+                        canvas.setSlotMacroPreviews(retainedSlotPreviews);
+                    }
+                } else {
+                    logger.info(
+                            "Insert changed to '{}' away from slot-preview carrier '{}' -- hiding previews (retained)",
+                            selected != null ? selected.getId() : "(none)",
+                            slotPreviewCarrierId);
+                    if (canvas != null) {
+                        canvas.clearSlotMacroPreviews();
+                    }
+                }
             }
         });
 
