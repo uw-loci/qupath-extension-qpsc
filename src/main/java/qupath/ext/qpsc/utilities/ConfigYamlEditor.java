@@ -419,6 +419,65 @@ public final class ConfigYamlEditor {
         return new Result(true, "appended " + newKey + " under " + pathStr(parentPath));
     }
 
+    /**
+     * Set (create or update) a scalar {@code field} directly under a top-level block
+     * {@code blockKey} -- e.g. {@code light_path.scope_type}. Creates the block and/or the field if
+     * absent and updates it in place if present. Idempotent (no-op when the value already matches).
+     * String values are quoted only when a bare token would round-trip to a YAML 1.1 boolean.
+     *
+     * @param configPath the microscope YAML to edit
+     * @param blockKey   a top-level block key (created at indent 0 if missing)
+     * @param field      the scalar field directly under the block
+     * @param value      the string value to write
+     * @return a {@link Result} describing whether the file changed
+     */
+    public static Result setTopLevelChildScalar(Path configPath, String blockKey, String field, String value)
+            throws IOException {
+        List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
+        String formatted = formatScalarString(value);
+        int blockLine = findTopLevelKey(lines, blockKey);
+        if (blockLine < 0) {
+            // Create the block at end of file with its single child.
+            int insertAt = lines.size();
+            while (insertAt > 0 && lines.get(insertAt - 1).isBlank()) insertAt--;
+            List<String> add = new ArrayList<>();
+            add.add(blockKey + ":");
+            add.add("  " + field + ": " + formatted);
+            lines.addAll(insertAt, add);
+            Files.write(configPath, lines, StandardCharsets.UTF_8);
+            logger.info("ConfigYamlEditor: created {}.{} = {}", blockKey, field, formatted);
+            return new Result(true, "created " + blockKey + "." + field + " = " + formatted);
+        }
+        int childIndent = detectChildIndent(lines, blockLine, 0);
+        int blockEnd = findBlockEnd(lines, blockLine + 1, 0);
+        // Locate an existing scalar field with matchesKey (findChildKey only matches valueless
+        // parent keys, so it never finds a scalar like "scope_type: inverted").
+        int fieldLine = -1;
+        for (int i = blockLine + 1; i < blockEnd; i++) {
+            if (matchesKey(lines.get(i), childIndent, field)) {
+                fieldLine = i;
+                break;
+            }
+        }
+        if (fieldLine >= 0) {
+            String existing = scalarValueOf(lines.get(fieldLine));
+            if (existing != null && existing.equals(value)) {
+                return new Result(false, "No change (already " + formatted + ")");
+            }
+            lines.set(fieldLine, repeat(' ', childIndent) + field + ": " + formatted);
+            Files.write(configPath, lines, StandardCharsets.UTF_8);
+            logger.info("ConfigYamlEditor: {}.{} {} -> {}", blockKey, field, existing, formatted);
+            return new Result(true, blockKey + "." + field + " -> " + formatted);
+        }
+        // Block exists but field is absent -> insert at end of the block.
+        int insertAt = blockEnd;
+        while (insertAt - 1 > blockLine && lines.get(insertAt - 1).isBlank()) insertAt--;
+        lines.add(insertAt, repeat(' ', childIndent) + field + ": " + formatted);
+        Files.write(configPath, lines, StandardCharsets.UTF_8);
+        logger.info("ConfigYamlEditor: added {}.{} = {}", blockKey, field, formatted);
+        return new Result(true, "added " + blockKey + "." + field + " = " + formatted);
+    }
+
     // ---------- internals ----------
 
     /** Walk a key path, returning the line index of the deepest key, or -1. */

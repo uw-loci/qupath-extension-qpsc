@@ -32,6 +32,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.LightPathModel;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
@@ -84,6 +85,12 @@ public class StageMapWindow {
     private boolean suppressFlipCheckboxListener = false;
     /** Apply Flips checkbox -- promoted to a field so init/source-change paths can sync its state. */
     private CheckBox applyFlipsCheckbox;
+
+    // Live Stage View slide-placement factors, seeded from the YAML light_path block and written
+    // back on change. The Stage View bench flip derives from these via LightPathModel.
+    private String svScopeType;
+    private String svSlideInsertion;
+    private String svInvertedFlipAxis;
 
     private Label positionLabel;
     private Label targetLabel;
@@ -780,28 +787,60 @@ public class StageMapWindow {
         // physically sits on the stage (the inverted-vs-upright scope + optical flip that QPSC
         // stores nowhere). Only affects Stage View; AUTO leaves Stage View identical to Camera
         // View (the historical, inert behaviour), so the default never changes what users see.
+        // The physical slide-placement factors (orientation-stack factor 1), recorded per
+        // microscope in the YAML light_path block. Stage View derives its flip from these via
+        // LightPathModel; Camera View is unaffected. Defaults (upright + Way A) give an identity
+        // bench flip, so Stage View == Camera View until the rig is described -- no regression.
+        // Changes write straight to the microscope YAML so the Stage Map and setup wizard share
+        // one source of truth. The three drop-downs mirror the light-path simulator.
+        svScopeType = LightPathModel.scopeType();
+        svSlideInsertion = LightPathModel.slideInsertion();
+        svInvertedFlipAxis = LightPathModel.invertedFlipAxis();
+
         Label stageViewLabel = new Label("Stage view:");
-        ComboBox<String> stageViewCombo = new ComboBox<>();
-        stageViewCombo.getItems().addAll(STAGE_VIEW_LABELS);
-        stageViewCombo
+        ComboBox<String> scopeCombo = new ComboBox<>();
+        scopeCombo.getItems().addAll("Upright", "Inverted");
+        scopeCombo
                 .getSelectionModel()
-                .select(stageViewLabelForKey(PersistentPreferences.getStageViewOrientation()));
-        stageViewCombo.setTooltip(new Tooltip("Stage View orientation.\n\n"
-                + "Supplies the flip between the camera view and how the slide\n"
-                + "physically sits on the stage -- the inverted-vs-upright scope\n"
-                + "and optical flip that QPSC does not store anywhere else. Set it\n"
-                + "by eye until Stage View matches the slide on the bench.\n\n"
-                + "Auto = Stage View identical to Camera View (default; no change).\n"
-                + "Only affects Stage View; Camera View is unchanged."));
-        stageViewCombo.setOnAction(e -> {
-            String key = stageViewKeyForLabel(stageViewCombo.getSelectionModel().getSelectedItem());
-            PersistentPreferences.setStageViewOrientation(key);
-            logger.info("Stage View orientation set to: {}", key);
-            // Re-apply immediately if the map is currently showing Stage View.
-            if (canvas != null && applyFlipsCheckbox != null && !applyFlipsCheckbox.isSelected()) {
-                boolean[] axes = resolveViewFlipAxes(false);
-                canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
-            }
+                .select(LightPathModel.SCOPE_INVERTED.equals(svScopeType) ? "Inverted" : "Upright");
+        scopeCombo.setTooltip(new Tooltip("Scope type (factor 1a): inverted (objective below,\n"
+                + "coverslip down) vs upright (objective above, coverslip up).\n"
+                + "Written to light_path.scope_type."));
+        ComboBox<String> insertCombo = new ComboBox<>();
+        insertCombo.getItems().addAll("Slide A", "Slide B (180)");
+        insertCombo
+                .getSelectionModel()
+                .select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? "Slide B (180)" : "Slide A");
+        insertCombo.setTooltip(new Tooltip("Slide insertion (factor 1b): the two ways a slide drops\n"
+                + "into the holder (in-plane 180). Written to light_path.slide_insertion."));
+        ComboBox<String> axisCombo = new ComboBox<>();
+        axisCombo.getItems().addAll("Turn V", "Turn H");
+        axisCombo
+                .getSelectionModel()
+                .select(LightPathModel.AXIS_HORIZONTAL.equals(svInvertedFlipAxis) ? "Turn H" : "Turn V");
+        axisCombo.setTooltip(new Tooltip("Inverted turn-over axis: which way the slide is flipped\n"
+                + "over to face the coverslip down (only affects inverted scopes).\n"
+                + "Written to light_path.inverted_flip_axis."));
+
+        scopeCombo.setOnAction(e -> {
+            svScopeType = "Inverted".equals(scopeCombo.getValue())
+                    ? LightPathModel.SCOPE_INVERTED
+                    : LightPathModel.SCOPE_UPRIGHT;
+            LightPathModel.writeFactor(LightPathModel.KEY_SCOPE_TYPE, svScopeType);
+            reapplyStageViewFlip();
+        });
+        insertCombo.setOnAction(e -> {
+            svSlideInsertion =
+                    "Slide B (180)".equals(insertCombo.getValue()) ? LightPathModel.INSERT_B : LightPathModel.INSERT_A;
+            LightPathModel.writeFactor(LightPathModel.KEY_SLIDE_INSERTION, svSlideInsertion);
+            reapplyStageViewFlip();
+        });
+        axisCombo.setOnAction(e -> {
+            svInvertedFlipAxis = "Turn H".equals(axisCombo.getValue())
+                    ? LightPathModel.AXIS_HORIZONTAL
+                    : LightPathModel.AXIS_VERTICAL;
+            LightPathModel.writeFactor(LightPathModel.KEY_INVERTED_FLIP_AXIS, svInvertedFlipAxis);
+            reapplyStageViewFlip();
         });
 
         // NOTE: Initial flip state is applied in show() after the stage is visible.
@@ -818,7 +857,9 @@ public class StageMapWindow {
                         spacer,
                         applyFlipsCheckbox,
                         stageViewLabel,
-                        stageViewCombo,
+                        scopeCombo,
+                        insertCombo,
+                        axisCombo,
                         macroOverlayCheckbox,
                         configButton,
                         calibrateButton,
@@ -1759,49 +1800,23 @@ public class StageMapWindow {
         return axes;
     }
 
-    /** Canonical Stage View orientation keys (stored in prefs) and their friendly combo labels. */
-    private static final String[] STAGE_VIEW_KEYS = {"AUTO", "FLIP_H", "FLIP_V", "ROT_180"};
-
-    private static final String[] STAGE_VIEW_LABELS = {"Auto", "Flip horizontal", "Flip vertical", "Rotate 180"};
-
-    private static String stageViewLabelForKey(String key) {
-        for (int i = 0; i < STAGE_VIEW_KEYS.length; i++) {
-            if (STAGE_VIEW_KEYS[i].equals(key)) {
-                return STAGE_VIEW_LABELS[i];
-            }
-        }
-        return STAGE_VIEW_LABELS[0];
-    }
-
-    private static String stageViewKeyForLabel(String label) {
-        for (int i = 0; i < STAGE_VIEW_LABELS.length; i++) {
-            if (STAGE_VIEW_LABELS[i].equals(label)) {
-                return STAGE_VIEW_KEYS[i];
-            }
-        }
-        return STAGE_VIEW_KEYS[0];
-    }
-
     /**
-     * The operator-set Stage View orientation flip -- the bench flip between the camera view and
-     * how the slide physically sits on the stage. This is factor 1 (inverted-vs-upright scope) and
-     * factor 2 (optical flip) of the orientation stack, which QPSC does not encode anywhere else;
-     * it is supplied by eye via the Stage View combo. {@code AUTO} = identity, so Stage View is
-     * then identical to Camera View (the historical, inert behaviour).
+     * The bench flip for Stage View, derived from the live slide-placement drop-downs
+     * ({@link #svScopeType} / {@link #svSlideInsertion} / {@link #svInvertedFlipAxis}) via
+     * {@link LightPathModel#benchFlipFlags(String, String, String)}. The same derivation the setup
+     * wizard uses, so the two never diverge. Defaults (upright + Way A) reduce to identity.
      *
      * @return {@code {flipX, flipY}}; never null
      */
     private boolean[] stageViewFlipFlags() {
-        String key = PersistentPreferences.getStageViewOrientation();
-        switch (key) {
-            case "FLIP_H":
-                return new boolean[] {true, false};
-            case "FLIP_V":
-                return new boolean[] {false, true};
-            case "ROT_180":
-                return new boolean[] {true, true};
-            default:
-                return new boolean[] {false, false};
+        return LightPathModel.benchFlipFlags(svScopeType, svSlideInsertion, svInvertedFlipAxis);
+    }
+
+    /** Re-apply the canvas flip when a slide-placement drop-down changes and Stage View is showing. */
+    private void reapplyStageViewFlip() {
+        if (canvas != null && applyFlipsCheckbox != null && !applyFlipsCheckbox.isSelected()) {
+            boolean[] axes = resolveViewFlipAxes(false);
+            canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
         }
     }
 
@@ -1811,8 +1826,8 @@ public class StageMapWindow {
      * <ul>
      *   <li><b>Camera View</b> -- the camera-orientation flip only ({@link #resolveCurrentFlipAxes()}),
      *       matching the Live Viewer / acquisition image.</li>
-     *   <li><b>Stage View</b> -- Camera View XOR the operator's {@link #stageViewFlipFlags()}, adding
-     *       the unencoded bench flip so the map matches the slide as it sits on the stage.</li>
+     *   <li><b>Stage View</b> -- Camera View XOR the derived {@link #stageViewFlipFlags()} bench flip,
+     *       so the map matches the slide as it physically sits on the stage.</li>
      * </ul>
      *
      * <p>While slot previews are shown (orientation check), returns identity -- the previews are

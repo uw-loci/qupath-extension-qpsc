@@ -3,7 +3,6 @@ package qupath.ext.qpsc.utilities;
 import java.awt.image.BufferedImage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager.TransformPreset;
 import qupath.lib.projects.ProjectImageEntry;
@@ -29,10 +28,10 @@ import qupath.lib.projects.ProjectImageEntry;
  *       camera; and <b>(1b) slide insertion</b> -- a slide can be slotted into the holder two ways
  *       (an in-plane 180-degree rotation, frosted label at either end). Neither changes the
  *       eyepiece/camera view of a given feature (the coverslip always faces the objective), but
- *       together they set how the slide reads on the stage. <b>Not encoded anywhere</b> in QPSC
- *       config today. The operator supplies the net effect on the Stage Map by eye via
- *       {@link PersistentPreferences#getStageViewOrientation()} (a display-only proxy, not a
- *       per-microscope hardware fact).</li>
+ *       together they set how the slide reads on the stage. Recorded per microscope in the YAML
+ *       {@code light_path} block ({@link #scopeType()} / {@link #slideInsertion()} /
+ *       {@link #invertedFlipAxis()}) and reduced to a bench flip by {@link #currentBenchFlip()};
+ *       the Stage Map and setup wizard both derive their Stage View from it.</li>
  *   <li><b>Optical flip</b> -- objective + tube-lens parity, nominally the per-detector
  *       {@code flip_x/flip_y} in the microscope YAML, read via
  *       {@link MicroscopeConfigManager#getDetectorFlipX(String)} /
@@ -64,6 +63,111 @@ public final class LightPathModel {
     private static final Logger logger = LoggerFactory.getLogger(LightPathModel.class);
 
     private LightPathModel() {}
+
+    // ------------------------------------------------------------------
+    // Factor 1 (slide placement) -- per-microscope YAML light_path block
+    // ------------------------------------------------------------------
+
+    /** Top-level YAML block holding the per-microscope slide-placement factors. */
+    public static final String BLOCK = "light_path";
+
+    public static final String KEY_SCOPE_TYPE = "scope_type"; // factor 1a
+    public static final String KEY_SLIDE_INSERTION = "slide_insertion"; // factor 1b
+    public static final String KEY_INVERTED_FLIP_AXIS = "inverted_flip_axis"; // how you turn it over
+
+    public static final String SCOPE_UPRIGHT = "upright";
+    public static final String SCOPE_INVERTED = "inverted";
+    public static final String INSERT_A = "A";
+    public static final String INSERT_B = "B";
+    public static final String AXIS_VERTICAL = "vertical";
+    public static final String AXIS_HORIZONTAL = "horizontal";
+
+    /** Scope type from config; defaults to {@link #SCOPE_UPRIGHT} (identity bench flip) when unset. */
+    public static String scopeType() {
+        return readOr(KEY_SCOPE_TYPE, SCOPE_UPRIGHT);
+    }
+
+    /** Default slide insertion from config; defaults to {@link #INSERT_A} (identity) when unset. */
+    public static String slideInsertion() {
+        return readOr(KEY_SLIDE_INSERTION, INSERT_A);
+    }
+
+    /** Which axis the slide is turned over to face the coverslip down on an inverted scope. */
+    public static String invertedFlipAxis() {
+        return readOr(KEY_INVERTED_FLIP_AXIS, AXIS_VERTICAL);
+    }
+
+    private static String readOr(String field, String dflt) {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) {
+            return dflt;
+        }
+        String v = mgr.getString(BLOCK, field);
+        return (v == null || v.isBlank()) ? dflt : v.trim();
+    }
+
+    /**
+     * Derive the bench flip -- the {flipX, flipY} that takes the camera-oriented view to how the
+     * slide physically sits on the stage -- from the two placement factors. Pure geometry: the
+     * scope-face flip (upright = identity; inverted = mirror about the turn-over axis) composed with
+     * the insertion (Way B = in-plane 180). Axis-aligned, so it reduces to two booleans.
+     *
+     * <p>This is the single source of truth shared by the Stage Map's Stage View and the setup
+     * wizard, so the two never diverge. {@code upright + A} = identity, matching the historical inert
+     * default (Stage View == Camera View).
+     *
+     * @param scopeType {@link #SCOPE_UPRIGHT} or {@link #SCOPE_INVERTED}
+     * @param insertion {@link #INSERT_A} or {@link #INSERT_B}
+     * @param invAxis   {@link #AXIS_VERTICAL} or {@link #AXIS_HORIZONTAL} (only used when inverted)
+     * @return {@code {flipX, flipY}}; never null
+     */
+    public static boolean[] benchFlipFlags(String scopeType, String insertion, String invAxis) {
+        // Diagonal-only 2x2 (a, d) with a,d in {+1,-1}: flipX = a<0, flipY = d<0.
+        int sa = 1;
+        int sd = 1;
+        if (SCOPE_INVERTED.equalsIgnoreCase(scopeType)) {
+            if (AXIS_HORIZONTAL.equalsIgnoreCase(invAxis)) {
+                sa = -1; // mirror X (turn over about the short axis)
+            } else {
+                sd = -1; // mirror Y (turn over about the long axis) -- default
+            }
+        }
+        int ia = INSERT_B.equalsIgnoreCase(insertion) ? -1 : 1; // Way B = in-plane 180
+        int id = ia;
+        return new boolean[] {sa * ia < 0, sd * id < 0};
+    }
+
+    /** The bench flip for the active microscope, read from config (or the identity default). */
+    public static boolean[] currentBenchFlip() {
+        return benchFlipFlags(scopeType(), slideInsertion(), invertedFlipAxis());
+    }
+
+    /**
+     * Persist one slide-placement factor to the active microscope's YAML {@code light_path} block.
+     * No-op (returns false) when there is no writable config. Callers should reload the config
+     * afterwards if they need the change reflected in subsequent reads.
+     *
+     * @param field one of {@link #KEY_SCOPE_TYPE}, {@link #KEY_SLIDE_INSERTION},
+     *              {@link #KEY_INVERTED_FLIP_AXIS}
+     * @param value the value to write
+     * @return {@code true} if the file was changed
+     */
+    public static boolean writeFactor(String field, String value) {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null || mgr.getConfigPath() == null) {
+            logger.warn("LightPathModel.writeFactor({}={}): no writable config", field, value);
+            return false;
+        }
+        try {
+            ConfigYamlEditor.Result r = ConfigYamlEditor.setTopLevelChildScalar(
+                    java.nio.file.Path.of(mgr.getConfigPath()), BLOCK, field, value);
+            logger.info("LightPathModel.writeFactor: {}", r.message);
+            return r.changed;
+        } catch (Exception e) {
+            logger.error("LightPathModel.writeFactor({}={}) failed: {}", field, value, e.getMessage());
+            return false;
+        }
+    }
 
     /**
      * Resolve and format the full orientation stack for the current preferences, active detector,
@@ -105,7 +209,7 @@ public final class LightPathModel {
             macroFlip = "(no entry/preset in context)";
         }
 
-        String stageViewPref = PersistentPreferences.getStageViewOrientation();
+        boolean[] bench = currentBenchFlip();
 
         StringBuilder sb = new StringBuilder(1024);
         sb.append("LightPathModel -- orientation stack for microscope '")
@@ -115,10 +219,17 @@ public final class LightPathModel {
             sb.append(" [OFFLINE/placeholder]");
         }
         sb.append(":").append(System.lineSeparator());
-        sb.append("  1. Slide placement    : NOT ENCODED (inverted vs upright; physical). ")
-                .append("Stage Map proxy = stageViewOrientation pref '")
-                .append(stageViewPref)
-                .append("'")
+        sb.append("  1. Slide placement    : scope=")
+                .append(scopeType())
+                .append(", insertion=")
+                .append(slideInsertion())
+                .append(", flipAxis=")
+                .append(invertedFlipAxis())
+                .append(" -> bench flip (")
+                .append(bench[0])
+                .append(", ")
+                .append(bench[1])
+                .append(")  [YAML light_path.*]")
                 .append(System.lineSeparator());
         sb.append("  2. Optical flip       : ")
                 .append(opticalFlip)

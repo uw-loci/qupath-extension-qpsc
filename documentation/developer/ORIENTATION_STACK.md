@@ -52,40 +52,48 @@ composite/transform are right. That is the root of the Stage-Map and SIFT-auto-m
 | **OWS3** | inverted / face-down | (false,false) | NORMAL | INVERT_XY | **(true,true)** | (false,false) |
 | **PPM**  | upright / face-up    | (false,false) | NORMAL | NORMAL    | **(false,false)** | (false,false) |
 
-## The Stage View orientation control (factor 1's display proxy)
+## The Stage View orientation control (factor 1, made explicit)
 
-Since factor 1 is unencoded, the Stage Map cannot *compute* the difference between "how the camera
-sees it" and "how the slide sits on the stage". The **Stage View orientation** control
-(`PersistentPreferences.stageViewOrientation`: `AUTO | FLIP_H | FLIP_V | ROT_180`) lets the operator
-supply that bench flip by eye:
+Factor 1 is unencoded in the *hardware* stack, so the Stage Map cannot derive the difference between
+"how the camera sees it" and "how the slide sits on the stage" from polarity/camera/detector alone.
+Instead it is described **per microscope** in the YAML `light_path` block and reduced to a bench flip
+deterministically:
+
+```yaml
+light_path:
+  scope_type: inverted        # factor 1a: upright | inverted
+  slide_insertion: A          # factor 1b default: A | B (in-plane 180)
+  inverted_flip_axis: vertical # how the slide is turned over: vertical | horizontal
+```
 
 - **Camera View** = camera-only flip (matches the Live Viewer / acquisition image).
-- **Stage View** = Camera View XOR the Stage View orientation.
-- `AUTO` (default) = identity, so Stage View == Camera View -- the historical, inert behaviour. No
-  regression until an operator deliberately sets it.
+- **Stage View** = Camera View XOR `LightPathModel.benchFlipFlags(scope, insertion, axis)` -- the
+  pure-geometry reduction `scopeFace o insertion` (unit-tested in `LightPathModelBenchFlipTest`).
+- Defaults (`upright + A`) reduce to identity, so Stage View == Camera View -- the historical, inert
+  behaviour. No regression until the rig is described.
 
-This is a **display-only proxy on the current install**, not yet a per-microscope hardware fact --
-see the open decision below.
+The Stage Map's three drop-downs (scope / slide / turn-over axis) read and write this block via
+`ConfigYamlEditor.setTopLevelChildScalar`, so the map and the setup wizard share one source of truth.
+`LightPathModel.benchFlipFlags` is that shared derivation; the light-path simulator uses the same
+`scopeFace o insertion` composition.
 
-## Open decision: making this per-microscope and surfacing it at setup
+## Per-microscope source of truth + setup (status)
 
 The goal is **one per-microscope source of truth** for these settings, reviewed/confirmed during
-initial setup rather than scattered across prefs, YAML, and presets. Today:
+initial setup. Where each factor lives today:
 
-- Factors 3 and 4 are **install-wide prefs** (auto-detected), not per-microscope YAML.
-- Factor 2 is **per-detector YAML**.
-- Factor 1 is **nowhere**.
+- Factor 1 (1a scope type, 1b slide insertion): **per-microscope YAML `light_path` block** (done).
+- Factor 2 (optical flip): **per-detector YAML** `id_detector.flip_x/flip_y`.
+- Factors 3 and 4 (camera, polarity): **install-wide prefs**, auto-detected.
 
-Proposed direction (pending sign-off):
+Decisions locked (2026-08-07):
 
-1. Add a per-microscope YAML `light_path:` block: `slide_placement: inverted|upright` (factor 1) and
-   optionally the *canonical* `camera_orientation` / `stage_polarity` as documented per-scope values,
-   so a fresh install inherits the rig's known-good orientation instead of re-detecting blind.
-2. Make `LightPathModel` read factor 1 from that block (falling back to the Stage View pref proxy
-   when absent), so the Stage Map derives its Stage View instead of the operator dialing it each time.
-3. Surface a **review-and-confirm step** in the setup wizard that shows the `LightPathModel` dump and
-   the `StageImageTransform.describe()` behaviour, and writes confirmed values back to the YAML.
+1. **DONE** -- `light_path` YAML block (`scope_type`, `slide_insertion`, `inverted_flip_axis`), read
+   by `LightPathModel` and written by `ConfigYamlEditor.setTopLevelChildScalar`.
+2. **DONE** -- the Stage Map Stage View uses explicit physical drop-downs (scope / slide / turn-over)
+   backed by that block, replacing the interim by-eye `stageViewOrientation` pref (now removed).
+3. **PENDING (Phase 3)** -- a **fully editable setup-wizard page** with a live slide + FOV preview
+   (mirroring the light-path simulator) that writes all orientation factors to the YAML. This is the
+   remaining piece; it needs JavaFX runtime verification and will build on `LightPathModel`.
 
-The scope of step 3 (confirm-only vs a fully editable wizard page) and the exact YAML keys are the
-decision to lock before implementing. Until then, `stageViewOrientation` is the interim operator
-control and this document + `LightPathModel` are the single source of truth in code.
+`LightPathModel` and this document remain the single source of truth in code.

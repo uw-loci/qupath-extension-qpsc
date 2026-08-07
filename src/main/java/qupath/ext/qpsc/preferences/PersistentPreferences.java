@@ -79,26 +79,6 @@ public class PersistentPreferences {
         stageMapInsertProperty.set(insertId == null ? "" : insertId);
     }
 
-    /**
-     * Stage Map "Stage View" orientation relative to the Camera View, i.e. how the slide
-     * physically sits on the stage vs. what the camera sees. This is NOT encoded by
-     * Camera Orientation / Stage Polarity / detector flip (all can be identity while the
-     * optics still flip camera-vs-stage), so the operator sets it per scope for the map
-     * DISPLAY only. Values: {@code AUTO} (Stage View == Camera View; today's behavior,
-     * inert), {@code FLIP_H}, {@code FLIP_V}, {@code ROT_180}.
-     */
-    private static final StringProperty stageViewOrientationProperty =
-            PathPrefs.createPersistentPreference("stageViewOrientation", "AUTO");
-
-    public static String getStageViewOrientation() {
-        String v = stageViewOrientationProperty.get();
-        return (v == null || v.isBlank()) ? "AUTO" : v;
-    }
-
-    public static void setStageViewOrientation(String value) {
-        stageViewOrientationProperty.set((value == null || value.isBlank()) ? "AUTO" : value);
-    }
-
     /** Last "Rotate all slides" value (deg) in the Multi-Slide dialog -- slides are usually
      * mounted the same way, so it is restored across sessions. */
     private static final StringProperty multiSlideRotateAllProperty =
