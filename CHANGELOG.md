@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+**Live Viewer Camera tab: Profile default now matches current objective**
+- The Profile dropdown in the Camera tab now defaults to the profile matching the currently-active objective (e.g., showing `Brightfield_20x` when the objective is 20x), using the same resolution rule as acquisition workflows. Previously the dropdown defaulted to the first profile in the list regardless of objective, which could show `Brightfield_10x` on a 20x objective and require a manual selection change. A user's manual selection is still retained across rebuilds (e.g., when switching modalities).
+
 ### Added
 
 **MicroManager Folder Stitch: axis inversion controls**

@@ -221,7 +221,7 @@ Shows the current hardware and provides modality-dependent camera controls.
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Profile | Dropdown | Pick the acquisition profile (e.g. `Brightfield_10x`). Selection applies immediately, running `APPLYPR` to switch the light path, then rebuilds the panel so the displayed exposure/illumination fields re-pull from saved prefs and re-push to hardware. (No separate Apply button -- changing the dropdown is the apply.) |
+| Profile | Dropdown | Pick the acquisition profile (e.g. `Brightfield_10x`). The dropdown defaults to the profile matching the current objective (e.g., `Brightfield_20x` when the 20x objective is active), using the same resolution as acquisition workflows. Selection applies immediately, running `APPLYPR` to switch the light path, then rebuilds the panel so the displayed exposure/illumination fields re-pull from saved prefs and re-push to hardware. (No separate Apply button -- changing the dropdown is the apply.) A manual selection is retained across rebuilds (e.g., when switching modalities). |
 | Exposure (ms) | Text field | Sets the camera exposure. Commits on **Enter or focus-loss** (no Set button) and persists as the Camera default the next Bounded Acquisition inherits. |
 | Lamp / Intensity | Slider + Text field + ON/OFF | Sets the live lamp power. The slider sends on release; the text field commits on **Enter or focus-loss** (no Set button). The tuned value is persisted per modality and restored on the next session. |
 | Brightfield WB | Button | Applies the single white balance preset (no rotation). |

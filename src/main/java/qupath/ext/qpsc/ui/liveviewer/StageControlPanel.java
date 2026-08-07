@@ -2632,7 +2632,21 @@ public class StageControlPanel extends VBox {
             // Apply ends up displayed as Brightfield_10x even though they
             // applied 20x. The retained selection also lets Apply Profile
             // rebuild without losing context.
+            // Base default: the profile the CURRENT OBJECTIVE actually resolves to
+            // (same rule acquisition uses), not just the first in the list -- so on
+            // a 20x objective the Camera tab shows Brightfield_20x, not Brightfield_10x.
             String defaultSelection = matchingProfiles.get(0);
+            try {
+                if (currentCameraObjectiveId != null) {
+                    String resolved = mgr.resolveProfileKey(modality, currentCameraObjectiveId);
+                    if (resolved != null && matchingProfiles.contains(resolved)) {
+                        defaultSelection = resolved;
+                    }
+                }
+            } catch (Exception ex) {
+                logger.debug("Could not resolve objective profile for Camera tab default: {}", ex.getMessage());
+            }
+            // A retained user pick still wins across rebuilds (Apply Profile, preset load).
             if (cameraActiveProfile != null && matchingProfiles.contains(cameraActiveProfile)) {
                 defaultSelection = cameraActiveProfile;
             }
