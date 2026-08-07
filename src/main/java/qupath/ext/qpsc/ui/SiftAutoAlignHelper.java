@@ -112,26 +112,47 @@ public final class SiftAutoAlignHelper {
         int regionW = Math.min(server.getWidth() - regionX, (int) (tileW + 2 * marginPx));
         int regionH = Math.min(server.getHeight() - regionY, (int) (tileH + 2 * marginPx));
 
+        // Read the WSI region at the resolution SIFT will actually use, not full-res.
+        // The server downscales both images to fine_target = max(micro_px, wsi_px,
+        // min_px) for the fine pass (coarser for the coarse pass), so reading full-res
+        // and letting the server downscale wastes I/O -- a 6614^2 region read + PNG
+        // write when SIFT uses ~1657^2 (~10s in OWS3 logs). Pre-downscaling to the fine
+        // target and reporting the region's EXACT effective pixel size (below) leaves
+        // the server's fine-target and the returned um offset unchanged (the offset math
+        // is invariant), so the stage move is identical -- only far fewer pixels move.
+        double siftMinPx = PersistentPreferences.getSiftMinPixelSize();
+        double siftTargetPx = Math.max(microPixelSize, Math.max(wsiPixelSize, siftMinPx));
+        double readDownsample = Math.max(1.0, siftTargetPx / wsiPixelSize);
         logger.info(
-                "Extracting WSI region: ({}, {}) {}x{} pixels (margin={}um={}px)",
+                "Extracting WSI region: ({}, {}) {}x{} full-res px (margin={}um={}px), read at downsample {} "
+                        + "(SIFT target {} um/px)",
                 regionX,
                 regionY,
                 regionW,
                 regionH,
                 marginUm,
-                (int) marginPx);
+                (int) marginPx,
+                String.format("%.2f", readDownsample),
+                String.format("%.3f", siftTargetPx));
 
-        RegionRequest request = RegionRequest.createInstance(server.getPath(), 1.0, regionX, regionY, regionW, regionH);
+        RegionRequest request =
+                RegionRequest.createInstance(server.getPath(), readDownsample, regionX, regionY, regionW, regionH);
         BufferedImage wsiRegion = server.readRegion(request);
+        // Exact effective pixel size of the returned (downsampled) region, derived from
+        // its actual dimensions so the um offset is exact regardless of readRegion
+        // rounding. Sent to the server as --wsi-px in place of the full-res value.
+        double effectiveWsiPx =
+                wsiRegion.getWidth() > 0 ? (double) regionW / wsiRegion.getWidth() * wsiPixelSize : wsiPixelSize;
 
         File tempFile = File.createTempFile("sift_wsi_region_", ".png");
         tempFile.deleteOnExit();
         ImageIO.write(wsiRegion, "PNG", tempFile);
         logger.info(
-                "Saved WSI region to temp file: {} ({}x{})",
+                "Saved WSI region to temp file: {} ({}x{}, effective {} um/px)",
                 tempFile.getAbsolutePath(),
                 wsiRegion.getWidth(),
-                wsiRegion.getHeight());
+                wsiRegion.getHeight(),
+                String.format("%.4f", effectiveWsiPx));
 
         ProjectImageEntry<BufferedImage> entry = gui.getProject() != null && gui.getImageData() != null
                 ? gui.getProject().getEntry(gui.getImageData())
@@ -222,7 +243,7 @@ public final class SiftAutoAlignHelper {
                     .siftAutoAlign(
                             tempFile.getAbsolutePath(),
                             microPixelSize,
-                            wsiPixelSize,
+                            effectiveWsiPx,
                             flipX,
                             flipY,
                             minPx,
