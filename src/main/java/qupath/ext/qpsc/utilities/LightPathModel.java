@@ -22,20 +22,20 @@ import qupath.lib.projects.ProjectImageEntry;
  *
  * <h2>The orientation stack (light path, slide to pixels)</h2>
  * <ol>
- *   <li><b>Slide placement</b> -- two independent sub-parts, both physical and both unencoded:
- *       <b>(1a) scope type</b> -- inverted scope (objective below, coverslip down) vs upright
- *       (objective above, coverslip up), which mirrors the naked-eye stage view relative to the
- *       camera; and <b>(1b) slide insertion</b> -- a slide can be slotted into the holder two ways
- *       (an in-plane 180-degree rotation, frosted label at either end). Neither changes the
- *       eyepiece/camera view of a given feature (the coverslip always faces the objective), but
- *       together they set how the slide reads on the stage. Recorded per microscope in the YAML
- *       {@code light_path} block ({@link #scopeType()} / {@link #slideInsertion()} /
- *       {@link #invertedFlipAxis()}) and reduced to a bench flip by {@link #currentBenchFlip()};
- *       the Stage Map and setup wizard both derive their Stage View from it.</li>
- *   <li><b>Optical flip</b> -- objective + tube-lens parity, nominally the per-detector
- *       {@code flip_x/flip_y} in the microscope YAML, read via
- *       {@link MicroscopeConfigManager#getDetectorFlipX(String)} /
- *       {@link MicroscopeConfigManager#getDetectorFlipY(String)}. False on both current rigs.</li>
+ *   <li><b>Slide placement</b> -- two binary factors that span all four axis-aligned orientations:
+ *       <b>(1a) scope type</b> -- upright (face up) vs inverted (face down); and <b>(1b) slide
+ *       insertion</b> -- which side the label is on (an in-plane 180). There is no separate
+ *       "turn-over axis": flipping a slide over its long vs short axis differs only by that in-plane
+ *       180, so it is already captured by insertion. Neither changes the camera view of a given
+ *       feature (the coverslip always faces the objective), but together they set how the slide reads
+ *       on the stage. Recorded per microscope in the YAML {@code light_path} block
+ *       ({@link #scopeType()} / {@link #slideInsertion()}) and reduced to a bench flip by
+ *       {@link #currentBenchFlip()}; the Stage Map and setup wizard both derive their Stage View
+ *       from it.</li>
+ *   <li><b>Optical flip</b> -- objective + tube-lens parity ({@link #opticalFlip()}, YAML
+ *       {@code light_path.optical_flip}). This is why a scope needs a distinct Camera View at all
+ *       (e.g. PPM's objective inversion = 180/XY); it feeds the Stage Map Camera View, display only.
+ *       The per-detector {@code flip_x/flip_y} remains for macro-image resolution.</li>
  *   <li><b>Camera orientation</b> -- the camera's mounting rotation on the port,
  *       {@link CameraOrientation} via {@link QPPreferenceDialog#getCameraOrientationProperty()}.</li>
  *   <li><b>Stage polarity</b> -- which way the stage physically moves for a {@code +X/+Y} command,
@@ -52,11 +52,15 @@ import qupath.lib.projects.ProjectImageEntry;
  * <h2>What is trustworthy</h2>
  * <p>Factors 3 and 4 compose into {@link StageImageTransform} -- its
  * {@link StageImageTransform#stitcherFlipFlags()} (stage+camera composite) drives acquisition and
- * stitching, and its {@link StageImageTransform#cameraFlipFlags()} (camera only) drives the Stage
- * Map. The per-slide alignment transform, fit to real image-to-stage correspondences, captures the
- * <em>combined</em> effect of factors 1-4 and is the empirically correct relationship. Factors 1
- * and 2 being unencoded is why any surface that reads the decomposition alone (the Stage Map) can
- * be wrong even when the composite/transform are right.
+ * stitching. The per-slide alignment transform, fit to real image-to-stage correspondences,
+ * captures the <em>combined</em> effect of all factors and is the empirically correct relationship,
+ * which is why acquisition/navigation/stitching are correct regardless of the display factors below.
+ *
+ * <p>The Stage Map is the surface that reads the decomposition, so it needs factors 1 and 2 named
+ * explicitly: <b>Camera View</b> = {@link StageImageTransform#cameraFlipFlags()} XOR
+ * {@link #currentOpticalFlip()} (so the map matches the Live Viewer), and <b>Stage View</b> =
+ * {@link #currentBenchFlip()} (so it matches the slide on the bench). These are display only and
+ * never touch acquisition.
  */
 public final class LightPathModel {
 
@@ -73,14 +77,16 @@ public final class LightPathModel {
 
     public static final String KEY_SCOPE_TYPE = "scope_type"; // factor 1a
     public static final String KEY_SLIDE_INSERTION = "slide_insertion"; // factor 1b
-    public static final String KEY_INVERTED_FLIP_AXIS = "inverted_flip_axis"; // how you turn it over
+    public static final String KEY_OPTICAL_FLIP = "optical_flip"; // factor 2: camera-vs-stage optical flip
 
     public static final String SCOPE_UPRIGHT = "upright";
     public static final String SCOPE_INVERTED = "inverted";
     public static final String INSERT_A = "A";
     public static final String INSERT_B = "B";
-    public static final String AXIS_VERTICAL = "vertical";
-    public static final String AXIS_HORIZONTAL = "horizontal";
+    public static final String OPTICAL_NONE = "none";
+    public static final String OPTICAL_X = "x";
+    public static final String OPTICAL_Y = "y";
+    public static final String OPTICAL_XY = "xy";
 
     /** Scope type from config; defaults to {@link #SCOPE_UPRIGHT} (identity bench flip) when unset. */
     public static String scopeType() {
@@ -92,9 +98,45 @@ public final class LightPathModel {
         return readOr(KEY_SLIDE_INSERTION, INSERT_A);
     }
 
-    /** Which axis the slide is turned over to face the coverslip down on an inverted scope. */
-    public static String invertedFlipAxis() {
-        return readOr(KEY_INVERTED_FLIP_AXIS, AXIS_VERTICAL);
+    /**
+     * Factor 2: the optical flip between what the camera sees and how the slide sits on the stage
+     * (objective + tube-lens parity). Defaults to {@link #OPTICAL_NONE}. This is the reason a
+     * microscope needs a distinct Camera View at all -- on a scope with no optical flip, the camera
+     * view and the stage view coincide.
+     *
+     * <p><b>Display only.</b> This feeds the Stage Map's Camera View so the map matches the Live
+     * Viewer; it does NOT touch acquisition/navigation/stitching, which are already correct via the
+     * empirically calibrated alignment transform. Because the camera orientation (factor 3) is
+     * {@code NORMAL} on the current rigs, this value equals the net camera-vs-stage flip the
+     * operator observes (e.g. reversed-in-X on OWS3, XY on PPM) -- set it by matching, do not try to
+     * split it from the camera mounting.
+     */
+    public static String opticalFlip() {
+        return readOr(KEY_OPTICAL_FLIP, OPTICAL_NONE);
+    }
+
+    /**
+     * Reduce an optical-flip token to {flipX, flipY}. {@code none} = identity.
+     *
+     * @param value {@link #OPTICAL_NONE} / {@link #OPTICAL_X} / {@link #OPTICAL_Y} / {@link #OPTICAL_XY}
+     * @return {@code {flipX, flipY}}; never null
+     */
+    public static boolean[] opticalFlipFlags(String value) {
+        if (OPTICAL_X.equalsIgnoreCase(value)) {
+            return new boolean[] {true, false};
+        }
+        if (OPTICAL_Y.equalsIgnoreCase(value)) {
+            return new boolean[] {false, true};
+        }
+        if (OPTICAL_XY.equalsIgnoreCase(value)) {
+            return new boolean[] {true, true};
+        }
+        return new boolean[] {false, false};
+    }
+
+    /** The optical flip for the active microscope, read from config (identity default). */
+    public static boolean[] currentOpticalFlip() {
+        return opticalFlipFlags(opticalFlip());
     }
 
     private static String readOr(String field, String dflt) {
@@ -116,30 +158,29 @@ public final class LightPathModel {
      * wizard, so the two never diverge. {@code upright + A} = identity, matching the historical inert
      * default (Stage View == Camera View).
      *
-     * @param scopeType {@link #SCOPE_UPRIGHT} or {@link #SCOPE_INVERTED}
-     * @param insertion {@link #INSERT_A} or {@link #INSERT_B}
-     * @param invAxis   {@link #AXIS_VERTICAL} or {@link #AXIS_HORIZONTAL} (only used when inverted)
+     * <p>Two binary factors span all four axis-aligned orientations, so there is no separate
+     * "turn-over axis": turning a slide over about its long vs short axis differs only by an in-plane
+     * 180, which IS the insertion. The inverted face-flip is therefore a fixed single mirror (Y) and
+     * the insertion supplies the other degree of freedom.
+     *
+     * @param scopeType {@link #SCOPE_UPRIGHT} (face up) or {@link #SCOPE_INVERTED} (face down)
+     * @param insertion {@link #INSERT_A} or {@link #INSERT_B} (which side the label is on)
      * @return {@code {flipX, flipY}}; never null
      */
-    public static boolean[] benchFlipFlags(String scopeType, String insertion, String invAxis) {
+    public static boolean[] benchFlipFlags(String scopeType, String insertion) {
         // Diagonal-only 2x2 (a, d) with a,d in {+1,-1}: flipX = a<0, flipY = d<0.
+        // Inverted (face down) = mirror Y; insertion B = in-plane 180. The four combinations give the
+        // four axis-aligned orientations: upright+A id, upright+B (T,T), inverted+A (F,T), inverted+B (T,F).
         int sa = 1;
-        int sd = 1;
-        if (SCOPE_INVERTED.equalsIgnoreCase(scopeType)) {
-            if (AXIS_HORIZONTAL.equalsIgnoreCase(invAxis)) {
-                sa = -1; // mirror X (turn over about the short axis)
-            } else {
-                sd = -1; // mirror Y (turn over about the long axis) -- default
-            }
-        }
-        int ia = INSERT_B.equalsIgnoreCase(insertion) ? -1 : 1; // Way B = in-plane 180
+        int sd = SCOPE_INVERTED.equalsIgnoreCase(scopeType) ? -1 : 1;
+        int ia = INSERT_B.equalsIgnoreCase(insertion) ? -1 : 1;
         int id = ia;
         return new boolean[] {sa * ia < 0, sd * id < 0};
     }
 
     /** The bench flip for the active microscope, read from config (or the identity default). */
     public static boolean[] currentBenchFlip() {
-        return benchFlipFlags(scopeType(), slideInsertion(), invertedFlipAxis());
+        return benchFlipFlags(scopeType(), slideInsertion());
     }
 
     /**
@@ -148,7 +189,7 @@ public final class LightPathModel {
      * afterwards if they need the change reflected in subsequent reads.
      *
      * @param field one of {@link #KEY_SCOPE_TYPE}, {@link #KEY_SLIDE_INSERTION},
-     *              {@link #KEY_INVERTED_FLIP_AXIS}
+     *              {@link #KEY_OPTICAL_FLIP}
      * @param value the value to write
      * @return {@code true} if the file was changed
      */
@@ -191,12 +232,15 @@ public final class LightPathModel {
         boolean[] composite = sit.stitcherFlipFlags();
         boolean[] cameraOnly = sit.cameraFlipFlags();
 
-        // Factor 2 -- per-detector optical flip (false when no detector / no config).
-        String opticalFlip;
+        // Factor 2 -- the display optical flip (light_path.optical_flip), plus the per-detector flip
+        // used for macro-image resolution (false when no detector / no config).
+        boolean[] optical = currentOpticalFlip();
+        String detectorFlip;
         if (mgr != null && detectorId != null) {
-            opticalFlip = String.format("(%s, %s)", mgr.getDetectorFlipX(detectorId), mgr.getDetectorFlipY(detectorId));
+            detectorFlip =
+                    String.format("(%s, %s)", mgr.getDetectorFlipX(detectorId), mgr.getDetectorFlipY(detectorId));
         } else {
-            opticalFlip = "(unresolved -- no active detector/config)";
+            detectorFlip = "(unresolved)";
         }
 
         // Macro preset flip (factor +) -- resolved through FlipResolver so it matches acquisition.
@@ -223,8 +267,6 @@ public final class LightPathModel {
                 .append(scopeType())
                 .append(", insertion=")
                 .append(slideInsertion())
-                .append(", flipAxis=")
-                .append(invertedFlipAxis())
                 .append(" -> bench flip (")
                 .append(bench[0])
                 .append(", ")
@@ -232,10 +274,14 @@ public final class LightPathModel {
                 .append(")  [YAML light_path.*]")
                 .append(System.lineSeparator());
         sb.append("  2. Optical flip       : ")
-                .append(opticalFlip)
-                .append("  [YAML id_detector.flip_x/flip_y, detector='")
-                .append(detectorId != null ? detectorId : "?")
-                .append("']")
+                .append(opticalFlip())
+                .append(" -> (")
+                .append(optical[0])
+                .append(", ")
+                .append(optical[1])
+                .append(")  [YAML light_path.optical_flip; drives map Camera View. detector flip ")
+                .append(detectorFlip)
+                .append(" for macro]")
                 .append(System.lineSeparator());
         sb.append("  3. Camera orientation : ")
                 .append(camera)

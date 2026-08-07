@@ -86,11 +86,11 @@ public class StageMapWindow {
     /** Apply Flips checkbox -- promoted to a field so init/source-change paths can sync its state. */
     private CheckBox applyFlipsCheckbox;
 
-    // Live Stage View slide-placement factors, seeded from the YAML light_path block and written
-    // back on change. The Stage View bench flip derives from these via LightPathModel.
+    // Live orientation-stack display factors, seeded from the YAML light_path block and written back
+    // on change. Stage View = benchFlipFlags(scope, insertion); Camera View adds the optical flip.
     private String svScopeType;
     private String svSlideInsertion;
-    private String svInvertedFlipAxis;
+    private String svOpticalFlip;
 
     private Label positionLabel;
     private Label targetLabel;
@@ -783,44 +783,42 @@ public class StageMapWindow {
             }
         });
 
-        // Stage View orientation -- supplies the flip between the camera view and how the slide
-        // physically sits on the stage (the inverted-vs-upright scope + optical flip that QPSC
-        // stores nowhere). Only affects Stage View; AUTO leaves Stage View identical to Camera
-        // View (the historical, inert behaviour), so the default never changes what users see.
-        // The physical slide-placement factors (orientation-stack factor 1), recorded per
-        // microscope in the YAML light_path block. Stage View derives its flip from these via
-        // LightPathModel; Camera View is unaffected. Defaults (upright + Way A) give an identity
-        // bench flip, so Stage View == Camera View until the rig is described -- no regression.
-        // Changes write straight to the microscope YAML so the Stage Map and setup wizard share
-        // one source of truth. The three drop-downs mirror the light-path simulator.
+        // Orientation-stack display factors, recorded per microscope in the YAML light_path block
+        // and shared with the setup wizard (one source of truth). Two groups:
+        //   * Stage View (bench) = scope type + slide insertion (factor 1) via benchFlipFlags.
+        //   * Camera View = camera orientation XOR optical flip (factor 2) -- the optical flip is why
+        //     a scope needs a distinct Camera View at all (e.g. PPM's objective inversion = XY).
+        // Defaults (upright + A + optical none) reduce both to identity -> Camera View == Stage View,
+        // the historical inert behaviour, so nothing changes until the rig is described. Changes
+        // write straight to the microscope YAML. Drop-downs mirror the light-path simulator.
         svScopeType = LightPathModel.scopeType();
         svSlideInsertion = LightPathModel.slideInsertion();
-        svInvertedFlipAxis = LightPathModel.invertedFlipAxis();
+        svOpticalFlip = LightPathModel.opticalFlip();
 
-        Label stageViewLabel = new Label("Stage view:");
+        Label stageViewLabel = new Label("Orientation:");
         ComboBox<String> scopeCombo = new ComboBox<>();
         scopeCombo.getItems().addAll("Upright", "Inverted");
         scopeCombo
                 .getSelectionModel()
                 .select(LightPathModel.SCOPE_INVERTED.equals(svScopeType) ? "Inverted" : "Upright");
-        scopeCombo.setTooltip(new Tooltip("Scope type (factor 1a): inverted (objective below,\n"
-                + "coverslip down) vs upright (objective above, coverslip up).\n"
-                + "Written to light_path.scope_type."));
+        scopeCombo.setTooltip(new Tooltip("Scope type (factor 1a): upright (objective above,\n"
+                + "coverslip up) vs inverted (objective below, coverslip down).\n"
+                + "Affects Stage View. Written to light_path.scope_type."));
         ComboBox<String> insertCombo = new ComboBox<>();
         insertCombo.getItems().addAll("Slide A", "Slide B (180)");
         insertCombo
                 .getSelectionModel()
                 .select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? "Slide B (180)" : "Slide A");
-        insertCombo.setTooltip(new Tooltip("Slide insertion (factor 1b): the two ways a slide drops\n"
-                + "into the holder (in-plane 180). Written to light_path.slide_insertion."));
-        ComboBox<String> axisCombo = new ComboBox<>();
-        axisCombo.getItems().addAll("Turn V", "Turn H");
-        axisCombo
-                .getSelectionModel()
-                .select(LightPathModel.AXIS_HORIZONTAL.equals(svInvertedFlipAxis) ? "Turn H" : "Turn V");
-        axisCombo.setTooltip(new Tooltip("Inverted turn-over axis: which way the slide is flipped\n"
-                + "over to face the coverslip down (only affects inverted scopes).\n"
-                + "Written to light_path.inverted_flip_axis."));
+        insertCombo.setTooltip(new Tooltip("Slide insertion (factor 1b): which side the label is on,\n"
+                + "the two ways a slide drops into the holder (in-plane 180).\n"
+                + "Affects Stage View. Written to light_path.slide_insertion."));
+        ComboBox<String> opticsCombo = new ComboBox<>();
+        opticsCombo.getItems().addAll("Optics: none", "Optics: flip X", "Optics: flip Y", "Optics: 180 (XY)");
+        opticsCombo.getSelectionModel().select(opticsLabelForKey(svOpticalFlip));
+        opticsCombo.setTooltip(new Tooltip("Optical flip (factor 2): objective + tube-lens parity --\n"
+                + "the camera-vs-stage flip that makes Camera View differ from\n"
+                + "Stage View (e.g. PPM objective inversion = 180/XY; OWS3 net\n"
+                + "reversed-in-X). Affects Camera View. Written to light_path.optical_flip."));
 
         scopeCombo.setOnAction(e -> {
             svScopeType = "Inverted".equals(scopeCombo.getValue())
@@ -835,12 +833,14 @@ public class StageMapWindow {
             LightPathModel.writeFactor(LightPathModel.KEY_SLIDE_INSERTION, svSlideInsertion);
             reapplyStageViewFlip();
         });
-        axisCombo.setOnAction(e -> {
-            svInvertedFlipAxis = "Turn H".equals(axisCombo.getValue())
-                    ? LightPathModel.AXIS_HORIZONTAL
-                    : LightPathModel.AXIS_VERTICAL;
-            LightPathModel.writeFactor(LightPathModel.KEY_INVERTED_FLIP_AXIS, svInvertedFlipAxis);
-            reapplyStageViewFlip();
+        opticsCombo.setOnAction(e -> {
+            svOpticalFlip = opticsKeyForLabel(opticsCombo.getValue());
+            LightPathModel.writeFactor(LightPathModel.KEY_OPTICAL_FLIP, svOpticalFlip);
+            // Optical flip feeds Camera View; re-apply for whichever view is showing.
+            if (canvas != null && applyFlipsCheckbox != null) {
+                boolean[] axes = resolveViewFlipAxes(applyFlipsCheckbox.isSelected());
+                canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
+            }
         });
 
         // NOTE: Initial flip state is applied in show() after the stage is visible.
@@ -859,7 +859,7 @@ public class StageMapWindow {
                         stageViewLabel,
                         scopeCombo,
                         insertCombo,
-                        axisCombo,
+                        opticsCombo,
                         macroOverlayCheckbox,
                         configButton,
                         calibrateButton,
@@ -1767,49 +1767,47 @@ public class StageMapWindow {
     }
 
     /**
-     * Resolve the {flipX, flipY} that transforms the whole Stage Map canvas from
-     * the sample frame into the displayed (Live Viewer) frame.
+     * Resolve the whole-canvas {flipX, flipY} for <b>Camera View</b> -- the flip that makes the map
+     * match the Live Viewer / acquisition image. This is the active scope's camera orientation
+     * ({@link StageImageTransform#cameraFlipFlags()}) composed with the per-microscope optical flip
+     * ({@link LightPathModel#opticalFlipFlags(String)}, orientation-stack factor 2). The optical flip
+     * is the reason Camera View differs from Stage View at all (e.g. PPM's objective inversion = XY).
      *
-     * <p>This is the active scope's <b>camera orientation only</b>
-     * ({@link qupath.ext.qpsc.utilities.CameraOrientation}, via
-     * {@link StageImageTransform#cameraFlipFlags()}). The map geometry is drawn
-     * through {@code stageToScreen}, which already applies the insert's axis
-     * inversion (= {@link qupath.ext.qpsc.utilities.StagePolarity}), so the
-     * unflipped canvas is already in the sample frame; only the camera
-     * orientation separates the sample frame from the displayed frame. We must
-     * NOT fold polarity in again here -- {@code stitcherFlipFlags()} (stage+camera)
-     * double-counted polarity and made Apply Flips 180 deg wrong on inverted-stage
-     * scopes (OWS3).
-     *
-     * <p><b>The macro-preset flip is deliberately NOT included here.</b>
-     * {@code flipMacroX/Y} describes the orientation of the macro <em>image</em>
-     * relative to the stage frame, not a camera-vs-stage relationship. It applies
-     * to the macro overlay pixels alone (see {@link #resolveMacroPresetFlip()} and
-     * the macro overlay builder) -- folding it into this whole-canvas mirror
-     * rotated the insert/slides/crosshair/FOV box out of both the stage and camera
-     * frames, which is the OWS3 X-mirror (the Ocus40 source preset has
-     * {@code flipMacroX=true}). After the macro overlay gets its own preset flip,
-     * this camera flip carries it the rest of the way to the displayed frame.
+     * <p>The map geometry is drawn through {@code stageToScreen}, which already applies the insert's
+     * axis inversion (= {@link qupath.ext.qpsc.utilities.StagePolarity}), so polarity must NOT be
+     * folded in again -- {@code stitcherFlipFlags()} (stage+camera) double-counted polarity and made
+     * the map 180 deg wrong on inverted-stage scopes (OWS3). The macro-preset flip
+     * ({@code flipMacroX/Y}) is likewise NOT included here -- it applies to the macro overlay pixels
+     * alone (see {@link #resolveMacroPresetFlip()}).
      *
      * @return a 2-element array {@code {flipX, flipY}}; never null
      */
     private boolean[] resolveCurrentFlipAxes() {
         boolean[] cam = StageImageTransform.current().cameraFlipFlags();
-        boolean[] axes = {cam[0], cam[1]};
-        logger.info("resolveCurrentFlipAxes: camera flip only = ({}, {})", axes[0], axes[1]);
+        boolean[] optical = LightPathModel.opticalFlipFlags(svOpticalFlip);
+        boolean[] axes = {cam[0] ^ optical[0], cam[1] ^ optical[1]};
+        logger.info(
+                "resolveCurrentFlipAxes (Camera View): camera={},{} XOR optical={},{} = {},{}",
+                cam[0],
+                cam[1],
+                optical[0],
+                optical[1],
+                axes[0],
+                axes[1]);
         return axes;
     }
 
     /**
-     * The bench flip for Stage View, derived from the live slide-placement drop-downs
-     * ({@link #svScopeType} / {@link #svSlideInsertion} / {@link #svInvertedFlipAxis}) via
-     * {@link LightPathModel#benchFlipFlags(String, String, String)}. The same derivation the setup
-     * wizard uses, so the two never diverge. Defaults (upright + Way A) reduce to identity.
+     * The bench flip for <b>Stage View</b>, derived from the live slide-placement drop-downs
+     * ({@link #svScopeType} / {@link #svSlideInsertion}) via
+     * {@link LightPathModel#benchFlipFlags(String, String)} -- the same derivation the setup wizard
+     * uses, so the two never diverge. Independent of the camera/optical path (the naked eye does not
+     * look through the optics). Defaults (upright + Way A) reduce to identity.
      *
      * @return {@code {flipX, flipY}}; never null
      */
     private boolean[] stageViewFlipFlags() {
-        return LightPathModel.benchFlipFlags(svScopeType, svSlideInsertion, svInvertedFlipAxis);
+        return LightPathModel.benchFlipFlags(svScopeType, svSlideInsertion);
     }
 
     /** Re-apply the canvas flip when a slide-placement drop-down changes and Stage View is showing. */
@@ -1821,13 +1819,14 @@ public class StageMapWindow {
     }
 
     /**
-     * Resolve the whole-canvas {flipX, flipY} for a given view.
+     * Resolve the whole-canvas {flipX, flipY} for a given view. Camera View and Stage View are two
+     * independent absolute orientations of the map:
      *
      * <ul>
-     *   <li><b>Camera View</b> -- the camera-orientation flip only ({@link #resolveCurrentFlipAxes()}),
-     *       matching the Live Viewer / acquisition image.</li>
-     *   <li><b>Stage View</b> -- Camera View XOR the derived {@link #stageViewFlipFlags()} bench flip,
-     *       so the map matches the slide as it physically sits on the stage.</li>
+     *   <li><b>Camera View</b> -- {@link #resolveCurrentFlipAxes()} (camera orientation XOR optical
+     *       flip), matching the Live Viewer / acquisition image.</li>
+     *   <li><b>Stage View</b> -- {@link #stageViewFlipFlags()} (the bench flip from scope + insertion),
+     *       matching the slide as it physically sits on the stage.</li>
      * </ul>
      *
      * <p>While slot previews are shown (orientation check), returns identity -- the previews are
@@ -1840,12 +1839,34 @@ public class StageMapWindow {
         if (savedApplyFlipsState != null) {
             return new boolean[] {false, false};
         }
-        boolean[] cam = resolveCurrentFlipAxes();
-        if (cameraView) {
-            return cam;
+        return cameraView ? resolveCurrentFlipAxes() : stageViewFlipFlags();
+    }
+
+    /** Canonical optical-flip keys and their friendly Optics combo labels. */
+    private static final String[] OPTICS_KEYS = {
+        LightPathModel.OPTICAL_NONE, LightPathModel.OPTICAL_X, LightPathModel.OPTICAL_Y, LightPathModel.OPTICAL_XY
+    };
+
+    private static final String[] OPTICS_LABELS = {
+        "Optics: none", "Optics: flip X", "Optics: flip Y", "Optics: 180 (XY)"
+    };
+
+    private static String opticsLabelForKey(String key) {
+        for (int i = 0; i < OPTICS_KEYS.length; i++) {
+            if (OPTICS_KEYS[i].equalsIgnoreCase(key)) {
+                return OPTICS_LABELS[i];
+            }
         }
-        boolean[] bench = stageViewFlipFlags();
-        return new boolean[] {cam[0] ^ bench[0], cam[1] ^ bench[1]};
+        return OPTICS_LABELS[0];
+    }
+
+    private static String opticsKeyForLabel(String label) {
+        for (int i = 0; i < OPTICS_LABELS.length; i++) {
+            if (OPTICS_LABELS[i].equals(label)) {
+                return OPTICS_KEYS[i];
+            }
+        }
+        return OPTICS_KEYS[0];
     }
 
     /**
