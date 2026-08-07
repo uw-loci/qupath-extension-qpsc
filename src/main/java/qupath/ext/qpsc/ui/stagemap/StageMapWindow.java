@@ -256,13 +256,22 @@ public class StageMapWindow {
                 canvas.setInsert(carrier);
             }
         }
-        // Save + force Apply Flips off (greyed) once, on entering the orientation check.
+        // Save + force the view toggle to Stage View (greyed) once, on entering the orientation
+        // check. Previews are authored in their own frame, so the whole-canvas flip must be
+        // identity while they are shown -- resolveViewFlipAxes() short-circuits to (false,false)
+        // whenever savedApplyFlipsState is non-null, which is set here.
         if (savedApplyFlipsState == null && applyFlipsCheckbox != null) {
             savedApplyFlipsState = applyFlipsCheckbox.isSelected();
-            applyFlipsCheckbox.setSelected(false);
+            suppressFlipCheckboxListener = true;
+            try {
+                applyFlipsCheckbox.setSelected(false);
+            } finally {
+                suppressFlipCheckboxListener = false;
+            }
             applyFlipsCheckbox.setDisable(true);
         }
         if (canvas != null) {
+            canvas.setFlipsApplied(false, false, false); // previews are drawn in their own frame
             canvas.setSlotMacroPreviews(previews);
         }
     }
@@ -271,12 +280,26 @@ public class StageMapWindow {
         if (canvas != null) {
             canvas.clearSlotMacroPreviews();
         }
-        // Restore Apply Flips to its pre-check state.
+        // Restore the view toggle to its pre-check state and re-apply the REAL view axes. Clear
+        // savedApplyFlipsState BEFORE re-applying so resolveViewFlipAxes() stops short-circuiting
+        // to identity and returns the live camera/stage-view flip again.
         if (savedApplyFlipsState != null && applyFlipsCheckbox != null) {
+            boolean restore = savedApplyFlipsState;
+            savedApplyFlipsState = null;
             applyFlipsCheckbox.setDisable(false);
-            applyFlipsCheckbox.setSelected(savedApplyFlipsState);
+            suppressFlipCheckboxListener = true;
+            try {
+                applyFlipsCheckbox.setSelected(restore);
+            } finally {
+                suppressFlipCheckboxListener = false;
+            }
+            if (canvas != null) {
+                boolean[] axes = resolveViewFlipAxes(restore);
+                canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
+            }
+        } else {
+            savedApplyFlipsState = null;
         }
-        savedApplyFlipsState = null;
         slotPreviewCarrierId = null;
         retainedSlotPreviews = null;
     }
@@ -338,8 +361,8 @@ public class StageMapWindow {
                 instance.applyFlipsCheckbox.setSelected(cameraView);
             } else if (cameraView && instance.canvas != null) {
                 // Already Camera View -- re-apply in case the flip axes changed since it was set.
-                boolean[] axes = instance.resolveCurrentFlipAxes();
-                instance.canvas.setFlipsApplied(true, axes[0], axes[1]);
+                boolean[] axes = instance.resolveViewFlipAxes(true);
+                instance.canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
             }
         });
     }
@@ -745,10 +768,39 @@ public class StageMapWindow {
             if (suppressFlipCheckboxListener) return;
             logger.info("Stage Map view toggled to: {}", newVal ? "Camera View" : "Stage View");
             if (canvas != null) {
-                // Resolve actual flip axes from the live context so the canvas uses the right
-                // mirror direction. Priority: open image entry metadata, then active preset.
-                boolean[] axes = resolveCurrentFlipAxes();
-                canvas.setFlipsApplied(newVal, axes[0], axes[1]);
+                // Camera View = camera-orientation flip only. Stage View = that XOR the operator's
+                // Stage View orientation, which supplies the unencoded bench flip (inverted-vs-
+                // upright scope + optical flip). Both fall back to identity when equal (default).
+                boolean[] axes = resolveViewFlipAxes(newVal);
+                canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
+            }
+        });
+
+        // Stage View orientation -- supplies the flip between the camera view and how the slide
+        // physically sits on the stage (the inverted-vs-upright scope + optical flip that QPSC
+        // stores nowhere). Only affects Stage View; AUTO leaves Stage View identical to Camera
+        // View (the historical, inert behaviour), so the default never changes what users see.
+        Label stageViewLabel = new Label("Stage view:");
+        ComboBox<String> stageViewCombo = new ComboBox<>();
+        stageViewCombo.getItems().addAll(STAGE_VIEW_LABELS);
+        stageViewCombo
+                .getSelectionModel()
+                .select(stageViewLabelForKey(PersistentPreferences.getStageViewOrientation()));
+        stageViewCombo.setTooltip(new Tooltip("Stage View orientation.\n\n"
+                + "Supplies the flip between the camera view and how the slide\n"
+                + "physically sits on the stage -- the inverted-vs-upright scope\n"
+                + "and optical flip that QPSC does not store anywhere else. Set it\n"
+                + "by eye until Stage View matches the slide on the bench.\n\n"
+                + "Auto = Stage View identical to Camera View (default; no change).\n"
+                + "Only affects Stage View; Camera View is unchanged."));
+        stageViewCombo.setOnAction(e -> {
+            String key = stageViewKeyForLabel(stageViewCombo.getSelectionModel().getSelectedItem());
+            PersistentPreferences.setStageViewOrientation(key);
+            logger.info("Stage View orientation set to: {}", key);
+            // Re-apply immediately if the map is currently showing Stage View.
+            if (canvas != null && applyFlipsCheckbox != null && !applyFlipsCheckbox.isSelected()) {
+                boolean[] axes = resolveViewFlipAxes(false);
+                canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
             }
         });
 
@@ -765,6 +817,8 @@ public class StageMapWindow {
                         sourceComboBox,
                         spacer,
                         applyFlipsCheckbox,
+                        stageViewLabel,
+                        stageViewCombo,
                         macroOverlayCheckbox,
                         configButton,
                         calibrateButton,
@@ -1652,22 +1706,20 @@ public class StageMapWindow {
      * changes, and when StagePolarity / CameraOrientation prefs change.
      */
     private void syncApplyFlipsFromHardware(String reason) {
-        boolean[] axes = resolveCurrentFlipAxes();
-        boolean shouldFlip = axes[0] || axes[1];
-        if (applyFlipsCheckbox != null) {
-            suppressFlipCheckboxListener = true;
-            try {
-                applyFlipsCheckbox.setSelected(shouldFlip);
-            } finally {
-                suppressFlipCheckboxListener = false;
-            }
-        }
+        // Preserve the operator's chosen view (Camera vs Stage) across hardware/source changes and
+        // just recompute the canvas flip for that view. Previously this forced the checkbox to
+        // match the camera-flip magnitude, which yanked the user out of Stage View on every source
+        // change; the Stage View orientation now carries the bench flip, so the view is sticky.
+        boolean cameraView = applyFlipsCheckbox != null && applyFlipsCheckbox.isSelected();
+        boolean[] axes = resolveViewFlipAxes(cameraView);
+        boolean apply = axes[0] || axes[1];
         if (canvas != null) {
-            canvas.setFlipsApplied(shouldFlip, axes[0], axes[1]);
+            canvas.setFlipsApplied(apply, axes[0], axes[1]);
             logger.info(
-                    "syncApplyFlipsFromHardware({}): shouldFlip={}, flipX={}, flipY={}",
+                    "syncApplyFlipsFromHardware({}): view={}, apply={}, flipX={}, flipY={}",
                     reason,
-                    shouldFlip,
+                    cameraView ? "Camera" : "Stage",
+                    apply,
                     axes[0],
                     axes[1]);
         }
@@ -1705,6 +1757,80 @@ public class StageMapWindow {
         boolean[] axes = {cam[0], cam[1]};
         logger.info("resolveCurrentFlipAxes: camera flip only = ({}, {})", axes[0], axes[1]);
         return axes;
+    }
+
+    /** Canonical Stage View orientation keys (stored in prefs) and their friendly combo labels. */
+    private static final String[] STAGE_VIEW_KEYS = {"AUTO", "FLIP_H", "FLIP_V", "ROT_180"};
+
+    private static final String[] STAGE_VIEW_LABELS = {"Auto", "Flip horizontal", "Flip vertical", "Rotate 180"};
+
+    private static String stageViewLabelForKey(String key) {
+        for (int i = 0; i < STAGE_VIEW_KEYS.length; i++) {
+            if (STAGE_VIEW_KEYS[i].equals(key)) {
+                return STAGE_VIEW_LABELS[i];
+            }
+        }
+        return STAGE_VIEW_LABELS[0];
+    }
+
+    private static String stageViewKeyForLabel(String label) {
+        for (int i = 0; i < STAGE_VIEW_LABELS.length; i++) {
+            if (STAGE_VIEW_LABELS[i].equals(label)) {
+                return STAGE_VIEW_KEYS[i];
+            }
+        }
+        return STAGE_VIEW_KEYS[0];
+    }
+
+    /**
+     * The operator-set Stage View orientation flip -- the bench flip between the camera view and
+     * how the slide physically sits on the stage. This is factor 1 (inverted-vs-upright scope) and
+     * factor 2 (optical flip) of the orientation stack, which QPSC does not encode anywhere else;
+     * it is supplied by eye via the Stage View combo. {@code AUTO} = identity, so Stage View is
+     * then identical to Camera View (the historical, inert behaviour).
+     *
+     * @return {@code {flipX, flipY}}; never null
+     */
+    private boolean[] stageViewFlipFlags() {
+        String key = PersistentPreferences.getStageViewOrientation();
+        switch (key) {
+            case "FLIP_H":
+                return new boolean[] {true, false};
+            case "FLIP_V":
+                return new boolean[] {false, true};
+            case "ROT_180":
+                return new boolean[] {true, true};
+            default:
+                return new boolean[] {false, false};
+        }
+    }
+
+    /**
+     * Resolve the whole-canvas {flipX, flipY} for a given view.
+     *
+     * <ul>
+     *   <li><b>Camera View</b> -- the camera-orientation flip only ({@link #resolveCurrentFlipAxes()}),
+     *       matching the Live Viewer / acquisition image.</li>
+     *   <li><b>Stage View</b> -- Camera View XOR the operator's {@link #stageViewFlipFlags()}, adding
+     *       the unencoded bench flip so the map matches the slide as it sits on the stage.</li>
+     * </ul>
+     *
+     * <p>While slot previews are shown (orientation check), returns identity -- the previews are
+     * authored in their own frame and must not be re-flipped.
+     *
+     * @param cameraView {@code true} for Camera View, {@code false} for Stage View
+     * @return {@code {flipX, flipY}}; never null
+     */
+    private boolean[] resolveViewFlipAxes(boolean cameraView) {
+        if (savedApplyFlipsState != null) {
+            return new boolean[] {false, false};
+        }
+        boolean[] cam = resolveCurrentFlipAxes();
+        if (cameraView) {
+            return cam;
+        }
+        boolean[] bench = stageViewFlipFlags();
+        return new boolean[] {cam[0] ^ bench[0], cam[1] ^ bench[1]};
     }
 
     /**

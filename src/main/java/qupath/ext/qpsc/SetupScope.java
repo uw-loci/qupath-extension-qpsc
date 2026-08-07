@@ -28,6 +28,7 @@ import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.FlippedDuplicateMigrator;
+import qupath.ext.qpsc.utilities.LightPathModel;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.OfflineScopeInstaller;
@@ -117,6 +118,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                     StageImageTransform.current().describe());
         } catch (Exception e) {
             logger.debug("Could not log StageImageTransform at startup: {}", e.getMessage());
+        }
+
+        // Dump the full orientation stack (slide placement, optical flip, camera, polarity, and
+        // the composite) so a single log line is the source of truth for any per-microscope
+        // alignment / "which way does it flip" report. See LightPathModel / ORIENTATION_STACK.md.
+        try {
+            LightPathModel.logCurrent("Orientation stack at startup");
+        } catch (Exception e) {
+            logger.debug("Could not log LightPathModel at startup: {}", e.getMessage());
         }
 
         // Check if tiles-to-pyramid extension is available (required for stitching).
