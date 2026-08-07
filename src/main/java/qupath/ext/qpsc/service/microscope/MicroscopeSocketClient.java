@@ -1305,6 +1305,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     input.readFully(ackResponse);
                     String ackStr = new String(ackResponse, StandardCharsets.UTF_8).trim();
 
+                    if (ackStr.startsWith("BUSY")) {
+                        // The server refused because it is already acquiring. Say so in the
+                        // terms the user will recognise, because the alternative -- two
+                        // acquisitions driving one stage -- corrupts the tiles silently and
+                        // is only visible as a scrambled mosaic hours later.
+                        throw new IOException("The microscope is already running an acquisition. "
+                                + "Wait for it to finish, or cancel it, before starting another. "
+                                + "(server replied: " + ackStr + ")");
+                    }
                     if (!ackStr.startsWith("STARTED")) {
                         throw new IOException("Unexpected acquisition acknowledgment: " + ackStr);
                     }
