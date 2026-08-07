@@ -16,6 +16,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Inverted Y stage](#inverted-y-stage) | Boolean | ON | Stage Y wiring is inverted |
 | [Camera orientation](#camera-orientation) | Enum | NORMAL | How the displayed image is oriented relative to the sample frame |
 | [Microscope Config File](#microscope-config-file) | File | - | Path to microscope YAML config |
+| [Macro image pixel size in microns](#macro-image-pixel-size-in-microns) | String | (empty) | Pixel size of macro/overview images from your slide scanner |
 | [Projects Folder](#projects-folder) | Directory | - | Root folder for slide projects |
 | [Tissue Detection Script](#tissue-detection-script) | File | - | Optional Groovy script for tissue detection |
 | [Data Bounds Classifier](#data-bounds-classifier) | File (.json) | - | Pixel classifier that finds the data region on acquired images (alignment workflow) |
@@ -296,6 +297,49 @@ overwritten.
 Using the wrong configuration file could damage the microscope! Ensure this points to the correct configuration for your specific microscope system.
 
 **Example:** `F:/QPScopeExtension/smartpath_configurations/microscopes/config_PPM.yml`
+
+---
+
+### Macro image pixel size in microns
+
+| Property | Value |
+|----------|-------|
+| Type | String |
+| Default | (empty — not set) |
+| Requires Restart | No |
+| **REQUIRED** | Yes (for Existing Image Acquisition) |
+
+**Description:**
+The pixel size of macro/overview images produced by your slide scanner, in microns per pixel. This is a measured property of the scanner hardware, not a preference you choose — every stage coordinate derived from the macro image scales directly with this value.
+
+**Why this is critical:**
+When you acquire from an existing macro image, QPSC transforms QuPath image coordinates (in pixels) to physical stage coordinates (in microns) using this pixel size. An 11x error (like the old default of 7.2 when the correct value is 81.0) shifts every acquired tile by 11x, landing far outside the intended region or even outside the stage's travel range.
+
+**How to find the correct value:**
+Look at your slide scanner's configuration or specifications:
+- **Ocus40 (LOCI):** 81.0 µm/px (from `config_Ocus40.yml`, `macro: pixel_size_um`)
+- **Any other scanner:** read it off that scanner's own configuration or specification. Do not carry a value over from a different scanner model, and do not estimate one — this is precisely the kind of number that produces a confident, silently wrong result.
+
+If unsure, contact your scanner's operator or facility manager. Leaving it unset and getting the error is safer than entering a plausible guess.
+
+**When this is used:**
+- **Existing Image Acquisition:** Required. If not set, the workflow fails with a clear error message directing you to set it. This is currently the only workflow that reads this preference.
+
+The Microscope Alignment workflow does *not* use it: that one reads `macro: pixel_size_um` directly from the selected scanner's configuration and refuses when it is absent, which is the better pattern of the two.
+
+**What happens if it is not set:**
+The Existing Image Acquisition workflow displays an error dialog:
+```
+Macro image pixel size is not set.
+
+This is the macro image's pixel size in microns, a measured property of the slide 
+scanner that produced it. It cannot be guessed: every stage coordinate derived 
+from the macro image scales directly with it.
+
+Set it in Preferences -> QPSC -> 'Macro image pixel size in microns'. The value 
+is on the scanner's configuration under 'macro: pixel_size_um' (for example, 81.0 
+for the Ocus40).
+```
 
 ---
 
