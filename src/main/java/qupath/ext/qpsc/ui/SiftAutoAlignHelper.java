@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.ui;
 
+import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
@@ -67,13 +69,24 @@ public final class SiftAutoAlignHelper {
      *
      * @param gui  QuPath GUI (for accessing the image server and project entry)
      * @param tile the tile to match against
+     * @param fullResToStage the alignment transform mapping this entry's QuPath
+     *     full-res pixels to stage micrometers -- the SAME transform the caller
+     *     used to predict the tile's stage position. The SIFT offset is a
+     *     displacement in the WSI-entry IMAGE frame, so it is mapped to a stage
+     *     displacement through this transform's linear part
+     *     ({@link AffineTransform#deltaTransform}); applying it raw lands at the
+     *     mirror on a flipped entry (e.g. a PPM flipped sibling). May be
+     *     {@code null} (e.g. the initial 3-point alignment before any estimate
+     *     exists), in which case the offset is applied raw as before.
      * @return {@code [offsetX, offsetY, inliers, confidence]} on success;
-     *     {@code null} if matching failed.
+     *     {@code null} if matching failed. The returned offset is the raw
+     *     server offset (WSI-entry frame), unchanged, for display; the stage
+     *     move uses the transform-composed delta.
      * @throws Exception if a low-level error occurs (server I/O, invalid
      *     pixel calibration, etc.). Match failures (insufficient features)
      *     return null rather than throwing.
      */
-    public static double[] autoAlign(QuPathGUI gui, PathObject tile) throws Exception {
+    public static double[] autoAlign(QuPathGUI gui, PathObject tile, AffineTransform fullResToStage) throws Exception {
 
         var imageData = gui.getImageData();
         if (imageData == null) throw new IllegalStateException("No image data available");
@@ -280,9 +293,31 @@ public final class SiftAutoAlignHelper {
             logger.info("SIFT offset: ({}, {}) um, inliers={}, confidence={}", offsetX, offsetY, inliers, confidence);
 
             double[] currentPos = mc.getStagePositionXY();
-            double newX = currentPos[0] + offsetX;
-            double newY = currentPos[1] + offsetY;
-            logger.info("Moving stage from ({}, {}) to ({}, {})", currentPos[0], currentPos[1], newX, newY);
+            // The SIFT offset is a displacement in the WSI-ENTRY image frame (the
+            // server returns micro-center-minus-WSI-center in the post-flip WSI
+            // pixel frame). Map it to a STAGE displacement through the same
+            // alignment transform that predicted this tile's position; applying it
+            // raw only works when that transform is an axis-aligned positive scale.
+            double[] stageDelta =
+                    composeSiftOffsetToStageDelta(offsetX, offsetY, flipX, flipY, wsiPixelSize, fullResToStage);
+            double newX = currentPos[0] + stageDelta[0];
+            double newY = currentPos[1] + stageDelta[1];
+            logger.info(
+                    "SIFT move: offset=({}, {}) um [WSI-entry frame], serverFlip=({}, {}), transform={} -> "
+                            + "composed stageDelta=({}, {}) um (raw-would-be=({}, {})); stage ({}, {}) -> ({}, {})",
+                    String.format("%.2f", offsetX),
+                    String.format("%.2f", offsetY),
+                    flipX,
+                    flipY,
+                    fullResToStage == null ? "none(raw)" : "alignment",
+                    String.format("%.2f", stageDelta[0]),
+                    String.format("%.2f", stageDelta[1]),
+                    String.format("%.2f", offsetX),
+                    String.format("%.2f", offsetY),
+                    String.format("%.1f", currentPos[0]),
+                    String.format("%.1f", currentPos[1]),
+                    String.format("%.1f", newX),
+                    String.format("%.1f", newY));
             mc.moveStageXY(newX, newY);
 
             return new double[] {offsetX, offsetY, inliers, confidence};
@@ -293,6 +328,61 @@ public final class SiftAutoAlignHelper {
                 logger.debug("Could not delete temp file: {}", tempFile);
             }
         }
+    }
+
+    /**
+     * Converts the SIFT offset into a stage displacement (micrometers).
+     *
+     * <p>The server returns the offset as (microscope-center - WSI-center) in the
+     * <em>post-flip WSI pixel</em> frame, converted to micrometers -- i.e. a
+     * displacement in the WSI-entry image frame after the {@code (serverFlipX,
+     * serverFlipY)} mirror the server applied so SIFT could match the camera
+     * orientation. To move the stage we:
+     * <ol>
+     *   <li>undo that server flip (a mirror negates a displacement component), so
+     *       the displacement is back in the raw entry-image frame;</li>
+     *   <li>convert micrometers to entry full-res pixels;</li>
+     *   <li>map the pixel displacement through the {@code fullResToStage} alignment
+     *       transform's linear part ({@link AffineTransform#deltaTransform}) -- the
+     *       exact image-&gt;stage direction mapping the caller used to predict the
+     *       tile position.</li>
+     * </ol>
+     *
+     * <p>Applying the offset raw (as the old code did) assumes entry-image axes ==
+     * stage axes, which is only true for an axis-aligned positive-scale transform.
+     * On a flipped entry (e.g. a PPM flipped sibling, whose transform mirrors X and
+     * Y) the raw move lands at the mirror -- the observed "off by ~1.5 tiles" bug.
+     * We never hard-code the sign here: it comes entirely from the empirically-fit
+     * alignment transform, so this is correct on any rig by construction.
+     *
+     * @param offsetXUm server offset X (um, WSI-entry frame, post server flip)
+     * @param offsetYUm server offset Y (um, WSI-entry frame, post server flip)
+     * @param serverFlipX whether the server mirrored the WSI in X before matching
+     * @param serverFlipY whether the server mirrored the WSI in Y before matching
+     * @param wsiPixelSize full-res WSI pixel size (um/px), to convert um -&gt; pixels
+     * @param fullResToStage entry full-res pixels -&gt; stage um; {@code null} falls
+     *     back to the raw offset (only the server-flip undo is applied)
+     * @return stage displacement {@code [dx, dy]} in micrometers
+     */
+    static double[] composeSiftOffsetToStageDelta(
+            double offsetXUm,
+            double offsetYUm,
+            boolean serverFlipX,
+            boolean serverFlipY,
+            double wsiPixelSize,
+            AffineTransform fullResToStage) {
+        // (1) Undo the server flip to return to the raw entry-image frame.
+        double entryUmX = serverFlipX ? -offsetXUm : offsetXUm;
+        double entryUmY = serverFlipY ? -offsetYUm : offsetYUm;
+        if (fullResToStage == null || wsiPixelSize <= 0) {
+            // No alignment transform (e.g. first 3-point alignment): apply raw.
+            return new double[] {entryUmX, entryUmY};
+        }
+        // (2) um -> entry full-res pixels; (3) linear map pixels -> stage um.
+        Point2D.Double srcPx = new Point2D.Double(entryUmX / wsiPixelSize, entryUmY / wsiPixelSize);
+        Point2D.Double dst = new Point2D.Double();
+        fullResToStage.deltaTransform(srcPx, dst);
+        return new double[] {dst.x, dst.y};
     }
 
     // Context of the search-range box currently shown on the Stage Map, so it
@@ -461,8 +551,12 @@ public final class SiftAutoAlignHelper {
      * SIFT dialog carries the focus/exposure reminder.
      */
     public static HBox buildSiftButtonRow(
-            QuPathGUI gui, PathObject targetTile, Window settingsOwnerSupplierTarget, Label statusLabel) {
-        return buildSiftButtonRow(gui, targetTile, settingsOwnerSupplierTarget, statusLabel, null);
+            QuPathGUI gui,
+            PathObject targetTile,
+            Window settingsOwnerSupplierTarget,
+            Label statusLabel,
+            AffineTransform fullResToStage) {
+        return buildSiftButtonRow(gui, targetTile, settingsOwnerSupplierTarget, statusLabel, fullResToStage, null);
     }
 
     /**
@@ -470,12 +564,17 @@ public final class SiftAutoAlignHelper {
      * has run AND returned a valid offset. Used by callers that gate further UI
      * (e.g. the SingleTileRefinement Save button) on a real refinement having
      * occurred so a quick "Save" click can't silently skip refinement.
+     *
+     * @param fullResToStage the alignment transform (entry full-res pixels -&gt;
+     *     stage um) used to map the SIFT offset to a stage move; see
+     *     {@link #autoAlign(QuPathGUI, PathObject, AffineTransform)}. May be null.
      */
     public static HBox buildSiftButtonRow(
             QuPathGUI gui,
             PathObject targetTile,
             Window settingsOwnerSupplierTarget,
             Label statusLabel,
+            AffineTransform fullResToStage,
             Runnable onSiftSuccess) {
         Button autoAlignButton = new Button("Auto-Align (SIFT)");
         autoAlignButton.setStyle(
@@ -506,7 +605,7 @@ public final class SiftAutoAlignHelper {
             new Thread(
                             () -> {
                                 try {
-                                    double[] result = autoAlign(gui, targetTile);
+                                    double[] result = autoAlign(gui, targetTile, fullResToStage);
                                     Platform.runLater(() -> {
                                         autoAlignButton.setDisable(false);
                                         if (result != null && result.length >= 2) {
@@ -565,12 +664,13 @@ public final class SiftAutoAlignHelper {
      * JavaFX status label. Used when the caller wants to chain logic
      * after match completion.
      */
-    public static CompletableFuture<double[]> autoAlignAsync(QuPathGUI gui, PathObject tile) {
+    public static CompletableFuture<double[]> autoAlignAsync(
+            QuPathGUI gui, PathObject tile, AffineTransform fullResToStage) {
         CompletableFuture<double[]> future = new CompletableFuture<>();
         new Thread(
                         () -> {
                             try {
-                                future.complete(autoAlign(gui, tile));
+                                future.complete(autoAlign(gui, tile, fullResToStage));
                             } catch (Exception e) {
                                 future.completeExceptionally(e);
                             }
