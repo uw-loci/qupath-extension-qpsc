@@ -496,7 +496,7 @@ public class StageMapWindow {
         root.setStyle("-fx-background-color: #2b2b2b;");
 
         // Top controls: Insert selector
-        HBox topBar = buildTopBar();
+        FlowPane topBar = buildTopBar();
 
         // Canvas for stage visualization (new WritableImage + Shapes implementation)
         canvas = new StageMapCanvas(CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -555,8 +555,13 @@ public class StageMapWindow {
         registerImageChangeListener();
     }
 
-    private HBox buildTopBar() {
-        HBox topBar = new HBox(10);
+    private FlowPane buildTopBar() {
+        // FlowPane (not HBox) so a toolbar wider than the window wraps to a second row instead of
+        // squeezing every control until its label clips to "...".
+        FlowPane topBar = new FlowPane();
+        topBar.setHgap(8);
+        topBar.setVgap(6);
+        topBar.setPadding(new Insets(4, 6, 4, 6));
         topBar.setAlignment(Pos.CENTER_LEFT);
 
         Label insertLabel = new Label("Insert:");
@@ -701,9 +706,6 @@ public class StageMapWindow {
                     + "  right-click to reset the view"));
         }
 
-        Region spacer = new Region();
-        HBox.setHgrow(spacer, Priority.ALWAYS);
-
         // Macro overlay checkbox
         macroOverlayCheckbox = new CheckBox("Overlay Macro");
         macroOverlayCheckbox.setStyle("-fx-text-fill: #ccc;");
@@ -795,7 +797,6 @@ public class StageMapWindow {
         svSlideInsertion = LightPathModel.slideInsertion();
         svOpticalFlip = LightPathModel.opticalFlip();
 
-        Label stageViewLabel = new Label("Orientation:");
         ComboBox<String> scopeCombo = new ComboBox<>();
         scopeCombo.getItems().addAll("Upright", "Inverted");
         scopeCombo
@@ -843,6 +844,34 @@ public class StageMapWindow {
             }
         });
 
+        // Collapse the three set-once orientation controls into ONE dropdown so the toolbar stays
+        // readable -- they are configured once per microscope and then rarely touched. The
+        // frequently-used Camera/Stage view toggle stays out in the toolbar. Combos keep their
+        // listeners; they are just re-parented into the dropdown's grid.
+        scopeCombo.setMaxWidth(Double.MAX_VALUE);
+        insertCombo.setMaxWidth(Double.MAX_VALUE);
+        opticsCombo.setMaxWidth(Double.MAX_VALUE);
+        GridPane orientationGrid = new GridPane();
+        orientationGrid.setHgap(8);
+        orientationGrid.setVgap(6);
+        orientationGrid.setPadding(new Insets(8));
+        orientationGrid.addRow(0, new Label("Scope:"), scopeCombo);
+        orientationGrid.addRow(1, new Label("Slide:"), insertCombo);
+        orientationGrid.addRow(2, new Label("Optics:"), opticsCombo);
+        CustomMenuItem orientationItem = new CustomMenuItem(orientationGrid);
+        orientationItem.setHideOnClick(false); // keep the popup open while adjusting the combos
+        MenuButton orientationMenu = new MenuButton("Orientation");
+        orientationMenu.getItems().add(orientationItem);
+        orientationMenu.setTooltip(new Tooltip("Per-microscope orientation (YAML light_path).\n\n"
+                + "Scope + Slide set the Stage View (how the slide sits on the bench).\n"
+                + "Optics sets the Camera View (so the map matches the Live Viewer).\n"
+                + "Defaults (upright / A / none) reduce both to identity -- inert."));
+
+        // Keep the Camera/Stage view label from clipping when the toolbar is tight.
+        if (applyFlipsCheckbox != null) {
+            applyFlipsCheckbox.setMinWidth(Region.USE_PREF_SIZE);
+        }
+
         // NOTE: Initial flip state is applied in show() after the stage is visible.
         // Calling setScaleX/Y during construction doesn't take effect because the
         // StackPane isn't in the scene graph yet, and Platform.runLater from the
@@ -854,12 +883,8 @@ public class StageMapWindow {
                         insertComboBox,
                         presetLabel,
                         sourceComboBox,
-                        spacer,
                         applyFlipsCheckbox,
-                        stageViewLabel,
-                        scopeCombo,
-                        insertCombo,
-                        opticsCombo,
+                        orientationMenu,
                         macroOverlayCheckbox,
                         configButton,
                         calibrateButton,
