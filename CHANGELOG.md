@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+**SIFT auto-align: incorrect stage move on flipped entries**
+- Auto-Align (SIFT) was moving the stage to the mirror (off by ~1.5 tiles) on flipped entries such as PPM flipped siblings. The offset was being applied raw, which only works for axis-aligned positive-scale transforms. The fix composes the SIFT offset through the same alignment transform used to predict the tile position, so the stage move is correct on any rig by construction -- no hard-coded signs. The raw offset is still shown in the UI for debugging; the stage move uses the composed delta.
+
 ### Changed
 
 **Stage Map: per-microscope light path configuration**
