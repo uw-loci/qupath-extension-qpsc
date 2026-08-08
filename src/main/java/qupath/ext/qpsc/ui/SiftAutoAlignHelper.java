@@ -293,23 +293,24 @@ public final class SiftAutoAlignHelper {
             logger.info("SIFT offset: ({}, {}) um, inliers={}, confidence={}", offsetX, offsetY, inliers, confidence);
 
             double[] currentPos = mc.getStagePositionXY();
-            // The SIFT offset is a displacement in the WSI-ENTRY image frame (the
-            // server returns micro-center-minus-WSI-center in the post-flip WSI
-            // pixel frame). Map it to a STAGE displacement through the same
-            // alignment transform that predicted this tile's position; applying it
-            // raw only works when that transform is an axis-aligned positive scale.
+            // The SIFT offset points FROM the target tile TO the current camera
+            // position (server: micro-center-minus-WSI-center), so the stage must
+            // move by the NEGATION, mapped through the alignment transform that
+            // predicted this tile's position. The old code added the raw offset and
+            // drove to the mirror-image landing.
             double[] stageDelta =
                     composeSiftOffsetToStageDelta(offsetX, offsetY, flipX, flipY, wsiPixelSize, fullResToStage);
             double newX = currentPos[0] + stageDelta[0];
             double newY = currentPos[1] + stageDelta[1];
             logger.info(
-                    "SIFT move: offset=({}, {}) um [WSI-entry frame], serverFlip=({}, {}), transform={} -> "
-                            + "composed stageDelta=({}, {}) um (raw-would-be=({}, {})); stage ({}, {}) -> ({}, {})",
+                    "SIFT move: offset=({}, {}) um [WSI-entry frame, target->current], serverFlip=({}, {}), "
+                            + "transform={} -> stageDelta=({}, {}) um (old-buggy-raw-would-be=({}, {})); "
+                            + "stage ({}, {}) -> ({}, {})",
                     String.format("%.2f", offsetX),
                     String.format("%.2f", offsetY),
                     flipX,
                     flipY,
-                    fullResToStage == null ? "none(raw)" : "alignment",
+                    fullResToStage == null ? "none" : "alignment",
                     String.format("%.2f", stageDelta[0]),
                     String.format("%.2f", stageDelta[1]),
                     String.format("%.2f", offsetX),
@@ -331,38 +332,43 @@ public final class SiftAutoAlignHelper {
     }
 
     /**
-     * Converts the SIFT offset into a stage displacement (micrometers).
+     * Converts the SIFT offset into the stage displacement to ADD to the current
+     * position to bring the camera onto the tile (micrometers).
      *
-     * <p>The server returns the offset as (microscope-center - WSI-center) in the
-     * <em>post-flip WSI pixel</em> frame, converted to micrometers -- i.e. a
-     * displacement in the WSI-entry image frame after the {@code (serverFlipX,
-     * serverFlipY)} mirror the server applied so SIFT could match the camera
-     * orientation. To move the stage we:
-     * <ol>
-     *   <li>undo that server flip (a mirror negates a displacement component), so
-     *       the displacement is back in the raw entry-image frame;</li>
-     *   <li>convert micrometers to entry full-res pixels;</li>
-     *   <li>map the pixel displacement through the {@code fullResToStage} alignment
-     *       transform's linear part ({@link AffineTransform#deltaTransform}) -- the
-     *       exact image-&gt;stage direction mapping the caller used to predict the
-     *       tile position.</li>
-     * </ol>
+     * <p><b>Direction.</b> The server computes the offset as
+     * {@code (microscope-center-in-WSI) - (WSI-center)} -- i.e. it points FROM the
+     * target tile (the WSI region is centered on it) TO where the camera currently
+     * is. So to move the camera ONTO the tile the stage must travel the OPPOSITE
+     * way: {@code target - current = -offset}. Empirically confirmed on PPM
+     * 2026-08-08: predicted stage P, SIFT landing was {@code P + offset}, the true
+     * tile was {@code P - offset}, and "Go to centroid" (which uses P) sat exactly
+     * at their midpoint -- target and the +offset landing are symmetric about P.
+     * The old code added the offset and thus drove to that mirror-image landing.
      *
-     * <p>Applying the offset raw (as the old code did) assumes entry-image axes ==
-     * stage axes, which is only true for an axis-aligned positive-scale transform.
-     * On a flipped entry (e.g. a PPM flipped sibling, whose transform mirrors X and
-     * Y) the raw move lands at the mirror -- the observed "off by ~1.5 tiles" bug.
-     * We never hard-code the sign here: it comes entirely from the empirically-fit
-     * alignment transform, so this is correct on any rig by construction.
+     * <p><b>Frame.</b> The offset is a displacement in the post-server-flip WSI
+     * pixel frame (the server mirrors the WSI by {@code (serverFlipX, serverFlipY)}
+     * so SIFT sees the camera orientation). We (1) undo that server flip to return
+     * to the raw entry-image frame, (2) negate for the target-minus-current
+     * direction above, (3) convert um -&gt; entry full-res pixels, and (4) map the
+     * pixel displacement through the {@code fullResToStage} alignment transform's
+     * linear part ({@link AffineTransform#deltaTransform}) -- the same image-&gt;stage
+     * mapping the caller used to predict the tile position. On PPM that linear part
+     * is identity (the flip lives in the sibling pixels, not the transform), so the
+     * whole correction reduces to the negation; on a rig whose alignment transform
+     * carries a flip/rotation (or a rotated stage insert) the transform supplies it.
+     * No sign is hard-coded: the direction is fixed by the server's offset
+     * definition and the orientation comes from the empirically-fit transform, so
+     * this is correct on any rig by construction.
      *
      * @param offsetXUm server offset X (um, WSI-entry frame, post server flip)
      * @param offsetYUm server offset Y (um, WSI-entry frame, post server flip)
      * @param serverFlipX whether the server mirrored the WSI in X before matching
      * @param serverFlipY whether the server mirrored the WSI in Y before matching
      * @param wsiPixelSize full-res WSI pixel size (um/px), to convert um -&gt; pixels
-     * @param fullResToStage entry full-res pixels -&gt; stage um; {@code null} falls
-     *     back to the raw offset (only the server-flip undo is applied)
-     * @return stage displacement {@code [dx, dy]} in micrometers
+     * @param fullResToStage entry full-res pixels -&gt; stage um; {@code null} applies
+     *     just the server-flip undo and the direction negation (no orientation map)
+     * @return stage displacement {@code [dx, dy]} to ADD to the current stage
+     *     position, in micrometers
      */
     static double[] composeSiftOffsetToStageDelta(
             double offsetXUm,
@@ -371,14 +377,16 @@ public final class SiftAutoAlignHelper {
             boolean serverFlipY,
             double wsiPixelSize,
             AffineTransform fullResToStage) {
-        // (1) Undo the server flip to return to the raw entry-image frame.
-        double entryUmX = serverFlipX ? -offsetXUm : offsetXUm;
-        double entryUmY = serverFlipY ? -offsetYUm : offsetYUm;
+        // (1) Undo the server flip to return to the raw entry-image frame, then
+        // (2) negate: the server offset points target->current, the stage must go
+        // current->target. (Both are linear, so their order does not matter.)
+        double entryUmX = (serverFlipX ? -offsetXUm : offsetXUm) * -1.0;
+        double entryUmY = (serverFlipY ? -offsetYUm : offsetYUm) * -1.0;
         if (fullResToStage == null || wsiPixelSize <= 0) {
-            // No alignment transform (e.g. first 3-point alignment): apply raw.
+            // No alignment transform (e.g. first 3-point alignment): no orientation map.
             return new double[] {entryUmX, entryUmY};
         }
-        // (2) um -> entry full-res pixels; (3) linear map pixels -> stage um.
+        // (3) um -> entry full-res pixels; (4) linear map pixels -> stage um.
         Point2D.Double srcPx = new Point2D.Double(entryUmX / wsiPixelSize, entryUmY / wsiPixelSize);
         Point2D.Double dst = new Point2D.Double();
         fullResToStage.deltaTransform(srcPx, dst);
