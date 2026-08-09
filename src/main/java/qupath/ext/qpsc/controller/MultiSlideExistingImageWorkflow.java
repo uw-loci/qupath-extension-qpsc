@@ -585,6 +585,17 @@ public final class MultiSlideExistingImageWorkflow {
             t.start();
         };
 
+        // Auto-collapse-on-focus-loss is wanted during the interactive SETUP/alignment pass (the panel
+        // is in the way of the alignment dialogs), but NOT once setup is done -- the operator then
+        // needs to see the blinking "Acquire All Set-Up" and the live progress list. Declared here (up
+        // from the acquire handler) so the next-step updater below can flip it on the setup->acquire
+        // transition. The acquire pass also forces it off for its duration.
+        boolean[] autoCollapseEnabled = {true};
+        // Set once applyCollapsed exists (defined later). Expands the panel from its collapsed banner
+        // bar. Invoked on the setup->acquire transition so a panel the operator collapsed during setup
+        // re-opens to reveal the Step 2 button.
+        Runnable[] expandPanelHolder = {null};
+
         // Concrete next-step updater (buttons now exist). Idle-gated: a run in progress clears the
         // pulse. Recommends Step 1 while any slot still needs setup, then Step 2 once slots are set
         // up, then Finish once all are terminal.
@@ -617,12 +628,24 @@ public final class MultiSlideExistingImageWorkflow {
                 nextStepPulse.highlight(finishBtn, "#2E7D32"); // all terminal -> Finish
                 step = 2;
             }
-            // On the transition into "Step 2 ready" (setup finished, nothing acquiring yet), restore
-            // the progress panel if the operator minimized it during the manual setup pass -- the
-            // "Acquire All Set-Up" button is now blinking and they cannot see it while iconified.
-            if (step == 1 && lastNextStep[0] != 1 && stage.isIconified()) {
-                stage.setIconified(false);
+            // On the transition into "Step 2 ready" (setup finished, nothing acquiring yet), re-open
+            // the panel: during the manual setup pass it auto-collapses to a banner bar on focus loss,
+            // so the blinking "Acquire All Set-Up" is otherwise hidden. Expand it, stop it re-collapsing
+            // (until the acquire pass, which manages the flag itself), un-minimize if iconified, and
+            // bring it forward so the operator sees the next step.
+            if (step == 1 && lastNextStep[0] != 1) {
+                autoCollapseEnabled[0] = false;
+                if (expandPanelHolder[0] != null) {
+                    expandPanelHolder[0].run();
+                }
+                if (stage.isIconified()) {
+                    stage.setIconified(false);
+                }
                 stage.toFront();
+            } else if (step == 0 && lastNextStep[0] != 0) {
+                // Back to needing setup (a slot reverted): restore auto-collapse so the alignment
+                // dialogs can push the panel out of the way again.
+                autoCollapseEnabled[0] = true;
             }
             lastNextStep[0] = step;
         };
@@ -706,11 +729,8 @@ public final class MultiSlideExistingImageWorkflow {
                     });
         });
 
-        // Auto-collapse-on-focus-loss is wanted during the interactive SETUP/alignment pass (the panel
-        // is in the way of the alignment dialogs), but NOT during the unattended ACQUIRE pass -- there
-        // the operator wants the live progress list visible while focus sits on the viewer/stitching.
-        // The acquire pass toggles this off for its duration.
-        boolean[] autoCollapseEnabled = {true};
+        // (autoCollapseEnabled is declared above, near the next-step updater, so the setup->acquire
+        // transition can flip it; the acquire pass below forces it off for its own duration.)
 
         // Two-pass PASS 2: unattended acquisition on every Set-up slot, replaying its
         // captured config against the alignment JSON persisted during setup.
@@ -986,6 +1006,9 @@ public final class MultiSlideExistingImageWorkflow {
             stage.sizeToScene();
         };
         collapseBtn.setOnAction(e -> applyCollapsed.accept(!collapsed[0]));
+        // Let the next-step updater expand the panel on the setup->acquire transition (it is defined
+        // before applyCollapsed, so it reaches it through this holder).
+        expandPanelHolder[0] = () -> applyCollapsed.accept(false);
 
         // Auto-collapse when the panel loses focus (a child alignment dialog, the Stage Map, or the
         // QuPath viewer takes over) so it gets out of the way exactly when you want it gone -- the
