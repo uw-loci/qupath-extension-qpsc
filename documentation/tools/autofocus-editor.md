@@ -92,6 +92,23 @@ The Sweep Autofocus section configures a periodic Z sweep that monitors focus dr
 
 **Test Sweep Autofocus** button: runs a single sweep at the current position so you can verify parameters before acquisition.
 
+### Test Sweep Autofocus
+
+The **Test Sweep Autofocus** button runs a single sweep-autofocus pass at the current stage position to verify your sweep range and step parameters before acquisition. On completion a results dialog opens with:
+
+- **Status header** -- Pass/fail indicator and brief result summary.
+- **Results folder path** -- absolute path to the folder where CSV results are saved.
+- **Diagnostic information** -- Initial Z, final Z, and measured Z shift (if applicable).
+
+The dialog provides buttons to access the results:
+
+| Button | Action |
+|--------|--------|
+| **Open Results Folder** | Opens the results folder in your file manager to inspect the CSV data. |
+| **Open Plot** | (When a diagnostic plot was generated) Opens the plot in your default image viewer. Sweep autofocus is optimized for speed and may skip plot generation, so this button only appears when a plot is available. |
+
+Both buttons keep the dialog open so you can open both the folder and the plot without re-running the test.
+
 ### Test Streaming Autofocus
 
 Below the streaming-AF panel, the **Test Streaming Autofocus** button runs a single streaming-AF pass at the current stage position with frame dumping enabled (server-side `--dump`). On completion a non-modal popup opens with:
