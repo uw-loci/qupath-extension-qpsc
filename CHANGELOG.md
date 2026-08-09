@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Multi-Slide & Existing Image Acquisition: removed hard requirement for macro pixel size preference**
+- The Existing Image Acquisition workflow (including Multi-Slide) previously required the "Macro image pixel size in microns" preference to be set, and crashed with "Macro image pixel size is not set" if it was empty. That preference was dead code: once a fullRes->stage alignment transform exists (which is always present in these paths), tiling needs only the camera FOV and the open image's own pixel calibration. The workflow now automatically resolves pixel size from the open image's calibration instead, so users no longer need to set the preference (though leaving it set causes no harm). This fixes the multi-slide batch acquisition blocker that was preventing workflow progress until the preference was manually configured.
+
 **SIFT auto-align: incorrect stage move on flipped entries**
 - Auto-Align (SIFT) was moving the stage to the mirror (off by ~1.5 tiles) on flipped entries such as PPM flipped siblings. The offset was being applied raw, which only works for axis-aligned positive-scale transforms. The fix composes the SIFT offset through the same alignment transform used to predict the tile position, so the stage move is correct on any rig by construction -- no hard-coded signs. The raw offset is still shown in the UI for debugging; the stage move uses the composed delta.
 
