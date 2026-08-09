@@ -40,8 +40,16 @@ Four factors stack along the light path, plus the macro-image flip that orients 
   the display factors below. This is why the Stage-Map/SIFT display bugs never corrupted data.
 - **Stage Map Camera View** = `cameraFlipFlags()` (factor 3) XOR `opticalFlipFlags` (factor 2) --
   so the map matches the Live Viewer. **Display only.**
-- **Stage Map Stage View** = `benchFlipFlags(scope, insertion)` (factor 1) -- independent of the
-  optics/camera, so the map matches the slide on the bench.
+- **Stage Map Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b **only**) -- the slide-180
+  rotation, and *nothing else*. It does **not** apply the scope-face flip (factor 1a). On an inverted
+  scope the physical inversion is already carried by the stage polarity (factor 4) and the per-slide
+  alignment transform, so the Stage Map's macro overlay is already drawn in that inverted baseline
+  (OWS3 2026-08-09: the macro overlay's own `sX=sY=+1` because the insert inversion `dirX=dirY=-1` and
+  the transform sign `m00=m11<0` cancel). Re-applying `benchFlipFlags`'s scope-face mirror on top
+  double-counted it and mirrored an already-correct macro. `slideRotationFlipFlags(insertion) ==
+  benchFlipFlags(upright, insertion)`, so this is a no-op on upright scopes (PPM) and only removes the
+  spurious mirror on inverted ones. `benchFlipFlags` remains the full physical reduction for the setup
+  wizard preview, which shows the whole bench (scope + insertion); the Stage Map does not.
 
 ### Known values
 
@@ -67,18 +75,23 @@ light_path:
 
 - **Camera View** = `cameraFlipFlags` (factor 3) XOR `opticalFlipFlags` (factor 2) -- matches the
   Live Viewer. The optical flip is why Camera View differs from Stage View at all.
-- **Stage View** = `benchFlipFlags(scope, insertion)` (factor 1) -- matches the slide on the bench.
-  The pure-geometry reduction `scopeFace o insertion` (inverted = mirror Y, insertion B = 180),
-  unit-tested in `LightPathModelBenchFlipTest`. The two binary factors span all four axis-aligned
-  orientations; **there is no turn-over axis** (it is redundant with insertion).
+- **Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b **only**) -- the slide-180 rotation.
+  It does **not** apply the scope-face flip (see "How they compose": the scope inversion is already in
+  the polarity + alignment-transform baseline, so re-applying it double-counts). `A` = identity, `B` =
+  180. Unit-tested in `LightPathModelBenchFlipTest`.
 - Defaults (`upright + A + optical none`) reduce both to identity, so Camera View == Stage View --
   the historical, inert behaviour. No regression until the rig is described.
 
-The Stage Map's three drop-downs (**Scope / Slide / Optics**) read and write this block via
-`ConfigYamlEditor.setTopLevelChildScalar`, so the map and the setup wizard share one source of truth.
-`LightPathModel` is that shared derivation; the light-path simulator uses the same composition.
-Everything here is **display only** -- it never touches acquisition, which the empirical alignment
-transform already gets right.
+**Where each control lives (2026-08-09).** The Stage Map exposes **only** the slide-180 rotation
+(`slide_insertion`) -- a "Slide: Label left / Label right (180)" combo -- because that is the only thing
+that changes run to run. The set-once properties **scope type** and **optical flip** are edited in
+**Utilities -> Microscope Configuration -> Light Path Orientation** (`LightPathSetupDialog`), which
+writes the same YAML block and calls `MicroscopeConfigManager.reload()` so the change takes effect
+(reopen the Stage Map / Live Viewer to see it). All three still route through
+`ConfigYamlEditor.setTopLevelChildScalar` and are read back through `LightPathModel`, the single source
+of truth, so the map, the Utilities dialog, and the setup wizard never diverge. Everything here is
+**display only** -- it never touches acquisition, which the empirical alignment transform already gets
+right.
 
 ## Per-microscope source of truth + setup (status)
 
@@ -94,14 +107,20 @@ Decisions locked (2026-08-07):
 1. **DONE** -- `light_path` YAML block (`scope_type`, `slide_insertion`, `optical_flip`), read by
    `LightPathModel` and written by `ConfigYamlEditor.setTopLevelChildScalar`. The turn-over axis was
    removed as redundant with insertion.
-2. **DONE** -- the Stage Map uses explicit physical drop-downs (**Scope / Slide / Optics**) backed by
-   that block: Camera View adds the optical flip, Stage View is the bench flip. Replaced the interim
-   by-eye `stageViewOrientation` pref (removed).
+2. **DONE (revised 2026-08-09)** -- controls split by how often they change. The **Stage Map** exposes
+   only the **slide-180 rotation** (`slide_insertion`); **scope type** and **optical flip** moved to
+   **Utilities -> Microscope Configuration -> Light Path Orientation** (`LightPathSetupDialog`). Stage
+   View is `slideRotationFlipFlags(insertion)` (scope-face flip dropped -- it double-counted the
+   polarity/transform baseline on inverted scopes; OWS3 2026-08-09). Camera View still adds the optical
+   flip. Superseded the earlier three-dropdown Stage Map design (and the interim by-eye
+   `stageViewOrientation` pref, removed).
 3. **PENDING (Phase 3)** -- a **fully editable setup-wizard page** with a live slide + FOV preview
    (mirroring the light-path simulator) that writes all orientation factors to the YAML. This is the
    remaining piece; it needs JavaFX runtime verification and will build on `LightPathModel`.
 
-Known values to enter (by matching, not derivation): **PPM** = upright, Slide B, Optics 180 (XY);
-**OWS3** = Optics reversed-in-X net, scope/slide TBD by matching.
+Known values (by matching, not derivation): **PPM** = upright, Slide B, Optics 180 (XY). **OWS3** =
+inverted scope, Optics `none` (Camera View correct at zero flip; verified 2026-08-09), slide rotation
+per placement. On OWS3 the Stage View is correct with the scope-face flip **dropped** -- the inversion
+is already in the polarity/transform baseline.
 
 `LightPathModel` and this document remain the single source of truth in code.

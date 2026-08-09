@@ -184,6 +184,29 @@ public final class LightPathModel {
     }
 
     /**
+     * The canvas flip for a slide rotated 180 degrees in its holder -- the ONLY orientation toggle
+     * the Stage Map exposes. {@link #INSERT_A} = as scanned (identity); {@link #INSERT_B} = rotated
+     * 180 (flip both axes), i.e. the operator placed the slide face down with the label on the other
+     * side.
+     *
+     * <p>This is deliberately independent of scope type and optical flip. On a real inverted scope
+     * the physical inversion is already carried by the stage polarity and the per-slide alignment
+     * transform -- the Stage Map's macro overlay is already drawn in that inverted baseline (verified
+     * on OWS3 2026-08-09: {@code sX=sY=+1} because the insert inversion {@code dirX=dirY=-1} and the
+     * transform sign {@code m00=m11<0} cancel). Re-applying the scope-face flip on top of that
+     * baseline double-counts it and mirrors an already-correct macro, which is why the Stage Map must
+     * use THIS (insertion only), not {@link #benchFlipFlags}. Equals {@code benchFlipFlags(upright,
+     * insertion)}, so it is a no-op change on upright scopes (e.g. PPM) and only removes the spurious
+     * scope-face mirror on inverted ones.
+     *
+     * @param insertion {@link #INSERT_A} or {@link #INSERT_B}
+     * @return {@code {flipX, flipY}}; never null
+     */
+    public static boolean[] slideRotationFlipFlags(String insertion) {
+        return benchFlipFlags(SCOPE_UPRIGHT, insertion);
+    }
+
+    /**
      * Persist one slide-placement factor to the active microscope's YAML {@code light_path} block.
      * No-op (returns false) when there is no writable config. Callers should reload the config
      * afterwards if they need the change reflected in subsequent reads.

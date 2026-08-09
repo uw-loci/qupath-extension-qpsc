@@ -23,6 +23,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.SessionLogBuffer;
 import qupath.ext.qpsc.ui.BugReportDialog;
+import qupath.ext.qpsc.ui.LightPathSetupDialog;
 import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
@@ -627,6 +628,17 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         + "run the autofocus / white-balance / background utilities afterwards.");
         registerObjectiveOption.setOnAction(e -> RegisterObjectiveWorkflow.run(qupath));
 
+        // Light Path Orientation (set-once scope type + optical flip). Needs a writable config.
+        MenuItem lightPathOption = new MenuItem("Light Path Orientation...");
+        lightPathOption.setDisable(!configValid || offlineScope);
+        setMenuItemTooltip(
+                lightPathOption,
+                "Set the microscope's fixed orientation: scope type (upright / inverted) and optical "
+                        + "flip (drives the Stage Map Camera View so it matches the Live Viewer). "
+                        + "These are set once per rig; the run-to-run slide-180 rotation stays on the "
+                        + "Stage Map.");
+        lightPathOption.setOnAction(e -> LightPathSetupDialog.show());
+
         // Setup Wizard (always available -- guides first-time configuration)
         MenuItem setupWizardOption = new MenuItem(res.getString("menu.setupWizard"));
         setMenuItemTooltip(
@@ -724,6 +736,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         serverConnectionOption,
                         new SeparatorMenuItem(),
                         registerObjectiveOption,
+                        lightPathOption,
                         parfocalityCalibrationOption);
 
         // Standalone tools kept one click away (frequent use / acquisition),

@@ -86,9 +86,16 @@ public class StageMapWindow {
     /** Apply Flips checkbox -- promoted to a field so init/source-change paths can sync its state. */
     private CheckBox applyFlipsCheckbox;
 
-    // Live orientation-stack display factors, seeded from the YAML light_path block and written back
-    // on change. Stage View = benchFlipFlags(scope, insertion); Camera View adds the optical flip.
-    private String svScopeType;
+    /** Slide-placement combo labels (map to light_path.slide_insertion A / B). */
+    private static final String SLIDE_LABEL_LEFT = "Label left (as scanned)";
+
+    private static final String SLIDE_LABEL_RIGHT = "Label right (180)";
+
+    // Orientation display factors seeded from the YAML light_path block. The Stage Map only lets the
+    // operator toggle the slide-180 rotation (svSlideInsertion) -- the run-to-run variable. Stage View
+    // = slideRotationFlipFlags(insertion) only; scope type and optical flip are set-once per-microscope
+    // properties edited in Utilities (LightPathSetupDialog), not here. svOpticalFlip is still read
+    // because it feeds Camera View (camera XOR optical), but it is not editable from this window.
     private String svSlideInsertion;
     private String svOpticalFlip;
 
@@ -785,87 +792,35 @@ public class StageMapWindow {
             }
         });
 
-        // Orientation-stack display factors, recorded per microscope in the YAML light_path block
-        // and shared with the setup wizard (one source of truth). Two groups:
-        //   * Stage View (bench) = scope type + slide insertion (factor 1) via benchFlipFlags.
-        //   * Camera View = camera orientation XOR optical flip (factor 2) -- the optical flip is why
-        //     a scope needs a distinct Camera View at all (e.g. PPM's objective inversion = XY).
-        // Defaults (upright + A + optical none) reduce both to identity -> Camera View == Stage View,
-        // the historical inert behaviour, so nothing changes until the rig is described. Changes
-        // write straight to the microscope YAML. Drop-downs mirror the light-path simulator.
-        svScopeType = LightPathModel.scopeType();
+        // Slide placement -- the ONE orientation control the Stage Map exposes, because it is the only
+        // thing that changes run to run: the operator drops the slide in with the label on the left or
+        // the right (an in-plane 180). Everything else about the light path (scope type upright/inverted,
+        // optical flip) is a set-once per-microscope property edited in Utilities -> Microscope
+        // Configuration -> Light Path Orientation, so it is deliberately NOT surfaced here. Stage View is
+        // driven by this rotation only (LightPathModel.slideRotationFlipFlags); the physical scope
+        // inversion is already carried by the stage polarity + alignment transform (the macro overlay's
+        // baseline), so re-applying it here would double-count it (OWS3 2026-08-09).
         svSlideInsertion = LightPathModel.slideInsertion();
-        svOpticalFlip = LightPathModel.opticalFlip();
+        svOpticalFlip = LightPathModel.opticalFlip(); // read-only here; feeds Camera View
 
-        ComboBox<String> scopeCombo = new ComboBox<>();
-        scopeCombo.getItems().addAll("Upright", "Inverted");
-        scopeCombo
-                .getSelectionModel()
-                .select(LightPathModel.SCOPE_INVERTED.equals(svScopeType) ? "Inverted" : "Upright");
-        scopeCombo.setTooltip(new Tooltip("Scope type (factor 1a): upright (objective above,\n"
-                + "coverslip up) vs inverted (objective below, coverslip down).\n"
-                + "Affects Stage View. Written to light_path.scope_type."));
+        Label slideLabel = new Label("Slide:");
         ComboBox<String> insertCombo = new ComboBox<>();
-        insertCombo.getItems().addAll("Slide A", "Slide B (180)");
+        insertCombo.getItems().addAll(SLIDE_LABEL_LEFT, SLIDE_LABEL_RIGHT);
         insertCombo
                 .getSelectionModel()
-                .select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? "Slide B (180)" : "Slide A");
-        insertCombo.setTooltip(new Tooltip("Slide insertion (factor 1b): which side the label is on,\n"
-                + "the two ways a slide drops into the holder (in-plane 180).\n"
-                + "Affects Stage View. Written to light_path.slide_insertion."));
-        ComboBox<String> opticsCombo = new ComboBox<>();
-        opticsCombo.getItems().addAll("Optics: none", "Optics: flip X", "Optics: flip Y", "Optics: 180 (XY)");
-        opticsCombo.getSelectionModel().select(opticsLabelForKey(svOpticalFlip));
-        opticsCombo.setTooltip(new Tooltip("Optical flip (factor 2): objective + tube-lens parity --\n"
-                + "the camera-vs-stage flip that makes Camera View differ from\n"
-                + "Stage View (e.g. PPM objective inversion = 180/XY; OWS3 net\n"
-                + "reversed-in-X). Affects Camera View. Written to light_path.optical_flip."));
-
-        scopeCombo.setOnAction(e -> {
-            svScopeType = "Inverted".equals(scopeCombo.getValue())
-                    ? LightPathModel.SCOPE_INVERTED
-                    : LightPathModel.SCOPE_UPRIGHT;
-            LightPathModel.writeFactor(LightPathModel.KEY_SCOPE_TYPE, svScopeType);
-            reapplyStageViewFlip();
-        });
+                .select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? SLIDE_LABEL_RIGHT : SLIDE_LABEL_LEFT);
+        insertCombo.setTooltip(new Tooltip("How the slide is placed in the holder: label on the left\n"
+                + "(as scanned) vs label on the right (rotated 180). Rotates the\n"
+                + "Stage View to match. Written to light_path.slide_insertion.\n\n"
+                + "Scope type and optical flip live in Utilities -> Microscope\n"
+                + "Configuration -> Light Path Orientation."));
         insertCombo.setOnAction(e -> {
-            svSlideInsertion =
-                    "Slide B (180)".equals(insertCombo.getValue()) ? LightPathModel.INSERT_B : LightPathModel.INSERT_A;
+            svSlideInsertion = SLIDE_LABEL_RIGHT.equals(insertCombo.getValue())
+                    ? LightPathModel.INSERT_B
+                    : LightPathModel.INSERT_A;
             LightPathModel.writeFactor(LightPathModel.KEY_SLIDE_INSERTION, svSlideInsertion);
             reapplyStageViewFlip();
         });
-        opticsCombo.setOnAction(e -> {
-            svOpticalFlip = opticsKeyForLabel(opticsCombo.getValue());
-            LightPathModel.writeFactor(LightPathModel.KEY_OPTICAL_FLIP, svOpticalFlip);
-            // Optical flip feeds Camera View; re-apply for whichever view is showing.
-            if (canvas != null && applyFlipsCheckbox != null) {
-                boolean[] axes = resolveViewFlipAxes(applyFlipsCheckbox.isSelected());
-                canvas.setFlipsApplied(axes[0] || axes[1], axes[0], axes[1]);
-            }
-        });
-
-        // Collapse the three set-once orientation controls into ONE dropdown so the toolbar stays
-        // readable -- they are configured once per microscope and then rarely touched. The
-        // frequently-used Camera/Stage view toggle stays out in the toolbar. Combos keep their
-        // listeners; they are just re-parented into the dropdown's grid.
-        scopeCombo.setMaxWidth(Double.MAX_VALUE);
-        insertCombo.setMaxWidth(Double.MAX_VALUE);
-        opticsCombo.setMaxWidth(Double.MAX_VALUE);
-        GridPane orientationGrid = new GridPane();
-        orientationGrid.setHgap(8);
-        orientationGrid.setVgap(6);
-        orientationGrid.setPadding(new Insets(8));
-        orientationGrid.addRow(0, new Label("Scope:"), scopeCombo);
-        orientationGrid.addRow(1, new Label("Slide:"), insertCombo);
-        orientationGrid.addRow(2, new Label("Optics:"), opticsCombo);
-        CustomMenuItem orientationItem = new CustomMenuItem(orientationGrid);
-        orientationItem.setHideOnClick(false); // keep the popup open while adjusting the combos
-        MenuButton orientationMenu = new MenuButton("Orientation");
-        orientationMenu.getItems().add(orientationItem);
-        orientationMenu.setTooltip(new Tooltip("Per-microscope orientation (YAML light_path).\n\n"
-                + "Scope + Slide set the Stage View (how the slide sits on the bench).\n"
-                + "Optics sets the Camera View (so the map matches the Live Viewer).\n"
-                + "Defaults (upright / A / none) reduce both to identity -- inert."));
 
         // Keep the Camera/Stage view label from clipping when the toolbar is tight.
         if (applyFlipsCheckbox != null) {
@@ -884,7 +839,8 @@ public class StageMapWindow {
                         presetLabel,
                         sourceComboBox,
                         applyFlipsCheckbox,
-                        orientationMenu,
+                        slideLabel,
+                        insertCombo,
                         macroOverlayCheckbox,
                         configButton,
                         calibrateButton,
@@ -1823,16 +1779,20 @@ public class StageMapWindow {
     }
 
     /**
-     * The bench flip for <b>Stage View</b>, derived from the live slide-placement drop-downs
-     * ({@link #svScopeType} / {@link #svSlideInsertion}) via
-     * {@link LightPathModel#benchFlipFlags(String, String)} -- the same derivation the setup wizard
-     * uses, so the two never diverge. Independent of the camera/optical path (the naked eye does not
-     * look through the optics). Defaults (upright + Way A) reduce to identity.
+     * The canvas flip for <b>Stage View</b>, driven by the slide-placement drop-down
+     * ({@link #svSlideInsertion}) only, via {@link LightPathModel#slideRotationFlipFlags(String)}.
+     *
+     * <p>Deliberately independent of scope type: on an inverted scope the physical inversion is
+     * already carried by the stage polarity and the per-slide alignment transform, so the macro
+     * overlay is already drawn in that inverted baseline. Re-applying the scope-face flip here would
+     * double-count it and mirror an already-correct macro (OWS3 2026-08-09). The only run-to-run
+     * variable -- which way the slide was dropped in (label left vs right, an in-plane 180) -- is the
+     * one thing this reflects. Way A reduces to identity.
      *
      * @return {@code {flipX, flipY}}; never null
      */
     private boolean[] stageViewFlipFlags() {
-        return LightPathModel.benchFlipFlags(svScopeType, svSlideInsertion);
+        return LightPathModel.slideRotationFlipFlags(svSlideInsertion);
     }
 
     /** Re-apply the canvas flip when a slide-placement drop-down changes and Stage View is showing. */
@@ -1850,7 +1810,7 @@ public class StageMapWindow {
      * <ul>
      *   <li><b>Camera View</b> -- {@link #resolveCurrentFlipAxes()} (camera orientation XOR optical
      *       flip), matching the Live Viewer / acquisition image.</li>
-     *   <li><b>Stage View</b> -- {@link #stageViewFlipFlags()} (the bench flip from scope + insertion),
+     *   <li><b>Stage View</b> -- {@link #stageViewFlipFlags()} (the slide-180 rotation only),
      *       matching the slide as it physically sits on the stage.</li>
      * </ul>
      *
@@ -1865,33 +1825,6 @@ public class StageMapWindow {
             return new boolean[] {false, false};
         }
         return cameraView ? resolveCurrentFlipAxes() : stageViewFlipFlags();
-    }
-
-    /** Canonical optical-flip keys and their friendly Optics combo labels. */
-    private static final String[] OPTICS_KEYS = {
-        LightPathModel.OPTICAL_NONE, LightPathModel.OPTICAL_X, LightPathModel.OPTICAL_Y, LightPathModel.OPTICAL_XY
-    };
-
-    private static final String[] OPTICS_LABELS = {
-        "Optics: none", "Optics: flip X", "Optics: flip Y", "Optics: 180 (XY)"
-    };
-
-    private static String opticsLabelForKey(String key) {
-        for (int i = 0; i < OPTICS_KEYS.length; i++) {
-            if (OPTICS_KEYS[i].equalsIgnoreCase(key)) {
-                return OPTICS_LABELS[i];
-            }
-        }
-        return OPTICS_LABELS[0];
-    }
-
-    private static String opticsKeyForLabel(String label) {
-        for (int i = 0; i < OPTICS_LABELS.length; i++) {
-            if (OPTICS_LABELS[i].equals(label)) {
-                return OPTICS_KEYS[i];
-            }
-        }
-        return OPTICS_KEYS[0];
     }
 
     /**

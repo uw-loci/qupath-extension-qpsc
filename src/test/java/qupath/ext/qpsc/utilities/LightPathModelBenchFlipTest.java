@@ -83,6 +83,25 @@ class LightPathModelBenchFlipTest {
     }
 
     @Test
+    void slideRotationIsInsertionOnly() {
+        // The Stage Map's Stage View uses this (NOT benchFlipFlags): the slide-180 rotation only,
+        // independent of scope type. A = identity, B = 180 (both axes). It must equal
+        // benchFlipFlags(upright, insertion) so it is a no-op on upright scopes and only drops the
+        // scope-face mirror on inverted ones (the OWS3 double-count fix, 2026-08-09).
+        assertFlip(LightPathModel.slideRotationFlipFlags(LightPathModel.INSERT_A), false, false, "slide A");
+        assertFlip(LightPathModel.slideRotationFlipFlags(LightPathModel.INSERT_B), true, true, "slide B (180)");
+        // Independence from scope type: same result regardless of what scope is configured.
+        assertArrayEquals(
+                LightPathModel.benchFlipFlags(LightPathModel.SCOPE_UPRIGHT, LightPathModel.INSERT_A),
+                LightPathModel.slideRotationFlipFlags(LightPathModel.INSERT_A),
+                "slide rotation A == benchFlip(upright, A)");
+        assertArrayEquals(
+                LightPathModel.benchFlipFlags(LightPathModel.SCOPE_UPRIGHT, LightPathModel.INSERT_B),
+                LightPathModel.slideRotationFlipFlags(LightPathModel.INSERT_B),
+                "slide rotation B == benchFlip(upright, B)");
+    }
+
+    @Test
     void opticalFlipFlagsMap() {
         assertFlip(LightPathModel.opticalFlipFlags(LightPathModel.OPTICAL_NONE), false, false, "none");
         assertFlip(LightPathModel.opticalFlipFlags(LightPathModel.OPTICAL_X), true, false, "x");
