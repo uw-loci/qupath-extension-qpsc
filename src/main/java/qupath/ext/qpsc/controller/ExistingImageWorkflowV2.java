@@ -1742,8 +1742,13 @@ public class ExistingImageWorkflowV2 {
                             throw new RuntimeException("Image validation failed");
                         }
 
-                        // Get pixel size from preferences (macro pixel size for annotation creation)
-                        state.pixelSize = getPixelSizeFromPreferences();
+                        // Pixel size for tiling. The macro pixel size is NOT needed here: this path
+                        // already has a fullRes->stage transform, and tiling uses the camera FOV +
+                        // the open image's own calibration (createTilesForAnnotations ignores this
+                        // value). Resolve from the image so a missing legacy preference cannot crash
+                        // acquisition. (Root cause of the multi-slide "Macro image pixel size is not
+                        // set" failure, 2026-08-08.)
+                        state.pixelSize = resolveTilingPixelSize();
 
                         // Use selected classes or preferences
                         state.selectedAnnotationClasses =
@@ -1776,37 +1781,26 @@ public class ExistingImageWorkflowV2 {
         }
 
         /**
-         * Gets pixel size from preferences (macro image pixel size).
-         * Reuses the same logic as the working workflow.
+         * Resolves a pixel size for the acquire / tiling path from the open image itself.
+         *
+         * <p>This used to read the legacy "Macro image pixel size in microns" preference and throw
+         * when it was unset. That preference is dead code: once a {@code fullRes->stage} alignment
+         * transform exists -- which is the case in every path that calls this (an already-loaded
+         * slide-specific alignment, or a sub-acquisition offset transform) -- tiling needs only the
+         * camera FOV and the open image's own pixel calibration. {@code createTilesForAnnotations}'s
+         * macro-pixel-size argument is explicitly unused (see {@link TileHelper}), and
+         * {@code buildOffsetBasedTransform} reads the pixel size straight from the image server. The
+         * empty-default change on 2026-08-07 turned that vestigial preference read into a hard crash
+         * that broke multi-slide acquisition on every slot, even though the value is never consumed.
+         *
+         * <p>So we read the open image's full-res pixel size (never throwing on a calibrated image),
+         * purely to keep {@code state.pixelSize} a real, positive value for downstream logging /
+         * bounds guards. The true macro pixel size is only needed by the <em>alignment</em> paths
+         * ({@code ManualAlignmentPath} / {@code ExistingAlignmentPath}), which take it as an explicit
+         * argument -- not from here.
          */
-        private double getPixelSizeFromPreferences() {
-            String pixelSizeStr = PersistentPreferences.getMacroImagePixelSizeInMicrons();
-
-            // This guard was unreachable until 2026-08-07: the preference
-            // defaulted to "7.2", so it was never empty and the workflow
-            // silently used 7.2 while the shipped scanner config declares
-            // 81.0. The default is now empty, which makes this fire.
-            if (pixelSizeStr == null || pixelSizeStr.trim().isEmpty()) {
-                logger.error("Macro image pixel size is not configured in preferences");
-                throw new IllegalStateException("Macro image pixel size is not set.\n\n"
-                        + "This is the macro image's pixel size in microns, a measured property "
-                        + "of the slide scanner that produced it. It cannot be guessed: every "
-                        + "stage coordinate derived from the macro image scales directly with it.\n\n"
-                        + "Set it in Preferences -> QPSC -> 'Macro image pixel size in microns'. "
-                        + "The value is on the scanner's configuration under 'macro: pixel_size_um' "
-                        + "(for example, 81.0 for the Ocus40).");
-            }
-
-            try {
-                double pixelSize = Double.parseDouble(pixelSizeStr.trim());
-                if (pixelSize <= 0) {
-                    throw new IllegalStateException("Invalid macro image pixel size: " + pixelSize);
-                }
-                logger.debug("Using macro pixel size from preferences: {} um", pixelSize);
-                return pixelSize;
-            } catch (NumberFormatException e) {
-                throw new IllegalStateException("Invalid macro image pixel size format: '" + pixelSizeStr + "'");
-            }
+        private double resolveTilingPixelSize() {
+            return WorkflowHelpers.resolveFullResPixelSize(gui, 1.0);
         }
 
         /**
@@ -2042,7 +2036,9 @@ public class ExistingImageWorkflowV2 {
                         MicroscopeController.getInstance().setCurrentTransform(transform);
                         logger.info("Offset-based transform created for sub-acquisition");
 
-                        state.pixelSize = getPixelSizeFromPreferences();
+                        // Tiling pixel size from the image (macro pixel size not needed; the
+                        // offset-based transform above already read the image calibration directly).
+                        state.pixelSize = resolveTilingPixelSize();
 
                         // Use selected classes or preferences
                         state.selectedAnnotationClasses =

@@ -588,6 +588,9 @@ public final class MultiSlideExistingImageWorkflow {
         // Concrete next-step updater (buttons now exist). Idle-gated: a run in progress clears the
         // pulse. Recommends Step 1 while any slot still needs setup, then Step 2 once slots are set
         // up, then Finish once all are terminal.
+        // Tracks the last recommended step (0=Set Up, 1=Acquire, 2=Finish; -1=none) so we can act
+        // once on a transition rather than every refresh.
+        int[] lastNextStep = {-1};
         Runnable updateNextStep = () -> {
             if (panelBusy[0]) {
                 nextStepPulse.clear();
@@ -603,13 +606,25 @@ public final class MultiSlideExistingImageWorkflow {
                     anySetUp = true;
                 }
             }
+            int step;
             if (anyNeedsSetup) {
                 nextStepPulse.highlight(setUpAllBtn, "#1565C0"); // Step 1
+                step = 0;
             } else if (anySetUp) {
                 nextStepPulse.highlight(acquireAllBtn, "#1565C0"); // Step 2
+                step = 1;
             } else {
                 nextStepPulse.highlight(finishBtn, "#2E7D32"); // all terminal -> Finish
+                step = 2;
             }
+            // On the transition into "Step 2 ready" (setup finished, nothing acquiring yet), restore
+            // the progress panel if the operator minimized it during the manual setup pass -- the
+            // "Acquire All Set-Up" button is now blinking and they cannot see it while iconified.
+            if (step == 1 && lastNextStep[0] != 1 && stage.isIconified()) {
+                stage.setIconified(false);
+                stage.toFront();
+            }
+            lastNextStep[0] = step;
         };
         nextStepHolder[0] = updateNextStep;
 
