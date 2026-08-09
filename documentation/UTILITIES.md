@@ -43,6 +43,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... |
 | [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Microscope Configuration > Communication Settings... |
 | Register Current Objective | Add the objective in the light path to the config (reads MM pixel size) | Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... |
+| Light Path Orientation | Set the microscope's fixed orientation: scope type (upright/inverted) and optical flip (drives the Stage Map Camera View) | Extensions > QP Scope > Utilities > Microscope Configuration > Light Path Orientation... |
 | [Parfocality Calibration](tools/parfocality-calibration.md) | Capture per-profile Z offsets so the stage refocuses when switching modality | Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality... |
 | **PPM Modality Submenu** (conditional -- only with PPM modality) | | |
 | [Polarizer Calibration](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/polarizer-calibration.md) | Calibrate polarizer rotation stage | Scope > PPM > Polarizer Calibration (PPM)... |
