@@ -438,38 +438,17 @@ Drive the stage roughly close (a few hundred microns is enough) using the joysti
 
 #### Q: "Macro image pixel size is not set" when starting Existing Image Acquisition
 
-**A:** This error occurs because the macro image pixel size is not configured in your preferences. This is a required setting that tells QPSC how to convert pixel coordinates from your slide scanner's macro image into physical stage coordinates.
+**A:** This error **no longer occurs** as of the latest release. The Existing Image Acquisition and Multi-Slide Acquisition workflows now automatically resolve pixel size from the open image's calibration instead of requiring a preference to be set.
 
-**What this means:**
-- Macro images from your slide scanner have a fixed pixel size (e.g., 81.0 µm/px for Ocus40)
-- QPSC needs this value to correctly transform QuPath image coordinates to stage coordinates
-- An incorrect value (like the old default of 7.2 when 81.0 is correct) causes every acquired tile to land in the wrong location — shifted by 11x or more
-- This value is a measured property of your scanner hardware and cannot be guessed
+**Historical context (for reference):**
+Prior versions crashed with "Macro image pixel size is not set" when the preference was empty. The preference is now **deprecated and optional** — if you have set it in the past, it is safe to leave it in place and will not interfere with acquisition.
 
-**The error message says:**
-```
-Macro image pixel size is not set.
+**What changed:**
+- Pixel size for tiling now comes from the open image's own calibration metadata instead of the legacy preference
+- The preference is no longer read by Existing Image Acquisition or Multi-Slide Acquisition workflows
+- No action required on your part — acquisitions will work whether or not the preference is set
 
-This is the macro image's pixel size in microns, a measured property of the slide 
-scanner that produced it. It cannot be guessed: every stage coordinate derived 
-from the macro image scales directly with it.
-
-Set it in Preferences -> QPSC -> 'Macro image pixel size in microns'. The value 
-is on the scanner's configuration under 'macro: pixel_size_um' (for example, 81.0 
-for the Ocus40).
-```
-
-**To fix:**
-1. Open **Edit > Preferences > QPSC**
-2. Look for **"Macro image pixel size in microns"** (in the "File & Path Configuration" section)
-3. Enter the correct pixel size from your scanner's configuration:
-   - **Ocus40 (LOCI):** `81.0` (from `config_Ocus40.yml`)
-   - **Any other scanner:** read it off that scanner's own configuration or specification -- do not reuse a value from a different model, and do not estimate
-4. Click OK and retry the Existing Image Acquisition workflow
-
-**If you're unsure of the value:** Contact your microscopy facility manager or consult your slide scanner's documentation. The value is often labeled as `macro: pixel_size_um` or similar.
-
-See [PREFERENCES > Macro image pixel size in microns](../PREFERENCES.md#macro-image-pixel-size-in-microns) for more details.
+**If you're curious about the technical details:** See [PREFERENCES > Macro image pixel size in microns](../PREFERENCES.md#macro-image-pixel-size-in-microns) for the full explanation of why the preference was needed historically and why it is no longer required.
 
 ---
 
