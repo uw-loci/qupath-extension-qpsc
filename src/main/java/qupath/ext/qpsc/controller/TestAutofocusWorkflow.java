@@ -283,7 +283,8 @@ public class TestAutofocusWorkflow {
                 String finalZ = result.get("final_z");
                 String zShift = result.get("z_shift");
 
-                Platform.runLater(() -> showAutofocusResultDialog(testType, initialZ, finalZ, zShift, plotPath));
+                Platform.runLater(
+                        () -> showAutofocusResultDialog(testType, initialZ, finalZ, zShift, plotPath, outputPath));
             });
 
         } catch (Exception e) {
@@ -336,7 +337,7 @@ public class TestAutofocusWorkflow {
      * Uses larger, bold text with system colors for better dark mode support.
      */
     private static void showAutofocusResultDialog(
-            String testType, String initialZ, String finalZ, String zShift, String plotPath) {
+            String testType, String initialZ, String finalZ, String zShift, String plotPath, String outputPath) {
         // Create custom dialog for better formatting
         javafx.scene.control.Alert alert =
                 new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
@@ -399,41 +400,90 @@ public class TestAutofocusWorkflow {
             content.getChildren().addAll(new javafx.scene.control.Separator(), plotLabel, plotPathLabel);
         }
 
+        // Show the folder where the CSV + plot were saved, so the operator can find
+        // the diagnostic data even when the fast sweep test skips the inline plot.
+        if (outputPath != null) {
+            javafx.scene.control.Label folderLabel = new javafx.scene.control.Label("Results folder:");
+            folderLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: -fx-text-base-color;");
+            javafx.scene.control.Label folderPathLabel = new javafx.scene.control.Label(outputPath);
+            folderPathLabel.setStyle(
+                    "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: -fx-text-base-color;");
+            folderPathLabel.setWrapText(true);
+            content.getChildren().addAll(new javafx.scene.control.Separator(), folderLabel, folderPathLabel);
+        }
+
         alert.getDialogPane().setContent(content);
         alert.getDialogPane().setMinWidth(500);
 
-        // Show "Open Plot" only when a diagnostic plot was produced.
-        // Sweep autofocus is designed for speed and skips the plot, so
-        // an "Open Plot" button there would be a silent no-op.
+        // Buttons: "Open Results Folder" (whenever we know the output dir -- the CSV
+        // always lands there, even when the fast sweep test skips the inline plot),
+        // "Open Plot" (only when a plot was produced), then "Close". The two "open"
+        // buttons consume their action so the dialog stays open -- the operator can
+        // open the folder AND the plot without re-running the test.
+        javafx.scene.control.ButtonType openFolderType = new javafx.scene.control.ButtonType(
+                "Open Results Folder", javafx.scene.control.ButtonBar.ButtonData.LEFT);
+        javafx.scene.control.ButtonType openPlotType =
+                new javafx.scene.control.ButtonType("Open Plot", javafx.scene.control.ButtonBar.ButtonData.LEFT);
+        javafx.scene.control.ButtonType closeType =
+                new javafx.scene.control.ButtonType("Close", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+
+        java.util.List<javafx.scene.control.ButtonType> buttons = new java.util.ArrayList<>();
+        if (outputPath != null) {
+            buttons.add(openFolderType);
+        }
         if (plotPath != null) {
-            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.YES, javafx.scene.control.ButtonType.NO);
-            ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.YES))
-                    .setText("Open Plot");
-            ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.NO))
-                    .setText("Close");
-        } else {
-            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
-            ((javafx.scene.control.Button) alert.getDialogPane().lookupButton(javafx.scene.control.ButtonType.OK))
-                    .setText("Close");
+            buttons.add(openPlotType);
+        }
+        buttons.add(closeType);
+        alert.getButtonTypes().setAll(buttons);
+
+        if (outputPath != null) {
+            javafx.scene.control.Button openFolderButton =
+                    (javafx.scene.control.Button) alert.getDialogPane().lookupButton(openFolderType);
+            openFolderButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+                e.consume(); // keep the dialog open
+                openInDesktop(new File(outputPath), "results folder");
+            });
+        }
+        if (plotPath != null) {
+            javafx.scene.control.Button openPlotButton =
+                    (javafx.scene.control.Button) alert.getDialogPane().lookupButton(openPlotType);
+            openPlotButton.addEventFilter(javafx.event.ActionEvent.ACTION, e -> {
+                e.consume(); // keep the dialog open
+                openInDesktop(new File(plotPath), "diagnostic plot");
+            });
         }
 
-        // Show dialog and handle response
-        alert.showAndWait().ifPresent(response -> {
-            if (response == javafx.scene.control.ButtonType.YES && plotPath != null) {
-                try {
-                    File plotFile = new File(plotPath);
-                    if (plotFile.exists()) {
-                        Desktop.getDesktop().open(plotFile);
-                        logger.info("Opened diagnostic plot: {}", plotPath);
-                    } else {
-                        Dialogs.showErrorMessage("File Not Found", "Diagnostic plot file not found: " + plotPath);
-                    }
-                } catch (IOException e) {
-                    logger.error("Failed to open diagnostic plot", e);
-                    Dialogs.showErrorMessage("Error Opening Plot", "Could not open diagnostic plot: " + e.getMessage());
-                }
+        alert.showAndWait();
+    }
+
+    /**
+     * Opens a file or folder in the OS file manager / default application, with
+     * consistent error reporting. No-op with an error dialog when the target is
+     * missing or the platform has no Desktop support (e.g. a headless server).
+     *
+     * @param target the file or directory to open
+     * @param label  short human name for the target, used in error messages
+     */
+    private static void openInDesktop(File target, String label) {
+        try {
+            if (!target.exists()) {
+                Dialogs.showErrorMessage(
+                        "Not Found", "The autofocus " + label + " was not found:\n" + target.getAbsolutePath());
+                return;
             }
-        });
+            if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
+                Dialogs.showErrorMessage(
+                        "Unsupported",
+                        "Opening the " + label + " is not supported on this system.\n" + target.getAbsolutePath());
+                return;
+            }
+            Desktop.getDesktop().open(target);
+            logger.info("Opened autofocus {}: {}", label, target.getAbsolutePath());
+        } catch (IOException e) {
+            logger.error("Failed to open autofocus {}", label, e);
+            Dialogs.showErrorMessage("Error", "Could not open the " + label + ": " + e.getMessage());
+        }
     }
 
     /**
