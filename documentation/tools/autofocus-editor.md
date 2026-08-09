@@ -90,8 +90,6 @@ The Sweep Autofocus section configures a periodic Z sweep that monitors focus dr
 | `brenner_gradient` | Brenner gradient-based focus measure. |
 | `p98_p2` | Difference between 98th and 2nd intensity percentiles. |
 
-**Test Sweep Autofocus** button: runs a single sweep at the current position so you can verify parameters before acquisition.
-
 ### Test Sweep Autofocus
 
 The **Test Sweep Autofocus** button runs a single sweep-autofocus pass at the current stage position to verify your sweep range and step parameters before acquisition. On completion a results dialog opens with:
