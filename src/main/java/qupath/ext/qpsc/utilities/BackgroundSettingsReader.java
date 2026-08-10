@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.AngleGains;
 
 /**
  * BackgroundSettingsReader - Utility for reading background collection settings files
@@ -51,6 +52,14 @@ public class BackgroundSettingsReader {
         public final String detector;
         public final String magnification;
         public final List<AngleExposure> angleExposures;
+        /**
+         * Per-angle gains recorded at background collection time, used only by the
+         * settings-match guard. Empty for older files (and for modalities/servers
+         * that do not report gains); never null. Keyed positionally, not by angle --
+         * match code should index by {@link AngleGains#ticks()}.
+         */
+        public final List<AngleGains> angleGains;
+
         public final String settingsFilePath;
         /** White balance mode used during background collection (e.g., "per_angle", "simple", "camera_awb", "off"). May be null for older settings files. */
         public final String wbMode;
@@ -73,6 +82,7 @@ public class BackgroundSettingsReader {
                 String detector,
                 String magnification,
                 List<AngleExposure> angleExposures,
+                List<AngleGains> angleGains,
                 String settingsFilePath,
                 String wbMode,
                 String profileKey,
@@ -86,6 +96,7 @@ public class BackgroundSettingsReader {
             this.detector = detector;
             this.magnification = magnification;
             this.angleExposures = angleExposures;
+            this.angleGains = angleGains != null ? angleGains : List.of();
             this.settingsFilePath = settingsFilePath;
             this.wbMode = wbMode;
             this.profileKey = profileKey;
@@ -99,12 +110,13 @@ public class BackgroundSettingsReader {
         @Override
         public String toString() {
             return String.format(
-                    "BackgroundSettings[modality=%s, objective=%s, detector=%s, angles=%d, channels=%d, "
+                    "BackgroundSettings[modality=%s, objective=%s, detector=%s, angles=%d, gains=%d, channels=%d, "
                             + "wbMode=%s, profile=%s, lamp=%s]",
                     modality,
                     objective,
                     detector,
                     angleExposures.size(),
+                    angleGains.size(),
                     channelBackgrounds.size(),
                     wbMode,
                     profileKey,
@@ -344,6 +356,26 @@ public class BackgroundSettingsReader {
                 }
             }
 
+            // Extract per-angle gains (optional; absent in older files and in
+            // collections whose server did not report gains). Tolerant: any missing
+            // gain component stays null and is skipped by the match, never a mismatch.
+            List<AngleGains> angleGains = new ArrayList<>();
+            List<Map<String, Object>> angleGainsList = getMapList(yamlData, "angle_gains");
+            if (angleGainsList != null) {
+                for (Map<String, Object> g : angleGainsList) {
+                    Double angle = getDouble(g, "angle");
+                    if (angle == null) {
+                        continue;
+                    }
+                    angleGains.add(new AngleGains(
+                            angle,
+                            getDouble(g, "unified_gain"),
+                            getDouble(g, "analog_red"),
+                            getDouble(g, "analog_blue")));
+                    logger.debug("Parsed angle gains: {}deg", angle);
+                }
+            }
+
             // Extract per-channel background entries (v2.0 channel-based files).
             List<ChannelBackground> channelBackgrounds = new ArrayList<>();
             List<Map<String, Object>> channelList = getMapList(yamlData, "channels");
@@ -391,6 +423,7 @@ public class BackgroundSettingsReader {
                     detector,
                     magnification,
                     angleExposures,
+                    angleGains,
                     settingsFile.getAbsolutePath(),
                     wbMode,
                     profileKey,

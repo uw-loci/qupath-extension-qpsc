@@ -1346,7 +1346,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String lampDeviceLabel,
             String resolvedProfileKey,
             Map<String, Double> channelExposures,
-            Map<String, Double> channelIntensities) {}
+            Map<String, Double> channelIntensities,
+            Map<Double, qupath.ext.qpsc.modality.AngleGains> angleGains) {}
 
     /**
      * Starts a background acquisition workflow on the server for flat field correction.
@@ -1440,8 +1441,74 @@ public class MicroscopeSocketClient implements AutoCloseable {
             logger.warn("No exposure data in background response (old server version?)");
         }
         SuccessMeta meta = parseSuccessMeta(parts.length > 2 ? parts[2] : null);
+        Map<Double, qupath.ext.qpsc.modality.AngleGains> angleGains =
+                parseAngleGains(parts.length > 3 ? parts[3] : null);
         return new BackgroundAcquisitionResult(
-                finalExposures, meta.lampIntensity(), meta.deviceLabel(), meta.profileKey(), Map.of(), Map.of());
+                finalExposures,
+                meta.lampIntensity(),
+                meta.deviceLabel(),
+                meta.profileKey(),
+                Map.of(),
+                Map.of(),
+                angleGains);
+    }
+
+    /**
+     * Parses the optional fourth pipe-field of a BGACQUIRE SUCCESS response --
+     * the per-angle gains the server actually applied, in the format
+     * {@code <angle>:<unified>/<red>/<blue>,<angle>:<unified>/<red>/<blue>,...}
+     * (e.g. {@code 7.0:3.0/1.2/1.5,-7.0:1.0/1.0/1.0}). Any missing or {@code none}
+     * gain component is left null.
+     *
+     * <p>Tolerant by design: a null/empty field (an older server that reports no
+     * gains) yields an empty map, so the writer records no {@code angle_gains}
+     * block and the settings-match guard simply cannot compare gains for that
+     * collection. Populating this field is the server-side half of the
+     * background settings-match guard.</p>
+     */
+    private static Map<Double, qupath.ext.qpsc.modality.AngleGains> parseAngleGains(String field) {
+        Map<Double, qupath.ext.qpsc.modality.AngleGains> result = new HashMap<>();
+        if (field == null || field.trim().isEmpty()) {
+            return result;
+        }
+        for (String entry : field.trim().split(",")) {
+            int colon = entry.indexOf(':');
+            if (colon <= 0) {
+                continue;
+            }
+            Double angle;
+            try {
+                angle = Double.parseDouble(entry.substring(0, colon).trim());
+            } catch (NumberFormatException e) {
+                logger.warn("Failed to parse angle in gains entry: {}", entry);
+                continue;
+            }
+            String[] comps = entry.substring(colon + 1).trim().split("/");
+            Double unified = comps.length > 0 ? parseGainComponent(comps[0]) : null;
+            Double red = comps.length > 1 ? parseGainComponent(comps[1]) : null;
+            Double blue = comps.length > 2 ? parseGainComponent(comps[2]) : null;
+            result.put(angle, new qupath.ext.qpsc.modality.AngleGains(angle, unified, red, blue));
+        }
+        if (!result.isEmpty()) {
+            logger.info("Parsed {} per-angle gain entries from server", result.size());
+        }
+        return result;
+    }
+
+    /** Parses a single gain component; blank or "none" yields null. */
+    private static Double parseGainComponent(String s) {
+        if (s == null) {
+            return null;
+        }
+        String t = s.trim();
+        if (t.isEmpty() || "none".equalsIgnoreCase(t)) {
+            return null;
+        }
+        try {
+            return Double.parseDouble(t);
+        } catch (NumberFormatException e) {
+            return null;
+        }
     }
 
     /**
@@ -1514,7 +1581,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 meta.deviceLabel(),
                 meta.profileKey(),
                 channelExposures,
-                meta.channelIntensities());
+                meta.channelIntensities(),
+                Map.of());
     }
 
     /** Parsed third pipe-field of a BGACQUIRE SUCCESS response. */

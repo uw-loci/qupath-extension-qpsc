@@ -353,6 +353,7 @@ public class BackgroundCollectionWorkflow {
                     profileIllumination,
                     bgResult.appliedLampIntensity(),
                     bgResult.lampDeviceLabel(),
+                    bgResult.angleGains(),
                     exposureMode);
 
             // Update the modality's background_correction config to enabled=true
@@ -706,6 +707,7 @@ public class BackgroundCollectionWorkflow {
             Double profileIlluminationIntensity,
             Double appliedLampIntensity,
             String lampDeviceLabel,
+            Map<Double, qupath.ext.qpsc.modality.AngleGains> angleGains,
             String exposureMode)
             throws IOException {
 
@@ -838,6 +840,36 @@ public class BackgroundCollectionWorkflow {
 
         // The main angle_exposures list - this is what readers look for
         yamlData.put("angle_exposures", angleExposureList);
+
+        // Per-angle gains the server applied (color modalities only). Written only
+        // when the server reported them; older servers send nothing, so the block is
+        // simply absent and the settings-match guard cannot compare gains for this
+        // collection. Each entry omits any gain component the server left null.
+        if (angleGains != null && !angleGains.isEmpty()) {
+            List<Map<String, Double>> angleGainsList = new ArrayList<>();
+            List<Double> sortedGainAngles = new ArrayList<>(angleGains.keySet());
+            sortedGainAngles.sort(Double::compare);
+            for (Double angle : sortedGainAngles) {
+                qupath.ext.qpsc.modality.AngleGains g = angleGains.get(angle);
+                if (g == null) {
+                    continue;
+                }
+                Map<String, Double> entry = new LinkedHashMap<>();
+                entry.put("angle", angle);
+                if (g.unifiedGain() != null) {
+                    entry.put("unified_gain", g.unifiedGain());
+                }
+                if (g.analogRed() != null) {
+                    entry.put("analog_red", g.analogRed());
+                }
+                if (g.analogBlue() != null) {
+                    entry.put("analog_blue", g.analogBlue());
+                }
+                angleGainsList.add(entry);
+            }
+            yamlData.put("angle_gains", angleGainsList);
+            logger.info("Recorded per-angle gains for {} angles", angleGainsList.size());
+        }
 
         // Notes
         List<String> notes = new ArrayList<>();
