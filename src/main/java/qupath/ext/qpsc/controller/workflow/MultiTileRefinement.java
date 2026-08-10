@@ -434,7 +434,6 @@ public class MultiTileRefinement {
                                                         tileCoords,
                                                         trustSift,
                                                         confidenceThreshold,
-                                                        estimate,
                                                         future);
                                             });
                                         } catch (Exception ex) {
@@ -451,7 +450,6 @@ public class MultiTileRefinement {
                                                     tileCoords,
                                                     false,
                                                     confidenceThreshold,
-                                                    estimate,
                                                     future));
                                         }
                                     },
@@ -491,13 +489,12 @@ public class MultiTileRefinement {
             double[] tileCoords,
             boolean autoRunSift,
             double confidenceThreshold,
-            AffineTransform estimate,
             CompletableFuture<PointMeasure> future) {
         // gateCaptureOnSift=false: multi-tile allows a manual nudge + capture without
-        // a prior SIFT run (unlike single-tile's Save-after-SIFT gate). The running
-        // estimate maps this tile's QuPath pixels -> stage, so SIFT composes its
-        // offset through it (same transform used to predict the tile position).
-        SiftCapturePane pane = new SiftCapturePane(gui, tile, false, "Add reference point", estimate);
+        // a prior SIFT run (unlike single-tile's Save-after-SIFT gate). SIFT moves the
+        // stage by -offset with no rig transform (the match resolves orientation), so
+        // the pane needs no alignment transform.
+        SiftCapturePane pane = new SiftCapturePane(gui, tile, false, "Add reference point");
         captureSlot.getChildren().setAll(pane);
         // The window is non-resizable, so grow it to fit the embedded pane instead of squeezing the
         // instruction labels above it. Paired with the clear() below to shrink back when the pane exits.

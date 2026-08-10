@@ -1,7 +1,5 @@
 package qupath.ext.qpsc.ui;
 
-import java.awt.geom.AffineTransform;
-import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.util.concurrent.CompletableFuture;
@@ -69,24 +67,15 @@ public final class SiftAutoAlignHelper {
      *
      * @param gui  QuPath GUI (for accessing the image server and project entry)
      * @param tile the tile to match against
-     * @param fullResToStage the alignment transform mapping this entry's QuPath
-     *     full-res pixels to stage micrometers -- the SAME transform the caller
-     *     used to predict the tile's stage position. The SIFT offset is a
-     *     displacement in the WSI-entry IMAGE frame, so it is mapped to a stage
-     *     displacement through this transform's linear part
-     *     ({@link AffineTransform#deltaTransform}); applying it raw lands at the
-     *     mirror on a flipped entry (e.g. a PPM flipped sibling). May be
-     *     {@code null} (e.g. the initial 3-point alignment before any estimate
-     *     exists), in which case the offset is applied raw as before.
      * @return {@code [offsetX, offsetY, inliers, confidence]} on success;
      *     {@code null} if matching failed. The returned offset is the raw
      *     server offset (WSI-entry frame), unchanged, for display; the stage
-     *     move uses the transform-composed delta.
+     *     move applies {@code -offset} (see {@link #composeSiftOffsetToStageDelta}).
      * @throws Exception if a low-level error occurs (server I/O, invalid
      *     pixel calibration, etc.). Match failures (insufficient features)
      *     return null rather than throwing.
      */
-    public static double[] autoAlign(QuPathGUI gui, PathObject tile, AffineTransform fullResToStage) throws Exception {
+    public static double[] autoAlign(QuPathGUI gui, PathObject tile) throws Exception {
 
         var imageData = gui.getImageData();
         if (imageData == null) throw new IllegalStateException("No image data available");
@@ -295,26 +284,25 @@ public final class SiftAutoAlignHelper {
             double[] currentPos = mc.getStagePositionXY();
             // The SIFT offset points FROM the target tile TO the current camera
             // position (server: micro-center-minus-WSI-center), so the stage must
-            // move by the NEGATION, mapped through the alignment transform that
-            // predicted this tile's position. The old code added the raw offset and
-            // drove to the mirror-image landing.
-            double[] stageDelta =
-                    composeSiftOffsetToStageDelta(offsetX, offsetY, flipX, flipY, wsiPixelSize, fullResToStage);
+            // move by the NEGATION -- and by NEGATION ONLY, no rig transform. SIFT
+            // matches the WSI region against the live camera, so the match itself
+            // resolves the light-path orientation; the offset is already in the
+            // frame the stage command uses for a relative correction. Verified on
+            // both rigs (PPM identity, OWS3 INVERT_XY) 2026-08-09: -offset lands
+            // correctly on both, whereas mapping through the alignment transform
+            // mirrored the move on OWS3.
+            double[] stageDelta = composeSiftOffsetToStageDelta(offsetX, offsetY, flipX, flipY);
             double newX = currentPos[0] + stageDelta[0];
             double newY = currentPos[1] + stageDelta[1];
             logger.info(
-                    "SIFT move: offset=({}, {}) um [WSI-entry frame, target->current], serverFlip=({}, {}), "
-                            + "transform={} -> stageDelta=({}, {}) um (old-buggy-raw-would-be=({}, {})); "
-                            + "stage ({}, {}) -> ({}, {})",
+                    "SIFT move: offset=({}, {}) um [WSI-entry frame, target->current], serverFlip=({}, {}) -> "
+                            + "stageDelta=({}, {}) um [-offset]; stage ({}, {}) -> ({}, {})",
                     String.format("%.2f", offsetX),
                     String.format("%.2f", offsetY),
                     flipX,
                     flipY,
-                    fullResToStage == null ? "none" : "alignment",
                     String.format("%.2f", stageDelta[0]),
                     String.format("%.2f", stageDelta[1]),
-                    String.format("%.2f", offsetX),
-                    String.format("%.2f", offsetY),
                     String.format("%.1f", currentPos[0]),
                     String.format("%.1f", currentPos[1]),
                     String.format("%.1f", newX),
@@ -333,64 +321,52 @@ public final class SiftAutoAlignHelper {
 
     /**
      * Converts the SIFT offset into the stage displacement to ADD to the current
-     * position to bring the camera onto the tile (micrometers).
+     * position to bring the camera onto the tile (micrometers): simply
+     * {@code -offset} (after undoing any server-applied flip). <b>No rig
+     * transform.</b>
      *
      * <p><b>Direction.</b> The server computes the offset as
-     * {@code (microscope-center-in-WSI) - (WSI-center)} -- i.e. it points FROM the
+     * {@code (microscope-center-in-WSI) - (WSI-center)} -- it points FROM the
      * target tile (the WSI region is centered on it) TO where the camera currently
-     * is. So to move the camera ONTO the tile the stage must travel the OPPOSITE
-     * way: {@code target - current = -offset}. Empirically confirmed on PPM
-     * 2026-08-08: predicted stage P, SIFT landing was {@code P + offset}, the true
-     * tile was {@code P - offset}, and "Go to centroid" (which uses P) sat exactly
-     * at their midpoint -- target and the +offset landing are symmetric about P.
-     * The old code added the offset and thus drove to that mirror-image landing.
+     * is. So the stage must travel the OPPOSITE way: {@code target - current =
+     * -offset}. Confirmed on PPM (predicted P; SIFT landing {@code P + offset}; true
+     * tile {@code P - offset}; "Go to centroid" = P sat at their midpoint) and on
+     * OWS3 (ground truth 2026-08-09).
      *
-     * <p><b>Frame.</b> The offset is a displacement in the post-server-flip WSI
-     * pixel frame (the server mirrors the WSI by {@code (serverFlipX, serverFlipY)}
-     * so SIFT sees the camera orientation). We (1) undo that server flip to return
-     * to the raw entry-image frame, (2) negate for the target-minus-current
-     * direction above, (3) convert um -&gt; entry full-res pixels, and (4) map the
-     * pixel displacement through the {@code fullResToStage} alignment transform's
-     * linear part ({@link AffineTransform#deltaTransform}) -- the same image-&gt;stage
-     * mapping the caller used to predict the tile position. On PPM that linear part
-     * is identity (the flip lives in the sibling pixels, not the transform), so the
-     * whole correction reduces to the negation; on a rig whose alignment transform
-     * carries a flip/rotation (or a rotated stage insert) the transform supplies it.
-     * No sign is hard-coded: the direction is fixed by the server's offset
-     * definition and the orientation comes from the empirically-fit transform, so
-     * this is correct on any rig by construction.
+     * <p><b>No light-path transform.</b> SIFT computes the offset by matching the
+     * WSI region against the <em>live camera image</em>; that match only succeeds
+     * when the two share an orientation, so the match itself has already resolved
+     * the light path. {@code currentPos} and the offset are captured together, so a
+     * <em>relative</em> "close the gap" correction is already in the stage-command
+     * frame -- {@code -offset} is correct on every rig. This is measured, not
+     * assumed: {@code -offset} lands correctly on both PPM (composite identity) and
+     * OWS3 (composite INVERT_XY), and the only operation consistent with both is the
+     * plain negation. An earlier version mapped the offset through the per-slide
+     * alignment transform; that transform's flip lives in the sibling pixels on PPM
+     * (linear part identity, harmless) but in the transform on OWS3 (XY-flip), which
+     * turned {@code -offset} into {@code +offset} and mirrored the move. (A future
+     * scope with a genuine camera <em>rotation</em> -- not just a flip -- is the one
+     * case that could need more; catch it by matching there.)
+     *
+     * <p>The server mirrors the WSI by {@code (serverFlipX, serverFlipY)} so SIFT
+     * sees the camera orientation; a mirror negates a displacement component, so we
+     * undo that flip before negating. In practice a flipped sibling sends
+     * {@code (false, false)} (zero residual), so this is usually a no-op.
      *
      * @param offsetXUm server offset X (um, WSI-entry frame, post server flip)
      * @param offsetYUm server offset Y (um, WSI-entry frame, post server flip)
      * @param serverFlipX whether the server mirrored the WSI in X before matching
      * @param serverFlipY whether the server mirrored the WSI in Y before matching
-     * @param wsiPixelSize full-res WSI pixel size (um/px), to convert um -&gt; pixels
-     * @param fullResToStage entry full-res pixels -&gt; stage um; {@code null} applies
-     *     just the server-flip undo and the direction negation (no orientation map)
      * @return stage displacement {@code [dx, dy]} to ADD to the current stage
      *     position, in micrometers
      */
     static double[] composeSiftOffsetToStageDelta(
-            double offsetXUm,
-            double offsetYUm,
-            boolean serverFlipX,
-            boolean serverFlipY,
-            double wsiPixelSize,
-            AffineTransform fullResToStage) {
-        // (1) Undo the server flip to return to the raw entry-image frame, then
-        // (2) negate: the server offset points target->current, the stage must go
-        // current->target. (Both are linear, so their order does not matter.)
-        double entryUmX = (serverFlipX ? -offsetXUm : offsetXUm) * -1.0;
-        double entryUmY = (serverFlipY ? -offsetYUm : offsetYUm) * -1.0;
-        if (fullResToStage == null || wsiPixelSize <= 0) {
-            // No alignment transform (e.g. first 3-point alignment): no orientation map.
-            return new double[] {entryUmX, entryUmY};
-        }
-        // (3) um -> entry full-res pixels; (4) linear map pixels -> stage um.
-        Point2D.Double srcPx = new Point2D.Double(entryUmX / wsiPixelSize, entryUmY / wsiPixelSize);
-        Point2D.Double dst = new Point2D.Double();
-        fullResToStage.deltaTransform(srcPx, dst);
-        return new double[] {dst.x, dst.y};
+            double offsetXUm, double offsetYUm, boolean serverFlipX, boolean serverFlipY) {
+        // Undo the server flip to return to the raw entry-image frame, then negate:
+        // the server offset points target->current, the stage must go current->target.
+        double dx = (serverFlipX ? -offsetXUm : offsetXUm) * -1.0;
+        double dy = (serverFlipY ? -offsetYUm : offsetYUm) * -1.0;
+        return new double[] {dx, dy};
     }
 
     // Context of the search-range box currently shown on the Stage Map, so it
@@ -559,12 +535,8 @@ public final class SiftAutoAlignHelper {
      * SIFT dialog carries the focus/exposure reminder.
      */
     public static HBox buildSiftButtonRow(
-            QuPathGUI gui,
-            PathObject targetTile,
-            Window settingsOwnerSupplierTarget,
-            Label statusLabel,
-            AffineTransform fullResToStage) {
-        return buildSiftButtonRow(gui, targetTile, settingsOwnerSupplierTarget, statusLabel, fullResToStage, null);
+            QuPathGUI gui, PathObject targetTile, Window settingsOwnerSupplierTarget, Label statusLabel) {
+        return buildSiftButtonRow(gui, targetTile, settingsOwnerSupplierTarget, statusLabel, null);
     }
 
     /**
@@ -572,17 +544,12 @@ public final class SiftAutoAlignHelper {
      * has run AND returned a valid offset. Used by callers that gate further UI
      * (e.g. the SingleTileRefinement Save button) on a real refinement having
      * occurred so a quick "Save" click can't silently skip refinement.
-     *
-     * @param fullResToStage the alignment transform (entry full-res pixels -&gt;
-     *     stage um) used to map the SIFT offset to a stage move; see
-     *     {@link #autoAlign(QuPathGUI, PathObject, AffineTransform)}. May be null.
      */
     public static HBox buildSiftButtonRow(
             QuPathGUI gui,
             PathObject targetTile,
             Window settingsOwnerSupplierTarget,
             Label statusLabel,
-            AffineTransform fullResToStage,
             Runnable onSiftSuccess) {
         Button autoAlignButton = new Button("Auto-Align (SIFT)");
         autoAlignButton.setStyle(
@@ -613,7 +580,7 @@ public final class SiftAutoAlignHelper {
             new Thread(
                             () -> {
                                 try {
-                                    double[] result = autoAlign(gui, targetTile, fullResToStage);
+                                    double[] result = autoAlign(gui, targetTile);
                                     Platform.runLater(() -> {
                                         autoAlignButton.setDisable(false);
                                         if (result != null && result.length >= 2) {
@@ -672,13 +639,12 @@ public final class SiftAutoAlignHelper {
      * JavaFX status label. Used when the caller wants to chain logic
      * after match completion.
      */
-    public static CompletableFuture<double[]> autoAlignAsync(
-            QuPathGUI gui, PathObject tile, AffineTransform fullResToStage) {
+    public static CompletableFuture<double[]> autoAlignAsync(QuPathGUI gui, PathObject tile) {
         CompletableFuture<double[]> future = new CompletableFuture<>();
         new Thread(
                         () -> {
                             try {
-                                future.complete(autoAlign(gui, tile, fullResToStage));
+                                future.complete(autoAlign(gui, tile));
                             } catch (Exception e) {
                                 future.completeExceptionally(e);
                             }

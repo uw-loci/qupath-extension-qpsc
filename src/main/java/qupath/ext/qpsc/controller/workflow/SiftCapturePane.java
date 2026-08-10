@@ -52,14 +52,6 @@ class SiftCapturePane extends VBox {
     private final PathObject tile;
 
     /**
-     * Alignment transform (this entry's QuPath full-res pixels -&gt; stage um) used
-     * to map the SIFT offset to a stage move -- the SAME transform the caller used
-     * to predict the tile position. See
-     * {@link qupath.ext.qpsc.ui.SiftAutoAlignHelper#autoAlign}. May be null.
-     */
-    private final java.awt.geom.AffineTransform fullResToStage;
-
-    /**
      * When {@code true}, the Capture button starts disabled and is enabled only
      * after a SIFT run returns a valid offset. This mirrors single-tile
      * refinement's "Save is disabled until Auto-Align (SIFT) has run
@@ -84,29 +76,19 @@ class SiftCapturePane extends VBox {
      * @param tile the target reference tile
      * @param gateCaptureOnSift disable Capture until a SIFT run has produced a valid offset
      */
-    SiftCapturePane(
-            QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift, java.awt.geom.AffineTransform fullResToStage) {
-        this(gui, tile, gateCaptureOnSift, "Capture position", fullResToStage);
+    SiftCapturePane(QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift) {
+        this(gui, tile, gateCaptureOnSift, "Capture position");
     }
 
     /**
      * @param captureLabel label for the capture/accept button -- "Capture position" for single-tile,
      *     "Add reference point" for multi-tile (so the button reads as its numbered alignment step).
-     * @param fullResToStage alignment transform (entry full-res pixels -&gt; stage um) used to map the
-     *     SIFT offset to a stage move; see {@link qupath.ext.qpsc.ui.SiftAutoAlignHelper#autoAlign}.
-     *     May be null.
      */
-    SiftCapturePane(
-            QuPathGUI gui,
-            PathObject tile,
-            boolean gateCaptureOnSift,
-            String captureLabel,
-            java.awt.geom.AffineTransform fullResToStage) {
+    SiftCapturePane(QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift, String captureLabel) {
         super(10);
         this.gui = gui;
         this.tile = tile;
         this.gateCaptureOnSift = gateCaptureOnSift;
-        this.fullResToStage = fullResToStage;
 
         setPadding(new Insets(10));
         setAlignment(Pos.CENTER_LEFT);
@@ -222,8 +204,8 @@ class SiftCapturePane extends VBox {
                                 // threshold yields the raw SIFT result for the label without reading
                                 // (or accepting) a stage position -- exactly the previous
                                 // "accept = autoAccept && ..." semantics.
-                                AutoAlignOutcome outcome = attemptAutoAccept(
-                                        gui, tile, autoAccept ? threshold : Double.POSITIVE_INFINITY, fullResToStage);
+                                AutoAlignOutcome outcome =
+                                        attemptAutoAccept(gui, tile, autoAccept ? threshold : Double.POSITIVE_INFINITY);
                                 double[] result = outcome.siftResult();
                                 double[] measured = outcome.measuredStageXY();
                                 Platform.runLater(() -> {
@@ -286,17 +268,13 @@ class SiftCapturePane extends VBox {
      * @param threshold minimum SIFT confidence (0.0-1.0) to accept; pass an unreachable value (e.g.
      *     {@link Double#POSITIVE_INFINITY}) to run SIFT for its raw result without accepting or
      *     reading a stage position
-     * @param fullResToStage alignment transform (entry full-res pixels -&gt; stage um) used to map the
-     *     SIFT offset to a stage move; see {@link SiftAutoAlignHelper#autoAlign}. May be null.
      * @return an {@link AutoAlignOutcome} carrying the raw result and (when accepted) the measured
      *     stage {@code [x, y]}
      * @throws Exception if the SIFT match or stage read fails (propagated for the caller to handle,
      *     exactly as the inline versions did inside their {@code catch (Exception)} blocks)
      */
-    static AutoAlignOutcome attemptAutoAccept(
-            QuPathGUI gui, PathObject tile, double threshold, java.awt.geom.AffineTransform fullResToStage)
-            throws Exception {
-        double[] result = SiftAutoAlignHelper.autoAlign(gui, tile, fullResToStage);
+    static AutoAlignOutcome attemptAutoAccept(QuPathGUI gui, PathObject tile, double threshold) throws Exception {
+        double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
         boolean accept = result != null && result.length >= 4 && result[3] >= threshold;
         double[] measured = accept ? MicroscopeController.getInstance().getStagePositionXY() : null;
         return new AutoAlignOutcome(result, measured);

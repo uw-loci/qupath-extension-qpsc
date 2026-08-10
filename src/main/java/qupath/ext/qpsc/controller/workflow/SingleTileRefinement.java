@@ -308,8 +308,8 @@ public class SingleTileRefinement {
                                     // embedded capture pane uses). Kept on a pre-dialog thread so a
                                     // successful auto-accept completes WITHOUT building the refinement
                                     // dialog -- no dialog flash.
-                                    SiftCapturePane.AutoAlignOutcome outcome = SiftCapturePane.attemptAutoAccept(
-                                            gui, selectedTile, confidenceThreshold, initialTransform);
+                                    SiftCapturePane.AutoAlignOutcome outcome =
+                                            SiftCapturePane.attemptAutoAccept(gui, selectedTile, confidenceThreshold);
                                     double[] result = outcome.siftResult();
                                     if (result != null && result.length >= 4) {
                                         double confidence = result[3]; // 4th element = confidence
@@ -427,7 +427,7 @@ public class SingleTileRefinement {
         // result label + Capture/Skip. gateCaptureOnSift=true preserves single-tile's
         // "Capture (Save) is disabled until Auto-Align (SIFT) has run successfully" gate,
         // so a quick click can't silently accept the predicted (unrefined) position.
-        SiftCapturePane capturePane = new SiftCapturePane(gui, selectedTile, true, initialTransform);
+        SiftCapturePane capturePane = new SiftCapturePane(gui, selectedTile, true);
 
         // "Create New Alignment" is a single-tile-only third outcome (switch to manual
         // alignment), so it stays outside the shared pane.

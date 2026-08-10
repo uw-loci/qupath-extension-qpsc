@@ -228,13 +228,8 @@ public class AffineTransformationController {
                                     : "Drive the stage so the live view matches the selected tile, then click"
                                             + " Confirm. Auto-Align (SIFT) can refine the last few microns once you"
                                             + " are roughly on the tile.";
-                            // SIFT composes its offset through the best image->stage
-                            // transform we have: the initial estimate if one exists,
-                            // else the scale-only transform (no flip -> behaves as raw,
-                            // acceptable for the very first alignment point).
-                            AffineTransform siftTransform = hasEstimate ? existingTransformEstimate : scalingTransform;
                             return afGate.thenCompose(ignored -> UIFunctions.stageAlignmentConfirmAsync(
-                                            gui, refTile, "Reference tile alignment", confirmInstruction, siftTransform)
+                                            gui, refTile, "Reference tile alignment", confirmInstruction)
                                     .thenCompose(aligned -> {
                                         if (!aligned) {
                                             logger.info("User cancelled at manual alignment step.");
@@ -356,8 +351,7 @@ public class AffineTransformationController {
                 String refineInstruction = "Refining with tile '"
                         + (tile.getName() != null ? tile.getName() : "tile")
                         + "'. Use the joystick or Auto-Align (SIFT) to fine-tune, then click Confirm.";
-                UIFunctions.stageAlignmentConfirmAsync(
-                                gui, tile, "Refinement tile alignment", refineInstruction, currentTransform)
+                UIFunctions.stageAlignmentConfirmAsync(gui, tile, "Refinement tile alignment", refineInstruction)
                         .thenAccept(ok -> {
                             if (!ok) {
                                 logger.info("User cancelled during secondary alignment at tile '{}'.", tile.getName());

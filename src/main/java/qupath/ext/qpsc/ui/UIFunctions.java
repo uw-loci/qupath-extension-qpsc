@@ -511,7 +511,7 @@ public class UIFunctions {
      * @return CompletableFuture that completes with true if confirmed, false if cancelled
      */
     public static CompletableFuture<Boolean> stageAlignmentConfirmAsync() {
-        return stageAlignmentConfirmAsync(null, null, null, null, null);
+        return stageAlignmentConfirmAsync(null, null, null, null);
     }
 
     /**
@@ -532,17 +532,9 @@ public class UIFunctions {
      *                         position accurate?")
      * @param instructionText  custom instruction (defaults to "Compare
      *                         with the uManager live view.")
-     * @param fullResToStage   alignment transform (entry full-res pixels -&gt;
-     *                         stage um) used to map the SIFT offset to a stage
-     *                         move; see
-     *                         {@link SiftAutoAlignHelper#autoAlign}. May be null.
      */
     public static CompletableFuture<Boolean> stageAlignmentConfirmAsync(
-            QuPathGUI gui,
-            PathObject siftTargetTile,
-            String headerText,
-            String instructionText,
-            java.awt.geom.AffineTransform fullResToStage) {
+            QuPathGUI gui, PathObject siftTargetTile, String headerText, String instructionText) {
         CompletableFuture<Boolean> future = new CompletableFuture<>();
 
         Runnable showDialog = () -> {
@@ -595,7 +587,7 @@ public class UIFunctions {
                 siftStatus.setWrapText(true);
                 siftStatus.setStyle("-fx-font-size: 10px;");
                 HBox siftRow = qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildSiftButtonRow(
-                        gui, siftTargetTile, stage, siftStatus, fullResToStage);
+                        gui, siftTargetTile, stage, siftStatus);
                 layout.getChildren()
                         .addAll(
                                 headerLabel,
