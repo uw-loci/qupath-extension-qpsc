@@ -300,6 +300,18 @@ public class AcquisitionConfigurationBuilder {
                             "Background validation: {} angles will have correction disabled", disabledAngles.size());
                     if (!disabledAngles.isEmpty()) {
                         logger.info("Disabled angles: {}", disabledAngles);
+                        // Surface a NON-blocking warning so the operator knows correction
+                        // is silently off for these angles (missing background image) --
+                        // acquisition still proceeds. Mirrors showAutofocusConfigurationWarning's
+                        // "warn from this off-FX build path via Platform.runLater" pattern, but
+                        // uses a toast (not a modal) since this is advisory, not a gate.
+                        String angleList = disabledAngles.stream()
+                                .map(a -> String.format("%.1f", a))
+                                .collect(java.util.stream.Collectors.joining(", "));
+                        javafx.application.Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showWarningNotification(
+                                "Background Subtraction",
+                                "No background subtraction for angle(s) " + angleList
+                                        + " deg -- no matching background image. Acquisition will proceed."));
                     }
                 }
             } catch (Exception e) {
