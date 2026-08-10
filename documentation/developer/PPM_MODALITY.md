@@ -243,45 +243,6 @@ graph TB
     W1 --> D["Disable BG correction<br/>for affected angles<br/>(--bg-disabled-angles)"]
 ```
 
-### Per-angle gains in `background_settings.yml` (settings-match guard)
-
-A flat-field background is only a valid divide-correction if **every capture
-setting that affects pixel values** matches between the background collection and
-the real acquisition. For PPM (JAI color) that set is the per-channel exposures
-**and the per-angle gains** (unified/master gain plus the analog red/blue white-
-balance trims). Exposure alone is not sufficient: the 2026-08-09 "+7 circles"
-incident had a *matching* exposure but a mismatched gain (background at
-`unified_gain 1.0`, acquisition at `3.0` after a WB re-calibration), so gain-3.0
-saturation at the tile-center hot-spot could not be undone by the linear divide.
-
-To make that comparison possible, `background_settings.yml` carries an optional
-`angle_gains` block alongside `angle_exposures`:
-
-```yaml
-angle_gains:
-  - {angle: 7.0, unified_gain: 3.0, analog_red: 1.2, analog_blue: 1.5}
-  - {angle: -7.0, unified_gain: 1.0, analog_red: 1.0, analog_blue: 1.0}
-```
-
-- Parsed by `BackgroundSettingsReader` into `BackgroundSettings.angleGains`
-  (`List<AngleGains>`). **Tolerant:** the block is absent in older files and any
-  individual gain component may be null -- a null component means "unknown, do not
-  compare", never a mismatch. `AngleGains` is a separate record from
-  `AngleExposure` on purpose, so the hot acquisition command-building path (which
-  threads `AngleExposure`) stays unchanged.
-- Written by the background-collection writer only when the server reports the
-  gains it applied. The wire slot is the **fourth pipe-field** of a `BGACQUIRE`
-  `SUCCESS` response -- `SUCCESS:/path|angle:exp,...|meta|angle:unified/red/blue,...`
-  -- parsed by `MicroscopeSocketClient.parseAngleGains`. An older server sends no
-  fourth field, so no `angle_gains` block is written and the guard simply cannot
-  compare gains for that collection. Populating that field is the server-side
-  (Python) half of the guard.
-
-The validation flow above compares angle presence, exposure, and WB mode today;
-extending it to compare the full modality-relevant set (adding gains for PPM, lamp
-intensity for brightfield/grayscale) and to **block with an override** when
-background subtraction is enabled is the settings-match guard proper.
-
 ## Sunburst Calibration (hue -> angle) is objective-independent
 
 The PPM sunburst calibration (`.npz`) maps image **hue -> orientation angle**.

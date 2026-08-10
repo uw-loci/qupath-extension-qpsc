@@ -99,69 +99,6 @@ class BackgroundSettingsV2Test {
     }
 
     @Test
-    void angleGainsBlockParsesFully() throws IOException {
-        Path f = write("background_settings.yml", """
-                metadata: {version: '2.0'}
-                hardware: {modality: ppm, objective: OBJ_20x, detector: JAI, magnification: 20x}
-                acquisition: {wb_mode: per_angle}
-                angle_exposures:
-                  - {angle: 7.0, exposure: 8.11}
-                  - {angle: -7.0, exposure: 10.02}
-                angle_gains:
-                  - {angle: 7.0, unified_gain: 3.0, analog_red: 1.2, analog_blue: 1.5}
-                  - {angle: -7.0, unified_gain: 1.0, analog_red: 1.0, analog_blue: 1.0}
-                """);
-
-        var s = BackgroundSettingsReader.readBackgroundSettings(f.toFile());
-        assertNotNull(s);
-        assertEquals(2, s.angleGains.size());
-        var plus = s.angleGains.stream()
-                .filter(g -> Math.abs(g.ticks() - 7.0) < 1e-6)
-                .findFirst()
-                .orElseThrow();
-        assertEquals(3.0, plus.unifiedGain(), 1e-6);
-        assertEquals(1.2, plus.analogRed(), 1e-6);
-        assertEquals(1.5, plus.analogBlue(), 1e-6);
-    }
-
-    @Test
-    void angleGainsToleratesMissingComponents() throws IOException {
-        Path f = write("background_settings.yml", """
-                metadata: {version: '2.0'}
-                hardware: {modality: ppm, objective: OBJ_20x, detector: JAI, magnification: 20x}
-                acquisition: {wb_mode: per_angle}
-                angle_exposures:
-                  - {angle: 0.0, exposure: 5.0}
-                angle_gains:
-                  - {angle: 0.0, unified_gain: 1.0}
-                """);
-
-        var s = BackgroundSettingsReader.readBackgroundSettings(f.toFile());
-        assertNotNull(s);
-        assertEquals(1, s.angleGains.size());
-        var g = s.angleGains.get(0);
-        assertEquals(1.0, g.unifiedGain(), 1e-6);
-        assertNull(g.analogRed());
-        assertNull(g.analogBlue());
-    }
-
-    @Test
-    void olderFileWithoutAngleGainsYieldsEmptyList() throws IOException {
-        Path f = write("background_settings.yml", """
-                metadata: {version: '1.0'}
-                hardware: {modality: ppm, objective: OBJ_20x, detector: JAI, magnification: 20x}
-                acquisition: {wb_mode: per_angle}
-                angle_exposures:
-                  - {angle: 0.0, exposure: 5.0}
-                """);
-
-        var s = BackgroundSettingsReader.readBackgroundSettings(f.toFile());
-        assertNotNull(s);
-        assertNotNull(s.angleGains);
-        assertTrue(s.angleGains.isEmpty());
-    }
-
-    @Test
     void fileWithNeitherAnglesNorChannelsIsRejected() throws IOException {
         Path f = write("background_settings.yml", """
                 metadata: {version: '2.0'}
