@@ -25,6 +25,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Background image missing: non-blocking warning notification**
+- When acquisition begins and one or more angles lack a matching background image, a warning toast now notifies the operator which angles will not have background subtraction applied. The acquisition proceeds automatically (the toast is advisory, not a prompt); the operator can let it run or cancel and re-collect backgrounds. Previously the disabling was silent.
+
 **MicroManager Folder Stitch: axis inversion controls**
 - New checkboxes **"Invert X axis"** and **"Invert Y axis"** in the Stitch MicroManager Folder dialog allow correcting for stage-axis inversion that occurs when a microscope's MicroManager configuration inverts an axis. When inverted, MicroManager records stage positions that run opposite to pixel space, causing tiles to be laid out mirrored; negating that coordinate before stitching corrects the mirroring. Checkboxes default to the current microscope's stage polarity (for the common case of stitching data just acquired on that same scope) and can be overridden to match different hardware configurations when stitching data from a different microscope. User choices are remembered across sessions.
 
