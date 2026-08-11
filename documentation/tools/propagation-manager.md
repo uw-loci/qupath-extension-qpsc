@@ -98,7 +98,7 @@ When enabled, this option restricts forward propagation to annotations whose tra
 1. Draw region annotations on the base image (e.g., mark tumor regions, tissue boundaries)
 2. Open **Propagation Manager** from the QP Scope menu
 3. Select **Forward** direction
-4. Choose the base image variant (flipped or original) from the dropdown
+4. Choose the base image from the dropdown (the "(Camera View)" companion, if present, is auto-selected)
 5. Verify sub-images and classes are correctly selected
 6. Click **Propagate**
 7. Open a sub-image to verify the annotations landed in the correct positions

@@ -113,7 +113,7 @@ The BoundingBox-derived alignment in `ImageMetadataManager.buildBoundingBoxPixel
 
 ### Step 1: QuPath Full-Res, unflipped base
 
-Annotations live on the unflipped base entry. The optional `(flipped XY)` sibling, when present, mirrors annotation coordinates via `TransformationFunctions.transformHierarchy` so back-propagation keeps the two in sync. Full-resolution pixel coordinates are interpreted in the unflipped pixel frame for transform purposes.
+Annotations live on the unflipped base entry. The optional "(Camera View)" companion, when present, mirrors annotation coordinates via `TransformationFunctions.transformHierarchy` so back-propagation keeps the two in sync. Full-resolution pixel coordinates are interpreted in the unflipped pixel frame for transform purposes.
 
 ### Step 2: Transform stored in working entry's pixel frame (no load-time baking)
 
@@ -230,8 +230,8 @@ The prior OWS3 "Apply Flips" bug (2026-06-23) was the *polarity* half of this: p
 
 | Scope | `cameraFlipFlags()` | preset `flipMacroX/Y` | What must match on screen |
 |---|---|---|---|
-| OWS3 | `(false, false)` | `(true, false)` | The two app views, the live camera, and the `(flipped X)` Ocus40 macro all agree **with each other** (all camera-oriented) — the SIFT-relevant fact, and confirmed working. **But** the app's "Stage View" does **not** match the *physical* slide orientation on the stage: it is ~180deg off (reported 2026-08-05, see below). |
-| PPM | `(false, false)` | `(true, true)` | The live camera matches the `(flipped XY)` Ocus40 image, so the Stage Map macro must render flipped-XY in **both** views. |
+| OWS3 | `(false, false)` | `(true, false)` | The two app views, the live camera, and the Ocus40 macro all agree **with each other** (all camera-oriented) — the SIFT-relevant fact, and confirmed working. **But** the app's "Stage View" does **not** match the *physical* slide orientation on the stage: it is ~180deg off (reported 2026-08-05, see below). |
+| PPM | `(false, false)` | `(true, true)` | The live camera matches the Ocus40 "(Camera View)" image, so the Stage Map macro must render flipped-XY in **both** views. |
 
 Two consequences worth stating because they read as bugs and are not:
 
