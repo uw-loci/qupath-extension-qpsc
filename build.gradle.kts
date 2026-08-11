@@ -66,7 +66,7 @@ allprojects {
         }
     }
 }
-val javafxVersion = "17.0.2"
+val javafxVersion = "26.0.1"
 // TODO: Define your dependencies here
 dependencies {
 
