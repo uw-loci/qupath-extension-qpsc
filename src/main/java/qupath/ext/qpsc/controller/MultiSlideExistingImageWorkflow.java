@@ -357,7 +357,7 @@ public final class MultiSlideExistingImageWorkflow {
         for (SlotState s : states) {
             int rowFinal = row++;
             Label posLabel = new Label(s.assignment.slotLabel());
-            // Drop the "(rotated N)(flipped XY)" suffix for display -- it is identical on every
+            // Drop the "(rotated N) (Camera View)" suffix for display -- it is identical on every
             // row (pure width, no signal); the full entry name stays in the tooltip.
             String fullEntryName = s.assignment.entry().getImageName();
             int suffixIdx = fullEntryName.indexOf(" (rotated");

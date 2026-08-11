@@ -763,8 +763,8 @@ public class ExistingImageWorkflowV2 {
                 if (!requiresFlipX && !requiresFlipY) {
                     return null; // no flip required -> current entry is authoritative
                 }
-                boolean currentHasFlip = (!requiresFlipX || ImageMetadataManager.isFlippedX(openEntry))
-                        && (!requiresFlipY || ImageMetadataManager.isFlippedY(openEntry));
+                boolean[] openParity = ImageMetadataManager.bakedParity(openEntry);
+                boolean currentHasFlip = (!requiresFlipX || openParity[0]) && (!requiresFlipY || openParity[1]);
                 if (currentHasFlip) {
                     return null; // current entry already in the required flip frame -> not stale
                 }
@@ -1963,8 +1963,9 @@ public class ExistingImageWorkflowV2 {
             }
 
             double[] xyOffset = ImageMetadataManager.getXYOffset(entry);
-            boolean flipX = ImageMetadataManager.isFlippedX(entry);
-            boolean flipY = ImageMetadataManager.isFlippedY(entry);
+            boolean[] entryParity = ImageMetadataManager.bakedParity(entry);
+            boolean flipX = entryParity[0];
+            boolean flipY = entryParity[1];
             String entryModality = entry.getMetadata().get(ImageMetadataManager.MODALITY);
             String entryObjective = entry.getMetadata().get(ImageMetadataManager.OBJECTIVE);
             String entryDetector = ImageMetadataManager.getDetectorId(entry);
@@ -2472,8 +2473,9 @@ public class ExistingImageWorkflowV2 {
                 try {
                     ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
                     if (openEntry != null) {
-                        openEntryFlipX = ImageMetadataManager.isFlippedX(openEntry);
-                        openEntryFlipY = ImageMetadataManager.isFlippedY(openEntry);
+                        boolean[] openParity = ImageMetadataManager.bakedParity(openEntry);
+                        openEntryFlipX = openParity[0];
+                        openEntryFlipY = openParity[1];
                     }
                 } catch (Exception e) {
                     logger.warn(

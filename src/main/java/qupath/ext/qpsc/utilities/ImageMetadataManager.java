@@ -6,6 +6,7 @@ import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.lightpath.LightPathSnapshot;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
@@ -35,13 +36,9 @@ public class ImageMetadataManager {
     public static final String XY_OFFSET_Y = "xy_offset_y_microns";
     public static final String Z_OFFSET = "z_offset_microns";
 
-    // FLIP_X / FLIP_Y record the OPTICAL FLIP status of this image.
-    // These indicate whether the microscope's light path mirrors the camera image
-    // relative to the physical slide. This is NOT stage axis inversion (which is a
-    // separate hardware property stored in preferences as stageInvertedX/Y).
-    // See CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY" for full details.
-    public static final String FLIP_X = "flip_x";
-    public static final String FLIP_Y = "flip_y";
+    // Optical flip status (flip_x/flip_y) was REMOVED: it was a lossy single-bit
+    // proxy for the orientation stack. Per-entry orientation now lives in the
+    // light-path metadata block below (LP_* + bakedParity). See ORIENTATION_STACK.md.
     public static final String SAMPLE_NAME = "sample_name";
     public static final String ORIGINAL_IMAGE_ID = "original_image_id";
 
@@ -120,6 +117,34 @@ public class ImageMetadataManager {
     // pixel->stage transform from scratch.
     public static final String STITCHER_FLIP_X = "stitcher_flip_x";
     public static final String STITCHER_FLIP_Y = "stitcher_flip_y";
+
+    // ------------------------------------------------------------------
+    // Light-path metadata (the full orientation stack, per entry).
+    // Replaces the lossy FLIP_X/FLIP_Y parity bit. Each entry records the
+    // factors that were in effect when its pixels were produced, plus the
+    // DERIVED net parity baked into those pixels (LP_BAKED_PARITY_*), which is
+    // the single value downstream consumers (SIFT, transform frame, back-prop)
+    // actually need. slide_insertion is PER-ENTRY here (the physical placement
+    // of this slide), distinct from the global per-scope default in
+    // LightPathModel's YAML. See ORIENTATION_STACK.md / COORDINATE_TRANSFORMS.md.
+    public static final String LP_SCOPE_TYPE = "lp_scope_type";
+    public static final String LP_SLIDE_INSERTION = "lp_slide_insertion";
+    public static final String LP_OPTICAL_FLIP = "lp_optical_flip";
+    public static final String LP_CAMERA_ORIENTATION = "lp_camera_orientation";
+    public static final String LP_STAGE_POLARITY = "lp_stage_polarity";
+    public static final String LP_MACRO_FLIP_X = "lp_macro_flip_x";
+    public static final String LP_MACRO_FLIP_Y = "lp_macro_flip_y";
+    public static final String LP_BAKED_PARITY_X = "lp_baked_parity_x";
+    public static final String LP_BAKED_PARITY_Y = "lp_baked_parity_y";
+
+    // Marks the on-demand corrected companion entry (the "(Camera View)" entry).
+    // Set explicitly at creation; never inferred from the entry name.
+    public static final String CAMERA_VIEW = "camera_view";
+
+    // The single suffix appended to a base entry's name to form its corrected
+    // companion. Replaces the old three-way "(flipped X|Y|XY)" naming: the axes
+    // are now recorded in metadata (LP_BAKED_PARITY_*), so the name is uniform.
+    public static final String CAMERA_VIEW_SUFFIX = "(Camera View)";
 
     // PPM analysis metadata
     public static final String PPM_CALIBRATION = "ppm_calibration";
@@ -330,8 +355,10 @@ public class ImageMetadataManager {
         metadata.put(XY_OFFSET_X, String.valueOf(xOffset));
         metadata.put(XY_OFFSET_Y, String.valueOf(yOffset));
         metadata.put(Z_OFFSET, String.valueOf(0.0)); // Z offset stored for voxel support
-        metadata.put(FLIP_X, flipX ? "1" : "0");
-        metadata.put(FLIP_Y, flipY ? "1" : "0");
+        // Orientation is no longer stored as a lossy flip_x/flip_y bit here; the
+        // "(Camera View)" companion records the full light path via setLightPath.
+        // The flipX/flipY params are retained (vestigial) on this signature only to
+        // avoid a wide call-site change; they are intentionally unused.
 
         if (baseImage != null && !baseImage.isEmpty()) {
             metadata.put(BASE_IMAGE, baseImage);
@@ -502,8 +529,9 @@ public class ImageMetadataManager {
         }
 
         // Check if image is marked as flipped in the required axes
-        boolean imageFlipX = isFlippedX(entry);
-        boolean imageFlipY = isFlippedY(entry);
+        boolean[] imageParity = bakedParity(entry);
+        boolean imageFlipX = imageParity[0];
+        boolean imageFlipY = imageParity[1];
 
         if (requiresFlipX && !imageFlipX) {
             logger.warn("Image {} is not flipped on X but flipX is required in preferences", entry.getImageName());
@@ -567,14 +595,6 @@ public class ImageMetadataManager {
             }
             if (metadata.get(XY_OFFSET_Y) == null) {
                 metadata.put(XY_OFFSET_Y, "0.0");
-                anyChanges = true;
-            }
-            if (metadata.get(FLIP_X) == null) {
-                metadata.put(FLIP_X, "0");
-                anyChanges = true;
-            }
-            if (metadata.get(FLIP_Y) == null) {
-                metadata.put(FLIP_Y, "0");
                 anyChanges = true;
             }
         }
@@ -846,44 +866,114 @@ public class ImageMetadataManager {
         }
     }
 
-    /**
-     * Checks if an image entry is marked as flipped on the X axis.
-     *
-     * @param entry The image entry to check
-     * @return true if the image is flipped horizontally, false otherwise
-     */
-    public static boolean isFlippedX(ProjectImageEntry<?> entry) {
-        if (entry == null) {
-            return false;
-        }
+    // isFlippedX/isFlippedY/isFlipped were removed: orientation parity now lives in
+    // the light-path metadata. Use bakedParity(entry) for the net parity baked into
+    // an entry's pixels.
 
-        String flipXStr = entry.getMetadata().get(FLIP_X);
-        return "1".equals(flipXStr);
+    // ------------------------------------------------------------------
+    // Light-path metadata API (the successor to FLIP_X/FLIP_Y).
+    // ------------------------------------------------------------------
+
+    /**
+     * Stamp the full light-path snapshot onto an entry. Flags are written as
+     * {@code "1"} / removed, matching {@link #setBoundingBoxStageBounds}. Callers
+     * are responsible for {@code project.syncChanges()} afterward.
+     */
+    public static void setLightPath(ProjectImageEntry<?> entry, LightPathSnapshot lp) {
+        if (entry == null || lp == null) return;
+        Map<String, String> meta = entry.getMetadata();
+        putOrRemove(meta, LP_SCOPE_TYPE, lp.scopeType());
+        putOrRemove(meta, LP_SLIDE_INSERTION, lp.slideInsertion());
+        putOrRemove(meta, LP_OPTICAL_FLIP, lp.opticalFlip());
+        putOrRemove(meta, LP_CAMERA_ORIENTATION, lp.cameraOrientation());
+        putOrRemove(meta, LP_STAGE_POLARITY, lp.stagePolarity());
+        putFlag(meta, LP_MACRO_FLIP_X, lp.macroFlipX());
+        putFlag(meta, LP_MACRO_FLIP_Y, lp.macroFlipY());
+        putFlag(meta, LP_BAKED_PARITY_X, lp.bakedParityX());
+        putFlag(meta, LP_BAKED_PARITY_Y, lp.bakedParityY());
     }
 
     /**
-     * Checks if an image entry is marked as flipped on the Y axis.
-     *
-     * @param entry The image entry to check
-     * @return true if the image is flipped vertically, false otherwise
+     * Read the light-path snapshot from an entry. Returns null when the entry has
+     * no light-path metadata (an unstamped raw base). Missing string fields come
+     * back null; missing flags come back false.
      */
-    public static boolean isFlippedY(ProjectImageEntry<?> entry) {
-        if (entry == null) {
-            return false;
+    public static LightPathSnapshot getLightPath(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        Map<String, String> meta = entry.getMetadata();
+        if (!meta.containsKey(LP_SCOPE_TYPE)
+                && !meta.containsKey(LP_SLIDE_INSERTION)
+                && !meta.containsKey(LP_BAKED_PARITY_X)
+                && !meta.containsKey(LP_BAKED_PARITY_Y)) {
+            return null;
         }
-
-        String flipYStr = entry.getMetadata().get(FLIP_Y);
-        return "1".equals(flipYStr);
+        return new LightPathSnapshot(
+                meta.get(LP_SCOPE_TYPE),
+                meta.get(LP_SLIDE_INSERTION),
+                meta.get(LP_OPTICAL_FLIP),
+                meta.get(LP_CAMERA_ORIENTATION),
+                meta.get(LP_STAGE_POLARITY),
+                meta.get(DETECTOR_ID),
+                "1".equals(meta.get(LP_MACRO_FLIP_X)),
+                "1".equals(meta.get(LP_MACRO_FLIP_Y)),
+                "1".equals(meta.get(LP_BAKED_PARITY_X)),
+                "1".equals(meta.get(LP_BAKED_PARITY_Y)));
     }
 
     /**
-     * Checks if an image entry is marked as flipped on either axis.
+     * The net per-axis mirror parity baked into an entry's pixels, relative to the
+     * raw source-scanner macro frame. This is the direct replacement for
+     * {@link #isFlippedX}/{@link #isFlippedY}: an unstamped raw base returns
+     * {@code {false, false}}; the "(Camera View)" companion returns the parity it
+     * was baked with.
      *
-     * @param entry The image entry to check
-     * @return true if the image is flipped on X or Y axis, false otherwise
+     * @return {@code {flipX, flipY}}
      */
-    public static boolean isFlipped(ProjectImageEntry<?> entry) {
-        return isFlippedX(entry) || isFlippedY(entry);
+    public static boolean[] bakedParity(ProjectImageEntry<?> entry) {
+        if (entry == null) return new boolean[] {false, false};
+        Map<String, String> meta = entry.getMetadata();
+        return new boolean[] {"1".equals(meta.get(LP_BAKED_PARITY_X)), "1".equals(meta.get(LP_BAKED_PARITY_Y))};
+    }
+
+    /**
+     * The per-slide physical placement of this entry's slide: {@code "A"}
+     * (label-left / as-scanned, identity) or {@code "B"} (label-right, 180).
+     * Defaults to {@code "A"} when unset.
+     */
+    public static String getSlideInsertion(ProjectImageEntry<?> entry) {
+        if (entry == null) return LightPathModel.INSERT_A;
+        String v = entry.getMetadata().get(LP_SLIDE_INSERTION);
+        return (v == null || v.isBlank()) ? LightPathModel.INSERT_A : v;
+    }
+
+    /**
+     * Set the per-slide placement. Caller is responsible for
+     * {@code project.syncChanges()}.
+     */
+    public static void setSlideInsertion(ProjectImageEntry<?> entry, String insertion) {
+        if (entry == null) return;
+        putOrRemove(entry.getMetadata(), LP_SLIDE_INSERTION, insertion);
+    }
+
+    /** True if this entry is the on-demand corrected "(Camera View)" companion. */
+    public static boolean isCameraView(ProjectImageEntry<?> entry) {
+        return entry != null && "1".equals(entry.getMetadata().get(CAMERA_VIEW));
+    }
+
+    /** Mark (or unmark) an entry as the "(Camera View)" companion. */
+    public static void setCameraView(ProjectImageEntry<?> entry, boolean cameraView) {
+        if (entry == null) return;
+        putFlag(entry.getMetadata(), CAMERA_VIEW, cameraView);
+    }
+
+    private static void putFlag(Map<String, String> meta, String key, boolean value) {
+        if (value) meta.put(key, "1");
+        else meta.remove(key);
+    }
+
+    private static void putOrRemove(Map<String, String> meta, String key, String value) {
+        if (value == null || value.isBlank()) meta.remove(key);
+        else meta.put(key, value);
     }
 
     /**
@@ -1029,7 +1119,7 @@ public class ImageMetadataManager {
             // to "MetroHealth_142.svs (flipped X)").
             boolean isBaseVariant = entryStripped.equals(baseName)
                     || imageName.startsWith(baseName + ".")
-                    || (imageName.startsWith(baseName) && imageName.contains("(flipped"));
+                    || (imageName.startsWith(baseName) && isCameraView(entry));
             if (!isBaseVariant) continue;
 
             siblings.add(entry);
@@ -1063,24 +1153,10 @@ public class ImageMetadataManager {
     public static ProjectImageEntry<BufferedImage> findSiblingWithFlip(
             Project<BufferedImage> project, String baseName, boolean flipX, boolean flipY) {
         for (ProjectImageEntry<BufferedImage> entry : getSiblingsByBaseImage(project, baseName)) {
-            String fxStr = entry.getMetadata().get(FLIP_X);
-            String fyStr = entry.getMetadata().get(FLIP_Y);
-
-            boolean entryFx;
-            boolean entryFy;
-            if (fxStr != null || fyStr != null) {
-                entryFx = "1".equals(fxStr);
-                entryFy = "1".equals(fyStr);
-            } else {
-                // Legacy entry lacking metadata: derive from name
-                String name = entry.getImageName();
-                if (name == null) name = "";
-                boolean nameXY = name.contains("(flipped XY)");
-                entryFx = nameXY || name.contains("(flipped X)");
-                entryFy = nameXY || name.contains("(flipped Y)");
-            }
-
-            if (entryFx == flipX && entryFy == flipY) {
+            // A base carries no baked flip; the "(Camera View)" companion records its
+            // parity in bakedParity (LP_BAKED_PARITY_*).
+            boolean[] p = isCameraView(entry) ? bakedParity(entry) : new boolean[] {false, false};
+            if (p[0] == flipX && p[1] == flipY) {
                 return entry;
             }
         }

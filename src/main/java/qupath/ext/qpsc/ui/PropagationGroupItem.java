@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import javafx.beans.property.SimpleBooleanProperty;
 import javafx.beans.property.SimpleStringProperty;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
@@ -51,10 +52,8 @@ public final class PropagationGroupItem {
 
     private static String shortLabel(String imageName) {
         if (imageName == null) return "";
-        if (imageName.contains("(flipped XY)")) return "flipped XY";
-        if (imageName.contains("(flipped X)")) return "flipped X";
-        if (imageName.contains("(flipped Y)")) return "flipped Y";
-        return "unflipped";
+        if (imageName.endsWith(ImageMetadataManager.CAMERA_VIEW_SUFFIX)) return "Camera View";
+        return "base";
     }
 
     public String getBaseName() {

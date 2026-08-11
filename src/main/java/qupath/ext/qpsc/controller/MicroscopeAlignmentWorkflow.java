@@ -515,9 +515,10 @@ public class MicroscopeAlignmentWorkflow {
             @SuppressWarnings("unchecked")
             Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
             var currentEntry = proj.getEntry(gui.getImageData());
-            if (currentEntry != null && ImageMetadataManager.isFlipped(currentEntry)) {
-                flipX = ImageMetadataManager.isFlippedX(currentEntry);
-                flipY = ImageMetadataManager.isFlippedY(currentEntry);
+            boolean[] entryParity = ImageMetadataManager.bakedParity(currentEntry);
+            if (currentEntry != null && (entryParity[0] || entryParity[1])) {
+                flipX = entryParity[0];
+                flipY = entryParity[1];
                 logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
             }
         }
@@ -640,9 +641,10 @@ public class MicroscopeAlignmentWorkflow {
                     @SuppressWarnings("unchecked")
                     Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
                     var currentEntry = proj.getEntry(gui.getImageData());
-                    if (currentEntry != null && ImageMetadataManager.isFlipped(currentEntry)) {
-                        flipX = ImageMetadataManager.isFlippedX(currentEntry);
-                        flipY = ImageMetadataManager.isFlippedY(currentEntry);
+                    boolean[] entryParity = ImageMetadataManager.bakedParity(currentEntry);
+                    if (currentEntry != null && (entryParity[0] || entryParity[1])) {
+                        flipX = entryParity[0];
+                        flipY = entryParity[1];
                         logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
                     }
                 }
@@ -814,9 +816,10 @@ public class MicroscopeAlignmentWorkflow {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> proj = (Project<BufferedImage>) gui.getProject();
                 var currentEntry = proj.getEntry(gui.getImageData());
-                if (currentEntry != null && ImageMetadataManager.isFlipped(currentEntry)) {
-                    flipX = ImageMetadataManager.isFlippedX(currentEntry);
-                    flipY = ImageMetadataManager.isFlippedY(currentEntry);
+                boolean[] entryParity = ImageMetadataManager.bakedParity(currentEntry);
+                if (currentEntry != null && (entryParity[0] || entryParity[1])) {
+                    flipX = entryParity[0];
+                    flipY = entryParity[1];
                     logger.info("Using flip state from entry metadata: flipX={}, flipY={}", flipX, flipY);
                 }
             }
@@ -1526,8 +1529,9 @@ public class MicroscopeAlignmentWorkflow {
                     if (lookupKey != null) {
                         ProjectImageEntry<java.awt.image.BufferedImage> openEntry =
                                 project.getEntry(gui.getImageData());
-                        boolean flipMacroX = openEntry != null && ImageMetadataManager.isFlippedX(openEntry);
-                        boolean flipMacroY = openEntry != null && ImageMetadataManager.isFlippedY(openEntry);
+                        boolean[] openParity = ImageMetadataManager.bakedParity(openEntry);
+                        boolean flipMacroX = openEntry != null && openParity[0];
+                        boolean flipMacroY = openEntry != null && openParity[1];
                         String modality = PersistentPreferences.getLastModality();
                         String objective = qupath.ext.qpsc.state.ObjectiveState.getInstance()
                                 .getObjective();

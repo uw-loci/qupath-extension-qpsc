@@ -176,8 +176,9 @@ public final class SiftAutoAlignHelper {
         // (true,false) -> 37k keypoints, 5 inliers -> FAILED, because SIFT
         // descriptors are not mirror-invariant). Only the unflipped BASE needs the
         // preset's base->camera flip.
-        boolean appliedX = entry != null && ImageMetadataManager.isFlippedX(entry);
-        boolean appliedY = entry != null && ImageMetadataManager.isFlippedY(entry);
+        boolean[] applied = ImageMetadataManager.bakedParity(entry);
+        boolean appliedX = applied[0];
+        boolean appliedY = applied[1];
         boolean flipX;
         boolean flipY;
         if (appliedX || appliedY) {

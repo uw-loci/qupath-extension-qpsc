@@ -787,18 +787,10 @@ public class QPProjectFunctions {
         // Add the flipped server to the project
         ProjectImageEntry<BufferedImage> flippedEntry = project.addImage(flippedServer.getBuilder());
 
-        // Set name to indicate it's flipped
+        // Single uniform companion name -- the flip axes are recorded in metadata
+        // (light-path baked parity), so the name no longer encodes them.
         String baseName = originalEntry.getImageName();
-        String flippedName;
-        if (flipX && flipY) {
-            flippedName = baseName + " (flipped XY)";
-        } else if (flipX) {
-            flippedName = baseName + " (flipped X)";
-        } else if (flipY) {
-            flippedName = baseName + " (flipped Y)";
-        } else {
-            flippedName = baseName + " (duplicate)";
-        }
+        String flippedName = baseName + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
         flippedEntry.setImageName(flippedName);
 
         // Read the flipped image data
@@ -1059,8 +1051,7 @@ public class QPProjectFunctions {
                     case ROTATE_270 -> " (rotated 270)";
                     default -> " (rotated)";
                 };
-        String flipSuffix = flipX && flipY ? " (flipped XY)" : flipX ? " (flipped X)" : " (flipped Y)";
-        String composedName = originalEntry.getImageName() + rotSuffix + flipSuffix;
+        String composedName = originalEntry.getImageName() + rotSuffix + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
         composedEntry.setImageName(composedName);
 
         ImageData<BufferedImage> composedData = composedEntry.readImageData();

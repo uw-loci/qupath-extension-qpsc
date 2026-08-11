@@ -547,8 +547,9 @@ public class ExistingAlignmentPath {
         // entry is the flipped sibling -- and was the cause of the 2026-05-18
         // stage-mirror bug.
         ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
-        boolean flipMacroX = openEntry != null && ImageMetadataManager.isFlippedX(openEntry);
-        boolean flipMacroY = openEntry != null && ImageMetadataManager.isFlippedY(openEntry);
+        boolean[] openParity = ImageMetadataManager.bakedParity(openEntry);
+        boolean flipMacroX = openEntry != null && openParity[0];
+        boolean flipMacroY = openEntry != null && openParity[1];
 
         AffineTransformManager.saveSlideAlignment(
                 project,
@@ -812,11 +813,12 @@ public class ExistingAlignmentPath {
 
         // If direct lookup worked and entry has correct flip status, we're done
         if (currentEntry != null && hasCorrectFlipStatus(currentEntry, requiresFlipX, requiresFlipY)) {
+            boolean[] currentParity = ImageMetadataManager.bakedParity(currentEntry);
             logger.info(
                     "Image verification PASSED: {} has correct flip status (flipX={}, flipY={})",
                     currentEntry.getImageName(),
-                    ImageMetadataManager.isFlippedX(currentEntry),
-                    ImageMetadataManager.isFlippedY(currentEntry));
+                    currentParity[0],
+                    currentParity[1]);
 
             // Also verify the hierarchy has annotations (sanity check)
             int annotationCount =
@@ -837,10 +839,11 @@ public class ExistingAlignmentPath {
         for (var entry : project.getImageList()) {
             String entryName = entry.getImageName();
 
-            // Check if this entry has "(flipped" in name (indicates it's a flipped duplicate)
-            if (entryName != null && entryName.contains("(flipped")) {
-                boolean entryFlipX = ImageMetadataManager.isFlippedX(entry);
-                boolean entryFlipY = ImageMetadataManager.isFlippedY(entry);
+            // Check if this entry is the corrected "(Camera View)" companion
+            if (ImageMetadataManager.isCameraView(entry)) {
+                boolean[] entryParity = ImageMetadataManager.bakedParity(entry);
+                boolean entryFlipX = entryParity[0];
+                boolean entryFlipY = entryParity[1];
 
                 logger.info("Found flipped entry: {} (flipX={}, flipY={})", entryName, entryFlipX, entryFlipY);
 
@@ -867,7 +870,8 @@ public class ExistingAlignmentPath {
         String flippedName = flippedEntry.getImageName();
         if (currentServerPath != null && flippedName != null) {
             // TransformedServer paths are complex, but they should reference the flipped entry
-            if (currentServerPath.contains(flippedName) || currentServerPath.contains("(flipped")) {
+            if (currentServerPath.contains(flippedName)
+                    || currentServerPath.contains(ImageMetadataManager.CAMERA_VIEW_SUFFIX)) {
                 guiShowsFlippedEntry = true;
                 logger.info("GUI appears to be showing flipped entry (path contains flipped indicator)");
             }
@@ -918,8 +922,9 @@ public class ExistingAlignmentPath {
      * Checks if an entry has the correct flip status for the requirements.
      */
     private boolean hasCorrectFlipStatus(ProjectImageEntry<?> entry, boolean requiresFlipX, boolean requiresFlipY) {
-        boolean isFlippedX = ImageMetadataManager.isFlippedX(entry);
-        boolean isFlippedY = ImageMetadataManager.isFlippedY(entry);
+        boolean[] parity = ImageMetadataManager.bakedParity(entry);
+        boolean isFlippedX = parity[0];
+        boolean isFlippedY = parity[1];
 
         boolean flipXMatches = !requiresFlipX || isFlippedX;
         boolean flipYMatches = !requiresFlipY || isFlippedY;
@@ -940,10 +945,13 @@ public class ExistingAlignmentPath {
                 logger.info("Current image base_image: '{}'", baseImage);
                 return baseImage;
             }
-            // Fall back to entry name stripped of flip suffix and extension
+            // Fall back to entry name stripped of the "(Camera View)" suffix and extension
             String name = currentEntry.getImageName();
             if (name != null) {
-                name = name.replaceAll("\\s*\\(flipped.*\\)", "");
+                if (name.endsWith(ImageMetadataManager.CAMERA_VIEW_SUFFIX)) {
+                    name = name.substring(0, name.length() - ImageMetadataManager.CAMERA_VIEW_SUFFIX.length())
+                            .trim();
+                }
                 name = qupath.lib.common.GeneralTools.stripExtension(name);
                 logger.info("Derived base_image from entry name: '{}'", name);
                 return name;
@@ -1092,8 +1100,7 @@ public class ExistingAlignmentPath {
         // Find the flipped entry matching the current image's base_image
         ProjectImageEntry<BufferedImage> flippedEntry = null;
         for (var entry : project.getImageList()) {
-            String entryName = entry.getImageName();
-            if (entryName != null && entryName.contains("(flipped")) {
+            if (ImageMetadataManager.isCameraView(entry)) {
                 if (hasCorrectFlipStatus(entry, requiresFlipX, requiresFlipY)
                         && matchesBaseImage(entry, currentBaseImage)) {
                     flippedEntry = entry;
@@ -1343,7 +1350,7 @@ public class ExistingAlignmentPath {
         }
         for (var entry : project.getImageList()) {
             String name = entry.getImageName();
-            if (name == null || name.contains("(rotated") || name.contains("(flipped")) {
+            if (name == null || name.contains("(rotated") || ImageMetadataManager.isCameraView(entry)) {
                 continue;
             }
             String stripped = GeneralTools.stripExtension(name);

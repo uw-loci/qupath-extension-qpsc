@@ -800,7 +800,7 @@ public class StageMapWindow {
         // driven by this rotation only (LightPathModel.slideRotationFlipFlags); the physical scope
         // inversion is already carried by the stage polarity + alignment transform (the macro overlay's
         // baseline), so re-applying it here would double-count it (OWS3 2026-08-09).
-        svSlideInsertion = LightPathModel.slideInsertion();
+        svSlideInsertion = currentSlidePlacement(); // PER-SLIDE placement of the open entry
         svOpticalFlip = LightPathModel.opticalFlip(); // read-only here; feeds Camera View
 
         Label slideLabel = new Label("Slide:");
@@ -809,16 +809,21 @@ public class StageMapWindow {
         insertCombo
                 .getSelectionModel()
                 .select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? SLIDE_LABEL_RIGHT : SLIDE_LABEL_LEFT);
-        insertCombo.setTooltip(new Tooltip("How the slide is placed in the holder: label on the left\n"
-                + "(as scanned) vs label on the right (rotated 180). Rotates the\n"
-                + "Stage View to match. Written to light_path.slide_insertion.\n\n"
+        insertCombo.setTooltip(new Tooltip("How THIS slide is placed in the holder: label on the left\n"
+                + "(as scanned) vs label on the right (rotated 180). Stored PER-SLIDE\n"
+                + "and baked into the corrected (Camera View) image so it matches the\n"
+                + "live camera. Changing it marks the corrected image + alignment stale.\n\n"
                 + "Scope type and optical flip live in Utilities -> Microscope\n"
                 + "Configuration -> Light Path Orientation."));
         insertCombo.setOnAction(e -> {
-            svSlideInsertion = SLIDE_LABEL_RIGHT.equals(insertCombo.getValue())
+            String newInsertion = SLIDE_LABEL_RIGHT.equals(insertCombo.getValue())
                     ? LightPathModel.INSERT_B
                     : LightPathModel.INSERT_A;
-            LightPathModel.writeFactor(LightPathModel.KEY_SLIDE_INSERTION, svSlideInsertion);
+            if (newInsertion.equals(svSlideInsertion)) {
+                return;
+            }
+            svSlideInsertion = newInsertion;
+            PlacementChangeCoordinator.applyPlacementChange(newInsertion);
             reapplyStageViewFlip();
         });
 
@@ -1793,6 +1798,27 @@ public class StageMapWindow {
      */
     private boolean[] stageViewFlipFlags() {
         return LightPathModel.slideRotationFlipFlags(svSlideInsertion);
+    }
+
+    /**
+     * The PER-SLIDE placement of the currently open entry ({@code A}/{@code B}),
+     * or the scope-wide default when there is no open project entry.
+     */
+    @SuppressWarnings("unchecked")
+    private static String currentSlidePlacement() {
+        try {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null) {
+                    return ImageMetadataManager.getSlideInsertion(entry);
+                }
+            }
+        } catch (Exception ignored) {
+            // fall through to the scope default
+        }
+        return LightPathModel.slideInsertion();
     }
 
     /** Re-apply the canvas flip when a slide-placement drop-down changes and Stage View is showing. */
@@ -2867,7 +2893,8 @@ public class StageMapWindow {
             }
 
             // For flipped images, try original's base_image
-            boolean isFlipped = ImageMetadataManager.isFlipped(entry);
+            boolean[] parity = ImageMetadataManager.bakedParity(entry);
+            boolean isFlipped = parity[0] || parity[1];
             logger.info("  Image is flipped: {}", isFlipped);
             if (isFlipped) {
                 String originalId = ImageMetadataManager.getOriginalImageId(entry);

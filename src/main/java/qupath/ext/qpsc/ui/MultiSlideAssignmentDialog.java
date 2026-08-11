@@ -664,7 +664,7 @@ public final class MultiSlideAssignmentDialog {
         boolean[] flip = ImageFlipHelper.resolveRequiredFlipFromPreset(base);
         boolean flipX = flip[0];
         boolean flipY = flip[1];
-        String flipSuffix = flipX && flipY ? " (flipped XY)" : flipX ? " (flipped X)" : flipY ? " (flipped Y)" : "";
+        String flipSuffix = (flipX || flipY) ? " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX : "";
         String targetName = base.getImageName() + " (rotated " + rotationDeg + ")" + flipSuffix;
         for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
             if (targetName.equals(e.getImageName())) {

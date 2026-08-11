@@ -5,7 +5,15 @@ All notable changes to the QPSC QuPath Extension will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased]
+## [0.9.0] - 2026-08-11
+
+### Changed
+
+**Light path & orientation: consolidated model, per-slide placement, "(Camera View)" companion**
+- The scattered flip/orientation logic is consolidated into a single cohesive, forkable `LightPath` class (new `utilities/lightpath` package: `LightPath`, `Parity`, `LightPathSnapshot`), which composes the orientation stack per detector and is the one place a differently-configured scope plugs in its geometry.
+- **Per-slide placement.** A slide can now be placed either way in the holder (label-left "as scanned" or label-right, a 180). The Stage Map "Slide:" control now stores this **per slide** and bakes it into the corrected whole-slide image so that image matches the live camera for the placement actually used. Changing placement marks the corrected image and any saved alignment stale (re-run alignment).
+- **The corrected companion is renamed to a single "(Camera View)" entry** (was "(flipped X|Y|XY)"). The flip axes are recorded in metadata rather than the name; check the entry's light-path metadata for specifics.
+- **`flip_x`/`flip_y` metadata removed.** Per-entry orientation was a lossy single-bit proxy; it is replaced by the full light-path metadata set plus a derived net "baked parity". This is an internal change with no effect on existing as-scanned slides (locked by regression tests), but it is **not backwards compatible**: projects with old "(flipped X)" entries will have a fresh "(Camera View)" companion created on next alignment.
 
 ### Fixed
 

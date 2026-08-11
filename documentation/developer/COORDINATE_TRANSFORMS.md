@@ -1,5 +1,19 @@
 # Coordinate Transform System
 
+> **UPDATED 2026-08-11 (v0.9.0).** The per-entry `flip_x`/`flip_y` metadata is
+> **removed**. The net parity baked into an entry's pixels is now
+> `ImageMetadataManager.bakedParity(entry)` (from the light-path metadata set); read
+> that wherever this doc says "isFlippedX/Y". The corrected companion is a single
+> **"(Camera View)"** entry (was `(flipped X|Y|XY)`), detected by the `camera_view`
+> flag (`isCameraView`), not the name. Orientation composition lives in
+> `utilities/lightpath.LightPath`; the companion is baked as `companionBake =
+> rawToCamera XOR slideRotationFlipFlags(placement)`, where placement is the
+> **per-slide** `lp_slide_insertion`. The single-bake invariant is unchanged (the
+> transform is fit and loaded in the companion frame with no delta); with the
+> companion always camera-oriented by construction, the **SIFT residual is zero** by
+> construction. See ORIENTATION_STACK.md for the model.
+
+
 Developer reference for how QPSC transforms coordinates between QuPath's pixel space and the physical microscope stage.
 
 ## The Problem

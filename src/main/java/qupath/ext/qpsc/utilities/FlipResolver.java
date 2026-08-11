@@ -54,9 +54,10 @@ public final class FlipResolver {
      */
     public static boolean resolveFlipX(
             ProjectImageEntry<BufferedImage> entry, TransformPreset activePreset, String detectorId) {
-        // 1. Per-image metadata (key present and == "1") wins for an already-imported entry.
-        if (entry != null && entry.getMetadata().get(ImageMetadataManager.FLIP_X) != null) {
-            return ImageMetadataManager.isFlippedX(entry);
+        // 1. A "(Camera View)" companion's baked parity is authoritative for that entry.
+        // A base / unstamped entry falls through to the preset's raw->camera parity.
+        if (ImageMetadataManager.isCameraView(entry)) {
+            return ImageMetadataManager.bakedParity(entry)[0];
         }
         // 2. Active preset captured its flip at alignment time.
         if (activePreset != null && activePreset.getFlipMacroX() != null) {
@@ -76,8 +77,8 @@ public final class FlipResolver {
     /** Resolve the macro Y flip; see {@link #resolveFlipX(ProjectImageEntry, TransformPreset, String)}. */
     public static boolean resolveFlipY(
             ProjectImageEntry<BufferedImage> entry, TransformPreset activePreset, String detectorId) {
-        if (entry != null && entry.getMetadata().get(ImageMetadataManager.FLIP_Y) != null) {
-            return ImageMetadataManager.isFlippedY(entry);
+        if (ImageMetadataManager.isCameraView(entry)) {
+            return ImageMetadataManager.bakedParity(entry)[1];
         }
         if (activePreset != null && activePreset.getFlipMacroY() != null) {
             return activePreset.getFlipMacroY();

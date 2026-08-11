@@ -16,6 +16,7 @@ import qupath.ext.qpsc.ui.AffineTransformationController;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -153,12 +154,10 @@ public class ManualAlignmentPath {
                 return null;
             }
             boolean[] flip = ImageFlipHelper.resolveRequiredFlipFromPreset(openEntry);
-            String suffix =
-                    (flip[0] && flip[1]) ? "(flipped XY)" : flip[0] ? "(flipped X)" : flip[1] ? "(flipped Y)" : null;
-            if (suffix == null) {
+            if (!flip[0] && !flip[1]) {
                 return null;
             }
-            return openName + " " + suffix;
+            return openName + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
         } catch (Exception e) {
             logger.warn("Could not resolve expected flipped-sibling name: {}", e.getMessage());
             return null;
@@ -461,8 +460,9 @@ public class ManualAlignmentPath {
         // AlignmentHelper.checkForSlideAlignment reads on the next load; preset-driven
         // flip can diverge -- the 2026-05-18 stage-mirror bug).
         ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
-        boolean flipMacroX = openEntry != null && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedX(openEntry);
-        boolean flipMacroY = openEntry != null && qupath.ext.qpsc.utilities.ImageMetadataManager.isFlippedY(openEntry);
+        boolean[] openParity = ImageMetadataManager.bakedParity(openEntry);
+        boolean flipMacroX = openEntry != null && openParity[0];
+        boolean flipMacroY = openEntry != null && openParity[1];
         AffineTransformManager.saveSlideAlignment(
                 project,
                 imageName,

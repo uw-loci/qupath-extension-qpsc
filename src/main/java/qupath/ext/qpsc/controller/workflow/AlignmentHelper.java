@@ -460,7 +460,7 @@ public class AlignmentHelper {
         body.append("To fix:\n");
         body.append("  1. In QuPath's Project tab, open the macro slide entry\n");
         body.append("     (typically the entry whose name has no _<mag>x_<region>_\n");
-        body.append("      suffix, often marked '(flipped XY)' for PPM).\n");
+        body.append("      suffix, often marked '(Camera View)' for PPM).\n");
         body.append("  2. Re-run the workflow.\n\n");
         body.append("If the macro entry has no alignment yet, run 3-point Microscope\n");
         body.append("Alignment first to create one.\n\n");

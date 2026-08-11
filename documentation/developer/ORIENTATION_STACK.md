@@ -1,5 +1,25 @@
 # Orientation stack -- one source of truth for alignment & directional settings
 
+> **UPDATED 2026-08-11 (v0.9.0) -- consolidated into `LightPath`; `flip_x/flip_y` removed.**
+> The composition below is now owned by the cohesive **`utilities/lightpath.LightPath`**
+> class (with a `Parity` value type and `LightPathSnapshot`), which is per-detector and
+> forkable -- a differently-configured scope plugs in its geometry there. Key changes:
+> - **Per-entry orientation no longer uses the lossy `flip_x`/`flip_y` bit.** It is
+>   replaced by a per-entry **light-path metadata set** (`lp_*` keys via
+>   `ImageMetadataManager.setLightPath/getLightPath`) plus a derived net
+>   **`ImageMetadataManager.bakedParity(entry)`** -- the successor every consumer
+>   (SIFT residual, transform pixel-frame, back-prop) reads.
+> - **Slide placement (factor 1b) is now PER-SLIDE**, stored on the entry
+>   (`lp_slide_insertion`, set from the Stage Map "Slide:" control) instead of the
+>   global YAML, and is **baked into the corrected image** so it matches the live
+>   camera for the placement used: `companionBake = rawToCamera XOR
+>   slideRotationFlipFlags(placement)` (`LightPath.companionBake`).
+> - **The corrected companion is one "(Camera View)" entry** (was `(flipped X|Y|XY)`);
+>   detection is by the `camera_view` metadata flag (`isCameraView`), not the name.
+> - `LightPathModel` remains the YAML/token reader that `LightPath` wraps; the global
+>   `slide_insertion` YAML is now only a fallback default for unstamped entries.
+
+
 This is the canonical developer reference for **how a slide on the stage becomes the pixels QPSC
 displays and stitches**, and for **where every orientation / directional setting lives per
 microscope**. When a report says "the arrows move the wrong way", "the Stage Map is 180 off", or

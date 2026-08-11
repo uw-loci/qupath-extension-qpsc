@@ -127,7 +127,7 @@ public final class PropagationManagerDialog {
         backBtn.setToggleGroup(dirGroup);
         forwardBtn.setTooltip(new Tooltip("Copy objects FROM the base image TO every selected sub-image."));
         backBtn.setTooltip(new Tooltip("Copy objects FROM selected sub-images TO every base sibling "
-                + "(unflipped + flipped X / Y / XY). Auto-creates missing siblings if enabled."));
+                + "(base + Camera View). Auto-creates missing siblings if enabled."));
         if (defaultDirection == Direction.BACK) backBtn.setSelected(true);
         else forwardBtn.setSelected(true);
         HBox dirBox = new HBox(12, new Label("Direction:"), forwardBtn, backBtn);
@@ -136,9 +136,8 @@ public final class PropagationManagerDialog {
         // -- Auto-create toggle (only meaningful for BACK) -----------------
         CheckBox autoCreateCheck = new CheckBox("Auto-create missing flipped siblings");
         autoCreateCheck.setSelected(true);
-        autoCreateCheck.setTooltip(
-                new Tooltip("When fanning back-propagated annotations, create missing flipped duplicates "
-                        + "(flipped X / Y / XY) on demand so cross-microscope acquisitions can use them."));
+        autoCreateCheck.setTooltip(new Tooltip("When fanning back-propagated annotations, create the missing "
+                + "(Camera View) companion on demand so cross-microscope acquisitions can use it."));
         autoCreateCheck.disableProperty().bind(forwardBtn.selectedProperty());
 
         // -- Replace-existing toggle ---------------------------------------
@@ -727,8 +726,9 @@ public final class PropagationManagerDialog {
                                     if (parentId == null) continue;
                                     for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
                                         if (parentId.equals(e.getID())) {
-                                            parentFlipX = ImageMetadataManager.isFlippedX(e);
-                                            parentFlipY = ImageMetadataManager.isFlippedY(e);
+                                            boolean[] parentParity = ImageMetadataManager.bakedParity(e);
+                                            parentFlipX = parentParity[0];
+                                            parentFlipY = parentParity[1];
                                             logger.info(
                                                     "ForwardProp: sub parent entry='{}' flipX={} flipY={}",
                                                     e.getImageName(),
@@ -975,8 +975,7 @@ public final class PropagationManagerDialog {
                                     try {
                                         ProjectImageEntry<BufferedImage> baseForSift = null;
                                         for (ProjectImageEntry<BufferedImage> s : grp.getSiblings()) {
-                                            String name = s.getImageName();
-                                            if (name != null && !name.contains("(flipped")) {
+                                            if (!ImageMetadataManager.isCameraView(s)) {
                                                 baseForSift = s;
                                                 break;
                                             }
@@ -1211,9 +1210,7 @@ public final class PropagationManagerDialog {
         List<ProjectImageEntry<BufferedImage>> siblings = grp.getSiblings();
         if (siblings.isEmpty()) return null;
         for (ProjectImageEntry<BufferedImage> s : siblings) {
-            String name = s.getImageName();
-            if (name == null) continue;
-            if (!name.contains("(flipped")) return s;
+            if (!ImageMetadataManager.isCameraView(s)) return s;
         }
         return siblings.get(0);
     }
@@ -1813,9 +1810,9 @@ public final class PropagationManagerDialog {
                     entriesAtPos.addAll(perEntry.keySet());
                 }
                 for (ProjectImageEntry<BufferedImage> targetEntry : entriesAtPos) {
-                    String name = targetEntry.getImageName() == null ? "" : targetEntry.getImageName();
-                    boolean sibFlipX = name.contains("(flipped XY)") || name.contains("(flipped X)");
-                    boolean sibFlipY = name.contains("(flipped XY)") || name.contains("(flipped Y)");
+                    boolean[] sibParity = ImageMetadataManager.bakedParity(targetEntry);
+                    boolean sibFlipX = sibParity[0];
+                    boolean sibFlipY = sibParity[1];
                     double sx = sibFlipX ? -1.0 : 1.0;
                     double sy = sibFlipY ? -1.0 : 1.0;
                     AffineTransform shift = AffineTransform.getTranslateInstance(sx * dxBasePx, sy * dyBasePx);

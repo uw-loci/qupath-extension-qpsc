@@ -182,11 +182,12 @@ public class AnnotationHelper {
                 qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> entry =
                         proj.getEntry(gui.getImageData());
                 if (entry != null) {
+                    boolean[] parity = qupath.ext.qpsc.utilities.ImageMetadataManager.bakedParity(entry);
                     entryDescription = String.format(
-                            "name='%s' FLIP_X='%s' FLIP_Y='%s' base_image='%s' original_image_id='%s'",
+                            "name='%s' bakedParityX=%s bakedParityY=%s base_image='%s' original_image_id='%s'",
                             entry.getImageName(),
-                            entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.FLIP_X),
-                            entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.FLIP_Y),
+                            parity[0],
+                            parity[1],
                             entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.BASE_IMAGE),
                             entry.getMetadata().get(qupath.ext.qpsc.utilities.ImageMetadataManager.ORIGINAL_IMAGE_ID));
                 } else {

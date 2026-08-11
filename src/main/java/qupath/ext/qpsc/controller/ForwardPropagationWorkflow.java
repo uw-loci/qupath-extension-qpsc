@@ -105,7 +105,7 @@ public class ForwardPropagationWorkflow {
 
             boolean isBaseVariant = entryStripped.equals(baseName)
                     || imageName.startsWith(baseName + ".")
-                    || (imageName.startsWith(baseName) && imageName.contains("(flipped"));
+                    || (imageName.startsWith(baseName) && ImageMetadataManager.isCameraView(entry));
             if (isBaseVariant) {
                 baseVariants.computeIfAbsent(baseName, k -> new ArrayList<>()).add(entry);
             } else {
@@ -888,14 +888,14 @@ public class ForwardPropagationWorkflow {
         // there are no flipped duplicates to auto-create as a substitute.
         ProjectImageEntry<BufferedImage> base = findUnflippedBase(project, baseName);
         if (base == null) {
-            // Soft fallback: pick any base-like entry whose name doesn't include "(flipped".
+            // Soft fallback: pick any base-like entry that is not the "(Camera View)" companion.
             // This covers projects that have already been migrated but had the unflipped
             // base renamed for some reason. Hard fail if even that finds nothing.
             for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
                 String name = e.getImageName();
                 if (name == null) continue;
                 String stripped = GeneralTools.stripExtension(name);
-                if (stripped.equals(baseName) && !name.contains("(flipped")) {
+                if (stripped.equals(baseName) && !ImageMetadataManager.isCameraView(e)) {
                     base = e;
                     break;
                 }
@@ -966,10 +966,11 @@ public class ForwardPropagationWorkflow {
                 String rawBase = ImageMetadataManager.getBaseImage(sibling);
                 String effectiveBase = (rawBase != null && !rawBase.isEmpty()) ? rawBase : stripped;
                 if (!baseName.equals(effectiveBase)) continue;
-                if (!name.contains("(flipped")) continue; // only fan to legacy duplicates
+                if (!ImageMetadataManager.isCameraView(sibling)) continue; // only fan to the corrected companion
 
-                boolean flipX = name.contains("(flipped XY)") || name.contains("(flipped X)");
-                boolean flipY = name.contains("(flipped XY)") || name.contains("(flipped Y)");
+                boolean[] sibParity = ImageMetadataManager.bakedParity(sibling);
+                boolean flipX = sibParity[0];
+                boolean flipY = sibParity[1];
                 if (!flipX && !flipY) continue;
 
                 AffineTransform mirror = createFlip(flipX, flipY, baseWidth, baseHeight);
@@ -1116,19 +1117,9 @@ public class ForwardPropagationWorkflow {
         }
         double rx = minX, ry = minY, rw = maxX - minX, rh = maxY - minY;
 
-        boolean parentFlipX = "1".equals(parent.getMetadata().get(ImageMetadataManager.FLIP_X));
-        boolean parentFlipY = "1".equals(parent.getMetadata().get(ImageMetadataManager.FLIP_Y));
-        String parentName = parent.getImageName();
-        if (parentName != null) {
-            if (parentName.contains("(flipped XY)")) {
-                parentFlipX = true;
-                parentFlipY = true;
-            } else if (parentName.contains("(flipped X)")) {
-                parentFlipX = true;
-            } else if (parentName.contains("(flipped Y)")) {
-                parentFlipY = true;
-            }
-        }
+        boolean[] parentParity = ImageMetadataManager.bakedParity(parent);
+        boolean parentFlipX = parentParity[0];
+        boolean parentFlipY = parentParity[1];
 
         if (parentFlipX || parentFlipY) {
             int baseWidth = unflippedBaseData.getServer().getWidth();
@@ -1203,11 +1194,10 @@ public class ForwardPropagationWorkflow {
             // Skip sub-acquisitions
             boolean isBaseLike = stripped.equals(baseName) || imageName.startsWith(baseName + ".");
             if (!isBaseLike) continue;
-            // Skip flipped duplicates by name (legacy projects that haven't been migrated yet)
-            if (imageName.contains("(flipped")) continue;
-            String fx = entry.getMetadata().get(ImageMetadataManager.FLIP_X);
-            String fy = entry.getMetadata().get(ImageMetadataManager.FLIP_Y);
-            boolean isUnflipped = (fx == null || "0".equals(fx)) && (fy == null || "0".equals(fy));
+            // Skip the corrected "(Camera View)" companion; we want the unflipped base.
+            if (ImageMetadataManager.isCameraView(entry)) continue;
+            boolean[] parity = ImageMetadataManager.bakedParity(entry);
+            boolean isUnflipped = !parity[0] && !parity[1];
             if (isUnflipped) return entry;
         }
         return null;

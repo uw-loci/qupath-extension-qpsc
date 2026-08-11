@@ -13,6 +13,9 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.lightpath.LightPath;
+import qupath.ext.qpsc.utilities.lightpath.LightPathSnapshot;
+import qupath.ext.qpsc.utilities.lightpath.Parity;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
@@ -202,9 +205,29 @@ public final class ImageFlipHelper {
             flipY = resolved[1];
         }
 
+        // Compose this slide's PER-SLIDE placement on top of the raw-scanner->camera
+        // parity, so the "(Camera View)" companion matches the LIVE camera for the way
+        // the slide was actually placed. Routed through the LightPath model: placement A
+        // (label-left / as scanned) is identity, B (label-right) is a 180. This is the
+        // only new term vs the historical companion; from here flipX/flipY == companionBake.
+        String insertion = ImageMetadataManager.getSlideInsertion(openEntry);
+        Parity bake = LightPath.forActiveScope().companionBake(insertion, new Parity(flipX, flipY));
+        if (bake.flipX() != flipX || bake.flipY() != flipY) {
+            logger.info(
+                    "validateAndFlipIfNeeded: placement '{}' composed onto raw->camera ({},{}) -> bake ({},{})",
+                    insertion,
+                    flipX,
+                    flipY,
+                    bake.flipX(),
+                    bake.flipY());
+        }
+        flipX = bake.flipX();
+        flipY = bake.flipY();
+
         if (!flipX && !flipY) {
             logger.info(
-                    "validateAndFlipIfNeeded: active preset for entry '{}' requires no flip -- no-op",
+                    "validateAndFlipIfNeeded: entry '{}' needs no camera-view bake (raw->camera identity, "
+                            + "placement A) -- no-op",
                     openEntry.getImageName());
             future.complete(true);
             return future;
@@ -220,6 +243,7 @@ public final class ImageFlipHelper {
             // (including any drawn since the sibling was created) and re-runs don't
             // accumulate duplicates -- the open entry is still the base here.
             mirrorAnnotationsToSibling(gui, sibling, flipX, flipY);
+            stampCameraViewMetadata(openEntry, sibling, flipX, flipY);
             switchOpenEntry(gui, sibling, future);
             return future;
         }
@@ -241,6 +265,7 @@ public final class ImageFlipHelper {
             // Populate the freshly-created (annotation-free) sibling from the base's
             // live hierarchy. createFlippedDuplicate no longer transfers annotations.
             mirrorAnnotationsToSibling(gui, created, flipX, flipY);
+            stampCameraViewMetadata(openEntry, created, flipX, flipY);
             switchOpenEntry(gui, created, future);
         } catch (Exception e) {
             logger.error("validateAndFlipIfNeeded: failed to create flipped duplicate", e);
@@ -487,52 +512,65 @@ public final class ImageFlipHelper {
      * caller treats that as "no flip needed".
      */
     private static boolean[] resolveFlipFromPreset(ProjectImageEntry<BufferedImage> openEntry) {
+        AffineTransformManager.TransformPreset preset = resolvePresetForEntry(openEntry);
+        if (preset == null || !preset.hasFlipState()) {
+            return new boolean[] {false, false};
+        }
+        boolean flipX = Boolean.TRUE.equals(preset.getFlipMacroX());
+        boolean flipY = Boolean.TRUE.equals(preset.getFlipMacroY());
+        logger.info(
+                "validateAndFlipIfNeeded: preset '{}' -> flipMacroX={}, flipMacroY={}", preset.getName(), flipX, flipY);
+        return new boolean[] {flipX, flipY};
+    }
+
+    /**
+     * Resolve the active {@code (sourceScanner -> activeMicroscope)} transform preset
+     * for an entry, or null when it cannot be resolved (no source scanner / no active
+     * scope / no config / no matching preset). Shared by flip resolution and the
+     * light-path snapshot stamped onto the companion.
+     */
+    private static AffineTransformManager.TransformPreset resolvePresetForEntry(
+            ProjectImageEntry<BufferedImage> openEntry) {
         try {
             String sourceScanner = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
             if (sourceScanner == null || sourceScanner.isBlank()) {
-                logger.info(
-                        "validateAndFlipIfNeeded: entry '{}' has no SOURCE_MICROSCOPE metadata; cannot resolve preset",
-                        openEntry.getImageName());
-                return new boolean[] {false, false};
+                return null;
             }
-
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
             String activeMicroscope = mgr != null ? mgr.getMicroscopeName() : null;
             if (activeMicroscope == null || activeMicroscope.isBlank()) {
-                logger.info("validateAndFlipIfNeeded: no active microscope name; cannot resolve preset");
-                return new boolean[] {false, false};
+                return null;
             }
-
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath == null || configPath.isBlank()) {
-                logger.info("validateAndFlipIfNeeded: no microscope config path; cannot resolve preset");
-                return new boolean[] {false, false};
+                return null;
             }
-
             AffineTransformManager atm = new AffineTransformManager(new File(configPath).getParent());
-            AffineTransformManager.TransformPreset preset = atm.getBestPresetForPair(sourceScanner, activeMicroscope);
-            if (preset == null || !preset.hasFlipState()) {
-                logger.info(
-                        "validateAndFlipIfNeeded: no preset (or no flip state) for ({}, {}); treating as no flip",
-                        sourceScanner,
-                        activeMicroscope);
-                return new boolean[] {false, false};
-            }
-
-            boolean flipX = Boolean.TRUE.equals(preset.getFlipMacroX());
-            boolean flipY = Boolean.TRUE.equals(preset.getFlipMacroY());
-            logger.info(
-                    "validateAndFlipIfNeeded: preset '{}' for ({}, {}) -> flipMacroX={}, flipMacroY={}",
-                    preset.getName(),
-                    sourceScanner,
-                    activeMicroscope,
-                    flipX,
-                    flipY);
-            return new boolean[] {flipX, flipY};
+            return atm.getBestPresetForPair(sourceScanner, activeMicroscope);
         } catch (Exception e) {
-            logger.warn("validateAndFlipIfNeeded: preset resolution failed: {}", e.getMessage());
-            return new boolean[] {false, false};
+            logger.warn("resolvePresetForEntry failed: {}", e.getMessage());
+            return null;
         }
+    }
+
+    /**
+     * Stamp the full light-path snapshot + the {@code camera_view} flag onto a
+     * freshly created or reused companion, recording the placement it was baked at
+     * and the net baked parity. Caller must have the project synced afterward.
+     */
+    private static void stampCameraViewMetadata(
+            ProjectImageEntry<BufferedImage> openEntry,
+            ProjectImageEntry<BufferedImage> companion,
+            boolean bakeX,
+            boolean bakeY) {
+        if (companion == null) return;
+        String insertion = ImageMetadataManager.getSlideInsertion(openEntry);
+        String detectorId = ImageMetadataManager.getDetectorId(openEntry);
+        AffineTransformManager.TransformPreset preset = resolvePresetForEntry(openEntry);
+        LightPathSnapshot lp =
+                LightPath.forActiveScope().capture(preset, insertion, detectorId, new Parity(bakeX, bakeY));
+        ImageMetadataManager.setLightPath(companion, lp);
+        ImageMetadataManager.setCameraView(companion, true);
     }
 
     /**
@@ -543,26 +581,19 @@ public final class ImageFlipHelper {
     public static ProjectImageEntry<BufferedImage> findFlippedSibling(
             Project<BufferedImage> project, ProjectImageEntry<BufferedImage> baseEntry, boolean flipX, boolean flipY) {
 
-        String desiredSuffix;
-        if (flipX && flipY) {
-            desiredSuffix = "(flipped XY)";
-        } else if (flipX) {
-            desiredSuffix = "(flipped X)";
-        } else {
-            desiredSuffix = "(flipped Y)";
-        }
-
+        // There is now ONE "(Camera View)" companion per base entry (the baked axes
+        // live in metadata), so flipX/flipY no longer select among axis-specific
+        // siblings -- they are ignored here.
+        String suffix = ImageMetadataManager.CAMERA_VIEW_SUFFIX;
         List<ProjectImageEntry<BufferedImage>> entries = project.getImageList();
 
-        // Exact-name pass FIRST: the flipped sibling of THIS entry is
-        // "<baseEntry name> <suffix>". This is essential for a rotated entry (e.g.
-        // "X (rotated 270)"): its base_image is the ORIGINAL ("X"), so the loose
-        // base_image match below would return the ORIGINAL's "X (flipped XY)" sibling and
-        // silently drop the rotation. The exact-name match returns
-        // "X (rotated 270) (flipped XY)" instead, preserving the rotation.
-        String exact = baseEntry.getImageName() + " " + desiredSuffix;
-        String exactStripped =
-                qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName()) + " " + desiredSuffix;
+        // Exact-name pass FIRST: the companion of THIS entry is "<baseEntry name>
+        // <suffix>". Essential for a rotated entry (e.g. "X (rotated 270)"): its
+        // base_image is the ORIGINAL ("X"), so the loose base_image match below would
+        // return the ORIGINAL's companion and silently drop the rotation. The
+        // exact-name match returns "X (rotated 270) (Camera View)" instead.
+        String exact = baseEntry.getImageName() + " " + suffix;
+        String exactStripped = qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName()) + " " + suffix;
         for (ProjectImageEntry<BufferedImage> e : entries) {
             if (e == baseEntry) continue;
             String name = e.getImageName();
@@ -572,8 +603,8 @@ public final class ImageFlipHelper {
         }
 
         // A rotated entry must NOT fall through to the loose base_image match -- that would
-        // return the original's flipped sibling (wrong orientation). Return null so the
-        // caller creates the rotated entry's OWN flipped sibling.
+        // return the original's companion (wrong orientation). Return null so the caller
+        // creates the rotated entry's OWN companion.
         if (isRotatedSiblingName(baseEntry.getImageName())) {
             return null;
         }
@@ -584,17 +615,12 @@ public final class ImageFlipHelper {
         }
         String baseImageFinal = baseImage;
 
+        // Metadata match: a camera-view companion sharing this base_image. No name gating.
         for (ProjectImageEntry<BufferedImage> e : entries) {
             if (e == baseEntry) continue;
-            String name = e.getImageName();
-            if (name == null || !name.contains(desiredSuffix)) continue;
-            // Prefer entries that share base_image; fall back to name-prefix match.
+            if (!ImageMetadataManager.isCameraView(e)) continue;
             String candBase = ImageMetadataManager.getBaseImage(e);
             if (candBase != null && candBase.equals(baseImageFinal)) {
-                return e;
-            }
-            if (name.startsWith(baseEntry.getImageName())
-                    || name.startsWith(qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName()))) {
                 return e;
             }
         }
@@ -607,12 +633,12 @@ public final class ImageFlipHelper {
     }
 
     /**
-     * @return true if {@code name} ends with one of the flipped-sibling
-     *     suffixes produced by {@code QPProjectFunctions.createFlippedDuplicate}.
+     * @return true if {@code name} ends with the "(Camera View)" companion suffix.
+     *     Prefer {@code ImageMetadataManager.isCameraView(entry)} when an entry is
+     *     available; this name-based form is for callers that have only a name.
      */
     public static boolean isFlippedSiblingName(String name) {
-        if (name == null) return false;
-        return name.endsWith("(flipped X)") || name.endsWith("(flipped Y)") || name.endsWith("(flipped XY)");
+        return name != null && name.endsWith(ImageMetadataManager.CAMERA_VIEW_SUFFIX);
     }
 
     /**
