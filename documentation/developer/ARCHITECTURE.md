@@ -280,7 +280,8 @@ Multiple microscope-specific configs exist: `config_PPM.yml` for the PPM-only sy
 
 | Key | Example | Purpose |
 |-----|---------|---------|
-| `flip_x` / `flip_y` | `"1"` / `"0"` | Optical flip state (per-detector) |
+| `lp_*` (light-path set) | e.g., `lp_scope_type`, `lp_slide_insertion` | Orientation stack (camera, scope polarity, slide placement) — see [ORIENTATION_STACK.md](ORIENTATION_STACK.md) |
+| `camera_view` | `"true"` | Marks this entry as a "(Camera View)" companion (optical flip baked in) |
 | `detector_id` | `"LOCI_DETECTOR_JAI_001"` | Which detector captured this image |
 | `image_collection` | `"3"` | Groups related images from same slide |
 | `xy_offset_x/y_microns` | `"12500.0"` | Physical position for coordinate transforms |

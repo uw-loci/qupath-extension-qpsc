@@ -158,7 +158,7 @@ annotation coords and shrink every stage move by `camera_px / macro_px`
 sub-image-acquisition-routing fix for the routing regression that this
 ordering closes). The sub-image branch also does not call
 `ImageFlipHelper.validateAndFlipIfNeeded`, because sub-images have no
-flipped sibling -- the helper itself short-circuits for sub-acquisition
+"(Camera View)" companion -- the helper itself short-circuits for sub-acquisition
 entries.
 
 **Sub-image cross-scope gate (`processSubAcquisitionPath`, added 2026-05-14).**

@@ -365,23 +365,23 @@ Observe which direction the physical stage actually moves. If it moves in the la
 
 #### Q: "Alignment Flip Frame Unverified"
 
-**A:** This dialog appears when you load a slide alignment that was saved before flip-frame verification was implemented (May 19, 2026). The alignment JSON has `flipMacroX` and `flipMacroY` fields but lacks the `flipFrameVerified` indicator, and the active microscope's saved presets require a flipped sibling for at least one source scanner.
+**A:** This dialog appears when you load a slide alignment that was saved before flip-frame verification was implemented (May 19, 2026). The alignment JSON has `flipMacroX` and `flipMacroY` fields but lacks the `flipFrameVerified` indicator, and the active microscope's saved presets require a "(Camera View)" companion for at least one source scanner.
 
 **What this means:**
 - The alignment was saved between May 2026 (when flip-frame metadata was first introduced) and May 19, 2026 (when verification stamping was added)
-- During that window, alignments saved the flip metadata but always hardcoded it to `false`, regardless of whether the transform was actually built on the flipped-sibling image
-- If the alignment was built on a flipped-sibling image but recorded as `(false, false)`, downstream workflows will apply an extra flip and send the stage to the X/Y mirror of the intended target
+- During that window, alignments saved the flip metadata but always hardcoded it to `false`, regardless of whether the transform was actually built on the "(Camera View)" image
+- If the alignment was built on a "(Camera View)" image but recorded as `(false, false)`, downstream workflows will apply an extra flip and send the stage to the X/Y mirror of the intended target
 - The 2026-05-18 OWS3 acquisition log shows this exact failure: annotation appearance flipped, partially overlapped with slide tissue
 
 **Why this matters:** On a flip-needing scope, frame mismatch produces coordinates that are mirrored horizontally. Your annotations will appear to disagree by X, and acquired tiles will land at X-mirrored positions.
 
 **To fix:**
 1. **Recommended:** Cancel the workflow, run **Microscope Alignment** on this slide to rebuild the alignment JSON with the new flip-frame verification stamping, then retry. The new JSON will record `flipFrameVerified: true` and downstream workflows will compose it correctly.
-2. **At your own risk:** Continue anyway if you are confident this alignment was built on the unflipped base entry (not the flipped sibling).
+2. **At your own risk:** Continue anyway if you are confident this alignment was built on the unflipped base entry (not the "(Camera View)" companion).
 
 #### Q: "Legacy Alignment -- Flip Frame Unknown"
 
-**A:** This dialog appears when you load a slide alignment saved before flip-frame metadata was introduced (before May 2026), and the active microscope's saved presets require a flipped sibling for at least one source scanner.
+**A:** This dialog appears when you load a slide alignment saved before flip-frame metadata was introduced (before May 2026), and the active microscope's saved presets require a "(Camera View)" companion for at least one source scanner.
 
 **What this means:**
 - The alignment JSON predates Phase 3 (May 2026) and has no `flipMacroX` / `flipMacroY` fields at all
@@ -508,7 +508,7 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
 
 #### Q: "Source Microscope Missing -- Workflow Cancelled" error
 
-**A:** The open entry has no `source_microscope` metadata, and the active microscope requires a flipped sibling for visual-UX during alignment.
+**A:** The open entry has no `source_microscope` metadata, and the active microscope requires a "(Camera View)" companion for visual-UX during alignment.
 
 **What this means:**
 - The image was imported without recording which microscope (scanner) it came from
