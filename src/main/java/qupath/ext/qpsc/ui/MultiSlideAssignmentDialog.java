@@ -207,6 +207,9 @@ public final class MultiSlideAssignmentDialog {
         // the default for VERTICAL inserts), and must not be clobbered when switching to a
         // horizontal insert auto-resets the control to 0.
         boolean[] suppressRotatePersist = {false};
+        // Guards the re-entrant clear when de-duplicating slot assignments (selecting an entry
+        // in one slot clears it from any other slot -- a slide is in exactly one position).
+        boolean[] suppressDedup = {false};
         ChoiceBox<Integer> rotateAllBox = new ChoiceBox<>();
         rotateAllBox.getItems().addAll(0, 90, 180, 270);
         // Restore the last-used rotation (slides are usually mounted the same way).
@@ -407,6 +410,31 @@ public final class MultiSlideAssignmentDialog {
                 // Any change updates the live Stage Map preview (rotation guarded so a bulk
                 // "Rotate all" coalesces into one refresh).
                 entryBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> refreshPreview.run());
+                // De-dup: a physical slide occupies exactly ONE slot. When an entry is selected
+                // here, clear it from any OTHER slot that still holds it. Without this, a slide
+                // left over in a second slot (e.g. pre-filled at slot 5, then re-picked at slot 4)
+                // is stamped with TWO slide_positions on OK; the later slot's stamp wins and the
+                // assignment silently reverts (the "keeps defaulting to 5" bug). Runs only on
+                // real user/programmatic selection of a non-null entry; guarded against the
+                // re-entrant clears it triggers.
+                entryBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> {
+                    if (nv == null || suppressDedup[0]) {
+                        return;
+                    }
+                    suppressDedup[0] = true;
+                    try {
+                        for (SlotRow other : slotRows) {
+                            if (other.entryBox() == entryBox) {
+                                continue;
+                            }
+                            if (other.entryBox().getSelectionModel().getSelectedItem() == nv) {
+                                other.entryBox().getSelectionModel().select(null);
+                            }
+                        }
+                    } finally {
+                        suppressDedup[0] = false;
+                    }
+                });
                 rotationBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> {
                     if (!suppressPreview[0]) refreshPreview.run();
                 });
@@ -448,11 +476,23 @@ public final class MultiSlideAssignmentDialog {
             }
             String chosenSource = sourceBox.getValue();
             List<SlotAssignment> assignments = new ArrayList<>();
+            // Defensive: never assign one base entry to two slots. The live de-dup keeps the UI
+            // clean, but if a duplicate ever slips through, the FIRST slot wins here so the base
+            // entry is stamped with exactly one slide_position (a later slot must not overwrite it).
+            java.util.Set<ProjectImageEntry<BufferedImage>> assignedEntries =
+                    java.util.Collections.newSetFromMap(new IdentityHashMap<>());
             for (SlotRow r : slotRows) {
                 if (r.skip.isSelected()) continue;
                 ProjectImageEntry<BufferedImage> entry =
                         r.entryBox.getSelectionModel().getSelectedItem();
                 if (entry == null) continue;
+                if (!assignedEntries.add(entry)) {
+                    logger.warn(
+                            "MS assignment: '{}' selected in more than one slot; keeping the first, skipping slot {}",
+                            entry.getImageName(),
+                            r.position);
+                    continue;
+                }
                 // Apply the chosen rotation: a non-zero rotation swaps the slot's assigned
                 // entry to a rotated duplicate (created/reused), so the batch aligns and
                 // acquires on the correctly-oriented macro. The chosen source scanner is

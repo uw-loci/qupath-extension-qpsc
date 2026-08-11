@@ -5,6 +5,13 @@ All notable changes to the QPSC QuPath Extension will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.2] - 2026-08-11
+
+### Fixed
+
+**Multi-Slide: a slide assigned to a new slot no longer reverts to its old position**
+- In the Multi-Slide assignment dialog, the same project image could be selected in two slots at once -- e.g. it was pre-filled at slot 5 (from a prior run's `slide_position`) and then re-picked at slot 4 without the leftover slot-5 selection clearing. On start, the run stamped that base entry once per slot, and because the slots stamp in order the **later slot won**, silently reverting the assignment (the "I set it to slot 4 but it keeps defaulting to 5" report). The dialog now enforces one slide per slot: selecting an image in a slot clears it from any other slot, and on start a base entry is stamped with exactly one `slide_position` (first slot wins if a duplicate ever slips through). Existing projects self-heal on the next correct run.
+
 ## [0.9.1] - 2026-08-11
 
 ### Fixed
