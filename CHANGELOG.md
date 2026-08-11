@@ -5,6 +5,13 @@ All notable changes to the QPSC QuPath Extension will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.3] - 2026-08-11
+
+### Fixed
+
+**"Save as MicroManager MDA..." button: exported .pos now carries real stage coordinates**
+- The pre-acquisition MDA export button (on the Existing Image Acquisition modality panel) synthesized tile centroids in the open image's full-resolution pixel space, then applied either a saved **macro -> stage** preset (which maps ~81 um/px macro pixels, not ~0.25 um/px full-res pixels -- off by ~300x) or, when no preset was selected, raw `pixel * pixel-size` with no stage offset. The resulting `.pos` coordinates matched no real stage position. The button now uses the same **full-resolution -> stage** transform the acquisition itself uses (`MicroscopeController.getCurrentTransform()`), so the exported positions match what the acquisition process writes. If no such transform is available yet (alignment not run), and no already-full-res-scale preset is selected, the export now reports "run alignment first" instead of writing miscalibrated coordinates.
+
 ## [0.9.2] - 2026-08-11
 
 ### Fixed

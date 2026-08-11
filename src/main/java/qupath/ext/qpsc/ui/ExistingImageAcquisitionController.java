@@ -51,6 +51,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
+import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.QuPathStyleManager;
 import qupath.lib.objects.PathObject;
@@ -1580,12 +1581,44 @@ public class ExistingImageAcquisitionController {
                 } catch (Exception ignored) {
                     // Fall back to detector pixel size.
                 }
-                // Resolve the alignment transform so synthesized centroids land in stage micrometers.
-                AffineTransformManager.TransformPreset preset =
-                        (useExistingRadio != null && useExistingRadio.isSelected() && transformCombo != null)
-                                ? transformCombo.getValue()
-                                : null;
-                AffineTransform transform = preset != null ? preset.getTransform() : null;
+                // Resolve the FULL-RES -> STAGE transform so synthesized centroids land in real stage
+                // micrometers. The annotation centroids are in the OPEN IMAGE's full-res pixel space,
+                // so we must apply the same full-res -> stage transform the acquisition uses -- NOT a
+                // saved macro -> stage preset (that maps MACRO pixels, ~81 um/px, and applied to
+                // full-res pixels, ~0.25 um/px, it produced coordinates off by ~300x: the reported
+                // "numbers that don't match any stage coordinates" bug).
+                //
+                // Priority:
+                //   1. MicroscopeController.getCurrentTransform() -- the live full-res -> stage
+                //      transform established by the alignment step, identical to what the acquisition
+                //      writes into TileConfiguration.txt (so the exported .pos matches the acquired one).
+                //   2. A selected slide-specific preset that is ALREADY full-res -> stage (its scale
+                //      matches the full-res pixel size), applied directly.
+                // A macro -> stage preset alone cannot be applied to image pixels without the
+                // green-box/data-bounds alignment context, so we refuse rather than emit garbage.
+                AffineTransform transform = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
+                        .getCurrentTransform();
+                if (transform == null) {
+                    AffineTransformManager.TransformPreset preset =
+                            (useExistingRadio != null && useExistingRadio.isSelected() && transformCombo != null)
+                                    ? transformCombo.getValue()
+                                    : null;
+                    AffineTransform presetTransform = preset != null ? preset.getTransform() : null;
+                    boolean presetIsSlideSpecific =
+                            presetTransform != null && Math.abs(presetTransform.getScaleX() - imagePixelSize) < 1.0;
+                    if (presetIsSlideSpecific) {
+                        logger.info(
+                                "MDA export: using slide-specific preset '{}' (already full-res -> stage)",
+                                preset.getName());
+                        transform = presetTransform;
+                    } else {
+                        return MdaExportContext.notReady(
+                                "No stage alignment is available yet, so stage coordinates cannot be computed.\n\n"
+                                        + "Run the alignment step (or acquire once) first -- then the exported MDA "
+                                        + "positions will match the acquisition. A saved macro-scale preset alone "
+                                        + "cannot be applied to the full-resolution image without alignment.");
+                    }
+                }
 
                 List<MdaExportAction.RegionPlan> regionPlans = new ArrayList<>(annotations.size());
                 for (PathObject ann : annotations) {
@@ -1712,18 +1745,12 @@ public class ExistingImageAcquisitionController {
                 for (int c = 0; c < cols; c++) {
                     double cxPx = minX + c * strideX + fovWpx / 2.0;
                     double cyPx = minY + r * strideY + fovHpx / 2.0;
-                    double[] src = new double[] {cxPx, cyPx};
-                    double[] dst = new double[2];
-                    if (transform != null) {
-                        transform.transform(src, 0, dst, 0, 1);
-                    } else {
-                        // No alignment yet -- fall back to QuPath pixel * pixel-size
-                        // so the .pos file still carries plausible-magnitude values
-                        // (calibrated stage coords just aren't available).
-                        dst[0] = cxPx * imagePixelSizeUm;
-                        dst[1] = cyPx * imagePixelSizeUm;
-                    }
-                    out.add(new TileStagePos(String.valueOf(idx++), dst[0], dst[1], 0.0));
+                    // transform is the full-res -> stage transform (the caller guarantees it is
+                    // non-null and full-res-scaled, matching the acquisition). Map the full-res
+                    // centroid to real stage micrometers.
+                    double[] stage =
+                            TransformationFunctions.transformQuPathFullResToStage(new double[] {cxPx, cyPx}, transform);
+                    out.add(new TileStagePos(String.valueOf(idx++), stage[0], stage[1], 0.0));
                 }
             }
             return out;
