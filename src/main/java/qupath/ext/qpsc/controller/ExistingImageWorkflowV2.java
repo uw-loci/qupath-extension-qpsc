@@ -365,6 +365,17 @@ public class ExistingImageWorkflowV2 {
                 return done;
             }
 
+            // Step 1.6: If the open entry is an EMPTY rotated/(Camera View) companion --
+            // e.g. a multi-slide slot's "(rotated N) (Camera View)" working entry, built
+            // directly by createRotatedFlippedDuplicate and opened WITHOUT passing through
+            // the base->sibling annotation mirror -- bring the source macro's annotations
+            // onto it (transformed by the same rotate+flip that produced its pixels) and
+            // persist, BEFORE Step 2 reads its annotation classes. Otherwise the operator's
+            // macro annotations are invisible here and the workflow takes the "no annotations"
+            // branch. No-op unless the open entry is an empty companion with an annotated
+            // source macro.
+            populateCompanionAnnotationsFromSource();
+
             // Step 2: Check if annotations exist and show annotation dialog FIRST
             Set<String> existingClasses = getExistingAnnotationClasses();
 
@@ -640,6 +651,46 @@ public class ExistingImageWorkflowV2 {
         /**
          * Gets all annotation class names from the current image.
          */
+        /**
+         * If the open entry is an empty rotated/(Camera View) companion, populate it from its
+         * source macro before the acquisition dialogs read its annotations. Handles the
+         * multi-slide case where the working "(rotated N) (Camera View)" entry is created and
+         * opened directly (bypassing the single-slide base->sibling mirror), so it starts
+         * empty even though the operator drew annotations on the base macro. The flip axes come
+         * from the companion's stamped baked parity; rotation from its name. Best-effort: any
+         * failure is logged, not thrown, so a populate hiccup never aborts setup. No-op unless
+         * the open entry is an empty companion with an annotated source macro.
+         */
+        @SuppressWarnings("unchecked")
+        private void populateCompanionAnnotationsFromSource() {
+            try {
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                ImageData<BufferedImage> imageData = (ImageData<BufferedImage>) gui.getImageData();
+                if (project == null || imageData == null || imageData.getHierarchy() == null) {
+                    return;
+                }
+                ProjectImageEntry<BufferedImage> openEntry = project.getEntry(imageData);
+                if (openEntry == null) {
+                    return;
+                }
+                String name = openEntry.getImageName();
+                boolean companion =
+                        ImageMetadataManager.isCameraView(openEntry) || (name != null && name.contains("(rotated"));
+                if (!companion) {
+                    return;
+                }
+                boolean alreadyHasAnnotations = imageData.getHierarchy().getAnnotationObjects().stream()
+                        .anyMatch(a -> a.getROI() != null && !a.getROI().isEmpty());
+                if (alreadyHasAnnotations) {
+                    return;
+                }
+                boolean[] parity = ImageMetadataManager.bakedParity(openEntry);
+                AnnotationHelper.bringSourceAnnotationsOntoOpenEntry(gui, project, openEntry, parity[0], parity[1]);
+            } catch (Exception e) {
+                logger.warn("populateCompanionAnnotationsFromSource failed: {}", e.getMessage());
+            }
+        }
+
         private Set<String> getExistingAnnotationClasses() {
             ImageData<?> imageData = gui.getImageData();
             if (imageData == null || imageData.getHierarchy() == null) {
@@ -1102,7 +1153,7 @@ public class ExistingImageWorkflowV2 {
             Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
             ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
             if (entry == null) return true;
-            if (!ImageFlipHelper.isFlippedSiblingName(entry.getImageName())) return true;
+            if (!ImageMetadataManager.isCameraView(entry)) return true;
 
             String baseId = entry.getMetadata().get(ImageMetadataManager.ORIGINAL_IMAGE_ID);
             if (baseId == null || baseId.isBlank()) return true;

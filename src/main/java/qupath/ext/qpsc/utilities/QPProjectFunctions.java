@@ -876,6 +876,17 @@ public class QPProjectFunctions {
      * @param sampleName the sample name for metadata
      * @return the new rotated entry, or null on failure / no-op
      */
+    /** Maps a {@link RotatedImageServer.Rotation} to its degree measure (0/90/180/270). */
+    private static int rotationDegreesOf(RotatedImageServer.Rotation rotation) {
+        if (rotation == null) return 0;
+        return switch (rotation) {
+            case ROTATE_90 -> 90;
+            case ROTATE_180 -> 180;
+            case ROTATE_270 -> 270;
+            default -> 0;
+        };
+    }
+
     public static ProjectImageEntry<BufferedImage> createRotatedDuplicate(
             Project<BufferedImage> project,
             ProjectImageEntry<BufferedImage> originalEntry,
@@ -941,6 +952,10 @@ public class QPProjectFunctions {
                 false, // rotation is not a flip; no flip axes are set
                 false,
                 sampleName);
+        // Record the baked rotation in metadata (the source of truth for the angle;
+        // the "(rotated N)" name token is user-reference only). Code reads this, not
+        // the name.
+        ImageMetadataManager.setRotationDegrees(rotatedEntry, rotationDegreesOf(rotation));
 
         rotatedEntry.saveImageData(rotatedData);
         project.syncChanges();
@@ -971,13 +986,14 @@ public class QPProjectFunctions {
      * with the rotated entry as its input). The output pixels are byte-identical to the
      * previous {@code (rotated N)(flipped XY)} sibling; only the entry count changes.
      *
-     * <p>The resulting name contains {@code (rotated N)} (so
-     * {@code TilingUtilities.isRotated90or270} and {@code parseRotationDegrees} still fire)
-     * and ends in a {@code (flipped ...)} suffix (so {@code ImageFlipHelper.isFlippedSiblingName}
-     * is true and {@code validateAndFlipIfNeeded} no-ops on it, keeping both passes on this
-     * entry). Annotations are NOT copied here -- like the flip/rotate siblings, the working
-     * entry's annotations are established during setup (operator draw, or the alignment
-     * path's source-macro transform) and persisted on this same entry.
+     * <p>The baked rotation and flip are recorded in METADATA
+     * ({@code lp_rotation_deg}, {@code camera_view}, baked parity) -- the source of truth
+     * that code reads; the {@code (rotated N) (Camera View)} name is retained for user
+     * reference only. {@code isCameraView} being true makes {@code validateAndFlipIfNeeded}
+     * no-op on this entry, keeping both passes on it. Annotations are NOT copied here -- the
+     * working entry's annotations are established during setup (operator draw, or the
+     * alignment path's source-macro transform, or the pre-dialog populate in
+     * {@code ExistingImageWorkflowV2}) and persisted on this same entry.
      *
      * @param project the project
      * @param originalEntry the macro entry to rotate + flip
@@ -1083,6 +1099,11 @@ public class QPProjectFunctions {
                 flipX, // record the flip axes so the frame is unambiguous downstream
                 flipY,
                 sampleName);
+        // Record the baked rotation in metadata (source of truth for the angle; the
+        // "(rotated N)" name token is user-reference only). The caller
+        // (MultiSlideAssignmentDialog) stamps the light-path snapshot (camera_view flag
+        // + baked parity) on top of this.
+        ImageMetadataManager.setRotationDegrees(composedEntry, rotationDegreesOf(rotation));
 
         composedEntry.saveImageData(composedData);
         project.syncChanges();

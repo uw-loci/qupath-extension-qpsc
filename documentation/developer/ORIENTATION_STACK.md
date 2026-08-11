@@ -18,6 +18,18 @@
 >   detection is by the `camera_view` metadata flag (`isCameraView`), not the name.
 > - `LightPathModel` remains the YAML/token reader that `LightPath` wraps; the global
 >   `slide_insertion` YAML is now only a fallback default for unstamped entries.
+>
+> **UPDATED 2026-08-11 (v0.9.1):** the baked quarter-rotation of a companion (multi-slide
+> holder mounting) is also metadata now -- **`lp_rotation_deg`**, read via
+> `ImageMetadataManager.getRotationDegrees(entry)`. Together with `bakedParity` and the
+> `camera_view` flag this makes orientation **entirely metadata-driven**: no code path reads
+> the entry name for rotation or companion classification (the `(rotated N) (Camera View)`
+> name is user-reference only). Companion lookup matches on `base_image` + baked rotation +
+> `camera_view`. The multi-slide path (`createRotatedFlippedDuplicate` +
+> `MultiSlideAssignmentDialog`) now stamps this light-path metadata on the companion at
+> creation -- previously only the single-slide flip path did, so multi-slide companions were
+> unstamped (baked parity `(false,false)`, `isCameraView` false), which broke annotation
+> transfer and `FlipResolver`.
 
 
 This is the canonical developer reference for **how a slide on the stage becomes the pixels QPSC

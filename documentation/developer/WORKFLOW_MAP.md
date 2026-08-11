@@ -2,7 +2,7 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: da84add5
+last_synced_commit: ef570f41
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
@@ -148,7 +148,7 @@ watched_symbols:
   - StitchingHelper.convertSingleZarrToTiff
   - ImageFlipHelper.validateAndFlipIfNeeded
   - ImageFlipHelper.mirrorAnnotationsToSibling
-  - ImageFlipHelper.isFlippedSiblingName
+  - ImageMetadataManager.isCameraView
   - FlipResolver.resolveFlipX
   - FlipResolver.resolveFlipY
   - FlipResolver.seedFlipForNewAlignment
@@ -382,7 +382,7 @@ writes:
 key_invariants:
   - "Adds no new validation gates; each per-slot W1 invocation runs the full validation chain independently."
   - "Menu hidden by default; requires preference flag."
-  - "A rotated slot assigns ONE composed (rotated N)(flipped XY) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. The composed name keeps '(rotated N)' (tiling/parseRotationDegrees) and ends '(flipped XY)' (validateAndFlipIfNeeded no-ops on it), so both passes open the correct working entry. Do not reintroduce the intermediate."
+  - "A rotated slot assigns ONE composed (rotated N)(Camera View) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. Orientation is metadata-driven: MultiSlideAssignmentDialog stamps the light-path snapshot (camera_view flag + baked parity + lp_rotation_deg) on the companion at creation, and code reads rotation from getRotationDegrees / classifies via isCameraView -- the '(rotated N) (Camera View)' name is user-reference only. isCameraView makes validateAndFlipIfNeeded no-op, so both passes open the correct working entry. Base annotations are brought onto the empty companion (AnnotationHelper.bringSourceAnnotationsOntoOpenEntry, rotate+flip) before the acquisition dialogs. Do not reintroduce the intermediate or parse rotation from the name."
 ```
 
 ### W1c: processSlideSpecificAlignment (sub-route of W1)

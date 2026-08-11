@@ -527,10 +527,11 @@ public final class MultiSlideAssignmentDialog {
             String base = ImageMetadataManager.getBaseImage(entry);
             String source = ImageMetadataManager.getSourceMicroscope(entry);
             String ownName = GeneralTools.stripExtension(name);
-            // Skip the (flipped X|Y|XY) visual-UX siblings -- they carry no macro.
-            if (ImageFlipHelper.isFlippedSiblingName(name)) {
+            // Skip the (Camera View) visual-UX companions -- they carry no macro.
+            // Classified by metadata, not the name.
+            if (ImageMetadataManager.isCameraView(entry)) {
                 logger.info(
-                        "collectMacroCandidates: EXCLUDE '{}' (flipped-sibling) base='{}' source='{}'",
+                        "collectMacroCandidates: EXCLUDE '{}' (camera-view companion) base='{}' source='{}'",
                         name,
                         base,
                         source);
@@ -664,14 +665,36 @@ public final class MultiSlideAssignmentDialog {
         boolean[] flip = ImageFlipHelper.resolveRequiredFlipFromPreset(base);
         boolean flipX = flip[0];
         boolean flipY = flip[1];
-        String flipSuffix = (flipX || flipY) ? " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX : "";
-        String targetName = base.getImageName() + " (rotated " + rotationDeg + ")" + flipSuffix;
+        boolean wantCameraView = flipX || flipY;
+        // Reuse an existing companion for this (base, rotation) via METADATA, not the name:
+        // base_image + baked rotation + camera-view-ness. (The "(rotated N) (Camera View)"
+        // name is retained for user reference but is not used to find the entry.)
+        String baseKey = ImageMetadataManager.getBaseImage(base);
+        if (baseKey == null || baseKey.isEmpty()) {
+            baseKey = GeneralTools.stripExtension(base.getImageName());
+        }
         for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
-            if (targetName.equals(e.getImageName())) {
-                logger.info("Reusing existing rotated entry '{}'", targetName);
-                ensureSourceMicroscope(e, chosenSource); // a prior-run sibling may lack source
-                return e;
+            if (e == base) {
+                continue;
             }
+            if (ImageMetadataManager.getRotationDegrees(e) != rotationDeg) {
+                continue;
+            }
+            if (ImageMetadataManager.isCameraView(e) != wantCameraView) {
+                continue;
+            }
+            String candBase = ImageMetadataManager.getBaseImage(e);
+            if (candBase == null || !candBase.equals(baseKey)) {
+                continue;
+            }
+            logger.info(
+                    "Reusing existing rotated companion '{}' (base='{}', rot={}deg, cameraView={})",
+                    e.getImageName(),
+                    baseKey,
+                    rotationDeg,
+                    wantCameraView);
+            ensureSourceMicroscope(e, chosenSource); // a prior-run sibling may lack source
+            return e;
         }
         try {
             String sampleName = GeneralTools.stripExtension(base.getImageName());
@@ -681,6 +704,21 @@ public final class MultiSlideAssignmentDialog {
                     : QPProjectFunctions.createRotatedDuplicate(project, base, rotation, sampleName);
             if (rotated != null) {
                 ensureSourceMicroscope(rotated, chosenSource); // belt-and-suspenders (inherits from base too)
+                // Stamp the light-path snapshot (camera_view flag + baked parity) onto the
+                // freshly built companion. createRotatedFlippedDuplicate builds the pixels but
+                // does NOT stamp -- that is the single-slide path's job via
+                // validateAndFlipIfNeeded, which the multi-slide path bypasses. Without this,
+                // the companion's bakedParity is (false,false) and isCameraView is false, so the
+                // annotation-transfer + FlipResolver treat it as an unflipped base (the observed
+                // "annotations not copied" regression).
+                if (flipX || flipY) {
+                    ImageFlipHelper.stampCameraViewMetadata(base, rotated, flipX, flipY);
+                    try {
+                        project.syncChanges();
+                    } catch (IOException ignore) {
+                        // best-effort: stamp lives in memory even if the sync is deferred
+                    }
+                }
                 return rotated;
             }
             logger.warn("Rotated-duplicate creation returned null for '{}'; using base entry", base.getImageName());

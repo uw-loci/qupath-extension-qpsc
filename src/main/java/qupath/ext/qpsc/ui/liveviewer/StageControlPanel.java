@@ -4601,8 +4601,8 @@ public class StageControlPanel extends VBox {
                     // was captured in flipped frame, bake the flip so we can
                     // apply the centroid in unflipped-base pixel coords.
                     ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
-                    boolean entryIsFlippedSibling = openEntry != null
-                            && qupath.ext.qpsc.utilities.ImageFlipHelper.isFlippedSiblingName(openEntry.getImageName());
+                    boolean entryIsFlippedSibling =
+                            openEntry != null && qupath.ext.qpsc.utilities.ImageMetadataManager.isCameraView(openEntry);
 
                     if (raw != null
                             && alignFlipX != null

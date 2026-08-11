@@ -136,6 +136,12 @@ public class ImageMetadataManager {
     public static final String LP_MACRO_FLIP_Y = "lp_macro_flip_y";
     public static final String LP_BAKED_PARITY_X = "lp_baked_parity_x";
     public static final String LP_BAKED_PARITY_Y = "lp_baked_parity_y";
+    // Quarter-rotation (0/90/180/270) baked into a rotated companion's pixels,
+    // relative to the source macro (multi-slide holder mounting). This is the
+    // metadata source of truth for the rotation angle -- code reads it here, NOT
+    // by parsing the "(rotated N)" token in the entry name (which is retained for
+    // user reference only). 0/absent = no rotation.
+    public static final String LP_ROTATION_DEG = "lp_rotation_deg";
 
     // Marks the on-demand corrected companion entry (the "(Camera View)" entry).
     // Set explicitly at creation; never inferred from the entry name.
@@ -964,6 +970,37 @@ public class ImageMetadataManager {
     public static void setCameraView(ProjectImageEntry<?> entry, boolean cameraView) {
         if (entry == null) return;
         putFlag(entry.getMetadata(), CAMERA_VIEW, cameraView);
+    }
+
+    /**
+     * The quarter-rotation (0/90/180/270) baked into this entry's pixels relative to
+     * its source macro. Read from {@link #LP_ROTATION_DEG} metadata -- NOT by parsing
+     * the entry name. Returns 0 when unset or unparseable.
+     */
+    public static int getRotationDegrees(ProjectImageEntry<?> entry) {
+        if (entry == null) return 0;
+        String v = entry.getMetadata().get(LP_ROTATION_DEG);
+        if (v == null || v.isBlank()) return 0;
+        try {
+            return ((Integer.parseInt(v.trim()) % 360) + 360) % 360;
+        } catch (NumberFormatException e) {
+            return 0;
+        }
+    }
+
+    /**
+     * Record the baked quarter-rotation. Caller is responsible for
+     * {@code project.syncChanges()}. A value of 0 removes the key.
+     */
+    public static void setRotationDegrees(ProjectImageEntry<?> entry, int deg) {
+        if (entry == null) return;
+        int norm = ((deg % 360) + 360) % 360;
+        Map<String, String> meta = entry.getMetadata();
+        if (norm == 0) {
+            meta.remove(LP_ROTATION_DEG);
+        } else {
+            meta.put(LP_ROTATION_DEG, String.valueOf(norm));
+        }
     }
 
     private static void putFlag(Map<String, String> meta, String key, boolean value) {

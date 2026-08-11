@@ -148,16 +148,16 @@ public class ManualAlignmentPath {
             if (openEntry == null) {
                 return null;
             }
-            String openName = openEntry.getImageName();
-            // Already a flipped sibling -> validateAndFlipIfNeeded no-ops; no wait.
-            if (ImageFlipHelper.isFlippedSiblingName(openName)) {
+            // Already the camera-view companion -> validateAndFlipIfNeeded no-ops; no wait.
+            // Classified by metadata, not the name.
+            if (ImageMetadataManager.isCameraView(openEntry)) {
                 return null;
             }
             boolean[] flip = ImageFlipHelper.resolveRequiredFlipFromPreset(openEntry);
             if (!flip[0] && !flip[1]) {
                 return null;
             }
-            return openName + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
+            return openEntry.getImageName() + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
         } catch (Exception e) {
             logger.warn("Could not resolve expected flipped-sibling name: {}", e.getMessage());
             return null;

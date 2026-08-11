@@ -107,10 +107,11 @@ public final class ImageFlipHelper {
             return future;
         }
 
-        // If the open entry IS already a flipped sibling, nothing to do.
-        if (isFlippedSiblingName(openEntry.getImageName())) {
+        // If the open entry IS already the camera-view companion, nothing to do.
+        // Classified by metadata, not the name.
+        if (ImageMetadataManager.isCameraView(openEntry)) {
             logger.info(
-                    "validateAndFlipIfNeeded: open entry '{}' is already a flipped sibling -- no-op",
+                    "validateAndFlipIfNeeded: open entry '{}' is already the camera-view companion -- no-op",
                     openEntry.getImageName());
             future.complete(true);
             return future;
@@ -557,8 +558,15 @@ public final class ImageFlipHelper {
      * Stamp the full light-path snapshot + the {@code camera_view} flag onto a
      * freshly created or reused companion, recording the placement it was baked at
      * and the net baked parity. Caller must have the project synced afterward.
+     *
+     * <p>Public so the multi-slide assignment path can stamp a
+     * {@code createRotatedFlippedDuplicate} companion it built directly (that path
+     * does not route through {@link #validateAndFlipIfNeeded}, which stamps the
+     * single-slide companion). Without this stamp the companion carries neither the
+     * {@code camera_view} flag nor its baked parity, so downstream readers
+     * ({@code bakedParity}, {@code isCameraView}) treat it as an unflipped base.
      */
-    private static void stampCameraViewMetadata(
+    public static void stampCameraViewMetadata(
             ProjectImageEntry<BufferedImage> openEntry,
             ProjectImageEntry<BufferedImage> companion,
             boolean bakeX,
@@ -574,71 +582,36 @@ public final class ImageFlipHelper {
     }
 
     /**
-     * Find an existing `(flipped X|Y|XY)` sibling of {@code baseEntry}
-     * matching the requested flip axes. Matches by `base_image`
-     * metadata if available, falling back to name prefix.
+     * Find the existing "(Camera View)" companion of {@code baseEntry}. There is one
+     * companion per {@code (base_image, rotation)}; the baked flip axes live in metadata,
+     * so {@code flipX/flipY} are not used to select among siblings. Matching is purely
+     * metadata-based -- {@code base_image} + baked rotation + the {@code camera_view} flag --
+     * and never reads the entry name.
      */
     public static ProjectImageEntry<BufferedImage> findFlippedSibling(
             Project<BufferedImage> project, ProjectImageEntry<BufferedImage> baseEntry, boolean flipX, boolean flipY) {
 
-        // There is now ONE "(Camera View)" companion per base entry (the baked axes
-        // live in metadata), so flipX/flipY no longer select among axis-specific
-        // siblings -- they are ignored here.
-        String suffix = ImageMetadataManager.CAMERA_VIEW_SUFFIX;
         List<ProjectImageEntry<BufferedImage>> entries = project.getImageList();
-
-        // Exact-name pass FIRST: the companion of THIS entry is "<baseEntry name>
-        // <suffix>". Essential for a rotated entry (e.g. "X (rotated 270)"): its
-        // base_image is the ORIGINAL ("X"), so the loose base_image match below would
-        // return the ORIGINAL's companion and silently drop the rotation. The
-        // exact-name match returns "X (rotated 270) (Camera View)" instead.
-        String exact = baseEntry.getImageName() + " " + suffix;
-        String exactStripped = qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName()) + " " + suffix;
-        for (ProjectImageEntry<BufferedImage> e : entries) {
-            if (e == baseEntry) continue;
-            String name = e.getImageName();
-            if (name != null && (name.equals(exact) || name.equals(exactStripped))) {
-                return e;
-            }
-        }
-
-        // A rotated entry must NOT fall through to the loose base_image match -- that would
-        // return the original's companion (wrong orientation). Return null so the caller
-        // creates the rotated entry's OWN companion.
-        if (isRotatedSiblingName(baseEntry.getImageName())) {
-            return null;
-        }
 
         String baseImage = ImageMetadataManager.getBaseImage(baseEntry);
         if (baseImage == null || baseImage.isBlank()) {
             baseImage = qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName());
         }
         String baseImageFinal = baseImage;
+        int baseRotation = ImageMetadataManager.getRotationDegrees(baseEntry);
 
-        // Metadata match: a camera-view companion sharing this base_image. No name gating.
+        // A camera-view companion sharing this base_image AND baked at the SAME rotation.
+        // The rotation match keeps a rotated base from resolving to the un-rotated
+        // original's companion (which shares base_image but differs in orientation).
         for (ProjectImageEntry<BufferedImage> e : entries) {
             if (e == baseEntry) continue;
             if (!ImageMetadataManager.isCameraView(e)) continue;
             String candBase = ImageMetadataManager.getBaseImage(e);
-            if (candBase != null && candBase.equals(baseImageFinal)) {
-                return e;
-            }
+            if (candBase == null || !candBase.equals(baseImageFinal)) continue;
+            if (ImageMetadataManager.getRotationDegrees(e) != baseRotation) continue;
+            return e;
         }
         return null;
-    }
-
-    /** True if {@code name} contains a "(rotated N)" suffix from createRotatedDuplicate. */
-    private static boolean isRotatedSiblingName(String name) {
-        return name != null && name.contains("(rotated ");
-    }
-
-    /**
-     * @return true if {@code name} ends with the "(Camera View)" companion suffix.
-     *     Prefer {@code ImageMetadataManager.isCameraView(entry)} when an entry is
-     *     available; this name-based form is for callers that have only a name.
-     */
-    public static boolean isFlippedSiblingName(String name) {
-        return name != null && name.endsWith(ImageMetadataManager.CAMERA_VIEW_SUFFIX);
     }
 
     /**

@@ -5,6 +5,18 @@ All notable changes to the QPSC QuPath Extension will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.9.1] - 2026-08-11
+
+### Fixed
+
+**Multi-Slide (PPM): base annotations now copied onto the rotated "(Camera View)" companion**
+- After the 0.9.0 orientation refactor, a multi-slide slot's rotated/flipped working entry ("X (rotated 270) (Camera View)") was built directly and opened without passing through the single-slide base->companion annotation mirror, so it started empty -- the operator's macro annotations never reached the acquisition entry, and the workflow took the "no annotations" branch. The root cause was that the multi-slide entry-creation path (`createRotatedFlippedDuplicate`) never stamped the new light-path metadata (the `camera_view` flag and baked parity), because `applyImageMetadata` no longer records flip. The fix: (1) the multi-slide path now stamps the full light-path snapshot on the companion at creation (matching the single-slide path); (2) a pre-dialog step brings the source macro's annotations onto an empty companion -- transformed through the same rotate+flip that produced its pixels, then persisted -- **before** the acquisition dialogs read its annotation classes.
+
+### Changed
+
+**Rotation is now recorded in metadata, not read from the entry name**
+- The baked quarter-rotation of a companion is stored in `lp_rotation_deg` metadata and is the single source of truth the code reads. The "(rotated N)" name token is retained for user reference only; no code path parses the name for rotation (or for camera-view classification) any more -- rotation comes from `getRotationDegrees(entry)` and companion classification from `isCameraView(entry)`. Rotated-companion lookup (single- and multi-slide) now matches on `base_image` + baked rotation + the `camera_view` flag rather than on the composed name. The `(rotated N)(flipped ...)` name-based transform math is consolidated into one shared implementation (`AnnotationHelper`) used by both the existing-alignment gate and the new multi-slide populate.
+
 ## [0.9.0] - 2026-08-11
 
 ### Changed

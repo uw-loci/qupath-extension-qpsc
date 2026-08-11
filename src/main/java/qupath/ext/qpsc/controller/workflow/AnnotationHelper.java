@@ -401,4 +401,191 @@ public class AnnotationHelper {
             return null;
         }
     }
+
+    // ------------------------------------------------------------------
+    // Source-macro annotation transfer onto a rotated/flipped companion.
+    //
+    // A "(rotated N) (Camera View)" companion is created directly (multi-slide)
+    // or on demand (single-slide flip) and starts empty: its annotations are a
+    // deterministic function of the source macro's, transformed through the same
+    // rotate+flip that produced its pixels. These helpers bring the source's
+    // annotations onto such a companion so the operator's macro annotations are
+    // visible to the acquisition dialogs. Shared by ExistingAlignmentPath (its
+    // Tier-2 annotation gate) and ExistingImageWorkflowV2 (the pre-dialog
+    // populate for multi-slide companions).
+    // ------------------------------------------------------------------
+
+    /**
+     * Builds the affine mapping original macro pixels to the final (rotated THEN flipped)
+     * frame. Rotation follows QuPath's {@code RotatedImageServer} quarter-rotation mapping;
+     * the flip is applied in the rotated frame with its (swapped for 90/270) dimensions and
+     * matches {@code ForwardPropagationWorkflow.createFlip}.
+     *
+     * @param rotationDeg 0 / 90 / 180 / 270
+     * @param wr final (rotated-frame) width in pixels
+     * @param hr final (rotated-frame) height in pixels
+     */
+    public static java.awt.geom.AffineTransform originalToFinalTransform(
+            int rotationDeg, int wr, int hr, boolean flipX, boolean flipY) {
+        // Original (un-rotated) dimensions: for 90/270 the axes are swapped.
+        double wo = (rotationDeg == 90 || rotationDeg == 270) ? hr : wr;
+        double ho = (rotationDeg == 90 || rotationDeg == 270) ? wr : hr;
+
+        java.awt.geom.AffineTransform rotate;
+        switch (rotationDeg) {
+            case 90 -> rotate = new java.awt.geom.AffineTransform(0, 1, -1, 0, ho, 0); // x'=ho-y, y'=x
+            case 180 -> rotate = new java.awt.geom.AffineTransform(-1, 0, 0, -1, wo, ho); // x'=wo-x, y'=ho-y
+            case 270 -> rotate = new java.awt.geom.AffineTransform(0, -1, 1, 0, 0, wo); // x'=y, y'=wo-x
+            default -> rotate = new java.awt.geom.AffineTransform(); // identity (0 deg)
+        }
+
+        // Flip in the rotated frame (dimensions wr x hr).
+        java.awt.geom.AffineTransform flip = new java.awt.geom.AffineTransform();
+        if (flipX && flipY) {
+            flip.translate(wr, hr);
+            flip.scale(-1, -1);
+        } else if (flipX) {
+            flip.translate(wr, 0);
+            flip.scale(-1, 1);
+        } else if (flipY) {
+            flip.translate(0, hr);
+            flip.scale(1, -1);
+        }
+
+        java.awt.geom.AffineTransform t = new java.awt.geom.AffineTransform(flip);
+        t.concatenate(rotate); // apply rotate first, then flip
+        return t;
+    }
+
+    /**
+     * Finds the original macro entry (the source scan carrying the annotations) that the
+     * given rotated/flipped entry derives from: an entry with NO {@code (rotated}/{@code
+     * Camera View} marker whose extension-stripped name (or {@code base_image}) matches the
+     * open entry's {@code base_image}. Returns null when none matches.
+     */
+    public static qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> findSourceMacroEntry(
+            qupath.lib.projects.Project<java.awt.image.BufferedImage> project,
+            qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> openEntry) {
+        String baseImage = qupath.ext.qpsc.utilities.ImageMetadataManager.getBaseImage(openEntry);
+        if (baseImage == null || baseImage.isEmpty()) {
+            return null;
+        }
+        for (var entry : project.getImageList()) {
+            String name = entry.getImageName();
+            // Skip derived companions (rotated and/or camera-view) via METADATA, not the
+            // name -- the source macro is the un-rotated, non-camera-view original.
+            if (name == null
+                    || qupath.ext.qpsc.utilities.ImageMetadataManager.getRotationDegrees(entry) != 0
+                    || qupath.ext.qpsc.utilities.ImageMetadataManager.isCameraView(entry)) {
+                continue;
+            }
+            String stripped = qupath.lib.common.GeneralTools.stripExtension(name);
+            if (baseImage.equals(name)
+                    || baseImage.equals(stripped)
+                    || baseImage.equals(qupath.ext.qpsc.utilities.ImageMetadataManager.getBaseImage(entry))) {
+                return entry;
+            }
+        }
+        return null;
+    }
+
+    /**
+     * When the open microscope-frame entry (a {@code (rotated N) (Camera View)} companion)
+     * is EMPTY, transform the source macro's annotations through the same rotation+flip that
+     * produced this entry, add them to the open entry's hierarchy, persist, and return them.
+     * Returns null when there is no source, the source has no annotations, or the transform
+     * yields nothing (caller then falls through to its own creation/dialog path).
+     *
+     * <p>Composite maps original macro pixels -&gt; rotated frame -&gt; flipped frame:
+     * {@code transform = flip . rotate}. Rotation degrees are parsed from the open entry's
+     * name; the final (rotated-frame) dimensions come from its live server.
+     *
+     * @param flipX net baked X parity of the companion (its {@code bakedParity[0]})
+     * @param flipY net baked Y parity of the companion (its {@code bakedParity[1]})
+     */
+    public static List<PathObject> bringSourceAnnotationsOntoOpenEntry(
+            QuPathGUI gui,
+            qupath.lib.projects.Project<java.awt.image.BufferedImage> project,
+            qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> openEntry,
+            boolean flipX,
+            boolean flipY) {
+        try {
+            // Rotation comes from metadata (source of truth), never the entry name.
+            int rotationDeg = qupath.ext.qpsc.utilities.ImageMetadataManager.getRotationDegrees(openEntry);
+            // Final (rotated-frame) dimensions from the open entry's server.
+            int wr = gui.getImageData().getServer().getWidth();
+            int hr = gui.getImageData().getServer().getHeight();
+
+            qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> source =
+                    findSourceMacroEntry(project, openEntry);
+            if (source == null) {
+                logger.info(
+                        "bringSourceAnnotations: no source macro entry found for '{}'; leaving target empty",
+                        openEntry.getImageName());
+                return null;
+            }
+
+            qupath.lib.images.ImageData<java.awt.image.BufferedImage> sourceData = source.readImageData();
+            List<PathObject> sourceAnnotations;
+            try {
+                sourceAnnotations = sourceData.getHierarchy().getAnnotationObjects().stream()
+                        .filter(a -> a.getROI() != null && !a.getROI().isEmpty())
+                        .collect(Collectors.toList());
+            } finally {
+                try {
+                    sourceData.getServer().close();
+                } catch (Exception ignore) {
+                    // best-effort: reading annotations does not touch pixels
+                }
+            }
+            if (sourceAnnotations.isEmpty()) {
+                logger.info(
+                        "bringSourceAnnotations: source macro '{}' has no annotations; leaving target empty",
+                        source.getImageName());
+                return null;
+            }
+
+            java.awt.geom.AffineTransform transform = originalToFinalTransform(rotationDeg, wr, hr, flipX, flipY);
+            List<PathObject> transformed = new java.util.ArrayList<>();
+            for (PathObject ann : sourceAnnotations) {
+                PathObject copy = qupath.lib.objects.PathObjectTools.transformObject(ann, transform, true, true);
+                if (copy != null && copy.getROI() != null && !copy.getROI().isEmpty()) {
+                    transformed.add(copy);
+                }
+            }
+            if (transformed.isEmpty()) {
+                logger.warn(
+                        "bringSourceAnnotations: transform produced no valid annotations from {} source object(s)",
+                        sourceAnnotations.size());
+                return null;
+            }
+
+            gui.getImageData().getHierarchy().addObjects(transformed);
+            try {
+                openEntry.saveImageData(gui.getImageData());
+                project.syncChanges();
+            } catch (Exception e) {
+                logger.warn(
+                        "bringSourceAnnotations: could not persist brought-through annotations on '{}': {}",
+                        openEntry.getImageName(),
+                        e.getMessage());
+            }
+            logger.info(
+                    "bringSourceAnnotations: brought {} annotation(s) from source '{}' through rotate {}deg + "
+                            + "flip(x={},y={}) onto '{}'",
+                    transformed.size(),
+                    source.getImageName(),
+                    rotationDeg,
+                    flipX,
+                    flipY,
+                    openEntry.getImageName());
+            return transformed;
+        } catch (Exception e) {
+            logger.error(
+                    "bringSourceAnnotations: failed to bring source annotations onto '{}': {}",
+                    openEntry.getImageName(),
+                    e.getMessage());
+            return null;
+        }
+    }
 }
