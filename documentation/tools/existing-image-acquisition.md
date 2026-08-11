@@ -129,12 +129,18 @@ When using a PPM modality, the hardware configuration pane includes angle select
 
 After configuring modality, objective, and detector, you may export the planned acquisition as a set of MicroManager MDA files instead of starting acquisition immediately. This is useful when you want to hand off the acquisition plan to Micro-Manager for execution outside of QuPath.
 
+**Prerequisites:**
+
+- **Alignment must be run first.** The stage coordinates in the exported `.pos` file require the full-resolution → stage transform established by the Alignment Selection step (either manually or via "Acquire once"). Without alignment, the button will show an error: "No stage alignment is available yet, so stage coordinates cannot be computed. Run the alignment step (or acquire once) first." This ensures the exported MDA positions match the coordinates that the acquisition workflow itself would write.
+
 **To export MDA files:**
 
 Click the **"Save MDA..."** button in the dialog footer. The button writes one MDA file set per selected annotation:
 - `MDA_<region>.txt` — acquisition parameters
 - `MDA_<region>.pos` — stage positions
 - `MDA_<region>.NOTES` — metadata
+
+The exported `.pos` file uses the same stage-coordinate transform used by the acquisition workflow itself, so hand-off execution in MicroManager will place tiles at the same stage positions.
 
 The dialog remains open after export, so you can still Start Acquisition or Cancel as needed.
 

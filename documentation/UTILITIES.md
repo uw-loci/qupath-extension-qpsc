@@ -227,7 +227,7 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 2. Open the **Stage Position List** window. Click **Load...** and select `MDA_<region>.pos`.
 3. Review channels, Z range and step, and positions in the MM dialogs -- they should match the QPSC plan.
 
-**Triggers.** The MDA files are written automatically at the start of every acquisition (auto-save). They can also be exported without acquiring via the **Save as MicroManager MDA...** button on the widefield and PPM acquisition setup dialogs; the button opens a confirmation alert with the saved path so you can jump straight to the folder.
+**Triggers.** The MDA files are written automatically at the start of every acquisition (auto-save). They can also be exported without acquiring via the **Save as MicroManager MDA...** button on the widefield, PPM, and Existing Image Acquisition setup dialogs; the button opens a confirmation alert with the saved path so you can jump straight to the folder. **Note:** To export MDA files, alignment must be run first (either manually or by acquiring once) — without alignment, the export button will show an error message asking you to run alignment first.
 
 **Autofocus.** QPSC runs per-tile, server-side streaming autofocus. MM 2.0 uses its own per-position `AutofocusManager`, which is a different mechanism. To keep MM from fighting our AF after the fact, the exported MDA sets `useAutofocus: false`. If you want MM to autofocus when re-running the plan, re-enable the "Autofocus" checkbox in the MDA window and pick an MM AF method.
 
