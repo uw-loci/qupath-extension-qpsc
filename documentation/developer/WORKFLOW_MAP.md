@@ -50,7 +50,6 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/utilities/StageImageTransform.java
   - src/main/java/qupath/ext/qpsc/utilities/QPProjectFunctions.java
   - src/main/java/qupath/ext/qpsc/utilities/StagePositionManager.java
-  - src/main/java/qupath/ext/qpsc/utilities/FlippedDuplicateMigrator.java
   - src/main/java/qupath/ext/qpsc/utilities/CrossScopeTransformBuilder.java
   - src/main/java/qupath/ext/qpsc/utilities/TransformationFunctions.java
   - src/main/java/qupath/ext/qpsc/preferences/PersistentPreferences.java
@@ -67,8 +66,6 @@ watched_symbols:
   - ImageMetadataManager.XY_OFFSET_X
   - ImageMetadataManager.XY_OFFSET_Y
   - ImageMetadataManager.Z_OFFSET
-  - ImageMetadataManager.FLIP_X
-  - ImageMetadataManager.FLIP_Y
   - ImageMetadataManager.SAMPLE_NAME
   - ImageMetadataManager.ORIGINAL_IMAGE_ID
   - ImageMetadataManager.MODALITY
@@ -98,9 +95,10 @@ watched_symbols:
   - ImageMetadataManager.SLIDE_POSITION
   - ImageMetadataManager.SLIDE_CARRIER
   - ImageMetadataManager.MS_RUN_ID
-  - ImageMetadataManager.isFlippedX
-  - ImageMetadataManager.isFlippedY
   - ImageMetadataManager.getSiblingsByBaseImage
+  - ImageMetadataManager.bakedParity
+  - ImageMetadataManager.getLightPath
+  - ImageMetadataManager.isCameraView
   - ImageMetadataManager.getBaseImage
   - ImageMetadataManager.getOriginalImageId
   - ImageMetadataManager.getAcquiredOnMicroscope
@@ -155,7 +153,6 @@ watched_symbols:
   - FlipResolver.resolveFlipY
   - FlipResolver.seedFlipForNewAlignment
   - CrossScopeTransformBuilder.compose
-  - FlippedDuplicateMigrator.migrate
   - StageImageTransform.current
   - StageImageTransform.stitcherFlipFlags
   # Controller / singletons
