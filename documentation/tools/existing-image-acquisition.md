@@ -165,11 +165,11 @@ When you start this workflow, QPSC checks whether the opened image's `source_mic
 
 **When the dialog does NOT appear:** The dialog is skipped if: (a) the image has no `source_microscope` tag, (b) its tag already matches the active microscope, or (c) the `acquired_on_microscope` tag is present and unambiguous (either matching active or differing from it).
 
-### Startup Check: Orphaned Flipped Sibling
+### Startup Check: Orphaned Camera View Companion
 
-When you start this workflow, QPSC checks whether the opened image is an orphaned flipped sibling — a `(flipped X|Y|XY)` companion entry whose base image is already in the active microscope's frame.
+When you start this workflow, QPSC checks whether the opened image is an orphaned "(Camera View)" companion entry whose base image is already in the active microscope's frame.
 
-**What orphaned siblings are:** Flipped siblings are automatically created during alignment workflows on scopes where optical flip matters (e.g., PPM). They are companions to the unflipped base entry. In rare cases, a previous workflow run under an incorrect source tag created a sibling, then a later fix corrected the base's source metadata. When the base is now in the active scope's frame, the orphaned sibling is no longer needed — and it lacks the stage-bounds metadata it would need to guide alignment on this scope.
+**What orphaned companions are:** The "(Camera View)" companion is automatically created during alignment workflows on scopes where optical flip matters (e.g., PPM). It is a companion to the unflipped base entry. In rare cases, a previous workflow run under an incorrect source tag created a companion, then a later fix corrected the base's source metadata. When the base is now in the active scope's frame, the orphaned companion is no longer needed — and it lacks the stage-bounds metadata it would need to guide alignment on this scope.
 
 **If the dialog appears:**
 
@@ -177,18 +177,18 @@ When you start this workflow, QPSC checks whether the opened image is an orphane
 |--------|----------|------------|
 | **OK** | Acknowledges the message and cancels the workflow. | You need to open the base image instead. |
 
-**Why this matters:** An orphaned sibling has no stage-bounds metadata of its own. If you tried to run the workflow on it, manual alignment would fall back to the scanner's macro pixel size (e.g., 81 µm/px) instead of the image's actual calibration (e.g., 0.65 µm/px on a 10x stitch). The coordinate transform would be wrong by ~125x, and the first refinement tile would land hundreds of thousands of microns outside the stage limits.
+**Why this matters:** An orphaned companion has no stage-bounds metadata of its own. If you tried to run the workflow on it, manual alignment would fall back to the scanner's macro pixel size (e.g., 81 µm/px) instead of the image's actual calibration (e.g., 0.65 µm/px on a 10x stitch). The coordinate transform would be wrong by ~125x, and the first refinement tile would land hundreds of thousands of microns outside the stage limits.
 
-**When the dialog is skipped:** If a per-slide alignment JSON already exists for this image's lookup key (e.g., from a prior Microscope Alignment run on this sibling), the check is bypassed and the workflow proceeds. The per-slide JSON contains the correct calibration and prevents the ~125x error case entirely. This means you can now run Microscope Alignment on a flipped sibling, and immediately use that sibling in Existing Image Acquisition without hitting the orphaned-sibling dialog.
+**When the dialog is skipped:** If a per-slide alignment JSON already exists for this image's lookup key (e.g., from a prior Microscope Alignment run on this companion), the check is bypassed and the workflow proceeds. The per-slide JSON contains the correct calibration and prevents the ~125x error case entirely. This means you can now run Microscope Alignment on a "(Camera View)" companion, and immediately use that companion in Existing Image Acquisition without hitting the orphaned-companion dialog.
 
 **To fix (when dialog appears):**
 
 1. Click **OK** to close the dialog and cancel the workflow.
-2. Open the base image (the one without the `(flipped X|Y|XY)` suffix) from the project pane.
+2. Open the base image (the one without the "(Camera View)" suffix) from the project pane.
 3. Re-run the Existing Image Acquisition workflow on the base.
-4. When convenient, you can delete the orphaned sibling from the project — it is no longer needed.
+4. When convenient, you can delete the orphaned companion from the project — it is no longer needed.
 
-**When the dialog does NOT appear:** If the image is not a flipped sibling, or if its base's source microscope differs from the active microscope (e.g., a genuine cross-scope sibling like a PPM acquisition on an Ocus40 macro), the workflow proceeds to Step 1 without prompting. The dialog is also skipped if a per-slide alignment JSON already exists for the image.
+**When the dialog does NOT appear:** If the image is not a "(Camera View)" companion, or if its base's source microscope differs from the active microscope (e.g., a genuine cross-scope companion like a PPM acquisition on an Ocus40 macro), the workflow proceeds to Step 1 without prompting. The dialog is also skipped if a per-slide alignment JSON already exists for the image.
 
 ### Step 1: Sample Setup
 

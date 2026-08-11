@@ -29,7 +29,7 @@ Transfer annotations and detections between base images (whole-slide scans) and 
 
 When the sub's parent entry (`original_image_id`) holds tile detections from the original acquisition, BACK propagation **bypasses the alignment transform entirely** and uses the tile-detection bbox as ground truth:
 
-1. Walk `sub.original_image_id` to find the parent entry (often the unflipped base, sometimes a legacy `(flipped X|Y|XY)` sibling).
+1. Walk `sub.original_image_id` to find the parent entry (often the unflipped base, sometimes a "(Camera View)" companion).
 2. Find detections on the parent named `<index>_<sub.annotation_name>` with a `TileNumber` measurement (set by `TilingUtilities` at acquisition time).
 3. Take their bbox union — this is the physical extent the camera captured.
 4. If the parent is a flipped sibling, mirror the bbox to unflipped-base coordinates and record the axis-flip.
@@ -69,7 +69,7 @@ Objects whose bounding box falls outside the target image bounds are filtered or
 
 The dialog shows one row per base-image group, with a checkbox to enable that group for propagation, and per-row indicators for sibling count, sub-acquisition count, and whether an alignment file was found. "Select all" and "Select none" buttons act on the group list. Multi-group runs aggregate results and warnings into one status pane.
 
-Under Step B (single unflipped base entry per slide), each group corresponds to one `MetroHealth_142.svs`-style entry. Legacy projects with `(flipped X|Y|XY)` duplicates still show their duplicates as siblings; BACK propagation writes to the unflipped base AND mirrors the result to each surviving duplicate via `createFlip(W,H)`.
+Each group corresponds to one base entry (e.g., `MetroHealth_142.svs`). The single "(Camera View)" companion, when present, mirrors back-propagated annotations via the same transform that created it; BACK propagation writes to the unflipped base AND mirrors the result to the companion when present.
 
 ### Sub-Image Selection
 

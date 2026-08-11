@@ -35,7 +35,6 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [JAI Noise Characterization](tools/noise-characterization.md) | Measure camera noise statistics | Extensions > QP Scope > Utilities > Image Quality > JAI Camera > Noise Characterization... |
 | **Utilities > Project Tools** | | |
 | [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... |
-| Migrate Flipped Duplicates | Consolidate annotations from legacy `(flipped X\|Y\|XY)` duplicate entries onto the base | Extensions > QP Scope > Utilities > Project Tools > Migrate Flipped Duplicates... |
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... |
 | Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... |
 | Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... |
