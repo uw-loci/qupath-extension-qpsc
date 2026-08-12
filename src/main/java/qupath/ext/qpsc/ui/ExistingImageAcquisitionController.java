@@ -1569,6 +1569,22 @@ public class ExistingImageAcquisitionController {
                 double fovWumicrons = fovMicrons[0];
                 double fovHumicrons = fovMicrons[1];
                 double overlap = QPPreferenceDialog.getTileOverlapPercentProperty();
+
+                // Prompt for the tiling FoV to use for THIS export. Pre-filled with the camera
+                // FoV (so accepting the default reproduces the acquisition tiling exactly). The
+                // use case is handing the position list to a device with a different field size --
+                // e.g. the MicroManager laser scanner -- so its tiling matches that field, not the
+                // camera's. MDA-export only: the real camera acquisition is unaffected.
+                Window promptParent = (dialog != null && dialog.getDialogPane().getScene() != null)
+                        ? dialog.getDialogPane().getScene().getWindow()
+                        : null;
+                Optional<double[]> fovChoice = promptTileFov(promptParent, fovWumicrons, fovHumicrons, overlap);
+                if (fovChoice.isEmpty()) {
+                    return MdaExportContext.cancelled();
+                }
+                fovWumicrons = fovChoice.get()[0];
+                fovHumicrons = fovChoice.get()[1];
+                overlap = fovChoice.get()[2];
                 double imagePixelSize = pixelSize;
                 try {
                     var gui = qupath.lib.gui.QuPathGUI.getInstance();
@@ -1677,6 +1693,9 @@ public class ExistingImageAcquisitionController {
                 UIFunctions.showAlertOverParent(err, parentWindow);
                 return;
             }
+            if (ctx != null && ctx.isCancelled()) {
+                return; // user dismissed the tile-FoV prompt -- abort silently
+            }
             if (ctx == null || ctx.hasError()) {
                 Alert info = new Alert(Alert.AlertType.INFORMATION);
                 info.setTitle("MicroManager MDA Export");
@@ -1754,6 +1773,93 @@ public class ExistingImageAcquisitionController {
                 }
             }
             return out;
+        }
+
+        /**
+         * Modal prompt for the tiling field of view (in stage micrometers) to use for an MDA
+         * export. Pre-filled with the camera FoV so accepting the default reproduces the
+         * acquisition tiling exactly; the operator can enter a different width/height to tile the
+         * annotations for another device's field (e.g. the MicroManager laser scanner). The
+         * "apply tile overlap" checkbox reuses the current tile-overlap preference when ticked,
+         * or 0% when unticked.
+         *
+         * @return {@code Optional.of(new double[]{fovWumicrons, fovHumicrons, overlapPercent})} on
+         *     Export, or {@code Optional.empty()} if the user cancels. Must be called on the FX thread.
+         */
+        private Optional<double[]> promptTileFov(
+                Window parent, double defaultFovWum, double defaultFovHum, double defaultOverlapPercent) {
+            Dialog<ButtonType> d = new Dialog<>();
+            d.setTitle("MDA Tile Field of View");
+            d.setHeaderText("Tile field of view for the exported position list");
+            if (parent != null) {
+                d.initOwner(parent);
+            }
+            ButtonType exportType = new ButtonType("Export", ButtonBar.ButtonData.OK_DONE);
+            d.getDialogPane().getButtonTypes().setAll(ButtonType.CANCEL, exportType);
+
+            TextField widthField = new TextField(formatUm(defaultFovWum));
+            TextField heightField = new TextField(formatUm(defaultFovHum));
+            widthField.setPrefColumnCount(8);
+            heightField.setPrefColumnCount(8);
+            CheckBox overlapCheck =
+                    new CheckBox(String.format("Apply tile overlap (%s%%)", formatUm(defaultOverlapPercent)));
+            overlapCheck.setSelected(defaultOverlapPercent > 0);
+
+            GridPane grid = new GridPane();
+            grid.setHgap(8);
+            grid.setVgap(8);
+            grid.setPadding(new Insets(12));
+            grid.add(new Label("Width (um):"), 0, 0);
+            grid.add(widthField, 1, 0);
+            grid.add(new Label("Height (um):"), 0, 1);
+            grid.add(heightField, 1, 1);
+            Label defaultHint = new Label(
+                    String.format("Default = camera FoV %s x %s um", formatUm(defaultFovWum), formatUm(defaultFovHum)));
+            defaultHint.setStyle("-fx-text-fill: gray; -fx-font-size: 11;");
+            grid.add(defaultHint, 0, 2, 2, 1);
+            grid.add(overlapCheck, 0, 3, 2, 1);
+            d.getDialogPane().setContent(grid);
+
+            // Disable Export while either field fails to parse as a positive number.
+            Button exportButton = (Button) d.getDialogPane().lookupButton(exportType);
+            Runnable validate = () -> exportButton.setDisable(
+                    parsePositive(widthField.getText()) == null || parsePositive(heightField.getText()) == null);
+            widthField.textProperty().addListener((o, ov, nv) -> validate.run());
+            heightField.textProperty().addListener((o, ov, nv) -> validate.run());
+            validate.run();
+
+            Optional<ButtonType> result = d.showAndWait();
+            if (result.isEmpty() || result.get() != exportType) {
+                return Optional.empty();
+            }
+            Double w = parsePositive(widthField.getText());
+            Double h = parsePositive(heightField.getText());
+            if (w == null || h == null) {
+                return Optional.empty();
+            }
+            double overlap = overlapCheck.isSelected() ? defaultOverlapPercent : 0.0;
+            return Optional.of(new double[] {w, h, overlap});
+        }
+
+        /** Parses a strictly-positive double, or null if the text is blank / non-numeric / <= 0. */
+        private static Double parsePositive(String text) {
+            if (text == null || text.isBlank()) {
+                return null;
+            }
+            try {
+                double v = Double.parseDouble(text.trim());
+                return v > 0 ? v : null;
+            } catch (NumberFormatException e) {
+                return null;
+            }
+        }
+
+        /** Formats a micron value for display, dropping a trailing ".0" for whole numbers. */
+        private static String formatUm(double v) {
+            if (v == Math.rint(v) && !Double.isInfinite(v)) {
+                return Long.toString((long) v);
+            }
+            return String.format("%.1f", v);
         }
 
         /** Current dialog selection for the modality panel's "what will be used" readout. */

@@ -313,6 +313,9 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
             UIFunctions.showAlertOverParent(err, win);
             return;
         }
+        if (ctx != null && ctx.isCancelled()) {
+            return; // user dismissed the tile-FoV prompt -- abort silently
+        }
         if (ctx == null || ctx.hasError()) {
             Window win = root.getScene() != null ? root.getScene().getWindow() : null;
             Alert info = new Alert(Alert.AlertType.INFORMATION);

@@ -135,9 +135,14 @@ After configuring modality, objective, and detector, you may export the planned 
 
 **To export MDA files:**
 
-Click the **"Save MDA..."** button in the dialog footer. The button writes one MDA file set per selected annotation:
+Click the **"Save MDA..."** button in the dialog footer. Before writing, a small **tile field-of-view prompt** appears, pre-filled with the camera field of view for the selected objective/detector:
+
+- **Width / Height (um):** the tile size the positions are generated for. Accept the default to reproduce the acquisition's own tiling exactly, or enter a different field size to tile the annotations for another device — for example, handing the position list to the **MicroManager laser scanner**, whose scan field differs from the camera. This affects the exported `.pos` positions only; it never changes the real camera acquisition.
+- **Apply tile overlap:** when ticked, the current tile-overlap preference is applied between tiles; when unticked, tiles abut with 0% overlap.
+
+On **Export**, the button writes one MDA file set per selected annotation:
 - `MDA_<region>.txt` — acquisition parameters
-- `MDA_<region>.pos` — stage positions
+- `MDA_<region>.pos` — stage positions (at the chosen field of view)
 - `MDA_<region>.NOTES` — metadata
 
 The exported `.pos` file uses the same stage-coordinate transform used by the acquisition workflow itself, so hand-off execution in MicroManager will place tiles at the same stage positions.

@@ -5,6 +5,13 @@ All notable changes to the QPSC QuPath Extension will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.10.0] - 2026-08-11
+
+### Added
+
+**MDA export: custom tile field of view**
+- Clicking "Save MDA..." (or the per-modality "Save as MicroManager MDA..." button) now opens a small prompt for the tiling field of view, pre-filled with the camera FoV for the selected objective/detector. Accepting the default reproduces the acquisition's own tiling; entering a different width/height tiles the annotations for another device's field -- the motivating use case is handing the position list to the MicroManager laser scanner, whose scan field differs from the camera. An "apply tile overlap" checkbox reuses the current overlap preference or sets 0%. This affects the exported `.pos` positions only; the real camera acquisition is unchanged. Cancelling the prompt aborts the export silently.
+
 ## [0.9.3] - 2026-08-11
 
 ### Fixed

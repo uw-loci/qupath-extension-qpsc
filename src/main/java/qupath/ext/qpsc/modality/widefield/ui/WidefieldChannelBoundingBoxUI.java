@@ -494,6 +494,9 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             UIFunctions.showAlertOverParent(err, win);
             return;
         }
+        if (ctx != null && ctx.isCancelled()) {
+            return; // user dismissed the tile-FoV prompt -- abort silently
+        }
         if (ctx == null || ctx.hasError()) {
             javafx.scene.Scene scene = root.getScene();
             javafx.stage.Window win = scene != null ? scene.getWindow() : null;
