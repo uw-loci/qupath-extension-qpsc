@@ -173,7 +173,11 @@ for unattended acquisition:
   after the stage jumps to each refinement tile, before the capture pane
   appears. Keep a Live Viewer stream open during multi-slide alignment so the
   streaming full-search AF is used (slot jumps can land far from the previous
-  slide's focus).
+  slide's focus). While slot-jump autofocus is running, the Live Viewer's
+  stage-movement controls (arrows, joystick, go-to-centroid) are locked to
+  prevent accidental stage bumps mid-scan; the Autofocus button becomes a
+  "Cancel Autofocus" toggle (red background) so you can abort the scan if needed
+  (Z is restored to the pre-scan position on cancel).
 
 The setup pass writes a fresh per-slide alignment JSON specific to that slide's
 position in the current holder, and records which stage insert it was made on.

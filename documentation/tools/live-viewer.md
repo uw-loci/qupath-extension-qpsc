@@ -87,7 +87,8 @@ The Autofocus button changes appearance to communicate status:
 | Ready | Default styling, label "Autofocus" | Normal idle state |
 | Streaming Running | Label "Cancel Autofocus", enabled | Streaming AF is running; click to cancel |
 | Sweep Running | Label "Sweeping...", disabled | Sweep Autofocus is running on the server (no client-side cancel) |
-| Cancelled | Returns to "Autofocus" | Streaming AF cancelled by the user; Z restored to the pre-scan position |
+| External AF Running | Label "Cancel Autofocus", red background, enabled | External autofocus started outside this window (e.g. multi-slide slot-jump AF) is running; click to cancel (ABORTAF is sent; Z restored to start position) |
+| Cancelled | Returns to "Autofocus" | Streaming AF or external AF cancelled by the user; Z restored to the pre-scan position |
 | Success | Returns to "Autofocus" | Focus found and committed |
 | Failed | Dialog appears | The selected autofocus method could not find focus |
 
@@ -158,6 +159,8 @@ Stage movement is disabled while Live View is OFF. When this occurs:
 - The Mark Z button remains enabled (it does not move the stage)
 
 This safety gate ensures you can see the stage move before issuing commands.
+
+**External autofocus lock:** While an autofocus scan started outside this window is running -- specifically the multi-slide slot-jump autofocus -- the entire stage-control panel (arrows, joystick, go-to-centroid, Z controls) is disabled to prevent accidental stage bumps mid-scan, and the Live toggle is disabled. The Autofocus button stays enabled and becomes a red "Cancel Autofocus" toggle, and the Live Viewer status bar shows "Autofocus: running... (click Cancel to stop)". Clicking Cancel sends ABORTAF (Z is restored to the pre-scan position); the controls unlock automatically when the scan settles.
 
 **Movement Controls:**
 
