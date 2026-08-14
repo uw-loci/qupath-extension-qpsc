@@ -2,7 +2,7 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: ef570f41
+last_synced_commit: 48bcb657
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
@@ -828,7 +828,7 @@ key_invariants:
 id: W19
 class: qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow
 file: src/main/java/qupath/ext/qpsc/ui/liveviewer/LiveViewerWindow.java
-entry: show() / hide() / lockControls(reason) / unlockControls()
+entry: show() / hide() / lockControls(reason) / unlockControls() / beginExternalAutofocus(cancel) / endExternalAutofocus()
 category: ui_singleton
 ui_entries:
   - "Menu: Extensions > QP Scope > Live Viewer (dispatch 'liveViewer')"
@@ -844,6 +844,7 @@ writes:
 key_invariants:
   - "Z bar widget + movement gate (commit 8d324838) -- suppresses Z trace during motion."
   - "Lock/unlock controls via static helpers; isLocked() reports global state."
+  - "beginExternalAutofocus/endExternalAutofocus: partial lock for scans started OUTSIDE this window (multi-slide slot-jump AF via SlotJumpAutofocus, W-multislide). Disables stage-movement controls but leaves the Autofocus button live as a Cancel toggle (ABORTAF). Distinct from lockControls, which disables the Autofocus button too."
   - "All control updates MUST go through Platform.runLater (UI conventions)."
   - "isShowTilesEnabled + showAcquiredTile path renders live tiles during acquisition."
 ```
@@ -2342,6 +2343,14 @@ two lines.
 - **lockControls(reason) / unlockControls()** -- Static API on
   `LiveViewerWindow`. Global UI lock with reason string. Used during
   primary-socket-blocking operations.
+
+- **beginExternalAutofocus(cancel) / endExternalAutofocus()** -- Static API on
+  `LiveViewerWindow`. Partial lock for an autofocus scan started OUTSIDE the
+  Live Viewer (the multi-slide slot-jump AF in `SlotJumpAutofocus`). Disables
+  the stage-movement controls (StageControlPanel, live/stage toggles, focus
+  range) to prevent stage bumps mid-scan, but leaves the Autofocus button
+  ENABLED and relabeled "Cancel Autofocus" wired to `cancel` (ABORTAF). Unlike
+  `lockControls`, which also disables the Autofocus button.
 
 - **stitcher flip flags** -- Bool[] returned by `StageImageTransform.
   stitcherFlipFlags()`. Drives X/Y flip during stitching pyramid build.
