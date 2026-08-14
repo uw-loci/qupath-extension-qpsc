@@ -187,6 +187,25 @@ public final class SlotJumpAutofocus {
         final boolean runStreaming = useStreaming;
         final String modalityForStreaming = streamingModality;
 
+        // Lock the Live Viewer's stage-movement controls while AF runs, and turn its
+        // Autofocus button into a Cancel toggle -- the same affordance as a single-slide
+        // scan. Cancel sends ABORTAF (aborts both the streaming and sweep paths); the
+        // scan then returns ABORTED/cancelled and the completion below clears the lock.
+        final MicroscopeSocketClient socketForCancel = controller.getSocketClient();
+        LiveViewerWindow.beginExternalAutofocus(() -> {
+            Thread abortThread = new Thread(
+                    () -> {
+                        try {
+                            socketForCancel.abortStreamingFocus();
+                        } catch (IOException e) {
+                            logger.warn("Slot-jump AF cancel: ABORTAF failed: {}", e.getMessage());
+                        }
+                    },
+                    "MultiSlide-SlotJumpAF-Cancel");
+            abortThread.setDaemon(true);
+            abortThread.start();
+        });
+
         Thread afThread = new Thread(
                 () -> {
                     String errorMsg = null;
@@ -242,6 +261,9 @@ public final class SlotJumpAutofocus {
                         errorMsg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
                         logger.error("Slot-jump AF failed: {}", errorMsg, ex);
                     }
+                    // Release the Live Viewer stage-movement lock and restore the Autofocus
+                    // button (whether AF succeeded, failed, or was cancelled).
+                    LiveViewerWindow.endExternalAutofocus();
                     if (errorMsg != null || cancelled) {
                         publish("Focus failed -- align manually", true);
                     } else {

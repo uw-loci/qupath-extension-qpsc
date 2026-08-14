@@ -127,6 +127,13 @@ public class LiveViewerWindow {
     // claude-reports/design/2026-05-24_sweep-focus-controller-removal.md.
     private volatile boolean sweepRunning = false;
 
+    // An autofocus scan started OUTSIDE this window (e.g. the multi-slide slot-jump
+    // AF in SlotJumpAutofocus) is running. While it is, we lock this window's stage-
+    // movement controls so the operator cannot bump the stage mid-scan, and turn the
+    // Autofocus button into a Cancel toggle wired to externalAutofocusCancel (ABORTAF).
+    private volatile boolean externalAutofocusRunning = false;
+    private Runnable externalAutofocusCancel;
+
     // Live mode state (camera streaming on/off, independent of window visibility)
     private volatile boolean liveActive = false;
 
@@ -327,6 +334,73 @@ public class LiveViewerWindow {
      */
     public static boolean isLocked() {
         return instance != null && instance.lockManager != null && instance.lockManager.isLocked();
+    }
+
+    /**
+     * Enters "external autofocus" mode for an autofocus scan started OUTSIDE this window
+     * (e.g. the multi-slide slot-jump AF). Locks the stage-movement controls so the
+     * operator cannot bump the stage mid-scan, and turns the Autofocus button into a
+     * Cancel toggle wired to {@code cancelAction} (typically ABORTAF). Unlike
+     * {@link #lockControls(String)}, this deliberately leaves the Autofocus button
+     * ENABLED so it can cancel the running scan. No-op if the Live Viewer is not open.
+     *
+     * @param cancelAction run on the FX thread when the operator clicks Cancel; the action
+     *                     itself should hand any blocking socket I/O to its own thread. May be null.
+     */
+    public static void beginExternalAutofocus(Runnable cancelAction) {
+        LiveViewerWindow w = instance;
+        if (w == null) {
+            return;
+        }
+        Platform.runLater(() -> w.applyExternalAutofocus(cancelAction));
+    }
+
+    /**
+     * Exits "external autofocus" mode, restoring the locked stage-movement controls and
+     * the Autofocus button. Safe to call from any thread; no-op if the Live Viewer is not open.
+     */
+    public static void endExternalAutofocus() {
+        LiveViewerWindow w = instance;
+        if (w == null) {
+            return;
+        }
+        Platform.runLater(w::clearExternalAutofocus);
+    }
+
+    /** Applies the external-autofocus lock (FX thread). */
+    private void applyExternalAutofocus(Runnable cancelAction) {
+        externalAutofocusRunning = true;
+        externalAutofocusCancel = cancelAction;
+        // Lock stage movement, but keep the Autofocus button live as a Cancel toggle.
+        if (stageControlPanel != null) stageControlPanel.setDisable(true);
+        if (stageControlToggle != null) stageControlToggle.setDisable(true);
+        if (liveToggleButton != null) liveToggleButton.setDisable(true);
+        if (focusRangeCombo != null) focusRangeCombo.setDisable(true);
+        if (autofocusButton != null) {
+            autofocusButton.setText("Cancel Autofocus");
+            autofocusButton.setStyle("-fx-base: #E57373;");
+            autofocusButton.setTooltip(new Tooltip("Autofocus running (multi-slide slot jump). Click to cancel "
+                    + "(Z is restored to the start position)."));
+            autofocusButton.setDisable(false);
+        }
+        updateStatus("Autofocus: running... (click Cancel to stop)");
+    }
+
+    /** Releases the external-autofocus lock (FX thread). */
+    private void clearExternalAutofocus() {
+        externalAutofocusRunning = false;
+        externalAutofocusCancel = null;
+        if (autofocusButton != null) {
+            autofocusButton.setText("Autofocus");
+            autofocusButton.setStyle("");
+            autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+            autofocusButton.setDisable(!liveActive);
+        }
+        if (focusRangeCombo != null) focusRangeCombo.setDisable(!liveActive);
+        if (liveToggleButton != null) liveToggleButton.setDisable(false);
+        if (stageControlToggle != null) stageControlToggle.setDisable(false);
+        if (stageControlPanel != null) stageControlPanel.setDisable(false);
+        updateStatus(liveActive ? "Live ON" : "Live OFF");
     }
 
     /**
@@ -1363,6 +1437,20 @@ public class LiveViewerWindow {
      * cancels it (not the configured method, which may have since changed).
      */
     private void handleAutofocus() {
+        if (externalAutofocusRunning) {
+            // An autofocus started outside this window (multi-slide slot jump) is
+            // running and the button is showing "Cancel Autofocus": a click requests
+            // its cancellation. The scan owner (SlotJumpAutofocus) restores the button
+            // when the aborted scan settles.
+            Runnable cancel = externalAutofocusCancel;
+            autofocusButton.setText("Cancelling...");
+            autofocusButton.setDisable(true);
+            updateStatus("Autofocus: cancelling...");
+            if (cancel != null) {
+                cancel.run();
+            }
+            return;
+        }
         if (sweepRunning) {
             // A sweep is in flight and the button is showing "Cancel
             // Autofocus": a click requests cancellation (ABORTAF).

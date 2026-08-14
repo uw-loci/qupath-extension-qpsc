@@ -276,7 +276,15 @@ public class MultiTileRefinement {
             outerPulse.clear();
             // Predict this point with the running estimate (refined by prior points), NOT
             // the raw initial transform.
-            capturePoint(stage, gui, workingEstimate[0], points.size() + 1, trustSift, confidenceThreshold, captureSlot)
+            capturePoint(
+                            stage,
+                            gui,
+                            workingEstimate[0],
+                            points.size() + 1,
+                            trustSift,
+                            confidenceThreshold,
+                            captureSlot,
+                            points)
                     .whenComplete((measure, ex) -> Platform.runLater(() -> {
                         if (ex != null) {
                             logger.warn("Multi-tile point capture failed: {}", ex.getMessage());
@@ -294,6 +302,10 @@ public class MultiTileRefinement {
                                     measure.measuredStage()[0],
                                     measure.measuredStage()[1]);
                         }
+                        // After the first tile is captured, every later pick must be a DIFFERENT
+                        // tile -- relabel so the operator knows to move on (the re-selection guard
+                        // in capturePoint rejects re-picking an already-used tile).
+                        addButton.setText(points.isEmpty() ? "Select tile" : "Select a new tile");
                         addButton.setDisable(false);
                         cancelButton.setDisable(false);
                         refreshDiagnostics.run();
@@ -368,7 +380,8 @@ public class MultiTileRefinement {
             int pointNumber,
             boolean trustSift,
             double confidenceThreshold,
-            VBox captureSlot) {
+            VBox captureSlot,
+            List<PointMeasure> alreadySelected) {
 
         CompletableFuture<PointMeasure> future = new CompletableFuture<>();
 
@@ -379,6 +392,17 @@ public class MultiTileRefinement {
                 .thenAccept(tile -> {
                     if (tile == null || tile.getROI() == null) {
                         logger.info("Multi-tile: tile selection cancelled for point {}", pointNumber);
+                        future.complete(null);
+                        return;
+                    }
+                    if (isTileAlreadySelected(tile, alreadySelected)) {
+                        String label = tile.getName() != null ? tile.getName() : ("TileNumber " + tileNumber(tile));
+                        logger.info(
+                                "Multi-tile: tile '{}' already captured for a prior point; rejecting re-selection",
+                                label);
+                        Platform.runLater(() -> Dialogs.showWarningNotification(
+                                "Tile already used",
+                                "That tile was already captured for this refinement. Select a different tile."));
                         future.complete(null);
                         return;
                     }
@@ -458,6 +482,37 @@ public class MultiTileRefinement {
                 });
 
         return future;
+    }
+
+    /**
+     * True if {@code tile} was already captured for an earlier point in this refinement
+     * session. Matched by the stable {@code TileNumber} measurement when both carry it,
+     * else by object identity (the same detection objects persist in the hierarchy).
+     */
+    private static boolean isTileAlreadySelected(PathObject tile, List<PointMeasure> selected) {
+        Double id = tileNumber(tile);
+        for (PointMeasure pm : selected) {
+            PathObject prior = pm.tile();
+            if (prior == tile) {
+                return true;
+            }
+            Double priorId = tileNumber(prior);
+            if (id != null && priorId != null && id.doubleValue() == priorId.doubleValue()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /** The stable {@code TileNumber} measurement of a tile detection, or null when absent. */
+    private static Double tileNumber(PathObject tile) {
+        if (tile == null
+                || tile.getMeasurements() == null
+                || !tile.getMeasurements().containsKey("TileNumber")) {
+            return null;
+        }
+        double v = tile.getMeasurements().get("TileNumber").doubleValue();
+        return Double.isNaN(v) ? null : v;
     }
 
     /**

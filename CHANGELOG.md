@@ -5,6 +5,18 @@ All notable changes to the QPSC QuPath Extension will be documented in this file
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Fixed
+
+**Multi-Slide: stage controls now lock during slot-jump autofocus, with a Cancel affordance**
+- When autofocus-on-slot-jump ran during a multi-slide alignment, the Live Viewer's stage-movement controls stayed enabled, so the operator could bump the stage mid-scan, and there was no way to cancel the scan. The slot-jump autofocus now locks the Live Viewer's stage-movement controls (arrows, joystick, go-to-centroid, live toggle) while it runs, and turns the Live Viewer Autofocus button into a "Cancel Autofocus" toggle -- the same affordance as a single-slide scan. Clicking it sends `ABORTAF` (aborts both the streaming and sweep paths); the controls unlock automatically when the scan settles (success, failure, or cancel). The same lock covers the multi-tile refinement's per-point autofocus, which shares the slot-jump path.
+
+### Changed
+
+**Multi-Tile refinement: "Select tile" becomes "Select a new tile" after the first, and re-picking a used tile is rejected**
+- In the multi-tile alignment refinement, the reference-tile button is relabeled to "Select a new tile" once the first point is captured, and selecting a tile that was already captured for an earlier point is now rejected (a "Tile already used" notification; the operator re-picks a different tile). Tiles are matched by their stable `TileNumber` measurement, falling back to object identity.
+
 ## [0.10.0] - 2026-08-11
 
 ### Added
