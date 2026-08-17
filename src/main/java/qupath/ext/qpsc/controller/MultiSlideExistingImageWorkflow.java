@@ -207,6 +207,21 @@ public final class MultiSlideExistingImageWorkflow {
                     runId,
                     result.assignments().size());
 
+            // Clear stale assignments for THIS carrier first. setSlideAssignment only ADDS
+            // slide_position to the newly-picked entries; an entry assigned in an earlier run of
+            // the same carrier but NOT in this one keeps its old slide_position. The dialog's
+            // pre-fill selects the FIRST candidate whose slide_position matches a slot, so a
+            // left-over entry earlier in the list wins over this run's pick and the assignment
+            // reads as "reverted to an old default" next time. runId is a random UUID (unordered),
+            // so the pre-fill cannot instead prefer the newest run -- the stale metadata must be
+            // removed. Other carriers' memory is left intact.
+            String carrierId = result.carrier().getId();
+            for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+                if (carrierId.equals(ImageMetadataManager.getSlideCarrier(e))) {
+                    ImageMetadataManager.clearSlideAssignment(e);
+                }
+            }
+
             // Persist slot metadata so partial runs are recoverable AND the assignment dialog can
             // restore the slide->position picks next time. Stamp the BASE macro entry: the dialog's
             // dropdown lists base macros and pre-fills by reading their slide_position. Stamping the

@@ -1362,4 +1362,20 @@ public class ImageMetadataManager {
         if (entry == null) return null;
         return entry.getMetadata().get(MS_RUN_ID);
     }
+
+    /**
+     * Removes all slide-assignment metadata ({@code slide_position},
+     * {@code slide_carrier}, {@code ms_run_id}) from the entry. Used before
+     * stamping a new multi-slide run so an entry left over from an earlier run
+     * cannot keep a stale {@code slide_position} that would win the assignment
+     * dialog's first-match pre-fill over the current run's pick. Caller is
+     * responsible for calling {@link Project#syncChanges()}.
+     */
+    public static void clearSlideAssignment(ProjectImageEntry<?> entry) {
+        if (entry == null) return;
+        Map<String, String> md = entry.getMetadata();
+        md.remove(SLIDE_POSITION);
+        md.remove(SLIDE_CARRIER);
+        md.remove(MS_RUN_ID);
+    }
 }
