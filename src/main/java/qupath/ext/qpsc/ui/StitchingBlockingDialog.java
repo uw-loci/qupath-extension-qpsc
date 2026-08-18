@@ -66,6 +66,11 @@ public class StitchingBlockingDialog {
 
     // Track active stitching operations by ID
     private final Map<String, String> activeOperations = new ConcurrentHashMap<>();
+    // Per-operation phase (e.g. "stitching..."), kept SEPARATE from the operation's display name in
+    // activeOperations so a status update never overwrites the name. Each row then reads
+    // "<name>: <phase>", so every concurrent operation stays visibly in progress instead of one row
+    // showing a "Stitching..." label while the rest look idle.
+    private final Map<String, String> operationStatuses = new ConcurrentHashMap<>();
     private final AtomicBoolean isComplete = new AtomicBoolean(false);
     private final AtomicBoolean showingWarning = new AtomicBoolean(false);
 
@@ -214,9 +219,13 @@ public class StitchingBlockingDialog {
     private void updateStatusList() {
         Platform.runLater(() -> {
             statusListView.getItems().clear();
-            activeOperations
-                    .values()
-                    .forEach(status -> statusListView.getItems().add("- " + status));
+            activeOperations.forEach((id, displayName) -> {
+                String phase = operationStatuses.get(id);
+                String row = (phase == null || phase.isBlank())
+                        ? "- " + displayName + ": queued"
+                        : "- " + displayName + ": " + phase;
+                statusListView.getItems().add(row);
+            });
             updateCountLabel();
         });
     }
@@ -482,7 +491,7 @@ public class StitchingBlockingDialog {
      */
     public void updateStatus(String operationId, String status) {
         if (activeOperations.containsKey(operationId)) {
-            activeOperations.put(operationId, status);
+            operationStatuses.put(operationId, status);
             updateStatusList();
             logger.debug("Updated stitching status for {}: {}", operationId, status);
         }
@@ -499,6 +508,7 @@ public class StitchingBlockingDialog {
         logger.info("completeOperation called for: {}, current operations: {}", operationId, activeOperations.keySet());
         Platform.runLater(() -> {
             if (activeOperations.remove(operationId) != null) {
+                operationStatuses.remove(operationId);
                 logger.info("Operation completed and removed: {}, remaining: {}", operationId, activeOperations.size());
                 updateStatusList();
 
@@ -539,6 +549,7 @@ public class StitchingBlockingDialog {
     public void failOperation(String operationId, String errorMessage) {
         Platform.runLater(() -> {
             if (activeOperations.remove(operationId) != null) {
+                operationStatuses.remove(operationId);
                 logger.error("Operation failed ({}): {}", operationId, errorMessage);
 
                 // Show error dialog (use show() to avoid blocking)
@@ -572,6 +583,7 @@ public class StitchingBlockingDialog {
         Platform.runLater(() -> {
             logger.warn("Force closing stitching dialog with {} operations still active", activeOperations.size());
             activeOperations.clear();
+            operationStatuses.clear();
             if (!isComplete.getAndSet(true) && dialog.isShowing()) {
                 dialog.close();
                 synchronized (instanceLock) {

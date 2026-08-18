@@ -544,8 +544,11 @@ public class StitchingRecoveryWorkflow {
                     logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);
                     final String opId = operationIds.get(angleDir);
                     if (progressDialog != null && opId != null) {
-                        progressDialog.updateStatus(
-                                opId, String.format("Stitching %s (%d/%d)...", angleName, angleNum, total));
+                        // The dialog row already shows this operation's name ("<sample> - <angle>");
+                        // the phase alone keeps every concurrent row reading as in-progress. The old
+                        // "(angleNum/total)" here was per-angle progress that collided visually with
+                        // the "N operations in progress" count and read as "only 1 of N stitching".
+                        progressDialog.updateStatus(opId, "stitching...");
                     }
 
                     // The stitcher appends "_<subdirName>" (the angle dir name); the user-pattern
