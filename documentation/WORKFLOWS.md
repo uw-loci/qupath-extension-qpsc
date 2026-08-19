@@ -16,11 +16,11 @@ QPSC connects QuPath to your microscope via Pycro-Manager and Micro-Manager. You
 |--------------|----------|-----------|
 | Scan a rectangular region by stage coordinates | [Bounded Acquisition](#workflow-1-bounded-acquisition) | Extensions -> QP Scope -> Bounded Acquisition |
 | Acquire high-res images of annotated regions on an overview slide | [Acquire from Existing Image](#workflow-2-acquire-from-existing-image) | Extensions -> QP Scope -> Acquire from Existing Image |
-| Acquire multi-channel widefield immunofluorescence (IF or BF+IF) | [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) | Same menu entries as Bounded / Existing Image |
+| Acquire multi-channel widefield immunofluorescence (IF, BF+IF, or LC-PolScope) | [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) | Same menu entries as Bounded / Existing Image |
 | Calibrate the coordinate link between a scanner image and the microscope | [Microscope Alignment](#workflow-3-microscope-alignment) | Extensions -> QP Scope -> Utilities -> Microscope Alignment |
 | Get guided help through the full setup-to-acquisition process | [Acquisition Wizard](#acquisition-wizard) | Extensions -> QP Scope -> Acquisition Wizard... |
 
-> **Multi-channel note:** Widefield immunofluorescence and combined Brightfield + IF are **not** separate menu items. They dispatch through the regular Bounded Acquisition and Acquire from Existing Image workflows whenever the selected acquisition profile's modality declares a `channels:` library in YAML. See [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) below for what the picker looks like and how files land on disk.
+> **Multi-channel note:** Widefield immunofluorescence, combined Brightfield + IF, and LC-PolScope are **not** separate menu items. They dispatch through the regular Bounded Acquisition and Acquire from Existing Image workflows whenever the selected acquisition profile's modality declares a `channels:` library in YAML. See [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) below for what the picker looks like and how files land on disk.
 
 ---
 
