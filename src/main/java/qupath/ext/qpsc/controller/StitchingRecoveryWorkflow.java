@@ -544,11 +544,22 @@ public class StitchingRecoveryWorkflow {
                     logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);
                     final String opId = operationIds.get(angleDir);
                     if (progressDialog != null && opId != null) {
-                        // The dialog row already shows this operation's name ("<sample> - <angle>");
-                        // the phase alone keeps every concurrent row reading as in-progress. The old
-                        // "(angleNum/total)" here was per-angle progress that collided visually with
-                        // the "N operations in progress" count and read as "only 1 of N stitching".
-                        progressDialog.updateStatus(opId, "stitching...");
+                        // Name the PHASE, because the phases are genuinely staggered: the reference
+                        // angle solves registration first (the barrier) and only then do the
+                        // siblings stitch, reusing that solve. Saying "stitching..." for every row
+                        // would misreport the reference's slow solve, and the old
+                        // "(angleNum/total)" collided visually with the "N operations in progress"
+                        // count. The row already carries the name, so the phase alone is enough.
+                        String phase;
+                        if (registrationMode instanceof qupath.ext.basicstitching.registration.RegistrationMode.Solve) {
+                            phase = "solving registration...";
+                        } else if (registrationMode
+                                instanceof qupath.ext.basicstitching.registration.RegistrationMode.Apply) {
+                            phase = "stitching (reusing solve)...";
+                        } else {
+                            phase = "stitching...";
+                        }
+                        progressDialog.updateStatus(opId, phase);
                     }
 
                     // The stitcher appends "_<subdirName>" (the angle dir name); the user-pattern
