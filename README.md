@@ -62,6 +62,7 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 | **Automated Stage Control** | Move XY, Z, and rotation stages with safety bounds checking |
 | **Multi-angle Imaging (PPM)** | Polarized light microscopy with automatic rotation sequences |
 | **[Multi-channel widefield immunofluorescence](documentation/CHANNELS.md)** | Vendor-agnostic channel library: driven entirely by YAML presets and device property writes, works with any Micro-Manager-driven illuminator |
+| **[LC-PolScope](documentation/CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization)** | Liquid-crystal polarization microscopy: electrical state control (no rotation stage), acquired through the channel library at a single shared exposure |
 | **[BF + IF](documentation/WORKFLOWS.md#multi-channel-acquisition-widefield-if-bfif)** | Combined brightfield + immunofluorescence in a single acquisition pass on single-camera scopes |
 | **[Micro-Manager MDA Export](documentation/UTILITIES.md#exporting-to-micro-manager-mda)** | Auto-exports MicroManager-compatible MDA files (`.txt` settings + `.pos` positions) alongside every acquisition, with manual export via "Save as MicroManager MDA..." on the setup dialogs |
 
@@ -86,9 +87,11 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 - **Autofocus Editor**: Configure focus parameters per objective
 - **Autofocus Benchmark**: Systematically find optimal autofocus settings by testing parameter combinations
 
-### PPM (Polarized Light Microscopy)
+### PPM and Polarization Microscopy
 
-QPSC includes PPM hardware support in its `modality/ppm/` package: rotation stage control, calibration workflows (Polarizer Calibration, Birefringence Optimization, Sensitivity Test, Reference Slide), angle selection, and exposure management. These appear under **Scope > PPM** when a PPM microscope is configured.
+**PPM (Polarized Light Microscopy):** QPSC includes PPM hardware support in its `modality/ppm/` package for **rotation stage-based** polarization control. Features include calibration workflows (Polarizer Calibration, Birefringence Optimization, Sensitivity Test, Reference Slide), angle selection, and exposure management. These appear under **Scope > PPM** when a PPM microscope is configured.
+
+**LC-PolScope (Liquid-Crystal Polarization):** For microscopes with a **liquid-crystal universal compensator** (e.g., Meadowlark D5020), QPSC provides the `lcpolscope` modality for electrical polarization control. The polarization states are acquired per tile through the channel library, at one shared exposure, and reconstructed downstream. Configuration follows the same channel schema as widefield and BF+IF.
 
 > **PPM image analysis** (hue range filtering, polarity plots, surface perpendicularity, batch analysis) is provided by the separate [qupath-extension-ppm](https://github.com/uw-loci/qupath-extension-ppm) extension under **Extensions > PPM Analysis**. Analysis tools work on any PPM images and do not require microscope hardware. See the [PPM extension documentation](https://github.com/uw-loci/qupath-extension-ppm/tree/master/documentation) for workflow guides. PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) Python package.
 

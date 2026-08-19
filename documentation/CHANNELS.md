@@ -1,6 +1,6 @@
 # QPSC Channels Reference
 
-This document describes how to configure channel-based modalities -- widefield immunofluorescence (IF) and combined brightfield + IF (BF+IF) -- in the QPSC QuPath extension. It is the primary reference for the Java side of the channel pipeline: YAML schema, how the picker reaches the acquisition loop, and common failures.
+This document describes how to configure channel-based modalities -- widefield immunofluorescence (IF), combined brightfield + IF (BF+IF), and liquid-crystal polarization (LC-PolScope) -- in the QPSC QuPath extension. It is the primary reference for the Java side of the channel pipeline: YAML schema, how the picker reaches the acquisition loop, and common failures.
 
 For the full cross-repo design rationale (pipeline shape, vendor-agnostic primitives, the "BF is just another channel" principle, the end-to-end OWS3 example, and per-tile / per-annotation file layout), see `../../QPSC/docs/multichannel-if-overview.md` -- that document is the source of truth. This file only covers what a QPSC Java-side user or developer needs to configure and debug a channel library.
 
@@ -170,9 +170,30 @@ The separate modality type exists so that:
 
 See `../../QPSC/docs/multichannel-if-overview.md` for the full OWS3 `BF_IF_20x` walkthrough.
 
+## 5. The `lcpolscope` Modality Type (Liquid-Crystal Polarization)
+
+Liquid-crystal polarization microscopy using an electrical universal compensator (e.g. Meadowlark D5020) is declared as a modality **named** `lcpolscope`, with `type: polarized`. The name and the type do different jobs here, and it is worth being precise about which is which:
+
+- The **name** (`lcpolscope`) is what `ModalityRegistry` prefix-matches to reach `LCPolScopeModalityHandler`.
+- The **type** (`polarized`) is an existing, recognised modality type that selects the right sample-physics defaults downstream -- a relaxed saturation tolerance and a wider tissue mask, both appropriate for polarized transmitted light.
+
+Using `type: polarized` does **not** make the scope look for a rotation stage: rotation-stage behaviour is gated on the modality *name* `ppm`, never on the type.
+
+The handler uses the channel system to represent the LC polarization states as channels -- the same mechanism widefield fluorescence uses for wavelengths -- rather than as rotation angles like PPM.
+
+The handler is registered under the prefixes `lcpolscope` and `lcps` in `ModalityRegistry`. Any profile whose modality key starts with either prefix (e.g. `lcpolscope_20x`, `lcps_20x`) routes through it.
+
+**Key differences from PPM:**
+- **Electrical, not mechanical**: LC states are set by voltage, not rotation; no rotation stage needed.
+- **Channel-based states**: The states are declared in the channel library, not as rotation angles. Each one applies its Micro-Manager `Channel` ConfigGroup preset *and* writes both LC voltages explicitly, so a state is always fully established rather than inherited from whatever ran last.
+- **Equal-exposure invariant**: All states **must** use the same exposure time because the downstream Stokes inversion multiplies by a calibrated instrument matrix. Per-state exposure differences silently bias retardance and orientation. The handler enforces this by normalizing all channels to the longest configured exposure and logging a warning if the YAML disagreed.
+- **Extinction-safe autofocus**: The extinction state (`State0`) is near-black by construction -- it is the state the calibration drove to minimum transmission. The handler defaults autofocus to the first non-extinction state and surfaces a focus-channel picker so users can override if needed.
+
+See the inline JavaDoc in `LCPolScopeModalityHandler` for the full design rationale and the equal-exposure/autofocus invariants.
+
 ---
 
-## 5. The Channel Picker UI
+## 6. The Channel Picker UI
 
 The picker is rendered by `WidefieldChannelBoundingBoxUI` and appears in the Bounded and Existing-Image dialogs whenever the resolved profile has a non-empty channel library. It has one row per channel with four interactive columns:
 
@@ -231,7 +252,7 @@ The Test button is disabled when the "Customize channel selection" checkbox is o
 
 ---
 
-## 6. How It Reaches the Acquisition Loop
+## 7. How It Reaches the Acquisition Loop
 
 The channel path is pure data flow from YAML to server CLI flags. Each step below lists the class/method that carries the data, so future readers can find the code quickly:
 
@@ -256,7 +277,7 @@ Channel-based modalities now correctly resolve their library through the **enhan
 
 ---
 
-## 7. Multichannel Stitching and Merge
+## 8. Multichannel Stitching and Merge
 
 After the per-channel tile directories are written, the channel branch runs a two-stage stitching pipeline:
 
@@ -281,7 +302,7 @@ This keeps filenames short and regular across modalities while preserving enough
 
 ---
 
-## 8. Troubleshooting
+## 9. Troubleshooting
 
 Channel-specific failure modes and log lines to search for. General acquisition troubleshooting lives in [TROUBLESHOOTING.md](TROUBLESHOOTING.md).
 
@@ -315,9 +336,9 @@ Channel-specific failure modes and log lines to search for. General acquisition 
 
 **Symptom:** A `channels:` block under a PPM / brightfield / laser-scanning modality has no effect.
 
-**Cause:** Only widefield fluorescence and BF+IF handlers take the channel branch. `PPMModalityHandler.getChannels`, `BrightfieldModalityHandler.getChannels`, and `LaserScanningModalityHandler.getChannels` all return empty regardless of what is in YAML.
+**Cause:** Only three modalities take the channel branch: `widefield` (fluorescence), `bf_if` (brightfield + IF), and `lcpolscope` (liquid-crystal polarization). Angle-based handlers like `PPMModalityHandler.getChannels`, `BrightfieldModalityHandler.getChannels`, and `LaserScanningModalityHandler.getChannels` all return empty regardless of what is in YAML.
 
-**Fix:** If you actually want channel-based acquisition, declare a new modality with `type: widefield` or `type: bf_if` and move the `channels:` block there.
+**Fix:** If you actually want channel-based acquisition, declare a new modality with `type: widefield`, `type: bf_if`, or (for polarization with electrical LC control) `type: lcpolscope` and move the `channels:` block there.
 
 ### Missing or non-numeric `exposure_ms` in library entry
 
@@ -345,7 +366,7 @@ Channel-specific failure modes and log lines to search for. General acquisition 
 
 ---
 
-## 9. See Also
+## 10. See Also
 
 - [AUTOFOCUS.md](AUTOFOCUS.md) -- how the picked focus channel feeds the modality-aware autofocus strategies.
 - [WORKFLOWS.md](WORKFLOWS.md) -- user-level multi-channel acquisition walkthrough (what the dialog looks like, what lands on disk).

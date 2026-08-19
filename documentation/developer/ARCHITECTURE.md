@@ -39,6 +39,7 @@ graph TB
         PPM[PPMModalityHandler]
         LSM[LaserScanningModalityHandler]
         BFM[BrightfieldModalityHandler]
+        LCPS[LCPolScopeModalityHandler]
     end
 
     subgraph "utilities/"
@@ -62,7 +63,7 @@ graph TB
     BAW --> AM
     EIW --> AM
     AM --> ARS --> MR --> MH
-    MH -.-> PPM & LSM & BFM
+    MH -.-> PPM & LSM & BFM & LCPS
     AM --> ACB --> MSC
     AM --> TH --> TU
     AM --> SH
