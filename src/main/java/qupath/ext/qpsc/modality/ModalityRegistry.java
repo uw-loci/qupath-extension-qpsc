@@ -6,6 +6,7 @@ import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.laserscan.LaserScanningModalityHandler;
+import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.ppm.PPMModalityHandler;
 
 /**
@@ -101,6 +102,14 @@ public final class ModalityRegistry {
         registerHandler("fluorescence", wfHandler);
         registerHandler("widefield", wfHandler);
         registerHandler("epi", wfHandler);
+
+        // LC-PolScope: liquid-crystal polarized light. Channel-based like widefield
+        // (the LC states are channels), but with its own handler because the states are
+        // not interchangeable the way fluorescence channels are -- they must share one
+        // exposure, and the extinction state must never be the autofocus reference.
+        LCPolScopeModalityHandler lcpsHandler = new LCPolScopeModalityHandler();
+        registerHandler("lcpolscope", lcpsHandler);
+        registerHandler("lcps", lcpsHandler);
 
         // Combined brightfield + immunofluorescence for single-camera scopes
         // (e.g. OWS3). Shares all acquisition behavior with widefield IF --
