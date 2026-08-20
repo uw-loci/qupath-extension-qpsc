@@ -17,6 +17,21 @@ The extension connects QuPath to your microscope via [Pycro-Manager](https://pyc
 
 ![System overview: QuPath drives a Pycro-Manager Python server that talks to Micro-Manager, with project metadata, microscope metadata, image tile positions, and stitched images flowing between the layers](documentation/images/Docs_SystemArchitecture.png)
 
+### What you actually install
+
+This repository holds only the **QuPath (Java) half** of QPSC. A working acquisition setup is
+**two halves plus Micro-Manager**:
+
+| Half | What it is | Where it comes from |
+|---|---|---|
+| **QuPath extension** | The "QP Scope" menu, dialogs, and workflows | This repository (the JARs) |
+| **Python command server** | Talks to the hardware over Pycro-Manager; QuPath sends it commands over a socket | Four `pip`-installed packages, led by [microscope_command_server](https://github.com/uw-loci/microscope_command_server) |
+| **Micro-Manager** | Device adapters for your stage, camera, and peripherals | [micro-manager.org](https://micro-manager.org/) |
+
+The extension loads and runs without the Python server -- analysis, utilities, and offline mode all
+work -- but **nothing can move the stage or capture an image until the server is installed and
+running**. See the [Installation Guide](documentation/INSTALLATION.md) for the full setup.
+
 ---
 
 ## Contents
@@ -137,21 +152,57 @@ All motorized components must be controllable through [Micro-Manager](https://mi
 - [QuPath 0.7.0+](https://qupath.github.io/) with Java 25+
 - [qupath-extension-tiles-to-pyramid](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid) - Separate extension, required to create final stitched images. **Not bundled** in the QPSC JAR; install it alongside QPSC (the QPSC extension catalog offers it). QPSC still loads without it (analysis, utilities and offline mode work) but warns at startup and cannot produce stitched output.
 - [Micro-Manager 2.0](https://micro-manager.org/) configured for your microscope
-- Python 3.10+ with [Pycro-Manager](https://pycro-manager.readthedocs.io/) installed
+- Python 3.10+ and the **four QPSC Python packages** (`microscope_command_server`, `microscope_control`,
+  `microscope_imageprocessing`, and optionally `ppm_library` for PPM). These pull in
+  [Pycro-Manager](https://pycro-manager.readthedocs.io/) and provide the command server that drives the
+  hardware -- QPSC cannot acquire without them. See [Installation](#installation).
 
 ### Installation
 
-1. **Download the extension JARs:**
+QPSC has **two halves, and acquisition needs both**: the **QuPath extension** (the JARs) and the
+**Python microscope command server** that actually drives your hardware. Installing only the JARs
+gives you a "QP Scope" menu that cannot move the stage or capture an image.
+
+> **Full step-by-step instructions, with verification commands and per-step troubleshooting, are in
+> the [QPSC Installation Guide](documentation/INSTALLATION.md).** The outline below summarises it.
+
+**1. Install [QuPath](https://qupath.github.io/) and [Micro-Manager](https://micro-manager.org/),**
+and confirm Micro-Manager can drive your stage and camera before going further.
+
+**2. Install the four Python packages.** Order matters -- each depends on the ones above it. In a
+virtual environment:
+
+```bash
+python -m venv venv_qpsc
+venv_qpsc\Scripts\activate.bat          # Windows (Command Prompt)
+
+pip install git+https://github.com/uw-loci/ppm_library.git               # optional, PPM only
+pip install git+https://github.com/uw-loci/microscope_control.git
+pip install git+https://github.com/uw-loci/microscope_imageprocessing.git
+pip install git+https://github.com/uw-loci/microscope_command_server.git
+```
+
+**3. Install the extension JARs:**
    - `qupath-extension-qpsc-[version].jar` - This extension
-   - `qupath-extension-tiles-to-pyramid-[version].jar` - [Required dependency](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid)
+   - `qupath-extension-tiles-to-pyramid-[version].jar` - [Required for stitching](https://github.com/uw-loci/qupath-extension-tiles-to-pyramid)
 
-2. **Install in QuPath:** Drag both JAR files into an open QuPath window, or copy them to your QuPath `extensions/` folder. (Both are part of the QPSC extension catalog, so installing via the catalog keeps them together.)
+   Drag both JAR files into an open QuPath window, or copy them to your QuPath `extensions/` folder.
+   (Both are part of the QPSC extension catalog, so installing via the catalog keeps them together
+   and offers updates.)
 
-3. **Restart QuPath** and verify the "QP Scope" menu appears.
+**4. Restart QuPath** and verify the "QP Scope" menu appears.
 
-4. **Configure** your microscope YAML (see `config_PPM.yml` sample) and shared hardware resource file (`resources/resources_LOCI.yml`).
+**5. Create your configuration files** with the
+[Setup Wizard](documentation/tools/setup-wizard.md) -- it launches automatically when no valid
+microscope configuration is found, and writes the microscope YAML plus the shared hardware resource
+file (`resources/resources_LOCI.yml`). Configure by hand (see the `config_PPM.yml` sample) only if
+the wizard does not cover your hardware.
 
-5. **Set preferences** in QuPath: Edit -> Preferences -> QPSC Extension (Python controller path, server settings).
+**6. Set preferences** in QuPath: Edit -> Preferences -> QPSC Extension (Python controller path,
+server settings).
+
+**7. Start the Python server, then connect.** See [startup order](#first-time-setup-checklist)
+below, and use the Live Viewer to confirm QuPath can move the stage.
 
 ### First-Time Setup Checklist
 
@@ -165,7 +216,13 @@ If configuring manually, verify each component:
 - [ ] **Python Server**: Server script starts without errors
 - [ ] **Connection**: Use the "Live Viewer" to test QuPath can move the stage
 
-**Startup order (every session):** Launch in this order: **Micro-Manager** (load hardware config) -> **Python Server** (run `start_server.bat`) -> **QuPath**. Create desktop shortcuts for all three arranged left-to-right for convenience. See the [Workflows Guide](documentation/WORKFLOWS.md#startup-order-every-session) for details.
+**Startup order (every session):** Launch in this order: **Micro-Manager** (load hardware config)
+-> **Python Server** -> **QuPath**. Start the server by running `microscope-command-server` in your
+activated virtual environment, or by double-clicking `start_server.bat` if you cloned the
+[microscope_command_server](https://github.com/uw-loci/microscope_command_server) repository -- that
+script activates the environment for you, but it ships in the repository and is **not** created by
+`pip install`. Create desktop shortcuts for all three arranged left-to-right for convenience. See the
+[Workflows Guide](documentation/WORKFLOWS.md#startup-order-every-session) for details.
 
 **Recommended first test:** Use the "Live Viewer" from the QP Scope menu to verify camera feed and stage movement before attempting a full acquisition.
 
