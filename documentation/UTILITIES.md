@@ -344,6 +344,12 @@ Large logs are trimmed to fit GitHub's issue size limit: the version/startup ban
 
 Your report will be filed as a GitHub Issue in the QPSC issue tracker with all the information you provided. You don't need a GitHub account, and the issue URL will be shown once submission completes.
 
+**What is redacted, and what is not.** Text attachments -- the logs and the system-info block --
+have your home directory replaced with `~`, so the report does not carry your Windows or Linux
+username. Paths outside your home directory are left as they are: a lab share or a data drive
+(`K:\...`) is usually the most useful part of a log, so it is kept. Note that logs record image
+and project *names*, which are not redacted.
+
 **Screenshot note:** The screenshot is not automatically redacted. You will see a mandatory preview dialog before anything is sent — close any sensitive windows first (passwords, personal info, etc.).
 
 **What happens to your data:**
