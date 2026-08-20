@@ -349,11 +349,11 @@ For channel-based modalities (widefield IF, BF+IF, LC-PolScope), the user picks 
 
 This pairing is what makes sparse-signal autofocus practical: the user can point AF at the brightest channel (e.g. DAPI on nuclei) without paying a filter-turret penalty, and the rest of the channels are collected immediately afterward from the same Z.
 
-**LC-PolScope special case -- set the focus channel by hand for now.** The extinction state (`State0`) is near-black by construction: the calibration drove it to minimum transmission, so every gradient- and texture-based focus metric collapses into noise on it. It is never a sensible autofocus reference.
+**LC-PolScope special case.** The extinction state (`State0`) is near-black by construction: the calibration drove it to minimum transmission, so every gradient- and texture-based focus metric collapses into noise on it. It is never a usable autofocus reference.
 
-The picker's fallback, when the user has not chosen and nothing is remembered from a previous run, is the **first channel in library order** -- which for an LC-PolScope profile is `State0`. So the default is currently the worst available choice, and **the operator must move the Focus radio to a swing state** (any of `State1`..`State4`; they are equivalent on a blank field). Once picked, the choice is remembered across runs.
+The picker's fallback used to be the first channel in library order, which for an LC-PolScope profile is exactly `State0`. That default is now decided by the modality handler instead: `ModalityHandler.defaultFocusChannelId(...)` returns library order by default (correct for fluorescence, where any channel with signal is a usable focus target), and `LCPolScopeModalityHandler` overrides it to return the first non-extinction state. The picker asks the registry rather than hardcoding any of this, so the dialog stays generic.
 
-`LCPolScopeModalityHandler.defaultFocusChannelId(...)` already computes the right answer -- the first non-extinction state -- but it is **not yet wired into the picker**, because the picker resolves its channel library without going through the modality handler. Wiring it is tracked as the next step in the LC-PolScope work; until then this is an operator responsibility, not an automatic one.
+It remains a *default*, not a constraint -- the user can pick any swing state on the Focus radio, and that choice is remembered across runs.
 
 See [CHANNELS.md](CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization) for why extinction-safe autofocus matters.
 

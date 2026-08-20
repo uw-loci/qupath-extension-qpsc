@@ -553,6 +553,34 @@ public interface ModalityHandler {
     }
 
     /**
+     * Returns the channel id autofocus should default to, given this profile's channel
+     * library.
+     *
+     * <p>The channel picker uses this to pre-select the Focus radio when the user has not
+     * chosen one and nothing is remembered from a previous run. The default implementation
+     * returns the first channel in library order, which is the right answer whenever the
+     * channels are interchangeable as focus targets -- true for fluorescence, where any
+     * channel with signal will do.
+     *
+     * <p>It is <b>not</b> true for every modality. LC-PolScope's first state is the
+     * extinction state, driven to minimum transmission by the calibration and therefore
+     * near-black: focus metrics evaluated on it measure noise. Modalities with an unsuitable
+     * first channel must override this rather than rely on library order.
+     *
+     * <p>This is a default preference, not a constraint -- the user can always pick a
+     * different channel in the picker, and that choice is remembered.
+     *
+     * @param channels the resolved channel library, in configuration order; may be empty
+     * @return the channel id to pre-select, or {@code null} if there is no sensible default
+     */
+    default String defaultFocusChannelId(List<Channel> channels) {
+        if (channels == null || channels.isEmpty()) {
+            return null;
+        }
+        return channels.get(0).id();
+    }
+
+    /**
      * Returns the default exposure time for a given rotation angle from
      * modality-specific persistent preferences.
      *

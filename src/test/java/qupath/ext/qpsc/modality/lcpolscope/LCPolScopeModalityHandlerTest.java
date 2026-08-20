@@ -83,7 +83,7 @@ class LCPolScopeModalityHandlerTest {
     @Test
     @DisplayName("Autofocus never defaults to the extinction state")
     void focusChannelIsNotExtinction() {
-        String focus = LCPolScopeModalityHandler.defaultFocusChannelId(fiveStates(50, 50, 50, 50, 50));
+        String focus = new LCPolScopeModalityHandler().defaultFocusChannelId(fiveStates(50, 50, 50, 50, 50));
         assertNotNull(focus);
         assertNotEquals(
                 LCPolScopeModalityHandler.EXTINCTION_CHANNEL_ID,
@@ -95,9 +95,35 @@ class LCPolScopeModalityHandlerTest {
     @Test
     @DisplayName("Focus channel falls back gracefully when only extinction exists")
     void focusChannelDegenerateCases() {
-        assertNull(LCPolScopeModalityHandler.defaultFocusChannelId(List.of()));
-        assertNull(LCPolScopeModalityHandler.defaultFocusChannelId(null));
-        assertEquals("State0", LCPolScopeModalityHandler.defaultFocusChannelId(List.of(state("State0", 50))));
+        LCPolScopeModalityHandler h = new LCPolScopeModalityHandler();
+        assertNull(h.defaultFocusChannelId(List.of()));
+        assertNull(h.defaultFocusChannelId(null));
+        assertEquals("State0", h.defaultFocusChannelId(List.of(state("State0", 50))));
+    }
+
+    @Test
+    @DisplayName("The default focus channel is reachable through the registry, as the picker reaches it")
+    void focusDefaultResolvesThroughRegistry() {
+        // This is the path the channel picker actually takes: it knows only the modality
+        // name, asks the registry for a handler, and asks that handler for a default. The
+        // bug this guards against is the picker falling back to library order, which for
+        // an LC-PolScope profile means State0 -- the extinction state, and the worst
+        // possible autofocus reference.
+        ModalityHandler h = ModalityRegistry.getHandler("lcpolscope_20x");
+        String focus = h.defaultFocusChannelId(fiveStates(50, 50, 50, 50, 50));
+        assertEquals("State1", focus, "picker would have defaulted autofocus onto extinction");
+    }
+
+    @Test
+    @DisplayName("Other modalities keep library order as their default focus channel")
+    void otherModalitiesUnaffected() {
+        // The hook added to ModalityHandler must not change behaviour anywhere else:
+        // for fluorescence any channel with signal is a usable focus target, and library
+        // order has been the default all along.
+        List<Channel> fl = List.of(state("DAPI", 100), state("FITC", 80), state("Cy5", 200));
+        assertEquals("DAPI", ModalityRegistry.getHandler("fluorescence_20x").defaultFocusChannelId(fl));
+        assertEquals("DAPI", ModalityRegistry.getHandler("bf_if_20x").defaultFocusChannelId(fl));
+        assertEquals("DAPI", ModalityRegistry.getHandler("ppm_20x").defaultFocusChannelId(fl));
     }
 
     @Test

@@ -111,14 +111,16 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     }
 
     /**
-     * The state autofocus should run on: the first non-extinction state in the configured
-     * order. Any swing state is far brighter than extinction and they are equivalent on a
-     * blank field, so the first is as good as any.
+     * {@inheritDoc}
      *
-     * @param channels channels for the profile
-     * @return channel id to focus on, or {@code null} if there is nothing to choose from
+     * <p>Never the extinction state. It is driven to minimum transmission by the
+     * calibration, so it is near-black and every gradient- and texture-based focus metric
+     * evaluated on it measures noise rather than sharpness. Any swing state is far brighter,
+     * and they are equivalent on a blank field, so the first non-extinction state is as good
+     * a choice as any.
      */
-    public static String defaultFocusChannelId(List<Channel> channels) {
+    @Override
+    public String defaultFocusChannelId(List<Channel> channels) {
         if (channels == null || channels.isEmpty()) {
             return null;
         }

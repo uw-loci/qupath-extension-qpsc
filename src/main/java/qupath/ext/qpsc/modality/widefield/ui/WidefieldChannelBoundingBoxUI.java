@@ -33,6 +33,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.PropertyRef;
 import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore;
 import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.ChannelState;
@@ -340,10 +341,28 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             row++;
         }
 
-        // After all rows are built, ensure exactly one focus radio is selected
-        // (the first one in library order if the user hasn't picked anything).
+        // After all rows are built, ensure exactly one focus radio is selected. The
+        // modality handler decides the default rather than this dialog: library order is
+        // right for fluorescence, where any channel with signal is a usable focus target,
+        // but wrong for modalities whose first channel is unsuitable -- LC-PolScope's
+        // State0 is the extinction state and is near-black by construction. Falls back to
+        // library order if the handler expresses no preference.
         if (focusToggleGroup.getSelectedToggle() == null && !channelFocusRadios.isEmpty()) {
-            channelFocusRadios.values().iterator().next().setSelected(true);
+            String preferred = null;
+            if (loadedModality != null) {
+                try {
+                    preferred = ModalityRegistry.getHandler(loadedModality).defaultFocusChannelId(library);
+                } catch (Exception e) {
+                    logger.debug("Focus-channel default lookup failed for '{}': {}", loadedModality, e.getMessage());
+                }
+            }
+            javafx.scene.control.RadioButton preferredRadio =
+                    preferred == null ? null : channelFocusRadios.get(preferred);
+            if (preferredRadio != null) {
+                preferredRadio.setSelected(true);
+            } else {
+                channelFocusRadios.values().iterator().next().setSelected(true);
+            }
         }
 
         // Wire the "2+ channels selected" binding now that all checkboxes exist.
