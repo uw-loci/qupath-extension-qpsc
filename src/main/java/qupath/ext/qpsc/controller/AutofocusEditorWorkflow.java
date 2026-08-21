@@ -126,6 +126,32 @@ public class AutofocusEditorWorkflow {
             this.gapSpatialMultiplier = gapSpatialMultiplier;
         }
 
+        /**
+         * Value comparison over every editable field, used to tell whether the
+         * operator actually changed this objective's entry. Only changed entries
+         * are validated on save -- otherwise saving an edit to one objective pops
+         * warnings about a different objective's long-standing values, which reads
+         * as a warning about the objective being edited (reported 2026-08-21: a
+         * 20x edit surfaced "large for 40x objective" from the untouched 40x entry).
+         */
+        boolean sameValuesAs(AutofocusSettings o) {
+            if (o == null) return false;
+            return nSteps == o.nSteps
+                    && Double.compare(searchRangeUm, o.searchRangeUm) == 0
+                    && nTiles == o.nTiles
+                    && interpStrength == o.interpStrength
+                    && java.util.Objects.equals(interpKind, o.interpKind)
+                    && java.util.Objects.equals(scoreMetric, o.scoreMetric)
+                    && Double.compare(textureThreshold, o.textureThreshold) == 0
+                    && Double.compare(tissueAreaThreshold, o.tissueAreaThreshold) == 0
+                    && Double.compare(sweepRangeUm, o.sweepRangeUm) == 0
+                    && sweepNSteps == o.sweepNSteps
+                    && edgeRetries == o.edgeRetries
+                    && gapIndexMultiplier == o.gapIndexMultiplier
+                    && Double.compare(gapSpatialMultiplier, o.gapSpatialMultiplier) == 0
+                    && p98P2FallbackEnabled == o.p98P2FallbackEnabled;
+        }
+
         // Validation with detailed feedback
         List<String> validate() {
             List<String> warnings = new ArrayList<>();
@@ -1668,11 +1694,22 @@ public class AutofocusEditorWorkflow {
                 // Validate all settings
                 boolean hasErrors = false;
                 for (AutofocusSettings settings : workingSettings.values()) {
+                    // Only warn about entries the operator actually touched. Every
+                    // objective is written on every save, so validating all of them
+                    // would nag about untouched, deliberately-tuned values -- and the
+                    // warning text names a magnification, so a warning raised for a
+                    // different objective reads as a warning about the current one.
+                    AutofocusSettings onDisk = existingSettings.get(settings.objective);
+                    if (onDisk != null && settings.sameValuesAs(onDisk)) {
+                        continue;
+                    }
                     List<String> warnings = settings.validate();
                     if (!warnings.isEmpty()) {
                         boolean proceed = Dialogs.showConfirmDialog(
                                 "Validation Warnings for " + settings.objective,
-                                String.join("\n", warnings) + "\n\nContinue saving?");
+                                "Objective: " + settings.objective + "\n\n"
+                                        + String.join("\n", warnings)
+                                        + "\n\nContinue saving?");
                         if (!proceed) {
                             hasErrors = true;
                             break;
