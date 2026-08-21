@@ -357,7 +357,7 @@ If you want to build the extension yourself (for development or to get the lates
 
 ### Prerequisites
 
-- **Java 21+ JDK** (not just JRE) - download from https://adoptium.net/
+- **Java 25 JDK** (not just JRE) - download from https://adoptium.net/. QuPath 0.7.0's published artifacts require a JVM 25 to resolve, even though QuPath itself runs on Java 21; both CI workflows use Temurin 25.
 - **Git** for cloning repositories
 
 ### Clone repositories
@@ -438,34 +438,42 @@ For development with hot-reload via QuPath, clone the [qupath-qpsc-dev](https://
 
 After cloning the extension, IntelliJ requires a few configuration steps to build correctly with Gradle.
 
-#### 1. Set the Gradle JVM (Critical)
+#### 1. Set the Gradle JVM to Java 25 (Critical)
 
-This is the most common source of build errors. Gradle uses its own JVM setting that is separate from the Project SDK.
+This is the most common source of build errors. Gradle uses its own JVM setting, separate from the Project SDK, and **it must be Java 25** -- not 21, and not "any JDK 17+".
 
 Go to:
 `File -> Settings -> Build, Execution, Deployment -> Build Tools -> Gradle`
 
-Set **Gradle JVM** to **Java 21** (or any JDK 17+).
+Set **Gradle JVM** to **Java 25**.
 
-> **Common error if this is wrong:**
+> **Why 25 when QuPath itself runs on Java 21?** QuPath 0.7.0 publishes its Maven artifacts with `org.gradle.jvm.version=25`, so dependency *resolution* needs a JVM 25. The extension still compiles to Java 21 bytecode (`options.release = 21` in `build.gradle.kts`) so the jar loads on QuPath's Java 21 runtime. Both CI workflows use Temurin 25 -- if your local build disagrees with CI, this setting is the first thing to check.
+
+> **Common errors if this is wrong:**
+> ```
+> No matching variant of org.qupath:qupath-core:0.7.0 was found.
+> ... required a runtime of a library compatible with Java 21,
+> ... but the library requires a runtime compatible with Java 25
+> ```
+> or, on a much older JDK:
 > ```
 > Dependency requires at least JVM runtime version 11. This build uses a Java 8 JVM.
 > ```
-> This means Gradle is using an old JDK. Fix it by changing the Gradle JVM setting above -- not just the Project SDK.
+> Both mean Gradle is running on the wrong JDK. Fix the Gradle JVM setting above -- changing only the Project SDK will not help.
 
 #### 2. Set the Project SDK
 
 Go to:
 `File -> Project Structure -> Project`
 
-Set the **SDK** to **Java 21**. This should match the Gradle JVM above.
+Set the **SDK** to **Java 25**, matching the Gradle JVM above.
 
 #### 3. Install a JDK if Needed
 
-If Java 21 is not listed in either dropdown, IntelliJ can download one for you:
+If Java 25 is not listed in either dropdown, IntelliJ can download one for you:
 
 1. In either dropdown, select **"Download JDK..."**
-2. Choose **Version: 21**, **Vendor: Eclipse Temurin** (recommended) or Amazon Corretto
+2. Choose **Version: 25**, **Vendor: Eclipse Temurin** (matching CI) or Amazon Corretto
 3. Click **Download**
 
 Alternatively, install manually from [Adoptium Temurin](https://adoptium.net/) and point IntelliJ to the installation directory.
@@ -476,6 +484,8 @@ After updating JDK settings:
 
 1. Click the **Reload Gradle** button in the Gradle tool window, or go to `File -> Sync Project with Gradle Files`
 2. Run `./gradlew build` from the terminal or use the Gradle tool window in IntelliJ
+
+> **Note on `gradle.properties`:** this file is gitignored, so a fresh clone does not have one. If you create one to pin `org.gradle.java.home`, remember the path is machine-specific -- it will not carry to another system, which is exactly why it is not committed.
 
 </details>
 

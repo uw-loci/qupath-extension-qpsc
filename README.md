@@ -806,7 +806,8 @@ For development with hot-reload via QuPath:
 
 1. Clone the [qupath-qpsc-dev](https://github.com/uw-loci/qupath-qpsc-dev) repository (custom QuPath build with QPSC pre-installed)
 2. Open as a Gradle project in IntelliJ
-3. Run the QuPath main class to launch with the extension
+3. **Set the Gradle JVM to Java 25** (`Settings -> Build Tools -> Gradle`). QuPath 0.7.0's artifacts require a JVM 25 to resolve; the extension still targets Java 21 bytecode. Getting this wrong is the most common setup failure -- see [INSTALLATION.md](documentation/INSTALLATION.md#development-with-intellij-idea)
+4. Run the QuPath main class to launch with the extension
 
 </details>
 
