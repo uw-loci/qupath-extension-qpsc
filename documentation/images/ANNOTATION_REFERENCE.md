@@ -10,8 +10,14 @@
 > updated to match. If this file disagrees with the current dialog, the
 > current dialog wins -- fix this file as part of the same change.
 >
-> Last reconciled against the UI: **2026-07-22** (see per-image "Verified"
+> Last reconciled against the UI: **2026-08-22** (see per-image "Verified"
 > notes; unverified rows are carried over from the script and may be stale).
+>
+> **State as of 2026-08-22: none of the four images below carry annotations any
+> more.** All were re-captured raw on the Windows workstation, so every bracket
+> and circle is gone and every Y-band in `tools/annotate_screenshots.py` is
+> stale. No prose in the docs refers to the numbers, so the figures read fine
+> as-is; the tables below are the spec if someone re-runs the annotator.
 
 ## How the annotations are produced
 
@@ -59,7 +65,7 @@ so it can run in CI or a pre-push agent pass.
 
 ### Docs_ExistingImage_ConsolidatedDialog.png  (`annotate_existing_image_dialog`)
 Style: numbered brackets down the left margin.
-**Verified 2026-07-22: the committed image is a RAW re-capture with NO brackets,
+**Verified 2026-08-22: the committed image is a RAW re-capture with NO brackets,
 and the section list in the script is stale (it still says "Advanced Options").**
 Current real sections, top to bottom:
 
@@ -68,7 +74,7 @@ Current real sections, top to bottom:
 | 1 | Project & Sample | Sample Name, Project |
 | 2 | Hardware Configuration | Modality, Objective, Detector, WB Mode |
 | 3 | Alignment Configuration | Use existing / manual; saved transform; confidence |
-| 4 | Refinement Options | Proceed without / Single-tile / Full manual |
+| 4 | Refinement Options | Proceed without / Single-tile / Multi-tile / Full manual |
 | 5 | Modality-Specific Options | Autofocus + Modality Options (PPM Polarization Angles, Save as MDA) -- script mislabels this "Advanced Options" |
 | 6 | Z-Stack Options | Collapsed section -- new since the script was written |
 | 7 | Acquisition Preview | Annotations / Images / Est. time / storage |
@@ -78,10 +84,10 @@ and re-measure all Y-bands against the new capture.
 
 ### Docs_BoundedAcquisition.png  (`annotate_bounded_acquisition`)
 Style: numbered brackets down the left margin.
-**Verified 2026-07-22: brackets are present but MISALIGNED with the current
-layout** (e.g. #3 is labeled "Bounding Box Region" in the script but brackets
-Hardware Configuration; the collapsible sections shifted everything below
-Acquisition Region). Current real sections:
+**Verified 2026-08-22: the committed image is a RAW re-capture with NO brackets.**
+(The 2026-07-22 capture had brackets, but they were misaligned -- #3 was labeled
+"Bounding Box Region" in the script while bracketing Hardware Configuration.)
+Current real sections:
 
 | # | Target section | Notes |
 |---|----------------|-------|
@@ -114,10 +120,11 @@ does not number it. Add a target if you want it labeled.)
 
 ### Docs_LiveViewer.png  (`annotate_live_viewer`)
 Style: numbered circles at region centers + colored highlight boxes.
-**NOT re-verified 2026-07-22.** Flagged by the drift check (new XYZ position
-overlay toggle, histogram dock toggle, and more controls). The region model is
-likely still valid but the box coordinates need re-measuring, and a new toggle
-may deserve its own number.
+**Verified 2026-08-22: the committed image is a RAW re-capture with NO circles
+or highlight boxes.** The five-region model below still matches the window; only
+the box coordinates need re-measuring. The toolbar has since gained XYZ and
+Hist toggles, and the right panel now has three tabs (Navigate / Saved Points /
+Camera) -- either may deserve its own number.
 
 | # | Target region | Notes |
 |---|----------------|-------|

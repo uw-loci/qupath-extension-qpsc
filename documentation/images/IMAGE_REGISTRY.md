@@ -12,19 +12,20 @@ This file tracks the relationship between documentation screenshots and the Java
 |------------|-------------------|---------------|--------|
 | `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-05-27 | OK |
 | `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-05-27 | OK |
-| `Docs_AnnotationAcquisition.png` | `ui/AnnotationAcquisitionDialog.java` | 2026-07-23 | OK -- re-mapped from the broad ExistingImageAcquisitionController to the actual class selection dialog; the multi-tile refinement radio lives in the consolidated dialog, not here, so this no longer false-flags |
+| `Docs_AnnotationAcquisition.png` | `ui/AnnotationAcquisitionDialog.java` | 2026-08-22 | OK -- re-captured (unannotated). Mapped to the actual class selection dialog rather than the broad ExistingImageAcquisitionController; the multi-tile refinement radio lives in the consolidated dialog, not here, so this no longer false-flags |
 | `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | 2026-05-27 | OK |
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
 | `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | OK |
-| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-08-22 | OK -- re-captured (unannotated; the numbered callouts from the 2026-05-27 figure are gone) |
 | `Docs_BoundedAcquisition_TileGrid.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
 | `Docs_CameraControl.png` | `ui/CameraControlController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings_Alerts.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
 | `Docs_CrossInstrumentWorkflow.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
-| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-05-27 | OK |
+| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-08-22 | OK -- re-captured (unannotated). Modality / Z-stack panes are collapsed here; see `Docs_ExistingImage_Modality_Zstack.png` for those expanded |
 | `Docs_ExistingImage_FluorescenceProject.png` | Lab-meeting slide deck (QuPath project view; not a single UI class) | 2026-06-01 | OK |
-| `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | 2026-05-27 | OK |
+| `Docs_ExistingImage_Modality_Zstack.png` | `ui/ExistingImageAcquisitionController.java`, `modality/ppm/ui/PPMBoundingBoxUI.java` | 2026-08-22 | OK -- the MODALITY-SPECIFIC + Z-STACK panes expanded (PPM angles shown); companion to the consolidated-dialog figure |
+| `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | 2026-08-22 | OK -- re-captured (unannotated; the numbered callouts from the 2026-05-27 figure are gone) |
 | `Docs_LiveViewer_Navigate.png` | `ui/liveviewer/StageControlPanel.java` | -- | CHECK -- renamed from `Docs_LiveViewer_Position.png` (tab renamed Position -> Navigate 2026-07-22); needs re-capture |
 | `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` | 2026-07-22 | OK -- drift check false-flagged it on 2026-07-22 (shared source with Navigate); no visible change, no re-capture needed |
 | `Docs_LiveViewer_Camera.png` | `ui/liveviewer/LiveViewerWindow.java` (camera tab) | -- | CHECK -- previously untracked |
@@ -32,7 +33,8 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_MicroscopeAlignment_RefineAlignment.png` | `controller/workflow/SingleTileRefinement.java` (3-point / single-tile refinement dialog) | -- | CHECK -- SIFT refinement dialogs changed substantially; verify or re-capture |
 | `Docs_MultiTileRefinement.png` | `controller/workflow/MultiTileRefinement.java` (numbered multi-tile SIFT panel, initial state) | 2026-07-23 | OK |
 | `Docs_MultiTileRefinement2.png` | `controller/workflow/MultiTileRefinement.java` (per-point capture state) + SIFT Matching Settings dialog (`ui/SiftAutoAlignHelper.java`) | 2026-07-23 | OK |
-| `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | -- | CHECK -- new "Calibrate..." button since 2026-05-27 |
+| `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | 2026-08-22 | OK -- re-captured; single horizontal slide with macro overlay, now showing the Slide-placement dropdown and "Calibrate..." |
+| `Docs_StageMap2.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | 2026-08-22 | OK -- four-slide vertical carrier with per-slot macros. Supersedes `Docs_MultiSlide_StageMap.png` as the current-UI capture of this insert (that one predates the Slide-placement dropdown but is still the figure used in the multi-slide workflow doc) |
 | `Docs_DishCoverslipCalibration.png` | Diagram / `ui/stagemap/StageMapWindow.java` insert calibration | -- | CHECK -- previously untracked |
 | `Docs_PropagationManager.png` | `controller/ForwardPropagationWorkflow.java` | -- | CHECK -- previously untracked |
 | `Docs_NoiseCharacterization.png` | `ui/NoiseCharacterizationDialog.java` | -- | CHECK -- previously untracked |
@@ -42,7 +44,7 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_SystemArchitecture.png` | Lab-meeting slide deck (architecture diagram; not a UI class) | 2026-06-01 | OK |
 | `Docs_WorkflowOverview_Desktop.png` | Lab-meeting slide deck (full-desktop composite; multiple UI classes) | 2026-06-01 | OK |
 | `Docs_WhiteBalanceCalibration.png` | `ui/WhiteBalanceDialog.java` | 2026-05-27 | OK |
-| `Docs_mainmenu.png` | `SetupScope.java` | -- | CHECK -- menu changes since 2026-05-27 |
+| `Docs_mainmenu.png` | `SetupScope.java` | 2026-08-22 | OK -- re-captured after the Light Path Orientation / Migrate Flipped Duplicates menu additions |
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |
 | `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | 2026-07-23 | OK |
 | `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | 2026-07-23 | OK |
@@ -60,7 +62,6 @@ This file tracks the relationship between documentation screenshots and the Java
 | Alignment Refinement with SIFT | `controller/workflow/SingleTileRefinement.java` | `Docs_AlignmentRefinementSIFT.png` |
 | Propagation Manager | `controller/ForwardPropagationWorkflow.java` | `Docs_PropagationManager.png` |
 | Z-Stack / Time-Lapse Dialog | `controller/StackTimeLapseWorkflow.java` | `Docs_ZStackTimeLapse.png` |
-| PPM modality options (angles) in acquisition dialog | `modality/ppm/*` UI section | `Docs_PPM_ModalityOptions.png` |
 | PPM Polarizer Calibration dialog | qupath-extension-ppm | `Docs_PPM_PolarizerCalibration.png` |
 | PPM Birefringence Optimization dialog | qupath-extension-ppm | `Docs_PPM_BirefringenceOptimization.png` |
 | PPM Reference Slide / Sunburst calibration | qupath-extension-ppm | `Docs_PPM_ReferenceSlide.png` |

@@ -9,6 +9,10 @@ Visual representation of the microscope stage insert showing slide positions. He
 
 ![Stage Map window](../images/Docs_StageMap.png)
 
+The layout drawn on the canvas follows the **Insert** dropdown. Above is a single horizontal slide with its macro overlaid; below is the four-slide vertical carrier used for [Multi-Slide Batch Acquisition](multi-slide-acquisition.md), where each slot shows its assigned macro and the green region selected for acquisition. **Overlay Macro** is greyed out for multi-slot carriers -- a single macro belongs to one slot, so the per-slot previews are used instead.
+
+![Stage Map showing the four-slide vertical carrier: each of the four slots holds an assigned slide macro with a green acquisition region, and the lime crosshair marks the current stage position in slot 4](../images/Docs_StageMap2.png)
+
 ## Prerequisites
 
 - Connected to microscope server (see [Communication Settings](server-connection.md))
