@@ -487,6 +487,36 @@ After updating JDK settings:
 
 > **Note on `gradle.properties`:** this file is gitignored, so a fresh clone does not have one. If you create one to pin `org.gradle.java.home`, remember the path is machine-specific -- it will not carry to another system, which is exactly why it is not committed.
 
+#### 5. Create the QuPath Run Configuration
+
+The dev build launches through Gradle's `run` task, which lives on the **root** project (the root
+`build.gradle.kts` applies `qupath.application-conventions`).
+
+`Run -> Edit Configurations -> + -> Gradle`, then:
+
+| Field | Value |
+|---|---|
+| Name | `QuPath` (anything) |
+| Run | `run` |
+| Gradle project | the **absolute path** to your clone, e.g. `C:\qpsc-extension\qupath-qpsc-dev` |
+
+> **Always pick the Gradle project with the folder icon -- do not type the project name.** The field
+> stores an absolute path internally but *displays* only the project's name, so a correct config and a
+> broken one look identical in the dialog. If you type `qupath` (which is `rootProject.name` in
+> `settings.gradle.kts`), IntelliJ treats it as a relative path and resolves it against your user home:
+>
+> ```
+> The specified project directory 'C:\Users\<you>\qupath' does not exist.
+> ```
+>
+> That message comes from Gradle itself, not QuPath. The giveaway is the path shape --
+> `%USERPROFILE%` + `\qupath` -- pointing at a directory you never created. Replace the field with the
+> full path to the clone.
+
+If the folder picker offers nothing, the build is not linked: in the **Gradle** tool window click **+**
+(Link Gradle Project), select `<clone>/settings.gradle.kts`, let it sync, then set the field. A sync
+that fails outright is usually the Gradle JVM (step 1) rather than anything about the run configuration.
+
 </details>
 
 ---
