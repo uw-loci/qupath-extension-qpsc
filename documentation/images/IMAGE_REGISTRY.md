@@ -34,7 +34,6 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_MultiTileRefinement.png` | `controller/workflow/MultiTileRefinement.java` (numbered multi-tile SIFT panel, initial state) | 2026-07-23 | OK |
 | `Docs_MultiTileRefinement2.png` | `controller/workflow/MultiTileRefinement.java` (per-point capture state) + SIFT Matching Settings dialog (`ui/SiftAutoAlignHelper.java`) | 2026-07-23 | OK |
 | `Docs_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | 2026-08-22 | OK -- re-captured; single horizontal slide with macro overlay, now showing the Slide-placement dropdown and "Calibrate..." |
-| `Docs_StageMap2.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` | 2026-08-22 | OK -- four-slide vertical carrier with per-slot macros. Supersedes `Docs_MultiSlide_StageMap.png` as the current-UI capture of this insert (that one predates the Slide-placement dropdown but is still the figure used in the multi-slide workflow doc) |
 | `Docs_DishCoverslipCalibration.png` | Diagram / `ui/stagemap/StageMapWindow.java` insert calibration | -- | CHECK -- previously untracked |
 | `Docs_PropagationManager.png` | `controller/ForwardPropagationWorkflow.java` | -- | CHECK -- previously untracked |
 | `Docs_NoiseCharacterization.png` | `ui/NoiseCharacterizationDialog.java` | -- | CHECK -- previously untracked |
@@ -48,7 +47,7 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |
 | `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | 2026-07-23 | OK |
 | `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | 2026-07-23 | OK |
-| `Docs_MultiSlide_StageMap.png` | `ui/stagemap/StageMapWindow.java` (multi-slide holder preview) | 2026-07-23 | OK |
+| `Docs_MultiSlide_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` (four-slide vertical carrier) | 2026-08-22 | OK -- re-captured; also used in stage-map.md as the multi-slot counterpart to the single-slide figure |
 
 ## Missing Screenshots (UI exists but no image)
 
