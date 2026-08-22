@@ -110,6 +110,42 @@ Front-load your decisions in the setup pass, then leave it running.
 > focus Z it establishes seeds that slot's first-tile autofocus in the acquire
 > pass, so acquisition starts near focus instead of hunting.
 
+### Automating the setup pass (experimental)
+
+The setup pass is the part that still needs an operator. The preference
+**Setup-pass automation** (Edit > Preferences > *QuPath SCope Multi-Slide*) can
+confirm each setup dialog for you:
+
+| Mode | Behavior |
+|------|----------|
+| `MANUAL` (default) | Every setup dialog waits for you. |
+| `FULLY_AUTOMATIC` | Each dialog confirms its primary action after 1 second; interacting with a dialog does **not** pause it. |
+| `AUTOMATIC_WITH_OVERRIDE` | Each dialog counts down -- the primary button shows the seconds remaining, e.g. **Continue (auto 7s)** -- then confirms. Clicking or typing in the dialog cancels the countdown and gives the **rest of that slide** back to you; the next slide resumes automatically. |
+
+Only the confirm control is ever pressed ("Collect Regions", "Start Acquisition",
+"Current Position is Accurate", "Continue") -- never Cancel, Back, or "Save MDA...".
+If that control is disabled, the countdown stops rather than firing and the slide
+is handed back to you.
+
+The countdown length lives in the microscope YAML so it can differ per scope
+(default 10 seconds when the key is absent):
+
+```yaml
+acquisition:
+  multislide:
+    auto_advance_seconds: 10
+```
+
+The mode is read when a driver starts, so changing it mid-batch takes effect at
+the next **Set Up All Remaining** / **Acquire All Set-Up**. **Run Single** and
+the other per-row buttons always stay manual.
+
+> **Not yet a walk-away setup pass.** An auto-confirmed alignment accepts
+> whatever position the base transform predicted, with nobody comparing it to the
+> live view. Automatic reference-tile picking and the server-side "find tissue,
+> then focus" jog are still to come; until then these modes are for exercising
+> the automation, not for runs you intend to keep. Leave `MANUAL` for real work.
+
 ### Manual, one slot at a time
 
 Use the **Status** dropdown to mark a slot **Done** (acquired outside the batch)

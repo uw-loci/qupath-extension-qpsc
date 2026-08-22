@@ -108,6 +108,12 @@ public class QPPreferenceDialog {
     private static final BooleanProperty saveRawTilesProperty =
             PathPrefs.createPersistentPreference("saveRawTilesProperty", false);
 
+    // How much of the multi-slide SETUP pass runs without a human. Stored as the enum
+    // name(); MultiSlideAcquisitionMode.fromPreferenceValue degrades anything unrecognised
+    // to MANUAL, so a stale or hand-edited value can never start an unattended run.
+    private static final StringProperty multiSlideAcquisitionModeProperty =
+            PathPrefs.createPersistentPreference("multiSlideAcquisitionMode", MultiSlideAcquisitionMode.MANUAL.name());
+
     // TEST-ONLY: when true, the multi-slide batch reuses each slot's saved per-slide
     // alignment instead of re-deriving it. UNSAFE for real runs (assumes the holder is
     // untouched since setup). Default false; a per-batch confirmation dialog still fires.
@@ -231,6 +237,7 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference("autofocusEditorAdvancedMode", false);
 
     // --- Notification / Alert preferences ---
+    private static final String MULTISLIDE_CATEGORY = "QuPath SCope Multi-Slide";
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
     private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
 
@@ -397,9 +404,36 @@ public class QPPreferenceDialog {
                         + "Useful for troubleshooting background subtraction.\n"
                         + "WARNING: Doubles file I/O time during acquisition.")
                 .build());
+        List<String> multiSlideModeChoices = new ArrayList<>();
+        for (MultiSlideAcquisitionMode m : MultiSlideAcquisitionMode.values()) {
+            multiSlideModeChoices.add(m.name());
+        }
+        items.add(new PropertyItemBuilder<>(multiSlideAcquisitionModeProperty, String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+                .name("Setup-pass automation")
+                .category(MULTISLIDE_CATEGORY)
+                .choices(multiSlideModeChoices)
+                .description("How much of the multi-slide SETUP pass runs without a human.\n"
+                        + "The ACQUIRE pass is already unattended in every mode.\n"
+                        + "\n"
+                        + "MANUAL -- today's flow: every setup dialog waits for you.\n"
+                        + "FULLY_AUTOMATIC -- each dialog confirms its primary action almost\n"
+                        + "  immediately; interacting with a dialog does NOT pause it.\n"
+                        + "AUTOMATIC_WITH_OVERRIDE -- each dialog counts down, then confirms.\n"
+                        + "  Clicking or typing in a dialog cancels the countdown and hands the\n"
+                        + "  rest of THAT SLIDE back to you; automation resumes at the next slide.\n"
+                        + "\n"
+                        + "The countdown length comes from the microscope YAML\n"
+                        + "(acquisition > multislide > auto_advance_seconds, default 10).\n"
+                        + "\n"
+                        + "WARNING: an auto-confirmed alignment accepts whatever position the base\n"
+                        + "transform predicted, with no human check. Reference-tile auto-pick and the\n"
+                        + "server-side tissue jog are not built yet, so the automatic modes are\n"
+                        + "unvalidated for production runs. Leave on MANUAL unless you are testing.")
+                .build());
         items.add(new PropertyItemBuilder<>(multiSlideReuseAlignmentProperty, Boolean.class)
                 .name("Reuse saved alignment (TESTING ONLY)")
-                .category(CATEGORY)
+                .category(MULTISLIDE_CATEGORY)
                 .description("TESTING ONLY -- assumes the holder has NOT been touched.\n"
                         + "When on, the multi-slide batch reuses each slot's saved per-slide\n"
                         + "alignment instead of re-aligning (slots with no saved alignment still\n"
@@ -977,6 +1011,15 @@ public class QPPreferenceDialog {
      */
     public static boolean getMultiSlideReuseAlignmentProperty() {
         return multiSlideReuseAlignmentProperty.get();
+    }
+
+    /**
+     * Returns the persisted multi-slide setup-pass automation mode, degrading to
+     * {@link MultiSlideAcquisitionMode#MANUAL} when the stored value is missing or
+     * unrecognised. Read once at batch start, not per dialog.
+     */
+    public static MultiSlideAcquisitionMode getMultiSlideAcquisitionMode() {
+        return MultiSlideAcquisitionMode.fromPreferenceValue(multiSlideAcquisitionModeProperty.get());
     }
 
     public static Double getTileOverlapPercentProperty() {

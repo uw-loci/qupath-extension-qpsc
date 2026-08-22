@@ -43,6 +43,7 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.AttentionPulse;
+import qupath.ext.qpsc.ui.AutoAdvanceController;
 import qupath.ext.qpsc.ui.DialogPlacement;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
@@ -51,6 +52,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MultiSlideAcquisitionEstimator;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -671,6 +673,18 @@ public final class MultiSlideExistingImageWorkflow {
         java.util.function.Consumer<Boolean> setBusy = busy -> {
             panelBusy[0] = busy;
             setPanelBusy(states, driverButtons, finishBtn, busy);
+            // Auto-advance is scoped to a running batch driver: armed here so the setup
+            // dialogs can auto-confirm, disarmed the moment the driver stops. Per-row
+            // (single-slot) actions do not go through setBusy, so they stay manual --
+            // which is what an operator clicking one row expects.
+            if (busy) {
+                AutoAdvanceController.armSession(
+                        QPPreferenceDialog.getMultiSlideAcquisitionMode(),
+                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
+                                .getMultiSlideAutoAdvanceSeconds());
+            } else {
+                AutoAdvanceController.disarmSession();
+            }
             updateNextStep.run();
         };
 
@@ -1043,6 +1057,10 @@ public final class MultiSlideExistingImageWorkflow {
             SlotJumpAutofocus.clearStatusSink();
             intendedSlotEntry = null;
             batchAbortAction = null;
+            // Arming is process-global, so it must not outlive this panel: an abort can close
+            // the panel without setBusy(false) ever running, and a later single-image workflow
+            // would otherwise inherit auto-advance.
+            AutoAdvanceController.disarmSession();
             nextStepPulse.clear();
             DialogPlacement.clearBatchAnchor();
         });
@@ -1106,6 +1124,7 @@ public final class MultiSlideExistingImageWorkflow {
                 "MS workflow: launching single-slide workflow for slot {} ({})",
                 s.assignment.position(),
                 s.assignment.entry().getImageName());
+        AutoAdvanceController.beginSlide();
         s.setStatus(Status.IN_PROGRESS);
         refreshFinish.run();
         CompletableFuture<Boolean> acquired = new CompletableFuture<>();
@@ -1161,6 +1180,8 @@ public final class MultiSlideExistingImageWorkflow {
                 "MS workflow: setup pass for slot {} ({})",
                 s.assignment.position(),
                 s.assignment.entry().getImageName());
+        // A previous slot's operator takeover does not carry into this one.
+        AutoAdvanceController.beginSlide();
         CompletableFuture<Void> done = new CompletableFuture<>();
         double[] slotCenter = WorkflowHelpers.resolveSlotCenterStageXY(carrier, s.assignment.position());
         // TEST-ONLY: reuseAlignment (pref + per-batch confirm) lets the setup pass reuse a

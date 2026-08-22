@@ -750,6 +750,32 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Countdown, in seconds, before a multi-slide setup dialog auto-confirms its
+     * primary action in the automatic acquisition modes. Read from
+     * {@code acquisition > multislide > auto_advance_seconds}.
+     *
+     * <p>The key is optional -- a scope that never runs unattended batches does not
+     * need it. Missing, unparseable, or negative values fall back to
+     * {@value #DEFAULT_AUTO_ADVANCE_SECONDS}. The value is clamped to
+     * {@value #MAX_AUTO_ADVANCE_SECONDS} so a typo cannot stall a batch for hours.
+     *
+     * @return countdown seconds, always in [0, {@value #MAX_AUTO_ADVANCE_SECONDS}]
+     */
+    public int getMultiSlideAutoAdvanceSeconds() {
+        Integer v = getInteger("acquisition", "multislide", "auto_advance_seconds");
+        if (v == null || v < 0) {
+            return DEFAULT_AUTO_ADVANCE_SECONDS;
+        }
+        return Math.min(v, MAX_AUTO_ADVANCE_SECONDS);
+    }
+
+    /** Default multi-slide auto-advance countdown when the YAML does not set one. */
+    public static final int DEFAULT_AUTO_ADVANCE_SECONDS = 10;
+
+    /** Upper clamp on the auto-advance countdown, so a typo cannot stall a batch. */
+    public static final int MAX_AUTO_ADVANCE_SECONDS = 300;
+
+    /**
      * Retrieves a Double value from the config or resources.
      *
      * @param keys Sequence of keys.

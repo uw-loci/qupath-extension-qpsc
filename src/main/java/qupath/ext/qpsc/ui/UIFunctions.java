@@ -614,6 +614,11 @@ public class UIFunctions {
                 future.complete(false);
             });
 
+            // Multi-slide auto-advance: no-op unless a batch armed an automatic mode.
+            // Reached by both the single alignment confirm and every per-tile confirm in
+            // multi-tile refinement, so one attachment covers both.
+            AutoAdvanceController.attach(stage, confirmButton);
+
             stage.centerOnScreen();
             stage.show();
         };

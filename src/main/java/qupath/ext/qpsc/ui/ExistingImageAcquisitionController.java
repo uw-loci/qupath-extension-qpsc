@@ -558,6 +558,9 @@ public class ExistingImageAcquisitionController {
                 return createResult();
             });
 
+            // Multi-slide auto-advance: no-op unless a batch armed an automatic mode.
+            // Fires startType specifically -- never the "Save MDA..." secondary or Cancel.
+            AutoAdvanceController.attach(dialog, startType);
             return dialog.showAndWait();
         }
 

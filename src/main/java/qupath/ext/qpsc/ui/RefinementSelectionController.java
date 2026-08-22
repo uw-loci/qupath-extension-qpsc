@@ -282,6 +282,8 @@ public class RefinementSelectionController {
                     return null;
                 });
 
+                // Multi-slide auto-advance: no-op unless a batch armed an automatic mode.
+                AutoAdvanceController.attach(dialog, continueButton);
                 dialog.showAndWait().ifPresent(future::complete);
                 if (!future.isDone()) {
                     future.complete(null);

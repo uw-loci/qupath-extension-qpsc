@@ -190,6 +190,8 @@ public class AnnotationAcquisitionDialog {
                 }
             });
 
+            // Multi-slide auto-advance: no-op unless a batch armed an automatic mode.
+            AutoAdvanceController.attach(dialog, collectButton);
             dialog.show();
         });
 

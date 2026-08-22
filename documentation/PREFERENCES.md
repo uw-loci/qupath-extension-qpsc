@@ -46,6 +46,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Disable All Autofocus (Danger)](#disable-all-autofocus-danger) | Boolean | OFF | Send `--af-disabled` on the wire so server runs zero AF |
 | Save Raw Tiles | Boolean | OFF | Save unprocessed tiles alongside corrected |
 | Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
+| [Setup-pass automation](#setup-pass-automation) | Choice | MANUAL | How much of the multi-slide setup pass runs without a human |
 | [Reuse saved alignment (TESTING ONLY)](#reuse-saved-alignment-testing-only) | Boolean | OFF | Multi-slide batch alignment reuse (UNSAFE, testing only) |
 | [Autofocus on slot jump](#autofocus-on-slot-jump) | Boolean | ON | Auto-focus after stage reaches each slot during multi-slide batch |
 | [Force Camera View on alignment start](#force-camera-view-on-alignment-start) | Boolean | ON | Switch Stage Map to Camera View when multi-slide alignment starts |
@@ -906,6 +907,55 @@ The zoom is best-effort: if no bounding-box preview is currently set on the Stag
 **When to Disable:**
 - You prefer a full-insert view for alignment navigation
 - Your Stage Map previews are inaccurate for some slots
+
+---
+
+### Setup-pass automation
+
+| Property | Value |
+|----------|-------|
+| Type | Choice (`MANUAL`, `FULLY_AUTOMATIC`, `AUTOMATIC_WITH_OVERRIDE`) |
+| Default | `MANUAL` |
+| Requires Restart | No |
+| Category | QuPath SCope Multi-Slide |
+
+**Description:**
+
+A multi-slide batch runs in two passes: an interactive **SETUP** pass (align, refine, and
+configure each slide) followed by an **ACQUIRE** pass that is already unattended. This
+preference governs the setup pass only — the acquire pass shows no dialogs in any mode.
+
+| Value | Behavior |
+|-------|----------|
+| `MANUAL` | Today's flow. Every setup dialog waits for you. |
+| `FULLY_AUTOMATIC` | Each setup dialog confirms its primary action after 1 second. Interacting with a dialog does **not** pause it. |
+| `AUTOMATIC_WITH_OVERRIDE` | Each setup dialog counts down (showing the remaining seconds in the button label), then confirms its primary action. Clicking or typing in a dialog cancels that countdown and hands the **rest of that slide** back to you; automation resumes at the next slide. |
+
+The countdown length comes from the microscope YAML, not from this dialog — see
+`acquisition > multislide > auto_advance_seconds` below. The mode is read once when a batch
+driver starts ("Set Up All Remaining" / "Acquire All Set-Up"), so changing it mid-batch has
+no effect until the next driver run. Per-row single-slot buttons always stay manual.
+
+**Which button gets confirmed:** only the primary/confirm control — "Collect Regions",
+"Start Acquisition", "Current Position is Accurate", "Continue". Never Cancel, never Back,
+and never a secondary action such as "Save MDA...". If the primary button is *disabled*
+(for example "Collect Regions" with no annotations matching the selected classes), the
+countdown stops instead of firing, and that slide is handed back to you.
+
+**Configuring the countdown** (optional; defaults to 10 seconds when absent):
+
+```yaml
+acquisition:
+  multislide:
+    auto_advance_seconds: 10   # 0 = confirm at once; clamped to 300
+```
+
+> **WARNING — not yet validated for production.** An auto-confirmed alignment accepts
+> whatever position the base transform predicted, with no human comparing it against the
+> live view. Automatic reference-tile selection and the server-side "find tissue, then
+> focus" jog are **not built yet**; until they are, the automatic modes are for testing the
+> automation itself, not for unattended runs you intend to keep. Leave this on `MANUAL`
+> for real acquisition.
 
 ---
 
