@@ -140,11 +140,21 @@ The mode is read when a driver starts, so changing it mid-batch takes effect at
 the next **Set Up All Remaining** / **Acquire All Set-Up**. **Run Single** and
 the other per-row buttons always stay manual.
 
+**Reference tiles are picked for you.** In an automatic mode, multi-tile refinement no
+longer opens the "Select Tile" dialog for each point. Tiles are chosen automatically:
+only tiles whose full ring of 8 neighbours is present and whose centre is inside the
+annotation are eligible (so the camera does not land half on background), those are
+ranked by how much texture they contain (SIFT needs structure), and three well-separated
+ones are taken. If nothing qualifies -- tissue thinner than three tiles across, for
+instance -- you are asked to pick by hand as before, rather than a poor tile being chosen
+silently. You still press **Select tile** and **Solve** in the refinement panel.
+
 > **Not yet a walk-away setup pass.** An auto-confirmed alignment accepts
 > whatever position the base transform predicted, with nobody comparing it to the
-> live view. Automatic reference-tile picking and the server-side "find tissue,
-> then focus" jog are still to come; until then these modes are for exercising
-> the automation, not for runs you intend to keep. Leave `MANUAL` for real work.
+> live view. The server-side "find tissue, then focus" jog that would recover
+> from a bad landing is still to come, as is the policy for what happens when SIFT
+> returns low confidence. Until then these modes are for exercising the automation, not
+> for runs you intend to keep. Leave `MANUAL` for real work.
 
 ### Manual, one slot at a time
 

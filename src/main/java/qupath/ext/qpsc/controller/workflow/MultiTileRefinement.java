@@ -119,8 +119,51 @@ public class MultiTileRefinement {
                 trustSift,
                 confidenceThreshold,
                 annotations == null ? 0 : annotations.size());
-        Platform.runLater(() -> showPanel(gui, initialTransform, trustSift, confidenceThreshold, future));
+        // In an automatic multi-slide batch, pick the reference tiles up front so each capture
+        // step consumes one instead of waiting for a click. An empty list (tissue thinner than
+        // three tiles, or no grid measurements) falls straight back to manual picking -- the
+        // operator is asked rather than a boundary tile being chosen silently.
+        List<PathObject> autoTiles = resolveAutoTiles(gui, annotations);
+        Platform.runLater(() -> showPanel(gui, initialTransform, trustSift, confidenceThreshold, future, autoTiles));
         return future;
+    }
+
+    /**
+     * Reference tiles chosen by {@link ReferenceTileSelector}, or an empty list when the
+     * operator should pick by hand: manual mode, a slide the operator has taken over, or a
+     * slide where nothing survives the interior filter.
+     */
+    private static List<PathObject> resolveAutoTiles(QuPathGUI gui, List<PathObject> annotations) {
+        if (!qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
+                || qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide()) {
+            return List.of();
+        }
+        if (gui == null || gui.getImageData() == null) {
+            return List.of();
+        }
+        var hierarchy = gui.getImageData().getHierarchy();
+        List<PathObject> tiles = hierarchy.getDetectionObjects().stream()
+                .filter(o -> o.getMeasurements().containsKey("TileNumber"))
+                .toList();
+        java.util.Map<String, qupath.lib.roi.interfaces.ROI> tissueByName = new java.util.HashMap<>();
+        if (annotations != null) {
+            for (PathObject a : annotations) {
+                if (a.getName() != null && a.getROI() != null) {
+                    tissueByName.put(a.getName(), a.getROI());
+                }
+            }
+        }
+        List<PathObject> chosen = ReferenceTileSelector.select(
+                tiles, tissueByName, gui.getImageData().getServer(), ReferenceTileSelector.DEFAULT_TILE_COUNT);
+        if (chosen.isEmpty()) {
+            logger.warn("Multi-tile: automatic reference-tile selection found nothing; falling back to manual picking");
+        } else {
+            logger.info(
+                    "Multi-tile: auto-picked {} reference tile(s): {}",
+                    chosen.size(),
+                    chosen.stream().map(PathObject::getName).toList());
+        }
+        return chosen;
     }
 
     private static void showPanel(
@@ -128,8 +171,11 @@ public class MultiTileRefinement {
             AffineTransform initialTransform,
             boolean trustSift,
             double confidenceThreshold,
-            CompletableFuture<SingleTileRefinement.RefinementResult> future) {
+            CompletableFuture<SingleTileRefinement.RefinementResult> future,
+            List<PathObject> autoTiles) {
 
+        // Consumed in order by successive capture steps; empty means "ask the operator".
+        java.util.Deque<PathObject> pendingAutoTiles = new java.util.ArrayDeque<>(autoTiles);
         List<PointMeasure> points = new ArrayList<>();
         // The transform used to PREDICT the next point's stage position. Starts as the
         // initial alignment and is refined after every captured point (translation-only
@@ -284,7 +330,8 @@ public class MultiTileRefinement {
                             trustSift,
                             confidenceThreshold,
                             captureSlot,
-                            points)
+                            points,
+                            pendingAutoTiles.poll())
                     .whenComplete((measure, ex) -> Platform.runLater(() -> {
                         if (ex != null) {
                             logger.warn("Multi-tile point capture failed: {}", ex.getMessage());
@@ -381,105 +428,113 @@ public class MultiTileRefinement {
             boolean trustSift,
             double confidenceThreshold,
             VBox captureSlot,
-            List<PointMeasure> alreadySelected) {
+            List<PointMeasure> alreadySelected,
+            PathObject preselectedTile) {
 
         CompletableFuture<PointMeasure> future = new CompletableFuture<>();
 
-        qupath.ext.qpsc.ui.UIFunctions.promptTileSelectionDialogAsync("Select reference tile #" + pointNumber
-                        + " for multi-tile refinement.\n"
-                        + "The microscope will move to its predicted position, then SIFT (or a manual nudge) "
-                        + "captures where it actually is.")
-                .thenAccept(tile -> {
-                    if (tile == null || tile.getROI() == null) {
-                        logger.info("Multi-tile: tile selection cancelled for point {}", pointNumber);
-                        future.complete(null);
-                        return;
-                    }
-                    if (isTileAlreadySelected(tile, alreadySelected)) {
-                        String label = tile.getName() != null ? tile.getName() : ("TileNumber " + tileNumber(tile));
-                        logger.info(
-                                "Multi-tile: tile '{}' already captured for a prior point; rejecting re-selection",
-                                label);
-                        Platform.runLater(() -> Dialogs.showWarningNotification(
-                                "Tile already used",
-                                "That tile was already captured for this refinement. Select a different tile."));
-                        future.complete(null);
-                        return;
-                    }
-                    double[] tileCoords = {
-                        tile.getROI().getCentroidX(), tile.getROI().getCentroidY()
-                    };
-                    double[] predictedStage =
-                            TransformationFunctions.transformQuPathFullResToStage(tileCoords, estimate);
-                    // DIAGNOSTIC (2026-07-12 diagonal-transform test): the actual QuPath->stage
-                    // mapping for a real tile, using the running estimate. With the diagonal fix,
-                    // QuPath-X should drive stage-X (not stage-Y). The first point's move (raw
-                    // initial transform) should land near the picked tile; 90-deg-off means the
-                    // transform is still axis-swapped -- stop and re-check.
-                    logger.info(
-                            "Multi-tile point {}: tile '{}' QuPath centroid ({}, {}) -> predicted stage ({}, {})",
-                            pointNumber,
-                            tile.getName(),
-                            tileCoords[0],
-                            tileCoords[1],
-                            predictedStage[0],
-                            predictedStage[1]);
-                    Platform.runLater(() -> WorkflowHelpers.centerAndSelectTile(gui, tile));
+        // A pre-picked tile skips the selection dialog entirely; everything downstream (move,
+        // autofocus, SIFT / manual capture, the already-used guard) is identical either way.
+        CompletableFuture<PathObject> tileSource;
+        if (preselectedTile != null) {
+            logger.info(
+                    "Multi-tile point {}: using auto-picked tile '{}' (no selection dialog)",
+                    pointNumber,
+                    preselectedTile.getName());
+            tileSource = CompletableFuture.completedFuture(preselectedTile);
+        } else {
+            tileSource = qupath.ext.qpsc.ui.UIFunctions.promptTileSelectionDialogAsync("Select reference tile #"
+                    + pointNumber
+                    + " for multi-tile refinement.\n"
+                    + "The microscope will move to its predicted position, then SIFT (or a manual nudge) "
+                    + "captures where it actually is.");
+        }
+        tileSource.thenAccept(tile -> {
+            if (tile == null || tile.getROI() == null) {
+                logger.info("Multi-tile: tile selection cancelled for point {}", pointNumber);
+                future.complete(null);
+                return;
+            }
+            if (isTileAlreadySelected(tile, alreadySelected)) {
+                String label = tile.getName() != null ? tile.getName() : ("TileNumber " + tileNumber(tile));
+                logger.info("Multi-tile: tile '{}' already captured for a prior point; rejecting re-selection", label);
+                Platform.runLater(() -> Dialogs.showWarningNotification(
+                        "Tile already used",
+                        "That tile was already captured for this refinement. Select a different tile."));
+                future.complete(null);
+                return;
+            }
+            double[] tileCoords = {tile.getROI().getCentroidX(), tile.getROI().getCentroidY()};
+            double[] predictedStage = TransformationFunctions.transformQuPathFullResToStage(tileCoords, estimate);
+            // DIAGNOSTIC (2026-07-12 diagonal-transform test): the actual QuPath->stage
+            // mapping for a real tile, using the running estimate. With the diagonal fix,
+            // QuPath-X should drive stage-X (not stage-Y). The first point's move (raw
+            // initial transform) should land near the picked tile; 90-deg-off means the
+            // transform is still axis-swapped -- stop and re-check.
+            logger.info(
+                    "Multi-tile point {}: tile '{}' QuPath centroid ({}, {}) -> predicted stage ({}, {})",
+                    pointNumber,
+                    tile.getName(),
+                    tileCoords[0],
+                    tileCoords[1],
+                    predictedStage[0],
+                    predictedStage[1]);
+            Platform.runLater(() -> WorkflowHelpers.centerAndSelectTile(gui, tile));
 
-                    // Stage move is socket I/O: run off the FX thread. Then embed the shared
-                    // capture pane on the FX thread and let it drive SIFT / manual capture.
-                    new Thread(
-                                    () -> {
-                                        try {
-                                            MicroscopeController.getInstance()
-                                                    .moveStageXY(predictedStage[0], predictedStage[1]);
-                                            Thread.sleep(500);
-                                            // Autofocus-on-jump before capture, so the tile is in
-                                            // focus when the capture pane appears. Honors the same
-                                            // multiSlideAutofocusOnJump preference as the slot jump
-                                            // (default on; no-op when disabled/disconnected). We are
-                                            // off the FX thread here, so block until AF settles -- the
-                                            // returned future always completes.
-                                            SlotJumpAutofocus.runAfterSlotMove().join();
-                                            Platform.runLater(() -> {
-                                                // Multi-slide alignment-step start: force Camera View
-                                                // + zoom to tissue once, at the first point (no-op
-                                                // outside a batch / when the map is closed).
-                                                if (pointNumber == 1) {
-                                                    MultiSlideExistingImageWorkflow.applyAlignStartViewAssists();
-                                                }
-                                                SiftAutoAlignHelper.drawSearchRangeOnStageMap(
-                                                        gui, tile, predictedStage[0], predictedStage[1]);
-                                                hostCapturePane(
-                                                        stage,
-                                                        captureSlot,
-                                                        gui,
-                                                        tile,
-                                                        tileCoords,
-                                                        trustSift,
-                                                        confidenceThreshold,
-                                                        future);
-                                            });
-                                        } catch (Exception ex) {
-                                            logger.warn(
-                                                    "Multi-tile point {} stage move failed: {} -- manual capture",
-                                                    pointNumber,
-                                                    ex.getMessage());
-                                            // Move failed: present the pane in manual mode (no auto-SIFT).
-                                            Platform.runLater(() -> hostCapturePane(
-                                                    stage,
-                                                    captureSlot,
-                                                    gui,
-                                                    tile,
-                                                    tileCoords,
-                                                    false,
-                                                    confidenceThreshold,
-                                                    future));
+            // Stage move is socket I/O: run off the FX thread. Then embed the shared
+            // capture pane on the FX thread and let it drive SIFT / manual capture.
+            new Thread(
+                            () -> {
+                                try {
+                                    MicroscopeController.getInstance()
+                                            .moveStageXY(predictedStage[0], predictedStage[1]);
+                                    Thread.sleep(500);
+                                    // Autofocus-on-jump before capture, so the tile is in
+                                    // focus when the capture pane appears. Honors the same
+                                    // multiSlideAutofocusOnJump preference as the slot jump
+                                    // (default on; no-op when disabled/disconnected). We are
+                                    // off the FX thread here, so block until AF settles -- the
+                                    // returned future always completes.
+                                    SlotJumpAutofocus.runAfterSlotMove().join();
+                                    Platform.runLater(() -> {
+                                        // Multi-slide alignment-step start: force Camera View
+                                        // + zoom to tissue once, at the first point (no-op
+                                        // outside a batch / when the map is closed).
+                                        if (pointNumber == 1) {
+                                            MultiSlideExistingImageWorkflow.applyAlignStartViewAssists();
                                         }
-                                    },
-                                    "MultiTile-Point-" + pointNumber)
-                            .start();
-                });
+                                        SiftAutoAlignHelper.drawSearchRangeOnStageMap(
+                                                gui, tile, predictedStage[0], predictedStage[1]);
+                                        hostCapturePane(
+                                                stage,
+                                                captureSlot,
+                                                gui,
+                                                tile,
+                                                tileCoords,
+                                                trustSift,
+                                                confidenceThreshold,
+                                                future);
+                                    });
+                                } catch (Exception ex) {
+                                    logger.warn(
+                                            "Multi-tile point {} stage move failed: {} -- manual capture",
+                                            pointNumber,
+                                            ex.getMessage());
+                                    // Move failed: present the pane in manual mode (no auto-SIFT).
+                                    Platform.runLater(() -> hostCapturePane(
+                                            stage,
+                                            captureSlot,
+                                            gui,
+                                            tile,
+                                            tileCoords,
+                                            false,
+                                            confidenceThreshold,
+                                            future));
+                                }
+                            },
+                            "MultiTile-Point-" + pointNumber)
+                    .start();
+        });
 
         return future;
     }

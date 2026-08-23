@@ -950,12 +950,17 @@ acquisition:
     auto_advance_seconds: 10   # 0 = confirm at once; clamped to 300
 ```
 
+**Reference tiles** for multi-tile refinement are picked automatically in the automatic
+modes (interior tiles only, ranked by texture, spread apart), so the "Select Tile" dialog
+does not appear. If no tile qualifies you are asked to pick by hand rather than a poor tile
+being chosen silently.
+
 > **WARNING — not yet validated for production.** An auto-confirmed alignment accepts
 > whatever position the base transform predicted, with no human comparing it against the
-> live view. Automatic reference-tile selection and the server-side "find tissue, then
-> focus" jog are **not built yet**; until they are, the automatic modes are for testing the
-> automation itself, not for unattended runs you intend to keep. Leave this on `MANUAL`
-> for real acquisition.
+> live view. The server-side "find tissue, then focus" jog that would recover from a bad
+> landing is **not built yet**, nor is the policy for a low-confidence SIFT result. Until
+> they are, the automatic modes are for testing the automation itself, not for unattended
+> runs you intend to keep. Leave this on `MANUAL` for real acquisition.
 
 ---
 
