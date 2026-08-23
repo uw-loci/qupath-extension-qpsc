@@ -508,14 +508,29 @@ public class SingleTileRefinement {
         }
         newAlignmentBox.setAlignment(Pos.CENTER_RIGHT);
 
+        // Live-state row, filled in by the prep pass below. Single-tile refinement is reachable
+        // from an automatic multi-slide batch too, so it needs the same hard block as multi-tile
+        // -- otherwise choosing single-tile would quietly bypass it.
+        Label liveStateLabel = new Label("Preparing live view...");
+        liveStateLabel.setWrapText(true);
+        liveStateLabel.setMaxWidth(Double.MAX_VALUE);
+        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+
         content.getChildren()
                 .addAll(
                         headerLabel,
                         SiftAutoAlignHelper.buildFocusSaturationWarning(),
+                        liveStateLabel,
                         instructionLabel,
                         siftDescription,
                         capturePane,
                         newAlignmentBox);
+
+        AlignmentLivePrep.runForDialog(
+                dialogStage,
+                liveStateLabel,
+                null,
+                () -> future.complete(new RefinementResult(initialTransform, selectedTile)));
 
         // Handle window close (X button)
         dialogStage.setOnCloseRequest(e -> {

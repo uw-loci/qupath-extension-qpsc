@@ -263,8 +263,36 @@ public class MultiTileRefinement {
         HBox buttons = new HBox(10, addButton, solveButton, cancelButton);
         buttons.setAlignment(Pos.CENTER_LEFT);
 
-        content.getChildren().addAll(header, instructions, pointsLabel, captureSlot, diagLabel, buttons);
+        // Live-state row: filled in by the prep pass below. Starts neutral so the dialog does
+        // not claim a state it has not checked yet.
+        Label liveStateLabel = new Label("Preparing live view...");
+        liveStateLabel.setWrapText(true);
+        liveStateLabel.setMaxWidth(420);
+        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+
+        // The same reminder every other SIFT dialog carries (SingleTileRefinement and the
+        // per-tile confirm). Multi-tile is the one that runs unattended batches, so its absence
+        // here was the worst place for it to be missing.
+        Label focusWarning = SiftAutoAlignHelper.buildFocusSaturationWarning();
+
+        content.getChildren()
+                .addAll(
+                        header,
+                        focusWarning,
+                        liveStateLabel,
+                        instructions,
+                        pointsLabel,
+                        captureSlot,
+                        diagLabel,
+                        buttons);
         stage.setScene(new Scene(content));
+
+        // Drive the rig into a state SIFT can work in (live running, modality at its alignment
+        // reference state), then report. Manual mode: a failure is a visible warning and the
+        // operator fixes it by hand. Automatic mode: nobody is watching, so a failure that could
+        // not be corrected ends the refinement rather than producing a silently bad alignment.
+        AlignmentLivePrep.runForDialog(
+                stage, liveStateLabel, ready -> addButton.setDisable(!ready), () -> future.complete(null));
 
         // Guides the operator to the next OUTER action: pulse "Select tile" (blue) until 2 points
         // are captured, then pulse "Solve & Save" (green). The embedded SiftCapturePane guides the

@@ -581,6 +581,54 @@ public interface ModalityHandler {
     }
 
     /**
+     * Drives the hardware into the state SIFT alignment should run in, and reports what it
+     * set.
+     *
+     * <p>Alignment matches the live camera against a bright-field-like whole-slide image, so
+     * it needs the modality's BRIGHT, well-exposed state -- not whatever the camera happened
+     * to be left in. For PPM that is the uncrossed angle: the near-extinction angles are dark
+     * by design and SIFT finds nothing in them. For channel-based modalities it is the
+     * channel autofocus already prefers ({@link #defaultFocusChannelId}).
+     *
+     * <p>The default implementation handles the channel-based case: it resolves this
+     * profile's channel library, picks the focus channel, and applies it. Angle-based
+     * modalities override. A modality with neither returns empty, which callers must treat as
+     * "nothing to set" rather than as a failure.
+     *
+     * <p><b>This moves hardware.</b> Implementations run inside
+     * {@code MicroscopeController.withLiveModeHandling} so live streaming is paused and
+     * resumed around the change, and throw rather than reporting a state they did not reach --
+     * an alignment run on a silently-unchanged camera is the failure this exists to prevent.
+     *
+     * @param modality  runtime modality name
+     * @param objective objective ID
+     * @param detector  detector ID
+     * @return short human-readable description of what was applied (e.g. {@code "uncrossed
+     *         (90 deg)"}), or empty when this modality has no particular alignment state
+     * @throws Exception if the state could not be reached
+     */
+    default Optional<String> applyAlignmentReferenceState(String modality, String objective, String detector)
+            throws Exception {
+        List<Channel> channels = getChannels(modality, objective, detector).get();
+        if (channels == null || channels.isEmpty()) {
+            return Optional.empty();
+        }
+        String channelId = defaultFocusChannelId(channels);
+        if (channelId == null || channelId.isEmpty()) {
+            return Optional.empty();
+        }
+        var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(
+                qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty());
+        String profileName = mgr.findFirstProfileForModality(modality);
+        if (profileName == null) {
+            return Optional.empty();
+        }
+        var controller = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        controller.withLiveModeHandling(() -> controller.getSocketClient().applyChannel(profileName, channelId));
+        return Optional.of("channel " + channelId);
+    }
+
+    /**
      * Returns the default exposure time for a given rotation angle from
      * modality-specific persistent preferences.
      *

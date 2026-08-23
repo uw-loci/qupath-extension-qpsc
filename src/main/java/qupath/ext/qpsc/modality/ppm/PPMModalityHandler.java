@@ -201,6 +201,89 @@ public class PPMModalityHandler implements ModalityHandler {
     /**
      * Loads PPM profile-specific exposure defaults for the given hardware configuration.
      */
+    /**
+     * PPM aligns at the UNCROSSED angle. The other three are at or near extinction -- dark by
+     * design, with exposures an order of magnitude longer -- and SIFT finds nothing in them.
+     * Applying the uncrossed WB preset rotates the polarizer AND loads that angle's exposures
+     * and gains together, because rotating without the matching exposure leaves the frame
+     * blown out (uncrossed runs ~0.2 ms against ~9 ms at the plus angle).
+     *
+     * <p>Throws when the uncrossed preset is not configured for this objective/detector,
+     * rather than rotating to a hard-coded 90 with whatever exposure was left over -- a
+     * saturated frame fails SIFT as thoroughly as a dark one, and silently.
+     */
+    @Override
+    public java.util.Optional<String> applyAlignmentReferenceState(String modality, String objective, String detector)
+            throws Exception {
+        var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(
+                qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty());
+
+        Double uncrossedDeg = null;
+        var rotationAngles = mgr.getRotationAngles("ppm");
+        if (rotationAngles != null) {
+            for (java.util.Map<String, Object> angle : rotationAngles) {
+                if ("uncrossed".equals(angle.get("name")) && angle.get("tick") instanceof Number tick) {
+                    uncrossedDeg = tick.doubleValue();
+                }
+            }
+        }
+        if (uncrossedDeg == null) {
+            throw new IllegalStateException("no 'uncrossed' angle configured for PPM");
+        }
+
+        var exposures = mgr.getModalityExposures(modality, objective, detector);
+        Object uncrossedExp = (exposures == null) ? null : exposures.get("uncrossed");
+        float[] expArray = parseExposureEntry(uncrossedExp);
+        if (expArray == null) {
+            throw new IllegalStateException("no uncrossed exposure calibrated for " + objective + " / " + detector
+                    + " -- run PPM white balance");
+        }
+        float[] gainArray = parseGainEntry(mgr.getModalityGains(modality, objective, detector));
+
+        var controller = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        final double deg = uncrossedDeg;
+        controller.withLiveModeHandling(
+                () -> controller.applyCameraSettingsForAngle("uncrossed", expArray, gainArray, deg));
+        return java.util.Optional.of(String.format("uncrossed (%d deg)", Math.round(deg)));
+    }
+
+    /** Per-channel {r,g,b} exposures, or a single unified value; null when neither is present. */
+    static float[] parseExposureEntry(Object entry) {
+        if (entry instanceof java.util.Map<?, ?> map) {
+            float r = toFloatOrZero(map.get("r"));
+            float g = toFloatOrZero(map.get("g"));
+            float b = toFloatOrZero(map.get("b"));
+            if (r > 0 && g > 0 && b > 0) {
+                return new float[] {r, g, b};
+            }
+        } else if (entry instanceof Number num) {
+            return new float[] {num.floatValue()};
+        }
+        return null;
+    }
+
+    /** Uncrossed gains as {unified, analogRed, analogBlue}, or unity when uncalibrated. */
+    static float[] parseGainEntry(Object gainsObj) {
+        if (!(gainsObj instanceof java.util.Map<?, ?> gains)
+                || !(gains.get("uncrossed") instanceof java.util.Map<?, ?> map)) {
+            return new float[] {1.0f};
+        }
+        float unified = toFloatOrZero(map.get("unified_gain"));
+        if (unified <= 0) {
+            unified = 1.0f;
+        }
+        Object aRed = map.get("analog_red");
+        Object aBlue = map.get("analog_blue");
+        if (aRed != null && aBlue != null) {
+            return new float[] {unified, toFloatOrZero(aRed), toFloatOrZero(aBlue)};
+        }
+        return new float[] {unified};
+    }
+
+    private static float toFloatOrZero(Object o) {
+        return (o instanceof Number n) ? n.floatValue() : 0f;
+    }
+
     @Override
     public void prepareForAcquisition(String modality, String objective, String detector) {
         try {

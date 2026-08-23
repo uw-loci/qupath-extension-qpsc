@@ -140,6 +140,27 @@ The mode is read when a driver starts, so changing it mid-batch takes effect at
 the next **Set Up All Remaining** / **Acquire All Set-Up**. **Run Single** and
 the other per-row buttons always stay manual.
 
+**The live view is set up for you.** Both refinement dialogs (single- and multi-tile)
+now prepare the microscope when they open: they start the Live Viewer if it is not
+already streaming, and put the modality into its alignment reference state -- for PPM
+that is the **uncrossed** angle with its calibrated exposure and gain, because the
+near-extinction angles are dark by design and SIFT finds nothing in them; for
+channel-based modalities it is the channel autofocus prefers. A status line reports
+what was applied, and both dialogs now carry the focus/exposure reminder that the
+other SIFT dialogs already had.
+
+If that state cannot be reached -- not connected, live view will not start, or the
+uncrossed exposure is not calibrated for this objective -- the dialog says so in red.
+In **manual** mode you can still proceed (you may know something the check does not).
+In an **automatic** mode the run stops instead: nobody is watching, and four silently
+mis-aligned slides is a worse outcome than a batch that refuses to start.
+
+**Autofocus skips are now visible.** Autofocus before an alignment step used to be
+skipped silently in several cases -- not connected, no objective resolvable, or the
+Live Viewer not streaming. That last one is the important one: without a live stream,
+streaming autofocus downgrades to a narrow drift check that cannot recover focus on a
+fresh slide, and can report success without having found it. All of these now warn.
+
 **Reference tiles are picked for you.** In an automatic mode, multi-tile refinement no
 longer opens the "Select Tile" dialog for each point. Tiles are chosen automatically:
 only tiles whose full ring of 8 neighbours is present and whose centre is inside the

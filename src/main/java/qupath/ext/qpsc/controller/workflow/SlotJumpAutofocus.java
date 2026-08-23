@@ -12,6 +12,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.fx.dialogs.Dialogs;
 
 /**
  * Autofocus-on-slot-jump for the multi-slide alignment step.
@@ -83,6 +84,28 @@ public final class SlotJumpAutofocus {
         statusSink = null;
     }
 
+    /**
+     * Announces that autofocus did NOT run, and why.
+     *
+     * <p>Every skip path used to be {@code logger.info} only, and {@link #publish} reaches a
+     * sink that ONLY the multi-slide panel registers -- so in a single-slide refinement the
+     * message went nowhere at all. An operator then aligned against an out-of-focus tile with
+     * no indication that focusing had been skipped. This always surfaces: to the panel when
+     * there is one, and as a notification when there is not.
+     *
+     * @param what short reason, e.g. "microscope not connected"
+     */
+    private static void publishSkip(String what) {
+        logger.warn("Slot-jump AF SKIPPED: {}", what);
+        publish("Focus skipped -- " + what, true);
+        if (statusSink == null) {
+            Platform.runLater(() -> Dialogs.showWarningNotification(
+                    "Autofocus skipped",
+                    "Autofocus did not run before this alignment step (" + what
+                            + "). The tile may be out of focus, which makes SIFT matching fail or misalign."));
+        }
+    }
+
     private static void publish(String message, boolean error) {
         StatusSink sink = statusSink;
         if (sink == null) {
@@ -122,28 +145,24 @@ public final class SlotJumpAutofocus {
 
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null || !controller.isConnected()) {
-            logger.info("Slot-jump AF skipped: microscope not connected");
-            publish("Ready", false);
+            publishSkip("microscope not connected");
             return CompletableFuture.completedFuture(null);
         }
         // Same guard as the Live Viewer Autofocus button: never AF during an acquisition.
         if (controller.isAcquisitionActive()) {
-            logger.info("Slot-jump AF skipped: acquisition in progress");
-            publish("Ready", false);
+            publishSkip("an acquisition is in progress");
             return CompletableFuture.completedFuture(null);
         }
 
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isBlank()) {
-            logger.info("Slot-jump AF skipped: microscope config not set");
-            publish("Focus skipped -- config unavailable", true);
+            publishSkip("microscope config not set");
             return CompletableFuture.completedFuture(null);
         }
         MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
         String objective = TestAutofocusWorkflow.getCurrentObjective(configManager);
         if (objective == null) {
-            logger.info("Slot-jump AF skipped: could not determine current objective");
-            publish("Focus skipped -- objective unavailable", true);
+            publishSkip("could not determine the current objective");
             return CompletableFuture.completedFuture(null);
         }
         String outputPath = TestAutofocusWorkflow.getDefaultOutputPath();
@@ -175,11 +194,22 @@ public final class SlotJumpAutofocus {
                         capEx.getMessage());
             }
         } else if (!"SWEEP".equals(method)) {
-            logger.info(
-                    "Slot-jump AF: method is {} but no Live Viewer stream is open (streamOpen={}); "
-                            + "using the SWEEP drift check as fallback",
-                    method,
-                    LiveViewerWindow.isStreamingActive());
+            // This is a DOWNGRADE, not a fallback: SWEEP is a narrow drift check that reports
+            // success without finding focus when Z is far off (measured on slot jumps at ~8 um
+            // error, and 0.00 um "shift" on a fresh slide). Reporting it at INFO meant a slide
+            // could be aligned out of focus with nothing on screen to say so.
+            logger.warn(
+                    "Slot-jump AF DOWNGRADED: method is {} but no Live Viewer stream is open; "
+                            + "using the SWEEP drift check, which cannot find focus if Z is far off",
+                    method);
+            publish("Focus limited -- no live stream, drift check only", true);
+            if (statusSink == null) {
+                Platform.runLater(() -> Dialogs.showWarningNotification(
+                        "Autofocus limited",
+                        "Streaming autofocus needs the Live Viewer running. Without it only a narrow "
+                                + "drift check ran, which cannot recover focus on a fresh slide. Open the "
+                                + "Live Viewer and re-focus before aligning."));
+            }
         }
 
         publish("Focusing...", false);

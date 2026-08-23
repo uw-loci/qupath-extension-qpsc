@@ -3032,25 +3032,13 @@ public class StageControlPanel extends VBox {
      * are written. Returns null if no matching profile exists.
      */
     @SuppressWarnings("unchecked")
+    /**
+     * Delegates to the shared config lookup so the camera tab and the alignment-prep path
+     * resolve a profile identically. Kept as a thin local method because several call sites
+     * below read better with the short name.
+     */
     private String findFirstMatchingProfile(String modality) {
-        try {
-            var profiles = mgr.getConfigItem("acquisition_profiles");
-            if (!(profiles instanceof java.util.Map<?, ?> profileMap) || profileMap.isEmpty()) return null;
-            String modalityLower = modality.toLowerCase();
-            for (var entry : profileMap.entrySet()) {
-                if (!(entry.getValue() instanceof java.util.Map<?, ?> profileCfg)) continue;
-                Object profModality = profileCfg.get("modality");
-                if (profModality == null) continue;
-                String profModStr = profModality.toString().toLowerCase();
-                int prefix = Math.min(2, Math.min(modalityLower.length(), profModStr.length()));
-                if (modalityLower.regionMatches(0, profModStr, 0, prefix)) {
-                    return String.valueOf(entry.getKey());
-                }
-            }
-        } catch (Exception e) {
-            logger.debug("findFirstMatchingProfile({}) failed: {}", modality, e.getMessage());
-        }
-        return null;
+        return mgr.findFirstProfileForModality(modality);
     }
 
     /** Save current camera state (exposure + gain + illumination) as a preset. */

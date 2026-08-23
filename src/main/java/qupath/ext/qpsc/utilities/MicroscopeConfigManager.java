@@ -769,6 +769,49 @@ public class MicroscopeConfigManager {
         return Math.min(v, MAX_AUTO_ADVANCE_SECONDS);
     }
 
+    /**
+     * First {@code acquisition_profiles} entry whose {@code modality} looks like the given
+     * modality, or null when nothing matches.
+     *
+     * <p>The match is deliberately loose -- the first two characters -- because profile
+     * modality strings and runtime modality names are not required to agree beyond their
+     * family ("ppm" vs "ppm_20x", "bf" vs "bf_10x"). Extracted from the Live Viewer's camera
+     * tab so the alignment-prep path resolves a profile the same way the camera tab does; a
+     * second heuristic that disagreed would be worse than a loose shared one.
+     *
+     * @param modality runtime modality name
+     * @return the profile key, or null
+     */
+    public String findFirstProfileForModality(String modality) {
+        if (modality == null || modality.isBlank()) {
+            return null;
+        }
+        try {
+            Object profiles = getConfigItem("acquisition_profiles");
+            if (!(profiles instanceof Map<?, ?> profileMap) || profileMap.isEmpty()) {
+                return null;
+            }
+            String modalityLower = modality.toLowerCase();
+            for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
+                if (!(entry.getValue() instanceof Map<?, ?> profileCfg)) {
+                    continue;
+                }
+                Object profModality = profileCfg.get("modality");
+                if (profModality == null) {
+                    continue;
+                }
+                String profModStr = profModality.toString().toLowerCase();
+                int prefix = Math.min(2, Math.min(modalityLower.length(), profModStr.length()));
+                if (modalityLower.regionMatches(0, profModStr, 0, prefix)) {
+                    return String.valueOf(entry.getKey());
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("findFirstProfileForModality({}) failed: {}", modality, e.getMessage());
+        }
+        return null;
+    }
+
     /** Default multi-slide auto-advance countdown when the YAML does not set one. */
     public static final int DEFAULT_AUTO_ADVANCE_SECONDS = 10;
 
