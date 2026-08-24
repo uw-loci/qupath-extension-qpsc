@@ -1425,6 +1425,10 @@ public class AcquisitionManager {
                 case COMPLETED:
                     logger.info("Acquisition completed successfully for {}", annotation.getName());
 
+                    // Count EVERY completed acquisition, not just the saturating ones -- this is
+                    // the denominator the batch summary reports against.
+                    SaturationSummaryDialog.noteAcquisitionComplete();
+
                     // Show saturation summary if any angles had saturation
                     String satSummary = socketClient.getFormattedSaturationSummary();
                     if (satSummary != null) {

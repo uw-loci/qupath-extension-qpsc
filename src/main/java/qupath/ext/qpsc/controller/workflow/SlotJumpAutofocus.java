@@ -95,6 +95,47 @@ public final class SlotJumpAutofocus {
      *
      * @param what short reason, e.g. "microscope not connected"
      */
+    /**
+     * Flags a SUCCESS whose numbers do not describe a validated focus peak.
+     *
+     * <p>The server reports {@code n} and {@code span} for its FINAL attempt only, while the
+     * total travel accumulates across up to six re-centred attempts. Two shapes are worth
+     * saying out loud, because both look identical to a good result in the log otherwise:
+     * <ul>
+     *   <li><b>Too few samples.</b> A peak cannot be validated from a handful of points. On
+     *       2026-08-14 a slot jump returned SUCCESS on {@code n=3} while moving 194.7 um.</li>
+     *   <li><b>Travel far exceeding the sampled span.</b> Legitimate after several attempts,
+     *       but it also means the final scan never saw the starting position, so nothing
+     *       cross-checks the direction it walked.</li>
+     * </ul>
+     *
+     * <p>This does not reject the result -- the same 2026-08-14 scan did land near true focus.
+     * It makes a marginal success visible instead of indistinguishable from a clean one.
+     */
+    private static void warnIfImplausible(MicroscopeSocketClient.StreamingFocusResult result) {
+        boolean fewSamples = result.nSamples < MIN_PLAUSIBLE_AF_SAMPLES;
+        boolean movedBeyondScan = result.zSpan > 0 && Math.abs(result.zShift) > result.zSpan;
+        if (!fewSamples && !movedBeyondScan) {
+            return;
+        }
+        String why = fewSamples
+                ? ("only " + result.nSamples + " samples in the final scan")
+                : String.format("moved %.1f um but the final scan covered only %.1f um", result.zShift, result.zSpan);
+        logger.warn(
+                "Slot-jump AF reported SUCCESS but the result is weakly supported: {} (z {} -> {}). "
+                        + "Check focus before aligning.",
+                why,
+                result.initialZ,
+                result.finalZ);
+        publish("Focus uncertain -- " + why, true);
+    }
+
+    /**
+     * Below this many samples in the final scan, a reported peak is not meaningfully validated.
+     * Normal scans in practice return 20-100 samples.
+     */
+    private static final int MIN_PLAUSIBLE_AF_SAMPLES = 10;
+
     private static void publishSkip(String what) {
         logger.warn("Slot-jump AF SKIPPED: {}", what);
         publish("Focus skipped -- " + what, true);
@@ -268,6 +309,7 @@ public final class SlotJumpAutofocus {
                                         result.finalZ,
                                         result.nSamples,
                                         result.zSpan);
+                                warnIfImplausible(result);
                             }
                         } else {
                             // Shared sweep run + parse + AF-history core (identical to the Live Viewer

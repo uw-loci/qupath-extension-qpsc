@@ -130,6 +130,9 @@ public final class AcquisitionMonitorService {
     private static void showSaturationSummaryIfNeeded(
             MicroscopeSocketClient socketClient, String tileDirPath, String modality) {
         try {
+            // Counted before the early return: an acquisition with NO saturation still ran, and
+            // omitting it made the batch summary report "N of N" every time.
+            SaturationSummaryDialog.noteAcquisitionComplete();
             String satSummary = socketClient.getFormattedSaturationSummary();
             if (satSummary == null) return;
 

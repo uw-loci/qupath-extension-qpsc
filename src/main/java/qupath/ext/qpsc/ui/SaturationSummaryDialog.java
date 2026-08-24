@@ -65,6 +65,18 @@ public class SaturationSummaryDialog {
     private static final List<BatchEntry> batchEntries = java.util.Collections.synchronizedList(new ArrayList<>());
 
     /**
+     * Acquisitions that COMPLETED during this batch, saturated or not.
+     *
+     * <p>Kept separately from {@link #batchEntries} because only saturating acquisitions are
+     * collected: using the entry count as the denominator made the summary read "3 of 3
+     * acquisition(s) had concerning saturation" for a run where 3 of 23 acquisitions across 4
+     * slides saturated (observed 2026-08-14). N-of-N is unfalsifiable -- it can only ever say
+     * that everything it knows about was bad.
+     */
+    private static final java.util.concurrent.atomic.AtomicInteger batchAcquisitionCount =
+            new java.util.concurrent.atomic.AtomicInteger();
+
+    /**
      * Enters batch mode: subsequent {@link #collect} calls accumulate instead of popping a dialog.
      * Call at the start of a multi-run acquire pass; pair with {@link #endBatchAndShow} (normal end)
      * or {@link #cancelBatch} (abort).
@@ -72,6 +84,7 @@ public class SaturationSummaryDialog {
     public static void beginBatch() {
         batchActive = true;
         batchEntries.clear();
+        batchAcquisitionCount.set(0);
         logger.info("Saturation summary: batch mode ON (per-slide reports collected into one dialog)");
     }
 
@@ -84,6 +97,18 @@ public class SaturationSummaryDialog {
     public static void cancelBatch() {
         batchActive = false;
         batchEntries.clear();
+        batchAcquisitionCount.set(0);
+    }
+
+    /**
+     * Records that one acquisition completed, whether or not it saturated. Call for EVERY
+     * completed acquisition in a batch -- this is the denominator the summary reports against,
+     * and an acquisition that is not counted here reads as if it never ran.
+     */
+    public static void noteAcquisitionComplete() {
+        if (batchActive) {
+            batchAcquisitionCount.incrementAndGet();
+        }
     }
 
     /**
@@ -116,14 +141,21 @@ public class SaturationSummaryDialog {
         }
         batchActive = false;
         List<BatchEntry> entries = new ArrayList<>(batchEntries);
+        int totalAcquisitions = batchAcquisitionCount.getAndSet(0);
         batchEntries.clear();
         if (entries.isEmpty()) {
-            logger.info("Saturation batch: no saturation across the run; no combined dialog");
+            logger.info(
+                    "Saturation batch: no saturation across {} acquisition(s) this run; no combined dialog",
+                    totalAcquisitions);
             return;
         }
+        // A batch that never counted (an older caller, or a path that bypassed the counter)
+        // must not report a denominator smaller than what it collected.
+        int denominator = Math.max(totalAcquisitions, entries.size());
+        logger.info("Saturation batch: {} of {} acquisition(s) reported saturation", entries.size(), denominator);
         Platform.runLater(() -> {
             try {
-                showBatchImpl(entries);
+                showBatchImpl(entries, denominator);
             } catch (Exception e) {
                 logger.error("Failed to show combined saturation summary dialog", e);
             }
@@ -326,7 +358,7 @@ public class SaturationSummaryDialog {
      * that had concerning saturation (worst-first), then a scrollable per-sample list -- flagged
      * samples expanded, clean ones collapsed.
      */
-    private static void showBatchImpl(List<BatchEntry> entries) {
+    private static void showBatchImpl(List<BatchEntry> entries, int totalAcquisitions) {
         List<SampleParsed> samples = new ArrayList<>();
         for (BatchEntry e : entries) {
             Parsed p = null;
@@ -347,7 +379,7 @@ public class SaturationSummaryDialog {
                 .toList();
 
         Stage stage = new Stage();
-        stage.setTitle("Saturation Summary -- Multi-Slide Run (" + samples.size() + " acquisitions)");
+        stage.setTitle("Saturation Summary -- Multi-Slide Run (" + totalAcquisitions + " acquisitions)");
         stage.initModality(Modality.NONE);
 
         VBox root = new VBox(10);
@@ -370,8 +402,8 @@ public class SaturationSummaryDialog {
             StringBuilder sb = new StringBuilder();
             sb.append(concerningSamples.size())
                     .append(" of ")
-                    .append(samples.size())
-                    .append(" acquisition(s) had concerning saturation:");
+                    .append(totalAcquisitions)
+                    .append(" acquisition(s) this run had concerning saturation:");
             for (SampleParsed s : concerningSamples) {
                 sb.append("\n  - ")
                         .append(labelFor(s.entry()))
