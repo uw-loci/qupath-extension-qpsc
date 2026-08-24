@@ -14,6 +14,7 @@ import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.SafeZClearanceMonitor;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -364,6 +365,9 @@ public final class SlotJumpAutofocus {
                                         result.nSamples,
                                         result.zSpan);
                                 warnIfImplausible(result);
+                                // Feed the safe-Z clearance monitor: this is a real,
+                                // measured sample plane for the insert currently loaded.
+                                SafeZClearanceMonitor.recordFocus(result.finalZ);
                             }
                         } else {
                             // Shared sweep run + parse + AF-history core (identical to the Live Viewer

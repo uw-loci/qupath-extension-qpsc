@@ -813,47 +813,99 @@ public class MicroscopeConfigManager {
     }
 
     /**
-     * The declared retracted ("safe") stage Z for this microscope, from
-     * {@code stage.safe_z_um}, or null when it is not configured.
+     * The declared retracted ("safe") stage Z to approach the sample from, resolved for a
+     * specific insert and modality.
      *
-     * <p>This is the position autofocus retracts to before approaching the sample, and it is
-     * safety-critical: it must be clear of the SHORTEST working distance among the objectives
-     * that can be mounted. Declaring it also declares the approach DIRECTION -- the scan runs
-     * from here toward wherever focus lies -- which is why nothing downstream has to reason
-     * about upright vs inverted or stage polarity. Those are easy to get backwards, and getting
-     * them backwards is a collision.
+     * <p>Safety-critical, and genuinely three-dimensional:
+     * <ul>
+     *   <li><b>Per insert</b> -- a 35 mm dish, a 96-well plate and a slide put the sample plane
+     *       at quite different heights, so one retraction cannot be clear for all of them.</li>
+     *   <li><b>Per modality</b> -- measured on OWS3, fluorescence and brightfield sit at
+     *       consistent offsets from each other.</li>
+     *   <li><b>Clear of the SHORTEST working distance</b> among objectives that can be
+     *       mounted for that combination.</li>
+     * </ul>
      *
-     * <p>Returns null rather than a default. There is no safe default: a guessed retraction
+     * <p>Declaring it also declares the approach DIRECTION -- the scan runs from here toward
+     * wherever focus lies -- which is why nothing downstream has to reason about upright vs
+     * inverted or stage polarity. Those are easy to get backwards, and getting them backwards
+     * is a collision.
+     *
+     * <p>Resolution is most-specific-first:
+     * <ol>
+     *   <li>{@code stage.inserts.configurations.<insert>.safe_z_um_by_modality.<modality>}</li>
+     *   <li>the same block keyed by the modality FAMILY ({@code ppm_20x} -> {@code ppm})</li>
+     *   <li>{@code stage.inserts.configurations.<insert>.safe_z_um}</li>
+     *   <li>{@code stage.safe_z_um}</li>
+     * </ol>
+     *
+     * <p>Returns null when nothing matches. There is no safe default: a guessed retraction
      * could be on the wrong side of the sample.
      *
-     * @return the configured safe Z in micrometers, or null
+     * @param insertId insert configuration key (e.g. {@code quad_v}); may be null to skip the
+     *                 insert-specific levels
+     * @param modality runtime modality name; may be null to skip the modality-specific level
+     * @return the resolved safe Z in micrometers, or null
      */
-    public Double getSafeZUm() {
+    public Double getSafeZUm(String insertId, String modality) {
+        if (insertId != null && !insertId.isBlank()) {
+            if (modality != null && !modality.isBlank()) {
+                Double byModality =
+                        getDouble("stage", "inserts", "configurations", insertId, "safe_z_um_by_modality", modality);
+                if (byModality != null) {
+                    return byModality;
+                }
+                int underscore = modality.indexOf('_');
+                if (underscore > 0) {
+                    Double byFamily = getDouble(
+                            "stage",
+                            "inserts",
+                            "configurations",
+                            insertId,
+                            "safe_z_um_by_modality",
+                            modality.substring(0, underscore));
+                    if (byFamily != null) {
+                        return byFamily;
+                    }
+                }
+            }
+            Double perInsert = getDouble("stage", "inserts", "configurations", insertId, "safe_z_um");
+            if (perInsert != null) {
+                return perInsert;
+            }
+        }
         return getDouble("stage", "safe_z_um");
     }
 
+    /** Scope-level fallback only; prefer {@link #getSafeZUm(String, String)}. */
+    public Double getSafeZUm() {
+        return getSafeZUm(null, null);
+    }
+
     /**
-     * Whether {@link #getSafeZUm()} is present and inside {@code stage.limits.z_um}.
+     * Whether the safe Z resolved for this insert/modality is inside {@code stage.limits.z_um}.
      *
-     * <p>A safe Z outside the configured envelope is a typo, not a policy: the limit gate would
-     * refuse every scan window that tried to reach it, so autofocus would fail on every slide
-     * rather than move anywhere dangerous. Checking it up front turns a baffling run-time
-     * failure into a config error.
+     * <p>A safe Z outside the envelope is a typo, not a policy: the limit gate would refuse
+     * every scan window that tried to reach it, so autofocus would fail on every slide rather
+     * than move anywhere dangerous. Checking it up front turns a baffling run-time failure into
+     * a config error.
      *
+     * @param insertId insert configuration key, or null
+     * @param modality runtime modality name, or null
      * @return null when valid (or unset), else a human-readable reason it is not usable
      */
-    public String validateSafeZUm() {
-        Double safeZ = getSafeZUm();
+    public String validateSafeZUm(String insertId, String modality) {
+        Double safeZ = getSafeZUm(insertId, modality);
         if (safeZ == null) {
             return null;
         }
         Double low = getDouble("stage", "limits", "z_um", "low");
         Double high = getDouble("stage", "limits", "z_um", "high");
         if (low != null && safeZ < low) {
-            return String.format("stage.safe_z_um (%.1f) is below stage.limits.z_um.low (%.1f)", safeZ, low);
+            return String.format("safe Z (%.1f) is below stage.limits.z_um.low (%.1f)", safeZ, low);
         }
         if (high != null && safeZ > high) {
-            return String.format("stage.safe_z_um (%.1f) is above stage.limits.z_um.high (%.1f)", safeZ, high);
+            return String.format("safe Z (%.1f) is above stage.limits.z_um.high (%.1f)", safeZ, high);
         }
         return null;
     }

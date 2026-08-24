@@ -54,6 +54,7 @@ import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MultiSlideAcquisitionEstimator;
+import qupath.ext.qpsc.utilities.SafeZClearanceMonitor;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -678,6 +679,17 @@ public final class MultiSlideExistingImageWorkflow {
             // (single-slot) actions do not go through setBusy, so they stay manual --
             // which is what an operator clicking one row expects.
             if (busy) {
+                // Watch how close this run's focus positions come to the retraction point
+                // declared for THIS insert and modality. Sample planes move -- slide thickness,
+                // a re-seated insert, a thicker coverslip -- and that drift is invisible until
+                // the run where retracting stops clearing the sample.
+                String insertId = carrier == null ? null : carrier.getId();
+                String activeModality =
+                        qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+                MicroscopeConfigManager clearanceCfg =
+                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+                SafeZClearanceMonitor.begin(
+                        clearanceCfg.getSafeZUm(insertId, activeModality), insertId + " / " + activeModality);
                 AutoAdvanceController.armSession(
                         QPPreferenceDialog.getMultiSlideAcquisitionMode(),
                         MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
@@ -797,6 +809,7 @@ public final class MultiSlideExistingImageWorkflow {
                                     runId);
                             // Still surface whatever saturation was collected before the abort.
                             SaturationSummaryDialog.endBatchAndShow();
+                            reportSafeZClearance();
                             autoCollapseEnabled[0] = true;
                             setBusy.accept(false);
                             refreshFinish.run();
@@ -815,6 +828,7 @@ public final class MultiSlideExistingImageWorkflow {
                             // One combined saturation dialog for the whole run (worst samples flagged
                             // at the top), instead of the per-acquisition popups collected above.
                             SaturationSummaryDialog.endBatchAndShow();
+                            reportSafeZClearance();
                             autoCollapseEnabled[0] = true;
                             setBusy.accept(false);
                             refreshFinish.run();
@@ -1061,6 +1075,9 @@ public final class MultiSlideExistingImageWorkflow {
             // the panel without setBusy(false) ever running, and a later single-image workflow
             // would otherwise inherit auto-advance.
             AutoAdvanceController.disarmSession();
+            // Same reasoning for the clearance monitor: a panel closed mid-run must not carry
+            // its half-collected focus positions into the next one.
+            SafeZClearanceMonitor.cancel();
             nextStepPulse.clear();
             DialogPlacement.clearBatchAnchor();
         });
@@ -1152,6 +1169,21 @@ public final class MultiSlideExistingImageWorkflow {
                     acquired.complete(ok);
                 }));
         return acquired;
+    }
+
+    /**
+     * Surfaces the safe-Z clearance finding for the run, if there is one.
+     *
+     * <p>A notification rather than a modal: it is a maintenance signal about the insert, not
+     * something that invalidates the data just acquired, and a batch that has just finished
+     * unattended should not sit waiting on a dialog. {@code report()} is one-shot, so the abort
+     * and normal-finish paths can both call it safely.
+     */
+    private static void reportSafeZClearance() {
+        String warning = SafeZClearanceMonitor.report();
+        if (warning != null) {
+            Platform.runLater(() -> Dialogs.showWarningNotification("Stage safe-Z clearance", warning));
+        }
     }
 
     /** A per-slot operation: open the entry, do the work, update status; complete when settled. */

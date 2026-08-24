@@ -238,6 +238,35 @@ The tilt model is most valuable when proximity ordering must eventually jump bac
 
 ---
 
+## Safe-Z Clearance Monitoring
+
+During multi-slide batch acquisitions, QPSC continuously monitors the focus positions achieved by autofocus and compares them against the declared safe (retracted) Z for the insert and modality in use. At the end of the run, if the clearance has shrunk or the focus positions straddle the retraction point, a warning notification is shown.
+
+**Why this matters:** The safe Z is measured once during setup, but the thing it must clear moves. Slide thickness, re-seated inserts, and different coverslips shift the sample plane, and that drift is invisible to autofocus — focus still succeeds right up to the run where retracting drives the objective into the sample.
+
+**Two levels of warning:**
+
+1. **"Focus positions on BOTH sides of safe Z"** — the most serious case. Focus measurements this run sat both above and below the retraction point, meaning retracting to it is not a retraction for at least some samples and risks collision. Re-measure the safe Z for this insert/modality immediately before running another unattended batch.
+
+2. **"Focus within 50 um of safe Z"** — the clearance has shrunk below the recommended margin. Still on the correct side, but far enough to warrant re-measurement. Useful as an early warning before the drift crosses over.
+
+**What to do:**
+
+- Retract the stage until the objective is clearly clear of the sample for the insert that
+  triggered the warning, and read the Z off the Live Viewer
+- Update `stage.inserts.configurations.<insert>.safe_z_um` (or
+  `...safe_z_um_by_modality.<modality>`) in the microscope YAML, keeping the value inside
+  `stage.limits.z_um`
+- Reload the config (Stage Map's **Reload** button, or restart QuPath)
+
+The check watches whatever focus positions a run produces, from both slot-jump autofocus and
+manual Live Viewer autofocus. It covers **multi-slide batches and single Existing Image runs**;
+a multi-slide batch reports once across all its slides rather than once per slot. It does
+nothing when no autofocus runs, or when no safe Z is configured for the insert and modality in
+use.
+
+---
+
 ## Manual Focus Fallback
 
 When autofocus fails (both primary and fallback metrics), the system can request manual intervention:

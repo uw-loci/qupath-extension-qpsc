@@ -227,6 +227,21 @@ Progress** / **Set up** if a run is cancelled at a gate or hits a handled error
 **Skipped**, click **Finish**. A combined saturation summary is shown if any
 tiles had concerning saturation during the run.
 
+After the run finishes, if the microscope configuration declares a safe Z for the
+insert/modality combination used in this run, a **Safe-Z Clearance** notification
+may appear. This is a maintenance signal about the stage insert, not a data
+problem. It reports when:
+- **Focus positions on both sides of the safe Z** — the retraction point sits
+  inside the range of sample planes (serious case). The sample plane may have
+  drifted past the retraction point, so the objective risks collision on future
+  runs.
+- **Closest focus within 50 µm of the safe Z** — clearance is shrinking. The
+  sample plane is drifting toward the retraction point.
+
+Both conditions recommend re-measuring the safe Z for this insert before running
+unattended focus on subsequent batches. See [PREFERENCES > Safe Z](../PREFERENCES.md#safe-z-retraction-point)
+for configuration details.
+
 ## Alignment during multi-slide runs
 
 By default, **every slide is aligned fresh** on each batch pass -- a saved

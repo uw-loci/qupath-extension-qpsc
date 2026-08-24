@@ -138,6 +138,9 @@ public class StreamingFocusController {
                             result.nSamples,
                             result.zSpan,
                             elapsedMs);
+                    // A manual focus is still a measured sample plane for the loaded insert,
+                    // so it counts toward the safe-Z clearance check.
+                    qupath.ext.qpsc.utilities.SafeZClearanceMonitor.recordFocus(result.finalZ);
                     finish(callback, okMsg, Outcome.SUCCESS);
                     return;
 

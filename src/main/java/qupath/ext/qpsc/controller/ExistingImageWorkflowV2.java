@@ -255,6 +255,13 @@ public class ExistingImageWorkflowV2 {
         private Double capturedFocusZ;
 
         /**
+         * True when THIS run armed the safe-Z clearance monitor and must therefore report it.
+         * False inside a multi-slide batch, where the batch armed it first and reports once
+         * across all slides rather than once per slot.
+         */
+        private boolean ownsClearanceMonitor = false;
+
+        /**
          * Completes when THIS slot's stitching + project imports (and success-path tile
          * cleanup) have fully settled. In the pipelined ACQUIRE pass the driver-advancing
          * future ({@link #execute()} result) resolves earlier -- at acquisition-complete --
@@ -300,6 +307,21 @@ public class ExistingImageWorkflowV2 {
          */
         public CompletableFuture<WorkflowState> execute() {
             CompletableFuture<WorkflowState> done = new CompletableFuture<>();
+
+            // Watch this run's focus positions against the insert's declared retraction point.
+            // beginIfIdle defers to a multi-slide batch that is already watching, so a batch
+            // reports once across all its slides instead of once per slot.
+            try {
+                var clearanceCfg =
+                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+                String insertId = PersistentPreferences.getStageMapInsert();
+                String activeModality =
+                        qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+                ownsClearanceMonitor = qupath.ext.qpsc.utilities.SafeZClearanceMonitor.beginIfIdle(
+                        clearanceCfg.getSafeZUm(insertId, activeModality), insertId + " / " + activeModality);
+            } catch (Exception e) {
+                logger.debug("Safe-Z clearance monitor not armed: {}", e.getMessage());
+            }
 
             // Step 1: Validate prerequisites
             if (!validatePrerequisites()) {
@@ -2626,6 +2648,17 @@ public class ExistingImageWorkflowV2 {
          */
         private void cleanup() {
             logger.info("Workflow completed - cleaning up");
+            // Report the safe-Z clearance for a SINGLE-image run. In a multi-slide batch this
+            // method runs once per slot while the batch owns the monitor, so ownsClearanceMonitor
+            // is false there and the batch reports once over all four slides instead.
+            if (ownsClearanceMonitor) {
+                ownsClearanceMonitor = false;
+                String warning = qupath.ext.qpsc.utilities.SafeZClearanceMonitor.report();
+                if (warning != null) {
+                    Platform.runLater(
+                            () -> qupath.fx.dialogs.Dialogs.showWarningNotification("Stage safe-Z clearance", warning));
+                }
+            }
             // Clear any preserved annotations (should already be restored, but cleanup just in case)
             state.annotationPreservation.clearPreservedAnnotations();
             MicroscopeController.getInstance().setCurrentTransform(null);

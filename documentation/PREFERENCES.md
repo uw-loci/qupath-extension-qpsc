@@ -1131,6 +1131,55 @@ These will be automatically copied to child images acquired from that parent.
 
 ---
 
+## Safe Z (Retraction Point)
+
+The safe Z is the declared retracted position where the objective clears the sample, and the position autofocus approaches from. On scopes with interchangeable inserts (dishes, plates, slide holders), the sample plane sits at different heights depending on which insert is loaded, so a single safe Z cannot safely clear all combinations. QPSC now resolves safe Z per insert and per imaging modality, with fallback levels when per-insert/modality values are absent.
+
+### Configuration (YAML)
+
+Safe Z values are stored in your microscope configuration file under `stage.inserts.configurations`. The resolution hierarchy is most-specific-first:
+
+```yaml
+stage:
+  # Scope-level fallback (applied to all inserts and modalities)
+  safe_z_um: -500.0
+
+  inserts:
+    configurations:
+      quad_v:
+        # Per-insert, scope-level (applies to this insert, all modalities)
+        safe_z_um: -480.0
+        
+        # Per-insert, per-modality (most specific)
+        safe_z_um_by_modality:
+          ppm_20x: -450.0        # Specific to 20x PPM on this insert
+          ppm: -440.0            # Family fallback: any ppm_* on this insert
+          bf_10x: -470.0         # Specific to 10x brightfield
+```
+
+**Resolution order (first-match wins):**
+1. `stage.inserts.configurations.<insert>.safe_z_um_by_modality.<modality>` — e.g., `ppm_20x`
+2. `stage.inserts.configurations.<insert>.safe_z_um_by_modality.<family>` — e.g., `ppm` for `ppm_20x`
+3. `stage.inserts.configurations.<insert>.safe_z_um` — per-insert fallback
+4. `stage.safe_z_um` — scope-level fallback (applied to all inserts)
+
+Returns null when nothing matches. There is no safe default: a guessed retraction could be on the wrong side of the sample.
+
+**Why per-insert and per-modality:**
+- **Per insert:** A 35 mm dish, a 96-well plate, and a slide put the sample plane at quite different heights, so one retraction cannot safely clear all of them.
+- **Per modality:** On OWS3, fluorescence and brightfield were measured sitting at consistent offsets from each other.
+
+### Runtime Clearance Check
+
+At the end of a run -- a multi-slide batch, or a single Existing Image acquisition -- QPSC compares the focus positions achieved during the run against the declared safe Z and issues a warning if the clearance has shrunk or the focus positions straddle the retraction point. This is a continuous safety monitor: the declared safe Z is measured once, but the sample plane drifts with slide thickness, re-seated inserts, and coverslip variations.
+
+- **Warning 1:** Focus positions landed on both sides of the safe Z. The retraction point is inside the range of sample planes — re-measurement is critical.
+- **Warning 2:** The closest focus came within 50 um of the safe Z. Clearance has shrunk below the recommended margin — re-measure before running unattended.
+
+If you see either warning, use the Parfocality Calibration tool or manual stage/autofocus to re-measure the safe Z for that insert/modality, then update the YAML configuration. See [AUTOFOCUS.md > Safe-Z Clearance Monitoring](AUTOFOCUS.md#safe-z-clearance-monitoring) for full details and troubleshooting steps.
+
+---
+
 ## Safety Options
 
 Settings that affect acquisition safety and reliability.

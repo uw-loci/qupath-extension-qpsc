@@ -660,6 +660,55 @@ To remove the *cause* (so AF works normally instead of falling back every tile):
 3. `n_tiles=5` means autofocus every 5 tiles instead of every 2 tiles
 4. Faster acquisition but less frequent focus updates
 
+#### Q: "Stage safe-Z clearance" notification after multi-slide batch
+
+**A:** This notification appears at the end of a multi-slide acquisition run when the achieved focus positions have drifted dangerously close to (or across) the declared safe Z retraction point.
+
+**What this means:**
+
+The safe Z is the position where the objective retracts to clear the sample during autofocus and tool exchange. It is measured once during setup, but the thing it must clear moves: slides vary in thickness, an insert gets re-seated, a dish is swapped for a plate. If the sample plane drifts toward the retraction point, "retracting" stops providing clearance.
+
+The notification reports one of two findings:
+
+1. **"Focus positions fell on BOTH SIDES of the configured safe Z"** (serious)
+   - Your achieved focus Z values straddle the retraction point
+   - For some samples, retracting to the safe Z would drive the objective INTO the sample
+   - This is the case where collision risk is real
+
+2. **"Focus came within X um of the configured safe Z"** (warning)
+   - Clearance is shrinking, though still on the correct side
+   - The sample plane is drifting toward the retraction point
+
+**Why it matters:**
+
+Silent focus-drift is dangerous: autofocus will keep succeeding as the sample plane drifts toward the retraction point, right up to the run where collision actually occurs. There is no autofocus metric that would catch it — everything looks fine until the hard stop.
+
+**What to do:**
+
+1. **For the serious case (both sides):** Stop running unattended autofocus immediately. Do not proceed until you have re-measured the safe Z.
+
+2. **For the warning case (within 50 µm):** Schedule a re-measurement, but the data from this run is still safe. The warning exists so you catch the drift before it becomes dangerous.
+
+**How to re-measure:**
+
+1. Manually focus on the sample using the Live Viewer
+2. Note the Z position
+3. Manually move to your declared safe Z and confirm the objective is clear of the sample
+4. If the measured Z and safe Z are closer than expected, or if measured Z is on the wrong side of safe Z, update the YAML configuration:
+
+```yaml
+stage:
+  inserts:
+    configurations:
+      <insert_id>:
+        safe_z_um_by_modality:
+          <modality>: <new_measured_safe_z>
+```
+
+5. Restart QuPath and retry
+
+See [PREFERENCES > Safe Z](../PREFERENCES.md#safe-z-retraction-point) for the full configuration hierarchy.
+
 #### Q: I enabled "Disable All Autofocus" but the manual focus dialog still appeared
 
 **A:** Fixed 2026-04-26. The Java side previously dropped the `--af-tiles`/`--af-steps`/`--af-range` triplet but didn't tell the server "no AF at all", so the server fell back to YAML defaults and ran AF normally (including the manual-focus prompt on the first failure). Now the Java side sends an explicit `--af-disabled` flag the server short-circuits on. If you still see manual focus prompts after this fix, confirm: (1) the QuPath build is current (commit `98edcf2` or later), (2) the server is current (commit `b5ae861` or later), (3) "Disable All Autofocus (Danger)" is actually checked in Preferences (Extensions > QP Scope > Preferences). Server log should show a single `Autofocus DISABLED for this acquisition` line at workflow start.
