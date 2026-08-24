@@ -77,7 +77,19 @@ public final class MultiSlideAssignmentDialog {
             ProjectImageEntry<BufferedImage> baseEntry) {}
 
     /** Result of the whole dialog: a chosen carrier + a list of per-slot assignments. */
-    public record Result(StageInsert carrier, List<SlotAssignment> assignments) {}
+    /**
+     * @param carrier    the chosen slide carrier
+     * @param assignments per-slot image assignments
+     * @param modality   modality selected for the whole batch
+     * @param objective  objective ID selected for the whole batch
+     * @param detector   detector ID selected for the whole batch (may be null if unresolvable)
+     */
+    public record Result(
+            StageInsert carrier,
+            List<SlotAssignment> assignments,
+            String modality,
+            String objective,
+            String detector) {}
 
     private MultiSlideAssignmentDialog() {}
 
@@ -96,6 +108,132 @@ public final class MultiSlideAssignmentDialog {
             }
         });
         return future;
+    }
+
+    /**
+     * Fills the modality / objective / detector pickers and seeds them from the shared
+     * modality and objective state, so re-opening the dialog offers what the operator last
+     * chose rather than config order.
+     *
+     * <p>The detector list is offered even when the config declares only one: an explicit
+     * choice is what makes the background check below meaningful, and
+     * {@code getActiveDetector()} deliberately refuses to guess when several are declared and
+     * none is remembered.
+     */
+    private static void populateHardwareBoxes(
+            MicroscopeConfigManager mgr,
+            ComboBox<String> modalityBox,
+            ComboBox<String> objectiveBox,
+            ComboBox<String> detectorBox) {
+        try {
+            var modalities = mgr.getSection("modalities");
+            if (modalities != null) {
+                modalityBox.getItems().setAll(modalities.keySet());
+            }
+            String fromState = qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+            if (fromState != null && modalityBox.getItems().contains(fromState)) {
+                modalityBox.setValue(fromState);
+            } else if (!modalityBox.getItems().isEmpty()) {
+                modalityBox.setValue(modalityBox.getItems().get(0));
+            }
+
+            var objectiveIds = mgr.getAvailableObjectives();
+            var objectiveNames = mgr.getObjectiveFriendlyNames(objectiveIds);
+            objectiveBox
+                    .getItems()
+                    .setAll(objectiveIds.stream()
+                            .map(id -> objectiveNames.get(id) + " (" + id + ")")
+                            .sorted()
+                            .toList());
+            selectById(
+                    objectiveBox,
+                    qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective());
+
+            var detectorIds = mgr.getAvailableDetectors();
+            var detectorNames = mgr.getDetectorFriendlyNames(detectorIds);
+            detectorBox
+                    .getItems()
+                    .setAll(detectorIds.stream()
+                            .map(id -> detectorNames.get(id) + " (" + id + ")")
+                            .sorted()
+                            .toList());
+            selectById(detectorBox, mgr.getActiveDetector());
+        } catch (Exception e) {
+            logger.warn("Could not populate multi-slide hardware pickers: {}", e.getMessage());
+        }
+    }
+
+    /** Selects the display item whose trailing "(id)" matches, else the first item. */
+    private static void selectById(ComboBox<String> box, String id) {
+        if (id != null && !id.isEmpty()) {
+            for (String item : box.getItems()) {
+                if (id.equals(extractId(item))) {
+                    box.setValue(item);
+                    return;
+                }
+            }
+        }
+        if (!box.getItems().isEmpty()) {
+            box.setValue(box.getItems().get(0));
+        }
+    }
+
+    /** Pulls the ID out of a {@code "Friendly name (THE_ID)"} display string. */
+    static String extractId(String displayString) {
+        if (displayString == null) {
+            return null;
+        }
+        int open = displayString.lastIndexOf('(');
+        int close = displayString.lastIndexOf(')');
+        if (open >= 0 && close > open) {
+            return displayString.substring(open + 1, close);
+        }
+        return displayString;
+    }
+
+    /**
+     * Reports whether backgrounds and white balance are calibrated for the selected hardware.
+     *
+     * <p>Advisory, not a gate: the operator may be deliberately acquiring without background
+     * correction, and blocking a whole batch on it would be wrong. What was wrong before is
+     * that they had no way to find out until the acquisition dialog of the FIRST SLIDE, by
+     * which point the carrier and assignments were already committed.
+     */
+    private static void updateReadiness(Label label, String modality, String objective, String detector) {
+        if (modality == null || objective == null || detector == null) {
+            label.setText("Select modality, objective and detector to check calibration.");
+            label.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+            return;
+        }
+        StringBuilder problems = new StringBuilder();
+        try {
+            CalibrationChecker.StepStatus bg =
+                    CalibrationChecker.checkBackgroundCorrection(modality, objective, detector);
+            if (bg.status() != CalibrationChecker.Status.READY) {
+                problems.append("Backgrounds: ").append(bg.message());
+            }
+            CalibrationChecker.StepStatus wb = CalibrationChecker.checkWhiteBalance(modality, objective, detector);
+            if (wb.status() != CalibrationChecker.Status.READY) {
+                if (problems.length() > 0) {
+                    problems.append("\n");
+                }
+                problems.append("White balance: ").append(wb.message());
+            }
+        } catch (Exception e) {
+            logger.warn("Calibration check failed for {}/{}/{}: {}", modality, objective, detector, e.getMessage());
+            label.setText("Could not check calibration for this combination: " + e.getMessage());
+            label.setStyle("-fx-font-size: 11px; -fx-text-fill: #7a5c00;");
+            return;
+        }
+
+        if (problems.length() == 0) {
+            label.setText("Backgrounds and white balance are calibrated for this combination.");
+            label.setStyle("-fx-font-size: 11px; -fx-text-fill: #2E7D32;");
+        } else {
+            label.setText(
+                    problems + "\nEvery slide in this batch uses this combination, so this affects the whole run.");
+            label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #b00020;");
+        }
     }
 
     private static void showImpl(Window owner, Project<BufferedImage> project, CompletableFuture<Result> future) {
@@ -184,6 +322,45 @@ public final class MultiSlideAssignmentDialog {
         Label sourceLabel = new Label("Source scanner:");
         HBox sourceRow = new HBox(8, sourceLabel, sourceBox);
         sourceRow.setStyle("-fx-alignment: center-left;");
+
+        // Hardware for the whole batch. Chosen HERE rather than per slide because background
+        // and white-balance calibration are keyed on (modality, objective, detector): until
+        // those are fixed there is nothing to check them against, and previously the first
+        // point at which they were known was slide 1's acquisition dialog -- after the operator
+        // had already committed to a carrier and assignments. The selection is published to the
+        // shared modality/objective state, which every later dialog reads on open, so it also
+        // stops the operator re-picking the same hardware once per slide.
+        MicroscopeConfigManager hwConfig =
+                MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+
+        ComboBox<String> modalityBox = new ComboBox<>();
+        ComboBox<String> objectiveBox = new ComboBox<>();
+        ComboBox<String> detectorBox = new ComboBox<>();
+        Label readiness = new Label();
+        readiness.setWrapText(true);
+        readiness.setMaxWidth(620);
+        readiness.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+
+        populateHardwareBoxes(hwConfig, modalityBox, objectiveBox, detectorBox);
+        Runnable refreshReadiness = () -> updateReadiness(
+                readiness,
+                modalityBox.getValue(),
+                extractId(objectiveBox.getValue()),
+                extractId(detectorBox.getValue()));
+        modalityBox.valueProperty().addListener((o, a, b) -> refreshReadiness.run());
+        objectiveBox.valueProperty().addListener((o, a, b) -> refreshReadiness.run());
+        detectorBox.valueProperty().addListener((o, a, b) -> refreshReadiness.run());
+        refreshReadiness.run();
+
+        HBox hardwareRow = new HBox(
+                8,
+                new Label("Modality:"),
+                modalityBox,
+                new Label("Objective:"),
+                objectiveBox,
+                new Label("Detector:"),
+                detectorBox);
+        hardwareRow.setStyle("-fx-alignment: center-left;");
 
         // Slot rows live in a GridPane; rebuilt on carrier change
         GridPane slotGrid = new GridPane();
@@ -510,7 +687,32 @@ public final class MultiSlideAssignmentDialog {
             // Keep the previews on the Stage Map as a reference for the per-slide alignments
             // that follow; just restore the Apply Flips control.
             StageMapWindow.finishOrientationCheck();
-            future.complete(new Result(chosen, Collections.unmodifiableList(assignments)));
+            // Publish before completing: the per-slide dialogs that follow read these states
+            // when they open, so the batch's hardware choice becomes their default instead of
+            // each one re-deriving it from config order or a stale preference.
+            String chosenModality = modalityBox.getValue();
+            String chosenObjective = extractId(objectiveBox.getValue());
+            String chosenDetector = extractId(detectorBox.getValue());
+            if (chosenModality != null && !chosenModality.isEmpty()) {
+                qupath.ext.qpsc.state.ModalityState.getInstance().setModality(chosenModality);
+            }
+            if (chosenObjective != null && !chosenObjective.isEmpty()) {
+                qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(chosenObjective);
+            }
+            if (chosenDetector != null && !chosenDetector.isEmpty()) {
+                PersistentPreferences.setLastDetector(chosenDetector);
+            }
+            logger.info(
+                    "MultiSlide batch hardware: modality={} objective={} detector={}",
+                    chosenModality,
+                    chosenObjective,
+                    chosenDetector);
+            future.complete(new Result(
+                    chosen,
+                    Collections.unmodifiableList(assignments),
+                    chosenModality,
+                    chosenObjective,
+                    chosenDetector));
             stage.close();
         });
         cancelButton.setOnAction(e -> {
@@ -530,6 +732,8 @@ public final class MultiSlideAssignmentDialog {
                 new Separator(),
                 carrierRow,
                 sourceRow,
+                hardwareRow,
+                readiness,
                 rotateAllRow,
                 new Separator(),
                 slotsScroll,

@@ -81,6 +81,26 @@ In the assignment dialog:
 > about the slot center, and a manual landmark alignment measures that rotation
 > directly, so a reversed slide is still handled correctly.
 
+### Hardware for the batch
+
+The assignment dialog also sets the **Modality**, **Objective** and **Detector** for the
+whole run, and reports underneath whether **backgrounds** and **white balance** are
+calibrated for that combination.
+
+This lives here rather than in each slide's acquisition dialog for two reasons.
+Calibration is keyed on (modality, objective, detector), so until those are fixed there is
+nothing to check against -- previously the first point at which they were known was
+slide 1's acquisition dialog, after you had already committed to a carrier and its
+assignments. And every slide in the batch uses the same combination, so picking it once
+removes a repeated choice from every per-slide dialog.
+
+The calibration line is **advisory, not a gate** -- you may be deliberately acquiring
+without background correction. It exists so that "no backgrounds for this objective" is
+something you learn before the run rather than several slides into it.
+
+Your choice is published to the shared modality/objective state, so the acquisition dialog
+for each slide opens already set to it.
+
 ## Step 2 -- Run the batch
 
 The batch progress panel is organized into collapsible sections: **Slots**
