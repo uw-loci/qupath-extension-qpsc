@@ -11,8 +11,11 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
+import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.gui.QuPathGUI;
 
 /**
  * Autofocus-on-slot-jump for the multi-slide alignment step.
@@ -136,6 +139,33 @@ public final class SlotJumpAutofocus {
      */
     private static final int MIN_PLAUSIBLE_AF_SAMPLES = 10;
 
+    /**
+     * The focus Z saved on the open slide's per-slide alignment JSON, or null when that slide
+     * has never been aligned.
+     *
+     * <p>Uses the same lookup key {@code checkForSlideAlignment} uses to find the alignment
+     * itself, so the seed and the transform always come from the same record. Returns null on
+     * any failure -- a missing seed costs a slower scan, whereas a seed read from the WRONG
+     * slide's record would drive the stage somewhere arbitrary before scanning.
+     */
+    private static Double resolveSavedFocusZ() {
+        try {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui == null || gui.getProject() == null || gui.getImageData() == null) {
+                return null;
+            }
+            String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
+            if (imageName == null) {
+                return null;
+            }
+            String key = AlignmentHelper.resolveMacroLookupKey(gui.getProject(), gui.getImageData(), imageName);
+            return (key == null) ? null : AffineTransformManager.loadSlideFocusZ(gui.getProject(), key);
+        } catch (Exception e) {
+            logger.debug("Slot-jump AF: no saved focus Z available ({})", e.getMessage());
+            return null;
+        }
+    }
+
     private static void publishSkip(String what) {
         logger.warn("Slot-jump AF SKIPPED: {}", what);
         publish("Focus skipped -- " + what, true);
@@ -250,6 +280,30 @@ public final class SlotJumpAutofocus {
                         "Streaming autofocus needs the Live Viewer running. Without it only a narrow "
                                 + "drift check ran, which cannot recover focus on a fresh slide. Open the "
                                 + "Live Viewer and re-focus before aligning."));
+            }
+        }
+
+        // Seed Z from THIS slide's saved focus before scanning. Without it the scan starts
+        // wherever the previous slide left the stage, and slide-to-slide focus variation is
+        // large and normal: across 8 slides in one carrier on 2026-08-14 the focus Z spread was
+        // 236 um. One slot jump there had to hunt 195 um, exhausted all six 30 um attempts (every
+        // one classifying edge_high, i.e. "the peak is above this window"), fell through to a
+        // Brent bracket that never bracketed, and committed the top edge on 3 samples.
+        //
+        // The seed is only available once that slide has been aligned at least once -- a
+        // first-time setup pass has nothing to seed from and still scans from where it lands.
+        Double seedZ = resolveSavedFocusZ();
+        if (seedZ != null) {
+            try {
+                double before = controller.getStagePositionZ();
+                if (Math.abs(before - seedZ) > 1.0) {
+                    logger.info("Slot-jump AF: seeding Z from this slide's saved focus: {} -> {} um", before, seedZ);
+                    controller.moveStageZ(seedZ);
+                }
+            } catch (Exception e) {
+                logger.warn(
+                        "Slot-jump AF: could not seed Z from saved focus ({}); scanning from current Z",
+                        e.getMessage());
             }
         }
 
