@@ -21,9 +21,15 @@ import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
  *       compare against and -- worse -- {@code SlotJumpAutofocus} quietly downgrades a
  *       streaming focus scan to the narrow SWEEP drift check, which reports success without
  *       finding focus when Z is far off.</li>
- *   <li><b>The wrong modality state.</b> On PPM the camera is often left at a near-extinction
- *       angle, which is dark by design. SIFT finds nothing and reports low confidence, with
- *       no indication that the angle was the cause.</li>
+ *   <li><b>The wrong modality state.</b> Nothing verified the imaging state before alignment
+ *       -- it depended entirely on the operator having set it by hand. On PPM, aligning at a
+ *       near-extinction angle (dark by design) leaves SIFT nothing to match, and it reports
+ *       low confidence with no indication that the angle was the cause. This removes the
+ *       dependence on remembering; it is NOT a fix for a measured defect. Log analysis of the
+ *       2026-08-14 runs found setup-pass focus curves at 38-59% amplitude with R^2 ~ 0.99,
+ *       i.e. the operator HAD set the angle correctly. Do not cite this class as evidence
+ *       that setup focus was systematically wrong -- that hypothesis was tested and refuted
+ *       (see claude-reports/2026-08-24_multislide-log-analysis.md).</li>
  *   <li><b>No microscope at all.</b> Alignment proceeds against a stale frame.</li>
  * </ul>
  *
