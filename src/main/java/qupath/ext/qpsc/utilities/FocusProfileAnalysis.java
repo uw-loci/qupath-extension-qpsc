@@ -208,6 +208,146 @@ public final class FocusProfileAnalysis {
     }
 
     /**
+     * Compares a scan taken over tissue with one taken over bare slide at the same Z range.
+     *
+     * <p>This is what makes the coverslip question empirical rather than a guess. A peak that
+     * appears in BOTH scans cannot be tissue -- there was no tissue in the second one -- so it
+     * is a surface: coverslip, slide/air interface, mounting medium. A peak present only over
+     * tissue is the real focus. No threshold tuning decides this; the second scan does.
+     *
+     * @param tissueZ      Z samples of the over-tissue scan, in approach order
+     * @param tissueMetric metric samples of the over-tissue scan
+     * @param bgZ          Z samples of the over-background scan
+     * @param bgMetric     metric samples of the over-background scan
+     * @param manualFocusZ the Z the operator focused tissue on, or NaN to skip that check
+     * @return the paired verdict
+     */
+    public static PairVerdict analysePair(
+            double[] tissueZ, double[] tissueMetric, double[] bgZ, double[] bgMetric, double manualFocusZ) {
+
+        Verdict tissue = analyse(tissueZ, tissueMetric, manualFocusZ);
+        List<String> reasons = new ArrayList<>();
+        if (Double.isNaN(tissue.globalMaxZ())) {
+            reasons.add("The over-tissue scan has no usable focus peak.");
+            return new PairVerdict(false, false, tissue, List.of(), false, List.copyOf(reasons));
+        }
+
+        List<FalsePeak> bgPeaks = prominentPeaks(bgZ, bgMetric);
+
+        // How close two peaks must be to be the same surface. Scaled to the measured peak
+        // width so a broad low-mag peak is not split into two by sampling jitter.
+        double tolerance = Double.isNaN(tissue.peakWidthUm()) ? 5.0 : Math.max(5.0, tissue.peakWidthUm());
+
+        boolean tissuePeakIsDistinct =
+                bgPeaks.stream().noneMatch(b -> Math.abs(b.z() - tissue.globalMaxZ()) <= tolerance);
+
+        List<FalsePeak> surfacePeaks = new ArrayList<>();
+        for (FalsePeak candidate : tissue.falsePeaks()) {
+            if (bgPeaks.stream().anyMatch(b -> Math.abs(b.z() - candidate.z()) <= tolerance)) {
+                surfacePeaks.add(candidate);
+            }
+        }
+
+        if (!tissuePeakIsDistinct) {
+            reasons.add(String.format(
+                    "The strongest peak over tissue (Z=%.1f um) also appears with no tissue present, so it "
+                            + "is a surface rather than the sample plane. Autofocus on this "
+                            + "modality/objective is keying on something other than the tissue.",
+                    tissue.globalMaxZ()));
+        }
+        for (FalsePeak p : surfacePeaks) {
+            reasons.add(String.format(
+                    "A surface peak sits at Z=%.1f um, before focus at Z=%.1f um -- confirmed by the "
+                            + "background scan. An approach that stops at the first peak would commit there.",
+                    p.z(), tissue.globalMaxZ()));
+        }
+        // Findings from the tissue scan alone (flat metric, peak away from the manual focus,
+        // non-monotonic rise) still apply.
+        reasons.addAll(tissue.reasons().stream()
+                .filter(r -> !r.contains("likely a coverslip"))
+                .toList());
+
+        boolean usable = tissuePeakIsDistinct && !Double.isNaN(tissue.globalMaxZ()) && tissue.risingFraction() > 0;
+        return new PairVerdict(
+                usable,
+                !surfacePeaks.isEmpty(),
+                tissue,
+                List.copyOf(surfacePeaks),
+                tissuePeakIsDistinct,
+                List.copyOf(reasons));
+    }
+
+    /**
+     * Outcome of comparing the over-tissue and over-background scans.
+     *
+     * @param usable             a tissue focus peak exists and is distinguishable from any surface
+     * @param requiresTissueGate surface peaks sit BEFORE focus, so committing to the first peak
+     *                           would land on glass -- the approach must gate on tissue detection
+     * @param tissue             the over-tissue scan's own analysis
+     * @param surfacePeaks       peaks before focus that the background scan confirmed are surfaces
+     * @param tissuePeakIsDistinct the focus peak has no counterpart in the background scan
+     * @param reasons            findings, empty when nothing is wrong
+     */
+    public record PairVerdict(
+            boolean usable,
+            boolean requiresTissueGate,
+            Verdict tissue,
+            List<FalsePeak> surfacePeaks,
+            boolean tissuePeakIsDistinct,
+            List<String> reasons) {}
+
+    /**
+     * Every prominent local maximum in a profile, measured against the deeper adjacent valley.
+     * Used to inventory what the background scan contains, where there is no "true" peak to
+     * measure prominence against.
+     *
+     * @param z      Z samples in scan order
+     * @param metric metric samples
+     * @return prominent peaks in scan order; empty when the profile is unusable or flat
+     */
+    public static List<FalsePeak> prominentPeaks(double[] z, double[] metric) {
+        List<FalsePeak> peaks = new ArrayList<>();
+        if (z == null || metric == null || z.length != metric.length || z.length < 5) {
+            return peaks;
+        }
+        double[] v = smooth(metric, smoothingWindow(z));
+        double min = v[0];
+        double max = v[0];
+        for (double x : v) {
+            min = Math.min(min, x);
+            max = Math.max(max, x);
+        }
+        double range = max - min;
+        if (range <= 0) {
+            return peaks;
+        }
+        for (int i = 1; i < v.length - 1; i++) {
+            if (v[i] <= v[i - 1] || v[i] < v[i + 1]) {
+                continue;
+            }
+            double leftValley = v[i];
+            for (int j = i; j >= 0; j--) {
+                leftValley = Math.min(leftValley, v[j]);
+                if (v[j] > v[i]) {
+                    break;
+                }
+            }
+            double rightValley = v[i];
+            for (int j = i; j < v.length; j++) {
+                rightValley = Math.min(rightValley, v[j]);
+                if (v[j] > v[i]) {
+                    break;
+                }
+            }
+            double prominence = v[i] - Math.max(leftValley, rightValley);
+            if (prominence >= PROMINENCE_FRACTION * range) {
+                peaks.add(new FalsePeak(z[i], v[i], prominence));
+            }
+        }
+        return peaks;
+    }
+
+    /**
      * Moving-average window, in samples. Sized to about 1 um of travel so it suppresses
      * per-frame noise without blurring a peak that may only be a couple of microns wide at high
      * magnification. Always odd and at least 1.

@@ -46,10 +46,15 @@ public final class FocusApproachValidationStore {
      * @param modality          modality validated
      * @param objective         objective ID validated (the highest-magnification one in use)
      * @param usable            whether approach-from-safe-Z is licensed for this combination
+     * @param requiresTissueGate surfaces sit before focus, so the approach must gate on tissue
+     *                          detection rather than committing to the first peak
      * @param safeZUm           the retracted Z the approach was measured from
      * @param approachDistanceUm measured distance from safe Z to focus
      * @param peakWidthUm       measured focus-peak FWHM; bounds how fast the approach may scan
-     * @param falsePeakZs       Z positions of prominent peaks encountered before focus
+     * @param falsePeakZs       Z of peaks before focus that the background scan confirmed are
+     *                          surfaces rather than tissue
+     * @param exposureMs        camera exposure the profile was measured at, or NaN if unknown
+     * @param illumination      illumination intensity the profile was measured at, or NaN
      * @param reasons           why it failed, empty when it passed
      * @param timestamp         ISO-8601 instant the run completed
      */
@@ -58,10 +63,13 @@ public final class FocusApproachValidationStore {
             String modality,
             String objective,
             boolean usable,
+            boolean requiresTissueGate,
             double safeZUm,
             double approachDistanceUm,
             double peakWidthUm,
             List<Double> falsePeakZs,
+            double exposureMs,
+            double illumination,
             List<String> reasons,
             String timestamp) {
 
@@ -76,12 +84,51 @@ public final class FocusApproachValidationStore {
          * @return a human-readable reason, or null
          */
         public String isStaleAgainst(Double currentSafeZUm) {
+            return isStaleAgainst(currentSafeZUm, Double.NaN, Double.NaN);
+        }
+
+        /**
+         * As {@link #isStaleAgainst(Double)}, but also checks the imaging conditions the profile
+         * was measured under.
+         *
+         * <p>Exposure and illumination matter because the focus metric is an intensity spread.
+         * Changing them rescales it, and a large enough increase saturates the sensor, which
+         * flattens the metric and destroys the peak this record claims exists. The peak's
+         * POSITION should not move, so a change is a warning to re-measure rather than proof the
+         * record is wrong -- but silently trusting a profile taken at a tenth of the current
+         * exposure is not defensible either.
+         *
+         * @param currentSafeZUm    safe Z currently configured
+         * @param currentExposureMs current camera exposure, or NaN to skip the check
+         * @param currentIllumination current illumination intensity, or NaN to skip
+         * @return a human-readable reason, or null when the record still applies
+         */
+        public String isStaleAgainst(Double currentSafeZUm, double currentExposureMs, double currentIllumination) {
             if (currentSafeZUm == null) {
                 return "stage.safe_z_um is no longer configured";
             }
             if (Math.abs(currentSafeZUm - safeZUm) > 1.0) {
                 return String.format(
                         "stage.safe_z_um changed from %.1f to %.1f since this was measured", safeZUm, currentSafeZUm);
+            }
+            // Ratio, not absolute: 0.2 -> 0.4 ms matters as much as 9 -> 18 ms.
+            if (!Double.isNaN(currentExposureMs) && !Double.isNaN(exposureMs) && exposureMs > 0) {
+                double ratio = currentExposureMs / exposureMs;
+                if (ratio < 0.5 || ratio > 2.0) {
+                    return String.format(
+                            "exposure changed from %.2f to %.2f ms since this was measured; the focus metric "
+                                    + "scales with it, and enough of a change saturates the sensor and flattens "
+                                    + "the peak",
+                            exposureMs, currentExposureMs);
+                }
+            }
+            if (!Double.isNaN(currentIllumination) && !Double.isNaN(illumination) && illumination > 0) {
+                double ratio = currentIllumination / illumination;
+                if (ratio < 0.5 || ratio > 2.0) {
+                    return String.format(
+                            "illumination changed from %.1f to %.1f since this was measured",
+                            illumination, currentIllumination);
+                }
             }
             return null;
         }

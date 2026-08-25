@@ -92,7 +92,19 @@ class FocusApproachValidationStoreTest {
     @Test
     void aRecordGoesStaleWhenSafeZMoves() {
         var rec = new FocusApproachValidationStore.Record(
-                "PPM", "ppm_20x", "OBJ_40X", true, -700.0, 300.0, 9.4, List.of(), List.of(), "2026-08-24T12:00:00Z");
+                "PPM",
+                "ppm_20x",
+                "OBJ_40X",
+                true,
+                false,
+                -700.0,
+                300.0,
+                9.4,
+                List.of(),
+                0.2,
+                50.0,
+                List.of(),
+                "2026-08-24T12:00:00Z");
 
         assertNull(rec.isStaleAgainst(-700.0), "unchanged safe Z keeps the record valid");
         assertNull(rec.isStaleAgainst(-700.4), "sub-micron drift is not a change");
@@ -111,16 +123,50 @@ class FocusApproachValidationStoreTest {
                 "ppm_20x",
                 "OBJ_40X",
                 false,
+                true,
                 -700.0,
                 300.0,
                 Double.NaN,
                 List.of(-380.0),
-                List.of("A prominent peak sits at Z=-380.0 um, before focus"),
+                0.2,
+                50.0,
+                List.of("A surface peak sits at Z=-380.0 um, before focus"),
                 "2026-08-24T12:00:00Z");
 
         assertFalse(rec.usable());
         assertEquals(1, rec.falsePeakZs().size());
         assertEquals(-380.0, rec.falsePeakZs().get(0), 1e-9);
         assertFalse(rec.reasons().isEmpty());
+        assertTrue(rec.requiresTissueGate(), "a surface before focus means the gate is required");
+    }
+
+    @Test
+    void aBigExposureChangeGoesStaleButASmallOneDoesNot() {
+        // The focus metric is an intensity spread, so exposure rescales it; enough of a change
+        // saturates the sensor and flattens the peak the record claims exists.
+        var rec = new FocusApproachValidationStore.Record(
+                "PPM",
+                "ppm_20x",
+                "OBJ_40X",
+                true,
+                false,
+                -700.0,
+                300.0,
+                9.4,
+                List.of(),
+                0.2,
+                50.0,
+                List.of(),
+                "2026-08-24T12:00:00Z");
+
+        assertNull(rec.isStaleAgainst(-700.0, 0.2, 50.0), "unchanged conditions");
+        assertNull(rec.isStaleAgainst(-700.0, 0.25, 55.0), "a 25% drift is not a re-measure");
+        assertNull(rec.isStaleAgainst(-700.0, Double.NaN, Double.NaN), "unknown conditions cannot invalidate");
+
+        String why = rec.isStaleAgainst(-700.0, 2.0, 50.0);
+        assertNotNull(why, "a 10x exposure change must invalidate");
+        assertTrue(why.contains("exposure"), why);
+
+        assertNotNull(rec.isStaleAgainst(-700.0, 0.2, 5.0), "a 10x illumination change must invalidate");
     }
 }

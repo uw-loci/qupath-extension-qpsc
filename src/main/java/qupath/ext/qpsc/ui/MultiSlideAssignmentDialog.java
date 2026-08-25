@@ -36,6 +36,7 @@ import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapCanvas;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.FocusApproachValidationStore;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
@@ -163,6 +164,48 @@ public final class MultiSlideAssignmentDialog {
         }
     }
 
+    /**
+     * Whether the focus approach has been characterised for this combination, or null when it
+     * has and is still current.
+     *
+     * <p>Surfaced here because a multi-slide batch is the workflow where an uncharacterised
+     * focus approach costs the most: it runs unattended across four slides, so nobody sees the
+     * first slide land on a coverslip. The message names the tool rather than just reporting a
+     * state, because "not recorded" is only actionable if you know what to run.
+     *
+     * @param modality  selected modality
+     * @param objective selected objective ID
+     * @return advisory text, or null
+     */
+    private static String focusApproachStatus(String modality, String objective) {
+        try {
+            MicroscopeConfigManager mgr =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            String scope = mgr.getString("microscope", "name");
+            if (scope == null) {
+                return null;
+            }
+            FocusApproachValidationStore.Record rec = FocusApproachValidationStore.find(scope, modality, objective);
+            if (rec == null) {
+                return "Focus approach: not yet characterised for this modality/objective. "
+                        + "Run Utilities > Focus Approach Validation before relying on unattended focus.";
+            }
+            String stale = rec.isStaleAgainst(mgr.getSafeZUm(null, modality));
+            if (stale != null) {
+                return "Focus approach: the recorded characterisation no longer applies (" + stale
+                        + "). Re-run Utilities > Focus Approach Validation.";
+            }
+            if (!rec.usable()) {
+                return "Focus approach: characterisation FAILED for this combination -- "
+                        + String.join(" ", rec.reasons());
+            }
+            return null;
+        } catch (Exception e) {
+            logger.debug("Focus-approach status unavailable: {}", e.getMessage());
+            return null;
+        }
+    }
+
     /** Selects the display item whose trailing "(id)" matches, else the first item. */
     private static void selectById(ComboBox<String> box, String id) {
         if (id != null && !id.isEmpty()) {
@@ -224,6 +267,14 @@ public final class MultiSlideAssignmentDialog {
             label.setText("Could not check calibration for this combination: " + e.getMessage());
             label.setStyle("-fx-font-size: 11px; -fx-text-fill: #7a5c00;");
             return;
+        }
+
+        String focusApproach = focusApproachStatus(modality, objective);
+        if (focusApproach != null) {
+            if (problems.length() > 0) {
+                problems.append("\n");
+            }
+            problems.append(focusApproach);
         }
 
         if (problems.length() == 0) {
