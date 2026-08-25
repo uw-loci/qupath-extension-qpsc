@@ -238,6 +238,54 @@ The tilt model is most valuable when proximity ordering must eventually jump bac
 
 ---
 
+## Focus Approach Validation
+
+**Menu: Extensions > QP Scope > Image Quality > Focus Approach Validation...**
+
+Measures how the focus metric behaves while approaching the sample from the retracted safe Z,
+for one modality and objective. Run it before relying on unattended focus; the multi-slide
+assignment dialog reports when a combination has not been characterised.
+
+**Why two scans.** Approaching from outside, the objective may cross a coverslip or slide/air
+interface that produces a genuine contrast peak *before* the tissue -- at high magnification the
+coverslip is the first thing it meets. Rather than guess with a threshold, the tool runs the same
+scan twice: once with the camera over tissue, once over bare slide. **A peak present in both
+cannot be tissue**, because there was no tissue in the second scan. That makes the coverslip
+question a measurement.
+
+**Use the highest-magnification objective** you scan with for this kind of work. It has the
+shortest working distance, so a safe Z clear for it is clear for everything else, and the
+narrowest focus peak, so a profile that is clean there is cleaner at lower magnification.
+Validating the worst case licenses the rest.
+
+**Procedure:**
+
+1. Set exposure and illumination to what you actually acquire with.
+2. Move the stage in XY over **tissue** and focus by hand; confirm.
+3. The stage retracts to the safe Z and scans in, continuing ~30 um past your focus so the far
+   side of the peak is captured.
+4. Move in XY to a **bare** part of the same slide, changing nothing else; confirm.
+5. The identical scan runs there.
+
+**What it records** (per microscope / modality / objective):
+
+| | |
+|---|---|
+| Usable | a tissue focus peak exists and is distinguishable from any surface |
+| Requires tissue gate | surfaces sit *before* focus, so the approach must stop only where tissue is detected |
+| Approach distance | safe Z to focus, which sets the expected scan duration |
+| Peak width (FWHM) | bounds how fast the approach may scan without stepping over focus |
+| Exposure / illumination | the conditions the profile was measured under |
+
+**Exposure and illumination matter.** The focus metric is an intensity spread, so both rescale
+it, and a large enough increase saturates the sensor and flattens the very peak the record
+claims exists. The peak's *position* should not move, so a change is a prompt to re-measure
+rather than proof the record is wrong -- but a profile taken at a tenth of the current exposure
+is not evidence about the current one. QPSC treats a change of more than 2x in either as stale
+and asks you to re-run.
+
+---
+
 ## Safe-Z Clearance Monitoring
 
 During multi-slide batch acquisitions, QPSC continuously monitors the focus positions achieved by autofocus and compares them against the declared safe (retracted) Z for the insert and modality in use. At the end of the run, if the clearance has shrunk or the focus positions straddle the retraction point, a warning notification is shown.

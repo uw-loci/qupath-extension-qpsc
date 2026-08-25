@@ -14,6 +14,7 @@ import javafx.scene.control.Tooltip;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.FocusApproachValidationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
 import qupath.ext.qpsc.controller.QPScopeController;
@@ -425,6 +426,19 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // Focus Approach Validation -- characterises how focus behaves approaching from the
+        // safe Z, for one modality/objective. Sits beside the autofocus editor because it is
+        // the measurement the automated approach depends on.
+        MenuItem focusApproachOption = new MenuItem(res.getString("menu.focusApproachValidation"));
+        focusApproachOption.setDisable(!configValid || offlineScope);
+        setMenuItemTooltip(
+                focusApproachOption,
+                "Measure how the focus metric behaves while approaching the sample from the retracted "
+                        + "safe Z. Scans once over tissue and once over bare slide, so peaks that are "
+                        + "coverslip rather than sample are identified by measurement instead of guesswork. "
+                        + "Required before unattended multi-slide focus can be trusted.");
+        focusApproachOption.setOnAction(e -> FocusApproachValidationWorkflow.run());
+
         // WB Comparison Test
         MenuItem wbComparisonOption = new MenuItem(res.getString("menu.wbComparison"));
         wbComparisonOption.setDisable(!configValid || offlineScope);
@@ -640,7 +654,12 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         }
         imageQualityMenu
                 .getItems()
-                .addAll(new SeparatorMenuItem(), autofocusEditorOption, autofocusBenchmarkOption, probeStageAfOption);
+                .addAll(
+                        new SeparatorMenuItem(),
+                        autofocusEditorOption,
+                        autofocusBenchmarkOption,
+                        focusApproachOption,
+                        probeStageAfOption);
 
         // JAI Camera (white balance + noise) belongs under Image Quality; only
         // shown when a JAI camera is configured.

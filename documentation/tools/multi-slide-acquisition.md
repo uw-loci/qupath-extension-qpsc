@@ -84,8 +84,8 @@ In the assignment dialog:
 ### Hardware for the batch
 
 The assignment dialog also sets the **Modality**, **Objective** and **Detector** for the
-whole run, and reports underneath whether **backgrounds** and **white balance** are
-calibrated for that combination.
+whole run, and reports underneath the status of **backgrounds**, **white balance**, and
+**focus approach** calibration for that combination.
 
 This lives here rather than in each slide's acquisition dialog for two reasons.
 Calibration is keyed on (modality, objective, detector), so until those are fixed there is
@@ -98,7 +98,23 @@ The calibration line is **advisory, not a gate** -- you may be deliberately acqu
 without background correction. It exists so that "no backgrounds for this objective" is
 something you learn before the run rather than several slides into it.
 
-Your choice is published to the shared modality/objective state, so the acquisition dialog
+**Focus approach status** reports whether autofocus has been characterised
+for this modality/objective combination. Because multi-slide acquisition runs unattended,
+an uncharacterised approach cannot recover from a bad landing on the first slide. The
+status appears as a separate line when there is a problem:
+
+- **Not characterised:** Run **Utilities > Focus Approach Validation** to measure the
+  approach for this modality/objective. The validation measures how autofocus behaves
+  on this microscope and whether surfaces (coverslips) sit before the tissue plane,
+  ensuring the approach will work on tissue rather than landing on glass.
+- **Stale characterisation:** The stored characterisation no longer applies because
+  safe-Z or imaging conditions (exposure, illumination) have changed since measurement.
+  Re-run the validation tool to update it.
+- **Failed characterisation:** The validation run completed but found a problem (e.g.
+  autofocus keying on glass rather than tissue, or a coverslip sitting before focus).
+  The reported reason says which; fix that before relying on unattended focus.
+
+Your choice of modality/objective is published to the shared state, so the acquisition dialog
 for each slide opens already set to it.
 
 ## Step 2 -- Run the batch
