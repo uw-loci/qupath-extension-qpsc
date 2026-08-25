@@ -284,6 +284,35 @@ rather than proof the record is wrong -- but a profile taken at a tenth of the c
 is not evidence about the current one. QPSC treats a change of more than 2x in either as stale
 and asks you to re-run.
 
+### How Validation Enables Approach-from-Safe-Z Autofocus
+
+When a Focus Approach Validation run completes successfully for a modality/objective combination,
+QPSC uses its measurements to enable a safer autofocus strategy called **approach-from-safe-Z**.
+Instead of the standard edge-retry walk that starts from wherever the stage was left and
+guesses whether moving further is correct, the approach-from-safe-Z strategy:
+
+1. Retracts to the measured safe Z (the operator-verified retraction point)
+2. Scans toward the sample in one bounded motion (bounded by the measured approach distance plus headroom)
+3. Returns to safe Z if focus is not found
+
+This replaces the open-ended edge-retry search with a controlled, measured scan. It is safer by
+construction -- travel is bounded and the direction is measured rather than inferred. Whether it
+is also more *accurate* than the edge-retry walk has not yet been established on hardware; treat
+that as untested until a rig run says otherwise.
+
+**When it applies:** Slot-jump autofocus during multi-slide batch acquisition. This is the
+autofocus that runs when moving between slides in a carrier, where the focus position can vary
+significantly and a far-from-focus starting Z is common.
+
+**When it falls back:** If no validation record exists, if the record is stale (safe Z or
+imaging conditions have changed significantly), or if the validation found a problem, QPSC logs
+a warning and falls back to the standard scan. The workflow still runs and acquires images, but
+using the slower edge-retry strategy.
+
+**Validation is advisory, not a gate.** Multi-slide acquisition will proceed whether or not
+validation exists. The multi-slide assignment dialog shows the validation status so you can
+choose to re-run it if needed; nothing is blocked.
+
 ---
 
 ## Safe-Z Clearance Monitoring

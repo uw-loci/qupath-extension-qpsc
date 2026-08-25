@@ -393,6 +393,21 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | `--range <um>` | no | Override of `sweep_range_um` from the yaml. |
 | `--dump 1` | no | Enable server-side frame dumping (TIFs + CSV + manifest). When set, the server writes all captured frames and per-frame metrics to a diagnostics folder and includes the path in the response. Used by the Autofocus Configuration Editor's Test button for offline analysis. |
 | `--max-attempts <n>` | no | Cap on focus-search attempts (edge retries). Pass 0 (default) to use the server default (MAX_EDGE_RETRIES + 1 = 3), appropriate for Live Viewer "find focus from scratch" use. Pass 1 from tile-AF to perform a single fast scan with the previous tile's Z as a tight seed. |
+| `--safe-z <um>` | no | Declared retracted position for approach-from-safe-Z. Must be paired with `--approach-max`; a partial specification is rejected with a warning and the standard scan runs, because neither has a safe default. |
+| `--approach-max <um>` | no | Signed travel bound from the safe Z toward the sample. The **sign carries the approach direction**, so the server never infers upright/inverted or stage polarity. Clamped to `stage.limits.z_um`. |
+| `--tissue-gate 1` | no | Commit only to a peak where the strategy's validity check finds tissue. Set when validation found surfaces (coverslip, slide face) *before* focus -- exactly when committing to the first peak would land on glass. |
+
+**Approach-from-safe-Z** (`--safe-z` + `--approach-max`) replaces the edge-retry
+walk for that call rather than seeding it. The walk starts wherever the stage was
+left and decides after each scan whether to continue, so every continuation is a
+guess that moving further -- possibly toward the sample -- is correct. The
+approach retracts to a position the operator measured as clear of the sample and
+scans in once, bounded. On failure the stage is returned to the safe Z rather
+than left where the scan stopped. The walk does **not** run as a fallback: doing
+so would reintroduce the open-ended travel the approach exists to avoid.
+
+QPSC only sends these flags when a Focus Approach Validation run has licensed the
+modality/objective; see `claude-reports/design/2026-08-24_approach-from-safe-z-autofocus.md`.
 
 Server-side sequence:
 

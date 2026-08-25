@@ -167,6 +167,92 @@ public final class SlotJumpAutofocus {
         }
     }
 
+    /**
+     * Whether this slot jump may use approach-from-safe-Z, and with what bounds.
+     *
+     * @param safeZUm           retracted position, or NaN to use the standard scan
+     * @param approachMaxUm     signed travel bound from the safe Z, or NaN
+     * @param requireTissueGate commit only where tissue is detected
+     */
+    private record ApproachPlan(double safeZUm, double approachMaxUm, boolean requireTissueGate) {
+        static ApproachPlan disabled() {
+            return new ApproachPlan(Double.NaN, Double.NaN, false);
+        }
+    }
+
+    /**
+     * Licenses approach-from-safe-Z only when a Focus Approach Validation run has measured
+     * this combination and still applies.
+     *
+     * <p>This is the gate. The approach drives the objective toward the sample along a path
+     * nobody watches, and the two things that make that defensible -- that the metric peaks at
+     * the sample rather than on glass, and how far the sample is from the retraction point --
+     * are measurements, not settings. Without them the standard scan runs instead: slower and
+     * less accurate, but it does not assume anything unverified about this rig.
+     *
+     * <p>Deliberately NOT a hard block on the workflow. Refusing to acquire because a
+     * characterisation is missing would strand a rig that has been focusing fine for months;
+     * the operator is told (in the multi-slide assignment dialog) and the run proceeds on the
+     * old path.
+     */
+    private static ApproachPlan resolveApproachPlan(String configPath, String modality, String objective) {
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            String scope = mgr.getString("microscope", "name");
+            if (scope == null || modality == null || objective == null) {
+                return ApproachPlan.disabled();
+            }
+            var record = qupath.ext.qpsc.utilities.FocusApproachValidationStore.find(scope, modality, objective);
+            if (record == null) {
+                logger.info(
+                        "Slot-jump AF: no focus-approach validation for {}/{}/{}; using the standard scan",
+                        scope,
+                        modality,
+                        objective);
+                return ApproachPlan.disabled();
+            }
+            if (!record.usable()) {
+                logger.warn(
+                        "Slot-jump AF: focus-approach validation FAILED for {}/{}; using the standard scan ({})",
+                        modality,
+                        objective,
+                        String.join("; ", record.reasons()));
+                return ApproachPlan.disabled();
+            }
+            Double currentSafeZ = mgr.getSafeZUm(null, modality);
+            String stale = record.isStaleAgainst(currentSafeZ);
+            if (stale != null) {
+                logger.warn("Slot-jump AF: focus-approach validation is stale ({}); using the standard scan", stale);
+                return ApproachPlan.disabled();
+            }
+            // Travel bound: the measured distance plus headroom for slide-to-slide variation.
+            // Signed, so the sign carries the approach direction and nothing has to infer it.
+            double measured = record.approachDistanceUm();
+            if (Double.isNaN(measured) || measured <= 0) {
+                return ApproachPlan.disabled();
+            }
+            double bound = measured * APPROACH_HEADROOM_FACTOR;
+            logger.info(
+                    "Slot-jump AF: approach-from-safe-Z licensed -- safe Z {} um, bound {} um, tissue gate {}",
+                    currentSafeZ,
+                    String.format("%.1f", bound),
+                    record.requiresTissueGate());
+            return new ApproachPlan(currentSafeZ, bound, record.requiresTissueGate());
+        } catch (Exception e) {
+            logger.debug(
+                    "Slot-jump AF: could not resolve an approach plan ({}); using the standard scan", e.getMessage());
+            return ApproachPlan.disabled();
+        }
+    }
+
+    /**
+     * Headroom on the validated approach distance. The validation measured ONE slide; the
+     * measured slide-to-slide focus spread on a carrier was 236 um against approach distances
+     * of a few hundred, so a bound with no headroom would fall short on a thicker slide. Kept
+     * modest because this is also the travel cap.
+     */
+    private static final double APPROACH_HEADROOM_FACTOR = 1.4;
+
     private static void publishSkip(String what) {
         logger.warn("Slot-jump AF SKIPPED: {}", what);
         publish("Focus skipped -- " + what, true);
@@ -342,6 +428,7 @@ public final class SlotJumpAutofocus {
                             // withAllLiveViewingOff). Blocking; returns a typed result. Objective is
                             // null -- the server auto-detects it from the live pixel size, exactly as
                             // the Live Viewer streaming-focus button does.
+                            ApproachPlan plan = resolveApproachPlan(configPath, modalityForStreaming, objective);
                             MicroscopeSocketClient.StreamingFocusResult result = controller
                                     .getSocketClient()
                                     .streamingFocus(
@@ -350,7 +437,10 @@ public final class SlotJumpAutofocus {
                                             modalityForStreaming,
                                             Double.NaN,
                                             false,
-                                            SLOT_JUMP_MAX_AF_ATTEMPTS);
+                                            SLOT_JUMP_MAX_AF_ATTEMPTS,
+                                            plan.safeZUm(),
+                                            plan.approachMaxUm(),
+                                            plan.requireTissueGate());
                             if (result.status == MicroscopeSocketClient.StreamingFocusResult.Status.ABORTED) {
                                 cancelled = true;
                             } else if (result.status != MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {

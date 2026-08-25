@@ -1941,6 +1941,44 @@ public class MicroscopeSocketClient implements AutoCloseable {
             boolean dumpFrames,
             int maxAttempts)
             throws IOException {
+        return streamingFocus(
+                yamlPath, objective, modality, rangeOverrideUm, dumpFrames, maxAttempts, Double.NaN, Double.NaN, false);
+    }
+
+    /**
+     * Variant that requests APPROACH-FROM-SAFE-Z instead of the edge-retry walk.
+     *
+     * <p>The walk starts wherever the stage was left and decides after each scan whether to
+     * keep going, so every continuation is a guess that moving further -- possibly toward the
+     * sample -- is correct. The approach instead retracts to a position the operator measured
+     * as clear of the sample and scans in ONCE, bounded by {@code approachMaxUm}.
+     *
+     * <p>Both {@code safeZUm} and {@code approachMaxUm} must be finite for the server to use
+     * the approach; a partial specification falls back to the standard scan rather than being
+     * guessed at, because neither has a safe default. Callers should only pass them when a
+     * Focus Approach Validation run has licensed this modality/objective -- the approach bound
+     * comes from that run's measured safe-Z-to-focus distance.
+     *
+     * @param safeZUm          declared retracted position, or NaN to use the standard scan
+     * @param approachMaxUm    signed travel bound from the safe Z toward the sample; the sign
+     *                         carries the approach direction
+     * @param requireTissueGate commit only to a peak where tissue is detected. Set when the
+     *                         validation found surfaces (coverslip, slide face) BEFORE focus,
+     *                         which is exactly when committing to the first peak lands on glass
+     * @return the focus result
+     * @throws IOException if the socket exchange fails
+     */
+    public StreamingFocusResult streamingFocus(
+            String yamlPath,
+            String objective,
+            String modality,
+            double rangeOverrideUm,
+            boolean dumpFrames,
+            int maxAttempts,
+            double safeZUm,
+            double approachMaxUm,
+            boolean requireTissueGate)
+            throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for streamingFocus");
         }
@@ -1961,6 +1999,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (maxAttempts > 0) {
             msgBuilder.append(" --max-attempts ").append(maxAttempts);
+        }
+        // Both or neither: the server refuses a partial specification rather than
+        // defaulting one of them, and this mirrors that so the intent is explicit on the wire.
+        if (!Double.isNaN(safeZUm) && !Double.isNaN(approachMaxUm)) {
+            msgBuilder.append(" --safe-z ").append(safeZUm);
+            msgBuilder.append(" --approach-max ").append(approachMaxUm);
+            if (requireTissueGate) {
+                msgBuilder.append(" --tissue-gate 1");
+            }
         }
         msgBuilder.append(" ").append(END_MARKER);
         String message = msgBuilder.toString();
