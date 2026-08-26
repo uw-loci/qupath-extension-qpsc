@@ -184,11 +184,13 @@ public final class SlotJumpAutofocus {
      * Licenses approach-from-safe-Z only when a Focus Approach Validation run has measured
      * this combination and still applies.
      *
-     * <p>This is the gate. The approach drives the objective toward the sample along a path
-     * nobody watches, and the two things that make that defensible -- that the metric peaks at
-     * the sample rather than on glass, and how far the sample is from the retraction point --
-     * are measurements, not settings. Without them the standard scan runs instead: slower and
-     * less accurate, but it does not assume anything unverified about this rig.
+     * <p>This is the gate, and it matters because the approach is the MORE DANGEROUS option --
+     * it drives the objective the whole way toward the sample along a path nobody watches,
+     * where the standard scan creeps in 30 um steps near the last focus. The two things that
+     * make that defensible -- that the metric peaks at the sample rather than on glass, and how
+     * far the sample is from the retraction point -- are measurements, not settings. Without
+     * them the standard scan runs instead: slower, but it assumes nothing unverified about this
+     * rig. Never make the approach the default for an unvalidated combination.
      *
      * <p>Deliberately NOT a hard block on the workflow. Refusing to acquire because a
      * characterisation is missing would strand a rig that has been focusing fine for months;

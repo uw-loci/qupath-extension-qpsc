@@ -6,11 +6,17 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
 import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.scene.Scene;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -112,6 +118,15 @@ public final class FocusApproachValidationWorkflow {
         if (manualFocusZ == null) {
             return;
         }
+        // The retraction is about to be exercised for the FIRST time, by moving to a number a
+        // human typed. If it is on the wrong side of the sample, this move drives the objective
+        // into the slide -- and it would do so before anything has been measured, which is the
+        // one motion this whole tool exists to make safe. So confirm the direction against the
+        // focus the operator just set, with the real numbers in front of them.
+        if (!confirmRetractionDirection(manualFocusZ, safeZ)) {
+            return;
+        }
+
         double[][] tissueProfile = captureProfile(mgr, controller, configPath, modality, safeZ, manualFocusZ);
         if (tissueProfile == null) {
             Dialogs.showErrorMessage("Focus Approach Validation", "The over-tissue scan produced no usable profile.");
@@ -199,6 +214,53 @@ public final class FocusApproachValidationWorkflow {
         return alert.showAndWait().filter(b -> b == ButtonType.OK).isPresent();
     }
 
+    /**
+     * Confirms, with real numbers, that moving from the focused position to the declared safe Z
+     * travels AWAY from the sample.
+     *
+     * <p>Nothing in the software can determine this. Which sign retracts depends on the rig,
+     * and the safe Z is operator-entered, so a transposed sign or a value from a different
+     * insert sends the objective straight into the slide. The stage-limit check cannot catch it
+     * -- a wrong-side value is usually still comfortably inside the envelope.
+     *
+     * <p>Showing the distance and direction rather than asking "is the safe Z correct?" is the
+     * point: the operator can sanity-check 200 um in the negative direction against what they
+     * can see, where they cannot meaningfully re-check a number they typed earlier.
+     *
+     * @param focusZ the Z the operator just focused tissue at
+     * @param safeZ  the declared retracted position
+     * @return true to proceed
+     */
+    private static boolean confirmRetractionDirection(double focusZ, double safeZ) {
+        double delta = safeZ - focusZ;
+        String direction = delta >= 0 ? "POSITIVE (+Z)" : "NEGATIVE (-Z)";
+        Alert alert = new Alert(Alert.AlertType.WARNING);
+        alert.setTitle("Focus Approach Validation");
+        alert.setHeaderText("Confirm the retraction direction before the stage moves");
+        TextArea body = new TextArea(String.format(
+                "The stage is about to move from your focus to the declared safe Z:%n%n"
+                        + "    focused at   %.1f um%n"
+                        + "    safe Z       %.1f um%n"
+                        + "    movement     %.1f um in the %s direction%n%n"
+                        + "Confirm that this direction moves the objective AWAY from the sample.%n%n"
+                        + "This cannot be checked in software. Which sign retracts depends on the "
+                        + "microscope, and the safe Z was entered by hand -- if it is on the wrong side, "
+                        + "or belongs to a different stage insert, this move drives the objective into "
+                        + "the slide. The stage-limit check will not catch that: a wrong-side value is "
+                        + "usually still well inside the configured envelope.%n%n"
+                        + "If you are not certain, cancel and verify by retracting manually in the Live "
+                        + "Viewer first.",
+                focusZ, safeZ, Math.abs(delta), direction));
+        body.setEditable(false);
+        body.setWrapText(true);
+        body.setPrefRowCount(16);
+        body.setPrefColumnCount(64);
+        alert.getDialogPane().setContent(new VBox(body));
+        ButtonType proceed = new ButtonType("Direction is correct -- proceed");
+        alert.getButtonTypes().setAll(proceed, ButtonType.CANCEL);
+        return alert.showAndWait().filter(b -> b == proceed).isPresent();
+    }
+
     /** Prompts, then reads the stage Z the operator settled on. Null when cancelled. */
     private static Double promptAndReadZ(MicroscopeController controller, String header, String instruction) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
@@ -235,31 +297,104 @@ public final class FocusApproachValidationWorkflow {
             String modality,
             double safeZ,
             double manualFocusZ) {
-        // The scan runs from the safe Z to just past focus, so it is centred between them.
+
         double direction = Math.signum(manualFocusZ - safeZ);
         double farEnd = manualFocusZ + direction * PAST_FOCUS_MARGIN_UM;
         double range = Math.abs(farEnd - safeZ);
         double centre = (safeZ + farEnd) / 2.0;
-        try {
-            controller.moveStageZ(safeZ);
-            controller.moveStageZ(centre);
-            MicroscopeSocketClient.StreamingFocusResult result =
-                    controller.getSocketClient().streamingFocus(configPath, null, modality, range, true, 1);
-            if (result == null || result.dumpPath == null) {
-                logger.warn("Focus-approach scan returned no dump path");
-                return null;
-            }
-            Path samples = Paths.get(result.dumpPath).resolve("samples.csv");
-            double[][] profile = FocusApproachValidationStore.parseSamplesCsv(samples);
-            if (profile == null) {
-                logger.warn("Focus-approach scan dump had no usable samples.csv at {}", samples);
-            }
-            return profile;
-        } catch (Exception e) {
-            logger.error("Focus-approach scan failed", e);
-            Dialogs.showErrorMessage("Focus Approach Validation", "The scan failed: " + e.getMessage());
+
+        // The scan moves the stage toward the sample for tens of seconds. Running it on the FX
+        // thread would freeze the UI for the whole traverse with no way to intervene, which is
+        // exactly the wrong property for the one tool whose job is to make that motion safe. So
+        // it runs on a daemon thread behind a Cancel the operator can actually reach.
+        final double[][][] holder = new double[1][][];
+        final boolean[] cancelled = {false};
+
+        Stage progress = new Stage();
+        progress.initModality(Modality.APPLICATION_MODAL);
+        progress.setTitle("Focus Approach Validation");
+        progress.setAlwaysOnTop(true);
+
+        Label status = new Label(String.format(
+                "Retracting to %.1f um, then scanning %.1f um toward the sample.%n%n"
+                        + "Watch the stage. Cancel stops the scan and returns to the safe Z.",
+                safeZ, range));
+        status.setWrapText(true);
+        status.setMaxWidth(460);
+        ProgressBar bar = new ProgressBar();
+        bar.setPrefWidth(460);
+
+        Button cancelButton = new Button("CANCEL - stop the scan");
+        cancelButton.setStyle("-fx-base: #c62828; -fx-font-weight: bold;");
+        Runnable abort = () -> {
+            cancelled[0] = true;
+            status.setText("Cancelling -- sending abort and returning to the safe Z...");
+            cancelButton.setDisable(true);
+            Thread aborter = new Thread(
+                    () -> {
+                        try {
+                            controller.getSocketClient().abortStreamingFocus();
+                        } catch (Exception e) {
+                            logger.warn("Focus-approach cancel: abort failed: {}", e.getMessage());
+                        }
+                        try {
+                            controller.moveStageZ(safeZ);
+                        } catch (Exception e) {
+                            logger.error("Focus-approach cancel: could NOT return to the safe Z: {}", e.getMessage());
+                        }
+                    },
+                    "FocusApproach-Abort");
+            aborter.setDaemon(true);
+            aborter.start();
+        };
+        cancelButton.setOnAction(e -> abort.run());
+        // The window close button must abort too, not orphan a moving stage.
+        progress.setOnCloseRequest(e -> {
+            e.consume();
+            abort.run();
+        });
+
+        VBox box = new VBox(12, status, bar, cancelButton);
+        box.setPadding(new Insets(18));
+        progress.setScene(new Scene(box));
+
+        Thread scanThread = new Thread(
+                () -> {
+                    try {
+                        controller.moveStageZ(safeZ);
+                        if (!cancelled[0]) {
+                            MicroscopeSocketClient.StreamingFocusResult result = controller
+                                    .getSocketClient()
+                                    .streamingFocus(configPath, null, modality, range, true, 1);
+                            if (result != null && result.dumpPath != null) {
+                                Path samples = Paths.get(result.dumpPath).resolve("samples.csv");
+                                holder[0] = FocusApproachValidationStore.parseSamplesCsv(samples);
+                                if (holder[0] == null) {
+                                    logger.warn("Focus-approach scan dump had no usable samples.csv at {}", samples);
+                                }
+                            } else {
+                                logger.warn("Focus-approach scan returned no dump path");
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.error("Focus-approach scan failed", e);
+                    } finally {
+                        Platform.runLater(progress::close);
+                    }
+                },
+                "FocusApproach-Scan");
+        scanThread.setDaemon(true);
+        scanThread.start();
+
+        progress.showAndWait();
+        if (cancelled[0]) {
+            logger.info("Focus-approach scan cancelled by the operator");
             return null;
         }
+        // centre is computed above for symmetry with the server's window maths; the server
+        // derives its own window from --range around the current Z, which is the safe Z here.
+        logger.debug("Focus-approach scan window centred near {}", centre);
+        return holder[0];
     }
 
     /** Current camera exposure, or NaN when it cannot be read. */
