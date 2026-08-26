@@ -877,6 +877,74 @@ public class MicroscopeConfigManager {
         return getDouble("stage", "safe_z_um");
     }
 
+    /**
+     * Which direction of Z increases the objective-sample separation, from
+     * {@code stage.focus.retract_sign} ({@code positive} | {@code negative}).
+     *
+     * <p>Every question that matters -- is this position clear, which way do I approach, is
+     * focus drifting toward the retraction point -- is about the objective-sample GAP. The
+     * mechanism is deliberately not modelled: some scopes drive the stage, others (the Nikon
+     * Eclipse on LC-PolScope) drive the objective, and in an infinity-corrected system the two
+     * are optically equivalent. Only the separation is real.
+     *
+     * <p>Declared, never derived from {@code scope_type} crossed with which element moves.
+     * That would be a two-factor sign composition, and this project's sign defects have almost
+     * all been exactly that -- flip XOR invert, stage polarity XOR camera orientation. One
+     * measured fact beats two composed ones when the failure mode is a collision.
+     *
+     * @return +1.0 when increasing Z retracts, -1.0 when decreasing Z retracts, or null when
+     *         the scope has not declared it (which disables approach-from-safe-Z rather than
+     *         guessing)
+     */
+    public Double getFocusRetractSign() {
+        String raw = getString("stage", "focus", "retract_sign");
+        if (raw == null) {
+            return null;
+        }
+        String v = raw.trim().toLowerCase();
+        if (v.equals("positive") || v.equals("+1") || v.equals("1")) {
+            return 1.0;
+        }
+        if (v.equals("negative") || v.equals("-1")) {
+            return -1.0;
+        }
+        logger.warn("stage.focus.retract_sign is '{}'; expected positive or negative. Treating as undeclared.", raw);
+        return null;
+    }
+
+    /**
+     * Checks a candidate safe Z against the declared retract direction, given a position where
+     * the sample is known to be in focus.
+     *
+     * <p>This is the check {@code stage.limits.z_um} cannot make. A wrong-SIDE safe Z is
+     * usually still comfortably inside the travel envelope -- PPM's limits are
+     * {@code [-720, 1000]} and a value of -500 sat happily inside them while pointing at the
+     * objective. Only a direction, plus one known focus position, distinguishes retracted from
+     * plunging.
+     *
+     * @param safeZUm  the candidate retracted position
+     * @param focusZUm a Z at which the sample is in focus
+     * @return null when the safe Z is on the retracted side (or the direction is undeclared),
+     *         else a human-readable reason it is not
+     */
+    public String validateSafeZDirection(double safeZUm, double focusZUm) {
+        Double retractSign = getFocusRetractSign();
+        if (retractSign == null) {
+            return null;
+        }
+        double actual = Math.signum(safeZUm - focusZUm);
+        if (actual == 0) {
+            return String.format("safe Z (%.1f) is the same as the focus position; it is not a retraction", safeZUm);
+        }
+        if (actual != retractSign) {
+            return String.format(
+                    "safe Z (%.1f) is on the WRONG SIDE of focus (%.1f). This scope declares that %s Z "
+                            + "retracts, so moving there would drive the objective toward the sample, not away.",
+                    safeZUm, focusZUm, retractSign > 0 ? "increasing" : "decreasing");
+        }
+        return null;
+    }
+
     /** Scope-level fallback only; prefer {@link #getSafeZUm(String, String)}. */
     public Double getSafeZUm() {
         return getSafeZUm(null, null);

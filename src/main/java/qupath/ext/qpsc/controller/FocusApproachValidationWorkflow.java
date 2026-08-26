@@ -11,9 +11,11 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
 import javafx.scene.control.TextArea;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -83,8 +85,8 @@ public final class FocusApproachValidationWorkflow {
         }
 
         String modality = qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
-        String objective = TestAutofocusWorkflow.getCurrentObjective(mgr);
         String scope = mgr.getString("microscope", "name");
+        String objective = resolveMountedObjective(mgr, controller);
         Double safeZ = mgr.getSafeZUm(null, modality);
 
         if (safeZ == null) {
@@ -103,7 +105,12 @@ public final class FocusApproachValidationWorkflow {
             return;
         }
 
-        if (!confirmPlan(modality, objective, safeZ)) {
+        // The record is KEYED on the objective, so a wrong value here does not merely mislabel
+        // the result -- it licenses the wrong objective and leaves the mounted one unlicensed.
+        // Hence a picker rather than a read-only line: the resolution below is a good default,
+        // not something to be trusted silently.
+        objective = confirmPlan(mgr, modality, objective, safeZ);
+        if (objective == null) {
             return;
         }
 
@@ -120,9 +127,25 @@ public final class FocusApproachValidationWorkflow {
         }
         // The retraction is about to be exercised for the FIRST time, by moving to a number a
         // human typed. If it is on the wrong side of the sample, this move drives the objective
-        // into the slide -- and it would do so before anything has been measured, which is the
-        // one motion this whole tool exists to make safe. So confirm the direction against the
-        // focus the operator just set, with the real numbers in front of them.
+        // into the slide -- before anything has been measured, and it is the one move Cancel
+        // cannot interrupt.
+        //
+        // Two guards, in order of preference. The MECHANICAL one runs first: with a declared
+        // retract direction and the focus the operator just set, a wrong-side value is provable
+        // and is refused outright. stage.limits.z_um cannot make this call -- PPM's -500 sat
+        // comfortably inside [-720, 1000] while pointing at the objective.
+        String wrongSide = mgr.validateSafeZDirection(safeZ, manualFocusZ);
+        if (wrongSide != null) {
+            logger.error("Focus-approach validation refused: {}", wrongSide);
+            Dialogs.showErrorMessage(
+                    "Focus Approach Validation",
+                    "Refusing to move.\n\n" + wrongSide
+                            + "\n\nFix stage.safe_z_um (or the per-insert override) in the microscope YAML "
+                            + "before running this. Nothing has moved.");
+            return;
+        }
+        // The HUMAN one is the fallback for scopes that have not declared a direction yet, and
+        // a cross-check where they have.
         if (!confirmRetractionDirection(manualFocusZ, safeZ)) {
             return;
         }
@@ -181,16 +204,87 @@ public final class FocusApproachValidationWorkflow {
         showVerdict(verdict, record);
     }
 
-    /** Explains what is about to happen and what the result depends on. */
-    private static boolean confirmPlan(String modality, String objective, double safeZ) {
+    /**
+     * Best guess at which objective is actually mounted.
+     *
+     * <p>NOT {@code TestAutofocusWorkflow.getCurrentObjective}: that reads
+     * {@code microscope.objective_in_use}, which is never populated at runtime on these rigs,
+     * and then falls back to the FIRST objective in the hardware list. On PPM that reports 10x
+     * whatever is mounted -- observed in the 2026-08-14 logs on every autofocus call, and
+     * observed again in this dialog.
+     *
+     * <p>Order: the pixel size MicroManager reports (the server resolves the objective the same
+     * way, so the two agree), then the session's objective state, then the stale config value.
+     *
+     * @return the best available objective ID, or null when nothing resolves
+     */
+    private static String resolveMountedObjective(MicroscopeConfigManager mgr, MicroscopeController controller) {
+        try {
+            double pixelSize = controller.getSocketClient().getMicroscopePixelSize();
+            var match = mgr.findHardwareByPixelSize(pixelSize, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+            if (match.isPresent()) {
+                logger.info(
+                        "Focus-approach: objective resolved as {} via MicroManager pixel size {} um/px",
+                        match.get().objectiveId(),
+                        pixelSize);
+                return match.get().objectiveId();
+            }
+            logger.warn(
+                    "Focus-approach: MicroManager pixel size {} um/px matched no configured objective; "
+                            + "falling back to session state",
+                    pixelSize);
+        } catch (Exception e) {
+            logger.warn("Focus-approach: could not read the MicroManager pixel size ({})", e.getMessage());
+        }
+        String fromState = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+        if (fromState != null && !fromState.isEmpty()) {
+            return fromState;
+        }
+        return TestAutofocusWorkflow.getCurrentObjective(mgr);
+    }
+
+    /**
+     * Explains what is about to happen, and lets the operator confirm or correct the objective.
+     *
+     * @return the chosen objective ID, or null if cancelled
+     */
+    private static String confirmPlan(
+            MicroscopeConfigManager mgr, String modality, String resolvedObjective, double safeZ) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Focus Approach Validation");
         alert.setHeaderText("Measure how focus behaves approaching from the safe Z");
 
+        // Objective picker, defaulted to the pixel-size match. The result record is keyed on
+        // this, so a silently-wrong value licenses the wrong objective AND leaves the mounted
+        // one unlicensed -- the operator must be able to see and correct it.
+        var objectiveIds = mgr.getAvailableObjectives();
+        var objectiveNames = mgr.getObjectiveFriendlyNames(objectiveIds);
+        ComboBox<String> objectiveBox = new ComboBox<>();
+        objectiveBox
+                .getItems()
+                .setAll(objectiveIds.stream()
+                        .map(id -> objectiveNames.get(id) + " (" + id + ")")
+                        .sorted()
+                        .toList());
+        for (String item : objectiveBox.getItems()) {
+            if (item.contains("(" + resolvedObjective + ")")) {
+                objectiveBox.setValue(item);
+            }
+        }
+        if (objectiveBox.getValue() == null && !objectiveBox.getItems().isEmpty()) {
+            objectiveBox.setValue(objectiveBox.getItems().get(0));
+        }
+        Label objectiveNote = new Label("Confirm the objective that is actually mounted -- the result is stored "
+                + "against it, and a wrong value licenses the wrong objective.");
+        objectiveNote.setWrapText(true);
+        objectiveNote.setMaxWidth(520);
+        objectiveNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        HBox objectiveRow = new HBox(8, new Label("Objective:"), objectiveBox);
+        objectiveRow.setStyle("-fx-alignment: center-left;");
+
         TextArea body = new TextArea("This measures whether autofocus can safely approach the sample from the "
                 + "retracted position, for ONE modality and objective.\n\n"
                 + "Modality:  " + modality + "\n"
-                + "Objective: " + objective + "\n"
                 + "Safe Z:    " + safeZ + " um\n\n"
                 + "Mount the HIGHEST-magnification objective you use for this kind of scanning. It has the "
                 + "shortest working distance and the narrowest focus peak, so a result that is clean there "
@@ -210,9 +304,19 @@ public final class FocusApproachValidationWorkflow {
         body.setWrapText(true);
         body.setPrefRowCount(22);
         body.setPrefColumnCount(64);
-        alert.getDialogPane().setContent(new VBox(body));
+        VBox content = new VBox(10, body, objectiveRow, objectiveNote);
+        alert.getDialogPane().setContent(content);
         alert.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
-        return alert.showAndWait().filter(b -> b == ButtonType.OK).isPresent();
+        if (alert.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) {
+            return null;
+        }
+        String chosen = objectiveBox.getValue();
+        if (chosen == null) {
+            return null;
+        }
+        int open = chosen.lastIndexOf('(');
+        int close = chosen.lastIndexOf(')');
+        return (open >= 0 && close > open) ? chosen.substring(open + 1, close) : chosen;
     }
 
     /**
