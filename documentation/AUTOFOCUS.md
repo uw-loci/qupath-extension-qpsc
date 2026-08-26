@@ -262,10 +262,24 @@ Validating the worst case licenses the rest.
 
 1. Set exposure and illumination to what you actually acquire with.
 2. Move the stage in XY over **tissue** and focus by hand; confirm.
-3. A confirmation dialog appears showing the focused Z, the declared safe Z, the movement distance,
-   and the direction (POSITIVE or NEGATIVE). **Verify that this direction moves the objective
-   AWAY from the sample.** If uncertain, cancel and verify manually in the Live Viewer first.
-   Click "Direction is correct -- proceed" to continue.
+3. A confirmation dialog appears with:
+   - **Objective picker** (dropdown) -- Confirm which objective is actually mounted. The result
+     record is **keyed on the objective**, so a wrong selection licenses the wrong objective and
+     leaves the mounted one unlicensed. The picker defaults to the pixel-size match (if available)
+     or the session state, but you should verify it visually.
+   - The focused Z, the declared safe Z, the movement distance, and the direction (POSITIVE or
+     NEGATIVE). **Verify that this direction moves the objective AWAY from the sample.** If
+     uncertain, cancel and verify manually in the Live Viewer first.
+   
+   **Mechanical direction check:** If your microscope YAML declares `stage.focus.retract_sign`,
+   the workflow performs an additional check: it refuses to move if the safe Z is on the wrong
+   side of focus (i.e., would drive the objective toward the sample). This check happens before
+   you confirm, and the error message tells you to fix the safe Z value in the YAML. If the
+   direction is undeclared in the YAML, this check is skipped and the human confirmation
+   remains the only guard.
+   
+   Click "Proceed" or "Direction is correct" to continue after confirming both the objective
+   and the retraction direction.
 4. The stage retracts to the safe Z and scans in, continuing ~30 um past your focus so the far
    side of the peak is captured. A window stays up for the whole traverse with a red **CANCEL**
    button, which aborts the scan and returns the stage to the safe Z. **Watch the stage during

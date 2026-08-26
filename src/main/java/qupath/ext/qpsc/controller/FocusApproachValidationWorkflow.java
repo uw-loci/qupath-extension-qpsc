@@ -28,6 +28,7 @@ import qupath.ext.qpsc.utilities.FocusApproachValidationStore;
 import qupath.ext.qpsc.utilities.FocusProfileAnalysis;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
+import qupath.lib.gui.QuPathGUI;
 
 /**
  * Guided measurement of how the focus metric behaves while approaching the sample from the
@@ -253,6 +254,9 @@ public final class FocusApproachValidationWorkflow {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Focus Approach Validation");
         alert.setHeaderText("Measure how focus behaves approaching from the safe Z");
+        // Non-modal: this dialog tells the operator to set exposure and illumination, so it
+        // must not block the controls that do that. showAndWait still waits for the answer.
+        makeNonBlocking(alert);
 
         // Objective picker, defaulted to the pixel-size match. The result record is keyed on
         // this, so a silently-wrong value licenses the wrong objective AND leaves the mounted
@@ -342,6 +346,9 @@ public final class FocusApproachValidationWorkflow {
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle("Focus Approach Validation");
         alert.setHeaderText("Confirm the retraction direction before the stage moves");
+        // Non-modal so the operator can act on its own advice: verify the retraction by hand in
+        // the Live Viewer before committing.
+        makeNonBlocking(alert);
         TextArea body = new TextArea(String.format(
                 "The stage is about to move from your focus to the declared safe Z:%n%n"
                         + "    focused at   %.1f um%n"
@@ -371,6 +378,9 @@ public final class FocusApproachValidationWorkflow {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Focus Approach Validation");
         alert.setHeaderText(header);
+        // These prompts ask the operator to move the stage in XY and focus by hand. An
+        // application-modal dialog would block exactly the controls it is asking them to use.
+        makeNonBlocking(alert);
         Label label = new Label(instruction);
         label.setWrapText(true);
         label.setMaxWidth(520);
@@ -500,6 +510,31 @@ public final class FocusApproachValidationWorkflow {
         // derives its own window from --range around the current Z, which is the safe Z here.
         logger.debug("Focus-approach scan window centred near {}", centre);
         return holder[0];
+    }
+
+    /**
+     * Makes an alert float over QuPath without taking input away from it.
+     *
+     * <p>Every prompt in this workflow asks the operator to do something with the microscope
+     * UI -- set exposure, move in XY, focus by hand, or go and verify a retraction in the Live
+     * Viewer. An application-modal dialog blocks precisely those controls, so {@code showAndWait}
+     * would sit waiting for an action it had made impossible. {@link Modality#NONE} still lets
+     * {@code showAndWait} block this workflow's own flow while leaving the rest of the UI live,
+     * which is the same pattern {@code UIFunctions.stageAlignmentConfirmAsync} uses.
+     *
+     * <p>The scan progress window is deliberately NOT made non-blocking: nothing should be
+     * driving the stage while a scan is traversing toward the sample.
+     */
+    private static void makeNonBlocking(Alert alert) {
+        alert.initModality(Modality.NONE);
+        QuPathGUI gui = QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            alert.initOwner(gui.getStage());
+        }
+        alert.getDialogPane().getScene().getWindow();
+        if (alert.getDialogPane().getScene().getWindow() instanceof Stage stage) {
+            stage.setAlwaysOnTop(true);
+        }
     }
 
     /** Current camera exposure, or NaN when it cannot be read. */

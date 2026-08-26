@@ -1137,6 +1137,30 @@ These will be automatically copied to child images acquired from that parent.
 
 The safe Z is the declared retracted position where the objective clears the sample, and the position autofocus approaches from. On scopes with interchangeable inserts (dishes, plates, slide holders), the sample plane sits at different heights depending on which insert is loaded, so a single safe Z cannot safely clear all combinations. QPSC now resolves safe Z per insert and per imaging modality, with fallback levels when per-insert/modality values are absent.
 
+### Retraction Direction (stage.focus.retract_sign)
+
+**Optional but recommended.** Declares which direction of Z increases the objective-sample separation, so the system can validate that a safe Z is on the retracted side of focus before attempting to move there.
+
+```yaml
+stage:
+  focus:
+    retract_sign: positive  # OR: negative
+```
+
+**Values:**
+- `positive` — increasing Z retracts (moves the objective away from the sample)
+- `negative` — decreasing Z retracts
+
+**What it does:**
+When this value is declared, the Focus Approach Validation workflow performs a mechanical direction check: before moving to the safe Z, it verifies that the safe Z is indeed on the retracted side of the focused position. If the safe Z is on the wrong side (would drive the objective toward the sample), the workflow refuses to move and displays an error message directing you to fix the safe Z value in the YAML. This check runs **before** the first motion and is the strongest guard against objective collisions.
+
+If the direction is **not declared**, the Focus Approach Validation workflow still runs but skips the mechanical check, relying on the human confirmation dialog as the only guard against wrong-side values.
+
+**Why this matters:** The stage Z limits (`stage.limits.z_um`) cannot distinguish a wrong-side safe Z from a valid one — a value like -500 can sit comfortably inside the limit range [-720, 1000] while still pointing at the objective. Only a direction, plus one known focus position, can prove whether a safe Z is truly retracted.
+
+**How to determine your scope's retraction direction:**
+Declare a test value (try `positive`), run Focus Approach Validation with exposure/illumination set to your acquisition defaults, and watch whether the stage moves away or toward the sample when it retracts. The mechanical check will refuse a wrong direction immediately; fix the YAML and re-run. Once confirmed on your scope, stamp the value permanently.
+
 ### Configuration (YAML)
 
 Safe Z values are stored in your microscope configuration file under `stage.inserts.configurations`. The resolution hierarchy is most-specific-first:
