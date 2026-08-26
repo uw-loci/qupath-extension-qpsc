@@ -261,7 +261,11 @@ Validating the worst case licenses the rest.
 **Procedure:**
 
 1. Set exposure and illumination to what you actually acquire with.
-2. Move the stage in XY over **tissue** and focus by hand; confirm.
+2. Move the stage in XY over **tissue** and focus by hand **using Live Mode** -- judge focus from
+   the live camera image, not the eyepiece. The two are not necessarily parfocal, and every
+   measurement here is made on camera frames; this Z is the reference the measured peak is checked
+   against within 5 um, so an eyepiece focus can fail a microscope that is working perfectly.
+   Confirm.
 3. A confirmation dialog appears with:
    - **Objective picker** (dropdown) -- Confirm which objective is actually mounted. The result
      record is **keyed on the objective**, so a wrong selection licenses the wrong objective and

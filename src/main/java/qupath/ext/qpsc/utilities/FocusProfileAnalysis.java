@@ -72,7 +72,15 @@ public final class FocusProfileAnalysis {
     /** Fraction of the approach that must ascend for the monotonic assumption to hold. */
     private static final double MIN_RISING_FRACTION = 0.80;
 
-    /** How far the strongest peak may sit from the operator's manual focus, in micrometers. */
+    /**
+     * How far the strongest peak may sit from the operator's manual focus, in micrometers.
+     *
+     * <p>Assumes the manual focus was set from the LIVE CAMERA IMAGE. The eyepiece and camera
+     * port are not necessarily parfocal, so an eyepiece focus can sit tens of microns from where
+     * the camera is sharp -- which would fail this check on a microscope that is working
+     * perfectly. The tool's instructions say so explicitly; do not loosen this tolerance to
+     * accommodate an eyepiece focus.
+     */
     private static final double FOCUS_TOLERANCE_UM = 5.0;
 
     private FocusProfileAnalysis() {}

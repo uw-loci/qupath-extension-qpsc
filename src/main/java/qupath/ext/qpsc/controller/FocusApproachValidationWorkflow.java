@@ -120,8 +120,13 @@ public final class FocusApproachValidationWorkflow {
         Double manualFocusZ = promptAndReadZ(
                 controller,
                 "Step 1 of 2: over TISSUE",
-                "Move the stage in XY so the camera is over TISSUE, then focus on it by hand.\n\n"
-                        + "Click OK when the tissue is sharply in focus. The stage will retract to "
+                "Move the stage in XY so the camera is over TISSUE, then focus by hand "
+                        + "USING LIVE MODE -- judge focus from the live camera image, NOT the eyepiece.\n\n"
+                        + "The eyepiece and the camera port are not necessarily parfocal, so an eyepiece "
+                        + "focus can sit tens of microns from where the camera is sharp. Everything measured "
+                        + "here comes from camera frames, and this Z is the reference the measured peak is "
+                        + "checked against -- an eyepiece focus can fail a perfectly good microscope.\n\n"
+                        + "Click OK when the tissue is sharply in focus IN LIVE MODE. The stage will retract to "
                         + safeZ + " um and scan back in past this focus.");
         if (manualFocusZ == null) {
             return;
@@ -294,7 +299,9 @@ public final class FocusApproachValidationWorkflow {
                 + "shortest working distance and the narrowest focus peak, so a result that is clean there "
                 + "is clean for the lower magnifications too.\n\n"
                 + "You will be asked to do two things:\n"
-                + "  1. Put the camera OVER TISSUE and focus by hand.\n"
+                + "  1. Put the camera OVER TISSUE and focus by hand IN LIVE MODE (not the eyepiece --\n"
+                + "     the two are not necessarily parfocal, and every measurement here is made on\n"
+                + "     camera frames).\n"
                 + "  2. Move to a BARE part of the same slide, changing nothing else.\n\n"
                 + "The same scan runs in both positions. Any peak that appears in both is a surface "
                 + "(coverslip, slide face) rather than tissue -- that is what the second scan is for.\n\n"
