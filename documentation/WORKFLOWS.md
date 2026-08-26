@@ -207,13 +207,17 @@ See [full documentation](tools/microscope-alignment.md) for step-by-step instruc
 
 ---
 
-## Multi-Channel Acquisition (Widefield IF, BF+IF)
+## Multi-Channel Acquisition (Widefield IF, BF+IF, LC-PolScope)
 
 ### When It Applies
 
-There is no new menu entry for multi-channel acquisition. Any acquisition profile whose modality declares a `channels:` library in the microscope YAML automatically takes the channel path when you run it through either [Bounded Acquisition](#workflow-1-bounded-acquisition) or [Acquire from Existing Image](#workflow-2-acquire-from-existing-image). Pure-IF profiles use a modality of type `widefield` and combined BF+IF profiles use type `bf_if`; both flow through the same UI and the same acquisition code path.
+There is no new menu entry for multi-channel acquisition. Any acquisition profile whose modality declares a `channels:` library in the microscope YAML automatically takes the channel path when you run it through either [Bounded Acquisition](#workflow-1-bounded-acquisition) or [Acquire from Existing Image](#workflow-2-acquire-from-existing-image). Three modality types use the channel system:
 
-Angle-based modalities (PPM) and channel-based modalities are mutually exclusive per acquisition. If a profile has a channel library, the angle axis is suppressed; if it does not, the workflow falls back to the existing single-snap / multi-angle path unchanged.
+- **Widefield immunofluorescence** (`type: widefield`) — fluorescence-only channels.
+- **Combined brightfield + IF** (`type: bf_if`) — brightfield channel plus fluorescence channels.
+- **Liquid-crystal polarization** (modality name `lcpolscope`, `type: polarized`) — electrical LC states as channels. Note the distinction: dispatch keys off the modality *name*, while `type` describes the sample physics and is shared with PPM.
+
+All three flow through the same UI and the same acquisition code path. Angle-based modalities (PPM) and channel-based modalities are mutually exclusive per acquisition. If a profile has a channel library, the angle axis is suppressed; if it does not, the workflow falls back to the existing single-snap / multi-angle path unchanged.
 
 ### Picking a Channel-Based Profile
 
