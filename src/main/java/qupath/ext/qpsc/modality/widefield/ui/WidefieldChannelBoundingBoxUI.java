@@ -402,6 +402,28 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                 .addAll(new Separator(), title, masterOverride, grid, presetBar, testBar, mdaBar, statusLabel, hint);
     }
 
+    /**
+     * Adds a modality-specific advisory to the top of this dialog.
+     *
+     * <p>The channel picker is shared by every channel modality, so anything
+     * true only of one of them belongs here rather than in the shared layout.
+     * Inserted at index 0 so it is read before the operator starts choosing
+     * channels, not after.
+     *
+     * @param heading short bold line naming the concern
+     * @param body    the explanation; wrapped, so write prose not fragments
+     */
+    public void addModalityNotice(String heading, String body) {
+        Label headingLabel = boldLabel(heading);
+        Label bodyLabel = new Label(body);
+        bodyLabel.setWrapText(true);
+        bodyLabel.setMaxWidth(520);
+        bodyLabel.setStyle("-fx-font-size: 11px;");
+        VBox notice = new VBox(2, headingLabel, bodyLabel);
+        notice.setStyle("-fx-padding: 6; -fx-border-color: -fx-accent; -fx-border-width: 0 0 0 3;");
+        root.getChildren().add(0, notice);
+    }
+
     private static Label boldLabel(String text) {
         Label l = new Label(text);
         l.setStyle("-fx-font-weight: bold;");

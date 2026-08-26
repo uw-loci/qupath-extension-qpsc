@@ -136,7 +136,23 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         // Reuse the generic channel picker rather than forking a near-identical dialog --
         // the LC states are channels as far as the UI is concerned.
         WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI();
-        return ui.hasChannels() ? Optional.of(ui) : Optional.empty();
+        if (!ui.hasChannels()) {
+            return Optional.empty();
+        }
+        ui.addModalityNotice(
+                "Equal exposure across all states is required",
+                "The reconstruction treats the five states as samples of one radiometric scale. "
+                        + "A per-state exposure difference biases retardance and orientation with no "
+                        + "visible symptom -- the images still look correct. Leave the exposures equal.");
+        ui.addModalityNotice(
+                "Orientation is axial: stitching and downsampling need care",
+                "This run also produces a slow-axis orientation map, where 0 and 180 degrees mean the "
+                        + "same thing. Averaging such values is invalid -- the mean of 179 and 1 is 90 "
+                        + "degrees, perpendicular to the truth and entirely plausible-looking. Seam "
+                        + "blending and pyramid downsampling must therefore go through sin(2t)/cos(2t), "
+                        + "and mirroring the image negates the angle. The written tiles declare this in "
+                        + "their OME metadata; any external tool you use on them must honour it.");
+        return Optional.of(ui);
     }
 
     private List<Channel> resolveChannels(String profileKey) {
