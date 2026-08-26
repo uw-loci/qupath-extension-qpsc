@@ -98,6 +98,7 @@ class FocusApproachValidationStoreTest {
                 true,
                 false,
                 -700.0,
+                -400.0,
                 300.0,
                 9.4,
                 List.of(),
@@ -125,6 +126,7 @@ class FocusApproachValidationStoreTest {
                 false,
                 true,
                 -700.0,
+                -400.0,
                 300.0,
                 Double.NaN,
                 List.of(-380.0),
@@ -141,6 +143,86 @@ class FocusApproachValidationStoreTest {
     }
 
     @Test
+    void theApproachBoundCarriesTheDirectionTheRunMeasured() {
+        // PPM as measured 2026-08-26: retract is the POSITIVE direction (safe Z 0, samples
+        // near -250), so the approach must scan NEGATIVE. An unsigned bound would send the
+        // scan away from the sample and find nothing.
+        var ppm = new FocusApproachValidationStore.Record(
+                "PPM",
+                "ppm_20x",
+                "OBJ_20X",
+                true,
+                false,
+                0.0,
+                -250.0,
+                250.0,
+                8.0,
+                List.of(),
+                0.2,
+                50.0,
+                List.of(),
+                "2026-08-26T12:00:00Z");
+        assertEquals(-350.0, ppm.signedApproachBoundUm(1.4), 1e-9);
+
+        // A rig where retract is the negative direction gets the opposite sign from the same
+        // arithmetic -- nothing here encodes a convention.
+        var other = new FocusApproachValidationStore.Record(
+                "Other",
+                "bf_10x",
+                "OBJ_10X",
+                true,
+                false,
+                -700.0,
+                -400.0,
+                300.0,
+                9.0,
+                List.of(),
+                0.2,
+                50.0,
+                List.of(),
+                "2026-08-26T12:00:00Z");
+        assertEquals(420.0, other.signedApproachBoundUm(1.4), 1e-9);
+    }
+
+    @Test
+    void anUnusableBoundIsReportedRatherThanGuessed() {
+        var noFocus = new FocusApproachValidationStore.Record(
+                "PPM",
+                "ppm_20x",
+                "OBJ_20X",
+                true,
+                false,
+                0.0,
+                Double.NaN,
+                250.0,
+                8.0,
+                List.of(),
+                0.2,
+                50.0,
+                List.of(),
+                "2026-08-26T12:00:00Z");
+        assertTrue(Double.isNaN(noFocus.signedApproachBoundUm(1.4)));
+
+        // Focus AT the safe Z gives no direction, so there is nothing to infer.
+        var degenerate = new FocusApproachValidationStore.Record(
+                "PPM",
+                "ppm_20x",
+                "OBJ_20X",
+                true,
+                false,
+                0.0,
+                0.0,
+                250.0,
+                8.0,
+                List.of(),
+                0.2,
+                50.0,
+                List.of(),
+                "2026-08-26T12:00:00Z");
+        assertTrue(Double.isNaN(degenerate.signedApproachBoundUm(1.4)));
+    }
+
+    @Test
     void aBigExposureChangeGoesStaleButASmallOneDoesNot() {
         // The focus metric is an intensity spread, so exposure rescales it; enough of a change
         // saturates the sensor and flattens the peak the record claims exists.
@@ -151,6 +233,7 @@ class FocusApproachValidationStoreTest {
                 true,
                 false,
                 -700.0,
+                -400.0,
                 300.0,
                 9.4,
                 List.of(),

@@ -49,7 +49,12 @@ public final class FocusApproachValidationStore {
      * @param requiresTissueGate surfaces sit before focus, so the approach must gate on tissue
      *                          detection rather than committing to the first peak
      * @param safeZUm           the retracted Z the approach was measured from
-     * @param approachDistanceUm measured distance from safe Z to focus
+     * @param focusZUm          the Z the focus peak was measured at. Stored because
+     *                          {@code approachDistanceUm} is unsigned: the approach DIRECTION is
+     *                          {@code sign(focusZUm - safeZUm)}, and getting it wrong sends the
+     *                          scan away from the sample (useless) or, on a rig where retract is
+     *                          the negative direction, further into it
+     * @param approachDistanceUm measured distance from safe Z to focus (unsigned)
      * @param peakWidthUm       measured focus-peak FWHM; bounds how fast the approach may scan
      * @param falsePeakZs       Z of peaks before focus that the background scan confirmed are
      *                          surfaces rather than tissue
@@ -65,6 +70,7 @@ public final class FocusApproachValidationStore {
             boolean usable,
             boolean requiresTissueGate,
             double safeZUm,
+            double focusZUm,
             double approachDistanceUm,
             double peakWidthUm,
             List<Double> falsePeakZs,
@@ -83,6 +89,30 @@ public final class FocusApproachValidationStore {
          * @param currentSafeZUm the safe Z currently configured
          * @return a human-readable reason, or null
          */
+        /**
+         * Signed travel bound for the approach: how far, and in which direction, to scan from
+         * the safe Z.
+         *
+         * <p>The sign is the whole point. It is what lets the server avoid inferring which way
+         * retracts -- a determination that differs per rig and is dangerous to get wrong. It is
+         * recovered from the two positions this run actually measured rather than from any
+         * convention.
+         *
+         * @param headroomFactor multiplier on the measured distance; the validation measured ONE
+         *                       slide, so some headroom is needed for slide-to-slide variation
+         * @return signed bound in micrometers, or NaN when the record cannot supply one
+         */
+        public double signedApproachBoundUm(double headroomFactor) {
+            if (Double.isNaN(focusZUm) || Double.isNaN(approachDistanceUm) || approachDistanceUm <= 0) {
+                return Double.NaN;
+            }
+            double direction = Math.signum(focusZUm - safeZUm);
+            if (direction == 0) {
+                return Double.NaN;
+            }
+            return direction * approachDistanceUm * headroomFactor;
+        }
+
         public String isStaleAgainst(Double currentSafeZUm) {
             return isStaleAgainst(currentSafeZUm, Double.NaN, Double.NaN);
         }

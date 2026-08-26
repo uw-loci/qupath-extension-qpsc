@@ -303,6 +303,11 @@ guesses whether moving further is correct, the approach-from-safe-Z strategy:
 2. Scans toward the sample in one bounded motion (bounded by the measured approach distance plus headroom)
 3. Returns to safe Z if focus is not found
 
+The validation captures **both the safe Z and the actual focus Z** from your measurements. The approach
+bound is computed as a *signed* value: the sign is determined by the difference (focus Z - safe Z), so
+it encodes which direction to scan. This is critical: an unsigned bound would send the scan the wrong way
+on a rig where retraction is the positive Z direction, finding nothing instead of focus.
+
 **This is the more dangerous option, not the safer one.** The edge-retry walk creeps in 30 um
 steps near the last focus; the approach deliberately traverses the whole distance toward the
 sample, on a bound extrapolated from a single slide, starting from a position entered by hand. It
@@ -311,8 +316,14 @@ slide".
 
 What it buys is control and auditability: bounded, one-directional travel that can be checked
 after the fact. That only pays off with the preparation -- a physically verified safe Z for the
-insert in use, a passing validation run, and attention during the first few runs. Accuracy
-relative to the walk is untested on hardware so far.
+insert in use, a passing validation run, and attention during the first few runs. Accuracy relative
+to the walk is untested on hardware so far.
+
+Note that the two direction safeguards guard different moments and are not interchangeable. The
+**confirmation dialog** guards the very first move -- the blind retraction to a hand-entered safe Z,
+before anything has been measured. The **signed bound** is derived from the measurements taken
+afterward, and only governs which way the server scans on later runs. A correct signed bound cannot
+rescue a wrong-side safe Z, because the crash would already have happened during that first move.
 
 **When it applies:** Slot-jump autofocus during multi-slide batch acquisition. This is the
 autofocus that runs when moving between slides in a carrier, where the focus position can vary

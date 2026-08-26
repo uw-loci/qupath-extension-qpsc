@@ -227,13 +227,15 @@ public final class SlotJumpAutofocus {
                 logger.warn("Slot-jump AF: focus-approach validation is stale ({}); using the standard scan", stale);
                 return ApproachPlan.disabled();
             }
-            // Travel bound: the measured distance plus headroom for slide-to-slide variation.
-            // Signed, so the sign carries the approach direction and nothing has to infer it.
-            double measured = record.approachDistanceUm();
-            if (Double.isNaN(measured) || measured <= 0) {
+            // Travel bound: the measured distance plus headroom for slide-to-slide variation,
+            // SIGNED from the two positions the validation actually measured. The sign is what
+            // lets the server avoid inferring which way retracts; an unsigned bound sends the
+            // scan away from the sample on a rig where retract is the positive direction.
+            double bound = record.signedApproachBoundUm(APPROACH_HEADROOM_FACTOR);
+            if (Double.isNaN(bound)) {
+                logger.info("Slot-jump AF: validation record has no usable approach bound; using the standard scan");
                 return ApproachPlan.disabled();
             }
-            double bound = measured * APPROACH_HEADROOM_FACTOR;
             logger.info(
                     "Slot-jump AF: approach-from-safe-Z licensed -- safe Z {} um, bound {} um, tissue gate {}",
                     currentSafeZ,

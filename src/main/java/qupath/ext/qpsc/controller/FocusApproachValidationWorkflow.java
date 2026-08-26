@@ -164,6 +164,7 @@ public final class FocusApproachValidationWorkflow {
                 verdict.usable(),
                 verdict.requiresTissueGate(),
                 safeZ,
+                verdict.tissue().globalMaxZ(),
                 verdict.tissue().approachDistanceUm(),
                 verdict.tissue().peakWidthUm(),
                 List.copyOf(surfaceZs),
