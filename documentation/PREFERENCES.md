@@ -968,11 +968,19 @@ up notifications, or an unattended run waits in silence. Starting **Set Up All R
 in an automatic mode also lists any pending slot that has no annotations, since each would
 otherwise stop the pass.
 
+**The first landmark searches for tissue before focusing.** The base transform lands it a
+median 600 um out (worst 1.5 mm), often on blank glass where a focus scan finds coverslip
+contrast rather than the sample. The microscope now checks whether it is on tissue and, if
+not, steps outward toward the tile grid in FOV-sized hops. Only the first landmark does
+this — the second lands within 26 um. If nothing is found the stage returns to where it
+started, focusing proceeds anyway, and the slide is handed back with a notification.
+
 > **WARNING — not validated for real acquisition.** An auto-confirmed alignment accepts
 > whatever position the base transform predicted, with no human comparing it against the
-> live view. The server-side "find tissue, then focus" jog that would recover from a bad
-> landing is **not built yet**; the first landmark of a slide has been measured landing
-> roughly 600 um out. Leave this on `MANUAL` for real acquisition, and prove a batch in
+> live view, and the tissue search above has **not yet been run on a microscope** — only
+> its geometry is unit-tested. It also needs a command server new enough to know the
+> `FINDTISS` command; an older one logs a warning and focuses from the predicted position
+> exactly as before. Leave this on `MANUAL` for real acquisition, and prove a batch in
 > `AUTOMATIC_WITH_OVERRIDE` before trusting `FULLY_AUTOMATIC`.
 
 ---

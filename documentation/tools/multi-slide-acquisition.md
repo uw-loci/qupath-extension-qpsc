@@ -226,12 +226,26 @@ wait silently. Before **Set Up All Remaining** starts, an automatic batch also c
 every pending slot for annotations and lists any that have none, since each of those
 would otherwise stop the pass waiting for you to draw a region.
 
+**The first landmark looks for tissue before focusing.** The base transform puts a
+slide's first landmark a median 600 um from where it aimed (worst case 1.5 mm), which
+often leaves the camera over blank glass -- and a focus scan there finds coverslip
+contrast, or nothing, and the alignment that follows is done out of focus. Before
+focusing, the microscope now checks whether it is actually on tissue and, if not, steps
+outward toward the tissue in FOV-sized hops until it is. It only has to find tissue, not
+the right tile: SIFT handles the rest, and has matched from 1.5 mm away.
+
+Only the FIRST landmark does this. The second one, corrected by the first, lands within
+26 um, so searching again would just cost time. If nothing is found nearby, the stage goes
+back where it started, focusing proceeds anyway, and the slide is handed back to you with
+a notification -- the run does not pretend it worked.
+
 > **Still not validated for real work.** An auto-confirmed alignment accepts whatever
-> position the base transform predicted, with nobody comparing it to the live view. The
-> server-side "find tissue, then focus" jog that would recover from a bad landing is not
-> built; the first landmark of a slide has been measured landing roughly 600 um out. Leave
-> `MANUAL` for real acquisition, and run a batch in `AUTOMATIC_WITH_OVERRIDE` -- where any
-> click hands the slide back -- before trusting `FULLY_AUTOMATIC`.
+> position the base transform predicted, with nobody comparing it to the live view, and
+> the tissue search above has **not yet been run on a microscope** -- only its geometry is
+> tested. It also needs a command server new enough to know the `FINDTISS` command; an
+> older one logs a warning and focuses from the predicted position, exactly as before.
+> Leave `MANUAL` for real acquisition, and run a batch in `AUTOMATIC_WITH_OVERRIDE` --
+> where any click hands the slide back -- before trusting `FULLY_AUTOMATIC`.
 
 ### Manual, one slot at a time
 

@@ -402,6 +402,47 @@ choose to re-run it if needed; nothing is blocked.
 
 ---
 
+## Finding tissue before focusing (multi-slide first landmark)
+
+A focus scan needs something to focus on. In a multi-slide batch, the FIRST alignment
+landmark of each slide is predicted from the base transform, and that prediction is off by
+a median of **613 um** (worst case **1507 um**, measured over 8 slides on 2026-08-24) —
+frequently far enough to leave the camera over blank glass. Scanning there commits to
+coverslip contrast or exhausts the attempt budget, and the alignment that follows is done
+against an out-of-focus view.
+
+Before focusing at that landmark, QPSC asks the microscope to look for tissue
+(`FINDTISS`): snap where it is, check the frame with the **same tissue/background gate the
+acquisition path uses**, and if it is background, step one field-of-view diagonal outward
+and check again — fanning around a direction hint that points toward the centre of the
+tile grid, since that is where the tissue is. Seven positions are checked by default,
+which reaches roughly 890 um at 20x.
+
+**Only the first landmark searches.** The second one, corrected by the first's translation,
+lands within **26 um** — the base transform's error is very nearly a constant per-slide
+offset, so searching again would only cost time.
+
+**It only has to find tissue, not the right tile.** SIFT is not the weak link here: it has
+matched at 1507 um with 796 inliers. Once focus is real, the alignment step handles the
+rest.
+
+**What it does not do:** it never changes Z, exposure, or any camera setting. The modality
+has just been put into its alignment reference state (for PPM, the calibrated uncrossed
+angle and exposure) and SIFT is about to match against that state, so a brightness-chasing
+loop here would silently change what the next step depends on. This is a deliberate
+difference from the acquisition path's first-tile search, which does adjust exposure.
+
+**When nothing is found:** the stage is returned to the predicted position, focusing runs
+anyway, and — in an automatic batch — the slide is handed back to the operator with a push
+notification rather than the run continuing quietly.
+
+> **Not yet verified on a microscope.** The search geometry is unit-tested on both sides;
+> the behaviour on real tissue is not. It also requires a command server new enough to know
+> `FINDTISS`; an older one logs a warning and focuses from the predicted position, exactly
+> as before this existed.
+
+---
+
 ## Safe-Z Clearance Monitoring
 
 During multi-slide batch acquisitions, QPSC continuously monitors the focus positions achieved by autofocus and compares them against the declared safe (retracted) Z for the insert and modality in use. At the end of the run, if the clearance has shrunk or the focus positions straddle the retraction point, a warning notification is shown.

@@ -31,8 +31,11 @@ package qupath.ext.qpsc.preferences;
  * {@link qupath.ext.qpsc.ui.AutoAdvanceController#requestOperatorAttention}, which stops
  * auto-advance for that slide only and sends a push notification.
  *
- * <p>Not built: the server-side tissue jog (Phase D) that would correct the first
- * landmark's landing error, measured at roughly 600 um on a slide's first point.
+ * <p>The first landmark of each slide also runs a tissue search before focusing
+ * ({@code SlotJumpAutofocus.TissueSearchHint} -> the server's {@code FINDTISS}): the base
+ * transform puts that landmark a median 613 um from its target, often on blank glass where
+ * a focus scan finds coverslip contrast rather than the sample. Later landmarks land within
+ * 26 um and do not search. The search is UNVERIFIED ON HARDWARE.
  */
 public enum MultiSlideAcquisitionMode {
 

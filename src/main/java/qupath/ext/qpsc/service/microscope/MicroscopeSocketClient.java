@@ -349,6 +349,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
         STRMAFZ("strmafz_"),
 
         /**
+         * Move the stage in XY until the camera is looking at tissue, so a
+         * following focus scan has something to find. Never touches Z or the
+         * exposure; the caller orders the pair itself (MOVE, FINDTISS, STRMAFZ).
+         */
+        FINDTISS("findtiss"),
+
+        /**
          * Abort an in-progress streaming autofocus scan. Sent on the
          * AUXILIARY socket because the primary socket is blocked inside
          * the STRMAFZ round-trip for the whole scan. Response: {@code ACK}.
@@ -2181,6 +2188,170 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 }
             }
         }
+    }
+
+    /** Outcome of a {@link #findTissue} search. */
+    public record FindTissueResult(Status status, double x, double y, int attempt, int attempts, String reason) {
+
+        public enum Status {
+            /** Tissue was found; the stage is standing at {@code (x, y)}. */
+            FOUND,
+            /** Every searched position was background; the stage is back where it started. */
+            NOT_FOUND,
+            /** The search could not be performed at all (see {@code reason}). */
+            FAILED
+        }
+
+        /** True when the caller may proceed to autofocus expecting tissue in view. */
+        public boolean found() {
+            return status == Status.FOUND;
+        }
+    }
+
+    /**
+     * Search outward from the current stage position until the camera is looking at
+     * tissue (FINDTISS).
+     *
+     * <p>Purely an XY operation: the server never changes Z or the exposure, so the
+     * modality's alignment reference state -- which SIFT is about to match against --
+     * survives the search unchanged. Order the calls yourself:
+     * {@code moveStageXY} then {@code findTissue} then {@code streamingFocus}.
+     *
+     * <p>Why it exists: a multi-slide batch's FIRST predicted landmark per slide lands a
+     * median 613 um from its target (worst 1507 um, measured over 8 slides on 2026-08-24),
+     * which frequently puts the camera on blank glass. Autofocus there finds coverslip
+     * contrast or nothing at all. SIFT itself is fine at that distance (796 inliers at
+     * 1507 um), so all this has to achieve is tissue -- ANY tissue -- in view before
+     * focusing.
+     *
+     * <p>On NOT_FOUND the server returns the stage to where the search started, so a
+     * failed search leaves the caller's own prediction intact rather than parked at an
+     * arbitrary last guess.
+     *
+     * @param yamlPath   main config path; the server derives {@code autofocus_<scope>.yml}
+     *                   from it for the per-objective tissue thresholds. Required.
+     * @param objective  objective id for those thresholds; may be null
+     * @param dirX       stage-space X of a hint pointing at where tissue is believed to be
+     * @param dirY       stage-space Y of that hint. Pass {@code NaN} for either to search
+     *                   the compass instead of fanning around a bearing.
+     * @param stepUm     radius increment; pass {@code NaN} to let the server use one
+     *                   camera FOV diagonal
+     * @param maxAttempts positions to visit including the starting one; 0 for the server default
+     */
+    public FindTissueResult findTissue(
+            String yamlPath, String objective, double dirX, double dirY, double stepUm, int maxAttempts)
+            throws IOException {
+        if (yamlPath == null || yamlPath.isEmpty()) {
+            throw new IllegalArgumentException("yamlPath is required for findTissue");
+        }
+        StringBuilder msgBuilder = new StringBuilder();
+        msgBuilder.append("--yaml ").append(yamlPath);
+        if (objective != null && !objective.isEmpty()) {
+            msgBuilder.append(" --objective ").append(objective);
+        }
+        if (!Double.isNaN(dirX) && !Double.isNaN(dirY)) {
+            msgBuilder.append(" --dir ").append(dirX).append(",").append(dirY);
+        }
+        if (!Double.isNaN(stepUm) && stepUm > 0) {
+            msgBuilder.append(" --step ").append(stepUm);
+        }
+        if (maxAttempts > 0) {
+            msgBuilder.append(" --max-attempts ").append(maxAttempts);
+        }
+        msgBuilder.append(" ").append(END_MARKER);
+        String message = msgBuilder.toString();
+        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+
+        logger.info("Sending FINDTISS command: {}", message);
+
+        synchronized (socketLock) {
+            ensureConnected();
+            int originalTimeout = readTimeout;
+            try {
+                if (socket != null) {
+                    // Each attempt is one stage move plus one snap -- a couple of seconds.
+                    // The server caps the budget at 25, so 120s covers the worst request
+                    // without leaving a wedged search holding the primary socket for long.
+                    socket.setSoTimeout(120000);
+                }
+                output.write(Command.FINDTISS.getValue());
+                output.flush();
+                Thread.sleep(50);
+                output.write(messageBytes);
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+
+                byte[] buffer = new byte[512];
+                int bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("FINDTISS: no response from server");
+                }
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
+                logger.info("FINDTISS response: {}", response);
+                lastActivityTime.set(System.currentTimeMillis());
+                return parseFindTissueResponse(response);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("FINDTISS interrupted", e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (IOException e) {
+                        logger.warn("Failed to restore socket timeout after FINDTISS", e);
+                    }
+                }
+            }
+        }
+    }
+
+    /**
+     * Parses one FINDTISS response line. Package-private so the wire format can be tested
+     * without a socket -- the three shapes are
+     * {@code FOUND:<x>:<y>:<attempt>:<of>}, {@code NOTFOUND:<x>:<y>:<of>}, and
+     * {@code FAILED:<reason>}.
+     */
+    static FindTissueResult parseFindTissueResponse(String response) throws IOException {
+        if (response == null) {
+            throw new IOException("FINDTISS: no response");
+        }
+        String trimmed = response.trim();
+        try {
+            if (trimmed.startsWith("FOUND:")) {
+                String[] p = trimmed.substring("FOUND:".length()).split(":");
+                if (p.length < 4) {
+                    throw new IOException("FINDTISS: malformed FOUND payload: " + trimmed);
+                }
+                return new FindTissueResult(
+                        FindTissueResult.Status.FOUND,
+                        Double.parseDouble(p[0].trim()),
+                        Double.parseDouble(p[1].trim()),
+                        Integer.parseInt(p[2].trim()),
+                        Integer.parseInt(p[3].trim()),
+                        null);
+            }
+            if (trimmed.startsWith("NOTFOUND:")) {
+                String[] p = trimmed.substring("NOTFOUND:".length()).split(":");
+                if (p.length < 3) {
+                    throw new IOException("FINDTISS: malformed NOTFOUND payload: " + trimmed);
+                }
+                int attempts = Integer.parseInt(p[2].trim());
+                return new FindTissueResult(
+                        FindTissueResult.Status.NOT_FOUND,
+                        Double.parseDouble(p[0].trim()),
+                        Double.parseDouble(p[1].trim()),
+                        attempts,
+                        attempts,
+                        "no tissue at any of " + attempts + " searched position(s)");
+            }
+        } catch (NumberFormatException e) {
+            throw new IOException("FINDTISS: could not parse payload: " + trimmed, e);
+        }
+        if (trimmed.startsWith("FAILED:")) {
+            return new FindTissueResult(
+                    FindTissueResult.Status.FAILED, 0, 0, 0, 0, trimmed.substring("FAILED:".length()));
+        }
+        throw new IOException("FINDTISS: unknown response prefix: " + trimmed);
     }
 
     /**

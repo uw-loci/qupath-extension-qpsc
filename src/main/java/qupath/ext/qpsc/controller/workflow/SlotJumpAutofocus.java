@@ -293,6 +293,150 @@ public final class SlotJumpAutofocus {
     }
 
     /**
+     * A request to look for tissue before focusing, for the ONE case that needs it.
+     *
+     * <p>Measured over 8 slides on 2026-08-24: a slide's FIRST predicted landmark lands a
+     * median 613 um from its target (worst 1507 um), which often puts the camera on blank
+     * glass where a focus scan has nothing to find. The SECOND landmark, corrected by the
+     * first's translation, lands within 26 um -- so the base transform's error is very nearly
+     * a constant per-slide offset and only the first landmark needs this. That is why the
+     * search is a parameter rather than something {@link #runAfterSlotMove()} always does:
+     * every other caller is already on target, and searching there would spend a minute
+     * confirming it.
+     *
+     * @param dirX stage-space X of a hint pointing at where tissue is believed to be
+     * @param dirY stage-space Y of that hint; {@code NaN} in either means "no hint" and the
+     *             server sweeps the compass instead of fanning around a bearing
+     */
+    public record TissueSearchHint(double dirX, double dirY) {}
+
+    /**
+     * A stage-space vector from {@code fromStageXY} toward the centre of the tile grid.
+     *
+     * <p>The tile grid is where the tissue is -- tiles are only generated over annotations --
+     * so its centre is the best cheap answer to "which way should I look". This is the same
+     * heuristic the command server's own first-tile search uses, computed here instead
+     * because the caller is the only side that holds the tile geometry and the transform.
+     *
+     * @param tiles       tile detections carrying {@code TileNumber}
+     * @param fromStageXY the predicted stage position the search will start from
+     * @param estimate    the QuPath-full-res to stage transform used to predict it
+     * @return {@code {dx, dy}}, or {@code null} when there is no usable direction -- no tiles,
+     *         or a start point already at the grid centre, where no bearing is better than
+     *         any other and the caller should let the server sweep the compass
+     */
+    public static double[] tissueDirectionHint(
+            java.util.Collection<qupath.lib.objects.PathObject> tiles,
+            double[] fromStageXY,
+            java.awt.geom.AffineTransform estimate) {
+        if (tiles == null || tiles.isEmpty() || fromStageXY == null || estimate == null) {
+            return null;
+        }
+        double sumX = 0;
+        double sumY = 0;
+        int n = 0;
+        for (qupath.lib.objects.PathObject tile : tiles) {
+            var roi = tile.getROI();
+            // An EMPTY roi is not a null one: its centroid reads (0, 0), which would drag the
+            // grid centre toward the image origin and send the search off in a direction
+            // nothing measured.
+            if (roi == null || roi.isEmpty()) {
+                continue;
+            }
+            sumX += roi.getCentroidX();
+            sumY += roi.getCentroidY();
+            n++;
+        }
+        if (n == 0) {
+            return null;
+        }
+        double[] centreStage = qupath.ext.qpsc.utilities.TransformationFunctions.transformQuPathFullResToStage(
+                new double[] {sumX / n, sumY / n}, estimate);
+        double dx = centreStage[0] - fromStageXY[0];
+        double dy = centreStage[1] - fromStageXY[1];
+        // Below a micrometre the two points are the same place as far as the stage is
+        // concerned, and normalising would amplify rounding noise into a confident bearing.
+        if (Math.hypot(dx, dy) < 1.0) {
+            return null;
+        }
+        return new double[] {dx, dy};
+    }
+
+    /**
+     * Looks for tissue before focusing, then focuses. See {@link TissueSearchHint} for why
+     * only one caller passes a hint.
+     *
+     * <p>The search runs on the SAME background thread as autofocus, so it never blocks the
+     * FX thread -- which matters because it can take several stage moves, and the multi-slide
+     * panel's Abort All has to stay clickable throughout.
+     *
+     * @param search where to look; {@code null} skips the search entirely
+     */
+    public static CompletableFuture<Void> runAfterSlotMove(TissueSearchHint search) {
+        pendingTissueSearch = search;
+        return runAfterSlotMove();
+    }
+
+    /**
+     * Set by {@link #runAfterSlotMove(TissueSearchHint)} for the duration of one call and
+     * consumed by the AF thread it starts. Not a parameter on the private path because the
+     * guard chain in {@link #runAfterSlotMove()} has a dozen early returns, each of which
+     * would have to thread it through unchanged.
+     */
+    private static volatile TissueSearchHint pendingTissueSearch;
+
+    /**
+     * Runs the tissue search, if one was requested. Best-effort: a failure leaves the stage
+     * where the prediction put it and lets autofocus try anyway, because a focus scan on
+     * glass is a worse outcome than a slow one but not a worse outcome than no scan at all.
+     *
+     * @return true when the search moved the stage onto tissue
+     */
+    private static boolean runTissueSearch(
+            MicroscopeController controller, String configPath, String objective, TissueSearchHint search) {
+        if (search == null) {
+            return false;
+        }
+        publish("Looking for tissue...", false);
+        try {
+            MicroscopeSocketClient.FindTissueResult result = controller
+                    .getSocketClient()
+                    .findTissue(configPath, objective, search.dirX(), search.dirY(), Double.NaN, 0);
+            switch (result.status()) {
+                case FOUND -> {
+                    logger.info(
+                            "Slot-jump tissue search: tissue at ({}, {}) on attempt {} of {}",
+                            String.format("%.1f", result.x()),
+                            String.format("%.1f", result.y()),
+                            result.attempt(),
+                            result.attempts());
+                    return true;
+                }
+                case NOT_FOUND -> {
+                    // The server has already put the stage back where it started, so the
+                    // prediction is intact -- but a scan from here is a scan over glass.
+                    logger.warn(
+                            "Slot-jump tissue search found nothing in {} position(s); "
+                                    + "focusing from the predicted position anyway",
+                            result.attempts());
+                    publish("No tissue found nearby -- focus may be unreliable", true);
+                    qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+                            "Slot-jump tissue search",
+                            "no tissue within " + result.attempts()
+                                    + " searched position(s) of the predicted landmark");
+                }
+                default -> logger.warn("Slot-jump tissue search unavailable: {}", result.reason());
+            }
+        } catch (IOException | RuntimeException e) {
+            // An older command server does not know FINDTISS. That must not stop the slide:
+            // focusing from the predicted position is exactly what happened before this
+            // existed, so fall through to it.
+            logger.warn("Slot-jump tissue search failed ({}); focusing from the predicted position", e.getMessage());
+        }
+        return false;
+    }
+
+    /**
      * Runs autofocus after the slot move has completed, if AF-on-jump is enabled and the guards
      * pass. Returns a future that completes when AF finishes (or immediately when skipped). The
      * future ALWAYS completes -- AF failure is surfaced on the status line but never blocks the
@@ -301,6 +445,10 @@ public final class SlotJumpAutofocus {
      * @return a future that completes (with null) once AF settles or is skipped
      */
     public static CompletableFuture<Void> runAfterSlotMove() {
+        // Consume the hint here, once, so every early return below leaves it cleared and a
+        // skipped AF cannot leak a search into the next caller.
+        final TissueSearchHint tissueSearch = pendingTissueSearch;
+        pendingTissueSearch = null;
         if (!PersistentPreferences.isMultiSlideAutofocusOnJump()) {
             return CompletableFuture.completedFuture(null);
         }
@@ -426,6 +574,14 @@ public final class SlotJumpAutofocus {
                 () -> {
                     String errorMsg = null;
                     boolean cancelled = false;
+                    // Tissue first, focus second: a scan started over blank glass finds
+                    // coverslip contrast or nothing, and no amount of attempt budget fixes
+                    // that. Off the FX thread by construction (we are on the AF daemon).
+                    if (runTissueSearch(controller, configPath, objective, tissueSearch)) {
+                        // Restore the phase the status line was showing before the search
+                        // borrowed it, so the sequence reads Moving -> Looking -> Focusing.
+                        publish("Focusing...", false);
+                    }
                     try {
                         if (runStreaming) {
                             // Streaming scan: MUST keep the live stream running (no

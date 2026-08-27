@@ -63,6 +63,44 @@ public class AffineTransformationController {
     }
 
     /**
+     * Whether to look for tissue before focusing at this slide's FIRST landmark, and which
+     * way to look.
+     *
+     * <p>This is the one landmark that needs it. Measured over 8 slides (2026-08-24), the
+     * base transform puts landmark 1 a median 613 um from its target -- often on blank glass,
+     * where a focus scan finds coverslip contrast or nothing. Landmark 2, corrected by
+     * landmark 1's translation, lands within 26 um, so the error is essentially a constant
+     * per-slide offset and searching again later would only cost time.
+     *
+     * <p>Restricted to automatic batches. In a manual run the operator is watching the live
+     * view and can drive the stage themselves; having it wander several hundred micrometres
+     * unbidden would be worse than the problem. Returns null -- no search -- otherwise.
+     */
+    private static SlotJumpAutofocus.TissueSearchHint resolveTissueSearch(
+            QuPathGUI gui, double[] predictedStageXY, AffineTransform estimate) {
+        if (!AutoAdvanceController.isArmed() || AutoAdvanceController.isOverriddenThisSlide()) {
+            return null;
+        }
+        if (gui == null || gui.getViewer() == null || gui.getViewer().getHierarchy() == null) {
+            return null;
+        }
+        double[] hint = SlotJumpAutofocus.tissueDirectionHint(
+                gui.getViewer().getHierarchy().getDetectionObjects(), predictedStageXY, estimate);
+        if (hint == null) {
+            // No usable bearing (no tiles, or already at the grid centre). Still search --
+            // the server sweeps the compass, which is the honest answer when nothing says
+            // which way tissue lies.
+            logger.info("Slot-jump tissue search: no direction hint available; the server will sweep the compass");
+            return new SlotJumpAutofocus.TissueSearchHint(Double.NaN, Double.NaN);
+        }
+        logger.info(
+                "Slot-jump tissue search: hint toward the tile-grid centre ({}, {}) um",
+                String.format("%.1f", hint[0]),
+                String.format("%.1f", hint[1]));
+        return new SlotJumpAutofocus.TissueSearchHint(hint[0], hint[1]);
+    }
+
+    /**
      * The reference tile for the first alignment landmark: auto-picked during an automatic
      * multi-slide batch, otherwise chosen by the operator in the selection dialog.
      *
@@ -257,7 +295,8 @@ public class AffineTransformationController {
                                 MicroscopeController.getInstance()
                                         .moveStageXY(estimatedStageCoords[0], estimatedStageCoords[1]);
                                 if (slotJumpAssist) {
-                                    afGate = SlotJumpAutofocus.runAfterSlotMove();
+                                    afGate = SlotJumpAutofocus.runAfterSlotMove(
+                                            resolveTissueSearch(gui, estimatedStageCoords, existingTransformEstimate));
                                 }
                             }
 

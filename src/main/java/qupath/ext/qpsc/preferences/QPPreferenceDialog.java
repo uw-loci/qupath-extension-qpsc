@@ -442,8 +442,12 @@ public class QPPreferenceDialog {
                         + "one under Notifications, or you will not hear about it). A setup slot\n"
                         + "that makes no progress for 20 minutes notifies you the same way.\n"
                         + "\n"
-                        + "Not built: the server-side tissue jog that corrects the first landmark's\n"
-                        + "landing error, measured at ~600 um on the first point of a slide.\n"
+                        + "The first landmark of each slide searches for tissue before focusing:\n"
+                        + "  the predicted position lands ~600 um out on average, often on blank\n"
+                        + "  glass where a focus scan has nothing to find. NOT YET VERIFIED ON A\n"
+                        + "  MICROSCOPE, and it needs a command server new enough to know FINDTISS\n"
+                        + "  (an older one logs a warning and focuses from the predicted position,\n"
+                        + "  which is what happened before).\n"
                         + "\n"
                         + "Leave on MANUAL unless you are testing.")
                 .build());

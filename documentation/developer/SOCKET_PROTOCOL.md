@@ -315,6 +315,7 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
 | STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `ABORTED:<reason>` / `FAILED:<reason>` |
 | ABORTAF | `abortaf_` | none | `ACK` |
+| FINDTISS | `findtiss` | `--yaml <path> [--objective <id>] [--dir <dx>,<dy>] [--step <um>] [--max-attempts <n>] ENDOFSTR` | `FOUND:<x>:<y>:<attempt>:<of>` / `NOTFOUND:<x>:<y>:<of>` / `FAILED:<reason>` |
 
 #### PROBEZ
 
@@ -441,6 +442,69 @@ Response formats:
   `initial_z`. No new focus committed; not an error.
 - `FAILED:<reason>` -- mid-scan error; stage state has been
   restored but no new focus was committed
+
+#### FINDTISS
+
+Move the stage in **XY** until the camera is looking at tissue, so a focus scan that
+follows has something to find. Never changes Z, exposure, or any camera setting -- the
+caller orders the pair itself:
+
+```
+MOVE -> FINDTISS -> STRMAFZ -> (SIFT)
+```
+
+**Why it exists.** A multi-slide batch predicts each slide's first alignment landmark
+from the base transform. Measured over 8 slides on 2026-08-24, that prediction lands a
+median **613 um** from its target (worst **1507 um**), which frequently puts the camera
+over blank glass. Autofocus there commits to coverslip contrast or exhausts its attempt
+budget. The second landmark, corrected by the first's translation, lands within **26 um**,
+so the base transform's error is very nearly a constant per-slide offset -- **only the
+first landmark of a slide needs this**, and QPSC only sends it there.
+
+SIFT reach is *not* the problem being solved: it matched at 1507 um with 796 inliers and
+0.999 confidence. So the search only has to put tissue -- any tissue -- in view. That is
+why the pattern is a coarse fan rather than a fine raster.
+
+Payload flags (text, terminated by `ENDOFSTR`):
+
+| Flag | Required | Description |
+|---|---|---|
+| `--yaml <path>` | yes | Path to the active `config_<scope>.yml`; the server derives `autofocus_<scope>.yml` from it for the tissue thresholds. |
+| `--objective <id>` | no | Objective whose per-objective `texture_threshold` / `tissue_area_threshold` / `rgb_brightness_threshold` apply. Missing falls back to the shipped defaults. |
+| `--dir <dx>,<dy>` | no | Stage-space hint toward where tissue is believed to be; only its bearing is used. QPSC computes it as the vector from the predicted position to the centre of the tile grid. Unusable input is ignored with a warning -- the search still works without it. |
+| `--step <um>` | no | Radius increment. Default: one camera FOV diagonal, which is the coarsest step that cannot skip ground. |
+| `--max-attempts <n>` | no | Positions to visit **including the starting one**. Default 7 (two full rings); capped at 25. |
+
+**Search pattern** (`server/tissue_search.py`, pure and unit-tested). The first position
+is always where the caller already is -- at the median error the camera is often still on
+tissue, and checking costs one snap. After that, positions lie on rings at whole multiples
+of `--step`. With a hint, three bearings per ring: down the hint, then +/-45 deg. Without
+one, the four compass points then the diagonals. So reach is
+`step * ((max_attempts - 1) // bearings_per_ring)` -- an attempt budget converts directly
+into a distance, which is how it was sized against the measurement above.
+
+Tissue is decided by the **same strategy validity check the acquisition path uses**
+(`texture_and_area` etc. from `microscope_imageprocessing.focus`), so there is no new
+metric to calibrate.
+
+**Exposure is deliberately not adjusted.** The caller has just put the modality into its
+alignment reference state (for PPM, the calibrated uncrossed angle and exposure) and SIFT
+is about to match against that state, so a brightness-chasing loop here would silently
+change what the next step depends on. This differs from the acquisition path's first-tile
+search, which does double exposure -- that one owns the camera state; this one borrows it.
+
+Response formats:
+
+- `FOUND:<x>:<y>:<attempt>:<of>` -- tissue found; **the stage is standing at `(x, y)`**.
+- `NOTFOUND:<x>:<y>:<of>` -- every searched position was background. **The stage has been
+  returned to where the search started**, and `(x, y)` is that starting point: a search
+  that found nothing has no reason to prefer its last guess over its first, and leaving
+  the stage elsewhere would silently invalidate the caller's own prediction.
+- `FAILED:<reason>` -- the search could not run at all (no FOV and no `--step`, stage
+  position unreadable, validity check unavailable). Nothing moved.
+
+A move that fails mid-search (typically a stage limit) is logged and skipped; the search
+continues with the offsets still reachable rather than abandoning the slide.
 
 #### ABORTAF
 
