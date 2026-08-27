@@ -249,6 +249,15 @@ class SiftCapturePane extends VBox {
                                             "SIFT failed: " + ex.getMessage() + " -- nudge manually, then Capture.");
                                     siftButton.setDisable(false);
                                     pulse.highlight(siftButton, "#E65100");
+                                    if (autoAccept) {
+                                        // Same hand-back as a below-threshold match. Without it a SIFT
+                                        // that THREW (socket dropped, region file missing) leaves the
+                                        // panel idle with nothing driving it -- the only thing that
+                                        // eventually notices is the 20-minute setup watchdog.
+                                        qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+                                                "Multi-tile alignment refinement",
+                                                "SIFT could not run: " + ex.getMessage());
+                                    }
                                 });
                             }
                         },
