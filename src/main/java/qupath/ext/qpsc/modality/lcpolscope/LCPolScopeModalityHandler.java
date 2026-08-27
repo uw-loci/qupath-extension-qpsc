@@ -9,6 +9,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
@@ -173,6 +174,28 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
             logger.warn("Failed to resolve LC-PolScope channels for profile '{}': {}", profileKey, e.getMessage());
             return List.of();
         }
+    }
+
+    /**
+     * LC-PolScope calibration, surfaced only when the microscope configuration
+     * declares this modality.
+     *
+     * <p>Calibration drives hardware and needs a live connection, so it lives here rather
+     * than in an analysis extension -- the same division that puts PPM's polarizer and
+     * reference-slide calibrations in this repository while its hue-range and polarity-plot
+     * tools live in qupath-extension-ppm.
+     */
+    @Override
+    public List<ModalityMenuItem> getMenuContributions() {
+        return List.of(new ModalityMenuItem(
+                "lcCalibration",
+                "Calibrate Liquid Crystals...",
+                "Find the extinction point and the swing states, and write the palette the "
+                        + "acquisition will use. Run on a clear, specimen-free field: the calibration "
+                        + "measures how dark extinction can be made, so anything birefringent in the "
+                        + "field makes the result worse. Reports an extinction ratio as its quality "
+                        + "figure -- 100 or above is good; this instrument has reached 267.",
+                () -> qupath.ext.qpsc.modality.lcpolscope.workflow.LCCalibrationWorkflow.run()));
     }
 
     @Override

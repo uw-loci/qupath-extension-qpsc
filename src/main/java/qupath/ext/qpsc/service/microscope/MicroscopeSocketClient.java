@@ -237,6 +237,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         PPMBIREF("ppmbiref"),
         /** Sunburst calibration for hue-to-angle mapping */
         SBCALIB("sbcalib_"),
+
+        /** LC-PolScope liquid-crystal calibration. */
+        LCCALIB("lccalib_"),
         /** Simple white balance calibration at single exposure */
         WBSIMPLE("wbsimple"),
         /** PPM white balance calibration at 4 angles */
@@ -7715,6 +7718,134 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 return finalResp;
             } finally {
                 socket.setSoTimeout(readTimeout);
+            }
+        }
+    }
+
+    /**
+     * Calibrates the LC-PolScope liquid crystals.
+     *
+     * <p>Finds the extinction point and the swing states, and returns the palette as JSON.
+     * Every parameter left null is taken from {@code modalities.<modality>.reconstruction}
+     * in the microscope YAML, so a calibration cannot silently disagree with the
+     * acquisition that will use it.
+     *
+     * <p>A poor calibration still returns SUCCESS with its extinction ratio and warnings --
+     * only a failure to produce any palette is an error. The caller decides what to do
+     * with a marginal result.
+     *
+     * @param yamlPath microscope configuration file
+     * @param outputFolder where the palette and metadata are written
+     * @param modality modality key, normally {@code lcpolscope}
+     * @param swing swing in waves, or null to take it from the YAML
+     * @param scheme {@code 4-State} or {@code 5-State}, or null for the YAML value
+     * @param wavelengthNm illumination wavelength, or null for the YAML value
+     * @param blackLevel explicit black level, or null to let the server measure one
+     * @param strategy {@code single_pass} or {@code iterative}
+     * @param statusCallback receives human-readable progress messages, may be null
+     * @return the raw JSON result
+     * @throws IOException if the server reports a failure or the connection breaks
+     */
+    public String runLcCalibration(
+            String yamlPath,
+            String outputFolder,
+            String modality,
+            Double swing,
+            String scheme,
+            Double wavelengthNm,
+            Double blackLevel,
+            String strategy,
+            Consumer<String> statusCallback)
+            throws IOException {
+
+        StringBuilder messageBuilder = new StringBuilder();
+        messageBuilder.append("--yaml ").append(yamlPath);
+        messageBuilder.append(" --output ").append(outputFolder);
+        if (modality != null && !modality.isBlank()) {
+            messageBuilder.append(" --modality ").append(modality);
+        }
+        if (swing != null) {
+            messageBuilder.append(" --swing ").append(swing);
+        }
+        if (scheme != null && !scheme.isBlank()) {
+            messageBuilder.append(" --scheme ").append(scheme);
+        }
+        if (wavelengthNm != null) {
+            messageBuilder.append(" --wavelength ").append(wavelengthNm);
+        }
+        if (blackLevel != null) {
+            messageBuilder.append(" --black-level ").append(blackLevel);
+        }
+        if (strategy != null && !strategy.isBlank()) {
+            messageBuilder.append(" --strategy ").append(strategy);
+        }
+        messageBuilder.append(" ").append(END_MARKER);
+
+        String message = messageBuilder.toString();
+        logger.info("Sending LC-PolScope calibration command: {}", message);
+
+        synchronized (socketLock) {
+            ensureConnected();
+            int originalTimeout = socket.getSoTimeout();
+            try {
+                // A calibration is a few hundred exposures; the default read
+                // timeout is nowhere near long enough.
+                socket.setSoTimeout(600000);
+
+                output.write(Command.LCCALIB.getValue());
+                output.write(message.getBytes(StandardCharsets.UTF_8));
+                output.flush();
+
+                byte[] buffer = new byte[65536];
+                int bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("No acknowledgment from server");
+                }
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                if (response.startsWith("FAILED:")) {
+                    throw new IOException("Server rejected the calibration: " + response.substring(7));
+                }
+                if (!response.startsWith("STARTED:")) {
+                    logger.warn("Unexpected initial response to LCCALIB: {}", response);
+                }
+
+                while (true) {
+                    bytesRead = input.read(buffer);
+                    if (bytesRead <= 0) {
+                        throw new IOException("Connection closed during calibration");
+                    }
+                    response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    lastActivityTime.set(System.currentTimeMillis());
+
+                    if (response.startsWith("PROGRESS:")) {
+                        // PROGRESS:current:total:message -- only the message is
+                        // useful here, since the state count is not known ahead.
+                        String[] parts = response.substring(9).split(":", 3);
+                        if (statusCallback != null && parts.length >= 3) {
+                            statusCallback.accept(parts[2].trim());
+                        }
+                        continue;
+                    }
+                    if (response.startsWith("FAILED:")) {
+                        throw new IOException("Calibration failed: " + response.substring(7));
+                    }
+                    if (response.startsWith("SUCCESS:")) {
+                        return response.substring(8).trim();
+                    }
+                    logger.warn("Unexpected response during calibration: {}", response);
+                }
+            } catch (IOException e) {
+                logger.error("Error during LC-PolScope calibration", e);
+                handleIOException(new IOException("LC calibration error", e));
+                throw new IOException("LC calibration error: " + e.getMessage(), e);
+            } finally {
+                if (socket != null) {
+                    try {
+                        socket.setSoTimeout(originalTimeout);
+                    } catch (Exception e) {
+                        logger.debug("Could not restore socket timeout: {}", e.getMessage());
+                    }
+                }
             }
         }
     }

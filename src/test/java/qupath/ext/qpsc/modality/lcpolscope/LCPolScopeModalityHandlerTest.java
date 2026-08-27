@@ -152,4 +152,21 @@ class LCPolScopeModalityHandlerTest {
                 h.getImageType().orElseThrow(),
                 "a polarization stack is neither brightfield nor fluorescence");
     }
+
+    @Test
+    @DisplayName("contributes a calibration menu item, which SetupScope gates on the config")
+    void contributesCalibrationMenuItem() {
+        // Placement decision: calibration drives hardware and needs a live connection, so
+        // it belongs in qpsc rather than an analysis extension -- the same division that
+        // keeps PPM's polarizer and reference-slide calibrations here. SetupScope hides the
+        // whole submenu on a microscope whose config does not declare this modality, so no
+        // gating logic is needed in the handler itself.
+        var contributions = new LCPolScopeModalityHandler().getMenuContributions();
+        assertEquals(1, contributions.size());
+        var item = contributions.get(0);
+        assertEquals("lcCalibration", item.id());
+        assertTrue(item.label().contains("Calibrate"), item.label());
+        assertNotNull(item.action());
+        assertTrue(item.tooltip().contains("clear"), "the tooltip should say the field must be clear");
+    }
 }
