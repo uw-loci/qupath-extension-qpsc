@@ -77,7 +77,9 @@ public class ProbeStageAfWorkflow {
 
         // Show a progress window while the probe runs.
         Stage progressStage = new Stage();
-        progressStage.initModality(Modality.APPLICATION_MODAL);
+        // Progress only -- the probe runs entirely on the server and reads no QuPath
+        // state, so there is nothing for modality to protect. Kept on top instead.
+        progressStage.initModality(Modality.NONE);
         progressStage.setTitle("Re-probe Stage AF");
         progressStage.setAlwaysOnTop(true);
         ProgressIndicator spinner = new ProgressIndicator();

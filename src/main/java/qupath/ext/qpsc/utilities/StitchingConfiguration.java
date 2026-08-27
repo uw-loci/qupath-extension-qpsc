@@ -8,6 +8,7 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
@@ -174,6 +175,11 @@ public class StitchingConfiguration {
                 ButtonType cancelButton = new ButtonType("Cancel Acquisition", ButtonBar.ButtonData.CANCEL_CLOSE);
 
                 Alert alert = new Alert(Alert.AlertType.WARNING);
+                // Non-modal: this alert tells the operator to go and edit
+                // Edit -> Preferences -> QPSC before pressing Retry, and an
+                // application-modal alert blocks the very window it points at.
+                // showAndWait() still holds the retry loop until they answer.
+                alert.initModality(Modality.NONE);
                 alert.setTitle("Incompatible Stitching Settings");
                 alert.setHeaderText("Please fix the stitching settings before continuing");
                 alert.setContentText(

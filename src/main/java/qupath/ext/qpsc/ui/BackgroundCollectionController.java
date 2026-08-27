@@ -15,6 +15,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -84,6 +85,9 @@ public class BackgroundCollectionController {
     // programmatically restoring the saved selection during refresh.
     private boolean restoringModeSelection = false;
 
+    // The one dialog instance currently on screen, or null. Only touched on the FX thread.
+    private static Dialog<BackgroundCollectionResult> activeDialog;
+
     /**
      * Shows the background collection dialog and returns the result.
      *
@@ -99,8 +103,30 @@ public class BackgroundCollectionController {
 
         Platform.runLater(() -> {
             try {
+                // Modality was the only thing preventing a second copy from being opened
+                // off the menu while this one is up. Guard it explicitly.
+                if (activeDialog != null && activeDialog.getDialogPane().getScene() != null) {
+                    javafx.stage.Window win =
+                            activeDialog.getDialogPane().getScene().getWindow();
+                    if (win != null && win.isShowing()) {
+                        logger.info("Background collection dialog already open - bringing to front");
+                        win.requestFocus();
+                        if (win instanceof Stage openStage) {
+                            openStage.toFront();
+                        }
+                        future.complete(null);
+                        return;
+                    }
+                }
+
                 // Create dialog
                 Dialog<BackgroundCollectionResult> dialog = new Dialog<>();
+                // Non-modal so the operator can follow this dialog's own instructions --
+                // "position the microscope at a clean, blank area" and "set hardware via
+                // the Live Viewer Camera tab" both need windows an application-modal
+                // dialog would lock out. showAndWait() below still blocks the workflow.
+                dialog.initModality(Modality.NONE);
+                activeDialog = dialog;
                 dialog.setTitle("Background Collection");
                 dialog.setHeaderText("Configure background image acquisition for flat field correction");
                 Button adviceButton = new Button("Advice");
@@ -138,7 +164,10 @@ public class BackgroundCollectionController {
                     }
                 };
                 modalityState.modalityProperty().addListener(stateListener);
-                dialog.setOnHidden(ev -> modalityState.modalityProperty().removeListener(stateListener));
+                dialog.setOnHidden(ev -> {
+                    modalityState.modalityProperty().removeListener(stateListener);
+                    activeDialog = null;
+                });
                 ScrollPane scrollPane = new ScrollPane(content);
                 scrollPane.setFitToWidth(true);
                 scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);

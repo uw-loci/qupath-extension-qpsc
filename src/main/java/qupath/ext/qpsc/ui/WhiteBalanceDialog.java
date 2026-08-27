@@ -17,6 +17,7 @@ import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
+import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
@@ -55,6 +56,9 @@ public class WhiteBalanceDialog {
     private static final String WB_SUBFOLDER = "white_balance_calibration";
     private static final StringProperty cameraProperty =
             PathPrefs.createPersistentPreference("wb.camera", "JAI AP-3200T-USB");
+
+    // The one dialog instance currently on screen, or null. Only touched on the FX thread.
+    private static Dialog<WBDialogResult> activeDialog;
 
     // Simple WB preferences
     private static final DoubleProperty simpleExposureProperty =
@@ -241,8 +245,30 @@ public class WhiteBalanceDialog {
 
         Platform.runLater(() -> {
             try {
+                // Modality was the only thing preventing a second copy from being
+                // opened off the menu while this one is up. Guard it explicitly.
+                if (activeDialog != null && activeDialog.getDialogPane().getScene() != null) {
+                    javafx.stage.Window win =
+                            activeDialog.getDialogPane().getScene().getWindow();
+                    if (win != null && win.isShowing()) {
+                        logger.info("White balance dialog already open - bringing to front");
+                        win.requestFocus();
+                        if (win instanceof javafx.stage.Stage openStage) {
+                            openStage.toFront();
+                        }
+                        future.complete(null);
+                        return;
+                    }
+                }
+
                 Dialog<WBDialogResult> dialog = new Dialog<>();
-                // Non-modal so user can interact with QuPath while dialog is open
+                activeDialog = dialog;
+                dialog.setOnHidden(ev -> activeDialog = null);
+                // Non-modal so the operator can act on this dialog's own instructions:
+                // it tells them to navigate to a blank area and check the field in the
+                // Live Viewer, which an application-modal dialog makes impossible.
+                // showAndWait() below still blocks the workflow until they answer.
+                dialog.initModality(Modality.NONE);
                 dialog.setTitle("White Balance Calibration");
                 dialog.setHeaderText("Configure JAI camera white balance calibration");
                 Button adviceButton = new Button("Advice");
