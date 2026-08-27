@@ -321,6 +321,14 @@ public final class SlotJumpAutofocus {
      * @param tiles       tile detections carrying {@code TileNumber}
      * @param fromStageXY the predicted stage position the search will start from
      * @param estimate    the QuPath-full-res to stage transform used to predict it
+     * <p><b>Why this needs no flip or polarity reasoning.</b> Both ends of the vector are put
+     * through the SAME transform into the SAME stage frame -- the predicted position the
+     * caller has already driven to, and the grid centre -- so the subtraction is taken
+     * entirely within that frame and any orientation error common to both cancels. The
+     * server then adds the offsets to a position it read from the stage itself. Nothing here
+     * asserts which way is right or up, which is what {@code ORIENTATION_STACK.md} asks of
+     * new directional code.
+     *
      * @return {@code {dx, dy}}, or {@code null} when there is no usable direction -- no tiles,
      *         or a start point already at the grid centre, where no bearing is better than
      *         any other and the caller should let the server sweep the compass
@@ -497,7 +505,7 @@ public final class SlotJumpAutofocus {
      *
      * @return a future that completes (with null) once AF settles or is skipped
      */
-    public static CompletableFuture<Void> runAfterSlotMove() {
+    public static synchronized CompletableFuture<Void> runAfterSlotMove() {
         // Consume the hint here, once, so every early return below leaves it cleared and a
         // skipped AF cannot leak a search into the next caller.
         final TissueSearchHint tissueSearch = pendingTissueSearch;
