@@ -155,7 +155,13 @@ public class ZBarPanel extends HBox {
             // No recenter while the fine bar is being dragged.
             if (!fineBar.dragging) {
                 double half = fineHalfWidth.get();
-                if (v < fineBar.zMin + 0.2 * half || v > fineBar.zMax - 0.2 * half) {
+                // The FIRST real Z always recenters, whatever the comfort zone says.
+                // Until one arrives the fine window sits on the coarse-range midpoint,
+                // which is a placeholder rather than a position; leaving it there
+                // because the incoming Z happens to fall inside it would show a window
+                // that was never chosen for this stage position.
+                boolean firstRealZ = oldV == null || Double.isNaN(oldV.doubleValue());
+                if (firstRealZ || v < fineBar.zMin + 0.2 * half || v > fineBar.zMax - 0.2 * half) {
                     fineBar.zMin = v - half;
                     fineBar.zMax = v + half;
                 }

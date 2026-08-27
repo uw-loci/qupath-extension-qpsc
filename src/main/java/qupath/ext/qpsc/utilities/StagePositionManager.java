@@ -203,6 +203,21 @@ public class StagePositionManager {
         logger.info("Stopping stage position polling");
         pollingActive = false;
 
+        // Forget the cached positions. While polling is stopped the stage still
+        // moves -- acquisition, autofocus, and the approach traverse all drive it
+        // -- so a value left over from before the stop is a memory, not a
+        // position, and handing it to a caller as though it were current is worse
+        // than admitting ignorance. Clearing to NaN also guarantees that the first
+        // poll after a restart is treated as an initial value and therefore always
+        // fires a change event, which is what re-seeds every listener. Without
+        // this, a listener that missed the transition waits for the stage to move
+        // before it learns where it is. That is what left the Z Focus bars blank
+        // and centred on the coarse-range midpoint after a run returned Z to 0.
+        posX = Double.NaN;
+        posY = Double.NaN;
+        posZ = Double.NaN;
+        posR = Double.NaN;
+
         if (poller != null) {
             poller.shutdownNow();
             try {

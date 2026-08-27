@@ -2,6 +2,10 @@ package qupath.ext.qpsc.utilities;
 
 import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
+import com.google.gson.TypeAdapter;
+import com.google.gson.stream.JsonReader;
+import com.google.gson.stream.JsonToken;
+import com.google.gson.stream.JsonWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -35,7 +39,48 @@ public final class FocusApproachValidationStore {
 
     private static final String FILENAME = "focus_approach_validation.json";
 
-    private static final Gson GSON = new GsonBuilder().setPrettyPrinting().create();
+    /**
+     * Writes a NaN measurement as JSON {@code null} and reads {@code null} back as NaN.
+     *
+     * <p>Several fields here mean "not measured", and this record spells that NaN. Gson
+     * refuses NaN outright, because it is not valid JSON -- which failed the whole save with
+     * "NaN is not a valid double value" and lost an otherwise good validation run.
+     *
+     * <p>The tempting one-line fix, {@code serializeSpecialFloatingPointValues()}, writes a
+     * bare {@code NaN} token that no strict JSON parser will read back. JSON already has a
+     * word for "no value", so use it.
+     *
+     * <p>This is paired with {@code serializeNulls()} below and the pairing is load-bearing:
+     * without it Gson omits the member entirely, and an absent {@code double} is reconstructed
+     * as 0.0 rather than NaN. That would silently turn "safe Z was never measured" into "safe Z
+     * is 0.0" -- and 0.0 is the real safe Z on PPM, so the corruption would look plausible.
+     */
+    private static final TypeAdapter<Double> NAN_AS_NULL = new TypeAdapter<>() {
+        @Override
+        public void write(JsonWriter out, Double value) throws IOException {
+            if (value == null || value.isNaN() || value.isInfinite()) {
+                out.nullValue();
+            } else {
+                out.value(value.doubleValue());
+            }
+        }
+
+        @Override
+        public Double read(JsonReader in) throws IOException {
+            if (in.peek() == JsonToken.NULL) {
+                in.nextNull();
+                return Double.NaN;
+            }
+            return in.nextDouble();
+        }
+    };
+
+    private static final Gson GSON = new GsonBuilder()
+            .setPrettyPrinting()
+            .serializeNulls()
+            .registerTypeAdapter(Double.class, NAN_AS_NULL)
+            .registerTypeAdapter(double.class, NAN_AS_NULL)
+            .create();
 
     private FocusApproachValidationStore() {}
 
@@ -177,6 +222,30 @@ public final class FocusApproachValidationStore {
         return microscope + "|" + modality + "|" + objective;
     }
 
+    /**
+     * Renders the store to JSON. Separated from the file write so the encoding -- notably
+     * the NaN-as-null contract -- can be exercised without a microscope-config preference.
+     *
+     * @param all records keyed by microscope|modality|objective
+     * @return the JSON text
+     */
+    static String serialize(Map<String, Record> all) {
+        return GSON.toJson(all);
+    }
+
+    /**
+     * Parses the store from JSON. Inverse of {@link #serialize}.
+     *
+     * @param json the JSON text
+     * @return records keyed by microscope|modality|objective, or null when the text is empty
+     */
+    static Map<String, Record> deserialize(String json) {
+        return GSON.fromJson(
+                json,
+                com.google.gson.reflect.TypeToken.getParameterized(LinkedHashMap.class, String.class, Record.class)
+                        .getType());
+    }
+
     /** All stored records, keyed by microscope|modality|objective. Empty when none exist. */
     public static Map<String, Record> loadAll() {
         Path path = storePath();
@@ -184,12 +253,7 @@ public final class FocusApproachValidationStore {
             return Map.of();
         }
         try {
-            String json = Files.readString(path, StandardCharsets.UTF_8);
-            @SuppressWarnings("unchecked")
-            Map<String, Record> loaded = GSON.fromJson(
-                    json,
-                    com.google.gson.reflect.TypeToken.getParameterized(LinkedHashMap.class, String.class, Record.class)
-                            .getType());
+            Map<String, Record> loaded = deserialize(Files.readString(path, StandardCharsets.UTF_8));
             return (loaded == null) ? Map.of() : loaded;
         } catch (Exception e) {
             logger.warn("Could not read {}: {}", path, e.getMessage());
@@ -223,7 +287,7 @@ public final class FocusApproachValidationStore {
         Map<String, Record> all = new LinkedHashMap<>(loadAll());
         all.put(key(record.microscope(), record.modality(), record.objective()), record);
         Files.createDirectories(path.getParent());
-        Files.writeString(path, GSON.toJson(all), StandardCharsets.UTF_8);
+        Files.writeString(path, serialize(all), StandardCharsets.UTF_8);
         logger.info(
                 "Focus-approach validation saved: {}/{}/{} usable={} -> {}",
                 record.microscope(),

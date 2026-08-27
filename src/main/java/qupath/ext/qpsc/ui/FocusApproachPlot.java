@@ -101,10 +101,13 @@ public final class FocusApproachPlot extends Pane {
         g.setFill(Color.web("#1b1b1b"));
         g.fillRect(0, 0, w, h);
 
-        // Left gutter carries the Z labels; the trace uses the rest.
+        // Left gutter carries the Z labels; the trace uses the rest. The bottom margin
+        // reserves a footer strip for the metric legend so it cannot collide with the
+        // lower endpoint label -- at a 22px margin the two were drawn 2px apart and
+        // overprinted into an unreadable smear.
         double gutter = 62;
         double top = 22;
-        double bottom = h - 22;
+        double bottom = h - 40;
         double plotW = Math.max(10, w - gutter - 12);
 
         g.setFont(Font.font(10));
@@ -138,9 +141,16 @@ public final class FocusApproachPlot extends Pane {
             }
         }
 
-        // Metric name, so nobody has to guess which curve they are looking at.
+        // Metric name in the reserved footer, so nobody has to guess which curve they
+        // are looking at -- and, more to the point, so nobody reads the live preview as
+        // if it were the measurement. The two differ in metric AND in sampling rate, so
+        // the live curve is legitimately noisier than the profile that replaces it;
+        // saying so here is cheaper than having to explain it after the fact.
         g.setFill(isServerProfile ? Color.web("#4FC3F7") : Color.web("#FFB74D"));
-        g.fillText((isServerProfile ? "server: " : "live: ") + metricLabel, gutter + 4, h - 6);
+        String legend = isServerProfile
+                ? "measured profile -- " + metricLabel + " (" + samples.size() + " samples)"
+                : "live preview only -- " + metricLabel + ", not the validated metric";
+        g.fillText(legend, gutter + 4, h - 8);
 
         if (samples.size() >= 2) {
             double min = Double.MAX_VALUE;

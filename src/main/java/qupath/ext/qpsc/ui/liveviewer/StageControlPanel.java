@@ -3617,7 +3617,47 @@ public class StageControlPanel extends VBox {
             return;
         }
         internalLiveActive.set(external.get());
-        external.addListener((obs, oldV, newV) -> internalLiveActive.set(newV != null && newV));
+        external.addListener((obs, oldV, newV) -> {
+            boolean nowLive = newV != null && newV;
+            internalLiveActive.set(nowLive);
+            // Going live is the moment the panel's idea of Z is most likely to be
+            // wrong: position polling is suspended while Live is off, and the stage
+            // moves during acquisition, autofocus, and the approach traverse. Re-read
+            // it from the hardware rather than waiting for the poller's first change
+            // event, which cannot arrive until the stage next moves.
+            if (nowLive && !(oldV != null && oldV)) {
+                resyncZFromHardware();
+            }
+        });
+    }
+
+    /**
+     * Re-read Z from the hardware and push it into both the Z field and the Z bars.
+     *
+     * <p>Deliberately a direct read rather than a look at {@link StagePositionManager}'s
+     * cache: the cache is only as fresh as the last poll, and the cases where a resync is
+     * wanted are exactly the cases where polling was not running.
+     */
+    private void resyncZFromHardware() {
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        double z = MicroscopeController.getInstance().getStagePositionZ();
+                        Platform.runLater(() -> {
+                            if (!zScrollInFlight) {
+                                zField.setText(String.format("%.2f", z));
+                            }
+                            if (zBarPanel != null) {
+                                zBarPanel.setCurrentZ(z);
+                            }
+                        });
+                    } catch (Exception e) {
+                        logger.debug("Z resync on live start failed: {}", e.getMessage());
+                    }
+                },
+                "StageControl-ZResync");
+        t.setDaemon(true);
+        t.start();
     }
 
     /**
@@ -3695,7 +3735,21 @@ public class StageControlPanel extends VBox {
 
                     try {
                         double z = MicroscopeController.getInstance().getStagePositionZ();
-                        Platform.runLater(() -> zField.setText(String.format("%.2f", z)));
+                        Platform.runLater(() -> {
+                            zField.setText(String.format("%.2f", z));
+                            // The Z bars need this same value. They used to be fed
+                            // only by StagePositionManager -- whose cache is NaN
+                            // until its poller delivers, and whose poller does not
+                            // start until this panel registers as its first
+                            // listener, which happens AFTER this method runs. So on
+                            // a first open the bars had no Z at all and sat at the
+                            // coarse-range midpoint while this very field showed the
+                            // correct position, because the field had a direct read
+                            // and the bars did not. Give them the direct read too.
+                            if (zBarPanel != null) {
+                                zBarPanel.setCurrentZ(z);
+                            }
+                        });
                         logger.debug("Initialized Z field with current position: {}", z);
                     } catch (Exception e) {
                         logger.debug("Failed to retrieve current Z stage position: {}", e.getMessage());
