@@ -151,4 +151,33 @@ class AutoAdvanceSessionTest {
         AutoAdvanceController.requestOperatorAttention("Single-tile refinement", "SIFT found no match");
         assertFalse(AutoAdvanceController.isArmed());
     }
+    // ---- blocking advisory prompts -------------------------------------------
+
+    @Test
+    void blockingPromptIsShownWhenAnOperatorIsThere() {
+        // Manual mode: the advisory must appear. It exists to make a human decide something
+        // that does not add up, and in manual mode there is a human.
+        assertFalse(AutoAdvanceController.deferBlockingPrompt("Objective mismatch", "saved at 40x"));
+    }
+
+    @Test
+    void blockingPromptIsSkippedAndHandedBackInAnAutomaticBatch() {
+        AutoAdvanceController.armSession(MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 10);
+
+        assertTrue(AutoAdvanceController.deferBlockingPrompt("Objective mismatch", "saved at 40x"));
+
+        assertTrue(
+                AutoAdvanceController.isOverriddenThisSlide(),
+                "skipping the prompt must hand the slide back, not silently continue past it");
+    }
+
+    @Test
+    void blockingPromptIsShownAgainOnceTheOperatorHasTakenOver() {
+        // Once a slide is overridden a human IS engaged with it, so the advisory is worth
+        // showing -- skipping it then would hide the reason they were called over.
+        AutoAdvanceController.armSession(MultiSlideAcquisitionMode.AUTOMATIC_WITH_OVERRIDE, 10);
+        AutoAdvanceController.overrideCurrentSlide("operator took over");
+
+        assertFalse(AutoAdvanceController.deferBlockingPrompt("Objective mismatch", "saved at 40x"));
+    }
 }

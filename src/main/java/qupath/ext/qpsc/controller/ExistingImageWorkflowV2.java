@@ -1098,6 +1098,21 @@ public class ExistingImageWorkflowV2 {
                         active);
                 return true;
             }
+            // No preset can carry this source to the active scope, and no operator is here to
+            // choose between re-tagging the source and proceeding cross-scope anyway. Both are
+            // consequential and neither is safe to assume, so refuse this slide and let the
+            // batch continue -- rather than waiting on a modal nobody will answer.
+            if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(
+                    "Source-microscope mismatch",
+                    "image is tagged source='" + source + "' with no preset reaching the active scope '" + active
+                            + "'")) {
+                logger.warn(
+                        "Automatic batch: refusing slide on source mismatch source='{}' active='{}' "
+                                + "(no cross-scope preset, and the choice needs a human)",
+                        source,
+                        active);
+                return false;
+            }
 
             // No preset from source to active -- genuinely ambiguous, ask the user.
             javafx.scene.control.Alert alert =
@@ -1222,6 +1237,17 @@ public class ExistingImageWorkflowV2 {
                 logger.debug("Orphaned-sibling guard: per-slide lookup failed: {}", e.getMessage());
             }
 
+            // The workflow is refused either way -- this dialog only explains why. Skipping it
+            // unattended changes no outcome; it stops the batch waiting on an OK nobody will
+            // click. The notification carries the same message to whoever is not in the room.
+            if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(
+                    "Orphaned flipped sibling",
+                    "'" + entry.getImageName() + "' has no stage-bounds metadata; re-run from its base image")) {
+                logger.warn(
+                        "Automatic batch: refusing workflow on orphaned sibling '{}' without showing the dialog",
+                        entry.getImageName());
+                return false;
+            }
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             alert.setTitle("Orphaned flipped sibling");

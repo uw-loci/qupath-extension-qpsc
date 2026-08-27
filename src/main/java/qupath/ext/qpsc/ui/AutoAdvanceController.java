@@ -240,6 +240,38 @@ public final class AutoAdvanceController {
     }
 
     /**
+     * Whether a BLOCKING advisory prompt should be skipped because no operator is there to
+     * answer it. Returns true when it should be skipped, having already handed the slide back
+     * and notified.
+     *
+     * <p>Distinct from {@link #attach}, and deliberately so. A countdown is right for a dialog
+     * whose default answer is the one you want -- "Collect Regions", "Start Acquisition".
+     * These are the opposite: advisories that exist because something does not add up (the
+     * saved alignment was built at another objective, its flip frame is unknown, the source
+     * scanner does not match). Counting one of those down to "Continue" would accept an
+     * unverified alignment with nobody looking, which is the failure mode this whole feature
+     * is supposed to avoid -- a wrong result that looks like a right one.
+     *
+     * <p>So the caller returns its CONSERVATIVE answer instead: refuse, and let this slide
+     * fail cleanly while the batch moves on to the next one. Three of four slides acquired
+     * and one flagged beats a run that stopped at slide two.
+     *
+     * <p>Without this the prompt simply waits. The setup-slot watchdog would eventually notice
+     * and notify, but only after 20 minutes, and the batch makes no progress in the meantime.
+     *
+     * @param what   the step that cannot continue, for the log and the notification
+     * @param reason what does not add up
+     * @return true when the prompt must not be shown
+     */
+    public static boolean deferBlockingPrompt(String what, String reason) {
+        if (!mode.isAutomatic() || overriddenThisSlide) {
+            return false;
+        }
+        requestOperatorAttention(what, reason);
+        return true;
+    }
+
+    /**
      * One dialog's countdown: relabels the primary button each second, fires it on expiry,
      * and (in AUTOMATIC_WITH_OVERRIDE) cancels itself on the first deliberate interaction.
      */

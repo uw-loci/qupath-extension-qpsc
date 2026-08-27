@@ -219,8 +219,16 @@ slide back on purpose, because proceeding would mis-align it:
 | No tile qualifies (tissue thinner than three tiles across) | You are asked to pick by hand, rather than a poor tile being chosen silently |
 | SIFT comes back below the confidence threshold | The refinement panel waits for you to nudge and capture; the position is never accepted unverified |
 
-Both stop automation **for that slide only** -- the next slide resumes automatically --
-and both send a push notification, as does a setup slot that makes no progress for 20
+A third case is the advisory dialogs that fire when a saved alignment does not add up --
+built at a different objective, flip frame unknown, source scanner unreachable from this
+microscope, or an orphaned image entry. Those ask you to decide whether to continue. With
+nobody there, an automatic batch does **not** count them down to "Continue" -- accepting an
+unverified alignment unwatched is exactly the silent-wrong-result this feature exists to
+avoid. It refuses that slide, flags it, and moves to the next one. Three slides acquired and
+one flagged beats a run that stopped at slide two.
+
+All of these stop automation **for that slide only** -- the next slide resumes automatically
+-- and all send a push notification, as does a setup slot that makes no progress for 20
 minutes. Configure one under *Notifications* in preferences, or an unattended run will
 wait silently. Before **Set Up All Remaining** starts, an automatic batch also checks
 every pending slot for annotations and lists any that have none, since each of those

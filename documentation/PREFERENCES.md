@@ -960,9 +960,12 @@ stop: that dialog's Confirm button is created disabled and only enables on a vie
 selection, so a countdown could never have driven it. Multi-tile refinement also drives its
 own **Select tile** and **Solve & Save**.
 
-**Two things still hand a slide back**, both because accepting them would mis-align it: no
-tile qualifying (tissue thinner than three tiles across), and a SIFT match below the
-confidence threshold. Automation stops for that slide only, the next slide resumes, and
+**Three things hand a slide back**, all because accepting them unwatched would mis-align it:
+no tile qualifying (tissue thinner than three tiles across), a SIFT match below the
+confidence threshold, and any advisory about a saved alignment that does not add up (built
+at a different objective, unknown flip frame, unreachable source scanner). Advisories are
+refused rather than counted down to "Continue" — auto-confirming one would accept an
+unverified alignment with nobody looking. Automation stops for that slide only, the next slide resumes, and
 both send a push notification — as does a setup slot with no progress for 20 minutes. Set
 up notifications, or an unattended run waits in silence. Starting **Set Up All Remaining**
 in an automatic mode also lists any pending slot that has no annotations, since each would

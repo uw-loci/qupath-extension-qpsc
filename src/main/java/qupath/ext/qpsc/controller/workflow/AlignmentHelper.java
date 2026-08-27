@@ -630,6 +630,13 @@ public class AlignmentHelper {
      * JSON) share the same FX-safe pattern.
      */
     public static boolean confirmContinueDialog(String title, String header, String body) {
+        // Unattended: refuse rather than wait. "Continue anyway" is a judgement about an
+        // alignment that does not add up, and nobody is here to make it -- so this slide
+        // fails and the batch moves on, instead of the run stopping dead on a modal dialog.
+        if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(title, header)) {
+            logger.warn("Automatic batch: refusing '{}' without asking -- {}", title, header);
+            return false;
+        }
         final boolean[] result = {false};
         Runnable show = () -> {
             javafx.scene.control.Alert alert =
@@ -677,6 +684,13 @@ public class AlignmentHelper {
     }
 
     private static void showPixelFrameMismatchDialogOnFx(String title, String header, String body) {
+        // Informational only -- the caller has already refused the alignment. Skipping the
+        // modal unattended changes no decision; it just stops the batch waiting on an OK
+        // nobody is going to click.
+        if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(title, header)) {
+            logger.warn("Automatic batch: not showing '{}' -- {}", title, header);
+            return;
+        }
         javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
         alert.setTitle(title);
         alert.setHeaderText(header);
