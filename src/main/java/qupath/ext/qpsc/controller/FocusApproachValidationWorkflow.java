@@ -109,6 +109,15 @@ public final class FocusApproachValidationWorkflow {
         // the result -- it licenses the wrong objective and leaves the mounted one unlicensed.
         // Hence a picker rather than a read-only line: the resolution below is a good default,
         // not something to be trusted silently.
+        // The instructions ask the operator to judge focus from the LIVE image, so make sure
+        // there is one. The scan itself does not need this -- the server starts its own
+        // sequence when none is running and tears it down after -- but a dark viewer while
+        // being told to focus in Live Mode is a confusing place to start.
+        if (!qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.isStreamingActive()) {
+            logger.info("Focus-approach: Live Viewer not streaming; opening it");
+            qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.show();
+        }
+
         objective = confirmPlan(mgr, modality, objective, safeZ);
         if (objective == null) {
             return;
@@ -504,6 +513,21 @@ public final class FocusApproachValidationWorkflow {
                                             farEnd);
                             if (result != null && result.dumpPath != null) {
                                 holder[0] = FocusApproachValidationStore.parseDumpDirectory(Paths.get(result.dumpPath));
+                                // The server leaves the stage at the traverse start (the safe Z),
+                                // which is right for it -- it has no idea what the caller was
+                                // doing. Here we DO know: the operator focused on this field, and
+                                // parking 250 um away means re-focusing before every re-run. The
+                                // focus Z is a position we were just at, so returning to it is a
+                                // plain move to somewhere known good, not a search.
+                                try {
+                                    controller.moveStageZ(manualFocusZ);
+                                    logger.info("Focus-approach: returned to the focus Z {} um", manualFocusZ);
+                                } catch (Exception e) {
+                                    logger.warn(
+                                            "Focus-approach: could not return to the focus Z ({}); "
+                                                    + "stage left at the safe Z",
+                                            e.getMessage());
+                                }
                             } else {
                                 logger.warn("Focus-approach scan returned no dump path");
                             }

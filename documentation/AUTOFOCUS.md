@@ -265,7 +265,8 @@ Validating the worst case licenses the rest.
    the live camera image, not the eyepiece. The two are not necessarily parfocal, and every
    measurement here is made on camera frames; this Z is the reference the measured peak is checked
    against within 5 um, so an eyepiece focus can fail a microscope that is working perfectly.
-   Confirm.
+   If the Live Viewer is not already streaming, QPSC opens it automatically so you can see the
+   live image while focusing. Confirm.
 3. A confirmation dialog appears with:
    - **Objective picker** (dropdown) -- Confirm which objective is actually mounted. The result
      record is **keyed on the objective**, so a wrong selection licenses the wrong objective and
@@ -289,6 +290,10 @@ Validating the worst case licenses the rest.
    button, which aborts the scan and returns the stage to the safe Z. **Watch the stage during
    this.** One limit worth knowing: the initial retraction is a plain stage move, so cancelling
    during it stops the scan that follows but does not interrupt the move already in flight.
+   After a successful scan the stage returns to the Z **you** focused at, not the peak the scan
+   measured (those can differ -- the gap between them is one of the things being checked). It is a
+   position the stage was at moments earlier, so re-running the validation needs no re-focusing.
+   A cancelled or failed scan returns to the safe Z instead.
 5. Move in XY to a **bare** part of the same slide, changing nothing else; confirm.
 6. The identical scan runs there, with the same cancellable window. The direction confirmation
    in step 3 is asked only once -- the retraction is unchanged for the second scan.
