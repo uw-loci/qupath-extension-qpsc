@@ -132,6 +132,17 @@ public final class ReferenceTileSelector {
                 tissueByName.put(a.getName(), a.getROI());
             }
         }
+        // Tiles are matched to their annotation by NAME (the suffix TilingUtilities bakes into
+        // the tile name), so an unnamed annotation contributes nothing here and its tiles get
+        // no containment test -- silently leaving only the neighbour-ring filter. That is still
+        // a real filter, but it is half the protection, and the difference shows up as a
+        // reference tile sitting on the tissue boundary. Say so rather than degrade quietly.
+        if (tissueByName.isEmpty() && !tissue.isEmpty()) {
+            logger.warn(
+                    "Reference tile selection: {} annotation(s) but none carry a name, so tiles cannot be matched "
+                            + "to them; falling back to the neighbour-ring filter alone",
+                    tissue.size());
+        }
         List<PathObject> chosen = select(tiles, tissueByName, gui.getImageData().getServer(), k);
         if (chosen.isEmpty()) {
             logger.warn("Automatic reference-tile selection found nothing; falling back to manual picking");
@@ -197,8 +208,17 @@ public final class ReferenceTileSelector {
                 if (!hasFullNeighbourRing(cells, row, col)) {
                     continue;
                 }
+                // A tile with no usable ROI has no position, so it cannot be scored, spread
+                // against, or driven to. Dropping it here rather than downstream matters:
+                // the spread step scores such a tile -1, and if it were the only candidate
+                // left it would be "chosen" as null and NPE at the caller, or -- worse in an
+                // automatic batch -- read as "no tile available" and open a dialog nobody is
+                // there to answer.
                 ROI roi = tile.getROI();
-                if (tissue != null && roi != null && !tissue.contains(roi.getCentroidX(), roi.getCentroidY())) {
+                if (roi == null || roi.isEmpty()) {
+                    continue;
+                }
+                if (tissue != null && !tissue.contains(roi.getCentroidX(), roi.getCentroidY())) {
                     continue;
                 }
                 result.add(tile);

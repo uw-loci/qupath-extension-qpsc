@@ -297,4 +297,42 @@ class ReferenceTileSelectorTest {
             qupath.ext.qpsc.ui.AutoAdvanceController.disarmSession();
         }
     }
+
+    @Test
+    void tileWithNoUsableRoiIsNotInterior() {
+        // A tile with no position cannot be scored, spread against, or driven to. Left in, it
+        // scores -1 in the spread step and -- if it were the last candidate -- would be
+        // "chosen" as null, NPEing at the caller or reading as "no tile available" and opening
+        // a dialog nobody is there to answer.
+        List<PathObject> tiles = new ArrayList<>(grid("ann", 3, 3));
+        PathObject noRoi = PathObjects.createDetectionObject(ROIs.createEmptyROI());
+        noRoi.setName("999_ann");
+        noRoi.getMeasurements().put("TileNumber", 999);
+        noRoi.getMeasurements().put("Row", 1);
+        noRoi.getMeasurements().put("Column", 1);
+        tiles.add(noRoi);
+
+        List<PathObject> interior = ReferenceTileSelector.interiorTiles(tiles, Map.of());
+
+        assertFalse(interior.contains(noRoi), "a tile with no usable ROI must not be interior");
+        assertTrue(interior.stream()
+                .allMatch(t -> t.getROI() != null && !t.getROI().isEmpty()));
+    }
+
+    @Test
+    void selectionNeverReturnsANullTile() {
+        // The guarantee every caller relies on: a non-empty result contains real tiles.
+        List<PathObject> tiles = new ArrayList<>(grid("ann", 4, 4));
+        PathObject noRoi = PathObjects.createDetectionObject(ROIs.createEmptyROI());
+        noRoi.setName("999_ann");
+        noRoi.getMeasurements().put("TileNumber", 999);
+        noRoi.getMeasurements().put("Row", 1);
+        noRoi.getMeasurements().put("Column", 2);
+        tiles.add(noRoi);
+
+        List<PathObject> chosen = ReferenceTileSelector.select(tiles, Map.of(), null, 3);
+
+        assertFalse(chosen.isEmpty());
+        assertTrue(chosen.stream().noneMatch(java.util.Objects::isNull));
+    }
 }

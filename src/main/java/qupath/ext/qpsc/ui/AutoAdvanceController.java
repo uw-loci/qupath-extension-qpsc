@@ -256,6 +256,12 @@ public final class AutoAdvanceController {
      * fail cleanly while the batch moves on to the next one. Three of four slides acquired
      * and one flagged beats a run that stopped at slide two.
      *
+     * <p>Note the difference from {@link #requestOperatorAttention}, which does NOT advance
+     * the batch: it stops auto-advance and leaves the current dialog up for a human. That is
+     * right when the remedy is a human decision at that dialog (a low-confidence SIFT match
+     * they can nudge and retry), and wrong here, where the answer is "do not use this
+     * alignment" and no amount of waiting improves it.
+     *
      * <p>Without this the prompt simply waits. The setup-slot watchdog would eventually notice
      * and notify, but only after 20 minutes, and the batch makes no progress in the meantime.
      *

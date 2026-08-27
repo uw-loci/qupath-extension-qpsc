@@ -423,8 +423,12 @@ Before focusing at that landmark, QPSC asks the microscope to look for tissue
 (`FINDTISS`): snap where it is, check the frame with the **same tissue/background gate the
 acquisition path uses**, and if it is background, step one field-of-view diagonal outward
 and check again — fanning around a direction hint that points toward the centre of the
-tile grid, since that is where the tissue is. Seven positions are checked by default,
-which reaches roughly 890 um at 20x.
+tile grid, since that is where the tissue is. Two rings are swept by default, reaching
+roughly 890 um at 20x: seven positions with a hint, seventeen without one.
+
+The step is deliberately coarse and leaves gaps between fields. That is the right trade
+here — the search is looking for a tissue mass many fields across, not for one particular
+field, and covering every micrometre would cost far more stage moves for no benefit.
 
 **Only that first point searches.** The second one, predicted by an estimate the first has
 already corrected, lands within **26 um** — the base transform's error is very nearly a

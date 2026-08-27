@@ -472,14 +472,14 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | `--yaml <path>` | yes | Path to the active `config_<scope>.yml`; the server derives `autofocus_<scope>.yml` from it for the tissue thresholds. |
 | `--objective <id>` | no | Objective whose per-objective `texture_threshold` / `tissue_area_threshold` / `rgb_brightness_threshold` apply. Missing falls back to the shipped defaults. |
 | `--dir <dx>,<dy>` | no | Stage-space hint toward where tissue is believed to be; only its bearing is used. QPSC computes it as the vector from the predicted position to the centre of the tile grid. Unusable input is ignored with a warning -- the search still works without it. |
-| `--step <um>` | no | Radius increment. Default: one camera FOV diagonal, which is the coarsest step that cannot skip ground. |
-| `--max-attempts <n>` | no | Positions to visit **including the starting one**. Default 7 (two full rings); capped at 25. |
+| `--step <um>` | no | Radius increment. Default: one camera FOV diagonal. Deliberately coarse, and it DOES leave gaps -- stepping 446 um along X with a 357 x 267 um field skips 89 um. A step that could not skip anything on any bearing would be the field's short side (267 um), needing far more positions for the same reach. Acceptable because the target is a tissue mass many fields across, not a specific field. |
+| `--max-attempts <n>` | no | Positions to visit **including the starting one**. Default is two complete rings: **7 with a hint, 17 without** (three bearings per ring versus eight). Capped at 25. Not one fixed number, because that cannot mean "whole rings" for both patterns, and stopping mid-ring biases the search toward whichever bearings are enumerated first. |
 
 **Search pattern** (`server/tissue_search.py`, pure and unit-tested). The first position
 is always where the caller already is -- at the median error the camera is often still on
 tissue, and checking costs one snap. After that, positions lie on rings at whole multiples
 of `--step`. With a hint, three bearings per ring: down the hint, then +/-45 deg. Without
-one, the four compass points then the diagonals. So reach is
+one, the four compass points then the four diagonals. So reach is
 `step * ((max_attempts - 1) // bearings_per_ring)` -- an attempt budget converts directly
 into a distance, which is how it was sized against the measurement above.
 

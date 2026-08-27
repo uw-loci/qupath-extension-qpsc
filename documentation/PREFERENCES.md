@@ -965,9 +965,14 @@ no tile qualifying (tissue thinner than three tiles across), a SIFT match below 
 confidence threshold, and any advisory about a saved alignment that does not add up (built
 at a different objective, unknown flip frame, unreachable source scanner). Advisories are
 refused rather than counted down to "Continue" — auto-confirming one would accept an
-unverified alignment with nobody looking. Automation stops for that slide only, the next slide resumes, and
-both send a push notification — as does a setup slot with no progress for 20 minutes. Set
-up notifications, or an unattended run waits in silence. Starting **Set Up All Remaining**
+unverified alignment with nobody looking.
+
+All three send a push notification — as does a setup slot with no progress for 20 minutes.
+Set up notifications, or an unattended run waits in silence. What follows differs: an
+**advisory** refuses the slide and the batch **moves on** to the next slot, while **no
+qualifying tile** or a **low-confidence SIFT** leaves that slide's dialog waiting for you and
+the batch does not advance past it. In `AUTOMATIC_WITH_OVERRIDE` that wait is the point of
+the mode; in `FULLY_AUTOMATIC` nobody is coming, so the run stops there until you return. Starting **Set Up All Remaining**
 in an automatic mode also lists any pending slot that has no annotations, since each would
 otherwise stop the pass.
 

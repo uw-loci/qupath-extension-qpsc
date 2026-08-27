@@ -227,9 +227,19 @@ unverified alignment unwatched is exactly the silent-wrong-result this feature e
 avoid. It refuses that slide, flags it, and moves to the next one. Three slides acquired and
 one flagged beats a run that stopped at slide two.
 
-All of these stop automation **for that slide only** -- the next slide resumes automatically
--- and all send a push notification, as does a setup slot that makes no progress for 20
-minutes. Configure one under *Notifications* in preferences, or an unattended run will
+All of these send a push notification, as does a setup slot that makes no progress for 20
+minutes. What happens next differs, and it is worth knowing which is which:
+
+| Case | What the batch does |
+|---|---|
+| An advisory about a saved alignment | The slide is **refused** and the batch **moves on** to the next slot, which is left "In progress" for you |
+| No qualifying tile, or SIFT below threshold | The slide's dialog **waits for you**. The batch does NOT advance past it -- the slide is unfinished, and finishing it is a human decision |
+
+The second row is the one to plan around: in `AUTOMATIC_WITH_OVERRIDE` that is the intended
+behaviour, since the mode exists so you can take a slide over. In `FULLY_AUTOMATIC` nobody
+is coming, so the run stops there until you return -- the 20-minute notification tells you,
+but the remaining slides wait. Another reason to prove a batch in `AUTOMATIC_WITH_OVERRIDE`
+first. Configure one under *Notifications* in preferences, or an unattended run will
 wait silently. Before **Set Up All Remaining** starts, an automatic batch also checks
 every pending slot for annotations and lists any that have none, since each of those
 would otherwise stop the pass waiting for you to draw a region.

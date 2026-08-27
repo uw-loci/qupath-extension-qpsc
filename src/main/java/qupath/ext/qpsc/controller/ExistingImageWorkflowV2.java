@@ -2479,6 +2479,15 @@ public class ExistingImageWorkflowV2 {
                             : SingleTileRefinement.performRefinement(gui, state.annotations, state.transform);
             return refineFuture
                     .thenApply(result -> {
+                        // A null result is the refinement's hard-block signal (AlignmentLivePrep
+                        // ends an unattended refinement rather than aligning against an unusable
+                        // live view). Dereferencing it threw an NPE that reached the batch driver
+                        // as an unexplained failure -- the slide was correctly left unfinished,
+                        // but the log said NullPointerException instead of why.
+                        if (result == null) {
+                            logger.warn("Refinement returned no result (hard block); preserving prior alignment");
+                            throw new CancellationException("Refinement was blocked before it could run");
+                        }
                         state.refinementTile = result.selectedTile;
                         // Only consume the refined transform + persist the JSON when the
                         // user actually accepted a refinement (Save Refined Position) or
