@@ -968,11 +968,12 @@ up notifications, or an unattended run waits in silence. Starting **Set Up All R
 in an automatic mode also lists any pending slot that has no annotations, since each would
 otherwise stop the pass.
 
-**The first landmark searches for tissue before focusing.** The base transform lands it a
-median 600 um out (worst 1.5 mm), often on blank glass where a focus scan finds coverslip
-contrast rather than the sample. The microscope now checks whether it is on tissue and, if
-not, steps outward toward the tile grid in FOV-sized hops. Only the first landmark does
-this — the second lands within 26 um. If nothing is found the stage returns to where it
+**The first measured point of each slide searches for tissue before focusing** — refinement
+point 1 on the usual green-box route, or landmark 1 when a slide falls back to 3-point
+manual alignment. The base transform lands it a median 600 um out (worst 1.5 mm), often on
+blank glass where a focus scan finds coverslip contrast rather than the sample. The
+microscope now checks whether it is on tissue and, if not, steps outward toward the tile
+grid in FOV-sized hops. Only that first point does this — the second lands within 26 um. If nothing is found the stage returns to where it
 started, focusing proceeds anyway, and the slide is handed back with a notification.
 
 > **WARNING — not validated for real acquisition.** An auto-confirmed alignment accepts

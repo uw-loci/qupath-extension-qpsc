@@ -363,6 +363,53 @@ public final class SlotJumpAutofocus {
     }
 
     /**
+     * A tissue search for a landmark predicted by the RAW base transform, or null when this
+     * caller should not search.
+     *
+     * <p>Three sites qualify, and they are alternatives rather than a sequence -- which one
+     * runs depends on how the slide is being aligned:
+     * <ul>
+     *   <li>{@code MultiTileRefinement} point 1 and {@code SingleTileRefinement}'s single
+     *       point, on the green-box + scanner-preset route a batch normally takes. THIS is
+     *       where the 613 um landing error was measured.</li>
+     *   <li>{@code AffineTransformationController}'s first landmark, on the 3-point manual
+     *       route, which a slide falls back to when there is no usable scanner preset.</li>
+     * </ul>
+     * Later points on any of those routes are predicted by an estimate already corrected by
+     * the first, land within 26 um, and must NOT search -- it would only cost time.
+     *
+     * <p>Restricted to automatic batches. In a manual run the operator is watching the live
+     * view and can drive the stage themselves; a stage wandering several hundred micrometres
+     * unbidden would be worse than the problem it solves.
+     *
+     * @param tiles           tile detections, for the direction hint
+     * @param predictedStageXY the position the transform predicted, which the search starts from
+     * @param estimate        the transform that predicted it
+     */
+    public static TissueSearchHint tissueSearchForFirstLandmark(
+            java.util.Collection<qupath.lib.objects.PathObject> tiles,
+            double[] predictedStageXY,
+            java.awt.geom.AffineTransform estimate) {
+        if (!qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
+                || qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide()) {
+            return null;
+        }
+        double[] hint = tissueDirectionHint(tiles, predictedStageXY, estimate);
+        if (hint == null) {
+            // No usable bearing (no tiles, or already at the grid centre). Still search --
+            // the server sweeps the compass, which is the honest answer when nothing says
+            // which way tissue lies.
+            logger.info("Tissue search: no direction hint available; the server will sweep the compass");
+            return new TissueSearchHint(Double.NaN, Double.NaN);
+        }
+        logger.info(
+                "Tissue search: hint toward the tile-grid centre ({}, {}) um",
+                String.format("%.1f", hint[0]),
+                String.format("%.1f", hint[1]));
+        return new TissueSearchHint(hint[0], hint[1]);
+    }
+
+    /**
      * Looks for tissue before focusing, then focuses. See {@link TissueSearchHint} for why
      * only one caller passes a hint.
      *
@@ -372,7 +419,7 @@ public final class SlotJumpAutofocus {
      *
      * @param search where to look; {@code null} skips the search entirely
      */
-    public static CompletableFuture<Void> runAfterSlotMove(TissueSearchHint search) {
+    public static synchronized CompletableFuture<Void> runAfterSlotMove(TissueSearchHint search) {
         pendingTissueSearch = search;
         return runAfterSlotMove();
     }

@@ -543,7 +543,23 @@ public class MultiTileRefinement {
                                     // (default on; no-op when disabled/disconnected). We are
                                     // off the FX thread here, so block until AF settles -- the
                                     // returned future always completes.
-                                    SlotJumpAutofocus.runAfterSlotMove().join();
+                                    // Point 1 only: it is the one predicted by the RAW base
+                                    // transform, which lands a median 613 um out -- often on
+                                    // blank glass, where the focus scan below has nothing to
+                                    // find. Points 2+ are predicted by an estimate the earlier
+                                    // points already corrected and land within 26 um, so a
+                                    // search there would only cost time. No-op outside an
+                                    // automatic batch.
+                                    SlotJumpAutofocus.TissueSearchHint tissueSearch = (pointNumber == 1)
+                                            ? SlotJumpAutofocus.tissueSearchForFirstLandmark(
+                                                    gui.getImageData()
+                                                            .getHierarchy()
+                                                            .getDetectionObjects(),
+                                                    predictedStage,
+                                                    estimate)
+                                            : null;
+                                    SlotJumpAutofocus.runAfterSlotMove(tissueSearch)
+                                            .join();
                                     Platform.runLater(() -> {
                                         // Multi-slide alignment-step start: force Camera View
                                         // + zoom to tissue once, at the first point (no-op

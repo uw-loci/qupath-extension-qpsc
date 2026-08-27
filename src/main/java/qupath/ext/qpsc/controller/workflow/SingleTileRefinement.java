@@ -271,7 +271,12 @@ public class SingleTileRefinement {
         // blocking socket round-trip, so the stage has arrived -- the settle-gate contract
         // SlotJumpAutofocus documents. AF runs off-thread; the returned future ALWAYS completes,
         // and we resume the refinement UI on the FX thread once focus settles (or is skipped).
-        SlotJumpAutofocus.runAfterSlotMove()
+        // Single-tile refinement has exactly one point, and it is predicted by the raw base
+        // transform -- the case measured at a median 613 um out, often onto blank glass where
+        // the focus scan has nothing to find. No-op outside an automatic batch.
+        SlotJumpAutofocus.TissueSearchHint tissueSearch = SlotJumpAutofocus.tissueSearchForFirstLandmark(
+                gui.getImageData().getHierarchy().getDetectionObjects(), estimatedStageCoords, initialTransform);
+        SlotJumpAutofocus.runAfterSlotMove(tissueSearch)
                 .whenComplete((ignored, afEx) -> Platform.runLater(() -> {
                     try {
                         continueRefinementAfterFocus(

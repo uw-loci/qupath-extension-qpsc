@@ -31,11 +31,13 @@ package qupath.ext.qpsc.preferences;
  * {@link qupath.ext.qpsc.ui.AutoAdvanceController#requestOperatorAttention}, which stops
  * auto-advance for that slide only and sends a push notification.
  *
- * <p>The first landmark of each slide also runs a tissue search before focusing
- * ({@code SlotJumpAutofocus.TissueSearchHint} -> the server's {@code FINDTISS}): the base
- * transform puts that landmark a median 613 um from its target, often on blank glass where
- * a focus scan finds coverslip contrast rather than the sample. Later landmarks land within
- * 26 um and do not search. The search is UNVERIFIED ON HARDWARE.
+ * <p>The first point measured on each slide also runs a tissue search before focusing
+ * ({@link qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus#tissueSearchForFirstLandmark}
+ * -> the server's {@code FINDTISS}): the raw base transform puts it a median 613 um from
+ * its target, often on blank glass where a focus scan finds coverslip contrast rather than
+ * the sample. That is refinement point 1 on the green-box + preset route a batch normally
+ * takes, or landmark 1 when a slide falls back to 3-point manual alignment. Later points
+ * land within 26 um and do not search. UNVERIFIED ON HARDWARE.
  */
 public enum MultiSlideAcquisitionMode {
 

@@ -404,12 +404,20 @@ choose to re-run it if needed; nothing is blocked.
 
 ## Finding tissue before focusing (multi-slide first landmark)
 
-A focus scan needs something to focus on. In a multi-slide batch, the FIRST alignment
-landmark of each slide is predicted from the base transform, and that prediction is off by
-a median of **613 um** (worst case **1507 um**, measured over 8 slides on 2026-08-24) —
+A focus scan needs something to focus on. In a multi-slide batch, the FIRST measured point
+of each slide is predicted by the **raw base transform**, and that prediction is off by a
+median of **613 um** (worst case **1507 um**, measured over 8 slides on 2026-08-24) —
 frequently far enough to leave the camera over blank glass. Scanning there commits to
 coverslip contrast or exhausts the attempt budget, and the alignment that follows is done
 against an out-of-focus view.
+
+"First point" means whichever of these the slide's alignment route reaches first — they are
+alternatives, not a sequence:
+
+| Route | First point |
+|---|---|
+| Green box + scanner preset (what a batch normally does) | Multi-tile refinement **point 1**, or single-tile refinement's one point |
+| 3-point manual landmarks (fallback when no scanner preset is usable) | Landmark **1** |
 
 Before focusing at that landmark, QPSC asks the microscope to look for tissue
 (`FINDTISS`): snap where it is, check the frame with the **same tissue/background gate the
@@ -418,9 +426,9 @@ and check again — fanning around a direction hint that points toward the centr
 tile grid, since that is where the tissue is. Seven positions are checked by default,
 which reaches roughly 890 um at 20x.
 
-**Only the first landmark searches.** The second one, corrected by the first's translation,
-lands within **26 um** — the base transform's error is very nearly a constant per-slide
-offset, so searching again would only cost time.
+**Only that first point searches.** The second one, predicted by an estimate the first has
+already corrected, lands within **26 um** — the base transform's error is very nearly a
+constant per-slide offset, so searching again would only cost time.
 
 **It only has to find tissue, not the right tile.** SIFT is not the weak link here: it has
 matched at 1507 um with 796 inliers. Once focus is real, the alignment step handles the

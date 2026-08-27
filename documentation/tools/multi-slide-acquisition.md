@@ -226,16 +226,17 @@ wait silently. Before **Set Up All Remaining** starts, an automatic batch also c
 every pending slot for annotations and lists any that have none, since each of those
 would otherwise stop the pass waiting for you to draw a region.
 
-**The first landmark looks for tissue before focusing.** The base transform puts a
-slide's first landmark a median 600 um from where it aimed (worst case 1.5 mm), which
+**The first measured point of each slide looks for tissue before focusing.** The base
+transform puts that point a median 600 um from where it aimed (worst case 1.5 mm), which
 often leaves the camera over blank glass -- and a focus scan there finds coverslip
 contrast, or nothing, and the alignment that follows is done out of focus. Before
 focusing, the microscope now checks whether it is actually on tissue and, if not, steps
 outward toward the tissue in FOV-sized hops until it is. It only has to find tissue, not
 the right tile: SIFT handles the rest, and has matched from 1.5 mm away.
 
-Only the FIRST landmark does this. The second one, corrected by the first, lands within
-26 um, so searching again would just cost time. If nothing is found nearby, the stage goes
+Only the FIRST point does this -- refinement point 1 on the usual green-box route, or
+landmark 1 when a slide falls back to 3-point manual alignment. The second point, corrected
+by the first, lands within 26 um, so searching again would just cost time. If nothing is found nearby, the stage goes
 back where it started, focusing proceeds anyway, and the slide is handed back to you with
 a notification -- the run does not pretend it worked.
 

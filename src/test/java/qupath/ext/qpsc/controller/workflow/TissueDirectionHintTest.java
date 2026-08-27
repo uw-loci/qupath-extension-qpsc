@@ -104,4 +104,50 @@ class TissueDirectionHintTest {
         assertEquals(200.0, hint[0], 1e-6);
         assertEquals(200.0, hint[1], 1e-6);
     }
+
+    // ---- the gate: which callers get a search at all ---------------------------
+
+    @org.junit.jupiter.api.AfterEach
+    void disarm() {
+        qupath.ext.qpsc.ui.AutoAdvanceController.disarmSession();
+    }
+
+    @Test
+    void noSearchOutsideAnAutomaticBatch() {
+        // In a manual run the operator is watching the live view; a stage wandering several
+        // hundred micrometres unbidden is worse than the problem it solves.
+        qupath.ext.qpsc.ui.AutoAdvanceController.disarmSession();
+        assertNull(SlotJumpAutofocus.tissueSearchForFirstLandmark(grid(), new double[] {0, 0}, new AffineTransform()));
+    }
+
+    @Test
+    void noSearchOnASlideTheOperatorHasTakenOver() {
+        qupath.ext.qpsc.ui.AutoAdvanceController.armSession(
+                qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 5);
+        qupath.ext.qpsc.ui.AutoAdvanceController.overrideCurrentSlide("operator took over");
+        assertNull(SlotJumpAutofocus.tissueSearchForFirstLandmark(grid(), new double[] {0, 0}, new AffineTransform()));
+    }
+
+    @Test
+    void armedBatchSearchesWithTheHint() {
+        qupath.ext.qpsc.ui.AutoAdvanceController.armSession(
+                qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 5);
+        var search = SlotJumpAutofocus.tissueSearchForFirstLandmark(grid(), new double[] {0, 0}, new AffineTransform());
+        assertNotNull(search);
+        assertEquals(200.0, search.dirX(), 1e-6);
+        assertEquals(200.0, search.dirY(), 1e-6);
+    }
+
+    @Test
+    void armedBatchStillSearchesWhenNoBearingIsAvailable() {
+        // Standing on the grid centre: no direction is better than another, but blank glass is
+        // still possible, so the search runs unhinted and the server sweeps the compass.
+        qupath.ext.qpsc.ui.AutoAdvanceController.armSession(
+                qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 5);
+        var search =
+                SlotJumpAutofocus.tissueSearchForFirstLandmark(grid(), new double[] {200, 200}, new AffineTransform());
+        assertNotNull(search, "an unhinted search is still worth running");
+        assertTrue(Double.isNaN(search.dirX()));
+        assertTrue(Double.isNaN(search.dirY()));
+    }
 }
