@@ -287,8 +287,20 @@ Validating the worst case licenses the rest.
    direction is undeclared in the YAML, this check is skipped and the human confirmation
    remains the only guard.
    
-   Click "Proceed" or "Direction is correct" to continue after confirming both the objective
-   and the retraction direction.
+   - **Save images** (checkbox) -- By default, QPSC saves the focus-metric measurements (samples.csv)
+     and the analysis verdict, but not the individual camera frames from the scan. Each scan
+     captures several hundred frames (roughly 750 MB per scan, 1.5 GB for both tissue and blank
+     scans), so saving frames is opt-in. Turn this on only if you need to visually inspect the raw
+     frames afterward to understand why the curve looks the way it does. The verdict comes entirely
+     from the CSV measurements regardless of whether images are saved.
+
+     Each scan writes a folder under `<microscope config dir>/autofocus_tests/`, named
+     `streaming_af_<timestamp>_tissue` or `streaming_af_<timestamp>_blank` so the two halves of
+     a validation run can be told apart afterwards. Inside are `samples.csv` (the focus-metric
+     trace), `z_poll.csv` (the raw stage-position poll), and `manifest.json`.
+   
+   Click "Proceed" or "Direction is correct" to continue after confirming the objective,
+   the retraction direction, and the save-images option.
 4. The stage retracts to the safe Z and scans in, continuing ~30 um past your focus so the far
    side of the peak is captured. A window stays up for the whole traverse with a vertical
    focus-metric plot and a red **CANCEL** button, which aborts the scan and returns the stage to
