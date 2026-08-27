@@ -445,9 +445,14 @@ anyway, and — in an automatic batch — the slide is handed back to the operat
 notification rather than the run continuing quietly.
 
 > **Not yet verified on a microscope.** The search geometry is unit-tested on both sides;
-> the behaviour on real tissue is not. It also requires a command server new enough to know
-> `FINDTISS`; an older one logs a warning and focuses from the predicted position, exactly
-> as before this existed.
+> the behaviour on real tissue is not.
+
+**If the command server is too old to know `FINDTISS`,** the client detects the missing
+reply, stops asking for the rest of the session, reconnects its primary socket, and focuses
+from the predicted position — the behaviour that predates the search. The reconnect is not
+cosmetic: an old server consumes the command's text payload as if each eight bytes were
+another command, which would otherwise shift every later command on that connection. Update
+the command server alongside the extension.
 
 ---
 

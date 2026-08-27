@@ -506,6 +506,20 @@ Response formats:
 A move that fails mid-search (typically a stage limit) is logged and skipped; the search
 continues with the offsets still reachable rather than abandoning the slide.
 
+**Compatibility -- this verb carries a payload, and that matters.** A server without the
+command does NOT simply ignore it. `qp_server.py` reads 8 bytes, finds no handler, logs
+`Unknown command` and continues -- with the text payload still in the stream. It then eats
+that payload eight bytes at a time as if each slice were a command, and whatever is left
+over when the payload does not divide by eight stays buffered and shifts every LATER
+command on that socket. Payload-free probes like `REQHWER` / `REQSAT` are safe against an
+old server for exactly this reason; `FINDTISS` is not.
+
+`MicroscopeSocketClient.findTissue` therefore treats "no usable reply" as a hard signal:
+it clears a session flag so nothing asks again, drops the primary socket so the next
+command reconnects onto a clean stream, and returns `FAILED`. Autofocus then runs from the
+predicted position -- the behaviour that predates the search. **Any future command that
+sends a payload needs the same treatment.**
+
 #### ABORTAF
 
 Cancel an in-progress `STRMAFZ` scan. No payload. Response: `ACK`

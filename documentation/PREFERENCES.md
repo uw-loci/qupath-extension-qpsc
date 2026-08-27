@@ -980,8 +980,9 @@ started, focusing proceeds anyway, and the slide is handed back with a notificat
 > whatever position the base transform predicted, with no human comparing it against the
 > live view, and the tissue search above has **not yet been run on a microscope** — only
 > its geometry is unit-tested. It also needs a command server new enough to know the
-> `FINDTISS` command; an older one logs a warning and focuses from the predicted position
-> exactly as before. Leave this on `MANUAL` for real acquisition, and prove a batch in
+> `FINDTISS` command — update the server alongside the extension. Against an older server
+> the extension notices the missing reply, stops asking, reconnects its socket, and focuses
+> from the predicted position as before, at the cost of one timeout on the first slide. Leave this on `MANUAL` for real acquisition, and prove a batch in
 > `AUTOMATIC_WITH_OVERRIDE` before trusting `FULLY_AUTOMATIC`.
 
 ---

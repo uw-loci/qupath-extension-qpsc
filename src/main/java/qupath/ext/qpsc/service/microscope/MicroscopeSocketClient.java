@@ -2247,6 +2247,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for findTissue");
         }
+        if (!findTissueSupported) {
+            return new FindTissueResult(FindTissueResult.Status.FAILED, 0, 0, 0, 0, "server does not support FINDTISS");
+        }
         StringBuilder msgBuilder = new StringBuilder();
         msgBuilder.append("--yaml ").append(yamlPath);
         if (objective != null && !objective.isEmpty()) {
@@ -2296,6 +2299,27 @@ public class MicroscopeSocketClient implements AutoCloseable {
             } catch (InterruptedException e) {
                 Thread.currentThread().interrupt();
                 throw new IOException("FINDTISS interrupted", e);
+            } catch (IOException e) {
+                // A server that does not know FINDTISS is NOT a benign no-op. Its dispatch loop
+                // reads 8 bytes, finds no handler, logs "Unknown command" and CONTINUES -- with
+                // our text payload still in the stream. It then consumes that payload eight
+                // bytes at a time as if each were a command, and any bytes left over when the
+                // payload does not divide by eight stay buffered and shift every LATER command
+                // on this socket. That is silent corruption of the primary connection, not a
+                // missing feature.
+                //
+                // So: stop asking for the rest of the session, and drop the primary socket so
+                // the next command reconnects onto a clean stream. Autofocus then runs from the
+                // predicted position, which is exactly what happened before this existed.
+                findTissueSupported = false;
+                logger.warn(
+                        "FINDTISS got no usable reply ({}). Disabling it for this session and reconnecting the "
+                                + "primary socket -- an older server consumes the payload as commands and would "
+                                + "desynchronise every later command.",
+                        e.getMessage());
+                disconnectPrimary();
+                return new FindTissueResult(
+                        FindTissueResult.Status.FAILED, 0, 0, 0, 0, "no reply (server too old?): " + e.getMessage());
             } finally {
                 if (socket != null) {
                     try {
@@ -4995,6 +5019,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
     // permanently without disturbing the connection. The server then falls
     // back to a hard abort on saturation, matching pre-feature behavior.
     private volatile boolean saturationCheckSupported = true;
+
+    /**
+     * Cleared the first time FINDTISS gets no usable reply, so a batch does not pay the
+     * read timeout once per slide against a server that does not have the command.
+     * Same idea as {@code hwErrorCheckSupported} / {@code saturationCheckSupported}, but it
+     * matters more here: those are payload-free commands, and this one is not (see
+     * {@link #findTissue}).
+     */
+    private volatile boolean findTissueSupported = true;
 
     /**
      * Checks if the server has a pending saturation continue/cancel decision.

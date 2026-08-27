@@ -445,9 +445,10 @@ public class QPPreferenceDialog {
                         + "The first landmark of each slide searches for tissue before focusing:\n"
                         + "  the predicted position lands ~600 um out on average, often on blank\n"
                         + "  glass where a focus scan has nothing to find. NOT YET VERIFIED ON A\n"
-                        + "  MICROSCOPE, and it needs a command server new enough to know FINDTISS\n"
-                        + "  (an older one logs a warning and focuses from the predicted position,\n"
-                        + "  which is what happened before).\n"
+                        + "  MICROSCOPE. Update the command server alongside the extension: it\n"
+                        + "  needs one new enough to know the FINDTISS command. Against an older\n"
+                        + "  server the search is disabled after the first slide and focusing\n"
+                        + "  falls back to the predicted position, as it did before.\n"
                         + "\n"
                         + "Leave on MANUAL unless you are testing.")
                 .build());

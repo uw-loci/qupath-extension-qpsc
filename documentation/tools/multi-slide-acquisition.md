@@ -243,8 +243,10 @@ a notification -- the run does not pretend it worked.
 > **Still not validated for real work.** An auto-confirmed alignment accepts whatever
 > position the base transform predicted, with nobody comparing it to the live view, and
 > the tissue search above has **not yet been run on a microscope** -- only its geometry is
-> tested. It also needs a command server new enough to know the `FINDTISS` command; an
-> older one logs a warning and focuses from the predicted position, exactly as before.
+> tested. It also needs a command server new enough to know the `FINDTISS` command: update
+> the server alongside the extension. If it is older, the extension notices the missing
+> reply, stops asking, reconnects, and focuses from the predicted position as it did before
+> -- but that costs one read timeout and a reconnect on the first slide.
 > Leave `MANUAL` for real acquisition, and run a batch in `AUTOMATIC_WITH_OVERRIDE` --
 > where any click hands the slide back -- before trusting `FULLY_AUTOMATIC`.
 
