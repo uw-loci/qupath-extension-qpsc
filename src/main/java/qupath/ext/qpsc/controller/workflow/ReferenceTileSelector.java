@@ -12,6 +12,7 @@ import java.util.Set;
 import java.util.function.ToDoubleFunction;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.objects.PathObject;
 import qupath.lib.regions.RegionRequest;
@@ -73,7 +74,75 @@ public final class ReferenceTileSelector {
     /** Long edge, in pixels, that a tile region is downsampled to before scoring. */
     private static final int SCORE_TARGET_PX = 256;
 
+    /**
+     * Maximum tiles whose texture is actually measured. Scoring reads an image region per
+     * tile, so this bounds the cost of a selection on a slide with thousands of tiles.
+     */
+    private static final int SCORE_BUDGET = 60;
+
     private ReferenceTileSelector() {}
+
+    // ---- automatic-batch entry point -------------------------------------------
+
+    /**
+     * True when an automatic batch is running and has not been handed back to the operator for
+     * the current slide -- i.e. when {@link #autoPickIfArmed} would attempt a pick.
+     *
+     * <p>Exists so a caller on the FX thread can decide whether to move the (image-reading)
+     * selection onto a worker thread without doing the selection itself to find out.
+     */
+    public static boolean wouldAutoPick() {
+        return qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
+                && !qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide();
+    }
+
+    /**
+     * Reference tiles for the slide currently open in {@code gui}, or an empty list when the
+     * operator should pick by hand.
+     *
+     * <p>This is the single gate every "pick a tile" site consults during a multi-slide batch.
+     * It returns empty -- meaning "show the dialog" -- in three cases, all of which are the
+     * operator being asked rather than a bad tile being chosen silently: the batch is not in an
+     * automatic mode, the operator has taken over this slide, or nothing survives the interior
+     * filter (tissue thinner than three tiles, or tiles with no {@code Row}/{@code Column}
+     * measurements).
+     *
+     * @param gui         QuPath GUI; a null GUI or no open image returns empty
+     * @param annotations tissue annotations to test containment against; when null the open
+     *                    image's annotation objects are used, so callers that never received an
+     *                    annotation list still get the containment test
+     * @param k           how many tiles to pick
+     * @return chosen tiles, or empty to fall back to the selection dialog
+     */
+    public static List<PathObject> autoPickIfArmed(QuPathGUI gui, List<PathObject> annotations, int k) {
+        if (!wouldAutoPick()) {
+            return List.of();
+        }
+        if (gui == null || gui.getImageData() == null) {
+            return List.of();
+        }
+        var hierarchy = gui.getImageData().getHierarchy();
+        List<PathObject> tiles = hierarchy.getDetectionObjects().stream()
+                .filter(o -> o.getMeasurements().containsKey("TileNumber"))
+                .toList();
+        Collection<PathObject> tissue = (annotations != null) ? annotations : hierarchy.getAnnotationObjects();
+        Map<String, ROI> tissueByName = new HashMap<>();
+        for (PathObject a : tissue) {
+            if (a.getName() != null && a.getROI() != null) {
+                tissueByName.put(a.getName(), a.getROI());
+            }
+        }
+        List<PathObject> chosen = select(tiles, tissueByName, gui.getImageData().getServer(), k);
+        if (chosen.isEmpty()) {
+            logger.warn("Automatic reference-tile selection found nothing; falling back to manual picking");
+        } else {
+            logger.info(
+                    "Automatic reference-tile selection picked {} tile(s): {}",
+                    chosen.size(),
+                    chosen.stream().map(PathObject::getName).toList());
+        }
+        return chosen;
+    }
 
     // ---- step 1: interior ------------------------------------------------------
 
@@ -167,8 +236,17 @@ public final class ReferenceTileSelector {
         if (candidates == null || candidates.isEmpty() || k <= 0) {
             return List.of();
         }
-        List<PathObject> ranked = new ArrayList<>(candidates);
-        ranked.sort(Comparator.comparingDouble(scorer).reversed());
+        List<PathObject> toScore = boundScoringSet(candidates);
+        // Score ONCE per tile into a map, then sort on the map. Sorting with the scorer as the
+        // comparator would call it O(n log n) times, and each call is a region read -- on a
+        // slide with a thousand tiles that is thousands of image reads to pick three tiles.
+        Map<PathObject, Double> scores = new HashMap<>();
+        for (PathObject tile : toScore) {
+            scores.put(tile, scorer.applyAsDouble(tile));
+        }
+        List<PathObject> ranked = new ArrayList<>(toScore);
+        ranked.sort(Comparator.comparingDouble((PathObject t) -> scores.getOrDefault(t, 0.0))
+                .reversed());
 
         int poolSize = Math.min(ranked.size(), Math.max(POOL_FLOOR, k * POOL_MULTIPLIER));
         List<PathObject> pool = new ArrayList<>(ranked.subList(0, poolSize));
@@ -189,6 +267,33 @@ public final class ReferenceTileSelector {
             pool.remove(best);
         }
         return chosen;
+    }
+
+    /**
+     * At most {@value #SCORE_BUDGET} tiles to score, sampled at an even stride across the
+     * interior set.
+     *
+     * <p>Texture scoring reads an image region per tile. A 20x acquisition can have thousands
+     * of interior tiles, and reading all of them to choose three would cost more than the
+     * alignment it is serving -- long enough to look like a hang. A fixed stride keeps the
+     * sampled set spread across the whole tissue (rather than clustered at whichever corner
+     * the tiling happened to emit first) and keeps the cost independent of tile count. It is
+     * deterministic, so the same slide picks the same tiles on a re-run.
+     */
+    private static List<PathObject> boundScoringSet(List<PathObject> candidates) {
+        if (candidates.size() <= SCORE_BUDGET) {
+            return candidates;
+        }
+        List<PathObject> sampled = new ArrayList<>(SCORE_BUDGET);
+        double stride = candidates.size() / (double) SCORE_BUDGET;
+        for (int i = 0; i < SCORE_BUDGET; i++) {
+            sampled.add(candidates.get((int) (i * stride)));
+        }
+        logger.info(
+                "Reference tile selection: scoring {} of {} interior tiles (even stride) to bound image reads",
+                sampled.size(),
+                candidates.size());
+        return sampled;
     }
 
     private static double minDistanceTo(PathObject candidate, List<PathObject> chosen) {

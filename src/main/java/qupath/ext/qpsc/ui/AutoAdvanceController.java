@@ -17,6 +17,9 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode;
+import qupath.ext.qpsc.service.notification.NotificationEvent;
+import qupath.ext.qpsc.service.notification.NotificationPriority;
+import qupath.ext.qpsc.service.notification.NotificationService;
 
 /**
  * Counts a multi-slide setup dialog down and then fires its primary button, so the
@@ -204,6 +207,36 @@ public final class AutoAdvanceController {
             overriddenThisSlide = true;
             logger.info("Auto-advance PAUSED for this slide: {}", reason);
         }
+    }
+
+    /**
+     * Hand the slide back to the operator because the software could not proceed on its own,
+     * and send a push notification so an absent operator learns the batch is waiting.
+     *
+     * <p>Distinct from {@link #overrideCurrentSlide}: that one is the operator deliberately
+     * taking over, and they are by definition at the microscope, so a phone alert would be
+     * noise. This one is an unattended run stopping, which is exactly what a push notification
+     * is for. Both stop auto-advance for the remainder of the slide.
+     *
+     * <p>No-op outside an armed batch, and silent when the slide is already overridden, so a
+     * chain of bail-outs sends one notification rather than several.
+     *
+     * @param what   short phrase naming the step that could not continue, e.g. "Multi-tile refinement"
+     * @param reason why it stopped, shown in the notification body
+     */
+    public static void requestOperatorAttention(String what, String reason) {
+        if (!mode.isAutomatic() || overriddenThisSlide) {
+            overrideCurrentSlide(reason);
+            return;
+        }
+        overrideCurrentSlide(reason);
+        logger.warn("Auto-advance handing this slide back to the operator: {} -- {}", what, reason);
+        NotificationService.getInstance()
+                .notify(
+                        "Slide needs attention",
+                        what + " stopped and is waiting for you: " + reason,
+                        NotificationPriority.HIGH,
+                        NotificationEvent.ACQUISITION_WARNING);
     }
 
     /**

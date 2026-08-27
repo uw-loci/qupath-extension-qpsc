@@ -128,14 +128,21 @@ public class SingleTileRefinement {
 
         String classSummary = summarizeAnnotationClasses(annotations);
 
-        // Select tile for refinement
-        UIFunctions.promptTileSelectionDialogAsync("Select a tile for alignment refinement.\n"
-                        + "Tiles created for " + annotations.size() + " annotation(s)"
-                        + (classSummary.isEmpty() ? "" : " of class: " + classSummary) + ".\n"
-                        + "The microscope will move to the estimated position for this tile.\n"
-                        + (trustSift
-                                ? "SIFT auto-alignment will attempt to match automatically."
-                                : "You will then manually adjust the stage position to match."))
+        // Select tile for refinement. During an automatic multi-slide batch the tile is picked
+        // by ReferenceTileSelector instead of by a click -- the selection dialog's Confirm is
+        // created disabled and only enables on a viewer selection, so a countdown cannot drive
+        // it and an unattended batch would stop here. An empty pick (manual mode, an overridden
+        // slide, or no interior tile) falls back to the dialog.
+        resolveRefinementTile(
+                        gui,
+                        annotations,
+                        "Select a tile for alignment refinement.\n"
+                                + "Tiles created for " + annotations.size() + " annotation(s)"
+                                + (classSummary.isEmpty() ? "" : " of class: " + classSummary) + ".\n"
+                                + "The microscope will move to the estimated position for this tile.\n"
+                                + (trustSift
+                                        ? "SIFT auto-alignment will attempt to match automatically."
+                                        : "You will then manually adjust the stage position to match."))
                 .thenAccept(selectedTile -> {
                     if (selectedTile == null) {
                         logger.info("User cancelled tile selection");
@@ -157,6 +164,21 @@ public class SingleTileRefinement {
                 });
 
         return future;
+    }
+
+    /**
+     * The tile to refine against: auto-picked during an automatic multi-slide batch, otherwise
+     * chosen by the operator. The auto-picked tile is centred and selected in the viewer by
+     * {@code performTileRefinement}, so both paths reach the refinement identically.
+     */
+    private static CompletableFuture<PathObject> resolveRefinementTile(
+            QuPathGUI gui, List<PathObject> annotations, String prompt) {
+        List<PathObject> auto = ReferenceTileSelector.autoPickIfArmed(gui, annotations, 1);
+        if (auto.isEmpty()) {
+            return UIFunctions.promptTileSelectionDialogAsync(prompt);
+        }
+        logger.info("Refinement tile auto-picked: '{}'", auto.get(0).getName());
+        return CompletableFuture.completedFuture(auto.get(0));
     }
 
     /**
@@ -351,7 +373,13 @@ public class SingleTileRefinement {
                                 } catch (Exception e) {
                                     logger.warn("SIFT auto-align error: {} -- falling back to manual", e.getMessage());
                                 }
-                                // Fallback: show manual dialog
+                                // Fallback: show manual dialog. In an automatic batch nobody is
+                                // watching, and this dialog has no countdown to fire -- accepting a
+                                // position SIFT could not verify would silently mis-align the slide.
+                                // Hand the slide back and notify instead of stalling unannounced.
+                                qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+                                        "Single-tile alignment refinement",
+                                        "SIFT could not match the reference tile confidently");
                                 Platform.runLater(() ->
                                         showRefinementDialog(gui, tileCoords, initialTransform, selectedTile, future));
                             },

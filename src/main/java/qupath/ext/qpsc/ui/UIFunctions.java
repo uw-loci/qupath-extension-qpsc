@@ -839,15 +839,15 @@ public class UIFunctions {
                                             .get("TileNumber")
                                             .doubleValue();
                     statusLabel.setText("Selected Tile Name: " + tileName);
-                    statusLabel.setTextFill(javafx.scene.paint.Color.GREEN);
+                    statusLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                     confirmButton.setDisable(false);
                 } else if (tiles.isEmpty()) {
                     statusLabel.setText("No tile selected");
-                    statusLabel.setTextFill(javafx.scene.paint.Color.BLACK);
+                    statusLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.NORMAL + ";");
                     confirmButton.setDisable(true);
                 } else {
                     statusLabel.setText("Multiple tiles selected - please select only one");
-                    statusLabel.setTextFill(javafx.scene.paint.Color.RED);
+                    statusLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
                     confirmButton.setDisable(true);
                 }
             }));

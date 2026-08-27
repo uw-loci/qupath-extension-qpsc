@@ -34,6 +34,7 @@ import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.CancellationToken;
+import qupath.ext.qpsc.controller.workflow.MultiSlidePreflight;
 import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.model.AcquisitionTimeEstimator;
@@ -750,6 +751,14 @@ public final class MultiSlideExistingImageWorkflow {
         // acquisition. Each slot advances to Set up and stashes its captured config.
         setUpAllBtn.setOnAction(e -> {
             stopAfterCurrent.setSelected(false);
+            // An unattended setup pass stops dead on a slide with no annotations (the per-slide
+            // annotation dialog waits for a human to draw or detect one). Say so before the
+            // batch starts rather than an hour in, with nobody in the room. Advisory only: the
+            // operator may plan to draw regions as each slide comes up.
+            if (!confirmAnnotationsPreflight(gui, states)) {
+                logger.info("MS workflow: Set Up All cancelled at the annotation pre-flight, runId={}", runId);
+                return;
+            }
             boolean reuse = resolveReuseForBatch(reuseDecision);
             setBusy.accept(true);
             logger.info("MS workflow: Set Up All Remaining started, runId={}", runId);
@@ -761,6 +770,8 @@ public final class MultiSlideExistingImageWorkflow {
                     s -> setupSlot(gui, carrier, s, refreshFinish, reuse, cancelToken),
                     stopAfterCurrent::isSelected,
                     aborted::get,
+                    "Set up",
+                    SETUP_SLOT_WATCHDOG_MS,
                     () -> {
                         logger.info("MS workflow: Set Up All Remaining finished, runId={}", runId);
                         setBusy.accept(false);
@@ -799,6 +810,9 @@ public final class MultiSlideExistingImageWorkflow {
                     s -> acquireSlot(gui, s, refreshFinish, cancelToken, pendingStitches),
                     stopAfterCurrent::isSelected,
                     aborted::get,
+                    "Acquire",
+                    // No watchdog: one slot's acquisition legitimately runs for hours.
+                    0L,
                     () -> {
                         logger.info("MS workflow: Acquire All Set-Up driver finished, runId={}", runId);
                         if (aborted.get()) {
@@ -1355,6 +1369,8 @@ public final class MultiSlideExistingImageWorkflow {
             SlotOp op,
             java.util.function.BooleanSupplier stopRequested,
             java.util.function.BooleanSupplier abortRequested,
+            String passName,
+            long slotWatchdogMs,
             Runnable onDone) {
 
         // Abort All: stop immediately, do not open or run any further slot. Checked first so
@@ -1380,9 +1396,93 @@ public final class MultiSlideExistingImageWorkflow {
         }
 
         final int idx = i;
-        op.run(states.get(idx))
-                .whenComplete((v, ex) -> Platform.runLater(
-                        () -> driveSequential(gui, states, idx + 1, match, op, stopRequested, abortRequested, onDone)));
+        SlotState slot = states.get(idx);
+        javafx.animation.Timeline watchdog = startSlotWatchdog(slot, passName, slotWatchdogMs);
+        op.run(slot)
+                .whenComplete((v, ex) -> Platform.runLater(() -> {
+                    if (watchdog != null) {
+                        watchdog.stop();
+                    }
+                    driveSequential(
+                            gui,
+                            states,
+                            idx + 1,
+                            match,
+                            op,
+                            stopRequested,
+                            abortRequested,
+                            passName,
+                            slotWatchdogMs,
+                            onDone);
+                }));
+    }
+
+    /**
+     * How long one slot's SETUP may take before the operator is told the run is waiting.
+     *
+     * <p>Setup is interactive but bounded: a slot jump, an autofocus, a SIFT match or two, and
+     * tile creation. Twenty minutes is far longer than any of those and still far shorter than
+     * the hours an unattended batch might be left alone. Only the setup pass is watched -- an
+     * ACQUIRE slot legitimately runs for hours, so a timer there would only cry wolf.
+     */
+    private static final long SETUP_SLOT_WATCHDOG_MS = 20 * 60 * 1000L;
+
+    /**
+     * Starts a one-shot timer that notifies the operator if a slot's op has not finished in
+     * {@code timeoutMs}. Returns the timer so the caller can stop it on completion, or null when
+     * no watchdog applies (manual pacing, or a pass with no bound).
+     *
+     * <p>It deliberately does NOT cancel or advance past the slot. Whatever is waiting is an
+     * open dialog with live state behind it -- a stage at a landmark, a half-captured
+     * refinement -- and tearing that down blind risks a worse outcome than a stopped batch.
+     * The failure this addresses is the run being stuck SILENTLY, so it converts a silent stall
+     * into an announced one and leaves the decision to a human.
+     */
+    private static javafx.animation.Timeline startSlotWatchdog(SlotState slot, String passName, long timeoutMs) {
+        if (timeoutMs <= 0 || !AutoAdvanceController.isArmed()) {
+            return null;
+        }
+        String label = slot.assignment.slotLabel();
+        javafx.animation.Timeline timeline = new javafx.animation.Timeline(new javafx.animation.KeyFrame(
+                javafx.util.Duration.millis(timeoutMs),
+                evt -> AutoAdvanceController.requestOperatorAttention(
+                        passName + " on slot " + label,
+                        "no progress for " + (timeoutMs / 60000) + " minutes -- the run is waiting for you")));
+        timeline.play();
+        return timeline;
+    }
+
+    /**
+     * Runs the annotation pre-flight and, when slots are missing regions, asks whether to start
+     * anyway. Returns true to proceed.
+     *
+     * <p>Only runs for an automatic batch. In manual mode the operator is at the microscope and
+     * handles each slide's annotation dialog as it appears, so a pre-flight would be one more
+     * dialog for no gain.
+     */
+    private static boolean confirmAnnotationsPreflight(QuPathGUI gui, List<SlotState> states) {
+        if (!QPPreferenceDialog.getMultiSlideAcquisitionMode().isAutomatic()) {
+            return true;
+        }
+        List<MultiSlidePreflight.SlotAnnotationCheck> checks = new ArrayList<>();
+        for (SlotState s : states) {
+            if (s.status == Status.PENDING || s.status == Status.IN_PROGRESS) {
+                checks.add(new MultiSlidePreflight.SlotAnnotationCheck(
+                        s.assignment.slotLabel(), s.assignment.entry(), s.assignment.baseEntry()));
+            }
+        }
+        List<String> missing = MultiSlidePreflight.slotsWithoutAnnotations(gui, checks);
+        if (missing.isEmpty()) {
+            return true;
+        }
+        return Dialogs.showConfirmDialog(
+                "No regions on some slides",
+                "These slots have no annotations to acquire:\n\n    "
+                        + String.join("\n    ", missing)
+                        + "\n\nAn automatic run stops on each of them and waits for you to draw or "
+                        + "detect a region, so it will not finish unattended.\n\n"
+                        + "Draw the regions first, or start anyway and handle those slides as they "
+                        + "come up.");
     }
 
     /**

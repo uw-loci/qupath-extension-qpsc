@@ -264,4 +264,37 @@ class ReferenceTileSelectorTest {
         t.setName("7");
         assertEquals("", ReferenceTileSelector.annotationKey(t));
     }
+
+    @Test
+    void autoPickReturnsNothingWhenNoBatchIsArmed() {
+        // The gate every "pick a tile" site consults. Outside an automatic batch it must return
+        // empty so the operator gets the selection dialog they expect.
+        qupath.ext.qpsc.ui.AutoAdvanceController.disarmSession();
+        assertTrue(ReferenceTileSelector.autoPickIfArmed(null, null, 3).isEmpty());
+    }
+
+    @Test
+    void autoPickReturnsNothingWhenTheOperatorHasTakenOverTheSlide() {
+        qupath.ext.qpsc.ui.AutoAdvanceController.armSession(
+                qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 5);
+        try {
+            qupath.ext.qpsc.ui.AutoAdvanceController.overrideCurrentSlide("operator took over");
+            assertTrue(ReferenceTileSelector.autoPickIfArmed(null, null, 3).isEmpty());
+        } finally {
+            qupath.ext.qpsc.ui.AutoAdvanceController.disarmSession();
+        }
+    }
+
+    @Test
+    void autoPickReturnsNothingWithNoOpenImage() {
+        qupath.ext.qpsc.ui.AutoAdvanceController.armSession(
+                qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 5);
+        try {
+            assertTrue(
+                    ReferenceTileSelector.autoPickIfArmed(null, null, 3).isEmpty(),
+                    "no GUI / no open image must fall back to asking, not throw");
+        } finally {
+            qupath.ext.qpsc.ui.AutoAdvanceController.disarmSession();
+        }
+    }
 }

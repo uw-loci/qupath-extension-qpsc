@@ -16,16 +16,23 @@ package qupath.ext.qpsc.preferences;
  * timer, so an auto-confirmed alignment accepts whatever position the base transform
  * predicted with no human check. Treat them as unvalidated for production runs.
  *
- * <p>They also do not yet reach unattended operation, and it is worth knowing exactly
- * where they stop. Reference-tile auto-pick (Phase C) IS built and wired -- see
- * {@code MultiTileRefinement.resolveAutoTiles}. What remains is the FIRST landmark
- * point of each slide: {@code UIFunctions.promptTileSelectionDialogAsync} creates its
- * Confirm button disabled and only enables it once a polling Timeline sees a
- * tile-bearing detection selected in the viewer, so attaching a countdown cannot drive
- * it -- the countdown would hit the disabled-primary guard and hand the slide back.
- * Landmark points 2 and 3 need no such pick; they are chosen programmatically. The
- * server-side tissue jog (Phase D) that would correct the first landmark's landing
- * error is also not built.
+ * <p>Every tile pick along the setup pass is now made by {@link
+ * qupath.ext.qpsc.controller.workflow.ReferenceTileSelector}: the first landmark point
+ * of each slide, the single-tile refinement pick, and each multi-tile reference point.
+ * That matters because those picks could not be automated by a countdown --
+ * {@code UIFunctions.promptTileSelectionDialogAsync} creates its Confirm button disabled
+ * and only enables it once a polling Timeline sees a tile-bearing detection selected in
+ * the viewer, so a countdown would hit the disabled-primary guard and hand the slide
+ * back. Landmark points 2 and 3 never needed a pick; they are chosen programmatically.
+ *
+ * <p>Two situations still hand a slide back deliberately, both because proceeding would
+ * mis-align it: tissue too small to contain an interior tile (nothing survives the
+ * selector's filters), and a SIFT match below the confidence threshold. Both call
+ * {@link qupath.ext.qpsc.ui.AutoAdvanceController#requestOperatorAttention}, which stops
+ * auto-advance for that slide only and sends a push notification.
+ *
+ * <p>Not built: the server-side tissue jog (Phase D) that would correct the first
+ * landmark's landing error, measured at roughly 600 um on a slide's first point.
  */
 public enum MultiSlideAcquisitionMode {
 

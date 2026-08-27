@@ -118,4 +118,37 @@ class AutoAdvanceSessionTest {
         assertTrue(MultiSlideAcquisitionMode.FULLY_AUTOMATIC.isAutomatic());
         assertTrue(MultiSlideAcquisitionMode.AUTOMATIC_WITH_OVERRIDE.isAutomatic());
     }
+
+    @Test
+    void requestOperatorAttentionStopsAutoAdvanceForTheSlide() {
+        AutoAdvanceController.armSession(MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 10);
+        assertFalse(AutoAdvanceController.isOverriddenThisSlide());
+
+        AutoAdvanceController.requestOperatorAttention("Multi-tile refinement", "SIFT found no match");
+
+        assertTrue(
+                AutoAdvanceController.isOverriddenThisSlide(),
+                "a step that cannot continue must hand the slide back, not leave it counting down");
+        assertTrue(AutoAdvanceController.isArmed(), "the batch keeps running; only this slide waits");
+    }
+
+    @Test
+    void requestOperatorAttentionIsClearedByTheNextSlide() {
+        AutoAdvanceController.armSession(MultiSlideAcquisitionMode.FULLY_AUTOMATIC, 10);
+        AutoAdvanceController.requestOperatorAttention("Multi-tile refinement", "SIFT found no match");
+        assertTrue(AutoAdvanceController.isOverriddenThisSlide());
+
+        AutoAdvanceController.beginSlide();
+
+        assertFalse(
+                AutoAdvanceController.isOverriddenThisSlide(),
+                "one slide needing a human must not turn the rest of the batch manual");
+    }
+
+    @Test
+    void requestOperatorAttentionIsSafeWhenNotArmed() {
+        // Reached from single-slide runs of the same code paths; must not throw or arm anything.
+        AutoAdvanceController.requestOperatorAttention("Single-tile refinement", "SIFT found no match");
+        assertFalse(AutoAdvanceController.isArmed());
+    }
 }

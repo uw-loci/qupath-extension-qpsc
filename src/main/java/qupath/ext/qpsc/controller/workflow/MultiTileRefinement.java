@@ -135,36 +135,7 @@ public class MultiTileRefinement {
      * slide where nothing survives the interior filter.
      */
     private static List<PathObject> resolveAutoTiles(QuPathGUI gui, List<PathObject> annotations) {
-        if (!qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
-                || qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide()) {
-            return List.of();
-        }
-        if (gui == null || gui.getImageData() == null) {
-            return List.of();
-        }
-        var hierarchy = gui.getImageData().getHierarchy();
-        List<PathObject> tiles = hierarchy.getDetectionObjects().stream()
-                .filter(o -> o.getMeasurements().containsKey("TileNumber"))
-                .toList();
-        java.util.Map<String, qupath.lib.roi.interfaces.ROI> tissueByName = new java.util.HashMap<>();
-        if (annotations != null) {
-            for (PathObject a : annotations) {
-                if (a.getName() != null && a.getROI() != null) {
-                    tissueByName.put(a.getName(), a.getROI());
-                }
-            }
-        }
-        List<PathObject> chosen = ReferenceTileSelector.select(
-                tiles, tissueByName, gui.getImageData().getServer(), ReferenceTileSelector.DEFAULT_TILE_COUNT);
-        if (chosen.isEmpty()) {
-            logger.warn("Multi-tile: automatic reference-tile selection found nothing; falling back to manual picking");
-        } else {
-            logger.info(
-                    "Multi-tile: auto-picked {} reference tile(s): {}",
-                    chosen.size(),
-                    chosen.stream().map(PathObject::getName).toList());
-        }
-        return chosen;
+        return ReferenceTileSelector.autoPickIfArmed(gui, annotations, ReferenceTileSelector.DEFAULT_TILE_COUNT);
     }
 
     private static void showPanel(
@@ -288,12 +259,29 @@ public class MultiTileRefinement {
                         buttons);
         stage.setScene(new Scene(content));
 
+        // Set by the countdown wiring further down; invoked once the rig is ready and again after
+        // every captured point. A holder because the prep callback below is registered before
+        // that wiring exists -- safe because the callback runs via runLater, so it cannot fire
+        // until this method has returned and the holder is filled.
+        final Runnable[] advanceAutomatically = {() -> {}};
+
         // Drive the rig into a state SIFT can work in (live running, modality at its alignment
         // reference state), then report. Manual mode: a failure is a visible warning and the
         // operator fixes it by hand. Automatic mode: nobody is watching, so a failure that could
         // not be corrected ends the refinement rather than producing a silently bad alignment.
         AlignmentLivePrep.runForDialog(
-                stage, liveStateLabel, ready -> addButton.setDisable(!ready), () -> future.complete(null));
+                stage,
+                liveStateLabel,
+                ready -> {
+                    addButton.setDisable(!ready);
+                    // Only start counting down once the live view is actually usable. Firing
+                    // into a disabled "Select tile" would trip the disabled-primary guard and
+                    // hand the slide back for a reason that is about to resolve itself.
+                    if (ready) {
+                        advanceAutomatically[0].run();
+                    }
+                },
+                () -> future.complete(null));
 
         // Guides the operator to the next OUTER action: pulse "Select tile" (blue) until 2 points
         // are captured, then pulse "Solve & Save" (green). The embedded SiftCapturePane guides the
@@ -343,6 +331,35 @@ public class MultiTileRefinement {
             outerPulse.highlight(solveButton, "#2E7D32");
         };
 
+        // Drives the panel through its own steps during an automatic batch: count down onto
+        // "Select tile" while auto-picked tiles remain, then onto "Solve & Save" once enough
+        // points are captured. Re-armed after each point because a countdown is one-shot --
+        // it fires its button once and stops.
+        //
+        // Called only when the panel is idle (prep just finished, or a capture just completed
+        // and re-enabled the buttons), so it never counts down onto a control that a capture
+        // in flight is about to re-enable underneath it.
+        advanceAutomatically[0] = () -> {
+            if (!qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
+                    || qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide()) {
+                return;
+            }
+            if (!pendingAutoTiles.isEmpty()) {
+                qupath.ext.qpsc.ui.AutoAdvanceController.attach(stage, addButton);
+                return;
+            }
+            if (points.size() >= MIN_POINTS) {
+                qupath.ext.qpsc.ui.AutoAdvanceController.attach(stage, solveButton);
+                return;
+            }
+            // Out of auto-picked tiles without a solvable set: every remaining point would need
+            // a human to pick a tile, and this panel has no countdown that can do that. Say so
+            // and notify rather than sitting on an idle dialog for the rest of the batch.
+            qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+                    "Multi-tile alignment refinement",
+                    points.size() + " of " + MIN_POINTS + " reference points captured and no auto-picked tiles left");
+        };
+
         addButton.setOnAction(e -> {
             addButton.setDisable(true);
             solveButton.setDisable(true);
@@ -385,6 +402,8 @@ public class MultiTileRefinement {
                         addButton.setDisable(false);
                         cancelButton.setDisable(false);
                         refreshDiagnostics.run();
+                        // Panel is idle again -- re-arm the countdown for the next step.
+                        advanceAutomatically[0].run();
                     }));
         });
 

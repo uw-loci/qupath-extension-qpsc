@@ -952,22 +952,28 @@ acquisition:
     auto_advance_seconds: 10   # 0 = confirm at once; clamped to 300
 ```
 
-**Reference tiles** for multi-tile refinement are picked automatically in the automatic
-modes (interior tiles only, ranked by texture, spread apart), so the "Select Tile" dialog
-does not appear. If no tile qualifies you are asked to pick by hand rather than a poor tile
-being chosen silently.
+**Tiles are picked for you** in the automatic modes — the first landmark of each slide,
+the single-tile refinement pick, and every multi-tile reference point. Only interior tiles
+qualify (full ring of 8 neighbours, centre inside the annotation), ranked by texture and
+spread apart. The "Select Tile" dialog does not appear at all. This is what removes the
+stop: that dialog's Confirm button is created disabled and only enables on a viewer
+selection, so a countdown could never have driven it. Multi-tile refinement also drives its
+own **Select tile** and **Solve & Save**.
 
-> **WARNING — not yet unattended, and it stalls rather than fails.** An automatic batch
-> stops at the **first landmark point of each slide**: the 3-point alignment's reference-tile
-> dialog enables its Confirm button only once a tile is selected in the viewer, so no
-> countdown can drive it, and the slot sequence has no timeout. Landmark points 2 and 3 need
-> no pick and do auto-advance. The refinement panel's **Select tile** and **Solve & Save**
-> remain manual presses too -- the automation removed the decision there, not the click.
->
-> An auto-confirmed alignment also accepts whatever position the base transform predicted,
-> with no human comparing it against the live view. The server-side "find tissue, then focus"
-> jog that would recover from a bad landing is **not built yet**, nor is the policy for a
-> low-confidence SIFT result. Leave this on `MANUAL` for real acquisition.
+**Two things still hand a slide back**, both because accepting them would mis-align it: no
+tile qualifying (tissue thinner than three tiles across), and a SIFT match below the
+confidence threshold. Automation stops for that slide only, the next slide resumes, and
+both send a push notification — as does a setup slot with no progress for 20 minutes. Set
+up notifications, or an unattended run waits in silence. Starting **Set Up All Remaining**
+in an automatic mode also lists any pending slot that has no annotations, since each would
+otherwise stop the pass.
+
+> **WARNING — not validated for real acquisition.** An auto-confirmed alignment accepts
+> whatever position the base transform predicted, with no human comparing it against the
+> live view. The server-side "find tissue, then focus" jog that would recover from a bad
+> landing is **not built yet**; the first landmark of a slide has been measured landing
+> roughly 600 um out. Leave this on `MANUAL` for real acquisition, and prove a batch in
+> `AUTOMATIC_WITH_OVERRIDE` before trusting `FULLY_AUTOMATIC`.
 
 ---
 

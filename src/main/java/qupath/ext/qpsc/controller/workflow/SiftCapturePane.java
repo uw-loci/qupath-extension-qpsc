@@ -219,12 +219,26 @@ class SiftCapturePane extends VBox {
                                     if (measured != null && !resultFuture.isDone()) {
                                         logger.info("SiftCapturePane: SIFT auto-accepted (confidence {})", result[3]);
                                         resultFuture.complete(measured);
-                                    } else if (validMatch) {
-                                        // Good match -- point the operator at Capture / Add reference point.
-                                        pulse.highlight(captureButton, "#00695C");
                                     } else {
-                                        // No usable match -- keep pointing at SIFT (nudge + re-run).
-                                        pulse.highlight(siftButton, "#E65100");
+                                        if (validMatch) {
+                                            // Good match -- point the operator at Capture / Add reference point.
+                                            pulse.highlight(captureButton, "#00695C");
+                                        } else {
+                                            // No usable match -- keep pointing at SIFT (nudge + re-run).
+                                            pulse.highlight(siftButton, "#E65100");
+                                        }
+                                        if (autoAccept) {
+                                            // An automatic batch asked SIFT to settle this point and it
+                                            // did not. Capture is a human judgement from here -- pressing
+                                            // it on an unverified position would record a bad
+                                            // correspondence -- so hand the slide back and say so, rather
+                                            // than leaving the panel silently idle.
+                                            qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+                                                    "Multi-tile alignment refinement",
+                                                    validMatch
+                                                            ? "SIFT confidence below the auto-accept threshold"
+                                                            : "SIFT found no usable match on the reference tile");
+                                        }
                                     }
                                 });
                             } catch (Exception ex) {

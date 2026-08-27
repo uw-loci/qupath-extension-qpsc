@@ -197,32 +197,41 @@ Live Viewer not streaming. That last one is the important one: without a live st
 streaming autofocus downgrades to a narrow drift check that cannot recover focus on a
 fresh slide, and can report success without having found it. All of these now warn.
 
-**Reference tiles are picked for you.** In an automatic mode, multi-tile refinement no
-longer opens the "Select Tile" dialog for each point. Tiles are chosen automatically:
-only tiles whose full ring of 8 neighbours is present and whose centre is inside the
-annotation are eligible (so the camera does not land half on background), those are
-ranked by how much texture they contain (SIFT needs structure), and three well-separated
-ones are taken. If nothing qualifies -- tissue thinner than three tiles across, for
-instance -- you are asked to pick by hand as before, rather than a poor tile being chosen
-silently. You still press **Select tile** and **Solve** in the refinement panel.
+**Every tile is picked for you.** In an automatic mode no "Select Tile" dialog appears at
+all -- not for the first landmark of a slide, not for single-tile refinement, and not for
+each multi-tile reference point. Tiles are chosen the way an operator would: only tiles
+whose full ring of 8 neighbours is present and whose centre is inside the annotation are
+eligible (so the camera does not land half on background), those are ranked by how much
+texture they contain (SIFT needs structure), and well-separated ones are taken so the fit
+is well conditioned.
 
-> **Not yet a walk-away setup pass, and it is worth knowing exactly where it stops.**
-> An automatic batch stalls at the **first landmark point of each slide**, in the
-> 3-point alignment's "Select a REFERENCE tile" dialog. That dialog's Confirm button is
-> created disabled and only enables once it sees a tile selected in the QuPath viewer, so
-> the countdown cannot drive it -- and nothing attaches a countdown there anyway. There is
-> no timeout on the slot sequence, so the batch waits there indefinitely. Landmark points
-> 2 and 3 need no such pick: they are chosen programmatically and only their confirms are
-> auto-advanced.
->
-> The refinement panel's **Select tile** and **Solve & Save** are also still manual
-> presses -- what the automation removed there is the *decision*, not the click.
->
-> Beyond that, an auto-confirmed alignment accepts whatever position the base transform
-> predicted, with nobody comparing it to the live view. The server-side "find tissue, then
-> focus" jog that would recover from a bad landing is still to come, as is the policy for
-> what happens when SIFT returns low confidence. Leave `MANUAL` for real work; these modes
-> are for exercising the automation.
+This mattered more than it sounds. That selection dialog's Confirm button is created
+*disabled* and only enables once it sees a tile selected in the QuPath viewer -- so no
+countdown could ever have driven it. Picking the tile is what removes the stop, not
+counting down on it. The multi-tile refinement panel now also drives its own **Select
+tile** and **Solve & Save**, so the whole panel runs without presses.
+
+**Where an automatic batch still stops -- and how you find out.** Two situations hand a
+slide back on purpose, because proceeding would mis-align it:
+
+| Situation | What happens |
+|---|---|
+| No tile qualifies (tissue thinner than three tiles across) | You are asked to pick by hand, rather than a poor tile being chosen silently |
+| SIFT comes back below the confidence threshold | The refinement panel waits for you to nudge and capture; the position is never accepted unverified |
+
+Both stop automation **for that slide only** -- the next slide resumes automatically --
+and both send a push notification, as does a setup slot that makes no progress for 20
+minutes. Configure one under *Notifications* in preferences, or an unattended run will
+wait silently. Before **Set Up All Remaining** starts, an automatic batch also checks
+every pending slot for annotations and lists any that have none, since each of those
+would otherwise stop the pass waiting for you to draw a region.
+
+> **Still not validated for real work.** An auto-confirmed alignment accepts whatever
+> position the base transform predicted, with nobody comparing it to the live view. The
+> server-side "find tissue, then focus" jog that would recover from a bad landing is not
+> built; the first landmark of a slide has been measured landing roughly 600 um out. Leave
+> `MANUAL` for real acquisition, and run a batch in `AUTOMATIC_WITH_OVERRIDE` -- where any
+> click hands the slide back -- before trusting `FULLY_AUTOMATIC`.
 
 ### Manual, one slot at a time
 

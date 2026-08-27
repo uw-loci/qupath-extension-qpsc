@@ -8,7 +8,9 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.controller.workflow.ReferenceTileSelector;
 import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
+import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -58,6 +60,41 @@ public class AffineTransformationController {
      */
     public static List<AlignmentPoint> getAlignmentPoints() {
         return Collections.unmodifiableList(new ArrayList<>(alignmentPoints));
+    }
+
+    /**
+     * The reference tile for the first alignment landmark: auto-picked during an automatic
+     * multi-slide batch, otherwise chosen by the operator in the selection dialog.
+     *
+     * <p>The auto-picked tile is centred and selected in the viewer exactly as a manual pick
+     * would be, so everything downstream -- the predicted-position move, SIFT against the
+     * tile, the Stage Map search-range overlay -- sees the same state either way.
+     */
+    private static CompletableFuture<PathObject> resolveReferenceTile(QuPathGUI gui, String prompt) {
+        if (!ReferenceTileSelector.wouldAutoPick()) {
+            return UIFunctions.promptTileSelectionDialogAsync(prompt);
+        }
+        // Selection reads image regions to score texture, and this method is called on the FX
+        // thread, so do the picking on a worker and come back to FX to select the tile.
+        CompletableFuture<PathObject> picked = new CompletableFuture<>();
+        new Thread(
+                        () -> {
+                            List<PathObject> auto = ReferenceTileSelector.autoPickIfArmed(gui, null, 1);
+                            Platform.runLater(() -> {
+                                if (auto.isEmpty()) {
+                                    UIFunctions.promptTileSelectionDialogAsync(prompt)
+                                            .thenAccept(picked::complete);
+                                    return;
+                                }
+                                PathObject tile = auto.get(0);
+                                logger.info("Reference tile auto-picked for the first landmark: '{}'", tile.getName());
+                                WorkflowHelpers.centerAndSelectTile(gui, tile);
+                                picked.complete(tile);
+                            });
+                        },
+                        "ReferenceTile-Pick")
+                .start();
+        return picked;
     }
 
     /**
@@ -175,7 +212,14 @@ public class AffineTransformationController {
                                     + "features and drive the stage close before clicking Confirm.";
                 }
 
-                UIFunctions.promptTileSelectionDialogAsync(tileSelectionPrompt)
+                // In an automatic multi-slide batch, pick the reference tile instead of waiting
+                // for a click. This is the FIRST landmark of every slide and the only tile pick
+                // on this path, so without it an unattended batch stops here indefinitely: the
+                // dialog's Confirm button is created disabled and only enables once a human
+                // selects a tile in the viewer, which no countdown can do for it. An empty
+                // result (manual mode, an overridden slide, or no interior tile) falls back to
+                // the dialog rather than choosing a boundary tile silently.
+                resolveReferenceTile(gui, tileSelectionPrompt)
                         .thenCompose(refTile -> {
                             if (refTile == null) {
                                 logger.info("User cancelled reference tile selection.");
