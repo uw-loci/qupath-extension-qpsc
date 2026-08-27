@@ -34,6 +34,22 @@ public class CalibrationChecker {
     /** Result of a status check with a human-readable message. */
     public record StepStatus(Status status, String message) {}
 
+    /**
+     * One white-balance mode's status, so a caller can colour each mode on its own.
+     *
+     * <p>Exists because collapsing the modes into a single {@link StepStatus} makes a display
+     * that is actively misleading: with per-angle backgrounds valid and simple-WB backgrounds
+     * stale, the one row goes amber and the operator cannot see from the colour that the mode
+     * they are about to acquire with is fine. Rolling up is still right for the pre-acquisition
+     * warning list -- there the question really is "is anything wrong" -- so the aggregate
+     * checks stay; this is the breakdown behind them.
+     *
+     * @param label   the mode's display name, e.g. "Per-angle" or "Simple"
+     * @param status  that mode's own status, never a roll-up
+     * @param message short human-readable detail for this mode alone
+     */
+    public record ModeStatus(String label, Status status, String message) {}
+
     /** Lamp-intensity units within which a background is considered consistent with the profile. */
     private static final double LAMP_INTENSITY_TOLERANCE = 1.0;
 
@@ -271,6 +287,75 @@ public class CalibrationChecker {
         } catch (Exception e) {
             logger.debug("Error checking background correction", e);
             return new StepStatus(Status.WARNING, "Could not verify background correction status");
+        }
+    }
+
+    /**
+     * Per-white-balance-mode background status, one entry per mode that applies.
+     *
+     * <p>The breakdown behind {@link #checkBackgroundCorrection}: same data, not rolled up, so
+     * a display can give each mode its own colour instead of painting a whole row amber
+     * because one of two modes went stale.
+     *
+     * <p>Returns an EMPTY list whenever the per-mode split does not apply -- a monochrome
+     * camera (no WB modes at all), a channel-based modality (backgrounds are per channel, not
+     * per WB mode), no configured background folder, or any failure to read. Callers must fall
+     * back to the aggregate check in that case rather than showing nothing; an empty list means
+     * "no per-mode view available", never "no problems".
+     *
+     * @param modality  the selected modality
+     * @param objective the selected objective ID
+     * @param detector  the selected detector ID
+     * @return one status per applicable WB mode, or an empty list when the split does not apply
+     */
+    public static java.util.List<ModeStatus> checkBackgroundsByMode(
+            String modality, String objective, String detector) {
+        if (modality == null || objective == null || detector == null) {
+            return java.util.List.of();
+        }
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            if (!mgr.isJAICamera(detector)) {
+                return java.util.List.of();
+            }
+            String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
+            if (bgFolder == null) {
+                return java.util.List.of();
+            }
+            // Channel-based modalities key their backgrounds by channel, not WB mode, so a
+            // per-WB-mode breakdown would be a fiction.
+            String profileKey = mgr.resolveProfileKey(modality, objective);
+            if (profileKey != null && !mgr.getChannelsForProfile(profileKey).isEmpty()) {
+                return java.util.List.of();
+            }
+
+            java.util.List<ModeStatus> modes = new java.util.ArrayList<>();
+            for (var result : BackgroundValidityChecker.checkAllModes(bgFolder, modality, objective, detector, mgr)) {
+                // "Off" never needs backgrounds, so showing it would add a permanent row that
+                // can only ever say "fine".
+                if (result.status() == BackgroundValidityChecker.ValidityStatus.NOT_NEEDED) {
+                    continue;
+                }
+                Status status =
+                        switch (result.status()) {
+                            case VALID -> Status.READY;
+                            case CALIBRATION_STALE, NO_BACKGROUNDS -> Status.WARNING;
+                            default -> Status.WARNING;
+                        };
+                String detail =
+                        switch (result.status()) {
+                            case VALID -> "valid";
+                            case CALIBRATION_STALE -> "stale";
+                            case NO_BACKGROUNDS -> "none";
+                            default -> "unknown";
+                        };
+                modes.add(new ModeStatus(result.mode().getDisplayName(), status, detail));
+            }
+            return modes;
+        } catch (Exception e) {
+            logger.debug("Error building the per-mode background breakdown", e);
+            return java.util.List.of();
         }
     }
 

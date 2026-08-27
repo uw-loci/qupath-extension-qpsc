@@ -5,6 +5,7 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.IdentityHashMap;
 import java.util.List;
 import java.util.Map;
@@ -25,6 +26,8 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextFlow;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.stage.Window;
@@ -251,49 +254,89 @@ public final class MultiSlideAssignmentDialog {
      * that they had no way to find out until the acquisition dialog of the FIRST SLIDE, by
      * which point the carrier and assignments were already committed.
      */
-    private static void updateReadiness(Label label, String modality, String objective, String detector) {
+    private static void updateReadiness(TextFlow flow, String modality, String objective, String detector) {
+        flow.getChildren().clear();
         if (modality == null || objective == null || detector == null) {
-            label.setText("Select modality, objective and detector to check calibration.");
-            label.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+            flow.getChildren()
+                    .add(line("Select modality, objective and detector to check calibration.", ThemeColors.MUTED));
             return;
         }
-        StringBuilder problems = new StringBuilder();
+
+        List<Text> lines = new ArrayList<>();
+        boolean anyProblem = false;
         try {
-            CalibrationChecker.StepStatus bg =
-                    CalibrationChecker.checkBackgroundCorrection(modality, objective, detector);
-            if (bg.status() != CalibrationChecker.Status.READY) {
-                problems.append("Backgrounds: ").append(bg.message());
+            // Backgrounds are checked per white-balance mode, and the modes disagree in exactly
+            // the case that matters: per-angle valid, simple stale. Give each mode its own
+            // colour instead of painting the whole block red because one of two went stale --
+            // the operator could not otherwise tell from the colour that the mode they are
+            // about to acquire with is fine. An empty breakdown means the per-mode split does
+            // not apply (monochrome camera, per-channel modality), so fall back to the
+            // aggregate rather than showing nothing.
+            var byMode = CalibrationChecker.checkBackgroundsByMode(modality, objective, detector);
+            if (byMode.isEmpty()) {
+                CalibrationChecker.StepStatus bg =
+                        CalibrationChecker.checkBackgroundCorrection(modality, objective, detector);
+                if (bg.status() != CalibrationChecker.Status.READY) {
+                    anyProblem = true;
+                    lines.add(line("Backgrounds: " + bg.message(), colorFor(bg.status())));
+                }
+            } else {
+                for (var mode : byMode) {
+                    if (mode.status() != CalibrationChecker.Status.READY) {
+                        anyProblem = true;
+                    }
+                    lines.add(line("Backgrounds (" + mode.label() + "): " + mode.message(), colorFor(mode.status())));
+                }
             }
+
             CalibrationChecker.StepStatus wb = CalibrationChecker.checkWhiteBalance(modality, objective, detector);
             if (wb.status() != CalibrationChecker.Status.READY) {
-                if (problems.length() > 0) {
-                    problems.append("\n");
-                }
-                problems.append("White balance: ").append(wb.message());
+                anyProblem = true;
+                lines.add(line("White balance: " + wb.message(), colorFor(wb.status())));
             }
         } catch (Exception e) {
             logger.warn("Calibration check failed for {}/{}/{}: {}", modality, objective, detector, e.getMessage());
-            label.setText("Could not check calibration for this combination: " + e.getMessage());
-            label.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + ";");
+            flow.getChildren()
+                    .add(line(
+                            "Could not check calibration for this combination: " + e.getMessage(),
+                            ThemeColors.WARNING));
             return;
         }
 
         String focusApproach = focusApproachStatus(modality, objective);
         if (focusApproach != null) {
-            if (problems.length() > 0) {
-                problems.append("\n");
-            }
-            problems.append(focusApproach);
+            anyProblem = true;
+            lines.add(line(focusApproach, ThemeColors.WARNING));
         }
 
-        if (problems.length() == 0) {
-            label.setText("Backgrounds and white balance are calibrated for this combination.");
-            label.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
-        } else {
-            label.setText(
-                    problems + "\nEvery slide in this batch uses this combination, so this affects the whole run.");
-            label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
+        if (lines.isEmpty()) {
+            flow.getChildren()
+                    .add(line(
+                            "Backgrounds and white balance are calibrated for this combination.", ThemeColors.SUCCESS));
+            return;
         }
+        if (anyProblem) {
+            lines.add(line(
+                    "Every slide in this batch uses this combination, so this affects the whole run.",
+                    ThemeColors.MUTED));
+        }
+        flow.getChildren().addAll(lines);
+    }
+
+    /** One readiness line, coloured for its own status and terminated so the flow wraps per line. */
+    private static Text line(String text, String cssColor) {
+        Text node = new Text(text + "\n");
+        node.setStyle("-fx-font-size: 11px; -fx-fill: " + cssColor + ";");
+        return node;
+    }
+
+    private static String colorFor(CalibrationChecker.Status status) {
+        return switch (status) {
+            case READY -> ThemeColors.SUCCESS;
+            case WARNING -> ThemeColors.WARNING;
+            case NOT_READY -> ThemeColors.ERROR;
+            case NOT_APPLICABLE -> ThemeColors.MUTED;
+        };
     }
 
     /**
@@ -413,8 +456,15 @@ public final class MultiSlideAssignmentDialog {
                 return null;
             }
         });
+        // Start on the carrier this project was last assigned to, not on whichever carrier
+        // happens to be first in the config. The slot pre-fill below only matches entries whose
+        // slide_carrier equals the SELECTED carrier, so defaulting to index 0 made every slot
+        // read "(unassigned)" whenever the operator's carrier was not first -- which is exactly
+        // the "it does not remember my slides" symptom, even though the metadata was there all
+        // along.
         if (!carriers.isEmpty()) {
-            carrierBox.getSelectionModel().select(0);
+            StageInsert remembered = lastAssignedCarrier(project, carriers);
+            carrierBox.getSelectionModel().select(remembered != null ? remembered : carriers.get(0));
         }
 
         Label carrierLabel = new Label("Carrier:");
@@ -467,8 +517,10 @@ public final class MultiSlideAssignmentDialog {
         ComboBox<String> modalityBox = new ComboBox<>();
         ComboBox<String> objectiveBox = new ComboBox<>();
         ComboBox<String> detectorBox = new ComboBox<>();
-        Label readiness = new Label();
-        readiness.setWrapText(true);
+        // A TextFlow, not a Label: each readiness line carries its own colour, because a
+        // single stale white-balance mode must not repaint the lines about the modes that
+        // are fine.
+        TextFlow readiness = new TextFlow();
         readiness.setMaxWidth(Double.MAX_VALUE);
         readiness.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
@@ -885,6 +937,48 @@ public final class MultiSlideAssignmentDialog {
      * sub-acquisition is {@code base_image} set AND *different* from its own name; this
      * mirrors {@code ExistingImageWorkflowV2.isSubAcquisition()}.
      */
+    /**
+     * The carrier this project's slide assignments were most recently stamped for, or null when
+     * nothing in the project carries an assignment for any of {@code carriers}.
+     *
+     * <p>Recency comes from {@code ms_assigned_at}, not {@code ms_run_id}: the run id is a random
+     * UUID and carries no order. Assignments for several carriers can coexist, because starting a
+     * run only clears the carrier being re-assigned, so "has any assignment" is not enough to
+     * pick one. Entries stamped before {@code ms_assigned_at} existed score 0 and are used only
+     * as a last resort, which still beats defaulting to the first carrier in the config.
+     */
+    private static StageInsert lastAssignedCarrier(Project<BufferedImage> project, List<StageInsert> carriers) {
+        if (project == null || carriers == null || carriers.isEmpty()) {
+            return null;
+        }
+        Map<String, Long> newestByCarrier = new HashMap<>();
+        for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
+            String carrierId = ImageMetadataManager.getSlideCarrier(entry);
+            if (carrierId == null || carrierId.isEmpty()) {
+                continue;
+            }
+            if (ImageMetadataManager.getSlidePosition(entry) < 0) {
+                continue;
+            }
+            long stamped = ImageMetadataManager.getSlideAssignedAt(entry);
+            newestByCarrier.merge(carrierId, stamped, Math::max);
+        }
+        StageInsert best = null;
+        long bestStamp = Long.MIN_VALUE;
+        for (StageInsert carrier : carriers) {
+            Long stamp = newestByCarrier.get(carrier.getId());
+            if (stamp != null && stamp > bestStamp) {
+                bestStamp = stamp;
+                best = carrier;
+            }
+        }
+        if (best != null) {
+            logger.info(
+                    "MS assignment: opening on carrier '{}' (most recently assigned in this project)", best.getId());
+        }
+        return best;
+    }
+
     private static List<ProjectImageEntry<BufferedImage>> collectMacroCandidates(Project<BufferedImage> project) {
         List<ProjectImageEntry<BufferedImage>> out = new ArrayList<>();
         if (project == null) {

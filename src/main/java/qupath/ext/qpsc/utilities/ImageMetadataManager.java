@@ -161,6 +161,8 @@ public class ImageMetadataManager {
     public static final String SLIDE_POSITION = "slide_position";
     public static final String SLIDE_CARRIER = "slide_carrier";
     public static final String MS_RUN_ID = "ms_run_id";
+    /** Epoch millis at which the slide assignment was stamped; see {@link #getSlideAssignedAt}. */
+    public static final String MS_ASSIGNED_AT = "ms_assigned_at";
 
     /**
      * Gets the next available image collection number for a project.
@@ -1349,6 +1351,27 @@ public class ImageMetadataManager {
         if (msRunId != null && !msRunId.isEmpty()) {
             md.put(MS_RUN_ID, msRunId);
         }
+        // When the assignment was made, so a later dialog can tell WHICH carrier was used
+        // most recently. ms_run_id cannot answer that -- it is a random UUID, deliberately
+        // unordered -- and assignments for different carriers coexist, because clearing on a
+        // new run only touches the carrier being re-assigned.
+        md.put(MS_ASSIGNED_AT, Long.toString(System.currentTimeMillis()));
+    }
+
+    /**
+     * When this entry's slide assignment was stamped, in epoch millis, or {@code 0} when it
+     * carries no timestamp (assigned before the field existed, or not assigned at all).
+     */
+    public static long getSlideAssignedAt(ProjectImageEntry<?> entry) {
+        if (entry == null) return 0L;
+        String raw = entry.getMetadata().get(MS_ASSIGNED_AT);
+        if (raw == null || raw.isEmpty()) return 0L;
+        try {
+            return Long.parseLong(raw.trim());
+        } catch (NumberFormatException e) {
+            logger.warn("Invalid ms_assigned_at metadata '{}'", raw);
+            return 0L;
+        }
     }
 
     /** Returns the slide-carrier id this entry was assigned to, or null. */
@@ -1377,5 +1400,6 @@ public class ImageMetadataManager {
         md.remove(SLIDE_POSITION);
         md.remove(SLIDE_CARRIER);
         md.remove(MS_RUN_ID);
+        md.remove(MS_ASSIGNED_AT);
     }
 }

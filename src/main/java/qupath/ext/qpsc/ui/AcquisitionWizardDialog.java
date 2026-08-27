@@ -19,6 +19,9 @@ import javafx.scene.shape.Circle;
 import javafx.scene.shape.Polygon;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.SVGPath;
+import javafx.scene.text.Text;
+import javafx.scene.text.TextAlignment;
+import javafx.scene.text.TextFlow;
 import javafx.stage.Stage;
 import javafx.stage.StageStyle;
 import org.slf4j.Logger;
@@ -355,8 +358,8 @@ public class AcquisitionWizardDialog {
         alignmentAgeTooltip.setShowDelay(javafx.util.Duration.millis(250));
         alignmentAgeTooltip.setShowDuration(javafx.util.Duration.seconds(20));
         StepRow alignmentRow = stepRows.get(STEP_ALIGNMENT);
-        Tooltip.install(alignmentRow.statusLabel, alignmentAgeTooltip);
-        Tooltip.install(alignmentRow.statusDot, alignmentAgeTooltip);
+        Tooltip.install(alignmentRow.statusFlow, alignmentAgeTooltip);
+        Tooltip.install(alignmentRow.statusDots, alignmentAgeTooltip);
 
         root.getChildren().add(stepsBox);
 
@@ -725,16 +728,34 @@ public class AcquisitionWizardDialog {
     // Step rows
     // ======================================================================
 
+    /**
+     * One prerequisite row's status widgets.
+     *
+     * <p>The dot and the text are PLURAL because some steps report several independent things.
+     * Background correction is checked per white-balance mode, and with per-angle valid and
+     * simple stale, a single dot has to pick one colour for two different answers -- it went
+     * amber, and the operator could not tell from the colour that the mode they were about to
+     * use was fine. So the row carries one dot and one coloured text run per reported status,
+     * and steps that report a single status simply get one of each.
+     */
     private static class StepRow {
         final int index;
-        final Circle statusDot;
-        final Label statusLabel;
+        final HBox statusDots;
+        final TextFlow statusFlow;
         final Button actionButton;
 
-        StepRow(int index, Circle statusDot, Label statusLabel, Button actionButton) {
+        /**
+         * The roll-up of this row's statuses, for the questions that are genuinely
+         * single-valued. Held as the status itself rather than recovered by comparing a dot's
+         * Paint to a hex literal, which is how "is the server connected" used to be answered --
+         * a boolean round-tripped through a colour, silently wrong the moment a shade changed.
+         */
+        Status worstStatus = Status.NOT_APPLICABLE;
+
+        StepRow(int index, HBox statusDots, TextFlow statusFlow, Button actionButton) {
             this.index = index;
-            this.statusDot = statusDot;
-            this.statusLabel = statusLabel;
+            this.statusDots = statusDots;
+            this.statusFlow = statusFlow;
             this.actionButton = actionButton;
         }
     }
@@ -768,19 +789,21 @@ public class AcquisitionWizardDialog {
 
         textBox.getChildren().addAll(titleLabel, descLabel);
 
-        // Status dot + label
-        Circle statusDot = new Circle(5, Color.GRAY);
+        // Status dots + text. One of each per independently-reported status (see StepRow).
+        HBox statusDots = new HBox(4);
+        statusDots.setAlignment(Pos.CENTER);
+        statusDots.getChildren().add(new Circle(5, Color.GRAY));
 
-        Label statusLabel = new Label("Checking...");
-        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + textMuted() + ";");
-        statusLabel.setMaxWidth(120);
-        statusLabel.setWrapText(true);
+        TextFlow statusFlow = new TextFlow(new Text("Checking..."));
+        statusFlow.setTextAlignment(TextAlignment.CENTER);
+        statusFlow.setMaxWidth(120);
+        statusFlow.setPrefWidth(120);
 
         VBox statusBox = new VBox(2);
         statusBox.setAlignment(Pos.CENTER);
         statusBox.setPrefWidth(130);
         statusBox.setMinWidth(130);
-        statusBox.getChildren().addAll(statusDot, statusLabel);
+        statusBox.getChildren().addAll(statusDots, statusFlow);
 
         // Action button
         Button btn = new Button(buttonText);
@@ -789,59 +812,112 @@ public class AcquisitionWizardDialog {
 
         row.getChildren().addAll(iconPane, textBox, statusBox, btn);
 
-        StepRow stepRow = new StepRow(index, statusDot, statusLabel, btn);
+        StepRow stepRow = new StepRow(index, statusDots, statusFlow, btn);
         stepRows.add(stepRow);
 
         return row;
     }
 
+    /** Dot colour for one status. */
+    private static Color dotColorFor(Status status) {
+        return switch (status) {
+            case READY -> Color.web("#4CAF50");
+            case WARNING -> Color.web("#FF9800");
+            case NOT_READY -> Color.web("#f44336");
+            case NOT_APPLICABLE -> Color.web("#9E9E9E");
+        };
+    }
+
+    /** Text colour for one status, as a CSS colour string. */
+    private String textColorFor(Status status) {
+        return switch (status) {
+            case READY -> ThemeColors.SUCCESS;
+            case WARNING -> ThemeColors.WARNING;
+            case NOT_READY -> ThemeColors.ERROR;
+            case NOT_APPLICABLE -> textMuted();
+        };
+    }
+
     private void updateStepStatus(int stepIndex, StepStatus status) {
+        updateStepStatus(
+                stepIndex,
+                java.util.List.of(new CalibrationChecker.ModeStatus(null, status.status(), status.message())));
+    }
+
+    /**
+     * Renders one step row from a list of INDEPENDENT statuses, each with its own dot and its
+     * own text colour.
+     *
+     * <p>The list is what a step actually reports. Background correction reports one entry per
+     * white-balance mode, and those entries disagree in the case that matters: per-angle valid,
+     * simple stale. Rolling that into one colour hides the half the operator needs -- so each
+     * gets its own dot, and the text names the mode ("Per-angle: valid") rather than describing
+     * a combined state that is true of neither.
+     *
+     * <p>Two things are still necessarily single-valued, and both take the WORST status in the
+     * list: the collapsed header pill (one dot per step by construction) and whether the row's
+     * action button is enabled. Both mean "does this step want attention", which is a question
+     * about the step as a whole, so a roll-up is the right answer there.
+     */
+    private void updateStepStatus(int stepIndex, java.util.List<CalibrationChecker.ModeStatus> parts) {
         if (stepIndex < 0 || stepIndex >= stepRows.size()) return;
+        if (parts == null || parts.isEmpty()) return;
 
         StepRow row = stepRows.get(stepIndex);
 
         Platform.runLater(() -> {
-            Color dotColor;
-            String labelStyle;
+            row.statusDots.getChildren().clear();
+            row.statusFlow.getChildren().clear();
 
-            switch (status.status()) {
-                case READY -> {
-                    dotColor = Color.web("#4CAF50");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";";
-                    row.actionButton.setDisable(false);
+            for (int i = 0; i < parts.size(); i++) {
+                CalibrationChecker.ModeStatus part = parts.get(i);
+                row.statusDots.getChildren().add(new Circle(5, dotColorFor(part.status())));
+
+                String text = (part.label() == null) ? part.message() : part.label() + ": " + part.message();
+                if (i < parts.size() - 1) {
+                    text = text + "\n";
                 }
-                case WARNING -> {
-                    dotColor = Color.web("#FF9800");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";";
-                    row.actionButton.setDisable(false);
-                }
-                case NOT_READY -> {
-                    dotColor = Color.web("#f44336");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";";
-                    row.actionButton.setDisable(false);
-                }
-                case NOT_APPLICABLE -> {
-                    dotColor = Color.web("#9E9E9E");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + textMuted() + ";";
-                    row.actionButton.setDisable(true);
-                }
-                default -> {
-                    dotColor = Color.GRAY;
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + textMuted() + ";";
-                }
+                Text run = new Text(text);
+                run.setStyle("-fx-font-size: 10px; -fx-fill: " + textColorFor(part.status()) + ";");
+                row.statusFlow.getChildren().add(run);
             }
 
-            row.statusDot.setFill(dotColor);
-            row.statusLabel.setStyle(labelStyle);
-            row.statusLabel.setText(status.message());
+            Status worst = worstOf(parts);
+            row.worstStatus = worst;
+            row.actionButton.setDisable(worst == Status.NOT_APPLICABLE);
 
-            // Mirror to collapsed pill dot
+            // Mirror to collapsed pill dot -- one dot per step, so it shows the worst.
             if (stepIndex < pillDots.length && pillDots[stepIndex] != null) {
-                pillDots[stepIndex].setFill(dotColor);
+                pillDots[stepIndex].setFill(dotColorFor(worst));
             }
 
             updateAcquireButtons();
         });
+    }
+
+    /**
+     * The status a single-valued control should show for a multi-status step: the one most
+     * in need of attention. NOT_APPLICABLE only wins when EVERY part is inapplicable -- one
+     * usable mode alongside an inapplicable one is a usable step, and greying out its button
+     * would stop the operator fixing the mode that is not.
+     */
+    private static Status worstOf(java.util.List<CalibrationChecker.ModeStatus> parts) {
+        Status worst = null;
+        for (CalibrationChecker.ModeStatus part : parts) {
+            if (worst == null || rank(part.status()) > rank(worst)) {
+                worst = part.status();
+            }
+        }
+        return worst == null ? Status.NOT_APPLICABLE : worst;
+    }
+
+    private static int rank(Status status) {
+        return switch (status) {
+            case NOT_APPLICABLE -> 0;
+            case READY -> 1;
+            case WARNING -> 2;
+            case NOT_READY -> 3;
+        };
     }
 
     // ======================================================================
@@ -1074,7 +1150,7 @@ public class AcquisitionWizardDialog {
         boolean connected = false;
         for (StepRow row : stepRows) {
             if (row.index == STEP_CONNECTION) {
-                connected = Color.web("#4CAF50").equals(row.statusDot.getFill());
+                connected = row.worstStatus == Status.READY;
                 break;
             }
         }
@@ -1222,8 +1298,18 @@ public class AcquisitionWizardDialog {
 
         CompletableFuture.runAsync(() -> {
             updateStepStatus(STEP_WHITE_BALANCE, CalibrationChecker.checkWhiteBalance(modality, objective, detector));
-            updateStepStatus(
-                    STEP_BACKGROUND, CalibrationChecker.checkBackgroundCorrection(modality, objective, detector));
+            // Background correction is checked per white-balance mode, and the modes disagree
+            // in exactly the case that matters -- per-angle valid, simple stale. Show each mode
+            // its own dot and colour rather than one amber row that is true of neither. An
+            // empty breakdown means the split does not apply here (monochrome camera,
+            // per-channel modality); the aggregate is the honest answer then.
+            var byMode = CalibrationChecker.checkBackgroundsByMode(modality, objective, detector);
+            if (byMode.isEmpty()) {
+                updateStepStatus(
+                        STEP_BACKGROUND, CalibrationChecker.checkBackgroundCorrection(modality, objective, detector));
+            } else {
+                updateStepStatus(STEP_BACKGROUND, byMode);
+            }
             updateStepStatus(STEP_ALIGNMENT, CalibrationChecker.checkAlignment());
         });
     }

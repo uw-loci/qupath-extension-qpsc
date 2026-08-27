@@ -427,6 +427,14 @@ public class GreenBoxPreviewController {
                     if (result != null) {
                         previewView.setImage(SwingFXUtils.toFXImage(result.getDebugImage(), null));
 
+                        // Confidence gate for an UNATTENDED batch. The green box is what the
+                        // whole alignment is anchored on, so auto-confirming a detection the
+                        // detector itself is unsure of is the silent-wrong-result this feature
+                        // exists to avoid. Above the bar it counts down and proceeds; below it,
+                        // or on no detection at all, the slide is handed back and the operator
+                        // is notified rather than the dialog sitting there for the rest of the
+                        // batch -- which is what it did before, with the box detected perfectly
+                        // and nothing to press the button.
                         if (result.getConfidence() > 0.30) {
                             // ACCEPTABLE CONFIDENCE (30%+) - collapse parameters, show success
                             // Note: Typical confidence scores are 30-50% for good detections
@@ -442,6 +450,9 @@ public class GreenBoxPreviewController {
                             confirmButton.setDisable(false);
                             logger.info(
                                     "Auto-detection succeeded with acceptable confidence: {}", result.getConfidence());
+                            // Attach only now: the button is created disabled and a countdown
+                            // never fires a disabled primary.
+                            AutoAdvanceController.attach(dialog, confirmType);
                         } else {
                             // LOW CONFIDENCE (below 30%) - expand parameters, show warning
                             statusLabel.setText(String.format(
@@ -453,6 +464,11 @@ public class GreenBoxPreviewController {
                             paramsPane.setText("Detection Parameters (adjustment recommended)");
                             confirmButton.setDisable(false);
                             logger.warn("Auto-detection completed with low confidence: {}", result.getConfidence());
+                            AutoAdvanceController.requestOperatorAttention(
+                                    "Green box detection",
+                                    String.format(
+                                            "detection confidence is only %.0f%% -- check the box before continuing",
+                                            result.getConfidence() * 100));
                         }
                     } else {
                         // DETECTION FAILED - expand parameters
@@ -463,6 +479,8 @@ public class GreenBoxPreviewController {
                         advancedPane.setExpanded(true);
                         confirmButton.setDisable(true);
                         logger.warn("Auto-detection failed to find green box");
+                        AutoAdvanceController.requestOperatorAttention(
+                                "Green box detection", "no green box was found in the macro image");
                     }
                 });
 
@@ -475,6 +493,8 @@ public class GreenBoxPreviewController {
                     statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-size: 12px;");
                     paramsPane.setExpanded(true);
                     logger.error("Auto-detection task failed", autoDetectTask.getException());
+                    AutoAdvanceController.requestOperatorAttention(
+                            "Green box detection", "the detector could not run on this macro image");
                 });
 
                 // Start auto-detection in background thread
