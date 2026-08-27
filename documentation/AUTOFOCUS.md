@@ -160,6 +160,10 @@ Streaming autofocus uses continuous-Z scanning. Unlike the stepped Sweep Autofoc
 
 On PPM at the production 0.73 ms exposure, a 6 um Streaming scan completes in ~1 second and delivers ~25-30 usable (z, metric) samples -- far denser than the stepped Sweep could produce in the same time.
 
+**Where a sample's Z comes from (2026-08-26).** `z_at_pop` is read from the parallel Z-poll trace -- a background thread sampling `core.get_position()` throughout the scan -- and not from `wall_ms * slow_speed_um_per_s`. The velocity model extrapolates from a hand-calibrated constant and cannot represent the stage's acceleration and deceleration ramps, so its error accumulates with distance travelled. Measured on PPM 20x over a 267 um approach traverse: configured 11.5 um/s against a real ~11.96 um/s in the constant-velocity phase, which by the sample plane had become an 8.6 um labelling error (operator focus -237.0; peak at measured Z -236.65 versus modelled Z -228.08).
+
+This matters far more for approach-from-safe-Z than for a routine sweep. The same mis-calibration over a 20-40 um sweep is sub-micron and invisible, which is why it went unnoticed; the approach traverses ten times further from a retracted start. Note that the endpoint-average velocity check in the logs cannot detect it -- the stage still arrives at `z_end`, so displacement over total time lands back on the configured value while the mid-scan labelling is wrong throughout. Each scan now logs the model-versus-measurement drift (warning past 2 um) and the achieved sampling density in um/sample.
+
 ### Feasibility envelope
 
 Streaming autofocus runs only when the server confirms three pre-flight gates. If any fails, the Autofocus button triggers the failure dialog and explains why:
@@ -296,10 +300,12 @@ Validating the worst case licenses the rest.
      far end (toward the sample).
    - **Live trace** (yellow) -- During the scan, the plot shows per-frame focus metrics from the
      Live Viewer (`brenner_gradient`), accumulating as frames arrive. This is only a client-side
-     approximation and may not be the metric the server uses.
+     approximation and may not be the metric the server uses. The label reads "live preview only --
+     [metric], not the validated metric" to remind you that this curve is monitoring only, not the
+     measurement the server will record.
    - **Server profile** (cyan, replaces live) -- When the scan returns, the server's actual
-     measurements replace the live trace. The label changes to name the server's metric (e.g.,
-     `brenner_gradient`, `p98_p2`, or other modality-specific choice).
+     measurements replace the live trace. The label shows "measured profile -- [metric] ([sample count])"
+     to distinguish it from the live preview and indicate the number of Z positions sampled.
    - **Reference lines:**
      - **Green dashed line** -- Your hand-focused Z (the sample focus). The measured peak should
        land within ~5 um of this line.
@@ -557,6 +563,7 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `edge_retries` | Additional sweep attempts on boundary peaks. Applies to BOTH the dense pre-acquisition AF and the mid-acquisition sweep autofocus. Each retry doubles the search range and shifts the center toward the inferred peak direction; sweeps are clamped to the configured stage Z limits, and retries that have nowhere new to search are skipped. (0=disable, 2=default) | 0-3 |
 | `gap_index_multiplier` | Force AF after this x `n_tiles` without AF (safety net) | 2-5 (default 3) |
 | `gap_spatial_multiplier` | Force AF when nearest AF exceeds this x grid spacing (fragment safety net) | 1.5-3.0 (default 2.0) |
+| `slow_speed_um_per_s` | Streaming-AF scan speed for THIS objective, overriding the scope-wide `stage.streaming_af.slow_speed_um_per_s`. Sets sampling density: frames arrive at the camera's rate, so um-per-sample is speed divided by frame rate. Aim for roughly ten samples across the focus peak's full width at half maximum, which is objective-dependent -- a 40x peak is a few um across where a 10x peak is tens. Leave unset to inherit the scope-wide value. | 2-20 |
 
 ### How AF Position Selection Works
 
