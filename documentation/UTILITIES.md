@@ -49,6 +49,8 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [PPM Reference Slide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-reference-slide.md) | Hue-to-angle calibration from sunburst slide | Scope > PPM > PPM Reference Slide... |
 | [PPM Sensitivity Test](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-sensitivity-test.md) | Test rotation stage precision | Scope > PPM > PPM Rotation Sensitivity Test... |
 | [PPM Birefringence Optimization](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-birefringence-optimization.md) | Find optimal polarizer angle for maximum contrast | Scope > PPM > PPM Birefringence Optimization... |
+| **LC-PolScope Modality Submenu** (conditional -- only with LC-PolScope modality) | | |
+| LC-PolScope Calibration | Calibrate the universal compensator: find the extinction point and swing states | Scope > LC-PolScope > Calibrate Liquid Crystals... |
 | **PPM Analysis Extension** (separate extension) | | |
 | [PPM Hue Range Filter](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images | Extensions > PPM Analysis > PPM Hue Range Filter... |
 | [PPM Polarity Plot](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-polarity-plot.md) | Polar histogram visualization of fiber orientations | Extensions > PPM Analysis > PPM Polarity Plot... |
@@ -174,6 +176,31 @@ PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) P
 | Batch PPM Analysis | Run polarity and/or perpendicularity analysis across all annotations in a project; exports CSV | Sunburst calibration, project with annotated PPM images | [Guide](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/batch-ppm-analysis.md) |
 | [Propagation Manager](tools/propagation-manager.md) | Bidirectional transfer of annotations/detections between base images and sub-images | Multi-sample project with sub-images, alignment transform | [Guide](tools/propagation-manager.md) |
 | [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse at current position | Microscope connection, positioned at area of interest | [Guide](tools/z-stack-timelapse.md) |
+
+---
+
+## LC-PolScope Tools
+
+LC-PolScope functionality includes a liquid-crystal calibration workflow:
+
+### LC-PolScope Calibration
+
+Calibrate the two variable retarders of the universal compensator by finding the extinction point (where the crystals transmit the least light) and the swing states either side of it. The calibration measures the palette the acquisition will use.
+
+**When You Need It:**
+- After initial system setup or when optical alignment changes
+- Whenever the extinction ratio falls: it is the health figure the calibration reports, so a
+  declining value is the signal. How often that happens on this instrument is not yet established.
+
+**Key Points:**
+- Run on a **clear, specimen-free field** — anything birefringent in the field makes the result worse
+- Measures extinction ratio as a quality figure (100 or above is good; this instrument has reached 267)
+- Automatically uses the microscope configuration's swing, scheme (4-State or 5-State), and wavelength settings
+- Produces a human-readable assessment (Good / Acceptable / Poor) based on extinction ratio
+- Supports single-pass or iterative search (iterative refines at ~3x the exposures)
+- Optional manual black level or auto-measurement from a dark frame
+
+**Access:** Extensions > QP Scope > [Modality Name] > Calibrate Liquid Crystals... (only visible when using an LC-PolScope microscope)
 
 ---
 

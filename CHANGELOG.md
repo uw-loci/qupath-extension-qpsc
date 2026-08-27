@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**LC-PolScope liquid-crystal calibration workflow**
+- New menu item "Calibrate Liquid Crystals..." appears under the QP Scope menu when using an LC-PolScope microscope. Finds the extinction point (where the crystals transmit the least light) and the swing states either side, then writes the palette the acquisition uses. Runs on a clear, specimen-free field; automatically uses the microscope configuration's swing, scheme, and wavelength settings so the calibration cannot disagree with the acquisition. Reports an extinction ratio as a quality figure (100 or above is good); supports single-pass or iterative search strategies.
+
 **Focus Approach Validation: live vertical focus-metric plot during the traverse**
 - The focus-approach validation window now displays a vertical plot of the focus metric while scanning from the safe Z toward the sample. The plot is oriented with the traverse start at the top (retracted) and the far end at the bottom (toward sample), matching the stage's direction of motion. During the scan, the Live Viewer's per-frame focus samples accumulate as a live trace (yellow); when the scan returns, the server's actual measurements replace the live approximation with the server's profile (cyan), named for the metric it used (e.g., `brenner_gradient`, `p98_p2`). Reference lines show your hand-focused Z (green dashed) and the current stage Z (gray). The validation window stays open after completion with a "Continue" button so you can review the curve before proceeding to the second (bare-slide) scan.
 
