@@ -51,7 +51,10 @@ When you launch **Multi-Slide Acquisition...**, the **Live Viewer** and **Stage 
 
 In the assignment dialog:
 
-1. **Pick the carrier** for the holder you have mounted.
+1. **Pick the carrier** for the holder you have mounted. The dialog defaults to the
+   carrier that was most recently used in this project, so if you acquire the same
+   holder type repeatedly, your last choice is pre-selected. Otherwise it defaults
+   to the first carrier in the config.
 2. **Set rotations.** Use **Rotate all slides** at the top to set every slot at
    once when slides are mounted the same way. The default follows the insert
    type: horizontal inserts (e.g. `single_h`) default to 0 degrees; vertical
@@ -93,6 +96,15 @@ nothing to check against -- previously the first point at which they were known 
 slide 1's acquisition dialog, after you had already committed to a carrier and its
 assignments. And every slide in the batch uses the same combination, so picking it once
 removes a repeated choice from every per-slide dialog.
+
+**Status is reported per white-balance mode, and coloured per mode.** Both white
+balance and background correction are checked mode by mode, and each line carries its
+own colour. This matters because the modes disagree in exactly the case that counts:
+"Backgrounds (Per-angle): valid" in green next to "Backgrounds (Simple (90deg)):
+stale" in orange tells you the mode you are about to acquire with is fine. Previously
+one stale mode turned the whole block red, and there was no way to see that from the
+colour. A monochrome camera or a per-channel fluorescence profile shows a single
+line instead, since neither splits by WB mode.
 
 The calibration line is **advisory, not a gate** -- you may be deliberately acquiring
 without background correction. It exists so that "no backgrounds for this objective" is
@@ -196,6 +208,18 @@ skipped silently in several cases -- not connected, no objective resolvable, or 
 Live Viewer not streaming. That last one is the important one: without a live stream,
 streaming autofocus downgrades to a narrow drift check that cannot recover focus on a
 fresh slide, and can report success without having found it. All of these now warn.
+
+**Green box detection counts down like the rest.** Until now it did not, and that was
+a hard stall: the "Use This Detection" button is created disabled and only enables once
+detection finishes, so an unattended batch sat on a perfectly detected box with nothing
+to press it. The countdown now attaches the moment detection enables the button.
+
+It is gated on the detector's own confidence. At 30% or above the dialog counts down and
+confirms. Below that -- or when no box is found, or the detector errors -- it stops and
+notifies you instead, leaving the parameter controls and **Detect Again** available. The
+green box is what the whole alignment is anchored on, so auto-confirming a detection the
+detector itself is unsure of is exactly the silent-wrong-result these gates exist to
+prevent.
 
 **Every tile is picked for you.** In an automatic mode no "Select Tile" dialog appears at
 all -- not for the first landmark of a slide, not for single-tile refinement, and not for

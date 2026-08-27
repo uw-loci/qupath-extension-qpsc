@@ -135,25 +135,11 @@ public class CalibrationChecker {
                 msg = "Simple WB calibrated";
             }
 
-            // Warn if ANY WB mode is stale (not only when ALL are). A stale mode must
-            // not read as green just because a sibling mode is valid -- the operator
-            // may acquire with the stale one. Name the stale mode(s) so it is clear
-            // which needs re-collecting. Non-blocking (WARNING).
-            String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
-            if (bgFolder != null) {
-                var allResults = BackgroundValidityChecker.checkAllModes(bgFolder, modality, objective, detector, mgr);
-                StringBuilder staleNames = new StringBuilder();
-                for (var r : allResults) {
-                    if (r.status() == BackgroundValidityChecker.ValidityStatus.CALIBRATION_STALE) {
-                        if (staleNames.length() > 0) staleNames.append(", ");
-                        staleNames.append(r.mode().getDisplayName());
-                    }
-                }
-                if (staleNames.length() > 0) {
-                    return new StepStatus(Status.WARNING, msg + " -- stale: " + staleNames + "; re-collect");
-                }
-            }
-
+            // Deliberately does NOT report background staleness. It used to: any stale mode
+            // turned this step amber, which made the white-balance row amber because
+            // BACKGROUNDS were out of date -- a different step, already reported by
+            // checkBackgroundCorrection, and reported there per mode. Saying it twice, once
+            // rolled up, is what made a single stale mode colour two rows at once.
             return new StepStatus(Status.READY, msg);
 
         } catch (Exception e) {
@@ -287,6 +273,74 @@ public class CalibrationChecker {
         } catch (Exception e) {
             logger.debug("Error checking background correction", e);
             return new StepStatus(Status.WARNING, "Could not verify background correction status");
+        }
+    }
+
+    /**
+     * Per-white-balance-mode CALIBRATION status: is each mode itself calibrated.
+     *
+     * <p>The breakdown behind {@link #checkWhiteBalance}, so each mode gets its own colour.
+     * Distinct from {@link #checkBackgroundsByMode}, which asks whether that mode's
+     * BACKGROUNDS are still valid -- a mode can be calibrated and its backgrounds stale, and
+     * those are two different things to fix.
+     *
+     * <p>Only the modes with a stored calibration to check are listed: per-angle (exposures or
+     * gains) and simple. Camera AWB is the camera doing it itself, with nothing on our side to
+     * verify, so listing it would add a row that can only ever say "not applicable".
+     *
+     * <p>Returns an EMPTY list when the split does not apply (non-JAI camera, or any failure to
+     * read); callers fall back to the aggregate. Empty means "no per-mode view", never "fine".
+     *
+     * @param modality  the selected modality
+     * @param objective the selected objective ID
+     * @param detector  the selected detector ID
+     * @return one status per checkable WB mode, or an empty list
+     */
+    public static java.util.List<ModeStatus> checkWhiteBalanceByMode(
+            String modality, String objective, String detector) {
+        if (modality == null || objective == null || detector == null) {
+            return java.util.List.of();
+        }
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+            if (!mgr.isJAICamera(detector)) {
+                return java.util.List.of();
+            }
+            java.util.List<ModeStatus> modes = new java.util.ArrayList<>();
+
+            int angleCount = 0;
+            var exposures = mgr.getModalityExposures(modality, objective, detector);
+            if (exposures instanceof java.util.Map<?, ?> expMap) {
+                angleCount = expMap.size();
+            }
+            if (angleCount == 0) {
+                var gains = mgr.getModalityGains(modality, objective, detector);
+                if (gains instanceof java.util.Map<?, ?> gainMap) {
+                    angleCount = gainMap.size();
+                }
+            }
+            modes.add(
+                    angleCount > 0
+                            ? new ModeStatus(
+                                    qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getDisplayName(),
+                                    Status.READY,
+                                    angleCount + " angles")
+                            : new ModeStatus(
+                                    qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getDisplayName(),
+                                    Status.WARNING,
+                                    "not calibrated"));
+
+            boolean hasSimple = mgr.getProfileSetting(modality, objective, detector, "simple_wb") != null;
+            modes.add(new ModeStatus(
+                    qupath.ext.qpsc.modality.WbMode.SIMPLE.getDisplayName(),
+                    hasSimple ? Status.READY : Status.WARNING,
+                    hasSimple ? "calibrated" : "not calibrated"));
+
+            return modes;
+        } catch (Exception e) {
+            logger.debug("Error building the per-mode white balance breakdown", e);
+            return java.util.List.of();
         }
     }
 

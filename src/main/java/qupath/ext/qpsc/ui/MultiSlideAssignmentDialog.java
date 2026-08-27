@@ -289,10 +289,20 @@ public final class MultiSlideAssignmentDialog {
                 }
             }
 
-            CalibrationChecker.StepStatus wb = CalibrationChecker.checkWhiteBalance(modality, objective, detector);
-            if (wb.status() != CalibrationChecker.Status.READY) {
-                anyProblem = true;
-                lines.add(line("White balance: " + wb.message(), colorFor(wb.status())));
+            var wbByMode = CalibrationChecker.checkWhiteBalanceByMode(modality, objective, detector);
+            if (wbByMode.isEmpty()) {
+                CalibrationChecker.StepStatus wb = CalibrationChecker.checkWhiteBalance(modality, objective, detector);
+                if (wb.status() != CalibrationChecker.Status.READY) {
+                    anyProblem = true;
+                    lines.add(line("White balance: " + wb.message(), colorFor(wb.status())));
+                }
+            } else {
+                for (var mode : wbByMode) {
+                    if (mode.status() != CalibrationChecker.Status.READY) {
+                        anyProblem = true;
+                    }
+                    lines.add(line("White balance (" + mode.label() + "): " + mode.message(), colorFor(mode.status())));
+                }
             }
         } catch (Exception e) {
             logger.warn("Calibration check failed for {}/{}/{}: {}", modality, objective, detector, e.getMessage());

@@ -1297,7 +1297,13 @@ public class AcquisitionWizardDialog {
         String detector = getSelectedDetector();
 
         CompletableFuture.runAsync(() -> {
-            updateStepStatus(STEP_WHITE_BALANCE, CalibrationChecker.checkWhiteBalance(modality, objective, detector));
+            var wbByMode = CalibrationChecker.checkWhiteBalanceByMode(modality, objective, detector);
+            if (wbByMode.isEmpty()) {
+                updateStepStatus(
+                        STEP_WHITE_BALANCE, CalibrationChecker.checkWhiteBalance(modality, objective, detector));
+            } else {
+                updateStepStatus(STEP_WHITE_BALANCE, wbByMode);
+            }
             // Background correction is checked per white-balance mode, and the modes disagree
             // in exactly the case that matters -- per-angle valid, simple stale. Show each mode
             // its own dot and colour rather than one amber row that is true of neither. An
