@@ -982,7 +982,10 @@ manual alignment. The base transform lands it a median 600 um out (worst 1.5 mm)
 blank glass where a focus scan finds coverslip contrast rather than the sample. The
 microscope now checks whether it is on tissue and, if not, steps outward toward the tile
 grid in FOV-sized hops. Only that first point does this — the second lands within 26 um. If nothing is found the stage returns to where it
-started, focusing proceeds anyway, and the slide is handed back with a notification.
+started and focusing proceeds anyway — the search is an optimisation on a step that
+already worked without it, so a failed search does **not** hand the slide back or stop
+an automatic batch. The steps that can actually tell — autofocus and the SIFT
+confidence gate — hand the slide back themselves if they fail.
 
 > **WARNING — not validated for real acquisition.** An auto-confirmed alignment accepts
 > whatever position the base transform predicted, with no human comparing it against the
