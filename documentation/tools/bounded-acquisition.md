@@ -13,6 +13,11 @@ QPSC covers the chosen region with a tile grid and acquires every tile, here sho
 
 ![Tile grid overlaid on a region, with labeled annotation boxes around individual specimens](../images/Docs_BoundedAcquisition_TileGrid.png)
 
+The dialog does not block the rest of QuPath, so you can drive the Live Viewer while it is
+open -- which is what **"Use Current Position as Center"** and **"Get Stage Position"** are
+for, since both read the centre of the Live Viewer field of view. Only one copy can be open
+at a time; choosing the menu item again brings the existing window to the front.
+
 ## Prerequisites
 
 - Python microscope server running
