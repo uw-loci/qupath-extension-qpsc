@@ -283,6 +283,12 @@ public final class ReferenceTileSelector {
                     best = candidate;
                 }
             }
+            // Only reachable when every remaining candidate has no ROI to measure from --
+            // interiorTiles drops those, so not via select(), but this method is public and
+            // adding a null here would surface as an NPE at whichever caller drove to it.
+            if (best == null) {
+                break;
+            }
             chosen.add(best);
             pool.remove(best);
         }

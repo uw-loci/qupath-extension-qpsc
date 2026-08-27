@@ -315,7 +315,7 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
 | STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `ABORTED:<reason>` / `FAILED:<reason>` |
 | ABORTAF | `abortaf_` | none | `ACK` |
-| FINDTISS | `findtiss` | `--yaml <path> [--objective <id>] [--dir <dx>,<dy>] [--step <um>] [--max-attempts <n>] ENDOFSTR` | `FOUND:<x>:<y>:<attempt>:<of>` / `NOTFOUND:<x>:<y>:<of>` / `ABORTED:<x>:<y>:<done>` / `FAILED:<reason>` |
+| FINDTISS | `findtiss` | `--yaml <path> [--modality <name>] [--objective <id>] [--dir <dx>,<dy>] [--step <um>] [--max-attempts <n>] ENDOFSTR` | `FOUND:<x>:<y>:<attempt>:<of>` / `NOTFOUND:<x>:<y>:<of>` / `ABORTED:<x>:<y>:<done>` / `FAILED:<reason>` |
 
 #### PROBEZ
 
@@ -470,7 +470,8 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | Flag | Required | Description |
 |---|---|---|
 | `--yaml <path>` | yes | Path to the active `config_<scope>.yml`; the server derives `autofocus_<scope>.yml` from it for the tissue thresholds. |
-| `--objective <id>` | no | Objective whose per-objective `texture_threshold` / `tissue_area_threshold` / `rgb_brightness_threshold` apply. Missing falls back to the shipped defaults. |
+| `--modality <name>` | in practice yes | Active modality. Selects the `modalities.<name>` binding in `autofocus_<scope>.yml`, and with it the strategy whose `validity_params` define tissue for this light path. Omitting it drops to the per-objective fallback below, which on PPM and LC-PolScope means applying thresholds their own config says reject valid fields. |
+| `--objective <id>` | no | Fallback only, used when no modality binding matches: the objective's flat `texture_threshold` / `tissue_area_threshold` from `autofocus_settings`. Missing falls back to the shipped defaults. |
 | `--dir <dx>,<dy>` | no | Stage-space hint toward where tissue is believed to be; only its bearing is used. QPSC computes it as the vector from the predicted position to the centre of the tile grid. Unusable input is ignored with a warning -- the search still works without it. |
 | `--step <um>` | no | Radius increment. Default: one camera FOV diagonal. Deliberately coarse, and it DOES leave gaps -- stepping 446 um along X with a 357 x 267 um field skips 89 um. A step that could not skip anything on any bearing would be the field's short side (267 um), needing far more positions for the same reach. Acceptable because the target is a tissue mass many fields across, not a specific field. |
 | `--max-attempts <n>` | no | Positions to visit **including the starting one**. Default is two complete rings: **7 with a hint, 17 without** (three bearings per ring versus eight). Capped at 25. Not one fixed number, because that cannot mean "whole rings" for both patterns, and stopping mid-ring biases the search toward whichever bearings are enumerated first. |
@@ -483,9 +484,25 @@ one, the four compass points then the four diagonals. So reach is
 `step * ((max_attempts - 1) // bearings_per_ring)` -- an attempt budget converts directly
 into a distance, which is how it was sized against the measurement above.
 
-Tissue is decided by the **same strategy validity check the acquisition path uses**
-(`texture_and_area` etc. from `microscope_imageprocessing.focus`), so there is no new
-metric to calibrate.
+**How "tissue" is decided.** By the **same strategy validity check the acquisition path
+uses**, resolved through the same chain (`server/focus_validity.py`, pure and
+unit-tested): `modalities.<modality>` binding -> `strategies.<name>.validity_check` +
+`validity_params`, with the binding's `overrides.validity_params` merged on top. So there
+is no new metric to calibrate and no second definition of "has content" to drift.
+
+Resolving it through the modality is not a nicety. `autofocus_<scope>.yml` states the
+thresholds in two places -- flat per-objective keys under `autofocus_settings`, and
+per-modality `validity_params` -- and the second is where the scopes that need it tune.
+LC-PolScope's binding sets `tissue_area_threshold: 0.1` against the objective entry's
+`0.2`, with the comment that the 20% floor "rejects valid fields"; PPM and LC-PolScope
+both widen `tissue_mask_range` to `[0.05, 0.95]`, which the flat keys cannot express at
+all. A search reading only the flat keys on those scopes reports "no tissue" while
+looking straight at some.
+
+A modality bound to a manual-only strategy resolves to `always_false`, which no search can
+satisfy. That is answered immediately with
+`FAILED:no-automatic-tissue-check-for-this-modality` **without moving the stage**, rather
+than walking the pattern to a foregone `NOTFOUND`.
 
 **Exposure is deliberately not adjusted.** The caller has just put the modality into its
 alignment reference state (for PPM, the calibrated uncrossed angle and exposure) and SIFT

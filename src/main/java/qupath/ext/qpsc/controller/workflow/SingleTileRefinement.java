@@ -173,12 +173,28 @@ public class SingleTileRefinement {
      */
     private static CompletableFuture<PathObject> resolveRefinementTile(
             QuPathGUI gui, List<PathObject> annotations, String prompt) {
-        List<PathObject> auto = ReferenceTileSelector.autoPickIfArmed(gui, annotations, 1);
-        if (auto.isEmpty()) {
+        if (!ReferenceTileSelector.wouldAutoPick()) {
             return UIFunctions.promptTileSelectionDialogAsync(prompt);
         }
-        logger.info("Refinement tile auto-picked: '{}'", auto.get(0).getName());
-        return CompletableFuture.completedFuture(auto.get(0));
+        // Scoring reads an image region per candidate tile, and this can be reached on the FX
+        // thread, so pick on a worker rather than freezing the UI mid-batch.
+        CompletableFuture<PathObject> picked = new CompletableFuture<>();
+        new Thread(
+                        () -> {
+                            List<PathObject> auto = ReferenceTileSelector.autoPickIfArmed(gui, annotations, 1);
+                            if (auto.isEmpty()) {
+                                Platform.runLater(() -> UIFunctions.promptTileSelectionDialogAsync(prompt)
+                                        .thenAccept(picked::complete));
+                                return;
+                            }
+                            logger.info(
+                                    "Refinement tile auto-picked: '{}'",
+                                    auto.get(0).getName());
+                            picked.complete(auto.get(0));
+                        },
+                        "ReferenceTile-Pick")
+                .start();
+        return picked;
     }
 
     /**

@@ -254,9 +254,11 @@ the right tile: SIFT handles the rest, and has matched from 1.5 mm away.
 
 Only the FIRST point does this -- refinement point 1 on the usual green-box route, or
 landmark 1 when a slide falls back to 3-point manual alignment. The second point, corrected
-by the first, lands within 26 um, so searching again would just cost time. If nothing is found nearby, the stage goes
-back where it started, focusing proceeds anyway, and the slide is handed back to you with
-a notification -- the run does not pretend it worked.
+by the first, lands within 26 um, so searching again would just cost time. If nothing is
+found nearby, the stage goes back where it started and focusing proceeds anyway -- the
+search is a help, not a gate, so failing to find tissue does not by itself stop the batch.
+A small section can defeat the search while autofocus and SIFT both work fine; if they do
+not, they hand the slide back themselves.
 
 > **Still not validated for real work.** An auto-confirmed alignment accepts whatever
 > position the base transform predicted, with nobody comparing it to the live view, and

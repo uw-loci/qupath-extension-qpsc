@@ -421,7 +421,9 @@ alternatives, not a sequence:
 
 Before focusing at that landmark, QPSC asks the microscope to look for tissue
 (`FINDTISS`): snap where it is, check the frame with the **same tissue/background gate the
-acquisition path uses**, and if it is background, step one field-of-view diagonal outward
+acquisition path uses** — resolved through the same modality binding, so a modality that
+widens its tissue band or lowers its area floor in `autofocus_<scope>.yml` gets those
+values here too — and if it is background, step one field-of-view diagonal outward
 and check again — fanning around a direction hint that points toward the centre of the
 tile grid, since that is where the tissue is. Two rings are swept by default, reaching
 roughly 890 um at 20x: seven positions with a hint, seventeen without one.
@@ -444,9 +446,13 @@ angle and exposure) and SIFT is about to match against that state, so a brightne
 loop here would silently change what the next step depends on. This is a deliberate
 difference from the acquisition path's first-tile search, which does adjust exposure.
 
-**When nothing is found:** the stage is returned to the predicted position, focusing runs
-anyway, and — in an automatic batch — the slide is handed back to the operator with a push
-notification rather than the run continuing quietly.
+**When nothing is found:** the stage is returned to the predicted position and focusing
+runs anyway. The search is an optimisation on a step that already worked without it, so a
+failed search does **not** hand the slide back or stop an automatic batch — on a small or
+sparse section the pattern can miss while autofocus and SIFT both succeed, and halting
+there would make the feature that exists to keep an unattended run moving the thing that
+stops it. The steps that can actually tell — autofocus, and the SIFT confidence gate —
+hand the slide back themselves if they fail.
 
 > **Not yet verified on a microscope.** The search geometry is unit-tested on both sides;
 > the behaviour on real tissue is not.

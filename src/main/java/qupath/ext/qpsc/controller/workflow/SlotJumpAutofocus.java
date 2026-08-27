@@ -456,7 +456,14 @@ public final class SlotJumpAutofocus {
         try {
             MicroscopeSocketClient.FindTissueResult result = controller
                     .getSocketClient()
-                    .findTissue(configPath, objective, search.dirX(), search.dirY(), Double.NaN, 0);
+                    .findTissue(
+                            configPath,
+                            qupath.ext.qpsc.state.ModalityState.getInstance().getModality(),
+                            objective,
+                            search.dirX(),
+                            search.dirY(),
+                            Double.NaN,
+                            0);
             switch (result.status()) {
                 case FOUND -> {
                     logger.info(
@@ -475,16 +482,23 @@ public final class SlotJumpAutofocus {
                 }
                 case NOT_FOUND -> {
                     // The server has already put the stage back where it started, so the
-                    // prediction is intact -- but a scan from here is a scan over glass.
+                    // prediction is intact -- but a scan from here may be a scan over glass.
+                    //
+                    // Deliberately NOT a hand-back to the operator. This search is an
+                    // OPTIMISATION on a step that already worked without it: autofocus still
+                    // runs, and SIFT matched at 1507 um with 796 inliers, so a failed search
+                    // is weak evidence that the slide is in trouble. On a small or sparse
+                    // section the pattern can easily miss while everything downstream
+                    // succeeds -- and stopping the batch there would make the feature that
+                    // exists to keep an unattended run moving the thing that halts it. The
+                    // steps that CAN tell (autofocus, and the SIFT confidence gate in
+                    // SiftCapturePane / SingleTileRefinement) hand the slide back themselves
+                    // if they actually fail.
                     logger.warn(
                             "Slot-jump tissue search found nothing in {} position(s); "
                                     + "focusing from the predicted position anyway",
                             result.attempts());
                     publish("No tissue found nearby -- focus may be unreliable", true);
-                    qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
-                            "Slot-jump tissue search",
-                            "no tissue within " + result.attempts()
-                                    + " searched position(s) of the predicted landmark");
                 }
                 default -> logger.warn("Slot-jump tissue search unavailable: {}", result.reason());
             }

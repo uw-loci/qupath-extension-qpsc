@@ -2045,6 +2045,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         StringBuilder msgBuilder = new StringBuilder();
         msgBuilder.append("--yaml ").append(yamlPath);
+        if (modality != null && !modality.isEmpty()) {
+            msgBuilder.append(" --modality ").append(modality);
+        }
         if (objective != null && !objective.isEmpty()) {
             msgBuilder.append(" --objective ").append(objective);
         }
@@ -2238,8 +2241,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * arbitrary last guess.
      *
      * @param yamlPath   main config path; the server derives {@code autofocus_<scope>.yml}
-     *                   from it for the per-objective tissue thresholds. Required.
-     * @param objective  objective id for those thresholds; may be null
+     *                   from it for the tissue thresholds. Required.
+     * @param modality   active modality. NOT optional in practice: it selects the strategy
+     *                   binding whose {@code validity_params} define tissue for this light
+     *                   path, and PPM and LC-PolScope both tune those away from the shipped
+     *                   defaults precisely because the defaults reject their valid fields.
+     *                   Null falls back to the flat per-objective thresholds.
+     * @param objective  objective id for the fallback thresholds; may be null
      * @param dirX       stage-space X of a hint pointing at where tissue is believed to be
      * @param dirY       stage-space Y of that hint. Pass {@code NaN} for either to search
      *                   the compass instead of fanning around a bearing.
@@ -2248,7 +2256,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param maxAttempts positions to visit including the starting one; 0 for the server default
      */
     public FindTissueResult findTissue(
-            String yamlPath, String objective, double dirX, double dirY, double stepUm, int maxAttempts)
+            String yamlPath,
+            String modality,
+            String objective,
+            double dirX,
+            double dirY,
+            double stepUm,
+            int maxAttempts)
             throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for findTissue");
@@ -2258,6 +2272,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         StringBuilder msgBuilder = new StringBuilder();
         msgBuilder.append("--yaml ").append(yamlPath);
+        if (modality != null && !modality.isEmpty()) {
+            msgBuilder.append(" --modality ").append(modality);
+        }
         if (objective != null && !objective.isEmpty()) {
             msgBuilder.append(" --objective ").append(objective);
         }

@@ -124,8 +124,22 @@ public class MultiTileRefinement {
         // step consumes one instead of waiting for a click. An empty list (tissue thinner than
         // three tiles, or no grid measurements) falls straight back to manual picking -- the
         // operator is asked rather than a boundary tile being chosen silently.
-        List<PathObject> autoTiles = resolveAutoTiles(gui, annotations);
-        Platform.runLater(() -> showPanel(gui, initialTransform, trustSift, confidenceThreshold, future, autoTiles));
+        if (!ReferenceTileSelector.wouldAutoPick()) {
+            Platform.runLater(
+                    () -> showPanel(gui, initialTransform, trustSift, confidenceThreshold, future, List.of()));
+            return future;
+        }
+        // Selection scores texture by reading an image region per candidate tile, and this
+        // method can be reached on the FX thread, so do the picking on a worker and open the
+        // panel from its result. Same reason AffineTransformationController hops here.
+        new Thread(
+                        () -> {
+                            List<PathObject> autoTiles = resolveAutoTiles(gui, annotations);
+                            Platform.runLater(() -> showPanel(
+                                    gui, initialTransform, trustSift, confidenceThreshold, future, autoTiles));
+                        },
+                        "ReferenceTile-Pick")
+                .start();
         return future;
     }
 
@@ -360,6 +374,26 @@ public class MultiTileRefinement {
                     points.size() + " of " + MIN_POINTS + " reference points captured and no auto-picked tiles left");
         };
 
+        // The next auto-picked tile, or null to open the selection dialog. Gated on the
+        // override rather than just on the queue: once the operator has taken this slide back
+        // -- by interacting, or because SIFT confidence was too low -- clicking "Select tile"
+        // must give them the picker. Handing them the next pre-picked tile instead would move
+        // the stage somewhere they did not choose, which is the opposite of taking over. The
+        // queue is drained at the same moment so a later re-arm cannot resurrect stale picks.
+        java.util.function.Supplier<PathObject> nextAutoTile = () -> {
+            if (!ReferenceTileSelector.wouldAutoPick()) {
+                if (!pendingAutoTiles.isEmpty()) {
+                    logger.info(
+                            "Multi-tile refinement: operator has taken this slide over; discarding {} "
+                                    + "auto-picked tile(s) and asking instead",
+                            pendingAutoTiles.size());
+                    pendingAutoTiles.clear();
+                }
+                return null;
+            }
+            return pendingAutoTiles.poll();
+        };
+
         addButton.setOnAction(e -> {
             addButton.setDisable(true);
             solveButton.setDisable(true);
@@ -377,7 +411,7 @@ public class MultiTileRefinement {
                             confidenceThreshold,
                             captureSlot,
                             points,
-                            pendingAutoTiles.poll())
+                            nextAutoTile.get())
                     .whenComplete((measure, ex) -> Platform.runLater(() -> {
                         if (ex != null) {
                             logger.warn("Multi-tile point capture failed: {}", ex.getMessage());
