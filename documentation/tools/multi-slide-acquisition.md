@@ -206,12 +206,23 @@ ones are taken. If nothing qualifies -- tissue thinner than three tiles across, 
 instance -- you are asked to pick by hand as before, rather than a poor tile being chosen
 silently. You still press **Select tile** and **Solve** in the refinement panel.
 
-> **Not yet a walk-away setup pass.** An auto-confirmed alignment accepts
-> whatever position the base transform predicted, with nobody comparing it to the
-> live view. The server-side "find tissue, then focus" jog that would recover
-> from a bad landing is still to come, as is the policy for what happens when SIFT
-> returns low confidence. Until then these modes are for exercising the automation, not
-> for runs you intend to keep. Leave `MANUAL` for real work.
+> **Not yet a walk-away setup pass, and it is worth knowing exactly where it stops.**
+> An automatic batch stalls at the **first landmark point of each slide**, in the
+> 3-point alignment's "Select a REFERENCE tile" dialog. That dialog's Confirm button is
+> created disabled and only enables once it sees a tile selected in the QuPath viewer, so
+> the countdown cannot drive it -- and nothing attaches a countdown there anyway. There is
+> no timeout on the slot sequence, so the batch waits there indefinitely. Landmark points
+> 2 and 3 need no such pick: they are chosen programmatically and only their confirms are
+> auto-advanced.
+>
+> The refinement panel's **Select tile** and **Solve & Save** are also still manual
+> presses -- what the automation removed there is the *decision*, not the click.
+>
+> Beyond that, an auto-confirmed alignment accepts whatever position the base transform
+> predicted, with nobody comparing it to the live view. The server-side "find tissue, then
+> focus" jog that would recover from a bad landing is still to come, as is the policy for
+> what happens when SIFT returns low confidence. Leave `MANUAL` for real work; these modes
+> are for exercising the automation.
 
 ### Manual, one slot at a time
 

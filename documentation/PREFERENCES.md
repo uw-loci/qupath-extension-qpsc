@@ -957,12 +957,17 @@ modes (interior tiles only, ranked by texture, spread apart), so the "Select Til
 does not appear. If no tile qualifies you are asked to pick by hand rather than a poor tile
 being chosen silently.
 
-> **WARNING — not yet validated for production.** An auto-confirmed alignment accepts
-> whatever position the base transform predicted, with no human comparing it against the
-> live view. The server-side "find tissue, then focus" jog that would recover from a bad
-> landing is **not built yet**, nor is the policy for a low-confidence SIFT result. Until
-> they are, the automatic modes are for testing the automation itself, not for unattended
-> runs you intend to keep. Leave this on `MANUAL` for real acquisition.
+> **WARNING — not yet unattended, and it stalls rather than fails.** An automatic batch
+> stops at the **first landmark point of each slide**: the 3-point alignment's reference-tile
+> dialog enables its Confirm button only once a tile is selected in the viewer, so no
+> countdown can drive it, and the slot sequence has no timeout. Landmark points 2 and 3 need
+> no pick and do auto-advance. The refinement panel's **Select tile** and **Solve & Save**
+> remain manual presses too -- the automation removed the decision there, not the click.
+>
+> An auto-confirmed alignment also accepts whatever position the base transform predicted,
+> with no human comparing it against the live view. The server-side "find tissue, then focus"
+> jog that would recover from a bad landing is **not built yet**, nor is the policy for a
+> low-confidence SIFT result. Leave this on `MANUAL` for real acquisition.
 
 ---
 
