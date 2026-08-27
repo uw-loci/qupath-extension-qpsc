@@ -13,10 +13,19 @@ package qupath.ext.qpsc.preferences;
  * an undefined state.
  *
  * <p>WARNING: the automatic modes confirm each setup dialog's primary action on a
- * timer. Until reference-tile auto-pick and the server-side tissue jog land
- * (Phases C and D of the full-auto design), an auto-confirmed alignment accepts
- * whatever position the base transform predicted, with no human check. Treat the
- * automatic modes as unvalidated for production runs.
+ * timer, so an auto-confirmed alignment accepts whatever position the base transform
+ * predicted with no human check. Treat them as unvalidated for production runs.
+ *
+ * <p>They also do not yet reach unattended operation, and it is worth knowing exactly
+ * where they stop. Reference-tile auto-pick (Phase C) IS built and wired -- see
+ * {@code MultiTileRefinement.resolveAutoTiles}. What remains is the FIRST landmark
+ * point of each slide: {@code UIFunctions.promptTileSelectionDialogAsync} creates its
+ * Confirm button disabled and only enables it once a polling Timeline sees a
+ * tile-bearing detection selected in the viewer, so attaching a countdown cannot drive
+ * it -- the countdown would hit the disabled-primary guard and hand the slide back.
+ * Landmark points 2 and 3 need no such pick; they are chosen programmatically. The
+ * server-side tissue jog (Phase D) that would correct the first landmark's landing
+ * error is also not built.
  */
 public enum MultiSlideAcquisitionMode {
 

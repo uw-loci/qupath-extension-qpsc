@@ -427,9 +427,21 @@ public class QPPreferenceDialog {
                         + "(acquisition > multislide > auto_advance_seconds, default 10).\n"
                         + "\n"
                         + "WARNING: an auto-confirmed alignment accepts whatever position the base\n"
-                        + "transform predicted, with no human check. Reference-tile auto-pick and the\n"
-                        + "server-side tissue jog are not built yet, so the automatic modes are\n"
-                        + "unvalidated for production runs. Leave on MANUAL unless you are testing.")
+                        + "transform predicted, with no human check.\n"
+                        + "\n"
+                        + "A FULLY_AUTOMATIC batch does NOT yet run unattended. It stalls at the\n"
+                        + "first landmark point of every slide, where selecting a reference tile\n"
+                        + "still needs a click in the viewer, and it will wait there indefinitely --\n"
+                        + "there is no timeout on the slot sequence. Multi-tile refinement also\n"
+                        + "still needs its Select tile and Solve buttons pressed, although the tile\n"
+                        + "it captures is now chosen for you.\n"
+                        + "\n"
+                        + "Built and working: reference-tile auto-pick, per-slide reset, and\n"
+                        + "auto-confirm on the annotation, refinement-choice, landmark-confirm and\n"
+                        + "acquisition-start dialogs. Not built: the server-side tissue jog that\n"
+                        + "corrects the first landmark's landing error.\n"
+                        + "\n"
+                        + "Leave on MANUAL unless you are testing.")
                 .build());
         items.add(new PropertyItemBuilder<>(multiSlideReuseAlignmentProperty, Boolean.class)
                 .name("Reuse saved alignment (TESTING ONLY)")
