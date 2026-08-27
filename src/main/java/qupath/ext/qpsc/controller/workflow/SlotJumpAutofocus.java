@@ -445,16 +445,38 @@ public final class SlotJumpAutofocus {
      * where the prediction put it and lets autofocus try anyway, because a focus scan on
      * glass is a worse outcome than a slow one but not a worse outcome than no scan at all.
      *
-     * @return true when the search moved the stage onto tissue
+     * <p><b>The search borrows the stage; it does not get to keep it.</b> The caller has
+     * driven to a predicted position, and the step AFTER autofocus -- SIFT -- matches the
+     * camera against a WSI region extracted around the TILE, expanded by the SIFT search
+     * margin (160 um by default). A camera parked hundreds of micrometres away has no
+     * overlap with that region at all, so leaving the stage at the tissue would trade a
+     * focus scan over glass for an alignment that cannot match: a worse failure, and a
+     * self-inflicted one. What the search is actually for is a Z value, and Z carries back
+     * -- the sample plane is flat to a couple of micrometres over the ring or two the search
+     * covers, the same assumption per-tile AF seeding already makes. So the position is
+     * captured here and the caller returns to it once focus has been found.
+     *
+     * @return the stage XY to return to after focusing, or null when the stage never moved
      */
-    private static boolean runTissueSearch(
+    private static double[] runTissueSearch(
             MicroscopeController controller,
             String configPath,
             String modality,
             String objective,
             TissueSearchHint search) {
         if (search == null) {
-            return false;
+            return null;
+        }
+        double[] beforeSearch;
+        try {
+            beforeSearch = controller.getStagePositionXY();
+        } catch (Exception e) {
+            // Without a position to come back to, moving the stage away would strand the
+            // alignment step somewhere it cannot match from. Focus where we are instead.
+            logger.warn(
+                    "Slot-jump tissue search skipped: could not read the stage position to return to ({})",
+                    e.getMessage());
+            return null;
         }
         publish("Looking for tissue...", false);
         try {
@@ -464,12 +486,15 @@ public final class SlotJumpAutofocus {
             switch (result.status()) {
                 case FOUND -> {
                     logger.info(
-                            "Slot-jump tissue search: tissue at ({}, {}) on attempt {} of {}",
+                            "Slot-jump tissue search: tissue at ({}, {}) on attempt {} of {}; "
+                                    + "focusing there, then returning to ({}, {})",
                             String.format("%.1f", result.x()),
                             String.format("%.1f", result.y()),
                             result.attempt(),
-                            result.attempts());
-                    return true;
+                            result.attempts(),
+                            String.format("%.1f", beforeSearch[0]),
+                            String.format("%.1f", beforeSearch[1]));
+                    return beforeSearch;
                 }
                 case ABORTED -> {
                     // The operator cancelled. Say nothing alarming and do not hand the slide
@@ -483,8 +508,9 @@ public final class SlotJumpAutofocus {
                     //
                     // Deliberately NOT a hand-back to the operator. This search is an
                     // OPTIMISATION on a step that already worked without it: autofocus still
-                    // runs, and SIFT matched at 1507 um with 796 inliers, so a failed search
-                    // is weak evidence that the slide is in trouble. On a small or sparse
+                    // runs from the predicted position, exactly as it did before this existed,
+                    // so a failed search is weak evidence that the slide is in trouble. On a
+                    // small or sparse
                     // section the pattern can easily miss while everything downstream
                     // succeeds -- and stopping the batch there would make the feature that
                     // exists to keep an unattended run moving the thing that halts it. The
@@ -505,7 +531,34 @@ public final class SlotJumpAutofocus {
             // existed, so fall through to it.
             logger.warn("Slot-jump tissue search failed ({}); focusing from the predicted position", e.getMessage());
         }
-        return false;
+        // Every non-FOUND outcome leaves the stage where it started (the server returns it
+        // itself on NOTFOUND and ABORTED), so there is nothing to undo.
+        return null;
+    }
+
+    /**
+     * Puts the stage back where the tissue search borrowed it from, keeping the Z that
+     * focusing just found. Failure is logged, not thrown: the alignment step that follows
+     * reports its own problem far more usefully than a stack trace here would.
+     */
+    private static void returnFromTissueSearch(MicroscopeController controller, double[] restoreXY) {
+        if (restoreXY == null) {
+            return;
+        }
+        try {
+            logger.info(
+                    "Slot-jump tissue search: returning to the predicted position ({}, {}) with the focus it found",
+                    String.format("%.1f", restoreXY[0]),
+                    String.format("%.1f", restoreXY[1]));
+            controller.moveStageXY(restoreXY[0], restoreXY[1]);
+        } catch (Exception e) {
+            logger.error(
+                    "Slot-jump tissue search: could not return to ({}, {}) -- alignment will be attempted from "
+                            + "wherever the search stopped, which is very likely outside the SIFT search margin: {}",
+                    String.format("%.1f", restoreXY[0]),
+                    String.format("%.1f", restoreXY[1]),
+                    e.getMessage());
+        }
     }
 
     /**
@@ -653,7 +706,9 @@ public final class SlotJumpAutofocus {
                     // Tissue first, focus second: a scan started over blank glass finds
                     // coverslip contrast or nothing, and no amount of attempt budget fixes
                     // that. Off the FX thread by construction (we are on the AF daemon).
-                    if (runTissueSearch(controller, configPath, modalityForServer, objective, tissueSearch)) {
+                    double[] returnToAfterFocus =
+                            runTissueSearch(controller, configPath, modalityForServer, objective, tissueSearch);
+                    if (returnToAfterFocus != null) {
                         // Restore the phase the status line was showing before the search
                         // borrowed it, so the sequence reads Moving -> Looking -> Focusing.
                         publish("Focusing...", false);
@@ -717,6 +772,10 @@ public final class SlotJumpAutofocus {
                         errorMsg = ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage();
                         logger.error("Slot-jump AF failed: {}", errorMsg, ex);
                     }
+                    // Hand the stage back before anything else looks at it -- including on a
+                    // failed or cancelled scan, where the caller's predicted position is the
+                    // only sane place to leave it.
+                    returnFromTissueSearch(controller, returnToAfterFocus);
                     // Release the Live Viewer stage-movement lock and restore the Autofocus
                     // button (whether AF succeeded, failed, or was cancelled).
                     LiveViewerWindow.endExternalAutofocus();

@@ -2232,9 +2232,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * <p>Why it exists: a multi-slide batch's FIRST predicted landmark per slide lands a
      * median 613 um from its target (worst 1507 um, measured over 8 slides on 2026-08-24),
      * which frequently puts the camera on blank glass. Autofocus there finds coverslip
-     * contrast or nothing at all. SIFT itself is fine at that distance (796 inliers at
-     * 1507 um), so all this has to achieve is tissue -- ANY tissue -- in view before
-     * focusing.
+     * contrast or nothing at all. All this has to achieve is tissue -- ANY tissue -- in view
+     * long enough to measure a focus, not the intended tile: the caller returns the stage to
+     * the predicted position afterwards and keeps only the Z (see
+     * {@code SlotJumpAutofocus.runTissueSearch}), because the alignment step that follows
+     * matches against a WSI region anchored on the TILE and would have no overlap with a
+     * camera parked hundreds of micrometres away.
      *
      * <p>On NOT_FOUND the server returns the stage to where the search started, so a
      * failed search leaves the caller's own prediction intact rather than parked at an

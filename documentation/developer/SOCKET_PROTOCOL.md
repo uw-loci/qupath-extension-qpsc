@@ -461,9 +461,16 @@ budget. The second landmark, corrected by the first's translation, lands within 
 so the base transform's error is very nearly a constant per-slide offset -- **only the
 first landmark of a slide needs this**, and QPSC only sends it there.
 
-SIFT reach is *not* the problem being solved: it matched at 1507 um with 796 inliers and
-0.999 confidence. So the search only has to put tissue -- any tissue -- in view. That is
-why the pattern is a coarse fan rather than a fine raster.
+The search only has to put tissue -- *any* tissue -- in view long enough for a focus scan
+to measure a Z, which is why the pattern is coarse rings rather than a fine raster.
+
+**The caller must give the stage back.** `FOUND` leaves the stage at the tissue, and that is
+not where the next step can work: SIFT matches against a WSI region anchored on the TILE and
+expanded by the SIFT search margin (160 um by default), so a camera several hundred
+micrometres away has no overlap with it. QPSC therefore focuses at the found position and
+then drives back to the predicted one, keeping only the Z -- the sample plane is flat to a
+couple of micrometres over the ring or two involved. A caller that skips the return trades a
+focus scan over glass for an alignment that cannot match.
 
 Payload flags (text, terminated by `ENDOFSTR`):
 

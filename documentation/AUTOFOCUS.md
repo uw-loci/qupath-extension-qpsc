@@ -443,9 +443,17 @@ field, and covering every micrometre would cost far more stage moves for no bene
 already corrected, lands within **26 um** — the base transform's error is very nearly a
 constant per-slide offset, so searching again would only cost time.
 
-**It only has to find tissue, not the right tile.** SIFT is not the weak link here: it has
-matched at 1507 um with 796 inliers. Once focus is real, the alignment step handles the
-rest.
+**It only has to find tissue, not the right tile — and it gives the stage back.** What the
+search produces is a Z value, not a position. Once focus is measured, QPSC drives back to
+the predicted position and keeps the focus; the sample plane is flat to a couple of
+micrometres over the ring or two the search covers, the same assumption per-tile AF seeding
+already makes.
+
+That return is not optional. SIFT matches the camera against a WSI region extracted around
+the **tile**, expanded by the SIFT search margin (*Alignment* preferences, 160 um by
+default). A camera left sitting several hundred micrometres away has no overlap with that
+region at all — so a search that kept the stage would trade a focus scan over glass for an
+alignment that cannot match, which is the worse failure of the two.
 
 **What it does not do:** it never changes Z, exposure, or any camera setting. The modality
 has just been put into its alignment reference state (for PPM, the calibrated uncrossed
