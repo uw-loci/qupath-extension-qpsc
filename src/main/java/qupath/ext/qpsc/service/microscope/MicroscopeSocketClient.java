@@ -1990,7 +1990,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 approachMaxUm,
                 requireTissueGate,
                 Double.NaN,
-                Double.NaN);
+                Double.NaN,
+                null,
+                false);
     }
 
     /**
@@ -2023,7 +2025,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double approachMaxUm,
             boolean requireTissueGate,
             double profileZStartUm,
-            double profileZEndUm)
+            double profileZEndUm,
+            String dumpLabel,
+            boolean saveFrames)
             throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for streamingFocus");
@@ -2042,6 +2046,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (dumpFrames) {
             msgBuilder.append(" --dump 1");
+            // Without a label the folder is just streaming_af_<timestamp>. A validation run
+            // produces two of them -- one over tissue, one over blank slide -- and afterwards
+            // nothing on disk says which is which.
+            if (dumpLabel != null && !dumpLabel.isBlank()) {
+                msgBuilder.append(" --dump-label ").append(dumpLabel.trim().replace(' ', '-'));
+            }
+            // Frames are the bulk of a dump: several hundred TIFs, often ~750 MB per scan.
+            // The CSVs and manifest are what the analysis reads, so frames are opt-in.
+            if (saveFrames) {
+                msgBuilder.append(" --dump-frames 1");
+            }
         }
         if (maxAttempts > 0) {
             msgBuilder.append(" --max-attempts ").append(maxAttempts);

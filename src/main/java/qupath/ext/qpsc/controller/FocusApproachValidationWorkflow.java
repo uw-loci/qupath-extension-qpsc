@@ -10,6 +10,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
@@ -119,10 +120,11 @@ public final class FocusApproachValidationWorkflow {
             qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.show();
         }
 
-        objective = confirmPlan(mgr, modality, objective, safeZ);
-        if (objective == null) {
+        Plan plan = confirmPlan(mgr, modality, objective, safeZ);
+        if (plan == null) {
             return;
         }
+        objective = plan.objective();
 
         // Scan 1: over tissue. The operator's manual focus is the reference the measured peak
         // is checked against.
@@ -165,7 +167,8 @@ public final class FocusApproachValidationWorkflow {
             return;
         }
 
-        double[][] tissueProfile = captureProfile(mgr, controller, configPath, modality, safeZ, manualFocusZ);
+        double[][] tissueProfile =
+                captureProfile(mgr, controller, configPath, modality, safeZ, manualFocusZ, "tissue", plan.saveFrames());
         if (tissueProfile == null) {
             Dialogs.showErrorMessage("Focus Approach Validation", "The over-tissue scan produced no usable profile.");
             return;
@@ -182,7 +185,8 @@ public final class FocusApproachValidationWorkflow {
         if (bgConfirm == null) {
             return;
         }
-        double[][] bgProfile = captureProfile(mgr, controller, configPath, modality, safeZ, manualFocusZ);
+        double[][] bgProfile =
+                captureProfile(mgr, controller, configPath, modality, safeZ, manualFocusZ, "blank", plan.saveFrames());
         if (bgProfile == null) {
             Dialogs.showErrorMessage("Focus Approach Validation", "The background scan produced no usable profile.");
             return;
@@ -263,7 +267,7 @@ public final class FocusApproachValidationWorkflow {
      *
      * @return the chosen objective ID, or null if cancelled
      */
-    private static String confirmPlan(
+    private static Plan confirmPlan(
             MicroscopeConfigManager mgr, String modality, String resolvedObjective, double safeZ) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Focus Approach Validation");
@@ -324,7 +328,20 @@ public final class FocusApproachValidationWorkflow {
         body.setWrapText(true);
         body.setPrefRowCount(22);
         body.setPrefColumnCount(64);
-        VBox content = new VBox(10, body, objectiveRow, objectiveNote);
+        // Off by default. Each scan captures several hundred frames, so keeping them costs
+        // roughly 750 MB per scan and 1.5 GB per validation run -- and the verdict is computed
+        // entirely from samples.csv, which is written either way. Frames are only worth keeping
+        // when the curve looks wrong and someone wants to see what the camera saw.
+        CheckBox saveImages = new CheckBox("Save images (one TIF per sample)");
+        saveImages.setSelected(false);
+        Label saveImagesNote = new Label("Off by default: roughly 750 MB per scan. The measurement and the "
+                + "verdict come from the CSV trace, which is always saved. Turn this on only to inspect "
+                + "individual frames afterwards.");
+        saveImagesNote.setWrapText(true);
+        saveImagesNote.setMaxWidth(520);
+        saveImagesNote.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        VBox content = new VBox(10, body, objectiveRow, objectiveNote, saveImages, saveImagesNote);
         alert.getDialogPane().setContent(content);
         alert.getButtonTypes().setAll(ButtonType.OK, ButtonType.CANCEL);
         if (alert.showAndWait().filter(b -> b == ButtonType.OK).isEmpty()) {
@@ -336,8 +353,17 @@ public final class FocusApproachValidationWorkflow {
         }
         int open = chosen.lastIndexOf('(');
         int close = chosen.lastIndexOf(')');
-        return (open >= 0 && close > open) ? chosen.substring(open + 1, close) : chosen;
+        String objectiveId = (open >= 0 && close > open) ? chosen.substring(open + 1, close) : chosen;
+        return new Plan(objectiveId, saveImages.isSelected());
     }
+
+    /**
+     * What the operator confirmed before the run starts.
+     *
+     * @param objective  the objective actually mounted; the result record is keyed on it
+     * @param saveFrames whether to keep the per-sample TIFs alongside the CSV trace
+     */
+    private record Plan(String objective, boolean saveFrames) {}
 
     /**
      * Confirms, with real numbers, that moving from the focused position to the declared safe Z
@@ -427,7 +453,9 @@ public final class FocusApproachValidationWorkflow {
             String configPath,
             String modality,
             double safeZ,
-            double manualFocusZ) {
+            double manualFocusZ,
+            String scanLabel,
+            boolean saveFrames) {
 
         double direction = Math.signum(manualFocusZ - safeZ);
         double farEnd = manualFocusZ + direction * PAST_FOCUS_MARGIN_UM;
@@ -543,7 +571,9 @@ public final class FocusApproachValidationWorkflow {
                                             Double.NaN,
                                             false,
                                             safeZ,
-                                            farEnd);
+                                            farEnd,
+                                            scanLabel,
+                                            saveFrames);
                             if (result != null && result.dumpPath != null) {
                                 java.nio.file.Path dumpRoot = Paths.get(result.dumpPath);
                                 holder[0] = FocusApproachValidationStore.parseDumpDirectory(dumpRoot);

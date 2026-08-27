@@ -240,7 +240,23 @@ public final class FocusProfileAnalysis {
             return new PairVerdict(false, false, tissue, List.of(), false, List.copyOf(reasons));
         }
 
-        List<FalsePeak> bgPeaks = prominentPeaks(bgZ, bgMetric);
+        // The tissue peak's amplitude above baseline is the yardstick the background is judged
+        // against; see prominentPeaks for why its own range is the wrong one.
+        double tissueAmplitude = amplitude(tissueMetric);
+        List<FalsePeak> bgPeaks = prominentPeaks(bgZ, bgMetric, tissueAmplitude);
+
+        // A blank scan that is essentially flat is the EXPECTED result, not a defect, and it
+        // looks alarming: a low staircase that never reaches a maximum. Say so, so nobody reads
+        // a clean pass as a failed measurement.
+        double bgAmplitude = amplitude(bgMetric);
+        if (tissueAmplitude > 0 && bgAmplitude < 0.15 * tissueAmplitude) {
+            reasons.add(String.format(
+                    "The no-tissue scan is flat (%.0f%% of the tissue scan's amplitude) and never reaches a "
+                            + "peak. That is the expected result: with no sample there is nothing to focus on, "
+                            + "and the steps visible in that curve are the focus metric's own quantisation "
+                            + "rather than structure.",
+                    100.0 * bgAmplitude / tissueAmplitude));
+        }
 
         // How close two peaks must be to be the same surface. Scaled to the measured peak
         // width so a broad low-mag peak is not split into two by sampling jitter.
@@ -313,7 +329,26 @@ public final class FocusProfileAnalysis {
      * @param metric metric samples
      * @return prominent peaks in scan order; empty when the profile is unusable or flat
      */
-    public static List<FalsePeak> prominentPeaks(double[] z, double[] metric) {
+    /**
+     * Peak-to-baseline amplitude of a profile: its full range after smoothing.
+     *
+     * @param metric the metric samples
+     * @return the range, or 0 when there is nothing to measure
+     */
+    private static double amplitude(double[] metric) {
+        if (metric == null || metric.length < 2) {
+            return 0;
+        }
+        double min = metric[0];
+        double max = metric[0];
+        for (double x : metric) {
+            min = Math.min(min, x);
+            max = Math.max(max, x);
+        }
+        return max - min;
+    }
+
+    public static List<FalsePeak> prominentPeaks(double[] z, double[] metric, double referenceRange) {
         List<FalsePeak> peaks = new ArrayList<>();
         if (z == null || metric == null || z.length != metric.length || z.length < 5) {
             return peaks;
@@ -329,6 +364,22 @@ public final class FocusProfileAnalysis {
         if (range <= 0) {
             return peaks;
         }
+        // Judge prominence against the REFERENCE range when one is supplied -- for a background
+        // scan that is the tissue scan's amplitude.
+        //
+        // Measuring a blank scan against its own range is the trap. A blank field has no focus
+        // signal, so its entire dynamic range is metric quantisation: p98_p2 on 8-bit data is a
+        // difference of integer percentiles averaged over three channels, so it moves in steps
+        // of 1/3 and the curve is a visible staircase. Against a range that IS three steps, one
+        // step clears 15% comfortably and every step edge is reported as a surface peak. Judged
+        // against a tissue peak of 86 counts (PPM 20x, 2026-08-26) the same step is 0.4% and
+        // correctly reads as nothing.
+        //
+        // This is also the right comparison physically. Both scans run at identical exposure and
+        // illumination, so their metrics share a scale, and a surface only matters if the
+        // approach would actually stop at it -- which it judges on a scan containing the tissue
+        // peak too.
+        double threshold = PROMINENCE_FRACTION * Math.max(range, referenceRange);
         for (int i = 1; i < v.length - 1; i++) {
             if (v[i] <= v[i - 1] || v[i] < v[i + 1]) {
                 continue;
@@ -348,7 +399,7 @@ public final class FocusProfileAnalysis {
                 }
             }
             double prominence = v[i] - Math.max(leftValley, rightValley);
-            if (prominence >= PROMINENCE_FRACTION * range) {
+            if (prominence >= threshold) {
                 peaks.add(new FalsePeak(z[i], v[i], prominence));
             }
         }
