@@ -126,11 +126,31 @@ public class UnifiedAcquisitionController {
      *
      * @return CompletableFuture containing the result, or cancelled if user cancels
      */
+    /** The dialog currently on screen, or null. Only touched on the FX thread. */
+    private static Dialog<UnifiedAcquisitionResult> activeDialog;
+
     public static CompletableFuture<UnifiedAcquisitionResult> showDialog() {
         CompletableFuture<UnifiedAcquisitionResult> future = new CompletableFuture<>();
 
         Platform.runLater(() -> {
             try {
+                // Modality had been the only thing preventing a second copy being opened off
+                // the menu while one is up -- showAndWait runs a nested event loop, so the menu
+                // stays live. Cancelling the new future matches what Cancel already does.
+                if (activeDialog != null
+                        && activeDialog.getDialogPane().getScene() != null
+                        && activeDialog.getDialogPane().getScene().getWindow() != null
+                        && activeDialog.getDialogPane().getScene().getWindow().isShowing()) {
+                    logger.info("Bounded acquisition dialog already open - bringing to front");
+                    javafx.stage.Window win =
+                            activeDialog.getDialogPane().getScene().getWindow();
+                    win.requestFocus();
+                    if (win instanceof javafx.stage.Stage openStage) {
+                        openStage.toFront();
+                    }
+                    future.cancel(true);
+                    return;
+                }
                 UnifiedDialogBuilder builder = new UnifiedDialogBuilder();
                 Optional<UnifiedAcquisitionResult> result = builder.buildAndShow();
 
@@ -282,7 +302,18 @@ public class UnifiedAcquisitionController {
 
         Optional<UnifiedAcquisitionResult> buildAndShow() {
             dialog = new Dialog<>();
-            dialog.initModality(Modality.APPLICATION_MODAL);
+            // Non-modal so the operator can use the Live Viewer while this is open: the
+            // "Use Current Position as Center" and "Get Stage Position" buttons refer to the
+            // centre of the Live Viewer field of view, which modality locked out.
+            // showAndWait() still holds the workflow until they answer.
+            //
+            // KNOWN GAP, accepted deliberately: createProjectSection() reads hasOpenProject
+            // when the dialog is BUILT and changes its own layout from it, so opening or
+            // closing a project while this is up leaves the layout describing a project state
+            // that no longer holds, and Start Acquisition can write to the wrong place.
+            // Modality had been masking that. The real fix is to read project state at submit
+            // rather than at construction; tracked in claude-reports/TODO_LIST.md.
+            dialog.initModality(Modality.NONE);
             dialog.setTitle("Bounded Acquisition");
             dialog.setHeaderText("Configure and start a new bounded acquisition.\n"
                     + "All settings are visible below - expand sections as needed.");
@@ -350,9 +381,14 @@ public class UnifiedAcquisitionController {
                 return createResult();
             });
 
+            // Registered here rather than via setOnHidden: this class already owns a
+            // try/finally around the show, and setOnHidden is a single property, so a second
+            // one added elsewhere would silently replace the first and leak the reference.
+            activeDialog = dialog;
             try {
                 return dialog.showAndWait();
             } finally {
+                activeDialog = null;
                 // Always clear the stage-map preview once the dialog is dismissed --
                 // acquisition progress (if started) is shown by the acquisition overlay instead.
                 StageMapWindow.clearBoundingBoxPreview();
