@@ -26,6 +26,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 
 /**
@@ -313,7 +314,7 @@ public final class InsertCalibrationDialog {
 
         Label tip = new Label("Values are stage coordinates in micrometers; you can also type them directly.\n"
                 + "This window stays open and does not block the Live Viewer -- move the stage freely.");
-        tip.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+        tip.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         VBox content = new VBox(8, header);
         if (wireframe != null) {
@@ -367,18 +368,18 @@ public final class InsertCalibrationDialog {
 
         if (!failures.isEmpty()) {
             statusLabel.setText("Not saved: " + String.join("; ", failures));
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #c0392b;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
         if (anyChanged) {
             statusLabel.setText("Saved. Map updated.");
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #1e8449;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             if (onSaved != null) {
                 onSaved.run();
             }
         } else {
             statusLabel.setText("No changes to save.");
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #888;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         }
     }
 

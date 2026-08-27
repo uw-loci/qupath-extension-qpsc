@@ -425,15 +425,20 @@ public class ExistingImageAcquisitionController {
                 case "green":
                     return dark
                             ? "-fx-background-color: #1B3A1B; -fx-border-color: #2E7D32; -fx-border-width: 0 0 1 0;"
-                            : "-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; -fx-border-width: 0 0 1 0;";
+                            : "-fx-background-color: " + "ladder(-fx-background, #1B3A1B 49%, #E8F5E9 50%)"
+                                    + "; -fx-border-color: " + "ladder(-fx-background, #3A6B3E 49%, #A5D6A7 50%)"
+                                    + "; -fx-border-width: 0 0 1 0;";
                 case "blue":
                     return dark
                             ? "-fx-background-color: #1A2A3A; -fx-border-color: #42A5F5; -fx-border-width: 0 0 1 0;"
-                            : "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; -fx-border-width: 0 0 1 0;";
+                            : "-fx-background-color: " + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)"
+                                    + "; -fx-border-color: " + "ladder(-fx-background, #2A5B8A 49%, #90CAF9 50%)"
+                                    + "; -fx-border-width: 0 0 1 0;";
                 case "yellow":
                     return dark
                             ? "-fx-background-color: #3A3000; -fx-background-radius: 4; -fx-font-size: 11px;"
-                            : "-fx-background-color: #FFF9E5; -fx-background-radius: 4; -fx-font-size: 11px;";
+                            : "-fx-background-color: " + "ladder(-fx-background, #3A3000 49%, #FFF9E5 50%)"
+                                    + "; -fx-background-radius: 4; -fx-font-size: 11px;";
                 default:
                     return "";
             }
@@ -602,7 +607,7 @@ public class ExistingImageAcquisitionController {
             sampleNameField.setPrefWidth(300);
 
             sampleNameErrorLabel = new Label();
-            sampleNameErrorLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 10px;");
+            sampleNameErrorLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-size: 10px;");
             sampleNameErrorLabel.setVisible(false);
 
             sampleNameField.textProperty().addListener((obs, oldVal, newVal) -> {
@@ -1039,7 +1044,7 @@ public class ExistingImageAcquisitionController {
             // Modality-specific options (will be populated by updateModalityUI)
             modalityContent = new VBox(5);
             Label modalityPlaceholder = new Label("Select a modality to see specific options.");
-            modalityPlaceholder.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+            modalityPlaceholder.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
             modalityContent.getChildren().add(modalityPlaceholder);
 
             modalityPane = new TitledPane("Modality Options", modalityContent);
@@ -1818,7 +1823,7 @@ public class ExistingImageAcquisitionController {
             grid.add(heightField, 1, 1);
             Label defaultHint = new Label(
                     String.format("Default = camera FoV %s x %s um", formatUm(defaultFovWum), formatUm(defaultFovHum)));
-            defaultHint.setStyle("-fx-text-fill: gray; -fx-font-size: 11;");
+            defaultHint.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 11;");
             grid.add(defaultHint, 0, 2, 2, 1);
             grid.add(overlapCheck, 0, 3, 2, 1);
             d.getDialogPane().setContent(grid);
@@ -1922,7 +1927,7 @@ public class ExistingImageAcquisitionController {
                 modalityUI = null;
                 // Show placeholder when no modality-specific UI
                 Label placeholder = new Label("No specific options for " + modality);
-                placeholder.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+                placeholder.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
                 modalityContent.getChildren().add(placeholder);
                 modalityPane.setExpanded(false);
             }

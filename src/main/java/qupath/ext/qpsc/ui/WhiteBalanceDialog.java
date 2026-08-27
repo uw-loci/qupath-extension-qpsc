@@ -630,7 +630,7 @@ public class WhiteBalanceDialog {
         cameraCombo.setTooltip(new Tooltip("Select the camera for white balance calibration"));
 
         Label cameraNote = new Label("(Currently only JAI camera supported)");
-        cameraNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(cameraLabel, 0, 0);
         grid.add(cameraCombo, 1, 0);
@@ -662,7 +662,7 @@ public class WhiteBalanceDialog {
         toleranceSpinner.setTooltip(new Tooltip("Acceptable deviation from target intensity"));
 
         Label toleranceNote = new Label("(channels within tolerance are considered balanced)");
-        toleranceNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        toleranceNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         toleranceNote.setTooltip(new Tooltip("Channels within tolerance are considered balanced"));
 
         grid.add(toleranceLabel, 0, row);
@@ -699,7 +699,7 @@ public class WhiteBalanceDialog {
         // Output is read-only (derived from config location)
         // Add a note explaining this
         Label outputNote = new Label("(auto: config folder/" + WB_SUBFOLDER + ")");
-        outputNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        outputNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         outputNote.setTooltip(new Tooltip("Auto-derived: config folder/" + WB_SUBFOLDER));
 
         grid.add(outputLabel, 0, row);
@@ -772,7 +772,7 @@ public class WhiteBalanceDialog {
         }
 
         Label objectiveNote = new Label("(calibration is objective-specific)");
-        objectiveNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        objectiveNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         objectiveNote.setTooltip(new Tooltip("Calibration is objective-specific"));
 
         grid.add(objectiveLabel, 0, row);
@@ -826,7 +826,7 @@ public class WhiteBalanceDialog {
         }
 
         Label detectorNote = new Label("(calibration is detector-specific)");
-        detectorNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        detectorNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         detectorNote.setTooltip(new Tooltip("Calibration is detector-specific"));
 
         grid.add(detectorLabel, 0, row);
@@ -897,7 +897,7 @@ public class WhiteBalanceDialog {
         targetSpinner.setTooltip(new Tooltip("Target mean intensity for all channels (0-255)"));
 
         Label targetNote = new Label("(uncrossed / 90 deg target)");
-        targetNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        targetNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         targetBox.getChildren().addAll(targetLabel, targetSpinner, targetNote);
 
@@ -924,7 +924,7 @@ public class WhiteBalanceDialog {
         });
 
         Label smallAngleNote = new Label("(applies to +7, -7, and 0 deg)");
-        smallAngleNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        smallAngleNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         smallAngleBox.getChildren().addAll(smallAngleLabel, smallAngleSpinner, smallAngleNote);
 
@@ -1172,7 +1172,7 @@ public class WhiteBalanceDialog {
         // Note about editable angles
         Label noteLabel =
                 new Label("(Angle values loaded from config and are editable. Targets match optical properties.)");
-        noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Run button (wired by dialog setup code)
         Button runPpmBtn = new Button("Run PPM WB");
@@ -1230,7 +1230,7 @@ public class WhiteBalanceDialog {
         // Description
         Label descLabel = new Label("Advanced calibration parameters. Default values work well for most cases.");
         descLabel.setWrapText(true);
-        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         grid.add(descLabel, 0, row, 3, 1);
         row++;
 
@@ -1247,7 +1247,7 @@ public class WhiteBalanceDialog {
                 + "JAI camera supports 0-36 dB."));
 
         Label maxGainNote = new Label("(3dB = 1.41x gain)");
-        maxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        maxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         maxGainNote.setTooltip(new Tooltip("3dB = 1.41x, 6dB = 2x, 12dB = 4x linear gain"));
 
         grid.add(maxGainLabel, 0, row);
@@ -1268,7 +1268,7 @@ public class WhiteBalanceDialog {
                         + "to reduce exposure spread instead of relying purely on exposure."));
 
         Label gainThresholdNote = new Label("(exposure ratio before using gain)");
-        gainThresholdNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        gainThresholdNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         gainThresholdNote.setTooltip(new Tooltip("Exposure ratio between channels before applying gain compensation"));
 
         grid.add(gainThresholdLabel, 0, row);
@@ -1287,7 +1287,7 @@ public class WhiteBalanceDialog {
                 + "More iterations = better convergence but longer calibration time."));
 
         Label maxIterNote = new Label("(iterations before giving up)");
-        maxIterNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        maxIterNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         maxIterNote.setTooltip(new Tooltip("Maximum calibration iterations before giving up"));
 
         grid.add(maxIterLabel, 0, row);
@@ -1305,7 +1305,7 @@ public class WhiteBalanceDialog {
                 + "Improves accuracy but adds ~10 seconds to calibration."));
 
         Label blackLevelNote = new Label("(improves accuracy, adds time)");
-        blackLevelNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        blackLevelNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         blackLevelNote.setTooltip(new Tooltip("Improves accuracy but adds time to calibration"));
 
         grid.add(blackLevelLabel, 0, row);
@@ -1357,7 +1357,7 @@ public class WhiteBalanceDialog {
                 + "Default 5.0x (~14 dB) provides good balance."));
 
         Label baseGainNote = new Label("(starting gain for all channels)");
-        baseGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        baseGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(baseGainLabel, 0, row);
         grid.add(baseGainSpinner, 1, row);
@@ -1376,7 +1376,7 @@ public class WhiteBalanceDialog {
                 + "Default 50ms keeps calibration fast."));
 
         Label exposureSoftCapNote = new Label("(max exposure before gain boost)");
-        exposureSoftCapNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        exposureSoftCapNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(exposureSoftCapLabel, 0, row);
         grid.add(exposureSoftCapSpinner, 1, row);
@@ -1395,7 +1395,7 @@ public class WhiteBalanceDialog {
                 + "Default 12 dB prevents extremely long exposures."));
 
         Label boostedMaxGainNote = new Label("(max gain when past soft cap)");
-        boostedMaxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        boostedMaxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(boostedMaxGainLabel, 0, row);
         grid.add(boostedMaxGainSpinner, 1, row);
@@ -1418,7 +1418,7 @@ public class WhiteBalanceDialog {
                         + "Raise this if calibration warns 'desired Nx' above 4.0x."));
 
         Label gainAnalogRbMaxNote = new Label("(per-channel R/B ceiling, default 4.0x)");
-        gainAnalogRbMaxNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        gainAnalogRbMaxNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(gainAnalogRbMaxLabel, 0, row);
         grid.add(gainAnalogRbMaxSpinner, 1, row);

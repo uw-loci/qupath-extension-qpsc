@@ -42,6 +42,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -129,7 +130,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             Label empty = new Label("No fluorescence channels configured for this microscope.\n"
                     + "Contact facility staff to add a 'channels' list under\n"
                     + "modalities.<widefield-modality>.channels in the YAML.");
-            empty.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+            empty.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
             root.getChildren().addAll(new Separator(), title, empty);
             masterOverride = null;
             return;
@@ -280,7 +281,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                 defaultIntensities.put(id, defaultIntensity);
             } else {
                 Label placeholder = new Label("-");
-                placeholder.setStyle("-fx-text-fill: gray;");
+                placeholder.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
                 placeholder.setTooltip(new Tooltip("This channel has no intensity_property declared in the YAML, "
                         + "so there is no runtime intensity knob for it."));
                 grid.add(placeholder, 3, row);
@@ -389,7 +390,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
         Label hint = new Label(String.format(
                 "Library has %d channels. Default mode uses all of them at YAML exposures.", library.size()));
-        hint.setStyle("-fx-text-fill: gray; -fx-font-size: 10.5px;");
+        hint.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 10.5px;");
 
         HBox presetBar = buildPresetBar();
         HBox testBar = buildTestBar();

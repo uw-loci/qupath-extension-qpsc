@@ -309,7 +309,8 @@ public class AlignmentSelectionController {
 
                 // Note: Refinement options moved to RefinementSelectionController
                 Label refinementNote = new Label("[i] Refinement options available in next step");
-                refinementNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666; -fx-font-style: italic;");
+                refinementNote.setStyle(
+                        "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
                 refinementNote.setDisable(!useExistingRadio.isSelected());
 
                 transformSelectionBox
@@ -389,19 +390,27 @@ public class AlignmentSelectionController {
                 useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
                     if (selected) {
                         existingCard.setStyle(
-                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
-                        manualCard.setStyle(
-                                "-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: "
+                                        + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)"
+                                        + "; -fx-background-radius: 4;");
+                        manualCard.setStyle("-fx-border-color: " + "ladder(-fx-background, #4A4D4F 49%, #CCCCCC 50%)"
+                                + "; -fx-border-radius: 4; -fx-background-color: "
+                                + "ladder(-fx-background, #2F3234 49%, #FAFAFA 50%)" + "; -fx-background-radius: 4;");
                     }
                 });
 
                 createNewRadio.selectedProperty().addListener((obs, old, selected) -> {
                     if (selected) {
                         manualCard.setStyle(
-                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: "
+                                        + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)"
+                                        + "; -fx-background-radius: 4;");
                         if (hasTransforms) {
                             existingCard.setStyle(
-                                    "-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
+                                    "-fx-border-color: " + "ladder(-fx-background, #4A4D4F 49%, #CCCCCC 50%)"
+                                            + "; -fx-border-radius: 4; -fx-background-color: "
+                                            + "ladder(-fx-background, #2F3234 49%, #FAFAFA 50%)"
+                                            + "; -fx-background-radius: 4;");
                         }
                     }
                 });
@@ -436,10 +445,14 @@ public class AlignmentSelectionController {
                 Platform.runLater(() -> {
                     if (useExistingRadio.isSelected()) {
                         existingCard.setStyle(
-                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: "
+                                        + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)"
+                                        + "; -fx-background-radius: 4;");
                     } else if (createNewRadio.isSelected()) {
                         manualCard.setStyle(
-                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: #E3F2FD; -fx-background-radius: 4;");
+                                "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4; -fx-background-color: "
+                                        + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)"
+                                        + "; -fx-background-radius: 4;");
                     }
                 });
 
@@ -516,8 +529,9 @@ public class AlignmentSelectionController {
             boolean isAvailable) {
         VBox card = new VBox(8);
         card.setPadding(new Insets(12));
-        card.setStyle(
-                "-fx-border-color: #CCCCCC; -fx-border-radius: 4; -fx-background-color: #FAFAFA; -fx-background-radius: 4;");
+        card.setStyle("-fx-border-color: " + "ladder(-fx-background, #4A4D4F 49%, #CCCCCC 50%)"
+                + "; -fx-border-radius: 4; -fx-background-color: " + "ladder(-fx-background, #2F3234 49%, #FAFAFA 50%)"
+                + "; -fx-background-radius: 4;");
 
         if (!isAvailable) {
             card.setStyle(card.getStyle() + " -fx-opacity: 0.6;");
@@ -549,17 +563,17 @@ public class AlignmentSelectionController {
             Label reqLabel = new Label();
             if (req.met()) {
                 reqLabel.setText("[OK] " + req.description());
-                reqLabel.setStyle("-fx-text-fill: #2E7D32; -fx-font-size: 11px;");
+                reqLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-size: 11px;");
             } else {
                 reqLabel.setText("[ - ] " + req.description());
-                reqLabel.setStyle("-fx-text-fill: #666666; -fx-font-size: 11px;");
+                reqLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 11px;");
             }
             requirementsBox.getChildren().add(reqLabel);
         }
 
         // Best for description
         Label bestForLabel = new Label("Best for: " + bestFor);
-        bestForLabel.setStyle("-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: #555;");
+        bestForLabel.setStyle("-fx-font-size: 11px; -fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         card.getChildren().addAll(titleLabel, metricsRow, requirementsBox, bestForLabel);
 
@@ -577,15 +591,16 @@ public class AlignmentSelectionController {
         Label label = new Label();
         label.setWrapText(true);
         label.setPadding(new Insets(8, 10, 8, 10));
-        label.setStyle("-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
+        label.setStyle("-fx-background-color: " + "ladder(-fx-background, #3A3000 49%, #FFF8E1 50%)"
+                + "; -fx-background-radius: 4; -fx-font-size: 11px;");
 
         if (hasTransforms) {
             label.setText("[i] Recommendation: Use Existing Alignment (found " + transformCount + " saved transform"
                     + (transformCount > 1 ? "s" : "") + " for this microscope)");
-            label.setStyle(label.getStyle() + " -fx-text-fill: #F57F17;");
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.WARNING + ";");
         } else {
             label.setText("[i] Recommendation: Perform Manual Alignment (no saved transforms found)");
-            label.setStyle(label.getStyle() + " -fx-text-fill: #E65100;");
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.WARNING + ";");
         }
 
         return label;

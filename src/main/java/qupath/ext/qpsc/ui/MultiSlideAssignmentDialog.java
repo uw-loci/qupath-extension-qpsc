@@ -254,7 +254,7 @@ public final class MultiSlideAssignmentDialog {
     private static void updateReadiness(Label label, String modality, String objective, String detector) {
         if (modality == null || objective == null || detector == null) {
             label.setText("Select modality, objective and detector to check calibration.");
-            label.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+            label.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             return;
         }
         StringBuilder problems = new StringBuilder();
@@ -274,7 +274,7 @@ public final class MultiSlideAssignmentDialog {
         } catch (Exception e) {
             logger.warn("Calibration check failed for {}/{}/{}: {}", modality, objective, detector, e.getMessage());
             label.setText("Could not check calibration for this combination: " + e.getMessage());
-            label.setStyle("-fx-font-size: 11px; -fx-text-fill: #7a5c00;");
+            label.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + ";");
             return;
         }
 
@@ -288,11 +288,11 @@ public final class MultiSlideAssignmentDialog {
 
         if (problems.length() == 0) {
             label.setText("Backgrounds and white balance are calibrated for this combination.");
-            label.setStyle("-fx-font-size: 11px; -fx-text-fill: #2E7D32;");
+            label.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
         } else {
             label.setText(
                     problems + "\nEvery slide in this batch uses this combination, so this affects the whole run.");
-            label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #b00020;");
+            label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
         }
     }
 
@@ -425,7 +425,7 @@ public final class MultiSlideAssignmentDialog {
         List<ProjectImageEntry<BufferedImage>> macroCandidates = collectMacroCandidates(project);
         if (macroCandidates.isEmpty()) {
             Label warn = new Label("This project has no eligible macro entries. Add macro images first, then re-run.");
-            warn.setStyle("-fx-text-fill: #b00;");
+            warn.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
             Button close = new Button("Close");
             close.setOnAction(e -> {
                 future.complete(null);
@@ -766,7 +766,7 @@ public final class MultiSlideAssignmentDialog {
         buttons.setStyle("-fx-alignment: center-right;");
 
         Label hint = new Label("");
-        hint.setStyle("-fx-text-fill: #b00;");
+        hint.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
 
         okButton.setOnAction(e -> {
             StageInsert chosen = carrierBox.getValue();

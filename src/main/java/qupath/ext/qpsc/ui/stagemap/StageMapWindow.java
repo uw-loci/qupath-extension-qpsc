@@ -28,6 +28,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -500,7 +501,13 @@ public class StageMapWindow {
         // Main layout
         VBox root = new VBox(8);
         root.setPadding(new Insets(10));
-        root.setStyle("-fx-background-color: #2b2b2b;");
+        // This window is a viewer: its canvas is deliberately dark in BOTH themes so the stage
+        // map reads like an image rather than a form. Redefining -fx-background (the looked-up
+        // colour, not the paint) for this subtree tells every ThemeColors ladder underneath it
+        // that the ground here is dark, so the labels pick their light-on-dark variants even
+        // while the rest of QuPath is in the light theme. Without it the ladders would key off
+        // the application background and render dark grey text on this dark panel.
+        root.setStyle("-fx-background-color: #2b2b2b; -fx-background: #2b2b2b;");
 
         // Top controls: Insert selector
         FlowPane topBar = buildTopBar();
@@ -572,7 +579,7 @@ public class StageMapWindow {
         topBar.setAlignment(Pos.CENTER_LEFT);
 
         Label insertLabel = new Label("Insert:");
-        insertLabel.setStyle("-fx-text-fill: #ccc;");
+        insertLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         insertLabel.setTooltip(new Tooltip("Stage insert / slide holder type.\n"
                 + "Defines the aperture dimensions and slide positions.\n"
                 + "Configured in the YAML config file."));
@@ -623,7 +630,7 @@ public class StageMapWindow {
         // alignment preset for the current target microscope. The dropdown drives macro overlay
         // orientation and the Apply-Flips toggle; the matching preset is resolved internally.
         Label presetLabel = new Label("Source:");
-        presetLabel.setStyle("-fx-text-fill: #ccc;");
+        presetLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         presetLabel.setTooltip(new Tooltip("Source scanner that produced the macro image.\n"
                 + "Used to look up the matching alignment preset for\n"
                 + "this microscope, and to stamp source_microscope\n"
@@ -653,7 +660,8 @@ public class StageMapWindow {
 
         // Movement direction warning label - shows when Live View controls move opposite to expected
         movementWarningLabel = new Label();
-        movementWarningLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 10px; -fx-font-weight: bold;");
+        movementWarningLabel.setStyle(
+                "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-size: 10px; -fx-font-weight: bold;");
         movementWarningLabel.setVisible(false);
         movementWarningLabel.setManaged(false);
 
@@ -715,7 +723,7 @@ public class StageMapWindow {
 
         // Macro overlay checkbox
         macroOverlayCheckbox = new CheckBox("Overlay Macro");
-        macroOverlayCheckbox.setStyle("-fx-text-fill: #ccc;");
+        macroOverlayCheckbox.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         macroOverlayCheckbox.setTooltip(new Tooltip("Display the cropped macro image from alignment\n"
                 + "over the stage map at its calibrated position.\n\n"
                 + "This shows the slide-only portion of the macro\n"
@@ -756,7 +764,7 @@ public class StageMapWindow {
                 .bind(javafx.beans.binding.Bindings.when(applyFlipsCheckbox.selectedProperty())
                         .then("Camera View")
                         .otherwise("Stage View"));
-        applyFlipsCheckbox.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; "
+        applyFlipsCheckbox.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold; "
                 + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-border-radius: 2; "
                 + "-fx-padding: 2 4;");
         applyFlipsCheckbox.setTooltip(new Tooltip("How the Stage Map is oriented:\n\n"
@@ -981,7 +989,7 @@ public class StageMapWindow {
             InsertCalibrationDialog.show(stage, configPath, selected.getId(), selected.getName(), insertConfig, () -> {
                 reloadConfiguration();
                 statusLabel.setText("Insert calibration saved");
-                statusLabel.setStyle("-fx-text-fill: #6b6;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
             });
         } catch (Exception e) {
             logger.error("Insert calibration failed: {}", e.getMessage(), e);
@@ -998,7 +1006,7 @@ public class StageMapWindow {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath == null || configPath.isEmpty()) {
                 statusLabel.setText("No config file set");
-                statusLabel.setStyle("-fx-text-fill: #f66;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
 
@@ -1042,17 +1050,17 @@ public class StageMapWindow {
 
             if (serverReconfigOk) {
                 statusLabel.setText("Config reloaded");
-                statusLabel.setStyle("-fx-text-fill: #6b6;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
             } else {
                 statusLabel.setText("Config reloaded (server reconfig failed)");
-                statusLabel.setStyle("-fx-text-fill: #f66;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
             }
             logger.info("Configuration reloaded from: {}", configPath);
 
         } catch (Exception e) {
             logger.error("Failed to reload configuration: {}", e.getMessage(), e);
             statusLabel.setText("Reload failed");
-            statusLabel.setStyle("-fx-text-fill: #f66;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
         }
     }
 
@@ -1063,7 +1071,7 @@ public class StageMapWindow {
     @SuppressWarnings("unchecked")
     private void loadAndPaintAcquisitions() {
         statusLabel.setText("Loading acquisitions...");
-        statusLabel.setStyle("-fx-text-fill: #aaa;");
+        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Thread loader = new Thread(
                 () -> {
@@ -1072,7 +1080,7 @@ public class StageMapWindow {
                         if (gui == null || gui.getProject() == null) {
                             Platform.runLater(() -> {
                                 statusLabel.setText("No project open");
-                                statusLabel.setStyle("-fx-text-fill: #f66;");
+                                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                                 showAcquisitionsCheckbox.setSelected(false);
                             });
                             return;
@@ -1164,14 +1172,14 @@ public class StageMapWindow {
                             canvas.setAcquisitionOverlayVisible(true);
                             populateAcquisitionVisibilityMenu(finalThumbs);
                             statusLabel.setText(finalCount + " acquisitions loaded");
-                            statusLabel.setStyle("-fx-text-fill: #6b6;");
+                            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
                         });
 
                     } catch (Exception e) {
                         logger.error("Failed to load acquisition thumbnails: {}", e.getMessage(), e);
                         Platform.runLater(() -> {
                             statusLabel.setText("Load failed");
-                            statusLabel.setStyle("-fx-text-fill: #f66;");
+                            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                             showAcquisitionsCheckbox.setSelected(false);
                         });
                     }
@@ -1228,16 +1236,16 @@ public class StageMapWindow {
         bottomBar.setPadding(new Insets(5, 0, 0, 0));
 
         positionLabel = new Label("Position: -- , --");
-        positionLabel.setStyle("-fx-text-fill: #aaa; -fx-font-family: monospace;");
+        positionLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-family: monospace;");
 
         targetLabel = new Label("");
-        targetLabel.setStyle("-fx-text-fill: #7ab; -fx-font-family: monospace;");
+        targetLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-family: monospace;");
 
         // Acquisition overlay controls. Explicit text-fill is required: without it,
         // JavaFX's default checkbox label color is near-black, which disappears
         // against the dark stage-map background in dark mode.
         showAcquisitionsCheckbox = new CheckBox("Show Acquisitions");
-        showAcquisitionsCheckbox.setStyle("-fx-text-fill: #ccc; -fx-font-size: 10;");
+        showAcquisitionsCheckbox.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 10;");
         showAcquisitionsCheckbox.setTooltip(new Tooltip("Show / hide the acquisition overlay.\n"
                 + "First check scans the project for per-slide alignments\n"
                 + "and paints a translucent thumbnail at each acquired\n"
@@ -1299,7 +1307,7 @@ public class StageMapWindow {
         HBox.setHgrow(spacer, Priority.ALWAYS);
 
         statusLabel = new Label("");
-        statusLabel.setStyle("-fx-text-fill: #888;");
+        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
 
         bottomBar
                 .getChildren()
@@ -1398,7 +1406,7 @@ public class StageMapWindow {
         } catch (Exception e) {
             logger.error("Error loading insert configurations: {}", e.getMessage(), e);
             statusLabel.setText("Config error");
-            statusLabel.setStyle("-fx-text-fill: #f66;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
         }
     }
 
@@ -1940,7 +1948,7 @@ public class StageMapWindow {
                     canvas.updatePosition(pos[0], pos[1]);
                     positionLabel.setText(String.format("Pos: %.1f, %.1f um", pos[0], pos[1]));
                     statusLabel.setText("");
-                    statusLabel.setStyle("-fx-text-fill: #888;");
+                    statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
 
                     // Update target label based on mouse position
                     double[] target = canvas.getTargetPosition();
@@ -1948,7 +1956,10 @@ public class StageMapWindow {
                         StageInsert insert = insertComboBox.getValue();
                         boolean isLegal = insert != null && insert.isPositionLegal(target[0], target[1]);
                         targetLabel.setText(String.format("Target: %.1f, %.1f", target[0], target[1]));
-                        targetLabel.setStyle(isLegal ? "-fx-text-fill: #7ab;" : "-fx-text-fill: #fa7;");
+                        targetLabel.setStyle(
+                                isLegal
+                                        ? "-fx-text-fill: " + ThemeColors.INFO + ";"
+                                        : "-fx-text-fill: " + ThemeColors.WARNING + ";");
                     } else {
                         targetLabel.setText("");
                     }
@@ -2006,7 +2017,7 @@ public class StageMapWindow {
                     // slide rect, and insert outline -- exactly what the user
                     // wants to keep seeing when live position polling breaks.
                     statusLabel.setText("Position polling paused - see log");
-                    statusLabel.setStyle("-fx-text-fill: #f66;");
+                    statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                 }
             });
         }
@@ -2064,7 +2075,7 @@ public class StageMapWindow {
         // cache and makes the server's STATUS authoritative.
         if (MicroscopeController.getInstance().isAcquisitionActive()) {
             statusLabel.setText("Verifying acquisition state...");
-            statusLabel.setStyle("-fx-text-fill: #fa7;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
             new Thread(
                             () -> {
                                 boolean stillActive;
@@ -2083,12 +2094,12 @@ public class StageMapWindow {
                                 Platform.runLater(() -> {
                                     if (blocked) {
                                         statusLabel.setText("Locked during acquisition");
-                                        statusLabel.setStyle("-fx-text-fill: #fa7;");
+                                        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
                                     } else {
                                         // Stale flag was cleared inside the controller. Re-fire
                                         // the click so the user's intended move actually happens.
                                         statusLabel.setText("");
-                                        statusLabel.setStyle("-fx-text-fill: #888;");
+                                        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
                                         handleCanvasClick(stageX, stageY);
                                     }
                                 });
@@ -2223,7 +2234,7 @@ public class StageMapWindow {
         try {
             logger.info("Moving stage to ({}, {})", targetX, targetY);
             statusLabel.setText("Moving...");
-            statusLabel.setStyle("-fx-text-fill: #fa7;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
 
             MicroscopeController controller = MicroscopeController.getInstance();
             controller.moveStageXY(targetX, targetY);
@@ -2234,7 +2245,7 @@ public class StageMapWindow {
             logger.error("Failed to move stage: {}", e.getMessage(), e);
             showError("Movement Failed", "Failed to move stage: " + e.getMessage());
             statusLabel.setText("Move failed");
-            statusLabel.setStyle("-fx-text-fill: #f66;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
         }
     }
 

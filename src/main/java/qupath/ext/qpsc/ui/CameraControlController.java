@@ -153,7 +153,7 @@ public class CameraControlController {
             logger.info("Camera name: {}", cameraName);
         } catch (IOException e) {
             cameraLabel.setText(res.getString("camera.label.camera") + " Error: " + e.getMessage());
-            cameraLabel.setStyle("-fx-text-fill: red;");
+            cameraLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
         }
         content.getChildren().add(cameraLabel);
 
@@ -275,12 +275,12 @@ public class CameraControlController {
                                             () -> controller.getSocketClient().setBinning(chosen));
                                     Platform.runLater(() -> {
                                         statusLabel.setText("Binning set to " + chosen);
-                                        statusLabel.setStyle("-fx-text-fill: green;");
+                                        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                     });
                                 } catch (Exception ex) {
                                     Platform.runLater(() -> {
                                         statusLabel.setText("Binning failed: " + ex.getMessage());
-                                        statusLabel.setStyle("-fx-text-fill: red;");
+                                        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                                     });
                                 }
                             },
@@ -377,7 +377,7 @@ public class CameraControlController {
         // Camera WB mode cannot be controlled programmatically; show static label.
         if (isJAI) {
             Label wbModeLabel = new Label("Camera WB: Set in MicroManager's Device Property Browser");
-            wbModeLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+            wbModeLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             wbModeLabel.setWrapText(true);
             wbModeLabel.setTooltip(new Tooltip("Camera AWB cannot be controlled programmatically.\n"
                     + "Open MicroManager's Device Property Browser -> JAICamera -> WhiteBalance\n"
@@ -408,18 +408,19 @@ public class CameraControlController {
         Label settingsHeader = new Label(res.getString("camera.label.perAngleSettings"));
         settingsHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
         Label settingsNote = new Label(res.getString("camera.label.settingsNote"));
-        settingsNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+        settingsNote.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         settingsNote.setWrapText(true);
 
         // Note about stage rotation
         Label rotationNote =
                 new Label("Note: Clicking 'Apply & Go' will rotate the polarization stage to the selected angle.");
-        rotationNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
+        rotationNote.setStyle(
+                "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
         rotationNote.setWrapText(true);
 
         // WB method provenance label - shows which calibration method produced current settings
         Label wbMethodLabel = new Label("WB: No calibration loaded");
-        wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+        wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         wbMethodLabel.setWrapText(true);
 
         // Wrap per-angle section so it can be hidden for non-rotation modalities.
@@ -442,9 +443,12 @@ public class CameraControlController {
         statusLabel.setStyle("-fx-font-size: 11px;");
 
         // Styles for row differentiation
-        final String EXPOSURE_ROW_STYLE = "-fx-background-color: #f0f7ff; -fx-padding: 4px;"; // Light blue
-        final String GAIN_ROW_STYLE = "-fx-background-color: #fff7f0; -fx-padding: 4px;"; // Light peach
-        final String ANGLE_HEADER_STYLE = "-fx-background-color: #e8e8e8; -fx-padding: 6px;";
+        final String EXPOSURE_ROW_STYLE = "-fx-background-color: " + "ladder(-fx-background, #1A2A3A 49%, #f0f7ff 50%)"
+                + "; -fx-padding: 4px;"; // Light blue
+        final String GAIN_ROW_STYLE = "-fx-background-color: " + "ladder(-fx-background, #3A2A20 49%, #fff7f0 50%)"
+                + "; -fx-padding: 4px;"; // Light peach
+        final String ANGLE_HEADER_STYLE =
+                "-fx-background-color: " + "ladder(-fx-background, #3A3D3F 49%, #e8e8e8 50%)" + "; -fx-padding: 6px;";
 
         // Load PPM angles from YAML config (falls back to defaults)
         Map<String, Double> ppmAngles = loadPpmAngles(mgr);
@@ -462,8 +466,8 @@ public class CameraControlController {
 
             // Create a bordered VBox for each angle "card"
             VBox angleCard = new VBox(0);
-            angleCard.setStyle(
-                    "-fx-border-color: #cccccc; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
+            angleCard.setStyle("-fx-border-color: " + "ladder(-fx-background, #4A4D4F 49%, #cccccc 50%)"
+                    + "; -fx-border-width: 1px; -fx-border-radius: 4px; -fx-background-radius: 4px;");
 
             // --- Angle Header Row with Apply Button ---
             HBox headerRow = new HBox(10);
@@ -500,13 +504,13 @@ public class CameraControlController {
             // Column header row
             int gridRow = 0;
             Label colAll = new Label(res.getString("camera.label.all"));
-            colAll.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+            colAll.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             Label colR = new Label(res.getString("camera.label.r"));
-            colR.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+            colR.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             Label colG = new Label(res.getString("camera.label.g"));
-            colG.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+            colG.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             Label colB = new Label(res.getString("camera.label.b"));
-            colB.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #666666;");
+            colB.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             valuesGrid.add(new Label(""), 0, gridRow);
             valuesGrid.add(colAll, 1, gridRow);
@@ -563,11 +567,11 @@ public class CameraControlController {
             gainBField.setMaxWidth(55);
             // Labels for gain columns
             Label gainUnifiedLabel = new Label("Unified");
-            gainUnifiedLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+            gainUnifiedLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             Label gainRedLabel = new Label("Red");
-            gainRedLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+            gainRedLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             Label gainBlueLabel = new Label("Blue");
-            gainBlueLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+            gainBlueLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             VBox gainUnifiedBox = new VBox(1, gainUnifiedLabel, gainUnifiedField);
             VBox gainRedBox = new VBox(1, gainRedLabel, gainRField);
             VBox gainBlueBox = new VBox(1, gainBlueLabel, gainBField);
@@ -741,7 +745,7 @@ public class CameraControlController {
             illumHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 13px;");
 
             Label activeNote = new Label();
-            activeNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+            activeNote.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             activeNote.setText(
                     "Active source follows the applied profile; rows below drive each source independently.");
             activeNote.setWrapText(true);
@@ -759,7 +763,7 @@ public class CameraControlController {
                                     Platform.runLater(() -> {
                                         sourcesBox.getChildren().clear();
                                         Label none = new Label("(no illumination sources reported)");
-                                        none.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+                                        none.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                                         sourcesBox.getChildren().add(none);
                                     });
                                     return;
@@ -935,7 +939,7 @@ public class CameraControlController {
                                             () -> controller.getSocketClient().applyProfile(selected));
                                     Platform.runLater(() -> {
                                         statusLabel.setText("Profile applied: " + selected);
-                                        statusLabel.setStyle("-fx-text-fill: green;");
+                                        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                         // Re-fetch illumination state from the
                                         // server -- intensity / on-off changed
                                         // when the profile applied.
@@ -945,7 +949,7 @@ public class CameraControlController {
                                 } catch (Exception ex) {
                                     Platform.runLater(() -> {
                                         statusLabel.setText("Failed: " + ex.getMessage());
-                                        statusLabel.setStyle("-fx-text-fill: red;");
+                                        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                                     });
                                 }
                             },
@@ -1118,7 +1122,7 @@ public class CameraControlController {
             field.setPrefWidth(80);
             field.setPromptText(String.format("%.2f-%.2f", minPower, maxPower));
             Label rangeLabel = new Label(String.format("(%.0f-%.0f)", minPower, maxPower));
-            rangeLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
+            rangeLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             applyBtn.setOnAction(e -> {
                 try {
                     float v = Float.parseFloat(field.getText().trim());
@@ -1270,21 +1274,21 @@ public class CameraControlController {
             if (gainWarnings.length() > 0) {
                 statusLabel.setText(String.format(
                         "Applied %s (%.0f deg) - WARNING: %s", angleName, angleDegrees, gainWarnings.toString()));
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + ";");
                 logger.warn("Applied settings for {} with clamped gains: {}", angleName, gainWarnings);
             } else {
                 statusLabel.setText(String.format(res.getString("camera.status.applied"), angleName, angleDegrees));
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                 logger.info("Applied settings for angle {} at {} degrees", angleName, angleDegrees);
             }
 
         } catch (NumberFormatException ex) {
             statusLabel.setText("Invalid number format");
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
         } catch (IOException ex) {
             String errorMsg = String.format(res.getString("camera.error.applyFailed"), ex.getMessage());
             statusLabel.setText(errorMsg);
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             logger.error("Failed to apply settings for {}: {}", angleName, ex.getMessage());
         }
     }
@@ -1339,7 +1343,7 @@ public class CameraControlController {
 
         if (anyLoaded) {
             statusLabel.setText(res.getString("camera.status.reloaded"));
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
 
             // Detect the correct exposure mode from the YAML profile structure and
             // set radio buttons + camera mode accordingly.
@@ -1361,10 +1365,10 @@ public class CameraControlController {
             }
         } else {
             statusLabel.setText(String.format(res.getString("camera.error.noCalibration"), objective, detector));
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + ";");
             if (wbMethodLabel != null) {
                 wbMethodLabel.setText("WB: No calibration loaded");
-                wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+                wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             }
         }
     }
@@ -1520,7 +1524,7 @@ public class CameraControlController {
 
             if (statusLabel != null) {
                 statusLabel.setText(res.getString("camera.status.reloaded"));
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             }
 
             return true;
@@ -1529,7 +1533,7 @@ public class CameraControlController {
             logger.warn("Failed to load calibration for {}: {}", angleName, e.getMessage());
             if (statusLabel != null) {
                 statusLabel.setText(String.format(res.getString("camera.error.loadFailed"), e.getMessage()));
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             }
             return false;
         }
@@ -1558,20 +1562,23 @@ public class CameraControlController {
 
         if (wbMethod == null || wbMethod.equals("unknown")) {
             wbMethodLabel.setText("WB: Method unknown");
-            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         } else if (wbMethod.startsWith("manual_")) {
             String displayName = wbMethod.equals("manual_simple") ? "Manual simple" : "Manual PPM";
             wbMethodLabel.setText("WB: " + displayName + " calibration (reproducible)");
-            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green; -fx-font-weight: bold;");
+            wbMethodLabel.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold;");
         } else if (wbMethod.equals("continuous")) {
             wbMethodLabel.setText("WB: Continuous auto (not reproducible)");
-            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange; -fx-font-weight: bold;");
+            wbMethodLabel.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
         } else if (wbMethod.equals("once")) {
             wbMethodLabel.setText("WB: One-shot auto (not reproducible)");
-            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange; -fx-font-weight: bold;");
+            wbMethodLabel.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
         } else {
             wbMethodLabel.setText("WB: " + wbMethod);
-            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #999999;");
+            wbMethodLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         }
     }
 

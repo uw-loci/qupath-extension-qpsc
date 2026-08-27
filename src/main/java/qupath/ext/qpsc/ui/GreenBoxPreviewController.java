@@ -141,7 +141,7 @@ public class GreenBoxPreviewController {
 
                 // Status label with confidence display
                 Label statusLabel = new Label("Auto-detecting green box...");
-                statusLabel.setStyle("-fx-text-fill: #1976D2; -fx-font-size: 12px;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-size: 12px;");
 
                 // Progress indicator for auto-detection
                 ProgressIndicator progressIndicator = new ProgressIndicator();
@@ -348,7 +348,7 @@ public class GreenBoxPreviewController {
                     logger.debug("Resetting view to original image");
                     previewView.setImage(SwingFXUtils.toFXImage(macroImage, null));
                     statusLabel.setText("Click 'Detect Again' to run detection");
-                    statusLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 12px;");
+                    statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 12px;");
                     currentResult[0] = null;
                     if (confirmButtonHolder[0] != null) {
                         confirmButtonHolder[0].setDisable(true);
@@ -399,7 +399,7 @@ public class GreenBoxPreviewController {
                     progressIndicator.setVisible(false);
                     statusRow.getChildren().remove(progressIndicator);
                     statusLabel.setText("Auto-detection skipped. Adjust parameters and click 'Detect Again'");
-                    statusLabel.setStyle("-fx-text-fill: #666; -fx-font-size: 12px;");
+                    statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 12px;");
                     skipButton.setVisible(false);
                     paramsPane.setExpanded(true);
                     logger.info("User skipped auto-detection");
@@ -435,7 +435,8 @@ public class GreenBoxPreviewController {
                                     result.getConfidence() * 100,
                                     result.getDetectedBox().getBoundsX(),
                                     result.getDetectedBox().getBoundsY()));
-                            statusLabel.setStyle("-fx-text-fill: #2E7D32; -fx-font-weight: bold; -fx-font-size: 12px;");
+                            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS
+                                    + "; -fx-font-weight: bold; -fx-font-size: 12px;");
                             paramsPane.setExpanded(false);
                             paramsPane.setText("Detection Parameters (adjust if needed)");
                             confirmButton.setDisable(false);
@@ -446,7 +447,8 @@ public class GreenBoxPreviewController {
                             statusLabel.setText(String.format(
                                     "[!] Detection uncertain (%.0f%%) - Consider adjusting parameters",
                                     result.getConfidence() * 100));
-                            statusLabel.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
+                            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING
+                                    + "; -fx-font-weight: bold; -fx-font-size: 12px;");
                             paramsPane.setExpanded(true);
                             paramsPane.setText("Detection Parameters (adjustment recommended)");
                             confirmButton.setDisable(false);
@@ -455,7 +457,8 @@ public class GreenBoxPreviewController {
                     } else {
                         // DETECTION FAILED - expand parameters
                         statusLabel.setText("[X] No green box detected - Please adjust parameters and try again");
-                        statusLabel.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; -fx-font-size: 12px;");
+                        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR
+                                + "; -fx-font-weight: bold; -fx-font-size: 12px;");
                         paramsPane.setExpanded(true);
                         advancedPane.setExpanded(true);
                         confirmButton.setDisable(true);
@@ -469,7 +472,7 @@ public class GreenBoxPreviewController {
                     statusRow.getChildren().remove(progressIndicator);
                     skipButton.setVisible(false);
                     statusLabel.setText("[X] Detection error - Please adjust parameters and try again");
-                    statusLabel.setStyle("-fx-text-fill: #C62828; -fx-font-size: 12px;");
+                    statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-size: 12px;");
                     paramsPane.setExpanded(true);
                     logger.error("Auto-detection task failed", autoDetectTask.getException());
                 });
@@ -567,7 +570,7 @@ public class GreenBoxPreviewController {
         }
         progressIndicator.setVisible(true);
         statusLabel.setText("Detecting...");
-        statusLabel.setStyle("-fx-text-fill: #1976D2; -fx-font-size: 12px;");
+        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-size: 12px;");
 
         // Run detection in background
         Task<GreenBoxDetector.DetectionResult> detectTask = new Task<>() {
@@ -596,10 +599,12 @@ public class GreenBoxPreviewController {
 
                 if (result.getConfidence() > 0.30) {
                     // Acceptable confidence (30%+)
-                    statusLabel.setStyle("-fx-text-fill: #2E7D32; -fx-font-weight: bold; -fx-font-size: 12px;");
+                    statusLabel.setStyle(
+                            "-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold; -fx-font-size: 12px;");
                 } else {
                     // Low confidence (below 30%)
-                    statusLabel.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
+                    statusLabel.setStyle(
+                            "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold; -fx-font-size: 12px;");
                 }
 
                 if (confirmButtonHolder[0] != null) {
@@ -607,7 +612,8 @@ public class GreenBoxPreviewController {
                 }
             } else {
                 statusLabel.setText("[X] No green box detected - Try adjusting parameters");
-                statusLabel.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold; -fx-font-size: 12px;");
+                statusLabel.setStyle(
+                        "-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold; -fx-font-size: 12px;");
                 previewView.setImage(SwingFXUtils.toFXImage(macroImage, null));
                 if (confirmButtonHolder[0] != null) {
                     confirmButtonHolder[0].setDisable(true);
@@ -619,7 +625,7 @@ public class GreenBoxPreviewController {
             progressIndicator.setVisible(false);
             statusRow.getChildren().remove(progressIndicator);
             statusLabel.setText("[X] Detection error");
-            statusLabel.setStyle("-fx-text-fill: #C62828; -fx-font-size: 12px;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-size: 12px;");
             logger.error("Detection task failed", detectTask.getException());
         });
 

@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AutofocusBenchmarkDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.fx.dialogs.Dialogs;
 
@@ -243,7 +244,7 @@ public class AutofocusBenchmarkWorkflow {
             statusLabel.setMaxWidth(280);
 
             Label timeLabel = new Label("Progress updates received after each trial");
-            timeLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+            timeLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             // Cancel button
             Button cancelButton = new Button("Cancel Benchmark");

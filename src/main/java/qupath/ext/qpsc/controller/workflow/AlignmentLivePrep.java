@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 
 /**
@@ -186,7 +187,7 @@ public final class AlignmentLivePrep {
                 .thenAccept(result -> javafx.application.Platform.runLater(() -> {
                     if (result.ok()) {
                         liveStateLabel.setText(result.summary());
-                        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #2E7D32;");
+                        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                         if (setReady != null) {
                             setReady.accept(true);
                         }
@@ -195,7 +196,8 @@ public final class AlignmentLivePrep {
 
                     logger.warn("Alignment prep: live state not ready -- {}", result.summary());
                     liveStateLabel.setText(result.summary());
-                    liveStateLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #C62828;");
+                    liveStateLabel.setStyle(
+                            "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
 
                     if (!automatic) {
                         if (setReady != null) {

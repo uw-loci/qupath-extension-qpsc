@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * Collapsible panel for Live Viewer showing per-channel noise statistics.
@@ -44,10 +45,14 @@ public class NoiseStatsPanel extends TitledPane {
     private final Label greenName = new Label("Green");
     private final Label blueName = new Label("Blue");
 
-    private static final String RED_STYLE = "-fx-text-fill: #cc0000; -fx-font-weight: bold; -fx-font-size: 10px;";
-    private static final String GREEN_STYLE = "-fx-text-fill: #009900; -fx-font-weight: bold; -fx-font-size: 10px;";
-    private static final String BLUE_STYLE = "-fx-text-fill: #0000cc; -fx-font-weight: bold; -fx-font-size: 10px;";
-    private static final String MONO_STYLE = "-fx-text-fill: #444444; -fx-font-weight: bold; -fx-font-size: 10px;";
+    private static final String RED_STYLE =
+            "-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold; -fx-font-size: 10px;";
+    private static final String GREEN_STYLE =
+            "-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold; -fx-font-size: 10px;";
+    private static final String BLUE_STYLE =
+            "-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold; -fx-font-size: 10px;";
+    private static final String MONO_STYLE =
+            "-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-weight: bold; -fx-font-size: 10px;";
 
     private final Button measureButton;
     private final Label measureStatus;
@@ -102,7 +107,7 @@ public class NoiseStatsPanel extends TitledPane {
         measureButton.setOnAction(e -> runMultiFrameMeasurement());
 
         measureStatus = new Label("");
-        measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         HBox buttonRow = new HBox(10, measureButton, measureStatus);
         buttonRow.setAlignment(Pos.CENTER_LEFT);
@@ -200,7 +205,7 @@ public class NoiseStatsPanel extends TitledPane {
     private void runMultiFrameMeasurement() {
         measureButton.setDisable(true);
         measureStatus.setText("Measuring...");
-        measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Thread thread = new Thread(() -> {
             try {
@@ -218,14 +223,14 @@ public class NoiseStatsPanel extends TitledPane {
                     greenSnr.setText(String.format("%.1f", result.greenSNR()));
                     blueSnr.setText(String.format("%.1f", result.blueSNR()));
                     measureStatus.setText("Temporal (10 frames)");
-                    measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                    measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                     measureButton.setDisable(false);
                 });
             } catch (Exception e) {
                 logger.error("Failed to measure noise: {}", e.getMessage());
                 Platform.runLater(() -> {
                     measureStatus.setText("Error: " + e.getMessage());
-                    measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                    measureStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                     measureButton.setDisable(false);
                 });
             }
@@ -236,7 +241,7 @@ public class NoiseStatsPanel extends TitledPane {
 
     private static Label createHeaderLabel(String text) {
         Label label = new Label(text);
-        label.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: #444444;");
+        label.setStyle("-fx-font-weight: bold; -fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         return label;
     }
 

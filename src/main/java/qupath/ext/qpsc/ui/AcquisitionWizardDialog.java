@@ -807,17 +807,17 @@ public class AcquisitionWizardDialog {
             switch (status.status()) {
                 case READY -> {
                     dotColor = Color.web("#4CAF50");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #4CAF50;";
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";";
                     row.actionButton.setDisable(false);
                 }
                 case WARNING -> {
                     dotColor = Color.web("#FF9800");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #e68a00;";
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";";
                     row.actionButton.setDisable(false);
                 }
                 case NOT_READY -> {
                     dotColor = Color.web("#f44336");
-                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: #d32f2f;";
+                    labelStyle = "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";";
                     row.actionButton.setDisable(false);
                 }
                 case NOT_APPLICABLE -> {
@@ -884,7 +884,8 @@ public class AcquisitionWizardDialog {
                 + "  Extensions > QP Scope > Autofocus Configuration Editor\n"
                 + "  Adjust search range, step count, or score metric there."));
         Label afWarningLabel = new Label();
-        afWarningLabel.setStyle("-fx-text-fill: #D32F2F; -fx-font-weight: bold; -fx-font-size: 11px;");
+        afWarningLabel.setStyle(
+                "-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold; -fx-font-size: 11px;");
         afWarningLabel.setVisible(false);
         afWarningLabel.setManaged(false);
 
@@ -995,7 +996,8 @@ public class AcquisitionWizardDialog {
         }
         if (QPPreferenceDialog.getDisableAllAutofocus()) {
             autofocusStatusLabel.setText("Autofocus: DISABLED (set in Preferences > QuPath SCope)");
-            autofocusStatusLabel.setStyle("-fx-text-fill: #E65100; -fx-font-weight: bold; -fx-font-size: 12px;");
+            autofocusStatusLabel.setStyle(
+                    "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold; -fx-font-size: 12px;");
         } else {
             autofocusStatusLabel.setText("Autofocus: enabled (set in Preferences > QuPath SCope)");
             autofocusStatusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + textPrimary() + ";");

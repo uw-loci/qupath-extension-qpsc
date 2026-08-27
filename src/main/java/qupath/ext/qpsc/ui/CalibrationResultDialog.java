@@ -189,7 +189,7 @@ public class CalibrationResultDialog {
             Runnable onTuneThresholds) {
         // Header
         Label headerLabel = new Label("Calibration Completed Successfully");
-        headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: green;");
+        headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
         root.getChildren().add(headerLabel);
 
         // Results section
@@ -203,8 +203,9 @@ public class CalibrationResultDialog {
         Label rSquaredLabel = new Label("R-squared:");
         rSquaredLabel.setStyle("-fx-font-weight: bold;");
         String rSquaredStatus = result.rSquared() >= 0.95 ? " [GOOD]" : " [LOW - check results]";
-        String rSquaredStyle =
-                result.rSquared() >= 0.95 ? "-fx-text-fill: green;" : "-fx-text-fill: orange; -fx-font-weight: bold;";
+        String rSquaredStyle = result.rSquared() >= 0.95
+                ? "-fx-text-fill: " + ThemeColors.SUCCESS + ";"
+                : "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;";
         Label rSquaredValue = new Label(String.format("%.6f%s", result.rSquared(), rSquaredStatus));
         rSquaredValue.setStyle(rSquaredStyle);
         resultsGrid.add(rSquaredLabel, 0, row);
@@ -236,12 +237,12 @@ public class CalibrationResultDialog {
             root.getChildren().add(new Separator());
 
             Label warningsHeader = new Label("Warnings:");
-            warningsHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: orange;");
+            warningsHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.WARNING + ";");
             root.getChildren().add(warningsHeader);
 
             for (String warning : result.warnings()) {
                 Label warningLabel = new Label("  - " + warning);
-                warningLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 11px;");
+                warningLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-size: 11px;");
                 warningLabel.setWrapText(true);
                 root.getChildren().add(warningLabel);
             }
@@ -277,13 +278,13 @@ public class CalibrationResultDialog {
                     root.getChildren().add(imageBox);
                 } else {
                     Label noPlotLabel = new Label("(Plot image not found: " + result.plotPath() + ")");
-                    noPlotLabel.setStyle("-fx-text-fill: gray;");
+                    noPlotLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
                     root.getChildren().add(noPlotLabel);
                 }
             } catch (Exception e) {
                 logger.error("Failed to load plot image", e);
                 Label errorLabel = new Label("(Failed to load plot image: " + e.getMessage() + ")");
-                errorLabel.setStyle("-fx-text-fill: red;");
+                errorLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                 root.getChildren().add(errorLabel);
             }
         }
@@ -309,7 +310,7 @@ public class CalibrationResultDialog {
             Runnable onTuneThresholds) {
         // Header
         Label headerLabel = new Label("Calibration Failed");
-        headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: red;");
+        headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
         root.getChildren().add(headerLabel);
 
         // Error details
@@ -343,7 +344,7 @@ public class CalibrationResultDialog {
                         debugFolderPath = maskFile.getParent();
 
                         Label maskLabel = new Label("Segmentation Mask:");
-                        maskLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+                        maskLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                         root.getChildren().add(maskLabel);
 
                         Image maskImage = new Image(new FileInputStream(maskFile));
@@ -368,18 +369,18 @@ public class CalibrationResultDialog {
                                         + "Black pixels = background (below threshold).\n"
                                         + "All black: thresholds too high - lower saturation/value thresholds.\n"
                                         + "All white: thresholds too low - raise saturation/value thresholds.");
-                        maskHint.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
+                        maskHint.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                         maskHint.setWrapText(true);
                         root.getChildren().add(maskHint);
                     } else {
                         Label noMaskLabel = new Label("(Mask file not found: " + result.maskPath() + ")");
-                        noMaskLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
+                        noMaskLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 10px;");
                         root.getChildren().add(noMaskLabel);
                     }
                 } catch (Exception e) {
                     logger.error("Failed to load mask image", e);
                     Label errorMaskLabel = new Label("(Failed to load mask: " + e.getMessage() + ")");
-                    errorMaskLabel.setStyle("-fx-text-fill: gray; -fx-font-size: 10px;");
+                    errorMaskLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 10px;");
                     root.getChildren().add(errorMaskLabel);
                 }
             }
@@ -391,13 +392,13 @@ public class CalibrationResultDialog {
                     debugFolderPath = imgFile.getParent();
                 }
                 Label imgPathLabel = new Label("Captured image: " + result.imagePath());
-                imgPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #888888;");
+                imgPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                 imgPathLabel.setWrapText(true);
                 root.getChildren().add(imgPathLabel);
             }
             if (result.maskPath() != null) {
                 Label maskPathLabel = new Label("Segmentation mask: " + result.maskPath());
-                maskPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: #888888;");
+                maskPathLabel.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                 maskPathLabel.setWrapText(true);
                 root.getChildren().add(maskPathLabel);
             }
@@ -596,7 +597,7 @@ public class CalibrationResultDialog {
         Label instructionLabel =
                 new Label("Click on the center of the sunburst pattern to manually select the center point, "
                         + "then press \"Retry with Selected Center\" to re-run calibration.");
-        instructionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+        instructionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         instructionLabel.setWrapText(true);
         contentBox.getChildren().add(instructionLabel);
 

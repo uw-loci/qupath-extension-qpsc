@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -178,12 +179,12 @@ public class PolarizerCalibrationWorkflow {
             Label descriptionLabel =
                     new Label("Two-stage calibration:\n" + "1. Coarse sweep: 0-360 deg to locate minima\n"
                             + "2. Fine sweep: 0.1 deg steps for exact positions");
-            descriptionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+            descriptionLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             descriptionLabel.setWrapText(true);
 
             // Info label for duration estimate
             Label durationLabel = new Label();
-            durationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+            durationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             // Update duration estimate when parameters change
             Runnable updateDuration = () -> {

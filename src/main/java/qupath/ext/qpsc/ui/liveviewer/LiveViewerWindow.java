@@ -54,6 +54,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.state.ModalityState;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -2351,7 +2352,7 @@ public class LiveViewerWindow {
             if (mgr == null) {
                 fovLabel.setText("FoV: no config");
                 fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
-                        + "-fx-font-weight: bold; -fx-text-fill: red;");
+                        + "-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             String objId = stageControlPanel != null ? stageControlPanel.getCurrentObjectiveId() : null;
@@ -2359,7 +2360,7 @@ public class LiveViewerWindow {
             if (objId == null || "Unknown".equals(objId) || detId == null || "Unknown".equals(detId)) {
                 fovLabel.setText("FoV: unknown obj");
                 fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
-                        + "-fx-font-weight: bold; -fx-text-fill: red;");
+                        + "-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             Double pixelSize = mgr.getHardwarePixelSize(objId, detId);
@@ -2367,7 +2368,7 @@ public class LiveViewerWindow {
             if (pixelSize == null || pixelSize <= 0 || dims == null) {
                 fovLabel.setText("FoV: no pixel size");
                 fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
-                        + "-fx-font-weight: bold; -fx-text-fill: red;");
+                        + "-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             double fovW = dims[0] * pixelSize;
@@ -2376,8 +2377,8 @@ public class LiveViewerWindow {
             fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; -fx-font-weight: bold;");
         } catch (Exception e) {
             fovLabel.setText("FoV: error");
-            fovLabel.setStyle(
-                    "-fx-font-family: monospace; -fx-font-size: 11; " + "-fx-font-weight: bold; -fx-text-fill: red;");
+            fovLabel.setStyle("-fx-font-family: monospace; -fx-font-size: 11; "
+                    + "-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
         }
     }
 

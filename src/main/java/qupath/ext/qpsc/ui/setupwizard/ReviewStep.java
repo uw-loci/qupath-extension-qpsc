@@ -11,6 +11,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * Step 7: Review and Summary.
@@ -232,7 +233,7 @@ public class ReviewStep implements WizardStep {
             addSectionHeader("Warnings");
             for (String w : warnings) {
                 Label warnLabel = new Label("  - " + w);
-                warnLabel.setStyle("-fx-text-fill: orange;");
+                warnLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
                 warnLabel.setWrapText(true);
                 summaryBox.getChildren().add(warnLabel);
             }

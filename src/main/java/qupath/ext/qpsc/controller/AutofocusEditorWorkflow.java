@@ -26,6 +26,7 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -321,7 +322,7 @@ public class AutofocusEditorWorkflow {
                 if (item.startsWith("---")) {
                     setText(item);
                     setDisable(true);
-                    setStyle("-fx-font-weight: bold; -fx-text-fill: gray;");
+                    setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.MUTED + ";");
                     return;
                 }
                 setDisable(false);
@@ -434,7 +435,8 @@ public class AutofocusEditorWorkflow {
                     }
                     Label cl = new Label(cs.toString());
                     cl.setWrapText(true);
-                    cl.setStyle("-fx-text-fill: #6A6A6A; -fx-font-size: 11px; " + "-fx-font-style: italic;");
+                    cl.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 11px; "
+                            + "-fx-font-style: italic;");
                     card.getChildren().add(cl);
                 }
                 if (!m.bestFor.isEmpty()) {
@@ -445,7 +447,7 @@ public class AutofocusEditorWorkflow {
                 if (!m.avoidWhen.isEmpty()) {
                     Label aw = new Label("Avoid: " + m.avoidWhen.replace("\n", " "));
                     aw.setWrapText(true);
-                    aw.setStyle("-fx-text-fill: #B0463F;");
+                    aw.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                     card.getChildren().add(aw);
                 }
                 content.getChildren().add(card);
@@ -508,7 +510,7 @@ public class AutofocusEditorWorkflow {
                 + "settings above. Streaming AF is not invoked during\n"
                 + "acquisition; switch the Live Viewer button to 'Sweep'\n"
                 + "if you want acquisition-style behaviour interactively.");
-        intro.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+        intro.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label sourcesHeader = new Label("Effective settings (where each comes from):");
         sourcesHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px; " + "-fx-padding: 6 0 0 0;");
@@ -573,7 +575,7 @@ public class AutofocusEditorWorkflow {
                 + "or higher experimentally; sweep always works regardless.\n"
                 + "Saves on every change -- no need to press Save and Close."));
         Label expDesc = new Label("(streaming refuses above this; auto-falls back to Sweep)");
-        expDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        expDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         editGrid.add(expLabel, 0, 0);
         editGrid.add(expSpinner, 1, 0);
         editGrid.add(expDesc, 2, 0);
@@ -590,7 +592,7 @@ public class AutofocusEditorWorkflow {
         if (stageBlock.isEmpty()) {
             Label missing = new Label(
                     "(no stage.streaming_af block found -- " + "streaming AF will use legacy hardcoded defaults)");
-            missing.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+            missing.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
             rigGrid.add(missing, 0, 0, 2, 1);
         } else {
             int r = 0;
@@ -602,14 +604,16 @@ public class AutofocusEditorWorkflow {
                 Object v = stageBlock.get(key);
                 Label val = new Label(v == null ? "(unset)" : String.valueOf(v));
                 val.setStyle(
-                        v == null ? "-fx-text-fill: gray; -fx-font-style: italic;" : "-fx-font-family: monospace;");
+                        v == null
+                                ? "-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;"
+                                : "-fx-font-family: monospace;");
                 rigGrid.add(k, 0, r);
                 rigGrid.add(val, 1, r);
                 r++;
             }
             Label hint = new Label("Edit these in " + configFile.getName() + " under stage.streaming_af.\n"
                     + "Re-open this dialog after saving to see the new values.");
-            hint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray; -fx-padding: 4 0 0 0;");
+            hint.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-padding: 4 0 0 0;");
             rigGrid.add(hint, 0, r, 2, 1);
         }
 
@@ -622,7 +626,7 @@ public class AutofocusEditorWorkflow {
         Label testHint = new Label("Runs one streaming AF scan at the current XY/Z and dumps every captured\n"
                 + "frame plus a CSV of (time, assumed Z, actual Z, metric) under\n"
                 + "config/logs/streaming_af_dumps/. Plots are shown in a popup.");
-        testHint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        testHint.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         VBox testBox = new VBox(4, testStreamingButton, testHint);
         testBox.setPadding(new Insets(6, 0, 0, 0));
 
@@ -740,7 +744,7 @@ public class AutofocusEditorWorkflow {
                         != qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS
                 && result.reason != null) {
             Label hintLabel = new Label(qupath.ext.qpsc.utilities.AfFailureHint.format(null, result.reason));
-            hintLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #444;");
+            hintLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             hintLabel.setWrapText(true);
             root.getChildren().add(hintLabel);
         }
@@ -1180,7 +1184,7 @@ public class AutofocusEditorWorkflow {
                         + "Typical: 5 tiles (good balance)\n"
                         + "Use 1-3 for tilted or curved samples"));
         Label nTilesDesc = new Label("(Autofocus every N tiles; also sets af_min_distance)  (YAML: n_tiles)");
-        nTilesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        nTilesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Gap index multiplier: safety-net force-AF threshold in scan-order space
         Label gapIndexLabel = new Label("Index gap multiplier:");
@@ -1210,7 +1214,7 @@ public class AutofocusEditorWorkflow {
                 + "Reduce if long gaps between tissue cause defocus; increase\n"
                 + "if you see regular vertical focus bands in serpentine scans."));
         Label gapIndexDesc = new Label();
-        gapIndexDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        gapIndexDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Gap spatial multiplier: safety-net force-AF threshold in physical distance
         Label gapSpatialLabel = new Label("Spatial gap multiplier:");
@@ -1231,13 +1235,13 @@ public class AutofocusEditorWorkflow {
                 + "Decrease if scattered tissue fragments go out of focus;\n"
                 + "increase if the safety net fires on every serpentine turn."));
         Label gapSpatialDesc = new Label();
-        gapSpatialDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        gapSpatialDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Read-only derived display: af_min_distance and effective gap thresholds
         // Values update live as n_tiles / multipliers change.
         Label derivedLabel = new Label("Min AF distance (derived):");
         Label derivedValue = new Label();
-        derivedValue.setStyle("-fx-font-size: 11px; -fx-text-fill: #444; -fx-font-style: italic;");
+        derivedValue.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
         derivedValue.setTooltip(
                 new Tooltip("af_min_distance is not a user setting; it is computed at runtime by Python:\n"
                         + "  af_min_distance = ((fov_x + fov_y) / 2) x n_tiles\n\n"
@@ -1287,7 +1291,7 @@ public class AutofocusEditorWorkflow {
                 + "Typical: 0.005 for smooth tissue, 0.010-0.015 for textured"));
         Label textureThresholdDesc =
                 new Label("(Min texture variance, typical: 0.005-0.030)  (YAML: texture_threshold)");
-        textureThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        textureThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label tissueAreaThresholdLabel = new Label("Tissue area threshold:");
         TextField tissueAreaThresholdField = new TextField("0.2");
@@ -1305,7 +1309,7 @@ public class AutofocusEditorWorkflow {
                 + "Typical: 0.2 (20% coverage)"));
         Label tissueAreaThresholdDesc =
                 new Label("(Min tissue coverage fraction, typical: 0.05-0.30)  (YAML: tissue_area_threshold)");
-        tissueAreaThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        tissueAreaThresholdDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         tissueGrid.add(textureThresholdLabel, 0, 0);
         tissueGrid.add(textureThresholdField, 1, 0);
@@ -1328,7 +1332,8 @@ public class AutofocusEditorWorkflow {
         Button scoreMetricHelp = new Button("Help me pick");
         scoreMetricHelp.setOnAction(e -> showMetricHelpDialog(manifest));
         Label scoreMetricResolution = new Label(resolutionPreviewText(manifest, null, scoreMetricCombo.getValue()));
-        scoreMetricResolution.setStyle("-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: gray;");
+        scoreMetricResolution.setStyle(
+                "-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
         scoreMetricCombo.valueProperty().addListener((obs, o, n) -> {
             if (n != null && !n.startsWith("---")) {
                 scoreMetricResolution.setText(resolutionPreviewText(manifest, null, n));
@@ -1358,7 +1363,7 @@ public class AutofocusEditorWorkflow {
                 + "accept a histogram-spread fallback."));
         Label p98FallbackDesc =
                 new Label("(falls back to p98_p2 when primary peak validation fails)  (YAML: p98_p2_fallback_enabled)");
-        p98FallbackDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        p98FallbackDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         tissueGrid.add(p98FallbackLabel, 0, 3);
         tissueGrid.add(p98FallbackCheck, 1, 3);
         tissueGrid.add(p98FallbackDesc, 2, 3);
@@ -1387,7 +1392,7 @@ public class AutofocusEditorWorkflow {
                         + "  - May miss optimal focus on thick samples\n\n"
                         + "Typical: 9-15 steps"));
         Label nStepsDesc = new Label("(Number of Z positions to sample)  (YAML: n_steps)");
-        nStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        nStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label searchRangeLabel = new Label("Search range (um):");
         TextField searchRangeField = new TextField("15.0");
@@ -1403,7 +1408,7 @@ public class AutofocusEditorWorkflow {
                         + "  - May fail if sample is very tilted\n\n"
                         + "Typical: 15-25um for most samples"));
         Label searchRangeDesc = new Label("(Total Z range in micrometers)  (YAML: search_range_um)");
-        searchRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        searchRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label interpStrengthLabel = new Label("Interpolation density:");
         Spinner<Integer> interpStrengthSpinner = new Spinner<>(10, 1000, 100, 10);
@@ -1420,7 +1425,7 @@ public class AutofocusEditorWorkflow {
                         + "Typical: 100 (good default)\n"
                         + "Increase to 150-200 if autofocus is inconsistent"));
         Label interpStrengthDesc = new Label("(Interpolation density factor)  (YAML: interp_strength)");
-        interpStrengthDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        interpStrengthDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label interpKindLabel = new Label("Interpolation method:");
         ComboBox<String> interpKindCombo = new ComboBox<>();
@@ -1440,7 +1445,7 @@ public class AutofocusEditorWorkflow {
                 + "  - May overfit sparse data\n\n"
                 + "Typical: quadratic for most applications"));
         Label interpKindDesc = new Label("(Interpolation method)  (YAML: interp_kind)");
-        interpKindDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        interpKindDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Add standard autofocus fields to grid. Range first, then sample
         // count -- matches the Sweep Autofocus section below so the two
@@ -1484,7 +1489,7 @@ public class AutofocusEditorWorkflow {
                 + "  - May miss large drift events\n\n"
                 + "Typical: 10um (+/-5um) for most samples"));
         Label sweepRangeDesc = new Label("(Total Z range in um, centered on current position)  (YAML: sweep_range_um)");
-        sweepRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        sweepRangeDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label sweepNStepsLabel = new Label("Z samples:");
         Spinner<Integer> sweepNStepsSpinner = new Spinner<>(3, 100, 6, 1);
@@ -1501,7 +1506,7 @@ public class AutofocusEditorWorkflow {
                 + "  - Coarser peak detection\n\n"
                 + "Typical: 6 steps (~3s total)"));
         Label sweepNStepsDesc = new Label("(Number of Z positions to sample)  (YAML: sweep_n_steps)");
-        sweepNStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        sweepNStepsDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         sweepGrid.add(sweepRangeLabel, 0, 0);
         sweepGrid.add(sweepRangeField, 1, 0);
@@ -1524,7 +1529,7 @@ public class AutofocusEditorWorkflow {
                         + "Values above 3 rarely help -- if focus is that\n"
                         + "far away, the starting Z estimate is wrong."));
         Label edgeRetriesDesc = new Label("(Extra attempts on boundary peaks, 0-5)  (YAML: edge_retries)");
-        edgeRetriesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        edgeRetriesDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         sweepGrid.add(sweepNStepsLabel, 0, 1);
         sweepGrid.add(sweepNStepsSpinner, 1, 1);
@@ -1536,7 +1541,7 @@ public class AutofocusEditorWorkflow {
 
         // Status label for validation feedback
         Label statusLabel = new Label();
-        statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
+        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
         statusLabel.setWrapText(true);
         statusLabel.setMaxWidth(500);
 
@@ -1724,7 +1729,7 @@ public class AutofocusEditorWorkflow {
                 // Save to file
                 saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved successfully to " + autofocusFile.getName());
-                statusLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold;");
                 logger.info("Autofocus settings saved to: {}", autofocusFile.getAbsolutePath());
 
             } catch (NumberFormatException ex) {
@@ -1758,7 +1763,7 @@ public class AutofocusEditorWorkflow {
                 // Save to file first so test uses current settings
                 saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved - running standard autofocus test...");
-                statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
                 logger.info("Autofocus settings saved before standard test");
 
                 // Determine output path for test results (same directory as config file)
@@ -1771,7 +1776,7 @@ public class AutofocusEditorWorkflow {
                 // Update status after launching test
                 Platform.runLater(() -> {
                     statusLabel.setText("Standard autofocus test launched - check for results dialog");
-                    statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
+                    statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
                 });
 
             } catch (NumberFormatException ex) {
@@ -1808,7 +1813,7 @@ public class AutofocusEditorWorkflow {
                 // Save to file first so test uses current settings
                 saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved - running sweep autofocus test...");
-                statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
                 logger.info("Autofocus settings saved before sweep test");
 
                 // Determine output path for test results (same directory as config file)
@@ -1821,7 +1826,7 @@ public class AutofocusEditorWorkflow {
                 // Update status after launching test
                 Platform.runLater(() -> {
                     statusLabel.setText("Sweep autofocus test launched - check for results dialog");
-                    statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
+                    statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
                 });
 
             } catch (NumberFormatException ex) {
@@ -1872,7 +1877,7 @@ public class AutofocusEditorWorkflow {
                 saveCurrentSettings.run();
                 saveAutofocusSettings(autofocusFile, workingSettings, strategiesRef, bindingsRef);
                 statusLabel.setText("Settings saved - running autofocus validation...");
-                statusLabel.setStyle("-fx-text-fill: blue; -fx-font-weight: bold;");
+                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
 
                 String currentObj = objectiveCombo.getValue();
                 String testOutputPath = new File(configDir, "autofocus_tests").getAbsolutePath();
@@ -1901,7 +1906,7 @@ public class AutofocusEditorWorkflow {
                         logger.error("Autofocus validation failed", ex);
                         Platform.runLater(() -> {
                             statusLabel.setText("Validation failed: " + ex.getMessage());
-                            statusLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
                             Dialogs.showErrorMessage(
                                     "Autofocus Validation Failed",
                                     "Error: " + ex.getMessage()
@@ -2209,7 +2214,7 @@ public class AutofocusEditorWorkflow {
             cardsBox.getChildren().clear();
             if (strategies.isEmpty()) {
                 Label empty = new Label("No strategies defined. Click '+' to add one.");
-                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
                 cardsBox.getChildren().add(empty);
                 return;
             }
@@ -2276,7 +2281,8 @@ public class AutofocusEditorWorkflow {
         Button scoreHelp = new Button("Help me pick");
         scoreHelp.setOnAction(e -> showMetricHelpDialog(strategyManifest));
         Label scoreResolution = new Label(resolutionPreviewText(strategyManifest, null, sd.scoreMetric));
-        scoreResolution.setStyle("-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: gray;");
+        scoreResolution.setStyle(
+                "-fx-font-size: 10px; -fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
         scoreCombo.valueProperty().addListener((obs, o, n) -> {
             if (n != null && !n.startsWith("---")) {
                 scoreResolution.setText(resolutionPreviewText(strategyManifest, null, n));
@@ -2391,7 +2397,7 @@ public class AutofocusEditorWorkflow {
         });
 
         Button deleteBtn = new Button("Delete Strategy");
-        deleteBtn.setStyle("-fx-text-fill: red;");
+        deleteBtn.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
         deleteBtn.setOnAction(e -> {
             allStrategies.remove(sd.name);
             cardsBox.getChildren().clear();
@@ -2400,7 +2406,7 @@ public class AutofocusEditorWorkflow {
             }
             if (allStrategies.isEmpty()) {
                 Label empty = new Label("No strategies defined. Click '+' to add one.");
-                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
                 cardsBox.getChildren().add(empty);
             }
         });
@@ -2619,7 +2625,7 @@ public class AutofocusEditorWorkflow {
             rowsBox.getChildren().clear();
             if (bindings.isEmpty()) {
                 Label empty = new Label("No modality bindings defined. Click '+' to add one.");
-                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
                 rowsBox.getChildren().add(empty);
                 return;
             }
@@ -2691,13 +2697,13 @@ public class AutofocusEditorWorkflow {
                 + "looser tissue_mask_range for PPM polarized images)."));
 
         Button deleteBtn = new Button("X");
-        deleteBtn.setStyle("-fx-text-fill: red; -fx-font-size: 10px;");
+        deleteBtn.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-size: 10px;");
         deleteBtn.setOnAction(e -> {
             allBindings.remove(mb.modalityKey);
             rowsBox.getChildren().clear();
             if (allBindings.isEmpty()) {
                 Label empty = new Label("No modality bindings defined. Click '+' to add one.");
-                empty.setStyle("-fx-font-style: italic; -fx-text-fill: gray;");
+                empty.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
                 rowsBox.getChildren().add(empty);
             } else {
                 for (ModalityBinding m : allBindings.values()) {
@@ -2763,7 +2769,7 @@ public class AutofocusEditorWorkflow {
                 String label = badges.isEmpty() ? item : item + "  " + badges;
                 if (!modalityOk) {
                     label = label + "  -- not for " + FocusMetricsManifest.canonicalModality(mb.modalityKey);
-                    setStyle("-fx-text-fill: #B0463F;");
+                    setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                 } else {
                     setStyle("");
                 }
@@ -2773,7 +2779,7 @@ public class AutofocusEditorWorkflow {
         // Warning label that surfaces alongside the combo when the
         // current pick would be physically wrong for this modality.
         Label scoreOvWarn = new Label();
-        scoreOvWarn.setStyle("-fx-text-fill: #B0463F; -fx-font-size: 10px;");
+        scoreOvWarn.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-size: 10px;");
         scoreOvWarn.setWrapText(true);
         Runnable refreshOvWarn = () -> {
             String picked = mb.scoreMetricOverride;
@@ -3311,8 +3317,8 @@ public class AutofocusEditorWorkflow {
             statusLabel.setText(allPass ? "Validation PASSED" : "Validation: check results");
             statusLabel.setStyle(
                     allPass
-                            ? "-fx-text-fill: green; -fx-font-weight: bold;"
-                            : "-fx-text-fill: orange; -fx-font-weight: bold;");
+                            ? "-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold;"
+                            : "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
         }
     }
 }

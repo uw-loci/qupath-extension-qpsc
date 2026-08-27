@@ -148,7 +148,7 @@ public class MicroscopeSelectionDialog {
 
                 // Warning label
                 Label warningLabel = new Label();
-                warningLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                warningLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
                 warningLabel.setWrapText(true);
                 warningLabel.setVisible(false);
 
@@ -217,7 +217,7 @@ public class MicroscopeSelectionDialog {
                 // Info about current microscope
                 Label currentInfo = new Label("Current microscope: " + currentMicroscope
                         + " (alignments cannot be created to the same microscope)");
-                currentInfo.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+                currentInfo.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
                 // Assemble content
                 content.getChildren()

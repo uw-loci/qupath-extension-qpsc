@@ -20,6 +20,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BirefringenceOptimizationDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -120,11 +121,11 @@ public class BirefringenceOptimizationWorkflow {
         progressLabel.setStyle("-fx-font-size: 14px;");
 
         Label statusLabel = new Label("");
-        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
+        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label infoLabel = new Label("This window will update as the test progresses.\n"
                 + "You can use Stage Control and other windows while waiting.");
-        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Button cancelButton = new Button("Cancel");
         AtomicBoolean cancelled = new AtomicBoolean(false);

@@ -16,6 +16,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * Step 6: Server Connection.
@@ -121,7 +122,7 @@ public class ServerStep implements WizardStep {
 
         if (host.isEmpty()) {
             statusLabel.setText("Error: host is empty");
-            statusLabel.setStyle("-fx-font-style: italic; -fx-text-fill: red;");
+            statusLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
 
@@ -146,11 +147,11 @@ public class ServerStep implements WizardStep {
                         testButton.setDisable(false);
                         if (connected) {
                             statusLabel.setText("Connected successfully to " + host + ":" + port);
-                            statusLabel.setStyle("-fx-font-style: normal; -fx-text-fill: limegreen;");
+                            statusLabel.setStyle("-fx-font-style: normal; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                             logger.info("Server connection test succeeded: {}:{}", host, port);
                         } else {
                             statusLabel.setText("Connection failed: " + msg);
-                            statusLabel.setStyle("-fx-font-style: normal; -fx-text-fill: red;");
+                            statusLabel.setStyle("-fx-font-style: normal; -fx-text-fill: " + ThemeColors.ERROR + ";");
                             logger.debug("Server connection test failed: {}:{} - {}", host, port, msg);
                         }
                     });

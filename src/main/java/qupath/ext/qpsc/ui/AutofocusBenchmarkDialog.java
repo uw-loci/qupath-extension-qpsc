@@ -128,7 +128,7 @@ public class AutofocusBenchmarkDialog {
                 });
 
                 Label referenceZHelp = new Label("(Must be manually verified in focus before starting)");
-                referenceZHelp.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+                referenceZHelp.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
                 referenceZBox.getChildren().addAll(referenceZLabel, referenceZField, useCurrentZButton);
 
@@ -187,13 +187,14 @@ public class AutofocusBenchmarkDialog {
                                 + "Recommended range: 1-200 um."));
 
                 Label distancesHelp = new Label("Distances from focus to test (above and below)");
-                distancesHelp.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+                distancesHelp.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
                 distancesBox.getChildren().addAll(distancesLabel, distancesField);
 
                 // Distance bounds validation label (declare before using in container)
                 Label distanceWarningLabel = new Label();
-                distanceWarningLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #cc6600; -fx-padding: 2 0 0 0;");
+                distanceWarningLabel.setStyle(
+                        "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + "; -fx-padding: 2 0 0 0;");
                 distanceWarningLabel.setManaged(false); // Hide by default
                 distanceWarningLabel.setVisible(false);
 
@@ -210,7 +211,8 @@ public class AutofocusBenchmarkDialog {
 
                 // Estimated test count and duration label
                 Label estimateLabel = new Label();
-                estimateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #0066cc; -fx-padding: 5 0 0 25;");
+                estimateLabel.setStyle(
+                        "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.INFO + "; -fx-padding: 5 0 0 25;");
 
                 // Objective identifier
                 HBox objectiveBox = new HBox(10);
@@ -263,7 +265,7 @@ public class AutofocusBenchmarkDialog {
                 }
 
                 Label objectiveHelp = new Label("Used for Z safety limits during benchmark testing");
-                objectiveHelp.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+                objectiveHelp.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
                 objectiveBox.getChildren().addAll(objectiveLabel, objectiveComboBox);
 
@@ -291,7 +293,8 @@ public class AutofocusBenchmarkDialog {
 
                 // Validation feedback label (shown at bottom when Run button is disabled)
                 Label validationLabel = new Label();
-                validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc0000; -fx-padding: 10 0 0 0;");
+                validationLabel.setStyle(
+                        "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + "; -fx-padding: 10 0 0 0;");
                 validationLabel.setWrapText(true);
 
                 // ========== ASSEMBLE CONTENT ==========
@@ -456,20 +459,20 @@ public class AutofocusBenchmarkDialog {
                         if (totalHours >= 1.0) {
                             durationStr = String.format("%.1f hours", totalHours);
                             // Red warning for very long benchmarks
-                            warningStyle += "-fx-text-fill: #cc0000; -fx-font-weight: bold;";
+                            warningStyle += "-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;";
                             estimateLabel.setText(String.format(
                                     "WARNING: %,d trials estimated, ~%s! Consider using Quick Mode.",
                                     totalTrials, durationStr));
                         } else if (totalMinutes >= 30) {
                             durationStr = String.format("%.0f minutes", totalMinutes);
                             // Orange warning for long benchmarks
-                            warningStyle += "-fx-text-fill: #cc6600;";
+                            warningStyle += "-fx-text-fill: " + ThemeColors.WARNING + ";";
                             estimateLabel.setText(
                                     String.format("Estimated: %,d trials, ~%s", totalTrials, durationStr));
                         } else {
                             durationStr = String.format("%.0f minutes", Math.max(5, totalMinutes));
                             // Blue info for reasonable benchmarks
-                            warningStyle += "-fx-text-fill: #0066cc;";
+                            warningStyle += "-fx-text-fill: " + ThemeColors.INFO + ";";
                             estimateLabel.setText(
                                     String.format("Estimated: %,d trials, ~%s", totalTrials, durationStr));
                         }

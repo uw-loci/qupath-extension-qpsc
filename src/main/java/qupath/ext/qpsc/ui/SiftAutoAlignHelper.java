@@ -518,7 +518,8 @@ public final class SiftAutoAlignHelper {
                 + "misalign or fail. This is NOT checked automatically.");
         warn.setWrapText(true);
         warn.setMaxWidth(Double.MAX_VALUE);
-        warn.setStyle("-fx-font-weight: bold; -fx-text-fill: #C62828; -fx-background-color: #fff3e0; "
+        warn.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + "; -fx-background-color: "
+                + "ladder(-fx-background, #3A2A15 49%, #fff3e0 50%)" + "; "
                 + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-padding: 6;");
         return warn;
     }
@@ -576,7 +577,7 @@ public final class SiftAutoAlignHelper {
         autoAlignButton.setOnAction(e -> {
             autoAlignButton.setDisable(true);
             statusLabel.setText("Running SIFT matching...");
-            statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             new Thread(
                             () -> {
@@ -591,7 +592,8 @@ public final class SiftAutoAlignHelper {
                                             statusLabel.setText(String.format(
                                                     "Aligned! Offset: (%.1f, %.1f) um%s. Verify and Confirm.",
                                                     result[0], result[1], confStr));
-                                            statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                            statusLabel.setStyle(
+                                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                             if (onSiftSuccess != null) {
                                                 try {
                                                     onSiftSuccess.run();
@@ -601,7 +603,8 @@ public final class SiftAutoAlignHelper {
                                             }
                                         } else {
                                             statusLabel.setText("SIFT matching failed. Align manually.");
-                                            statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: orange;");
+                                            statusLabel.setStyle(
+                                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";");
                                         }
                                     });
                                 } catch (Exception ex) {
@@ -622,7 +625,8 @@ public final class SiftAutoAlignHelper {
                                     Platform.runLater(() -> {
                                         autoAlignButton.setDisable(false);
                                         statusLabel.setText(userMsg);
-                                        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: orange;");
+                                        statusLabel.setStyle(
+                                                "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";");
                                     });
                                 }
                             },
@@ -958,7 +962,7 @@ public final class SiftAutoAlignHelper {
         grid.add(new Label("Min pixel size (um):"), 0, row);
         grid.add(minPxSpinner, 1, row);
         Label minPxHelp = new Label("Downsample to this resolution. Lower = more detail but slower.");
-        minPxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        minPxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         minPxHelp.setWrapText(true);
         grid.add(minPxHelp, 0, ++row, 2, 1);
 
@@ -968,7 +972,7 @@ public final class SiftAutoAlignHelper {
         grid.add(new Label("Ratio threshold:"), 0, ++row);
         grid.add(ratioSpinner, 1, row);
         Label ratioHelp = new Label("Lowe's ratio test. Higher = more permissive matching (try 0.8 if failing).");
-        ratioHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        ratioHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         ratioHelp.setWrapText(true);
         grid.add(ratioHelp, 0, ++row, 2, 1);
 
@@ -977,7 +981,7 @@ public final class SiftAutoAlignHelper {
         grid.add(new Label("Min match count:"), 0, ++row);
         grid.add(minMatchSpinner, 1, row);
         Label matchHelp = new Label("Minimum inlier matches required. Lower = accept weaker matches.");
-        matchHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        matchHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         matchHelp.setWrapText(true);
         grid.add(matchHelp, 0, ++row, 2, 1);
 
@@ -987,7 +991,7 @@ public final class SiftAutoAlignHelper {
         grid.add(new Label("Contrast threshold:"), 0, ++row);
         grid.add(contrastSpinner, 1, row);
         Label contrastHelp = new Label("Feature detection sensitivity. Lower = detect more features in pale tissue.");
-        contrastHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        contrastHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         contrastHelp.setWrapText(true);
         grid.add(contrastHelp, 0, ++row, 2, 1);
 
@@ -1006,7 +1010,7 @@ public final class SiftAutoAlignHelper {
         });
         Label marginHelp = new Label("WSI region extends this far beyond the tile on each side. "
                 + "With coarse-to-fine enabled you can raise this without slowing matching.");
-        marginHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        marginHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         marginHelp.setWrapText(true);
         grid.add(marginHelp, 0, ++row, 2, 1);
 
@@ -1016,7 +1020,7 @@ public final class SiftAutoAlignHelper {
         Label c2fHelp = new Label("Match a downsampled view of the whole search area first, then refine at full "
                 + "resolution over a small crop. Lets the search margin grow without paying for full-resolution "
                 + "matching over the whole region. Applies to SIFT auto-align (camera refinement).");
-        c2fHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        c2fHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         c2fHelp.setWrapText(true);
         grid.add(c2fHelp, 0, ++row, 2, 1);
 
@@ -1028,7 +1032,7 @@ public final class SiftAutoAlignHelper {
         grid.add(coarsePxSpinner, 1, row);
         Label coarsePxHelp = new Label("Resolution of the coarse pass. Higher = faster and larger reach but a coarser "
                 + "rough step. Only used when coarser than Min pixel size above.");
-        coarsePxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        coarsePxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         coarsePxHelp.setWrapText(true);
         grid.add(coarsePxHelp, 0, ++row, 2, 1);
 
@@ -1038,7 +1042,7 @@ public final class SiftAutoAlignHelper {
         grid.add(new Label("Auto-accept confidence:"), 0, ++row);
         grid.add(confSpinner, 1, row);
         Label confHelp = new Label("Min inlier ratio to auto-accept when Trust SIFT is enabled.");
-        confHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        confHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         confHelp.setWrapText(true);
         grid.add(confHelp, 0, ++row, 2, 1);
 
@@ -1059,7 +1063,7 @@ public final class SiftAutoAlignHelper {
                 + "H&E stains absorb green, so it carries the most tissue structure and keeps the same "
                 + "tissue-dark polarity as a brightfield mono camera. LUMINANCE is the legacy weighting, which "
                 + "brightens eosin and washes out cytoplasm contrast -- match against a mono camera is worse.");
-        rgbHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        rgbHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         rgbHelp.setWrapText(true);
         grid.add(rgbHelp, 0, ++row, 2, 1);
 
@@ -1079,7 +1083,7 @@ public final class SiftAutoAlignHelper {
                 + "PERCENTILE clips outliers and stretches; best when the camera doesn't use the full bit "
                 + "range (typical 12-14 bit cameras). MIN_MAX uses the actual data extremes. "
                 + "BIT_SHIFT is the legacy /256 behaviour.");
-        monoHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        monoHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         monoHelp.setWrapText(true);
         grid.add(monoHelp, 0, ++row, 2, 1);
 
@@ -1097,7 +1101,7 @@ public final class SiftAutoAlignHelper {
         Label pctHelp = new Label("Used only when normalization = PERCENTILE. Defaults 2 / 98 are robust against a few "
                 + "saturated pixels. Lower the high (e.g. 95) if the camera is over-exposed; raise the "
                 + "low (e.g. 5) for noisy backgrounds.");
-        pctHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        pctHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         pctHelp.setWrapText(true);
         grid.add(pctHelp, 0, ++row, 2, 1);
 
@@ -1108,7 +1112,7 @@ public final class SiftAutoAlignHelper {
                 new Label("Cross-modality contrast normalisation. Strongly recommended when matching a monochrome "
                         + "brightfield camera against an H&E (RGB) WSI -- the staining and the camera have very "
                         + "different intensity statistics, and CLAHE makes the keypoints commensurate.");
-        claheHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        claheHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         claheHelp.setWrapText(true);
         grid.add(claheHelp, 0, ++row, 2, 1);
 
@@ -1119,7 +1123,7 @@ public final class SiftAutoAlignHelper {
         grid.add(claheClipSpinner, 1, row);
         Label clipHelp =
                 new Label("Higher = more aggressive equalisation. 2.0 default; raise to 4.0 if matches are scarce.");
-        clipHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: #888;");
+        clipHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         clipHelp.setWrapText(true);
         grid.add(clipHelp, 0, ++row, 2, 1);
 

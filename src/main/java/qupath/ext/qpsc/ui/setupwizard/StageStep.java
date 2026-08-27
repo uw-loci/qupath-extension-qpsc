@@ -11,6 +11,7 @@ import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * Step 4: Stage Configuration.
@@ -84,7 +85,7 @@ public class StageStep implements WizardStep {
         Label warningLabel = new Label("WARNING: Set limits conservatively to prevent hardware damage. "
                 + "All values are in micrometers (um).");
         warningLabel.setWrapText(true);
-        warningLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
+        warningLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
 
         // Limits grid
         GridPane grid = new GridPane();

@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
@@ -447,7 +448,7 @@ public class SingleTileRefinement {
                         + "Click Settings to adjust parameters if matching fails.",
                 qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm()));
         siftDescription.setWrapText(true);
-        siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+        siftDescription.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Capture -> translation-only refined transform; Skip -> pass through. The pane
         // returns the measured stage position; the transform math stays here, unchanged
@@ -514,7 +515,7 @@ public class SingleTileRefinement {
         Label liveStateLabel = new Label("Preparing live view...");
         liveStateLabel.setWrapText(true);
         liveStateLabel.setMaxWidth(Double.MAX_VALUE);
-        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         content.getChildren()
                 .addAll(

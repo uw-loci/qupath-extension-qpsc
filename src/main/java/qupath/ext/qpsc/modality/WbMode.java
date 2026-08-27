@@ -3,6 +3,7 @@ package qupath.ext.qpsc.modality;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ListCell;
+import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * White balance modes supported by the QPSC acquisition system.
@@ -19,10 +20,26 @@ import javafx.scene.control.ListCell;
  * @since 4.1
  */
 public enum WbMode {
-    OFF("Off", "off", false, "#888888"),
-    CAMERA_AWB("Camera AWB", "camera_awb", true, "#00796B"),
-    SIMPLE("Simple (90deg)", "simple", true, "#1565C0"),
-    PER_ANGLE("Per-angle (PPM)", "per_angle", true, "#7B1FA2");
+    OFF("Off", "off", false, ThemeColors.MUTED),
+    CAMERA_AWB("Camera AWB", "camera_awb", true, Palette.TEAL),
+    SIMPLE("Simple (90deg)", "simple", true, ThemeColors.INFO),
+    PER_ANGLE("Per-angle (PPM)", "per_angle", true, Palette.PURPLE);
+
+    /**
+     * Teal and purple exist only to tell these two modes apart at a glance -- they carry no
+     * good/bad meaning, so neither maps onto a {@link ThemeColors} role. They follow the same
+     * ladder pattern so they track the theme like everything else; see {@link ThemeColors} for
+     * why a fixed hex cannot.
+     *
+     * <p>In a holder class because an enum constant may not reference a static field of its own
+     * enum declared after it.
+     */
+    private static final class Palette {
+        private Palette() {}
+
+        static final String TEAL = "ladder(-fx-background, #4DB6AC 49%, #00695C 50%)";
+        static final String PURPLE = "ladder(-fx-background, #CE93D8 49%, #6A1B9A 50%)";
+    }
 
     private final String displayName;
     private final String protocolName;
@@ -51,7 +68,7 @@ public enum WbMode {
         return requiresBackgrounds;
     }
 
-    /** CSS hex color used to distinguish this mode in the UI. */
+    /** Theme-aware CSS colour expression distinguishing this mode in the UI. */
     public String getColor() {
         return color;
     }

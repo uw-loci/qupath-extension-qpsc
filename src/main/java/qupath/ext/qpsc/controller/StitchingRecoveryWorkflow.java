@@ -31,6 +31,7 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.StitchingBlockingDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -96,7 +97,7 @@ public class StitchingRecoveryWorkflow {
         Label pixelLabel = new Label("Pixel size (um):");
         TextField pixelField = new TextField();
         Label pixelSourceLabel = new Label();
-        pixelSourceLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: #666;");
+        pixelSourceLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Initial value: saved preference > microscope config > 0.5 fallback
         String savedPixelSize = PersistentPreferences.getRestitchPixelSize();
@@ -144,10 +145,10 @@ public class StitchingRecoveryWorkflow {
                     metadataLabel.setText("Sample: " + info.getProperty("sample_name", "?")
                             + " | Modality: " + info.getProperty("modality", "?")
                             + " | Objective: " + info.getProperty("objective", "?"));
-                    metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: green;");
+                    metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                 } else {
                     metadataLabel.setText("No acquisition metadata found -- will use folder name");
-                    metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: orange;");
+                    metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.WARNING + ";");
                 }
             }
         });

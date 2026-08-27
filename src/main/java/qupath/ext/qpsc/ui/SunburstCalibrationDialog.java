@@ -60,7 +60,7 @@ public class SunburstCalibrationDialog {
         Label mainLabel = new Label(text);
 
         Label helpIndicator = new Label(" (?)");
-        helpIndicator.setStyle("-fx-text-fill: #0066cc; -fx-font-weight: bold; -fx-cursor: hand;");
+        helpIndicator.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold; -fx-cursor: hand;");
 
         Tooltip tooltip = new Tooltip(tooltipText);
         tooltip.setWrapText(true);
@@ -129,7 +129,8 @@ public class SunburstCalibrationDialog {
                     + "- If the image looks washed out or white, reduce exposure before proceeding.");
             angleNote.setWrapText(true);
             angleNote.setMaxWidth(Double.MAX_VALUE);
-            angleNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
+            angleNote.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
 
             root.getChildren().addAll(headerRow, new Separator(), instructionLabel, angleNote, new Separator());
 
@@ -190,7 +191,7 @@ public class SunburstCalibrationDialog {
             Label cameraInstructions =
                     new Label("Open Camera Control to set the polarizer to a low angle (crossed or near-crossed)\n"
                             + "and verify the camera settings before running calibration.");
-            cameraInstructions.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+            cameraInstructions.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             cameraInstructions.setWrapText(true);
             grid.add(cameraInstructions, 0, row, 3, 1);
             row++;
@@ -363,7 +364,8 @@ public class SunburstCalibrationDialog {
                     "Output files saved to: {folder}/\n" + "  - {name}_image.tif    Acquired calibration image\n"
                             + "  - {name}.npz          Calibration data (used by PPM analysis)\n"
                             + "  - {name}_plot.png     Visual verification of calibration fit");
-            outputInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666; -fx-font-family: monospace;");
+            outputInfoLabel.setStyle(
+                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-family: monospace;");
             outputInfoLabel.setWrapText(true);
             grid.add(outputInfoLabel, 0, row, 3, 1);
 

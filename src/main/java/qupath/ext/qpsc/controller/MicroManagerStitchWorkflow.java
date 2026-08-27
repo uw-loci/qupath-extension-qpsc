@@ -32,6 +32,7 @@ import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.TileFolderInspector;
@@ -107,7 +108,7 @@ public class MicroManagerStitchWorkflow {
         TextField pxField = new TextField("");
         pxField.setPrefWidth(100);
         Label pxSourceLabel = new Label("");
-        pxSourceLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: #666;");
+        pxSourceLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // ---- format combo ----
         Label fmtLabel = new Label("Output format:");
@@ -140,7 +141,7 @@ public class MicroManagerStitchWorkflow {
         // ---- metadata preview label ----
         Label metaLabel = new Label("");
         metaLabel.setWrapText(true);
-        metaLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: #444;");
+        metaLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // ---- input browse: resolve pixel size + suggested filename + output folder ----
         inBrowse.setOnAction(e -> {
@@ -337,10 +338,10 @@ public class MicroManagerStitchWorkflow {
             metaLabel.setText("Channels: "
                     + (channels.isEmpty() ? "?" : String.join(", ", channels))
                     + (mmVersion != null ? "  |  MicroManager " + mmVersion : ""));
-            metaLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: green;");
+            metaLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
         } else {
             metaLabel.setText("No MMStack metadata detected in folder.");
-            metaLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: orange;");
+            metaLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.WARNING + ";");
         }
     }
 

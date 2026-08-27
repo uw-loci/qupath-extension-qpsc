@@ -304,7 +304,8 @@ public class RefinementSelectionController {
     private static VBox createAlignmentInfoSection(AlignmentInfo info) {
         VBox section = new VBox(8);
         section.setPadding(new Insets(12));
-        section.setStyle("-fx-background-color: #F5F5F5; -fx-background-radius: 4;");
+        section.setStyle("-fx-background-color: " + "ladder(-fx-background, #303334 49%, #F5F5F5 50%)"
+                + "; -fx-background-radius: 4;");
 
         // Confidence display with color coding
         HBox confidenceRow = new HBox(10);
@@ -331,11 +332,11 @@ public class RefinementSelectionController {
 
         // Source info
         Label sourceLabel = new Label("Source: " + info.source());
-        sourceLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        sourceLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Transform name if available
         Label transformLabel = new Label("Transform: " + info.transformName());
-        transformLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        transformLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         section.getChildren().addAll(confidenceRow, sourceLabel, transformLabel);
 
@@ -351,8 +352,8 @@ public class RefinementSelectionController {
 
         VBox card = new VBox(4);
         card.setPadding(new Insets(10));
-        card.setStyle("-fx-background-color: #FAFAFA; -fx-background-radius: 4; "
-                + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
+        card.setStyle("-fx-background-color: " + "ladder(-fx-background, #2F3234 49%, #FAFAFA 50%)"
+                + "; -fx-background-radius: 4; " + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
 
         // Title row with radio button
         HBox titleRow = new HBox(8);
@@ -365,12 +366,12 @@ public class RefinementSelectionController {
 
         // Description
         Label descLabel = new Label(description);
-        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         descLabel.setPadding(new Insets(0, 0, 0, 24)); // Indent under radio
 
         // Metrics
         Label metricsLabel = new Label(metrics);
-        metricsLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+        metricsLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         metricsLabel.setPadding(new Insets(0, 0, 0, 24)); // Indent under radio
 
         card.getChildren().addAll(titleRow, descLabel, metricsLabel);
@@ -382,11 +383,12 @@ public class RefinementSelectionController {
         // Visual feedback for selection
         radio.selectedProperty().addListener((obs, old, selected) -> {
             if (selected) {
-                card.setStyle("-fx-background-color: #E3F2FD; -fx-background-radius: 4; "
+                card.setStyle("-fx-background-color: " + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)"
+                        + "; -fx-background-radius: 4; "
                         + "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4;");
             } else {
-                card.setStyle("-fx-background-color: #FAFAFA; -fx-background-radius: 4; "
-                        + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
+                card.setStyle("-fx-background-color: " + "ladder(-fx-background, #2F3234 49%, #FAFAFA 50%)"
+                        + "; -fx-background-radius: 4; " + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
             }
         });
 
@@ -413,18 +415,19 @@ public class RefinementSelectionController {
         Label label = new Label();
         label.setWrapText(true);
         label.setPadding(new Insets(10));
-        label.setStyle("-fx-background-color: #FFF8E1; -fx-background-radius: 4; -fx-font-size: 11px;");
+        label.setStyle("-fx-background-color: " + "ladder(-fx-background, #3A3000 49%, #FFF8E1 50%)"
+                + "; -fx-background-radius: 4; -fx-font-size: 11px;");
 
         String reason;
         if (confidence >= HIGH_CONFIDENCE_THRESHOLD) {
             reason = "High confidence alignments rarely need refinement";
-            label.setStyle(label.getStyle() + " -fx-text-fill: #2E7D32;");
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.SUCCESS + ";");
         } else if (confidence >= MEDIUM_CONFIDENCE_THRESHOLD) {
             reason = "Medium confidence - single-tile verification recommended";
-            label.setStyle(label.getStyle() + " -fx-text-fill: #F57F17;");
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.WARNING + ";");
         } else {
             reason = "Low confidence - full re-alignment recommended for accuracy";
-            label.setStyle(label.getStyle() + " -fx-text-fill: #C62828;");
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.ERROR + ";");
         }
 
         label.setText("[i] Recommendation: " + recommended.getDisplayName() + "\n    (" + reason + ")");

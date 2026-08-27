@@ -1247,7 +1247,7 @@ public class UIFunctions {
                 tissueDetectionButton.setDisable(true);
                 tissueDetectionButton.setText("Running...");
                 statusLabel.setText("Running tissue detection script...");
-                statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #555;");
+                statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
                 // Run on background thread so the UI stays responsive
                 CompletableFuture.runAsync(() -> {
@@ -1259,7 +1259,8 @@ public class UIFunctions {
                                     tissueDetectionButton.setText("Run Tissue Detection");
                                     if (ex != null) {
                                         statusLabel.setText("Tissue detection failed: " + ex.getMessage());
-                                        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #d32f2f;");
+                                        statusLabel.setStyle(
+                                                "-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                                     } else {
                                         int count = countCurrentAnnotations(gui, validClasses);
                                         if (count > 0) {
@@ -1267,12 +1268,14 @@ public class UIFunctions {
                                                     "Found %d annotation(s). Review/edit in QuPath, "
                                                             + "then click \"Use Annotations\" below.",
                                                     count));
-                                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #28a745;");
+                                            statusLabel.setStyle(
+                                                    "-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                             headerLabel.setText("Annotations ready");
                                         } else {
                                             statusLabel.setText("No annotations created. "
                                                     + "Try adjusting the tissue detection script or draw manually.");
-                                            statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #e65100;");
+                                            statusLabel.setStyle(
+                                                    "-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.WARNING + ";");
                                         }
                                     }
                                 },
@@ -1294,13 +1297,13 @@ public class UIFunctions {
                 } else {
                     statusLabel.setText("No annotations found. Please run tissue detection "
                             + "or draw annotations in QuPath first.");
-                    statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: #d32f2f;");
+                    statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 }
             });
 
             Button cancelButton = new Button("Cancel Workflow");
             cancelButton.setPrefWidth(440);
-            cancelButton.setStyle("-fx-text-fill: #d32f2f;");
+            cancelButton.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
             cancelButton.setOnAction(e -> {
                 logger.info("User cancelled workflow from annotation setup dialog");
                 stage.close();

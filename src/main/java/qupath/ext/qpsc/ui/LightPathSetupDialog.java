@@ -88,14 +88,14 @@ public final class LightPathSetupDialog {
                 + "inversion).");
         scopeHelp.setWrapText(true);
         scopeHelp.setMaxWidth(460);
-        scopeHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: -fx-mid-text-color;");
+        scopeHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label opticsHelp = new Label("Optical flip (objective + tube-lens parity). Drives the Stage "
                 + "Map's Camera View so it matches the Live Viewer (e.g. PPM = 180 (XY)). Set it by "
                 + "matching the camera. Reopen the Stage Map / Live Viewer to see a change applied.");
         opticsHelp.setWrapText(true);
         opticsHelp.setMaxWidth(460);
-        opticsHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: -fx-mid-text-color;");
+        opticsHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         GridPane grid = new GridPane();
         grid.setHgap(10);

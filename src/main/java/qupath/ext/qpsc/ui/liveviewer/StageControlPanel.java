@@ -60,6 +60,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.VirtualJoystick;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
@@ -376,7 +377,7 @@ public class StageControlPanel extends VBox {
         fovStepCombo.setPrefWidth(90);
 
         fovInfoLabel = new Label(res.getString("stageMovement.fov.unavailable"));
-        fovInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        fovInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Sample movement checkbox
         sampleMovementCheckbox = new CheckBox("Sample Movement");
@@ -464,7 +465,7 @@ public class StageControlPanel extends VBox {
         yField.setPrefWidth(70);
         Button moveXYBtn = new Button("Move XY");
         moveXYBtn.setStyle("-fx-font-size: 10px;");
-        xyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        xyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label zLabel = new Label("Z:");
         zLabel.setStyle("-fx-font-size: 10px;");
@@ -493,7 +494,7 @@ public class StageControlPanel extends VBox {
         zHelpTooltip.setHideDelay(Duration.millis(200));
         Tooltip.install(zHelpBtn, zHelpTooltip);
 
-        zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        zStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Z scroll handler (streams the wheel to the stage like a focus knob)
         javafx.event.EventHandler<ScrollEvent> zScrollHandler = event -> handleZScroll(event, zStepField);
@@ -506,7 +507,7 @@ public class StageControlPanel extends VBox {
         rField.setPrefWidth(70);
         Button moveRBtn = new Button("Move R");
         moveRBtn.setStyle("-fx-font-size: 10px;");
-        rStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        rStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Wire up move button handlers
         moveXYBtn.setOnAction(e -> handleMoveXY());
@@ -530,9 +531,11 @@ public class StageControlPanel extends VBox {
 
         // Banner shown when Live View is off: movement is gated.
         movementDisabledBanner = new Label("Movement disabled - Live View is Off");
-        movementDisabledBanner.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #b35900;"
-                + " -fx-background-color: #fff3e0; -fx-padding: 4 8 4 8;"
-                + " -fx-border-color: #ff9933; -fx-border-width: 1;");
+        movementDisabledBanner.setStyle(
+                "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.WARNING + ";"
+                        + " -fx-background-color: " + "ladder(-fx-background, #3A2A15 49%, #fff3e0 50%)"
+                        + "; -fx-padding: 4 8 4 8;"
+                        + " -fx-border-color: #ff9933; -fx-border-width: 1;");
         movementDisabledBanner.setMaxWidth(Double.MAX_VALUE);
         movementDisabledBanner.setVisible(false);
         movementDisabledBanner.setManaged(false);
@@ -673,7 +676,7 @@ public class StageControlPanel extends VBox {
         GridPane.setHalignment(downBtn2x, HPos.CENTER);
 
         Label keyboardHint = new Label("WASD / Arrows / Drag joystick");
-        keyboardHint.setStyle("-fx-font-size: 9px; -fx-text-fill: #666666;");
+        keyboardHint.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         VBox navSection = new VBox(4, navGrid, keyboardHint);
         navSection.setAlignment(Pos.CENTER);
@@ -687,7 +690,7 @@ public class StageControlPanel extends VBox {
 
         // XY status shown below navigation grid
         Label navXyStatus = new Label();
-        navXyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        navXyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         navXyStatus.textProperty().bind(xyStatus.textProperty());
 
         // --- Move-to-position controls (formerly the Position tab) ---
@@ -867,7 +870,7 @@ public class StageControlPanel extends VBox {
 
         // Status label
         savedPointsStatus = new Label();
-        savedPointsStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: #666666;");
+        savedPointsStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         savedPointsContent
                 .getChildren()
@@ -1593,11 +1596,11 @@ public class StageControlPanel extends VBox {
             noneRadio.setToggleGroup(previewGroup);
             noneRadio.setSelected(true); // Start in deactivated state.
             Label noneLabel = new Label("(None -- deactivate all)");
-            noneLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888888;");
+            noneLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             noneRadio.setOnAction(e -> {
                 if (resolvedProfile == null) {
                     cameraStatusLabel.setText("No matching profile for modality " + modality);
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                     return;
                 }
                 applyChannelInBackground(resolvedProfile, "");
@@ -1663,10 +1666,10 @@ public class StageControlPanel extends VBox {
                     try {
                         MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {(float) v});
                         cameraStatusLabel.setText("Channel " + chIdLocal + " exposure -> " + v + " ms");
-                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                     } catch (Exception ex) {
                         cameraStatusLabel.setText("Exposure update failed: " + ex.getMessage());
-                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                     }
                 });
                 expSpinner.valueProperty().addListener((obs, oldV, newV) -> {
@@ -1708,7 +1711,8 @@ public class StageControlPanel extends VBox {
                                     mc.getSocketClient().setProperty(pr.device(), pr.property(), valueStr);
                                     Platform.runLater(() -> {
                                         cameraStatusLabel.setText("Channel " + ch.id() + " intensity -> " + v);
-                                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                        cameraStatusLabel.setStyle(
+                                                "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                     });
                                 } catch (Exception ex) {
                                     logger.warn(
@@ -1719,7 +1723,8 @@ public class StageControlPanel extends VBox {
                                             ex.getMessage());
                                     Platform.runLater(() -> {
                                         cameraStatusLabel.setText("Intensity update failed: " + ex.getMessage());
-                                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                        cameraStatusLabel.setStyle(
+                                                "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                                     });
                                 }
                             },
@@ -1737,7 +1742,7 @@ public class StageControlPanel extends VBox {
                     qupath.ext.qpsc.preferences.PersistentPreferences.setLastFocusChannelId(ch.id());
                     if (resolvedProfile == null) {
                         cameraStatusLabel.setText("No matching profile for modality " + modality);
-                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         return;
                     }
                     // Drive the hardware to this channel: cube/shutter switch +
@@ -1771,7 +1776,7 @@ public class StageControlPanel extends VBox {
             Label liveNote = new Label("Tip: select a channel radio first to switch the cube/light path; "
                     + "then the Exp/Intensity spinners drive the hardware live via SETEXP/SETPROP.");
             liveNote.setWrapText(true);
-            liveNote.setStyle("-fx-font-size: 9px; -fx-text-fill: gray; -fx-font-style: italic;");
+            liveNote.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
             cameraModContent.getChildren().addAll(new Separator(), liveNote);
 
             // Persist the spinner-tuned values to YAML so they survive
@@ -1899,17 +1904,17 @@ public class StageControlPanel extends VBox {
         final String profileKey = cameraActiveProfile;
         if (profileKey == null) {
             cameraStatusLabel.setText("No profile selected -- cannot save");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
         final String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isBlank()) {
             cameraStatusLabel.setText("No config path configured");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
         cameraStatusLabel.setText("Reading current lamp level...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Step 1: read the LIVE lamp power (GETILLM is a socket round-trip, so
         // off the FX thread). Step 2: confirm on the FX thread, showing the exact
@@ -1930,7 +1935,8 @@ public class StageControlPanel extends VBox {
                         logger.error("Read lamp level failed: {}", ex.getMessage(), ex);
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Save failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                         return;
                     }
@@ -1972,7 +1978,8 @@ public class StageControlPanel extends VBox {
                                 + "field).";
                         if (!confirmSaveToYaml("Save camera settings to acquisition profile?", details)) {
                             cameraStatusLabel.setText("Save cancelled");
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                             return;
                         }
                         // Persist the live exposure as the Camera default so the
@@ -2002,14 +2009,16 @@ public class StageControlPanel extends VBox {
                                         }
                                         Platform.runLater(() -> {
                                             cameraStatusLabel.setText("Saved: " + result.message);
-                                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                                            cameraStatusLabel.setStyle(
+                                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                             rebuildCameraModContent(modality);
                                         });
                                     } catch (Exception ex) {
                                         logger.error("Save brightfield profile failed: {}", ex.getMessage(), ex);
                                         Platform.runLater(() -> {
                                             cameraStatusLabel.setText("Save failed: " + ex.getMessage());
-                                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                            cameraStatusLabel.setStyle(
+                                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                                         });
                                     }
                                 },
@@ -2069,12 +2078,12 @@ public class StageControlPanel extends VBox {
         final String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isBlank()) {
             cameraStatusLabel.setText("No config path configured");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
         if (cameraChannelDefs.isEmpty()) {
             cameraStatusLabel.setText("No channels to save");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
         // Snapshot spinner state on the FX thread so the worker reads
@@ -2113,12 +2122,12 @@ public class StageControlPanel extends VBox {
                 .append(".channels[*]\n(exposure_ms + the intensity device property).");
         if (!confirmSaveToYaml("Save channel settings to YAML?", confirmDetails.toString())) {
             cameraStatusLabel.setText("Save cancelled");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             return;
         }
 
         cameraStatusLabel.setText("Saving " + defSnap.size() + " channels...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Thread t = new Thread(
                 () -> {
@@ -2173,14 +2182,16 @@ public class StageControlPanel extends VBox {
                         logger.info("Save channels to YAML: {} write(s). Detail: {}", finalWrites, finalSummary);
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Saved " + finalWrites + " field(s) to YAML + reloaded server");
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                             rebuildCameraModContent(modality);
                         });
                     } catch (Exception ex) {
                         logger.error("Save fluorescence channels failed: {}", ex.getMessage(), ex);
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Save failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                     }
                 },
@@ -2282,7 +2293,7 @@ public class StageControlPanel extends VBox {
                 // value when building the command for non-rotation modalities.
                 qupath.ext.qpsc.preferences.PersistentPreferences.setLastUnifiedExposureMs(exp);
                 cameraStatusLabel.setText("Exposure: " + exp + " ms");
-                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                 logger.info("Set exposure to {} ms", exp);
                 try {
                     var verify =
@@ -2299,7 +2310,7 @@ public class StageControlPanel extends VBox {
                 }
             } catch (Exception ex) {
                 cameraStatusLabel.setText("Failed: " + ex.getMessage());
-                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 logger.warn("Failed to set exposure: {}", ex.getMessage());
             }
         };
@@ -2564,7 +2575,7 @@ public class StageControlPanel extends VBox {
     private void applyProfileInBackground(String selectedProfile, String modality) {
         if (selectedProfile == null) return;
         cameraStatusLabel.setText("Applying profile: " + selectedProfile + "...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         Thread t = new Thread(
                 () -> {
                     try {
@@ -2573,14 +2584,16 @@ public class StageControlPanel extends VBox {
                         mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(selectedProfile));
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Profile applied: " + selectedProfile);
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                             rebuildCameraModContent(modality);
                         });
                     } catch (Exception ex) {
                         logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                     }
                 },
@@ -2760,7 +2773,7 @@ public class StageControlPanel extends VBox {
         if (profileName == null) return;
         String label = (channelId == null || channelId.isEmpty()) ? "None" : channelId;
         cameraStatusLabel.setText("Applying " + label + "...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         Thread t = new Thread(
                 () -> {
                     try {
@@ -2783,13 +2796,15 @@ public class StageControlPanel extends VBox {
                         });
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Applied: " + label);
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                         });
                     } catch (Exception ex) {
                         logger.error("APPLYCH({}, {}) failed: {}", profileName, label, ex.getMessage());
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Channel apply failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                     }
                 },
@@ -2875,7 +2890,7 @@ public class StageControlPanel extends VBox {
                 String error = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.validateName(name);
                 if (error != null) {
                     cameraStatusLabel.setText(error);
-                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                    cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                     return;
                 }
                 boolean overwrite = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.loadNames()
@@ -2884,7 +2899,7 @@ public class StageControlPanel extends VBox {
                         name, getActiveChannelId(), snapshotChannelState());
                 refresh.run();
                 cameraStatusLabel.setText((overwrite ? "Updated preset: " : "Saved preset: ") + name);
-                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             });
         });
 
@@ -2898,7 +2913,7 @@ public class StageControlPanel extends VBox {
             qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.deletePreset(name);
             refresh.run();
             cameraStatusLabel.setText("Deleted preset: " + name);
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
         });
 
         Label label = new Label("Preset:");
@@ -2954,7 +2969,7 @@ public class StageControlPanel extends VBox {
         var preset = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.loadPreset(name);
         if (preset == null) {
             cameraStatusLabel.setText("Preset '" + name + "' has no stored data.");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
         String singleSelectedId = null;
@@ -2997,7 +3012,7 @@ public class StageControlPanel extends VBox {
             }
         }
         cameraStatusLabel.setText("Applied preset: " + name);
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
     }
 
     // Matches an excitation wavelength like "385 nm" / "385nm" anywhere in a
@@ -3085,7 +3100,8 @@ public class StageControlPanel extends VBox {
 
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Preset saved");
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                             // Re-enable load button
                             rebuildCameraModContent(modality);
                         });
@@ -3094,7 +3110,8 @@ public class StageControlPanel extends VBox {
                         logger.error("Failed to save preset: {}", ex.getMessage());
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Save failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                     }
                 },
@@ -3109,12 +3126,12 @@ public class StageControlPanel extends VBox {
         String presetStr = PersistentPreferences.getStringPreference(presetKey, null);
         if (presetStr == null || presetStr.isEmpty()) {
             cameraStatusLabel.setText("No saved preset");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             return;
         }
 
         cameraStatusLabel.setText("Applying preset...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Thread t = new Thread(
                 () -> {
@@ -3205,7 +3222,8 @@ public class StageControlPanel extends VBox {
 
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Preset applied");
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                             rebuildCameraModContent(modality);
                         });
                         logger.info("Applied camera preset: {}", presetStr);
@@ -3213,7 +3231,8 @@ public class StageControlPanel extends VBox {
                         logger.error("Failed to apply preset: {}", ex.getMessage());
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Load failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                     }
                 },
@@ -3234,13 +3253,13 @@ public class StageControlPanel extends VBox {
 
     private Label createDetailLabel(String detail) {
         Label lbl = new Label("  " + detail);
-        lbl.setStyle("-fx-font-size: 9px; -fx-text-fill: #666;");
+        lbl.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         return lbl;
     }
 
     private void addNoPresetsLabel() {
         Label lbl = new Label("No WB presets available.\nRun White Balance calibration first.");
-        lbl.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+        lbl.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         lbl.setWrapText(true);
         cameraModContent.getChildren().add(lbl);
     }
@@ -3261,7 +3280,7 @@ public class StageControlPanel extends VBox {
      */
     private void applyPresetNoRotation(String name, float[] exposures, float[] gains) {
         cameraStatusLabel.setText("Applying " + name + "...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Thread thread = new Thread(
                 () -> {
@@ -3270,7 +3289,8 @@ public class StageControlPanel extends VBox {
                         if (controller == null) {
                             Platform.runLater(() -> {
                                 cameraStatusLabel.setText("Not connected");
-                                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                cameraStatusLabel.setStyle(
+                                        "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                             });
                             return;
                         }
@@ -3280,13 +3300,15 @@ public class StageControlPanel extends VBox {
                                 () -> controller.getSocketClient().setCameraSettings(individual, exposures, gains));
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Applied: " + name);
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                         });
                     } catch (Exception ex) {
                         logger.error("Failed to apply preset: {}", ex.getMessage());
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                     }
                 },
@@ -3300,7 +3322,7 @@ public class StageControlPanel extends VBox {
      */
     private void applyWbPreset(String angleName, double angleDeg, float[] exposures, float[] gains) {
         cameraStatusLabel.setText("Applying " + angleName + "...");
-        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Thread thread = new Thread(
                 () -> {
@@ -3309,7 +3331,8 @@ public class StageControlPanel extends VBox {
                         if (controller == null) {
                             Platform.runLater(() -> {
                                 cameraStatusLabel.setText("Not connected");
-                                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                cameraStatusLabel.setStyle(
+                                        "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                             });
                             return;
                         }
@@ -3318,13 +3341,15 @@ public class StageControlPanel extends VBox {
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText(
                                     "Applied: " + capitalize(angleName) + " (" + (int) angleDeg + " deg)");
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: green;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                         });
                     } catch (Exception ex) {
                         logger.error("Failed to apply WB preset: {}", ex.getMessage());
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Failed: " + ex.getMessage());
-                            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                            cameraStatusLabel.setStyle(
+                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         });
                     }
                 },

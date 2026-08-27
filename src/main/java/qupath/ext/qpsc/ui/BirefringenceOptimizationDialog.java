@@ -114,7 +114,7 @@ public class BirefringenceOptimizationDialog {
 
             Label outputHint =
                     new Label("A timestamped subfolder (birefringence_YYYYMMDD_HHMMSS) will be created here.");
-            outputHint.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+            outputHint.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             Button browseBtn = new Button("Browse...");
             browseBtn.setTooltip(new Tooltip("Browse for a parent folder to store test results"));
@@ -186,11 +186,11 @@ public class BirefringenceOptimizationDialog {
 
             // Angle count estimate
             Label angleCountLabel = new Label();
-            angleCountLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+            angleCountLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             // High acquisition count warning
             Label highCountWarningLabel = new Label();
-            highCountWarningLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
+            highCountWarningLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
             highCountWarningLabel.setVisible(false);
 
             Runnable updateAngleCount = () -> {
@@ -260,16 +260,16 @@ public class BirefringenceOptimizationDialog {
 
             Label interpolateDesc =
                     new Label("Use calibration points from sensitivity test and interpolate between them (fastest)");
-            interpolateDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+            interpolateDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             interpolateDesc.setWrapText(true);
 
             Label calibrateDesc =
                     new Label("Measure optimal exposures on background first, then acquire (most accurate)");
-            calibrateDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+            calibrateDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             calibrateDesc.setWrapText(true);
 
             Label fixedDesc = new Label("Use same exposure for all angles (fastest, may saturate at some angles)");
-            fixedDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+            fixedDesc.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             fixedDesc.setWrapText(true);
 
             grid.add(interpolateMode, 0, row, 3, 1);
@@ -320,7 +320,7 @@ public class BirefringenceOptimizationDialog {
             targetIntensityLabel.setStyle("-fx-font-size: 10px;");
 
             Label targetIntensityHelper = new Label("Values 100-150 optimal. Above 200 risks saturation.");
-            targetIntensityHelper.setStyle("-fx-font-size: 9px; -fx-text-fill: gray;");
+            targetIntensityHelper.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             grid.add(targetIntensityLabel, 0, row);
             grid.add(targetIntensitySlider, 1, row);
@@ -344,8 +344,8 @@ public class BirefringenceOptimizationDialog {
                 if (exposureModeGroup.getSelectedToggle() == calibrateMode) {
                     positioningLabel.setText("CALIBRATE MODE: Position stage on a BLANK/BACKGROUND area first!\n"
                             + "The test will calibrate exposures on background, then prompt you to move to tissue.");
-                    positioningLabel.setStyle(
-                            "-fx-font-size: 11px; -fx-padding: 8 0 0 0; -fx-text-fill: #cc6600; -fx-font-weight: bold;");
+                    positioningLabel.setStyle("-fx-font-size: 11px; -fx-padding: 8 0 0 0; -fx-text-fill: "
+                            + ThemeColors.WARNING + "; -fx-font-weight: bold;");
                 } else {
                     positioningLabel.setText(
                             "Position stage on tissue with visible birefringence (e.g., collagen fibers).");
@@ -377,7 +377,8 @@ public class BirefringenceOptimizationDialog {
 
             // Duration estimate
             Label durationLabel = new Label();
-            durationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray; -fx-font-weight: bold;");
+            durationLabel.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-weight: bold;");
             Runnable updateDuration = () -> {
                 double min = minAngleSpinner.getValue();
                 double max = maxAngleSpinner.getValue();
@@ -414,7 +415,7 @@ public class BirefringenceOptimizationDialog {
 
             // Warning about small steps
             Label warningLabel = new Label();
-            warningLabel.setStyle("-fx-text-fill: orange; -fx-font-weight: bold;");
+            warningLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
             warningLabel.setVisible(false);
             stepSpinner.valueProperty().addListener((obs, old, val) -> {
                 if (val < 0.05) {

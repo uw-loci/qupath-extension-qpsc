@@ -295,8 +295,9 @@ public class SaturationSummaryDialog {
                             + "on the sensor, or a calibration that has drifted -- not your sample.");
             lowSignalExplainer.setWrapText(true);
             lowSignalExplainer.setMaxWidth(Double.MAX_VALUE);
-            lowSignalExplainer.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555; "
-                    + "-fx-background-color: #f4f1e8; -fx-padding: 6 8 6 8; "
+            lowSignalExplainer.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + "; "
+                    + "-fx-background-color: " + "ladder(-fx-background, #33302A 49%, #f4f1e8 50%)"
+                    + "; -fx-padding: 6 8 6 8; "
                     + "-fx-border-color: #d8cfb4; -fx-border-width: 0 0 0 3;");
             root.getChildren().add(lowSignalExplainer);
         }
@@ -309,20 +310,20 @@ public class SaturationSummaryDialog {
         banner.setStyle("-fx-font-size: 12px;");
 
         Label instruction = new Label("Double-click a row to move stage to that tile (requires microscope connection)");
-        instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+        instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         root.getChildren().addAll(banner, instruction);
 
         // Top: concerning saturation table (LOW + NORMAL roles)
         if (!concerning.isEmpty()) {
             Label concerningHeader = new Label("Concerning saturation (" + concerning.size() + " tiles)");
-            concerningHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: #b00020;");
+            concerningHeader.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");
             TableView<Map<String, Object>> concerningTable = buildTable(concerning, channelDisplay, handler);
             root.getChildren().addAll(concerningHeader, concerningTable);
             VBox.setVgrow(concerningTable, Priority.ALWAYS);
         } else {
             Label noConcerning = new Label("No concerning saturation detected.");
-            noConcerning.setStyle("-fx-font-style: italic; -fx-text-fill: #4a7c4a;");
+            noConcerning.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             root.getChildren().add(noConcerning);
         }
 
@@ -394,7 +395,8 @@ public class SaturationSummaryDialog {
         banner.setMaxWidth(Double.MAX_VALUE);
         if (concerningSamples.isEmpty()) {
             banner.setText("No concerning saturation in any acquisition this run.");
-            banner.setStyle("-fx-font-size: 12px; -fx-text-fill: #4a7c4a; -fx-background-color: #eef6ee; "
+            banner.setStyle("-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-background-color: "
+                    + "ladder(-fx-background, #1B3A1B 49%, #eef6ee 50%)" + "; "
                     + "-fx-padding: 6 8 6 8; -fx-border-color: #bcd8bc; -fx-border-width: 0 0 0 3;");
         } else {
             double worstOverall = concerningSamples.get(0).parsed().worstConcerningPct();
@@ -427,7 +429,7 @@ public class SaturationSummaryDialog {
         root.getChildren().add(banner);
 
         Label instruction = new Label("Double-click a row to move stage to that tile (requires microscope connection)");
-        instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+        instruction.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         root.getChildren().add(instruction);
 
         // Scrollable per-sample list: flagged samples first, then the clean/unavailable ones.
@@ -470,7 +472,7 @@ public class SaturationSummaryDialog {
             Label txt =
                     new Label(entry.summaryText() != null ? entry.summaryText() : "No detailed report was written.");
             txt.setWrapText(true);
-            txt.setStyle("-fx-font-size: 11px; -fx-text-fill: #555555;");
+            txt.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             pane.setContent(txt);
             return pane;
         }
@@ -495,7 +497,7 @@ public class SaturationSummaryDialog {
             body.getChildren().add(t);
         } else {
             Label ok = new Label("No concerning saturation detected.");
-            ok.setStyle("-fx-font-style: italic; -fx-text-fill: #4a7c4a;");
+            ok.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             body.getChildren().add(ok);
         }
         if (brightN > 0) {

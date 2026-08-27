@@ -166,7 +166,7 @@ public class SinglePointAcquisitionController {
             zProjectionCombo.getItems().addAll("none", "max", "min", "sum", "mean", "std");
             zProjectionCombo.setValue("none");
             Label zInfoLabel = new Label();
-            zInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            zInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             Runnable updateZInfo = () -> {
                 double range = zRangeSpinner.getValue();
@@ -204,7 +204,7 @@ public class SinglePointAcquisitionController {
             tIntervalSpinner.setEditable(true);
             tIntervalSpinner.setPrefWidth(100);
             Label tInfoLabel = new Label();
-            tInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+            tInfoLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             Runnable updateTInfo = () -> {
                 int tp = tpSpinner.getValue();
@@ -301,7 +301,7 @@ public class SinglePointAcquisitionController {
                         outputFolderField.getText());
                 if (error != null) {
                     statusLabel.setText(error);
-                    statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                    statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                     event.consume();
                     return;
                 }
@@ -330,7 +330,7 @@ public class SinglePointAcquisitionController {
                             tIntervalSpinner.getValue());
                     if (!proceed) {
                         statusLabel.setText("Adjust the interval or reduce planes / timepoints.");
-                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                         event.consume();
                     }
                 }

@@ -10,6 +10,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.StageDirectionCalibrationDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 
 /**
@@ -54,7 +55,7 @@ public class StageCalibrationStep implements WizardStep {
         Button skipButton = new Button("Keep current values");
         skipButton.setOnAction(e -> {
             statusLabel.setText("Keeping current values. Re-run anytime from the Live Viewer.");
-            statusLabel.setStyle("-fx-text-fill: gray;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         });
 
         HBox actionRow = new HBox(8, runButton, skipButton);

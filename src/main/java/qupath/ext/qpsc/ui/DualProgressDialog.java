@@ -207,7 +207,7 @@ public class DualProgressDialog {
         stitchingListView.setPrefHeight(80);
         stitchingListView.setStyle("-fx-font-size: 10px;");
         stitchingCountLabel = new Label("0 operations in progress");
-        stitchingCountLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        stitchingCountLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         stitchingSection = new VBox(5, stitchingHeader, stitchingListView, stitchingCountLabel);
         stitchingSection.setVisible(false);
         stitchingSection.setManaged(false); // Don't take space when hidden
@@ -227,7 +227,7 @@ public class DualProgressDialog {
         timepointProgressBar.setManaged(false);
         mdaPathLabel = new Label("");
         mdaPathLabel.setWrapText(true);
-        mdaPathLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+        mdaPathLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         mdaPathLabel.setVisible(false);
         mdaPathLabel.setManaged(false);
         driftNotice = new Label("");

@@ -13,6 +13,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -75,7 +76,7 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
                 + "  - Background correction ON + calibrated  ->  the Background Collection exposure\n"
                 + "  - otherwise  ->  the last unified exposure used\n"
                 + "Run Background Collection for this objective/detector to set the calibrated value.");
-        explanation.setStyle("-fx-font-size: 10px; -fx-text-fill: #888;");
+        explanation.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         explanation.setWrapText(true);
 
         overrideCheck = new CheckBox("Override exposure (ms):");
@@ -99,7 +100,7 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
                 + "reference was captured at the calibrated exposure, so it no longer matches this exposure. "
                 + "Background correction will not be valid for this run -- re-run Background Collection at the new "
                 + "exposure if you need flat-field correction.");
-        warning.setStyle("-fx-font-size: 10px; -fx-text-fill: #C62828;");
+        warning.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
         warning.setWrapText(true);
         warning.setVisible(false);
         warning.setManaged(false);
@@ -163,7 +164,7 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
         boolean warn = exp.warning() && overrideMs == null;
         readoutLabel.setStyle(
                 warn
-                        ? "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: #C62828;"
+                        ? "-fx-font-size: 11px; -fx-font-family: monospace; -fx-text-fill: " + ThemeColors.ERROR + ";"
                         : "-fx-font-size: 11px; -fx-font-family: monospace;");
     }
 

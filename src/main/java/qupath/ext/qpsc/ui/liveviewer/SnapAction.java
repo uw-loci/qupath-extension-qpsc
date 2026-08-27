@@ -42,6 +42,7 @@ import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader.BackgroundSettings;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -160,7 +161,7 @@ public final class SnapAction {
         // button's accessible text via the centered label.
         Label textLabel = new Label("Snap");
         Label arrow = new Label("\u25BE"); // U+25BE down-triangle, escaped to keep source ASCII-clean
-        arrow.setStyle("-fx-font-size: 8px; -fx-text-fill: -fx-mid-text-color; -fx-padding: 0 1 0 0;");
+        arrow.setStyle("-fx-font-size: 8px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-padding: 0 1 0 0;");
         arrow.setMouseTransparent(true);
         StackPane content = new StackPane(textLabel, arrow);
         StackPane.setAlignment(textLabel, Pos.CENTER);

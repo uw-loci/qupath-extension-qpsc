@@ -10,6 +10,7 @@ import javafx.scene.layout.GridPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveConfigWriter;
 import qupath.fx.dialogs.Dialogs;
@@ -156,7 +157,7 @@ public final class RegisterObjectiveWorkflow {
         if (matchNote != null && !matchNote.isEmpty()) {
             Label note = new Label(matchNote);
             note.setWrapText(true);
-            note.setStyle("-fx-text-fill: #a05000;");
+            note.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
             note.setMaxWidth(420);
             grid.add(note, 0, r++, 2, 1);
         }
@@ -182,7 +183,7 @@ public final class RegisterObjectiveWorkflow {
                 + "objective acquisition-ready.");
         hint.setWrapText(true);
         hint.setMaxWidth(420);
-        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: #606060;");
+        hint.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         grid.add(hint, 0, r, 2, 1);
 
         dialog.getDialogPane().setContent(grid);

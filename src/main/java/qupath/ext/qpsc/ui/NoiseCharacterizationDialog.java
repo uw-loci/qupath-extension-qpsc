@@ -287,7 +287,7 @@ public class NoiseCharacterizationDialog {
         // Description
         Label descLabel = new Label("Enter comma-separated values for gain and exposure settings to test.");
         descLabel.setWrapText(true);
-        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         grid.add(descLabel, 0, row, 3, 1);
         row++;
 
@@ -302,7 +302,7 @@ public class NoiseCharacterizationDialog {
         gainsField.setTooltip(new Tooltip("Comma-separated unified gain values to test (linear)"));
 
         Label gainsNote = new Label("(unified gain, linear)");
-        gainsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        gainsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(gainsLabel, 0, row);
         grid.add(gainsField, 1, row);
@@ -319,7 +319,7 @@ public class NoiseCharacterizationDialog {
         exposuresField.setTooltip(new Tooltip("Comma-separated exposure times in milliseconds to test"));
 
         Label exposuresNote = new Label("(milliseconds)");
-        exposuresNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        exposuresNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(exposuresLabel, 0, row);
         grid.add(exposuresField, 1, row);
@@ -338,12 +338,12 @@ public class NoiseCharacterizationDialog {
             List<Double> e = parseCommaSeparated(exposuresField.getText());
             if (g.isEmpty() || e.isEmpty()) {
                 validationLabel.setText("Enter valid comma-separated numbers");
-                validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
             } else {
                 int count = g.size() * e.size();
                 validationLabel.setText(
                         String.format("%d gains x %d exposures = %d configurations", g.size(), e.size(), count));
-                validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             }
         };
 
@@ -380,7 +380,7 @@ public class NoiseCharacterizationDialog {
                 + "Default 10 provides good balance."));
 
         Label framesNote = new Label("(more = more accurate, slower)");
-        framesNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        framesNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(framesLabel, 0, row);
         grid.add(framesSpinner, 1, row);
@@ -397,7 +397,7 @@ public class NoiseCharacterizationDialog {
                 + "Requires matplotlib on the Python server."));
 
         Label plotsNote = new Label("(noise curves + SNR heatmap)");
-        plotsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        plotsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(plotsLabel, 0, row);
         grid.add(plotsCheck, 1, row);
@@ -426,7 +426,7 @@ public class NoiseCharacterizationDialog {
         outputLabel.setTooltip(new Tooltip("Results saved to: " + outputPath));
 
         Label outputNote = new Label("(auto: config folder/" + NOISE_SUBFOLDER + ")");
-        outputNote.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        outputNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         grid.add(outputPathLabel, 0, row);
         grid.add(outputLabel, 1, row);

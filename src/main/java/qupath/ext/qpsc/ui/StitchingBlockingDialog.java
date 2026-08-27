@@ -178,7 +178,8 @@ public class StitchingBlockingDialog {
         // of these truncated with "..." despite already wrapping. USE_PREF_SIZE makes the wrapped
         // height the floor instead.
         warningMessage.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
-        warningMessage.setStyle("-fx-text-fill: orange; -fx-font-style: italic; -fx-text-alignment: center;");
+        warningMessage.setStyle(
+                "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-style: italic; -fx-text-alignment: center;");
 
         // Instructions
         Label instructions = new Label("This dialog will close automatically when all stitching operations complete. "
@@ -186,7 +187,8 @@ public class StitchingBlockingDialog {
         instructions.setWrapText(true);
         instructions.setMaxWidth(400);
         instructions.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
-        instructions.setStyle("-fx-text-fill: gray; -fx-font-size: 11px; -fx-text-alignment: center;");
+        instructions.setStyle(
+                "-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 11px; -fx-text-alignment: center;");
 
         content.getChildren()
                 .addAll(

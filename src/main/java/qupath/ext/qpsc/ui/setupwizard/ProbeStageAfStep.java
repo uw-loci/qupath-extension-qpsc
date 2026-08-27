@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.ProbeStageAfResult;
+import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * Wizard step 5b: probe the focus stage's streaming-AF speed parameters.
@@ -181,7 +182,7 @@ public class ProbeStageAfStep implements WizardStep {
 
         if (error != null) {
             statusLabel.setText("Probe failed: " + error);
-            statusLabel.setStyle("-fx-text-fill: red;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
             resultsArea.setText("Probe could not reach the server.\n\n"
                     + "Check that the microscope server is running at "
                     + QPPreferenceDialog.getMicroscopeServerHost() + ":"
@@ -192,11 +193,11 @@ public class ProbeStageAfStep implements WizardStep {
         }
         if (result == null) {
             statusLabel.setText("Probe returned no result");
-            statusLabel.setStyle("-fx-text-fill: red;");
+            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
             return;
         }
 
-        statusLabel.setStyle("-fx-text-fill: green;");
+        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
         statusLabel.setText(
                 result.enabled
                         ? "Probe complete -- streaming AF is viable on this stage."
@@ -249,7 +250,7 @@ public class ProbeStageAfStep implements WizardStep {
         slowValueField.setText("1");
         slowUmPerSField.setText("11.5");
         normalValueField.setText("100");
-        statusLabel.setStyle("-fx-text-fill: gray;");
+        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         statusLabel.setText(
                 "Using legacy defaults (Prior-style 1-100 percent). " + "Run \"Re-probe Stage AF\" later to verify.");
         resultsArea.setText("Skipped probe -- legacy defaults applied.");

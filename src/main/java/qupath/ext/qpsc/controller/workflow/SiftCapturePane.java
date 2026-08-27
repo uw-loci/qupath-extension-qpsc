@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 
@@ -96,7 +97,7 @@ class SiftCapturePane extends VBox {
 
         String tileName = tile != null && tile.getName() != null ? tile.getName() : "unnamed tile";
         Label tileInfoLabel = new Label("Target tile: " + tileName);
-        tileInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        tileInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Button restoreButton = new Button("Restore target tile");
         restoreButton.setTooltip(
@@ -114,7 +115,7 @@ class SiftCapturePane extends VBox {
         // green (confident) / amber (weak) / red (no match).
         siftResultLabel = new Label("SIFT: not run for this point yet.");
         siftResultLabel.setWrapText(true);
-        siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
+        siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         siftButton = new Button("Auto-Align (SIFT)");
         // Amber = the "SIFT" step in the numbered alignment-step list (matches its step label).
@@ -195,7 +196,7 @@ class SiftCapturePane extends VBox {
         // "click me again," which is the opposite of what we want mid-run. The pulse is re-pointed
         // (at Capture on a good match, or back at SIFT on no match) when the run returns.
         pulse.clear();
-        siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #555;");
+        siftResultLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
         siftResultLabel.setText("SIFTing for gold...");
         new Thread(
                         () -> {
@@ -229,7 +230,7 @@ class SiftCapturePane extends VBox {
                             } catch (Exception ex) {
                                 logger.warn("SiftCapturePane SIFT failed: {}", ex.getMessage());
                                 Platform.runLater(() -> {
-                                    siftResultLabel.setStyle("-fx-text-fill: #c0362c;");
+                                    siftResultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                                     siftResultLabel.setText(
                                             "SIFT failed: " + ex.getMessage() + " -- nudge manually, then Capture.");
                                     siftButton.setDisable(false);
@@ -308,14 +309,14 @@ class SiftCapturePane extends VBox {
             double conf = result[3];
             siftResultLabel.setStyle(
                     conf >= 0.5
-                            ? "-fx-text-fill: #1c8552; -fx-font-weight: bold;"
-                            : "-fx-text-fill: #a5640c; -fx-font-weight: bold;");
+                            ? "-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold;"
+                            : "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
             siftResultLabel.setText(String.format(
                     "SIFT: confidence %.0f%%, %d inliers, moved (%.1f, %.1f) um. "
                             + "Capture if the live view matches the tile.",
                     conf * 100, (int) result[2], result[0], result[1]));
         } else {
-            siftResultLabel.setStyle("-fx-text-fill: #c0362c; -fx-font-weight: bold;");
+            siftResultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
             siftResultLabel.setText("SIFT: no confident match. Nudge the stage manually, "
                     + "then Capture -- or try Auto-Align again.");
         }

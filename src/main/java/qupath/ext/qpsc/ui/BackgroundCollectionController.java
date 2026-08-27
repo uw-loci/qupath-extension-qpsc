@@ -255,7 +255,8 @@ public class BackgroundCollectionController {
 
                 // Add a status label at the bottom for acquisition progress
                 Label acquiringLabel = new Label();
-                acquiringLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #1565C0;");
+                acquiringLabel.setStyle(
+                        "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: " + ThemeColors.INFO + ";");
                 acquiringLabel.setVisible(false);
                 acquiringLabel.setWrapText(true);
                 // Add it below the scroll pane
@@ -311,7 +312,8 @@ public class BackgroundCollectionController {
                                 Platform.runLater(() -> {
                                     acquiringLabel.setText("Background collection complete!");
                                     acquiringLabel.setStyle(
-                                            "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #2E7D32;");
+                                            "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: "
+                                                    + ThemeColors.SUCCESS + ";");
                                     // Complete with null -- acquisition already ran above.
                                     // Completing with result would trigger run()'s thenAccept
                                     // and execute the acquisition a second time.
@@ -330,7 +332,8 @@ public class BackgroundCollectionController {
                                 Platform.runLater(() -> {
                                     acquiringLabel.setText("Acquisition failed: " + ex.getMessage());
                                     acquiringLabel.setStyle(
-                                            "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: #C62828;");
+                                            "-fx-font-weight: bold; -fx-font-size: 12px; -fx-text-fill: "
+                                                    + ThemeColors.ERROR + ";");
                                     okButton.setDisable(false);
                                     if (cancelBtn != null) cancelBtn.setDisable(false);
                                 });
@@ -622,7 +625,8 @@ public class BackgroundCollectionController {
     private VBox buildExposureModeBox() {
         bgExposureModeAdvisory = new Label();
         bgExposureModeAdvisory.setWrapText(true);
-        bgExposureModeAdvisory.setStyle("-fx-font-style: italic; -fx-font-size: 11px; -fx-text-fill: gray;");
+        bgExposureModeAdvisory.setStyle(
+                "-fx-font-style: italic; -fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         bgExposureModeGroup = new ToggleGroup();
         modeProfileRadio = new RadioButton("Use profile exposure");
@@ -976,7 +980,7 @@ public class BackgroundCollectionController {
                                     "Per-angle WB enabled - using calibrated exposures from imageprocessing config");
                             showBackgroundValidationMessage(
                                     "Per-angle white balance: Using calibrated exposure values from config.",
-                                    "-fx-text-fill: blue; -fx-font-weight: bold;");
+                                    "-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
                         } else if (capturedSettings != null) {
                             // Existing backgrounds found but we still use config/calibrated values
                             // so that new collection uses latest WB calibration exposures
@@ -986,12 +990,12 @@ public class BackgroundCollectionController {
                             showBackgroundValidationMessage(
                                     "Using calibrated exposure values from config. "
                                             + "Previous background images exist and will be overwritten.",
-                                    "-fx-text-fill: blue; -fx-font-weight: bold;");
+                                    "-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
                         } else {
                             logger.info("No existing background settings - using defaults from config/preferences");
                             showBackgroundValidationMessage(
                                     "No existing background images. Ready for new collection.",
-                                    "-fx-text-fill: green; -fx-font-weight: bold;");
+                                    "-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold;");
                         }
 
                         // Clear and update current values
@@ -1023,7 +1027,8 @@ public class BackgroundCollectionController {
                             expRow.setAlignment(Pos.CENTER_LEFT);
 
                             Label note = new Label("Adaptive exposure will converge to the target intensity.");
-                            note.setStyle("-fx-text-fill: gray; -fx-font-style: italic; -fx-font-size: 11px;");
+                            note.setStyle("-fx-text-fill: " + ThemeColors.MUTED
+                                    + "; -fx-font-style: italic; -fx-font-size: 11px;");
                             note.setWrapText(true);
 
                             exposureControlsPane.getChildren().addAll(expRow, note);
@@ -1059,7 +1064,8 @@ public class BackgroundCollectionController {
 
                             if (isMultiAngle) {
                                 Label angleTypeLabel = new Label(getAngleTypeName(ae.ticks()));
-                                angleTypeLabel.setStyle("-fx-text-fill: gray; -fx-font-style: italic;");
+                                angleTypeLabel.setStyle(
+                                        "-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
 
                                 if (perAngleWbEnabled) {
                                     // WB-calibrated: read-only labels -- editing would create
@@ -1156,7 +1162,7 @@ public class BackgroundCollectionController {
                     logger.error("Failed to get rotation angles for modality: {}", modality, ex);
                     Platform.runLater(() -> {
                         Label errorLabel = new Label("Failed to load exposure settings for " + modality);
-                        errorLabel.setStyle("-fx-text-fill: red;");
+                        errorLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                         exposureControlsPane.getChildren().add(errorLabel);
                     });
                     return null;
@@ -1199,14 +1205,17 @@ public class BackgroundCollectionController {
                 grid.add(new Label(String.format("%.1f", ch.defaultExposureMs())), 1, row);
                 grid.add(new Label(Double.isNaN(intensity) ? "--" : String.format("%.0f", intensity)), 2, row);
                 Label status = new Label(inUse ? "In use" : "Skipped (unused)");
-                status.setStyle(inUse ? "-fx-text-fill: #2E7D32;" : "-fx-text-fill: #9E9E9E;");
+                status.setStyle(
+                        inUse
+                                ? "-fx-text-fill: " + ThemeColors.SUCCESS + ";"
+                                : "-fx-text-fill: " + ThemeColors.MUTED + ";");
                 grid.add(status, 3, row);
                 row++;
             }
             exposureControlsPane.getChildren().add(grid);
             showBackgroundValidationMessage(
                     "Fluorescence profile: one background will be collected per in-use channel.",
-                    "-fx-text-fill: blue; -fx-font-weight: bold;");
+                    "-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
             return true;
         } catch (Exception e) {
             logger.debug("Could not render channel table: {}", e.getMessage());

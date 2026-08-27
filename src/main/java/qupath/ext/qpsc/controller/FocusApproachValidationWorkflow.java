@@ -22,6 +22,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.FocusApproachValidationStore;
 import qupath.ext.qpsc.utilities.FocusProfileAnalysis;
@@ -295,7 +296,7 @@ public final class FocusApproachValidationWorkflow {
                 + "against it, and a wrong value licenses the wrong objective.");
         objectiveNote.setWrapText(true);
         objectiveNote.setMaxWidth(520);
-        objectiveNote.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        objectiveNote.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         HBox objectiveRow = new HBox(8, new Label("Objective:"), objectiveBox);
         objectiveRow.setStyle("-fx-alignment: center-left;");
 

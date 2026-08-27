@@ -392,7 +392,7 @@ public class MacroImageController {
             else if (flipX) flipText += "Flipped X";
             else flipText += "Flipped Y";
             flipInfoLabel.setText(flipText);
-            flipInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #2c3e50;");
+            flipInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.NORMAL + ";");
         }
 
         // Try to load and display the macro image immediately when tab is created
@@ -416,7 +416,7 @@ public class MacroImageController {
                         previewImage.setImage(fxImage);
                         resultLabel.setText(
                                 "Macro image loaded (cropped and flipped). Click 'Preview Green Box Detection' to detect the scanned area.");
-                        resultLabel.setStyle("-fx-text-fill: #059669;");
+                        resultLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
                     }
                 }
             } catch (Exception ex) {
@@ -441,7 +441,7 @@ public class MacroImageController {
             ImageData imageData = gui.getImageData();
             if (imageData == null) {
                 resultLabel.setText("No image loaded");
-                resultLabel.setStyle("-fx-text-fill: red;");
+                resultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
 
@@ -500,7 +500,7 @@ public class MacroImageController {
                                 result.getDetectedBox().getBoundsWidth(),
                                 result.getDetectedBox().getBoundsHeight(),
                                 result.getConfidence()));
-                        resultLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+                        resultLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight: bold;");
 
                         // Save current params since detection was successful
                         params.saveToPreferences();
@@ -508,17 +508,17 @@ public class MacroImageController {
                     } else {
                         // No detection - keep showing the processed macro image
                         resultLabel.setText("No green box detected with current parameters");
-                        resultLabel.setStyle("-fx-text-fill: orange;");
+                        resultLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
                     }
                 } else {
                     resultLabel.setText("Could not retrieve macro image from current image");
-                    resultLabel.setStyle("-fx-text-fill: red;");
+                    resultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                     logger.error("Failed to retrieve macro image");
                 }
             } catch (Exception ex) {
                 String errorMsg = "Error during green box detection: " + ex.getMessage();
                 resultLabel.setText(errorMsg);
-                resultLabel.setStyle("-fx-text-fill: red;");
+                resultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                 logger.error("Error in green box preview", ex);
             }
         });
@@ -703,7 +703,7 @@ public class MacroImageController {
     //            else if (flipX) flipText += "Flipped X";
     //            else flipText += "Flipped Y";
     //            flipInfoLabel.setText(flipText);
-    //            flipInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #2c3e50;");
+    //            flipInfoLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.NORMAL + ";");
     //        }
     //
     //        // Try to load and display the macro image immediately when tab is created
@@ -727,7 +727,7 @@ public class MacroImageController {
     //                        previewImage.setImage(fxImage);
     //                        resultLabel.setText("Macro image loaded (cropped and flipped). Click 'Preview Green Box
     // Detection' to detect the scanned area.");
-    //                        resultLabel.setStyle("-fx-text-fill: #059669;");
+    //                        resultLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
     //                    }
     //                }
     //            } catch (Exception ex) {
@@ -751,7 +751,7 @@ public class MacroImageController {
     //            ImageData imageData = gui.getImageData();
     //            if (imageData == null) {
     //                resultLabel.setText("No image loaded");
-    //                resultLabel.setStyle("-fx-text-fill: red;");
+    //                resultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
     //                return;
     //            }
     //
@@ -809,7 +809,8 @@ public class MacroImageController {
     //                                result.getDetectedBox().getBoundsHeight(),
     //                                result.getConfidence()
     //                        ));
-    //                        resultLabel.setStyle("-fx-text-fill: green; -fx-font-weight: bold;");
+    //                        resultLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + "; -fx-font-weight:
+    // bold;");
     //
     //                        // Save current params since detection was successful
     //                        params.saveToPreferences();
@@ -817,17 +818,17 @@ public class MacroImageController {
     //                    } else {
     //                        // No detection - keep showing the processed macro image
     //                        resultLabel.setText("No green box detected with current parameters");
-    //                        resultLabel.setStyle("-fx-text-fill: orange;");
+    //                        resultLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
     //                    }
     //                } else {
     //                    resultLabel.setText("Could not retrieve macro image from current image");
-    //                    resultLabel.setStyle("-fx-text-fill: red;");
+    //                    resultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
     //                    logger.error("Failed to retrieve macro image");
     //                }
     //            } catch (Exception ex) {
     //                String errorMsg = "Error during green box detection: " + ex.getMessage();
     //                resultLabel.setText(errorMsg);
-    //                resultLabel.setStyle("-fx-text-fill: red;");
+    //                resultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
     //                logger.error("Error in green box preview", ex);
     //            }
     //        });
@@ -1291,7 +1292,9 @@ public class MacroImageController {
 
                     // Update stats with color coding
                     int regionCount = result.getTissueRegions().size();
-                    String regionStyle = regionCount > 0 ? "-fx-text-fill: green;" : "-fx-text-fill: orange;";
+                    String regionStyle = regionCount > 0
+                            ? "-fx-text-fill: " + ThemeColors.SUCCESS + ";"
+                            : "-fx-text-fill: " + ThemeColors.WARNING + ";";
 
                     statsLabel.setText(String.format(
                             "Detected %d tissue regions (after %d pixel minimum filter)\n"
@@ -1309,12 +1312,12 @@ public class MacroImageController {
                     logger.info("Tissue detection successful: {} regions found", regionCount);
                 } else {
                     statsLabel.setText("Failed to analyze macro image - check if macro image is available");
-                    statsLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                    statsLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
                     logger.warn("Tissue detection returned null result");
                 }
             } catch (Exception ex) {
                 statsLabel.setText("Error during tissue detection: " + ex.getMessage());
-                statsLabel.setStyle("-fx-text-fill: red; -fx-font-weight: bold;");
+                statsLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
                 logger.error("Error in tissue detection preview", ex);
             }
         });

@@ -117,7 +117,7 @@ public final class PropagationManagerDialog {
         Label header = new Label("Propagate annotations between base images and their sub-acquisitions.");
         header.setStyle("-fx-font-size: 12px;");
         Label countLabel = new Label(groups.size() + " group(s) with sub-acquisitions");
-        countLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        countLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // -- Direction toggle ----------------------------------------------
         ToggleGroup dirGroup = new ToggleGroup();

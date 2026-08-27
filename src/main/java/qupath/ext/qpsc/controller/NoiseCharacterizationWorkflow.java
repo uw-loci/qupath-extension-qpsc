@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.NoiseCharacterizationDialog;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -148,11 +149,11 @@ public class NoiseCharacterizationWorkflow {
         progressLabel.setStyle("-fx-font-size: 14px;");
 
         Label statusLabel = new Label("Preparing camera...");
-        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: gray;");
+        statusLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label infoLabel = new Label("Testing gain/exposure combinations for noise analysis.\n"
                 + "You can use other QuPath windows while this runs.");
-        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666666;");
+        infoLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Button cancelButton = new Button("Cancel");
         AtomicBoolean cancelled = new AtomicBoolean(false);

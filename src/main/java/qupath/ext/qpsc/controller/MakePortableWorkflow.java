@@ -30,6 +30,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -361,7 +362,7 @@ public class MakePortableWorkflow {
                             + "These are deleted by default -- they are only needed to re-stitch. "
                             + "Check the box above to keep them.",
                     tileScan.tileFileCount, tileScan.tileDirs.size(), formatBytes(tileScan.tileSizeBytes)));
-            tileInfoLabel.setStyle("-fx-text-fill: #b06000;");
+            tileInfoLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
         } else {
             tileInfoLabel.setText("No individual tile images found in the project folder.");
         }
@@ -537,7 +538,8 @@ public class MakePortableWorkflow {
         }
         label.setText(msg);
         boolean inert = action == ZarrAction.LEAVE && !willDeleteTiles;
-        label.setStyle("-fx-font-weight: bold; -fx-text-fill: " + (inert ? "gray" : "red") + ";");
+        label.setStyle(
+                "-fx-font-weight: bold; -fx-text-fill: " + (inert ? ThemeColors.MUTED : ThemeColors.ERROR) + ";");
     }
 
     /** Build the confirmation-dialog message for the chosen options. */
@@ -603,8 +605,10 @@ public class MakePortableWorkflow {
         label.setText(String.format("  %s  %s  (%s)", statusStr, ze.entryName, formatBytes(ze.zarrSizeBytes)));
         label.setStyle(
                 ze.status == TiffStatus.READY
-                        ? "-fx-text-fill: green;"
-                        : ze.status == TiffStatus.CONVERTING ? "-fx-text-fill: orange;" : "-fx-text-fill: red;");
+                        ? "-fx-text-fill: " + ThemeColors.SUCCESS + ";"
+                        : ze.status == TiffStatus.CONVERTING
+                                ? "-fx-text-fill: " + ThemeColors.WARNING + ";"
+                                : "-fx-text-fill: " + ThemeColors.ERROR + ";");
     }
 
     // ------------------------------------------------------------------

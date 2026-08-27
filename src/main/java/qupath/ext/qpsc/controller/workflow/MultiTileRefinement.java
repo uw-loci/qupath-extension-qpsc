@@ -23,6 +23,7 @@ import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.AttentionPulse;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
@@ -220,7 +221,7 @@ public class MultiTileRefinement {
         Label step2 =
                 stepLabel("2.  Click the amber \"Auto-Align (SIFT)\" to snap the stage onto that tile.", "#E65100");
         Hyperlink siftHelp = new Hyperlink("SIFT struggling? Open the alignment docs, then adjust \"Settings...\"");
-        siftHelp.setStyle("-fx-text-fill: #E65100;");
+        siftHelp.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
         siftHelp.setOnAction(e -> DocumentationHelper.openDocumentation("microscopeAlignment"));
         Label step2b = stepLabel(
                 "2b. If it lands off-target, nudge the stage toward the tile via the Stage Map, then run "
@@ -243,7 +244,7 @@ public class MultiTileRefinement {
         captureSlot.setFillWidth(true);
 
         Label diagLabel = new Label("Add at least 2 points to solve a correction.");
-        diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+        diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
         diagLabel.setWrapText(true);
         diagLabel.setMaxWidth(420);
         diagLabel.setMinHeight(Region.USE_PREF_SIZE);
@@ -268,7 +269,7 @@ public class MultiTileRefinement {
         Label liveStateLabel = new Label("Preparing live view...");
         liveStateLabel.setWrapText(true);
         liveStateLabel.setMaxWidth(420);
-        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        liveStateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // The same reminder every other SIFT dialog carries (SingleTileRefinement and the
         // per-tile confirm). Multi-tile is the one that runs unattended batches, so its absence
@@ -320,7 +321,7 @@ public class MultiTileRefinement {
                         fit.pointCount(),
                         String.format("%.2f", fit.rotationDegrees()),
                         String.format("%.4f", fit.scale()));
-                diagLabel.setStyle("-fx-text-fill: #C62828; -fx-font-weight: bold;");
+                diagLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
                 diagLabel.setText(String.format(
                         "WARNING: correction is rotation %.1f deg, scale %.3f -- much larger than slide play. "
                                 + "The base alignment likely does NOT match the stage (a rotation near 90/180/270 "
@@ -329,7 +330,7 @@ public class MultiTileRefinement {
                                 + "available if you are sure.",
                         fit.rotationDegrees(), fit.scale()));
             } else {
-                diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: #666;");
+                diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
                 diagLabel.setText(String.format(
                         "Correction from %d points: rotation %.2f deg, scale %.4f, fit RMS %.1f um.%s",
                         fit.pointCount(),

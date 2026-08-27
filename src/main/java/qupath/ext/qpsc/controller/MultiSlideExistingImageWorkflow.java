@@ -48,6 +48,7 @@ import qupath.ext.qpsc.ui.DialogPlacement;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.SectionBuilder;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
@@ -502,7 +503,7 @@ public final class MultiSlideExistingImageWorkflow {
         // entry's hierarchy off the FX thread, so it is recomputed at pass boundaries, not on every
         // state tick. Uses this scope's learned per-tile timing when available (self-calibrating).
         Label estimateLabel = new Label("Estimated run time: set up slides to see an estimate.");
-        estimateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #444;");
+        estimateLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         estimateLabel.setWrapText(true);
         estimateLabel.setMinHeight(Region.USE_PREF_SIZE);
         boolean[] estimateLearned = {false};
@@ -871,7 +872,7 @@ public final class MultiSlideExistingImageWorkflow {
         manualHint.setWrapText(true);
         manualHint.setMaxWidth(560);
         manualHint.setMinHeight(Region.USE_PREF_SIZE);
-        manualHint.setStyle("-fx-font-weight: bold; -fx-text-fill: #2E7D32;");
+        manualHint.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
         VBox slotsContent = new VBox(8, manualHint, grid);
         slotsContent.setStyle("-fx-border-color: #2E7D32; -fx-border-width: 2; -fx-border-radius: 6; -fx-padding: 10;");
         TitledPane slotsSection = SectionBuilder.section("Slots", true, slotsContent);
@@ -917,7 +918,7 @@ public final class MultiSlideExistingImageWorkflow {
         // "Focus failed -- align manually" on failure.
         SlotJumpAutofocus.setStatusSink((message, error) -> {
             afStatusLabel.setText("AF status: " + message);
-            afStatusLabel.setStyle(error ? "-fx-text-fill: #E65100; -fx-font-weight: bold;" : "");
+            afStatusLabel.setStyle(error ? "-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;" : "");
         });
 
         TitledPane alignmentSection = SectionBuilder.section("Alignment", true, alignmentBox);
@@ -1000,7 +1001,7 @@ public final class MultiSlideExistingImageWorkflow {
         // Finish / Abort row. The blue frame pairs with the green MANUAL Slots section above: blue
         // = run every slide unattended, green = drive one slide by hand.
         Label autoTitle = new Label("AUTOMATED RUN -- every slide in the holder");
-        autoTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: #1565C0;");
+        autoTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.INFO + ";");
 
         HBox stepRow = new HBox(10, setUpAllBtn, acquireAllBtn);
         stepRow.setAlignment(Pos.CENTER_LEFT);

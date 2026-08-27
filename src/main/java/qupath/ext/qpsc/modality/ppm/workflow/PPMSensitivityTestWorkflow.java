@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -172,7 +173,7 @@ public class PPMSensitivityTestWorkflow {
 
             // Test type description label
             Label testDescLabel = new Label();
-            testDescLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+            testDescLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             testDescLabel.setWrapText(true);
             testDescLabel.setPrefWidth(400);
 
@@ -226,7 +227,7 @@ public class PPMSensitivityTestWorkflow {
 
             // Info label for duration estimate
             Label durationLabel = new Label();
-            durationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: gray;");
+            durationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             // Update duration estimate when test type changes
             Runnable updateDuration = () -> {
@@ -275,14 +276,14 @@ public class PPMSensitivityTestWorkflow {
             grid.add(new Label("Base Angle (deg):"), 0, row);
             grid.add(baseAngleSpinner, 1, row);
             Label baseAngleNote = new Label("For deviation/repeatability tests");
-            baseAngleNote.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+            baseAngleNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             grid.add(baseAngleNote, 2, row, 2, 1);
             row++;
 
             grid.add(new Label("Repeats:"), 0, row);
             grid.add(repeatsSpinner, 1, row);
             Label repeatsNote = new Label("For repeatability test only");
-            repeatsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: gray;");
+            repeatsNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             grid.add(repeatsNote, 2, row, 2, 1);
             row++;
 
@@ -342,10 +343,12 @@ public class PPMSensitivityTestWorkflow {
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
                     validationLabel.setText("Warning: Please select a valid output folder");
-                    validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #D97706;"); // Orange warning
+                    validationLabel.setStyle(
+                            "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + ";"); // Orange warning
                 } else {
                     validationLabel.setText("Ready to start");
-                    validationLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #059669;"); // Green ready
+                    validationLabel.setStyle(
+                            "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";"); // Green ready
                 }
             };
 

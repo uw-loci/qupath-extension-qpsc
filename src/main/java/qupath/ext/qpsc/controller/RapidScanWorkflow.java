@@ -15,6 +15,7 @@ import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.StageImageTransform;
@@ -148,9 +149,9 @@ public class RapidScanWorkflow {
 
         // FOV and tile count labels
         Label fovLabel = new Label();
-        fovLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        fovLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         Label tileCountLabel = new Label();
-        tileCountLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        tileCountLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Center X/Y
         TextField centerXField = new TextField(String.format("%.1f", currentX));
@@ -241,7 +242,7 @@ public class RapidScanWorkflow {
         testSnapBtn.setTooltip(new Tooltip("Set camera to the configured exposure so you can check\n"
                 + "brightness in the Live Viewer before scanning."));
         Label testResultLabel = new Label();
-        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #666;");
+        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         testSnapBtn.setOnAction(e -> {
             testSnapBtn.setDisable(true);
             testResultLabel.setText("Setting exposure...");
@@ -256,13 +257,15 @@ public class RapidScanWorkflow {
                                         testResultLabel.setText(String.format(
                                                 "Exposure set to %.3f ms (was %.1f ms). Check Live Viewer brightness.",
                                                 testExp, orig));
-                                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #c60;");
+                                        testResultLabel.setStyle(
+                                                "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";");
                                         testSnapBtn.setDisable(false);
                                     });
                                 } catch (Exception ex) {
                                     Platform.runLater(() -> {
                                         testResultLabel.setText("Failed: " + ex.getMessage());
-                                        testResultLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: red;");
+                                        testResultLabel.setStyle(
+                                                "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                                         testSnapBtn.setDisable(false);
                                     });
                                 }
@@ -298,7 +301,7 @@ public class RapidScanWorkflow {
         Button startBtn = new Button("Start Rapid Scan");
         startBtn.setStyle("-fx-font-weight: bold;");
         Label statusLabel = new Label("Ready");
-        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Layout
         int row = 0;
@@ -366,18 +369,18 @@ public class RapidScanWorkflow {
         startBtn.setOnAction(e -> {
             if (fovState.fovW <= 0 || fovState.fovH <= 0) {
                 statusLabel.setText("Cannot determine FOV for selected objective.");
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             if (fovState.pixelSize <= 0) {
                 statusLabel.setText("Cannot determine pixel size -- stitching would fail.");
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             String output = outputField.getText().trim();
             if (output.isEmpty()) {
                 statusLabel.setText("Please specify an output folder.");
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             double cx, cy;
@@ -386,7 +389,7 @@ public class RapidScanWorkflow {
                 cy = Double.parseDouble(centerYField.getText().trim());
             } catch (NumberFormatException ex) {
                 statusLabel.setText("Invalid center coordinates.");
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
 
@@ -406,18 +409,18 @@ public class RapidScanWorkflow {
                     && selectedDet != null
                     && !QPScopeChecks.validateObjectivePixelSize(selectedObj, selectedDet, "brightfield", pxSize)) {
                 statusLabel.setText("Workflow cancelled -- objective mismatch.");
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             if (selectedDet != null && !QPScopeChecks.validateCameraRoi(selectedDet)) {
                 statusLabel.setText("Workflow cancelled -- camera ROI mismatch.");
-                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
 
             startBtn.setDisable(true);
             statusLabel.setText("Scanning...");
-            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
             new Thread(
                             () -> {
@@ -439,26 +442,30 @@ public class RapidScanWorkflow {
 
                                     Platform.runLater(() -> {
                                         statusLabel.setText("Scan complete: " + response);
-                                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                                        statusLabel.setStyle(
+                                                "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                     });
 
                                     if (doStitch) {
                                         Platform.runLater(() -> {
                                             statusLabel.setText("Stitching...");
-                                            statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+                                            statusLabel.setStyle(
+                                                    "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                                         });
                                         try {
                                             // Pixel size scales with binning (2x2 binning -> 2x pixel size)
                                             stitchRapidScanOutput(output, pxSize * fBinning);
                                             Platform.runLater(() -> {
                                                 statusLabel.setText("Scan + stitch complete");
-                                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: green;");
+                                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: "
+                                                        + ThemeColors.SUCCESS + ";");
                                             });
                                         } catch (Exception stitchEx) {
                                             logger.error("Stitching failed", stitchEx);
                                             Platform.runLater(() -> {
                                                 statusLabel.setText("Scan OK, stitch failed: " + stitchEx.getMessage());
-                                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: orange;");
+                                                statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: "
+                                                        + ThemeColors.WARNING + ";");
                                             });
                                         }
                                     }
@@ -466,7 +473,8 @@ public class RapidScanWorkflow {
                                     logger.error("Rapid scan failed", ex);
                                     Platform.runLater(() -> {
                                         statusLabel.setText("Failed: " + ex.getMessage());
-                                        statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: red;");
+                                        statusLabel.setStyle(
+                                                "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                                     });
                                 } finally {
                                     Platform.runLater(() -> startBtn.setDisable(false));

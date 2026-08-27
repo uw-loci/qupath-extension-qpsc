@@ -10,6 +10,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -374,8 +375,8 @@ public class TestAutofocusWorkflow {
                 if (Math.abs(shift) > 5.0) {
                     javafx.scene.control.Label warningLabel =
                             new javafx.scene.control.Label("WARNING: Large Z shift detected!");
-                    warningLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; "
-                            + "-fx-text-fill: #FF6B6B;"); // Soft red for visibility
+                    warningLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px; " + "-fx-text-fill: "
+                            + ThemeColors.ERROR + ";"); // Soft red for visibility
 
                     javafx.scene.control.Label warningDetail =
                             new javafx.scene.control.Label("Starting position may have been out of focus.");

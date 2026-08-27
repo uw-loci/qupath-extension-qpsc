@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -279,7 +280,7 @@ public class WhiteBalanceWorkflow {
         progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
 
         Label detailLabel = new Label("Adjusting per-channel exposures to balance colors");
-        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         root.getChildren().addAll(statusLabel, progress, detailLabel);
 
@@ -442,7 +443,7 @@ public class WhiteBalanceWorkflow {
 
         Label detailLabel = new Label("Calibrating 4 PPM angles:\n"
                 + "Positive (7 deg) -> Negative (-7 deg) -> Crossed (0 deg) -> Uncrossed (90 deg)");
-        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: #666;");
+        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         detailLabel.setWrapText(true);
 
         root.getChildren().addAll(statusLabel, progress, detailLabel);

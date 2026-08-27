@@ -349,7 +349,7 @@ public class ServerConnectionController {
         Label ntfyDesc = new Label("Send push notifications to your phone when workflows complete or fail.\n"
                 + "Setup: Install the ntfy app (free, Android/iOS), subscribe to a topic,\n"
                 + "then enter the same topic name below.");
-        ntfyDesc.setStyle("-fx-text-fill: #666666;");
+        ntfyDesc.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
         ntfyDesc.setWrapText(true);
         mainLayout.getChildren().add(ntfyDesc);
 

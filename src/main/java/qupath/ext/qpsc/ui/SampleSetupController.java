@@ -121,7 +121,7 @@ public class SampleSetupController {
 
             // Add real-time validation feedback for sample name
             Label sampleNameErrorLabel = new Label();
-            sampleNameErrorLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 10px;");
+            sampleNameErrorLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-size: 10px;");
             sampleNameErrorLabel.setVisible(false);
             sampleNameField.textProperty().addListener((obs, oldVal, newVal) -> {
                 String error = SampleNameValidator.getValidationError(newVal);
@@ -346,7 +346,7 @@ public class SampleSetupController {
 
             // --- Error label for validation messages ---
             Label errorLabel = new Label();
-            errorLabel.setStyle("-fx-text-fill: red; -fx-font-size: 12px;");
+            errorLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-size: 12px;");
             errorLabel.setWrapText(true);
             errorLabel.setVisible(false);
 
@@ -561,13 +561,15 @@ public class SampleSetupController {
      * Banner background color for creating a new project (blue tint).
      */
     private static final String BANNER_COLOR_NEW_PROJECT =
-            "-fx-background-color: #E3F2FD; -fx-border-color: #90CAF9; -fx-border-width: 0 0 1 0;";
+            "-fx-background-color: " + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)" + "; -fx-border-color: "
+                    + "ladder(-fx-background, #2A5B8A 49%, #90CAF9 50%)" + "; -fx-border-width: 0 0 1 0;";
 
     /**
      * Banner background color for adding to an existing project (green tint).
      */
     private static final String BANNER_COLOR_EXISTING_PROJECT =
-            "-fx-background-color: #E8F5E9; -fx-border-color: #A5D6A7; -fx-border-width: 0 0 1 0;";
+            "-fx-background-color: " + "ladder(-fx-background, #1B3A1B 49%, #E8F5E9 50%)" + "; -fx-border-color: "
+                    + "ladder(-fx-background, #3A6B3E 49%, #A5D6A7 50%)" + "; -fx-border-width: 0 0 1 0;";
 
     /**
      * Creates a variant detection banner that shows context about whether
@@ -595,24 +597,24 @@ public class SampleSetupController {
 
         // Secondary text (path/details)
         Label secondaryText = new Label();
-        secondaryText.setStyle("-fx-font-size: 11px; -fx-text-fill: #555;");
+        secondaryText.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         if (hasOpenProject) {
             // Adding to existing project - green banner
             banner.setStyle(BANNER_COLOR_EXISTING_PROJECT);
             iconLabel.setText("[+]");
-            iconLabel.setStyle(iconLabel.getStyle() + " -fx-text-fill: #2E7D32;");
+            iconLabel.setStyle(iconLabel.getStyle() + " -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             primaryText.setText("Adding to existing project: " + existingProjectName);
-            primaryText.setStyle(primaryText.getStyle() + " -fx-text-fill: #1B5E20;");
+            primaryText.setStyle(primaryText.getStyle() + " -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             secondaryText.setText("Using existing project");
-            secondaryText.setStyle(secondaryText.getStyle() + " -fx-text-fill: #388E3C;");
+            secondaryText.setStyle(secondaryText.getStyle() + " -fx-text-fill: " + ThemeColors.SUCCESS + ";");
         } else {
             // Creating new project - blue banner
             banner.setStyle(BANNER_COLOR_NEW_PROJECT);
             iconLabel.setText("[*]");
-            iconLabel.setStyle(iconLabel.getStyle() + " -fx-text-fill: #1565C0;");
+            iconLabel.setStyle(iconLabel.getStyle() + " -fx-text-fill: " + ThemeColors.INFO + ";");
             primaryText.setText("Creating new project");
-            primaryText.setStyle(primaryText.getStyle() + " -fx-text-fill: #0D47A1;");
+            primaryText.setStyle(primaryText.getStyle() + " -fx-text-fill: " + ThemeColors.INFO + ";");
 
             // Dynamic path display - will be updated as user types
             String initialPath = folderField.getText();
@@ -622,7 +624,7 @@ public class SampleSetupController {
             } else {
                 secondaryText.setText("Location: " + initialPath + File.separator + "[Sample Name]");
             }
-            secondaryText.setStyle(secondaryText.getStyle() + " -fx-text-fill: #1976D2;");
+            secondaryText.setStyle(secondaryText.getStyle() + " -fx-text-fill: " + ThemeColors.INFO + ";");
 
             // Add listeners to update path dynamically
             sampleNameField.textProperty().addListener((obs, oldVal, newVal) -> {

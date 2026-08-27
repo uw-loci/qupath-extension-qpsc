@@ -376,7 +376,7 @@ public class UnifiedAcquisitionController {
             }
 
             sampleNameErrorLabel = new Label();
-            sampleNameErrorLabel.setStyle("-fx-text-fill: orange; -fx-font-size: 10px;");
+            sampleNameErrorLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-size: 10px;");
             sampleNameErrorLabel.setVisible(false);
 
             sampleNameField.textProperty().addListener((obs, oldVal, newVal) -> {
