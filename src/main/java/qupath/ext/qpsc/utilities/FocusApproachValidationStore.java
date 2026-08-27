@@ -245,6 +245,47 @@ public final class FocusApproachValidationStore {
      * @return {@code [z[], metric[]]}, or null when the file cannot be parsed
      */
     /**
+     * The focus metric the server used, read from a dump's {@code manifest.json}.
+     *
+     * <p>Used to LABEL a plotted profile. The client cannot infer this: the metric is chosen
+     * server-side per modality and objective, and showing a curve under the wrong metric name
+     * would misrepresent the measurement.
+     *
+     * @param dumpRoot the directory the server reported
+     * @return the metric name, or null when it cannot be read
+     */
+    public static String readDumpMetricName(Path dumpRoot) {
+        if (dumpRoot == null) {
+            return null;
+        }
+        List<Path> candidates = new ArrayList<>();
+        candidates.add(dumpRoot.resolve("manifest.json"));
+        try (var entries = Files.list(dumpRoot)) {
+            entries.filter(Files::isDirectory)
+                    .filter(d -> d.getFileName().toString().startsWith("attempt_"))
+                    .sorted()
+                    .forEach(d -> candidates.add(d.resolve("manifest.json")));
+        } catch (IOException e) {
+            logger.debug("Could not list {}: {}", dumpRoot, e.getMessage());
+        }
+        for (Path manifest : candidates) {
+            if (!Files.exists(manifest)) {
+                continue;
+            }
+            try {
+                var map = GSON.fromJson(Files.readString(manifest, StandardCharsets.UTF_8), Map.class);
+                Object name = (map == null) ? null : map.get("metric_name");
+                if (name != null) {
+                    return name.toString();
+                }
+            } catch (Exception e) {
+                logger.debug("Could not read {}: {}", manifest, e.getMessage());
+            }
+        }
+        return null;
+    }
+
+    /**
      * Finds the sample trace inside a server dump directory.
      *
      * <p>The layout depends on which scan path produced it. A profiling traverse writes

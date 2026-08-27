@@ -467,6 +467,24 @@ public class LiveViewerWindow {
      *
      * @return true if the Live Viewer exists and its continuous acquisition is active
      */
+    /**
+     * The live per-frame focus trace, or null when the Live Viewer is not open.
+     *
+     * <p>Exposed so another window can mirror the same samples rather than duplicating the
+     * frame handling. Note what these ARE: a client-side metric computed on live frames, which
+     * is not necessarily the metric the server uses for a focus decision. A caller showing them
+     * must name the metric rather than implying it is the server's.
+     *
+     * @return the trace model, or null
+     */
+    public static FocusTraceModel getLiveFocusTrace() {
+        if (instance == null || instance.stageControlPanel == null) {
+            return null;
+        }
+        var zbar = instance.stageControlPanel.getZBarPanel();
+        return (zbar == null) ? null : zbar.getFocusTrace();
+    }
+
     public static boolean isStreamingActive() {
         return instance != null && instance.liveActive;
     }

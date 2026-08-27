@@ -7,6 +7,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Focus Approach Validation: live vertical focus-metric plot during the traverse**
+- The focus-approach validation window now displays a vertical plot of the focus metric while scanning from the safe Z toward the sample. The plot is oriented with the traverse start at the top (retracted) and the far end at the bottom (toward sample), matching the stage's direction of motion. During the scan, the Live Viewer's per-frame focus samples accumulate as a live trace (yellow); when the scan returns, the server's actual measurements replace the live approximation with the server's profile (cyan), named for the metric it used (e.g., `brenner_gradient`, `p98_p2`). Reference lines show your hand-focused Z (green dashed) and the current stage Z (gray). The validation window stays open after completion with a "Continue" button so you can review the curve before proceeding to the second (bare-slide) scan.
+
 ### Fixed
 
 **Multi-Slide: stage controls now lock during slot-jump autofocus, with a Cancel affordance**

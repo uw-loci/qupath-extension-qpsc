@@ -484,7 +484,39 @@ public final class FocusApproachValidationWorkflow {
             abort.run();
         });
 
-        VBox box = new VBox(12, status, bar, cancelButton);
+        // Live feedback: mirror the Live Viewer's per-frame focus trace onto a vertical plot
+        // oriented the way the stage travels -- start at the top, filling downward toward the
+        // sample. The samples are the LIVE metric, not the server's; the plot names which.
+        qupath.ext.qpsc.ui.FocusApproachPlot plot =
+                new qupath.ext.qpsc.ui.FocusApproachPlot(safeZ, farEnd, manualFocusZ);
+        java.util.List<double[]> livePoints = new java.util.ArrayList<>();
+        javafx.animation.Timeline poller =
+                new javafx.animation.Timeline(new javafx.animation.KeyFrame(javafx.util.Duration.millis(250), ev -> {
+                    var trace = qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.getLiveFocusTrace();
+                    if (trace != null) {
+                        // Accumulate rather than snapshot-and-replace: the Live Viewer's model
+                        // caps and evicts by age, which over a 250 um traverse would drop the
+                        // early part of the curve just as the interesting end arrives.
+                        for (double[] sample : trace.snapshot()) {
+                            boolean known =
+                                    livePoints.stream().anyMatch(existing -> Math.abs(existing[0] - sample[0]) < 0.05);
+                            if (!known) {
+                                livePoints.add(new double[] {sample[0], sample[1]});
+                            }
+                        }
+                        livePoints.sort((a2, b2) -> Double.compare(Math.abs(a2[0] - safeZ), Math.abs(b2[0] - safeZ)));
+                        plot.setSamples(livePoints, "brenner_gradient (live frames)", false);
+                    }
+                    try {
+                        plot.setCurrentZ(controller.getStagePositionZ());
+                    } catch (Exception ignored) {
+                        // Position polling is cosmetic; never let it interrupt the scan.
+                    }
+                }));
+        poller.setCycleCount(javafx.animation.Animation.INDEFINITE);
+        poller.play();
+
+        VBox box = new VBox(12, status, bar, plot, cancelButton);
         box.setPadding(new Insets(18));
         progress.setScene(new Scene(box));
 
@@ -512,7 +544,23 @@ public final class FocusApproachValidationWorkflow {
                                             safeZ,
                                             farEnd);
                             if (result != null && result.dumpPath != null) {
-                                holder[0] = FocusApproachValidationStore.parseDumpDirectory(Paths.get(result.dumpPath));
+                                java.nio.file.Path dumpRoot = Paths.get(result.dumpPath);
+                                holder[0] = FocusApproachValidationStore.parseDumpDirectory(dumpRoot);
+                                // Replace the live approximation with what the server actually
+                                // measured, named for ITS metric. Leaving the client-side curve
+                                // up would show one metric under another's name.
+                                if (holder[0] != null) {
+                                    String serverMetric = FocusApproachValidationStore.readDumpMetricName(dumpRoot);
+                                    java.util.List<double[]> pts = new java.util.ArrayList<>();
+                                    for (int i = 0; i < holder[0][0].length; i++) {
+                                        pts.add(new double[] {holder[0][0][i], holder[0][1][i]});
+                                    }
+                                    Platform.runLater(() -> {
+                                        poller.stop();
+                                        plot.setSamples(
+                                                pts, serverMetric == null ? "focus metric" : serverMetric, true);
+                                    });
+                                }
                                 // The server leaves the stage at the traverse start (the safe Z),
                                 // which is right for it -- it has no idea what the caller was
                                 // doing. Here we DO know: the operator focused on this field, and
@@ -535,7 +583,23 @@ public final class FocusApproachValidationWorkflow {
                     } catch (Exception e) {
                         logger.error("Focus-approach scan failed", e);
                     } finally {
-                        Platform.runLater(progress::close);
+                        Platform.runLater(() -> {
+                            poller.stop();
+                            if (holder[0] != null && !cancelled[0]) {
+                                // Hold the window open on the finished curve. Closing the
+                                // instant the scan returns would flash the server profile past
+                                // the operator, and this plot is the only view of the traverse
+                                // they get before the verdict.
+                                status.setText("Traverse complete. Review the curve, then continue.");
+                                cancelButton.setText("Continue");
+                                cancelButton.setDisable(false);
+                                cancelButton.setOnAction(ev -> progress.close());
+                                progress.setOnCloseRequest(ev -> {});
+                                bar.setProgress(1.0);
+                            } else {
+                                progress.close();
+                            }
+                        });
                     }
                 },
                 "FocusApproach-Scan");

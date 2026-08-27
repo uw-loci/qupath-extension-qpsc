@@ -286,14 +286,35 @@ Validating the worst case licenses the rest.
    Click "Proceed" or "Direction is correct" to continue after confirming both the objective
    and the retraction direction.
 4. The stage retracts to the safe Z and scans in, continuing ~30 um past your focus so the far
-   side of the peak is captured. A window stays up for the whole traverse with a red **CANCEL**
-   button, which aborts the scan and returns the stage to the safe Z. **Watch the stage during
-   this.** One limit worth knowing: the initial retraction is a plain stage move, so cancelling
-   during it stops the scan that follows but does not interrupt the move already in flight.
-   After a successful scan the stage returns to the Z **you** focused at, not the peak the scan
-   measured (those can differ -- the gap between them is one of the things being checked). It is a
-   position the stage was at moments earlier, so re-running the validation needs no re-focusing.
-   A cancelled or failed scan returns to the safe Z instead.
+   side of the peak is captured. A window stays up for the whole traverse with a vertical
+   focus-metric plot and a red **CANCEL** button, which aborts the scan and returns the stage to
+   the safe Z.
+   
+   **The plot:**
+   - **Vertical orientation** -- The plot fills from top to bottom as the stage moves toward the
+     sample, matching the direction of the traverse. Top is the safe Z (retracted), bottom is the
+     far end (toward the sample).
+   - **Live trace** (yellow) -- During the scan, the plot shows per-frame focus metrics from the
+     Live Viewer (`brenner_gradient`), accumulating as frames arrive. This is only a client-side
+     approximation and may not be the metric the server uses.
+   - **Server profile** (cyan, replaces live) -- When the scan returns, the server's actual
+     measurements replace the live trace. The label changes to name the server's metric (e.g.,
+     `brenner_gradient`, `p98_p2`, or other modality-specific choice).
+   - **Reference lines:**
+     - **Green dashed line** -- Your hand-focused Z (the sample focus). The measured peak should
+       land within ~5 um of this line.
+     - **Gray crosshair** -- The stage's current Z position during the scan, so you can watch
+       progress.
+   - **After scan completion** -- The window stays open on the finished plot with a **Continue**
+     button (replacing the CANCEL button) so you can review the curve and check that the peak is
+     where you expected. When ready, click **Continue** to proceed to the next scan.
+   
+   **Watch the stage during this.** One limit worth knowing: the initial retraction is a plain stage
+   move, so cancelling during it stops the scan that follows but does not interrupt the move
+   already in flight. After a successful scan the stage returns to the Z **you** focused at, not
+   the peak the scan measured (those can differ -- the gap between them is one of the things being
+   checked). It is a position the stage was at moments earlier, so re-running the validation needs
+   no re-focusing. A cancelled or failed scan returns to the safe Z instead.
 5. Move in XY to a **bare** part of the same slide, changing nothing else; confirm.
 6. The identical scan runs there, with the same cancellable window. The direction confirmation
    in step 3 is asked only once -- the retraction is unchanged for the second scan.
