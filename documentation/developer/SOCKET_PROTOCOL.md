@@ -315,7 +315,7 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
 | STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `ABORTED:<reason>` / `FAILED:<reason>` |
 | ABORTAF | `abortaf_` | none | `ACK` |
-| FINDTISS | `findtiss` | `--yaml <path> [--objective <id>] [--dir <dx>,<dy>] [--step <um>] [--max-attempts <n>] ENDOFSTR` | `FOUND:<x>:<y>:<attempt>:<of>` / `NOTFOUND:<x>:<y>:<of>` / `FAILED:<reason>` |
+| FINDTISS | `findtiss` | `--yaml <path> [--objective <id>] [--dir <dx>,<dy>] [--step <um>] [--max-attempts <n>] ENDOFSTR` | `FOUND:<x>:<y>:<attempt>:<of>` / `NOTFOUND:<x>:<y>:<of>` / `ABORTED:<x>:<y>:<done>` / `FAILED:<reason>` |
 
 #### PROBEZ
 
@@ -500,6 +500,13 @@ Response formats:
   returned to where the search started**, and `(x, y)` is that starting point: a search
   that found nothing has no reason to prefer its last guess over its first, and leaving
   the stage elsewhere would silently invalidate the caller's own prediction.
+- `ABORTED:<x>:<y>:<completed>` -- the operator cancelled via `ABORTAF`. **The stage has
+  been returned to the starting point**, and `completed` is how many positions had been
+  checked. `FINDTISS` honours the same abort signal as `STRMAFZ` on purpose: the Live Viewer
+  turns its Autofocus button into a Cancel toggle BEFORE the search starts, so from the
+  operator's side the search and the scan are one action and one Cancel must stop whichever
+  half is running. The signal is polled BETWEEN positions, never mid-move -- a stage move is
+  a blocking hardware call and tearing one down part-way loses track of where the stage is.
 - `FAILED:<reason>` -- the search could not run at all (no FOV and no `--step`, stage
   position unreadable, validity check unavailable). Nothing moved.
 

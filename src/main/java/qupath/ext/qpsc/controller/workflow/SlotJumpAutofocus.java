@@ -459,6 +459,12 @@ public final class SlotJumpAutofocus {
                             result.attempts());
                     return true;
                 }
+                case ABORTED -> {
+                    // The operator cancelled. Say nothing alarming and do not hand the slide
+                    // back for "no tissue" -- they stopped it on purpose, and the AF path
+                    // below reports the cancel itself.
+                    logger.info("Slot-jump tissue search cancelled by the operator");
+                }
                 case NOT_FOUND -> {
                     // The server has already put the stage back where it started, so the
                     // prediction is intact -- but a scan from here is a scan over glass.

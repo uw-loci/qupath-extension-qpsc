@@ -2201,6 +2201,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
             FOUND,
             /** Every searched position was background; the stage is back where it started. */
             NOT_FOUND,
+            /**
+             * The operator cancelled (the same ABORTAF the focus scan honours -- from their
+             * side the search and the scan are one action). The stage is back where it
+             * started. Not an error.
+             */
+            ABORTED,
             /** The search could not be performed at all (see {@code reason}). */
             FAILED
         }
@@ -2356,6 +2362,19 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         Integer.parseInt(p[2].trim()),
                         Integer.parseInt(p[3].trim()),
                         null);
+            }
+            if (trimmed.startsWith("ABORTED:")) {
+                String[] p = trimmed.substring("ABORTED:".length()).split(":");
+                if (p.length < 3) {
+                    throw new IOException("FINDTISS: malformed ABORTED payload: " + trimmed);
+                }
+                return new FindTissueResult(
+                        FindTissueResult.Status.ABORTED,
+                        Double.parseDouble(p[0].trim()),
+                        Double.parseDouble(p[1].trim()),
+                        Integer.parseInt(p[2].trim()),
+                        Integer.parseInt(p[2].trim()),
+                        "cancelled by the operator");
             }
             if (trimmed.startsWith("NOTFOUND:")) {
                 String[] p = trimmed.substring("NOTFOUND:".length()).split(":");

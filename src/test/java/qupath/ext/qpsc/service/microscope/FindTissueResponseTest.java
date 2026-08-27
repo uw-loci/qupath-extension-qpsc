@@ -42,6 +42,17 @@ class FindTissueResponseTest {
     }
 
     @Test
+    void parsesAbortedAsItsOwnOutcome() throws IOException {
+        // Must not collapse into FAILED or NOT_FOUND: the operator stopped it deliberately,
+        // so nothing should warn about unreliable focus or hand the slide back.
+        var result = MicroscopeSocketClient.parseFindTissueResponse("ABORTED:100.000:200.000:2");
+        assertEquals(MicroscopeSocketClient.FindTissueResult.Status.ABORTED, result.status());
+        assertEquals(100.0, result.x(), 1e-6);
+        assertEquals(200.0, result.y(), 1e-6);
+        assertFalse(result.found());
+    }
+
+    @Test
     void parsesFailedWithItsReason() throws IOException {
         var result = MicroscopeSocketClient.parseFindTissueResponse("FAILED:no --step and the camera FOV is unknown");
         assertEquals(MicroscopeSocketClient.FindTissueResult.Status.FAILED, result.status());
@@ -56,7 +67,7 @@ class FindTissueResponseTest {
     }
 
     @ParameterizedTest
-    @ValueSource(strings = {"FOUND:1:2:3", "NOTFOUND:1:2", "FOUND:x:2:3:4", "NOTFOUND:1:2:many"})
+    @ValueSource(strings = {"FOUND:1:2:3", "NOTFOUND:1:2", "FOUND:x:2:3:4", "NOTFOUND:1:2:many", "ABORTED:1:2"})
     void malformedPayloadThrowsRatherThanGuessing(String response) {
         // A half-parsed position is worse than an exception: the caller would move on
         // believing the stage is somewhere it is not.
