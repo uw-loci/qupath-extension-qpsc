@@ -448,7 +448,11 @@ public final class SlotJumpAutofocus {
      * @return true when the search moved the stage onto tissue
      */
     private static boolean runTissueSearch(
-            MicroscopeController controller, String configPath, String objective, TissueSearchHint search) {
+            MicroscopeController controller,
+            String configPath,
+            String modality,
+            String objective,
+            TissueSearchHint search) {
         if (search == null) {
             return false;
         }
@@ -456,14 +460,7 @@ public final class SlotJumpAutofocus {
         try {
             MicroscopeSocketClient.FindTissueResult result = controller
                     .getSocketClient()
-                    .findTissue(
-                            configPath,
-                            qupath.ext.qpsc.state.ModalityState.getInstance().getModality(),
-                            objective,
-                            search.dirX(),
-                            search.dirY(),
-                            Double.NaN,
-                            0);
+                    .findTissue(configPath, modality, objective, search.dirX(), search.dirY(), Double.NaN, 0);
             switch (result.status()) {
                 case FOUND -> {
                     logger.info(
@@ -563,22 +560,26 @@ public final class SlotJumpAutofocus {
         // SWEEP or no stream is open (streaming AF has no frames to analyze without a stream).
         boolean useStreaming = "STREAMING".equals(method) && LiveViewerWindow.isStreamingActive();
 
-        String streamingModality = null;
-        if (useStreaming) {
-            // Resolve the active modality so the server applies the right focus metric / thresholds
-            // (matches the Live Viewer autofocus button). Best-effort: null lets the server pick.
+        // Resolve the active modality ONCE for both consumers below. It has to come from
+        // GETCAP -- the modality the microscope reports it is actually in -- not from QuPath's
+        // ModalityState combo: the two are different names for the same idea and need not
+        // agree, and both the focus metric and the tissue/background thresholds are looked up
+        // by this string on the server. A name the server cannot match silently drops to
+        // per-objective defaults, which is a wrong answer that looks like a right one.
+        // Best-effort: null lets the server pick.
+        String resolvedModality = null;
+        if (useStreaming || tissueSearch != null) {
             try {
                 MicroscopeSocketClient.CapabilityResult cap =
                         controller.getSocketClient().getCapabilities(null);
                 if (cap != null && cap.modality != null && cap.modality.name != null) {
-                    streamingModality = cap.modality.name;
+                    resolvedModality = cap.modality.name;
                 }
             } catch (Exception capEx) {
-                logger.warn(
-                        "Slot-jump streaming AF: GETCAP failed ({}); proceeding with modality=null",
-                        capEx.getMessage());
+                logger.warn("Slot-jump AF: GETCAP failed ({}); proceeding with modality=null", capEx.getMessage());
             }
-        } else if (!"SWEEP".equals(method)) {
+        }
+        if (!useStreaming && !"SWEEP".equals(method)) {
             // This is a DOWNGRADE, not a fallback: SWEEP is a narrow drift check that reports
             // success without finding focus when Z is far off (measured on slot jumps at ~8 um
             // error, and 0.00 um "shift" on a fresh slide). Reporting it at INFO meant a slide
@@ -624,7 +625,7 @@ public final class SlotJumpAutofocus {
         publish("Focusing...", false);
         CompletableFuture<Void> done = new CompletableFuture<>();
         final boolean runStreaming = useStreaming;
-        final String modalityForStreaming = streamingModality;
+        final String modalityForServer = resolvedModality;
 
         // Lock the Live Viewer's stage-movement controls while AF runs, and turn its
         // Autofocus button into a Cancel toggle -- the same affordance as a single-slide
@@ -652,7 +653,7 @@ public final class SlotJumpAutofocus {
                     // Tissue first, focus second: a scan started over blank glass finds
                     // coverslip contrast or nothing, and no amount of attempt budget fixes
                     // that. Off the FX thread by construction (we are on the AF daemon).
-                    if (runTissueSearch(controller, configPath, objective, tissueSearch)) {
+                    if (runTissueSearch(controller, configPath, modalityForServer, objective, tissueSearch)) {
                         // Restore the phase the status line was showing before the search
                         // borrowed it, so the sequence reads Moving -> Looking -> Focusing.
                         publish("Focusing...", false);
@@ -663,13 +664,13 @@ public final class SlotJumpAutofocus {
                             // withAllLiveViewingOff). Blocking; returns a typed result. Objective is
                             // null -- the server auto-detects it from the live pixel size, exactly as
                             // the Live Viewer streaming-focus button does.
-                            ApproachPlan plan = resolveApproachPlan(configPath, modalityForStreaming, objective);
+                            ApproachPlan plan = resolveApproachPlan(configPath, modalityForServer, objective);
                             MicroscopeSocketClient.StreamingFocusResult result = controller
                                     .getSocketClient()
                                     .streamingFocus(
                                             configPath,
                                             null,
-                                            modalityForStreaming,
+                                            modalityForServer,
                                             Double.NaN,
                                             false,
                                             SLOT_JUMP_MAX_AF_ATTEMPTS,

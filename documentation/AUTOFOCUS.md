@@ -425,8 +425,15 @@ acquisition path uses** — resolved through the same modality binding, so a mod
 widens its tissue band or lowers its area floor in `autofocus_<scope>.yml` gets those
 values here too — and if it is background, step one field-of-view diagonal outward
 and check again — fanning around a direction hint that points toward the centre of the
-tile grid, since that is where the tissue is. Two rings are swept by default, reaching
-roughly 890 um at 20x: seven positions with a hint, seventeen without one.
+tile grid, since that is where the tissue is. Two rings of eight bearings are swept by
+default -- seventeen positions, reaching roughly 890 um at 20x.
+
+The hint decides the **order** bearings are tried in, never which ones. A good hint means
+the search returns on its first or second position; a bad one costs attempts rather than
+the slide. That matters because the hint is measured in the transform's own frame, and the
+transform is off by the very offset being defeated -- so when the predicted point sits near
+the tile-grid centre (common: the tile picker favours interior tiles) the hint's direction
+is dominated by that error and can point anywhere.
 
 The step is deliberately coarse and leaves gaps between fields. That is the right trade
 here — the search is looking for a tissue mass many fields across, not for one particular

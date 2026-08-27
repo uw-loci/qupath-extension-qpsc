@@ -474,15 +474,27 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | `--objective <id>` | no | Fallback only, used when no modality binding matches: the objective's flat `texture_threshold` / `tissue_area_threshold` from `autofocus_settings`. Missing falls back to the shipped defaults. |
 | `--dir <dx>,<dy>` | no | Stage-space hint toward where tissue is believed to be; only its bearing is used. QPSC computes it as the vector from the predicted position to the centre of the tile grid. Unusable input is ignored with a warning -- the search still works without it. |
 | `--step <um>` | no | Radius increment. Default: one camera FOV diagonal. Deliberately coarse, and it DOES leave gaps -- stepping 446 um along X with a 357 x 267 um field skips 89 um. A step that could not skip anything on any bearing would be the field's short side (267 um), needing far more positions for the same reach. Acceptable because the target is a tissue mass many fields across, not a specific field. |
-| `--max-attempts <n>` | no | Positions to visit **including the starting one**. Default is two complete rings: **7 with a hint, 17 without** (three bearings per ring versus eight). Capped at 25. Not one fixed number, because that cannot mean "whole rings" for both patterns, and stopping mid-ring biases the search toward whichever bearings are enumerated first. |
+| `--max-attempts <n>` | no | Positions to visit **including the starting one**. Default is two complete rings, **17 either way** -- a hint reorders a ring, it does not shrink one. Capped at 33 (four rings, which is what the measured 1507 um worst case needs at a 446 um step). Derived from the bearing count rather than written as a literal, because a budget stopping mid-ring biases the search toward whichever bearings are enumerated first -- and with a hint, that is exactly where the hint is least trustworthy. |
 
 **Search pattern** (`server/tissue_search.py`, pure and unit-tested). The first position
 is always where the caller already is -- at the median error the camera is often still on
 tissue, and checking costs one snap. After that, positions lie on rings at whole multiples
-of `--step`. With a hint, three bearings per ring: down the hint, then +/-45 deg. Without
-one, the four compass points then the four diagonals. So reach is
-`step * ((max_attempts - 1) // bearings_per_ring)` -- an attempt budget converts directly
-into a distance, which is how it was sized against the measurement above.
+of `--step`, eight bearings to a ring. So the radius swept in every direction is
+`step * ((max_attempts - 1) // 8)` -- an attempt budget converts directly into a distance,
+which is how it was sized against the measurement above.
+
+**A hint orders a ring; it never trims one.** `--dir` sorts the ring's bearings nearest-first
+(down the hint, then +/-45, out to 180) so a good hint returns on the first or second
+position. It does *not* restrict the search to a fan, and the reason is specific to how the
+hint is built: it is the vector from the predicted position to the tile-grid centre,
+measured in the transform's own frame -- and that transform is off by the very offset the
+search exists to defeat, which displaces both ends. Its angular error is therefore about
+`asin(offset / separation)`: negligible when the predicted point is far from the grid
+centre, and **unbounded when it is close**. Close is the common case, because the reference
+tile picker favours interior, high-texture tiles, which on a compact section sit near the
+middle. A +/-45 deg fan would march two rings down a bearing that can be 180 deg wrong and
+report `NOTFOUND` with the tissue directly behind it. Ordering costs nothing when the hint
+is good and cannot fail when it is bad, so there is no separation threshold to calibrate.
 
 **How "tissue" is decided.** By the **same strategy validity check the acquisition path
 uses**, resolved through the same chain (`server/focus_validity.py`, pure and

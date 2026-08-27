@@ -2299,9 +2299,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
             try {
                 if (socket != null) {
                     // Each attempt is one stage move plus one snap -- a couple of seconds.
-                    // The server caps the budget at 25, so 120s covers the worst request
-                    // without leaving a wedged search holding the primary socket for long.
-                    socket.setSoTimeout(120000);
+                    // The server caps the budget at 33 (four complete rings, which is what
+                    // the measured 1507 um worst-case landing error needs), so ~100s of
+                    // stage time at the cap; 180s covers it with headroom without leaving a
+                    // wedged search holding the primary socket for long. Keep this above
+                    // MAX_ATTEMPTS_CEILING * per-attempt time -- a timeout here is read as
+                    // "server too old" and permanently disables FINDTISS for the session.
+                    socket.setSoTimeout(180000);
                 }
                 output.write(Command.FINDTISS.getValue());
                 output.flush();
