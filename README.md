@@ -98,6 +98,7 @@ running**. See the [Installation Guide](documentation/INSTALLATION.md) for the f
 - **Background Collection**: Acquire flat-field correction images (removes uneven illumination)
 - **Polarizer Calibration**: Find optimal rotation angles for crossed polarizers
 - **Sunburst Calibration (PPM Reference Slide)**: Hue-to-angle mapping from a reference slide with radial spoke detection
+- **LC-PolScope Calibration**: Find the liquid-crystal compensator's extinction point and swing states to calibrate the polarization palette (available only on LC-PolScope microscopes)
 - **JAI Noise Characterization**: Measure camera noise statistics with Quick/Full/Custom presets
 - **Autofocus Editor**: Configure focus parameters per objective
 - **Autofocus Benchmark**: Systematically find optimal autofocus settings by testing parameter combinations
