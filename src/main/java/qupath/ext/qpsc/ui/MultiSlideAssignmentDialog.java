@@ -19,9 +19,11 @@ import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
+import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -60,6 +62,13 @@ import qupath.lib.projects.ProjectImageEntry;
 public final class MultiSlideAssignmentDialog {
 
     private static final Logger logger = LoggerFactory.getLogger(MultiSlideAssignmentDialog.class);
+
+    /**
+     * The dialog currently on screen, or null. Tracked only because the window is
+     * deliberately non-modal (see {@link #showImpl}), so nothing else prevents a second
+     * copy being opened while the first is still waiting on the operator.
+     */
+    private static Stage openInstance;
 
     /** Result of one slot assignment row. */
     /**
@@ -287,13 +296,81 @@ public final class MultiSlideAssignmentDialog {
         }
     }
 
+    /**
+     * Lays out the modality / objective / detector pickers, one per row.
+     *
+     * <p>They were originally three label-and-combo pairs on a single line. Objective and
+     * detector values carry their full config IDs -- "20x Olympus Pol
+     * (LOCI_OBJECTIVE_OLYMPUS_20X_POL_001)" -- which cannot fit three-across at any sane
+     * dialog width, so the HBox shrank every child until all three labels had ellipsized to
+     * "..." and the modality combo had collapsed to "..." as well. The row ended up with no
+     * readable text in it at all.
+     *
+     * <p>Stacking them gives each combo the full dialog width and each label its natural
+     * size. The labels are pinned to their preferred width because a label that is allowed
+     * to shrink is a label that can ellipsize away, and these name the controls beside them.
+     *
+     * @param modalityBox  the modality picker
+     * @param objectiveBox the objective picker
+     * @param detectorBox  the detector picker
+     * @return a two-column grid: fixed-width labels, combos taking the remaining width
+     */
+    static GridPane buildHardwareGrid(
+            ComboBox<String> modalityBox, ComboBox<String> objectiveBox, ComboBox<String> detectorBox) {
+        GridPane grid = new GridPane();
+        grid.setHgap(8);
+        grid.setVgap(6);
+
+        Label modalityLabel = new Label("Modality:");
+        Label objectiveLabel = new Label("Objective:");
+        Label detectorLabel = new Label("Detector:");
+        for (Label l : List.of(modalityLabel, objectiveLabel, detectorLabel)) {
+            l.setMinWidth(Region.USE_PREF_SIZE);
+        }
+        for (ComboBox<String> box : List.of(modalityBox, objectiveBox, detectorBox)) {
+            box.setMaxWidth(Double.MAX_VALUE);
+        }
+
+        ColumnConstraints labelCol = new ColumnConstraints();
+        labelCol.setHgrow(Priority.NEVER);
+        ColumnConstraints fieldCol = new ColumnConstraints();
+        fieldCol.setHgrow(Priority.ALWAYS);
+        fieldCol.setFillWidth(true);
+        grid.getColumnConstraints().addAll(labelCol, fieldCol);
+
+        grid.addRow(0, modalityLabel, modalityBox);
+        grid.addRow(1, objectiveLabel, objectiveBox);
+        grid.addRow(2, detectorLabel, detectorBox);
+        return grid;
+    }
+
     private static void showImpl(Window owner, Project<BufferedImage> project, CompletableFuture<Result> future) {
+        // Already open: raise the existing one rather than stacking a second copy. Modality
+        // used to make that impossible for free; without it, nothing else stops two dialogs
+        // both claiming to start the same run.
+        if (openInstance != null && openInstance.isShowing()) {
+            openInstance.toFront();
+            openInstance.requestFocus();
+            future.complete(null);
+            return;
+        }
+
         Stage stage = new Stage();
-        stage.initModality(Modality.APPLICATION_MODAL);
+        // NOT modal. This dialog's own instructions tell the operator to open the Stage Map
+        // beside it and rotate each slide until the live preview matches how the slide is
+        // physically mounted -- which an application-modal window makes impossible, since it
+        // blocks input to every other window including the Stage Map it is pointing at.
+        stage.initModality(Modality.NONE);
         if (owner != null) {
             stage.initOwner(owner);
         }
         stage.setTitle("Multi-Slide Acquisition");
+        openInstance = stage;
+        stage.showingProperty().addListener((o, was, is) -> {
+            if (Boolean.FALSE.equals(is) && openInstance == stage) {
+                openInstance = null;
+            }
+        });
 
         Label header = new Label("Assign project images to slide carrier positions");
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 13;");
@@ -305,7 +382,10 @@ public final class MultiSlideAssignmentDialog {
                 + "positions. Pass 1 of the workflow walks you through alignment and annotation per slide; "
                 + "Pass 2 acquires across all assigned slides.");
         intro.setWrapText(true);
-        intro.setMaxWidth(620);
+        // No fixed max width: a hardcoded wrap width silently goes stale the moment the
+        // dialog is resized or its pref width changes. In a fill-width VBox a wrapping
+        // Label already wraps to whatever width it is given.
+        intro.setMaxWidth(Double.MAX_VALUE);
         // Pin the wrapped intro to its full height so an over-full root VBox shrinks the scrollable
         // slot list (which has Vgrow) rather than squeezing the intro down to an ellipsized 3 lines.
         intro.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
@@ -354,7 +434,7 @@ public final class MultiSlideAssignmentDialog {
             VBox v = new VBox(10, header, intro, warn, close);
             v.setPadding(new Insets(12));
             stage.setScene(new Scene(v));
-            stage.showAndWait();
+            stage.show();
             return;
         }
 
@@ -389,7 +469,7 @@ public final class MultiSlideAssignmentDialog {
         ComboBox<String> detectorBox = new ComboBox<>();
         Label readiness = new Label();
         readiness.setWrapText(true);
-        readiness.setMaxWidth(620);
+        readiness.setMaxWidth(Double.MAX_VALUE);
         readiness.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
         populateHardwareBoxes(hwConfig, modalityBox, objectiveBox, detectorBox);
@@ -403,15 +483,7 @@ public final class MultiSlideAssignmentDialog {
         detectorBox.valueProperty().addListener((o, a, b) -> refreshReadiness.run());
         refreshReadiness.run();
 
-        HBox hardwareRow = new HBox(
-                8,
-                new Label("Modality:"),
-                modalityBox,
-                new Label("Objective:"),
-                objectiveBox,
-                new Label("Detector:"),
-                detectorBox);
-        hardwareRow.setStyle("-fx-alignment: center-left;");
+        GridPane hardwareGrid = buildHardwareGrid(modalityBox, objectiveBox, detectorBox);
 
         // Slot rows live in a GridPane; rebuilt on carrier change
         GridPane slotGrid = new GridPane();
@@ -783,7 +855,7 @@ public final class MultiSlideAssignmentDialog {
                 new Separator(),
                 carrierRow,
                 sourceRow,
-                hardwareRow,
+                hardwareGrid,
                 readiness,
                 rotateAllRow,
                 new Separator(),
@@ -791,9 +863,13 @@ public final class MultiSlideAssignmentDialog {
                 hint,
                 buttons);
         root.setPadding(new Insets(14));
-        root.setStyle("-fx-pref-width: 680; -fx-pref-height: 540;");
+        // Height covers the actual content: intro, five label+control rows (three of them
+        // the newly stacked hardware ones), the readiness block, and a slot list worth
+        // seeing. At 540 the list was crushed to a scrollbar even with a single slide,
+        // because slotsScroll is the only child that grows and so absorbs every shortfall.
+        root.setStyle("-fx-pref-width: 720; -fx-pref-height: 720;");
         stage.setScene(new Scene(root));
-        stage.showAndWait();
+        stage.show();
     }
 
     /**
