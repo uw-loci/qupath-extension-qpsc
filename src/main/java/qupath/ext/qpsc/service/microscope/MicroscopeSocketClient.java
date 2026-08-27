@@ -1979,6 +1979,52 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double approachMaxUm,
             boolean requireTissueGate)
             throws IOException {
+        return streamingFocus(
+                yamlPath,
+                objective,
+                modality,
+                rangeOverrideUm,
+                dumpFrames,
+                maxAttempts,
+                safeZUm,
+                approachMaxUm,
+                requireTissueGate,
+                Double.NaN,
+                Double.NaN);
+    }
+
+    /**
+     * Variant that traverses an EXPLICIT Z interval once and dumps the profile, committing to
+     * nothing.
+     *
+     * <p>For characterisation rather than focusing. The ordinary scan derives its window from
+     * the CURRENT Z, so asking for a range and hoping it lands on the sample does not work when
+     * the sample is not near the current position -- on 2026-08-26 that put a 265 um window at
+     * [-133, +133] while the sample sat at -235. Naming both endpoints removes the guess, and
+     * {@code profileZStartUm} may be greater OR less than {@code profileZEndUm}: the traverse
+     * runs from greater objective-sample separation to lesser, and which Z direction that is
+     * depends on the rig.
+     *
+     * <p>The stage is returned to {@code profileZStartUm} afterwards.
+     *
+     * @param profileZStartUm interval start, or NaN for a normal focusing scan
+     * @param profileZEndUm   interval end, or NaN for a normal focusing scan
+     * @return the scan result; the dump path carries the profile
+     * @throws IOException if the socket exchange fails
+     */
+    public StreamingFocusResult streamingFocus(
+            String yamlPath,
+            String objective,
+            String modality,
+            double rangeOverrideUm,
+            boolean dumpFrames,
+            int maxAttempts,
+            double safeZUm,
+            double approachMaxUm,
+            boolean requireTissueGate,
+            double profileZStartUm,
+            double profileZEndUm)
+            throws IOException {
         if (yamlPath == null || yamlPath.isEmpty()) {
             throw new IllegalArgumentException("yamlPath is required for streamingFocus");
         }
@@ -2002,6 +2048,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         // Both or neither: the server refuses a partial specification rather than
         // defaulting one of them, and this mirrors that so the intent is explicit on the wire.
+        if (!Double.isNaN(profileZStartUm) && !Double.isNaN(profileZEndUm)) {
+            msgBuilder.append(" --z-start ").append(profileZStartUm);
+            msgBuilder.append(" --z-end ").append(profileZEndUm);
+        }
         if (!Double.isNaN(safeZUm) && !Double.isNaN(approachMaxUm)) {
             msgBuilder.append(" --safe-z ").append(safeZUm);
             msgBuilder.append(" --approach-max ").append(approachMaxUm);

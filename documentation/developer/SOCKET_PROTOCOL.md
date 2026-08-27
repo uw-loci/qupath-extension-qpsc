@@ -393,6 +393,14 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | `--range <um>` | no | Override of `sweep_range_um` from the yaml. |
 | `--dump 1` | no | Enable server-side frame dumping (TIFs + CSV + manifest). When set, the server writes all captured frames and per-frame metrics to a diagnostics folder and includes the path in the response. Used by the Autofocus Configuration Editor's Test button for offline analysis. |
 | `--max-attempts <n>` | no | Cap on focus-search attempts (edge retries). Pass 0 (default) to use the server default (MAX_EDGE_RETRIES + 1 = 3), appropriate for Live Viewer "find focus from scratch" use. Pass 1 from tile-AF to perform a single fast scan with the previous tile's Z as a tight seed. |
+| `--z-start <um>` | no | Profiling mode: explicit Z interval start. Must be paired with `--z-end`; a partial specification is ignored with a warning. The stage returns here after the scan. Use for characterisation, where the region of interest is not near the current Z -- an ordinary scan derives its window from the current position and cannot be aimed. |
+| `--z-end <um>` | no | Profiling mode: explicit Z interval end. May be greater OR less than `--z-start`; the server simply traverses from one to the other. Ordering them so the traverse runs from greater objective-sample separation toward lesser is the CALLER's business -- the server has no notion of which way retracts (see `stage.focus.retract_sign`). |
+
+Profiling commits to nothing: it records the metric profile, returns the stage to
+`--z-start`, and reports success as a measurement. Deciding what the profile means is
+the caller's job. It is mutually exclusive with approach-from-safe-Z; if both are
+requested, the profiling traverse runs and the approach is skipped, since profiling is
+the one that moves nothing permanently.
 | `--safe-z <um>` | no | Declared retracted position for approach-from-safe-Z. Must be paired with `--approach-max`; a partial specification is rejected with a warning and the standard scan runs, because neither has a safe default. |
 | `--approach-max <um>` | no | Signed travel bound from the safe Z toward the sample. The **sign carries the approach direction**, so the server never infers upright/inverted or stage polarity. Clamped to `stage.limits.z_um`. |
 | `--tissue-gate 1` | no | Commit only to a peak where the strategy's validity check finds tissue. Set when validation found surfaces (coverslip, slide face) *before* focus -- exactly when committing to the first peak would land on glass. |

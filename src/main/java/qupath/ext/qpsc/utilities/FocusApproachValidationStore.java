@@ -244,6 +244,47 @@ public final class FocusApproachValidationStore {
      * @param samplesCsv path to the dump's samples.csv
      * @return {@code [z[], metric[]]}, or null when the file cannot be parsed
      */
+    /**
+     * Finds the sample trace inside a server dump directory.
+     *
+     * <p>The layout depends on which scan path produced it. A profiling traverse writes
+     * {@code samples.csv} directly into the dump root; the multi-attempt retry loop gives each
+     * attempt its own {@code attempt_N/} subdirectory. Checking both means a dump from either
+     * path is readable, including ones already on disk.
+     *
+     * <p>When several attempts are present the LAST is used: the retry loop walks toward the
+     * peak, so the final attempt is the one nearest focus.
+     *
+     * @param dumpRoot the directory the server reported
+     * @return the trace, or null when no readable one is found
+     */
+    public static double[][] parseDumpDirectory(Path dumpRoot) {
+        if (dumpRoot == null) {
+            return null;
+        }
+        double[][] flat = parseSamplesCsv(dumpRoot.resolve("samples.csv"));
+        if (flat != null) {
+            return flat;
+        }
+        try (var entries = Files.list(dumpRoot)) {
+            java.util.List<Path> attempts = entries.filter(Files::isDirectory)
+                    .filter(d -> d.getFileName().toString().startsWith("attempt_"))
+                    .sorted()
+                    .toList();
+            for (int i = attempts.size() - 1; i >= 0; i--) {
+                double[][] parsed = parseSamplesCsv(attempts.get(i).resolve("samples.csv"));
+                if (parsed != null) {
+                    logger.info("Read focus profile from {}", attempts.get(i).getFileName());
+                    return parsed;
+                }
+            }
+        } catch (IOException e) {
+            logger.warn("Could not list dump directory {}: {}", dumpRoot, e.getMessage());
+        }
+        logger.warn("No usable samples.csv in {} (checked the root and any attempt_* subdirectories)", dumpRoot);
+        return null;
+    }
+
     public static double[][] parseSamplesCsv(Path samplesCsv) {
         if (samplesCsv == null || !Files.exists(samplesCsv)) {
             return null;

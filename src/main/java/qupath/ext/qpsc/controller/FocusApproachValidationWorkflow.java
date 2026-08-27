@@ -1,6 +1,5 @@
 package qupath.ext.qpsc.controller;
 
-import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.time.Instant;
 import java.util.ArrayList;
@@ -485,15 +484,26 @@ public final class FocusApproachValidationWorkflow {
                     try {
                         controller.moveStageZ(safeZ);
                         if (!cancelled[0]) {
+                            // Name BOTH endpoints. Asking for a range alone lets the server
+                            // derive its window from the current Z, which is the safe Z -- so
+                            // the traverse straddles the retracted position instead of running
+                            // from it toward the sample.
                             MicroscopeSocketClient.StreamingFocusResult result = controller
                                     .getSocketClient()
-                                    .streamingFocus(configPath, null, modality, range, true, 1);
+                                    .streamingFocus(
+                                            configPath,
+                                            null,
+                                            modality,
+                                            range,
+                                            true,
+                                            1,
+                                            Double.NaN,
+                                            Double.NaN,
+                                            false,
+                                            safeZ,
+                                            farEnd);
                             if (result != null && result.dumpPath != null) {
-                                Path samples = Paths.get(result.dumpPath).resolve("samples.csv");
-                                holder[0] = FocusApproachValidationStore.parseSamplesCsv(samples);
-                                if (holder[0] == null) {
-                                    logger.warn("Focus-approach scan dump had no usable samples.csv at {}", samples);
-                                }
+                                holder[0] = FocusApproachValidationStore.parseDumpDirectory(Paths.get(result.dumpPath));
                             } else {
                                 logger.warn("Focus-approach scan returned no dump path");
                             }
