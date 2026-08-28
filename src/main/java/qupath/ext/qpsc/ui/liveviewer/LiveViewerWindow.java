@@ -507,12 +507,11 @@ public class LiveViewerWindow {
             }
             if (!instance.stage.isShowing()) {
                 instance.stage.show();
+                // A freshly opened viewer needs its frame poller; startLiveViewing also sends
+                // the camera the start command. An already-open one does NOT -- see below.
+                instance.startLiveViewing();
             } else {
                 instance.stage.toFront();
-            }
-            if (!instance.liveActive) {
-                logger.info("Live Viewer is open but not streaming; starting live viewing");
-                instance.startLiveViewing();
             }
             MicroscopeController controller = MicroscopeController.getInstance();
             if (controller != null && controller.getSocketClient() != null) {
@@ -520,6 +519,35 @@ public class LiveViewerWindow {
                         controller.getSocketClient().streamingActiveProperty().get());
             }
         });
+
+        // The camera restart is separate, off the FX thread, and deliberately NOT
+        // startLiveViewing(): that method guards on `polling`, and `polling` stays TRUE while the
+        // stream is paused -- stopContinuousAcquisitionSynchronously ("paused for camera
+        // operation") clears liveActive and leaves the poller running, and only closing the
+        // window clears polling. So on the state this method exists to repair -- window open,
+        // stream stopped -- startLiveViewing returns immediately having done nothing, and the
+        // caller waits out its timeout against a camera nobody restarted. restartStreaming is
+        // the counterpart that actually stops and restarts the sequence. It does socket I/O and
+        // sleeps, so it gets its own thread; callers poll isStreamingActive() as before.
+        Thread restart = new Thread(
+                () -> {
+                    // The window may still be being created on the FX thread.
+                    for (int i = 0; i < 40 && instance == null; i++) {
+                        try {
+                            Thread.sleep(50);
+                        } catch (InterruptedException e) {
+                            Thread.currentThread().interrupt();
+                            return;
+                        }
+                    }
+                    if (instance != null && !instance.liveActive) {
+                        logger.info("Live Viewer is open but its stream is stopped; restarting it");
+                        restartStreaming();
+                    }
+                },
+                "LiveViewer-EnsureStreaming");
+        restart.setDaemon(true);
+        restart.start();
     }
 
     /**
