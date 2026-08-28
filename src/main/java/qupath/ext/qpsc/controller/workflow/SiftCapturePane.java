@@ -343,9 +343,58 @@ class SiftCapturePane extends VBox {
      */
     static AutoAlignOutcome attemptAutoAccept(QuPathGUI gui, PathObject tile, double threshold) throws Exception {
         double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
-        boolean accept = result != null && result.length >= 4 && result[3] >= threshold;
+        boolean validMatch = result != null && result.length >= 2;
+        if (validMatch) {
+            // SIFT has just moved the stage in XY, and the field it lands on is often slightly
+            // softer than the one focus was set on -- the sample is not flat. Nothing after this
+            // re-focuses, so a Z captured here is the Z that gets saved and later seeds
+            // acquisition. Re-focus BEFORE anything reads the position, so both the auto-accept
+            // path below and a manual Capture get a focused Z.
+            refocusAfterSiftMove();
+        }
+        boolean accept = validMatch && result.length >= 4 && result[3] >= threshold;
         double[] measured = accept ? MicroscopeController.getInstance().getStagePositionXY() : null;
         return new AutoAlignOutcome(result, measured);
+    }
+
+    /**
+     * Short focus correction after a SIFT move. Best-effort: any failure leaves the stage where
+     * SIFT put it, which is exactly what happened before this existed.
+     *
+     * <p>Uses the SWEEP drift check rather than a full search, because the premise here is that
+     * focus is already close -- SIFT moved within a field or two of a plane that was in focus a
+     * moment ago. That premise is what makes SWEEP the right tool and a full streaming scan the
+     * wrong one: SWEEP is quick and reports success without finding focus when Z is far off,
+     * which is a bad property in general and a harmless one when the answer is nearby.
+     */
+    private static void refocusAfterSiftMove() {
+        if (qupath.ext.qpsc.preferences.QPPreferenceDialog.getDisableAllAutofocus()) {
+            logger.debug("Post-SIFT refocus skipped: autofocus is disabled in preferences");
+            return;
+        }
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null || !controller.isConnected() || controller.isAcquisitionActive()) {
+            return;
+        }
+        String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isBlank()) {
+            return;
+        }
+        try {
+            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(configPath);
+            String objective = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getCurrentObjective(mgr);
+            String outputPath = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getDefaultOutputPath();
+            SweepAutofocusRunner.SweepResult sweep =
+                    SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
+            if (sweep.cancelled()) {
+                logger.info("Post-SIFT refocus cancelled by the operator");
+            } else {
+                logger.info(
+                        "Post-SIFT refocus: Z {} -> {} (shift {})", sweep.initialZ(), sweep.finalZ(), sweep.zShift());
+            }
+        } catch (Exception e) {
+            logger.warn("Post-SIFT refocus failed ({}); capturing at the position SIFT left", e.getMessage());
+        }
     }
 
     /** Reads the stage position off the FX thread and completes with it (manual Capture). */
