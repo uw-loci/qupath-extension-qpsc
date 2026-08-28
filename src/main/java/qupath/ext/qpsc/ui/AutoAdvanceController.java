@@ -97,6 +97,10 @@ public final class AutoAdvanceController {
         mode = (batchMode == null) ? MultiSlideAcquisitionMode.MANUAL : batchMode;
         autoAdvanceSeconds = Math.max(0, seconds);
         overriddenThisSlide = false;
+        // Logged for EVERY mode, including MANUAL. It used to log only when automatic, so a
+        // batch running manually produced no line at all -- and "was this run armed?" is the
+        // first question asked when an operator finds themselves clicking every dialog. Silence
+        // could not answer it.
         if (mode.isAutomatic()) {
             logger.info(
                     "Auto-advance ARMED: mode={} countdown={}s",
@@ -104,6 +108,12 @@ public final class AutoAdvanceController {
                     mode == MultiSlideAcquisitionMode.FULLY_AUTOMATIC
                             ? FULLY_AUTOMATIC_FLOOR_SECONDS
                             : autoAdvanceSeconds);
+        } else {
+            logger.info(
+                    "Auto-advance NOT armed: mode={} -- every dialog will wait for you. Set "
+                            + "Preferences > QuPath SCope Multi-Slide > acquisition mode to change this, "
+                            + "and note that per-row Run Single is always manual by design.",
+                    mode);
         }
     }
 
@@ -128,6 +138,24 @@ public final class AutoAdvanceController {
     /** True when a batch is running in one of the automatic modes. */
     public static boolean isArmed() {
         return mode.isAutomatic();
+    }
+
+    /**
+     * Why automation is not driving right now, or null when it is.
+     *
+     * <p>For log lines at the points where the automation quietly does nothing. Those paths are
+     * correct -- a manual run and an overridden slide SHOULD wait for a human -- but they are
+     * indistinguishable in the log from the automation being broken, which is exactly how a run
+     * that stopped on purpose reads as "it just stopped".
+     */
+    public static String inactiveReason() {
+        if (!mode.isAutomatic()) {
+            return "the batch is not in an automatic mode (mode=" + mode + ")";
+        }
+        if (overriddenThisSlide) {
+            return "this slide was handed back to the operator earlier in the run";
+        }
+        return null;
     }
 
     /** True when the operator has taken over the slide currently being set up. */

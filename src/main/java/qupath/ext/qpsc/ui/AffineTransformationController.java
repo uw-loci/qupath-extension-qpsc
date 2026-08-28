@@ -87,6 +87,9 @@ public class AffineTransformationController {
      */
     private static CompletableFuture<PathObject> resolveReferenceTile(QuPathGUI gui, String prompt) {
         if (!ReferenceTileSelector.wouldAutoPick()) {
+            logger.info(
+                    "Landmark selection: asking the operator to pick a tile -- {}",
+                    qupath.ext.qpsc.ui.AutoAdvanceController.inactiveReason());
             return UIFunctions.promptTileSelectionDialogAsync(prompt);
         }
         // Selection reads image regions to score texture, and this method is called on the FX

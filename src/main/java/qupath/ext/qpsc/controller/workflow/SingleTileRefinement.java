@@ -174,6 +174,9 @@ public class SingleTileRefinement {
     private static CompletableFuture<PathObject> resolveRefinementTile(
             QuPathGUI gui, List<PathObject> annotations, String prompt) {
         if (!ReferenceTileSelector.wouldAutoPick()) {
+            logger.info(
+                    "Single-tile refinement: asking the operator to pick a tile -- {}",
+                    qupath.ext.qpsc.ui.AutoAdvanceController.inactiveReason());
             return UIFunctions.promptTileSelectionDialogAsync(prompt);
         }
         // Scoring reads an image region per candidate tile, and this can be reached on the FX

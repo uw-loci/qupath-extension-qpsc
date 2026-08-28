@@ -125,6 +125,9 @@ public class MultiTileRefinement {
         // three tiles, or no grid measurements) falls straight back to manual picking -- the
         // operator is asked rather than a boundary tile being chosen silently.
         if (!ReferenceTileSelector.wouldAutoPick()) {
+            logger.info(
+                    "Multi-tile refinement: picking tiles by hand -- {}",
+                    qupath.ext.qpsc.ui.AutoAdvanceController.inactiveReason());
             Platform.runLater(
                     () -> showPanel(gui, initialTransform, trustSift, confidenceThreshold, future, List.of()));
             return future;
@@ -354,8 +357,12 @@ public class MultiTileRefinement {
         // and re-enabled the buttons), so it never counts down onto a control that a capture
         // in flight is about to re-enable underneath it.
         advanceAutomatically[0] = () -> {
-            if (!qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
-                    || qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide()) {
+            String inactive = qupath.ext.qpsc.ui.AutoAdvanceController.inactiveReason();
+            if (inactive != null) {
+                // Say so. Returning silently here is what makes a deliberate stop look like a
+                // hang: the panel simply sits there and the log's last line is whatever
+                // succeeded just before.
+                logger.info("Multi-tile refinement: waiting for the operator -- {}", inactive);
                 return;
             }
             if (!pendingAutoTiles.isEmpty()) {
