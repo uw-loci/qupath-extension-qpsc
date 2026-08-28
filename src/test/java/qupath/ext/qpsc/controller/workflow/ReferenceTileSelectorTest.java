@@ -335,4 +335,59 @@ class ReferenceTileSelectorTest {
         assertFalse(chosen.isEmpty());
         assertTrue(chosen.stream().noneMatch(java.util.Objects::isNull));
     }
+
+    // ---- tissue coverage -------------------------------------------------------
+
+    private static java.awt.image.BufferedImage solid(int w, int h, int grey) {
+        var img = new java.awt.image.BufferedImage(w, h, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                img.setRGB(x, y, (grey << 16) | (grey << 8) | grey);
+            }
+        }
+        return img;
+    }
+
+    @Test
+    void blankGlassHasNoTissueCoverage() {
+        // Near-white is background on a brightfield WSI -- an empty field must not read as tissue,
+        // because that is what let a tile at the edge of the specimen be chosen as a reference.
+        assertEquals(0.0, ReferenceTileSelector.tissueFraction(solid(32, 32, 245)), 1e-9);
+    }
+
+    @Test
+    void veryDarkPixelsAreArtifactNotTissue() {
+        assertEquals(0.0, ReferenceTileSelector.tissueFraction(solid(32, 32, 5)), 1e-9);
+    }
+
+    @Test
+    void midToneIsTissue() {
+        assertEquals(1.0, ReferenceTileSelector.tissueFraction(solid(32, 32, 140)), 1e-9);
+    }
+
+    @Test
+    void coverageIsTheFractionOfTissuePixels() {
+        // Half blank, half stained.
+        var img = new java.awt.image.BufferedImage(10, 10, java.awt.image.BufferedImage.TYPE_INT_RGB);
+        for (int y = 0; y < 10; y++) {
+            for (int x = 0; x < 10; x++) {
+                int grey = (y < 5) ? 245 : 120;
+                img.setRGB(x, y, (grey << 16) | (grey << 8) | grey);
+            }
+        }
+        assertEquals(0.5, ReferenceTileSelector.tissueFraction(img), 1e-9);
+    }
+
+    @Test
+    void spreadPicksTheFarthestApartTiles() {
+        // Order in decides the seed; the rest are chosen for separation, so a cluster of
+        // near-identical tiles cannot supply all three reference points.
+        PathObject a = tile("ann", 0, 0, 0, 0);
+        PathObject b = tile("ann", 0, 1, 1, 0);
+        PathObject far = tile("ann", 0, 2, 1000, 1000);
+        var chosen = ReferenceTileSelector.spread(new java.util.ArrayList<>(java.util.List.of(a, b, far)), 2);
+        assertEquals(2, chosen.size());
+        assertSame(a, chosen.get(0));
+        assertSame(far, chosen.get(1));
+    }
 }

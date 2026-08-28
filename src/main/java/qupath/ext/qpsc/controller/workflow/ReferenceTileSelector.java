@@ -107,6 +107,18 @@ public final class ReferenceTileSelector {
      */
     private static final double PREFERRED_TISSUE_FRACTION = 0.5;
 
+    /**
+     * Smallest share of its texture score a tile keeps when it has no measurable tissue at all.
+     *
+     * <p>Without a floor, the coverage term can multiply EVERY candidate to zero -- if the
+     * coverage measure is wrong for a given image type, say -- and a set of all-zero scores makes
+     * the ranking arbitrary. That is worse than not weighting at all: it silently turns a
+     * considered pick into a random one, and a random interior tile on a sparse slide is very
+     * likely to be empty. The floor keeps texture ranking the tiles even when coverage tells us
+     * nothing, while a full field still outranks an empty one ten to one.
+     */
+    private static final double MIN_COVERAGE_WEIGHT = 0.1;
+
     private ReferenceTileSelector() {}
 
     // ---- automatic-batch entry point -------------------------------------------
@@ -291,13 +303,35 @@ public final class ReferenceTileSelector {
         for (PathObject tile : toScore) {
             scores.put(tile, scorer.applyAsDouble(tile));
         }
+        // All-zero scores mean the ranking below is arbitrary, so the "best" tile is whichever
+        // one happens to sort first -- indistinguishable from picking at random, and on a sparse
+        // slide a random interior tile is usually empty. Never silently.
+        double bestScore =
+                scores.values().stream().mapToDouble(Double::doubleValue).max().orElse(0.0);
+        if (bestScore <= 0.0) {
+            logger.warn(
+                    "Reference tile selection: all {} scored tiles scored 0, so the ranking carries no "
+                            + "information and the tiles chosen are effectively arbitrary. Expect a poor "
+                            + "reference tile; check that the image region reads are returning pixels.",
+                    toScore.size());
+        }
         List<PathObject> ranked = new ArrayList<>(toScore);
         ranked.sort(Comparator.comparingDouble((PathObject t) -> scores.getOrDefault(t, 0.0))
                 .reversed());
 
         int poolSize = Math.min(ranked.size(), Math.max(POOL_FLOOR, k * POOL_MULTIPLIER));
-        List<PathObject> pool = new ArrayList<>(ranked.subList(0, poolSize));
+        return spread(new ArrayList<>(ranked.subList(0, poolSize)), k);
+    }
 
+    /**
+     * Greedily take {@code k} tiles from {@code pool}, each as far as possible from those already
+     * taken. The first is the pool's own first element, so the caller's ordering decides the
+     * seed.
+     */
+    static List<PathObject> spread(List<PathObject> pool, int k) {
+        if (pool == null || pool.isEmpty() || k <= 0) {
+            return List.of();
+        }
         List<PathObject> chosen = new ArrayList<>();
         chosen.add(pool.remove(0)); // best-scoring tile seeds the set
         while (chosen.size() < k && !pool.isEmpty()) {
@@ -389,13 +423,51 @@ public final class ReferenceTileSelector {
                     (tiles == null) ? 0 : tiles.size());
             return List.of();
         }
-        ToDoubleFunction<PathObject> scorer = (server == null) ? t -> 0.0 : t -> textureScore(server, t.getROI());
-        List<PathObject> chosen = rankAndSpread(interior, scorer, k);
+        if (server == null) {
+            logger.warn("Reference tile selection: no image server, so tiles cannot be scored; "
+                    + "falling back to interior-and-spread only");
+            return rankAndSpread(interior, t -> 0.0, k);
+        }
+
+        // COVERAGE FIRST, then texture. "Interior" only means the tile has all 8 grid neighbours
+        // inside the ANNOTATION -- and an annotation drawn loosely around a whole specimen
+        // contains large empty gaps, so an interior tile can sit over nothing at all. That is how
+        // a tile in a thin lobe at the tissue edge got picked and the camera saw blank field.
+        //
+        // Ranking on texture with coverage as a multiplier was not enough either: a small cluster
+        // of cells on glass has strong boundary edges, so its texture score stays respectable.
+        // Choosing the densest fields FIRST and only then asking which of those has the most
+        // structure puts the choice where there is something to focus on and match against.
+        List<PathObject> scored = boundScoringSet(interior);
+        Map<PathObject, double[]> measures = new HashMap<>();
+        for (PathObject tile : scored) {
+            measures.put(tile, measureRegion(server, tile.getROI()));
+        }
+        List<PathObject> byCoverage = new ArrayList<>(scored);
+        byCoverage.sort(Comparator.comparingDouble((PathObject t) -> measures.getOrDefault(t, new double[] {0, 0})[0])
+                .reversed());
+
+        // Keep the densest slice, never fewer than enough to spread across. On a slide where
+        // nothing is dense this still yields the densest available rather than giving up.
+        int denseCount = Math.max(Math.max(k * POOL_MULTIPLIER, POOL_FLOOR), byCoverage.size() / 4);
+        denseCount = Math.min(denseCount, byCoverage.size());
+        List<PathObject> dense = new ArrayList<>(byCoverage.subList(0, denseCount));
+        dense.sort(Comparator.comparingDouble((PathObject t) -> measures.getOrDefault(t, new double[] {0, 0})[1])
+                .reversed());
+
+        List<PathObject> chosen = spread(dense, k);
         logger.info(
-                "Reference tile selection: {} candidate(s) -> {} interior -> {} chosen",
+                "Reference tile selection: {} candidate(s) -> {} interior -> {} scored -> {} densest "
+                        + "-> {} chosen (best coverage {}%, chosen coverage {})",
                 (tiles == null) ? 0 : tiles.size(),
                 interior.size(),
-                chosen.size());
+                scored.size(),
+                dense.size(),
+                chosen.size(),
+                String.format("%.0f", 100 * measures.getOrDefault(byCoverage.get(0), new double[] {0, 0})[0]),
+                chosen.stream()
+                        .map(t -> String.format("%.0f%%", 100 * measures.getOrDefault(t, new double[] {0, 0})[0]))
+                        .toList());
         return chosen;
     }
 
@@ -418,6 +490,32 @@ public final class ReferenceTileSelector {
      * <p>Returns 0 when the region cannot be read, which ranks the tile last rather than
      * aborting the selection.
      */
+    /**
+     * One region read, both measures: {@code [tissueCoverage, gradientStd]}. Reading once matters
+     * because the read is the expensive part -- the arithmetic either side of it is free.
+     */
+    static double[] measureRegion(ImageServer<BufferedImage> server, ROI roi) {
+        if (server == null || roi == null) {
+            return new double[] {0.0, 0.0};
+        }
+        try {
+            double longEdge = Math.max(roi.getBoundsWidth(), roi.getBoundsHeight());
+            double downsample = Math.max(1.0, longEdge / SCORE_TARGET_PX);
+            RegionRequest request = RegionRequest.createInstance(
+                    server.getPath(),
+                    downsample,
+                    (int) Math.round(roi.getBoundsX()),
+                    (int) Math.round(roi.getBoundsY()),
+                    (int) Math.round(roi.getBoundsWidth()),
+                    (int) Math.round(roi.getBoundsHeight()));
+            BufferedImage img = server.readRegion(request);
+            return new double[] {tissueFraction(img), gradientStd(img)};
+        } catch (Exception e) {
+            logger.debug("Reference tile selection: could not read tile region ({})", e.getMessage());
+            return new double[] {0.0, 0.0};
+        }
+    }
+
     public static double textureScore(ImageServer<BufferedImage> server, ROI roi) {
         if (server == null || roi == null) {
             return 0.0;
@@ -434,7 +532,8 @@ public final class ReferenceTileSelector {
                     (int) Math.round(roi.getBoundsHeight()));
             BufferedImage img = server.readRegion(request);
             double coverage = tissueFraction(img);
-            double weight = Math.min(1.0, coverage / PREFERRED_TISSUE_FRACTION);
+            double weight = MIN_COVERAGE_WEIGHT
+                    + (1.0 - MIN_COVERAGE_WEIGHT) * Math.min(1.0, coverage / PREFERRED_TISSUE_FRACTION);
             return gradientStd(img) * weight;
         } catch (Exception e) {
             logger.debug("Reference tile selection: could not score tile region ({})", e.getMessage());
