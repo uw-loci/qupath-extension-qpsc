@@ -341,15 +341,31 @@ Validating the worst case licenses the rest.
 
 | | |
 |---|---|
-| Usable | a tissue focus peak exists and is distinguishable from any surface |
+| Usable | the strongest focus peak sits within ~5 um of the sample plane (the Z you manually focused at), distinguishable from any surface peak |
 | Requires tissue gate | surfaces sit *before* focus, so the approach must stop only where tissue is detected |
+| Focus metric | the metric the server used to measure the profile (e.g., `tenengrad`, `p98_p2`). The verdict is only valid for this metric; changing `score_metric` for this objective invalidates the record |
+| Approach distance | safe Z to focus, which sets the expected scan duration |
+| Peak width (FWHM) | bounds how fast the approach may scan without stepping over focus |
+| Exposure / illumination | the conditions the profile was measured under |
+
+**Peak positioning requirement.** The strongest peak must sit within ~5 um of the sample plane
+you focused on by hand. If it lands elsewhere the validation **fails** — it does *not* simply
+recommend the tissue gate, because a peak in the wrong place is a different problem from a
+surface peak before focus, and the gate does not fix it.
+
+Failing is the useful outcome: a failed record disables approach mode, so autofocus falls back
+to the standard walk. Passing it would be worse than not validating at all, because
+`approachDistanceUm` is measured *to the strongest peak* — so a peak 207 um short of the sample
+also writes a travel bound 207 um short, and the licensed approach then scans a range that never
+reaches the sample. That is exactly what happened on 2026-08-28, when a PASSED record put focus
+200 um short.
 
 **The tissue gate is yours to set, not just the measurement's.** The validation result dialog
 carries a **"Require a tissue gate on every approach"** checkbox, pre-ticked to what the two
 scans measured. The measurement is a recommendation: it is taken on one slide at one XY, so
 "no surface peak here" is not "no surface peak on every slide this objective will see" — and
 getting it wrong is quiet and expensive, because the approach commits the first peak it meets
-and logs that as a success. On 2026-08-28 that put focus 200 um short of the sample.
+and logs that as a success.
 
 **When to turn it on:** whenever focus lands short of the sample, or you simply want the
 safer behaviour. With the gate on, the approach snaps at each candidate peak and stops only
@@ -364,9 +380,6 @@ binding already does exactly that, to 0.1, because the default 20% floor rejects
 
 The value is stored per `(microscope, modality, objective)` in `focus_approach_validation.json`,
 alongside the microscope config — not in a QuPath preference and not in `autofocus_<scope>.yml`.
-| Approach distance | safe Z to focus, which sets the expected scan duration |
-| Peak width (FWHM) | bounds how fast the approach may scan without stepping over focus |
-| Exposure / illumination | the conditions the profile was measured under |
 
 **Exposure and illumination matter.** The focus metric is an intensity spread, so both rescale
 it, and a large enough increase saturates the sensor and flattens the very peak the record
