@@ -77,8 +77,35 @@ public final class ReferenceTileSelector {
     /**
      * Maximum tiles whose texture is actually measured. Scoring reads an image region per
      * tile, so this bounds the cost of a selection on a slide with thousands of tiles.
+     *
+     * <p>Raised from 60 after an FNA slide, where 60 of 1021 interior tiles is a 6% sample and
+     * the tissue is scattered rather than a solid block -- so the sample can easily miss every
+     * good field and the pick lands on one that is mostly background. Measured cost is about
+     * 4.5 ms per tile, so this is roughly a second on a worker thread, once per slide.
      */
-    private static final int SCORE_BUDGET = 60;
+    private static final int SCORE_BUDGET = 240;
+
+    /**
+     * Luminance bounds for a "tissue" pixel on a brightfield WSI: brighter than
+     * {@value #TISSUE_WHITE_MAX} is blank glass, darker than {@value #TISSUE_DARK_MIN} is an
+     * artifact or shadow. Same convention and same numbers as the {@code wsi_tissue_*}
+     * thresholds the autofocus YAML uses to pre-score tiles, so the two agree about what
+     * tissue looks like.
+     */
+    private static final int TISSUE_WHITE_MAX = 230;
+
+    private static final int TISSUE_DARK_MIN = 20;
+
+    /**
+     * Tissue coverage at or above which a tile's texture score is taken at face value. Below
+     * it the score is scaled down in proportion, so a field that is 20% tissue ranks below one
+     * that is 60% even when the sparse field's edges give it a respectable gradient spread.
+     *
+     * <p>A reference tile is what SIFT matches against and what autofocus scans on. Both want
+     * a field FULL of structure, not one with a little structure and a lot of glass -- which
+     * is how a point that landed exactly on target still failed to focus.
+     */
+    private static final double PREFERRED_TISSUE_FRACTION = 0.5;
 
     private ReferenceTileSelector() {}
 
@@ -375,13 +402,21 @@ public final class ReferenceTileSelector {
     // ---- texture ---------------------------------------------------------------
 
     /**
-     * Standard deviation of gradient magnitude over the tile region, downsampled to roughly
-     * {@value #SCORE_TARGET_PX} px on its long edge.
+     * How good a reference tile this region is: gradient spread, scaled down when the field is
+     * mostly background.
      *
-     * <p>Standard deviation rather than mean: a uniformly grainy region (noise, or an evenly
-     * stained blank) has a high mean gradient but little structure, while real tissue has a
-     * wide spread of edge strengths. Returns 0 when the region cannot be read, which ranks the
-     * tile last rather than aborting the selection.
+     * <p>Standard deviation of gradient magnitude rather than mean: a uniformly grainy region
+     * (noise, or an evenly stained blank) has a high mean gradient but little structure, while
+     * real tissue has a wide spread of edge strengths.
+     *
+     * <p>Texture alone is not enough, which is what an FNA slide showed: a field with a small
+     * cluster of cells on glass has strong edges at the cluster boundary and scores
+     * respectably, but autofocus has almost nothing to work with and SIFT has few features to
+     * match. Scaling by tissue coverage prefers the field that is full of structure over the
+     * one that merely contains some.
+     *
+     * <p>Returns 0 when the region cannot be read, which ranks the tile last rather than
+     * aborting the selection.
      */
     public static double textureScore(ImageServer<BufferedImage> server, ROI roi) {
         if (server == null || roi == null) {
@@ -398,11 +433,40 @@ public final class ReferenceTileSelector {
                     (int) Math.round(roi.getBoundsWidth()),
                     (int) Math.round(roi.getBoundsHeight()));
             BufferedImage img = server.readRegion(request);
-            return gradientStd(img);
+            double coverage = tissueFraction(img);
+            double weight = Math.min(1.0, coverage / PREFERRED_TISSUE_FRACTION);
+            return gradientStd(img) * weight;
         } catch (Exception e) {
             logger.debug("Reference tile selection: could not score tile region ({})", e.getMessage());
             return 0.0;
         }
+    }
+
+    /**
+     * Fraction of pixels that look like tissue rather than glass or artifact -- luminance
+     * strictly between {@value #TISSUE_DARK_MIN} and {@value #TISSUE_WHITE_MAX}.
+     *
+     * <p>Assumes a brightfield WSI, where background is near-white. That is what the macro and
+     * whole-slide images in this workflow are; a fluorescence WSI would need the opposite
+     * sense, and would report ~0 here rather than something misleadingly plausible.
+     */
+    static double tissueFraction(BufferedImage img) {
+        if (img == null || img.getWidth() < 1 || img.getHeight() < 1) {
+            return 0.0;
+        }
+        int w = img.getWidth();
+        int h = img.getHeight();
+        int tissue = 0;
+        for (int y = 0; y < h; y++) {
+            for (int x = 0; x < w; x++) {
+                int rgb = img.getRGB(x, y);
+                double luma = 0.299 * ((rgb >> 16) & 0xFF) + 0.587 * ((rgb >> 8) & 0xFF) + 0.114 * (rgb & 0xFF);
+                if (luma > TISSUE_DARK_MIN && luma < TISSUE_WHITE_MAX) {
+                    tissue++;
+                }
+            }
+        }
+        return tissue / (double) (w * h);
     }
 
     /** Standard deviation of forward-difference gradient magnitude over a grayscale view. */

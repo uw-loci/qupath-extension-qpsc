@@ -577,21 +577,26 @@ public class MultiTileRefinement {
                                     // (default on; no-op when disabled/disconnected). We are
                                     // off the FX thread here, so block until AF settles -- the
                                     // returned future always completes.
-                                    // Point 1 only: it is the one predicted by the RAW base
-                                    // transform, which lands a median 613 um out -- often on
-                                    // blank glass, where the focus scan below has nothing to
-                                    // find. Points 2+ are predicted by an estimate the earlier
-                                    // points already corrected and land within 26 um, so a
-                                    // search there would only cost time. No-op outside an
-                                    // automatic batch.
-                                    SlotJumpAutofocus.TissueSearchHint tissueSearch = (pointNumber == 1)
-                                            ? SlotJumpAutofocus.tissueSearchForFirstLandmark(
+                                    // EVERY point, not just the first. Restricting this to point 1
+                                    // confused two different things: the 26 um figure that justified
+                                    // it is about where a point LANDS, and the search is about
+                                    // whether there is tissue to focus on WHERE IT LANDED. Point 2
+                                    // can land exactly on its target tile and still find a field
+                                    // that is 20% tissue -- observed on an FNA slide, where the
+                                    // focus scan then failed and SIFT matched against blur.
+                                    //
+                                    // The cost argument was wrong too. The search's first offset is
+                                    // always (0, 0), so when the field already has tissue it returns
+                                    // on attempt 1 of 17 having taken a single frame; every run so
+                                    // far has done exactly that. It only actually searches when the
+                                    // field is poor, which is precisely when it is worth it.
+                                    SlotJumpAutofocus.TissueSearchHint tissueSearch =
+                                            SlotJumpAutofocus.tissueSearchForFirstLandmark(
                                                     gui.getImageData()
                                                             .getHierarchy()
                                                             .getDetectionObjects(),
                                                     predictedStage,
-                                                    estimate)
-                                            : null;
+                                                    estimate);
                                     SlotJumpAutofocus.runAfterSlotMove(tissueSearch)
                                             .join();
                                     Platform.runLater(() -> {

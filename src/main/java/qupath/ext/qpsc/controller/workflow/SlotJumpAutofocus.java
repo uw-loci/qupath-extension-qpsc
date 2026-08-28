@@ -374,17 +374,20 @@ public final class SlotJumpAutofocus {
      * A tissue search for a landmark predicted by the RAW base transform, or null when this
      * caller should not search.
      *
-     * <p>Three sites qualify, and they are alternatives rather than a sequence -- which one
-     * runs depends on how the slide is being aligned:
-     * <ul>
-     *   <li>{@code MultiTileRefinement} point 1 and {@code SingleTileRefinement}'s single
-     *       point, on the green-box + scanner-preset route a batch normally takes. THIS is
-     *       where the 613 um landing error was measured.</li>
-     *   <li>{@code AffineTransformationController}'s first landmark, on the 3-point manual
-     *       route, which a slide falls back to when there is no usable scanner preset.</li>
-     * </ul>
-     * Later points on any of those routes are predicted by an estimate already corrected by
-     * the first, land within 26 um, and must NOT search -- it would only cost time.
+     * <p>Every measured point calls this, on whichever route the slide is being aligned by:
+     * {@code MultiTileRefinement}'s points, {@code SingleTileRefinement}'s single point, or
+     * {@code AffineTransformationController}'s landmarks.
+     *
+     * <p>It was once restricted to the FIRST point, on the reasoning that later points are
+     * predicted by an already-corrected estimate and land within 26 um. That conflated two
+     * different things: 26 um is about where a point LANDS, and this is about whether there is
+     * tissue to focus on WHERE IT LANDED. A point can land exactly on its target tile and
+     * still find a field that is mostly background -- routine on sparse samples like an FNA,
+     * and observed there as a focus failure followed by SIFT matching against blur.
+     *
+     * <p>Running it everywhere is close to free when it is not needed: the search's first
+     * offset is always (0, 0), so a field that already has tissue returns on attempt 1 having
+     * cost a single frame. It only searches when the field is genuinely poor.
      *
      * <p>Restricted to automatic batches. In a manual run the operator is watching the live
      * view and can drive the stage themselves; a stage wandering several hundred micrometres
