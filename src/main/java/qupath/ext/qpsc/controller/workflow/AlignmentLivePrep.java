@@ -103,8 +103,13 @@ public final class AlignmentLivePrep {
 
         // 1. Live stream. show() is a no-op when the window is already up and streaming.
         if (!LiveViewerWindow.isStreamingActive()) {
-            logger.info("Alignment prep: Live Viewer not streaming; opening it");
-            LiveViewerWindow.show();
+            logger.info("Alignment prep: Live Viewer not streaming; opening it and starting the stream");
+            // ensureStreaming, not show(): show() starts the stream only when it had to open the
+            // window, so an already-open-but-stopped viewer -- the state every step that needs
+            // exclusive camera access leaves behind -- got toFront() and nothing else. The wait
+            // below then timed out against a stream nobody had started, and reported it as
+            // "check the camera", which sent the operator after a camera that was fine.
+            LiveViewerWindow.ensureStreaming();
             if (!awaitStreaming()) {
                 return Result.failed("Live view did not start within " + (STREAM_WAIT_MS / 1000)
                         + "s -- check the camera, then reopen this dialog.");
@@ -194,7 +199,10 @@ public final class AlignmentLivePrep {
                         return;
                     }
 
-                    logger.warn("Alignment prep: live state not ready -- {}", result.summary());
+                    // ERROR, not WARN: in an automatic batch the next thing that happens is the
+                    // slide being abandoned, and the operator's only other notice is a dialog that
+                    // vanishes when the run moves on.
+                    logger.error("Alignment prep: live state not ready -- {}", result.summary());
                     liveStateLabel.setText(result.summary());
                     liveStateLabel.setStyle(
                             "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + ";");

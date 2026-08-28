@@ -2485,8 +2485,10 @@ public class ExistingImageWorkflowV2 {
                         // as an unexplained failure -- the slide was correctly left unfinished,
                         // but the log said NullPointerException instead of why.
                         if (result == null) {
-                            logger.warn("Refinement returned no result (hard block); preserving prior alignment");
-                            throw new CancellationException("Refinement was blocked before it could run");
+                            throw new WorkflowBlockedException(
+                                    "alignment refinement could not run -- the microscope could not be put "
+                                            + "into a state alignment can use (see the preceding warning); "
+                                            + "the prior alignment is preserved");
                         }
                         state.refinementTile = result.selectedTile;
                         // Only consume the refined transform + persist the JSON when the
@@ -2742,6 +2744,18 @@ public class ExistingImageWorkflowV2 {
         /**
          * Handles errors during workflow execution.
          */
+        /**
+         * The workflow stopping ITSELF because it cannot proceed, as opposed to the operator
+         * cancelling. Both unwind the same chain, so both were CancellationException and both
+         * logged "Workflow cancelled by user" -- which is a false statement about a run nobody
+         * touched, and the only trace a hard block left in the log.
+         */
+        private static class WorkflowBlockedException extends CancellationException {
+            WorkflowBlockedException(String message) {
+                super(message);
+            }
+        }
+
         private Void handleError(Throwable ex) {
             // Unwrap CompletionException to get the actual cause
             // This handles cases where cancel() is used instead of completeExceptionally()
@@ -2750,8 +2764,18 @@ public class ExistingImageWorkflowV2 {
                 cause = cause.getCause();
             }
 
-            if (cause instanceof CancellationException) {
-                logger.info("Workflow cancelled by user");
+            if (cause instanceof WorkflowBlockedException) {
+                // NOT a user cancellation, and it must not read as one. The software stopped
+                // itself because it could not proceed, and the reason -- which the operator saw
+                // in a dialog -- belongs in the log too. It used to land here as a plain
+                // CancellationException whose message was discarded, so the only record of a
+                // hard block was the line "Workflow cancelled by user", which sent anyone
+                // reading the log looking for an operator who had done nothing.
+                logger.warn("Workflow STOPPED before it could finish: {}", cause.getMessage());
+            } else if (cause instanceof CancellationException) {
+                logger.info(
+                        "Workflow cancelled by user{}",
+                        cause.getMessage() == null ? "" : " (" + cause.getMessage() + ")");
             } else {
                 logger.error("Workflow error", cause);
                 final Throwable displayCause = cause;

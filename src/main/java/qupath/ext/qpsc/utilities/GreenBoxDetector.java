@@ -320,22 +320,29 @@ public class GreenBoxDetector {
         }
 
         if (greenishPixelCount > 0) {
-            logger.info("Hue analysis: Found {} green-ish pixels (g > r && g > b)", greenishPixelCount);
-            logger.info(
+            // A per-pixel REJECTION TALLY, not a list of errors. The first count is a deliberately
+            // loose pre-filter (g > r && g > b) that most of a pale macro passes, and the strict
+            // filters below are what isolate the box -- so large "failed" numbers are the filters
+            // working, not the detection struggling. Said "failed" at INFO, which read as a wall of
+            // errors on a detection that succeeded.
+            logger.debug("Green box pixel filter: {} pixels pass the loose green pre-filter", greenishPixelCount);
+            logger.debug(
                     "  Hue range in image: [{}, {}] (expected: [{}, {}])",
                     String.format("%.3f", minHue),
                     String.format("%.3f", maxHue),
                     String.format("%.3f", params.hueMin),
                     String.format("%.3f", params.hueMax));
-            logger.info("  Filter results: {} passed all filters", passedAllFilters);
-            logger.info(
-                    "    Failed green ratio (< {}): {}",
+            logger.debug("  {} of those pass every strict filter and form the box candidates", passedAllFilters);
+            logger.debug(
+                    "    rejected, green ratio below {}: {}",
                     String.format("%.2f", params.greenThreshold),
                     failedGreenRatio);
-            logger.info("    Failed hue range: {}", failedHue);
-            logger.info(
-                    "    Failed saturation (< {}): {}", String.format("%.2f", params.saturationMin), failedSaturation);
-            logger.info("    Failed brightness: {}", failedBrightness);
+            logger.debug("    rejected, hue outside range: {}", failedHue);
+            logger.debug(
+                    "    rejected, saturation below {}: {}",
+                    String.format("%.2f", params.saturationMin),
+                    failedSaturation);
+            logger.debug("    rejected, brightness out of range: {}", failedBrightness);
 
             // Suggest adjustments if needed
             if (failedHue > passedAllFilters && failedHue > 100) {

@@ -491,6 +491,38 @@ public class LiveViewerWindow {
     }
 
     /**
+     * Makes sure the viewer is open AND actually streaming.
+     *
+     * <p>Not the same as {@link #show()}, which starts the stream only when it had to open the
+     * window: an already-open viewer takes the {@code toFront()} branch and nothing starts
+     * live viewing. That is a very common state -- every workflow step that needs exclusive
+     * camera access stops the stream and leaves the window up -- so a caller that says
+     * "show it, then wait for frames" waits for a stream nobody started, and reports a
+     * timeout that looks like a camera fault. Callers that need FRAMES want this method.
+     */
+    public static void ensureStreaming() {
+        Platform.runLater(() -> {
+            if (instance == null) {
+                instance = new LiveViewerWindow();
+            }
+            if (!instance.stage.isShowing()) {
+                instance.stage.show();
+            } else {
+                instance.stage.toFront();
+            }
+            if (!instance.liveActive) {
+                logger.info("Live Viewer is open but not streaming; starting live viewing");
+                instance.startLiveViewing();
+            }
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller != null && controller.getSocketClient() != null) {
+                instance.syncLiveStateFromServer(
+                        controller.getSocketClient().streamingActiveProperty().get());
+            }
+        });
+    }
+
+    /**
      * Synchronously stops continuous acquisition without hiding the window.
      * <p>
      * This is intended for short-lived camera operations (e.g., property changes)

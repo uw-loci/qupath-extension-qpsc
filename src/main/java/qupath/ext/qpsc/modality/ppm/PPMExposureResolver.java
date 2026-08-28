@@ -36,12 +36,34 @@ public final class PPMExposureResolver {
      * @param wbMode the selected white-balance mode (targets the matching background subfolder)
      * @return the default exposure (ms) for the angle
      */
+    /**
+     * Tuples already reported at INFO, so a resolution that has not changed is not restated.
+     *
+     * <p>The dialogs resolve every angle for every white-balance mode, and rebuild as the
+     * operator changes a selection, so one dialog produced fifteen lines covering two DIFFERENT
+     * sets of values -- and the message did not name the mode, so the two sets read as the same
+     * lookup contradicting itself. Keyed on the resolved value too, so a genuine change still
+     * gets a line.
+     */
+    private static final java.util.Set<String> reportedResolutions = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** Reports a resolved exposure at INFO the first time this exact answer is seen, DEBUG after. */
+    private static void reportResolved(String source, double angle, String wbMode, double exposureMs) {
+        String key = source + "|" + angle + "|" + wbMode + "|" + exposureMs;
+        String message = "Exposure for angle {} ({} white balance): {}ms from {}";
+        if (reportedResolutions.add(key)) {
+            logger.info(message, angle, wbMode == null ? "no" : wbMode, exposureMs, source);
+        } else {
+            logger.debug(message, angle, wbMode == null ? "no" : wbMode, exposureMs, source);
+        }
+    }
+
     public static double getDefaultExposureTime(
             double angle, String modality, String objective, String detector, String wbMode) {
         // If any hardware parameter is null, fall back to persistent preferences.
         if (modality == null || objective == null || detector == null) {
             double preferencesValue = getPersistentPreferenceExposure(angle);
-            logger.info("Using persistent preferences exposure time for angle {}: {}ms", angle, preferencesValue);
+            reportResolved("saved preferences (hardware not specified)", angle, wbMode, preferencesValue);
             return preferencesValue;
         }
 
@@ -57,8 +79,7 @@ public final class PPMExposureResolver {
                 if (backgroundSettings != null && backgroundSettings.angleExposures != null) {
                     for (AngleExposure ae : backgroundSettings.angleExposures) {
                         if (Math.abs(ae.ticks() - angle) < 0.001) {
-                            logger.info(
-                                    "Using background image exposure time for angle {}: {}ms", angle, ae.exposureMs());
+                            reportResolved("the collected background images", angle, wbMode, ae.exposureMs());
                             return ae.exposureMs();
                         }
                     }
@@ -76,16 +97,12 @@ public final class PPMExposureResolver {
             if (exposures != null) {
                 String angleKey = String.valueOf(angle);
                 if (exposures.get(angleKey) instanceof Number n) {
-                    logger.info("Using config file exposure time for angle {}: {}ms", angle, n.doubleValue());
+                    reportResolved("the config file", angle, wbMode, n.doubleValue());
                     return n.doubleValue();
                 }
                 for (String angleName : getAngleNames(angle)) {
                     if (exposures.get(angleName) instanceof Number n) {
-                        logger.info(
-                                "Using config file exposure time for angle {} (key={}): {}ms",
-                                angle,
-                                angleName,
-                                n.doubleValue());
+                        reportResolved("the config file (key " + angleName + ")", angle, wbMode, n.doubleValue());
                         return n.doubleValue();
                     }
                 }
@@ -96,7 +113,7 @@ public final class PPMExposureResolver {
 
         // Priority 3: persistent preferences.
         double preferencesValue = getPersistentPreferenceExposure(angle);
-        logger.info("Using persistent preferences exposure time for angle {}: {}ms", angle, preferencesValue);
+        reportResolved("saved preferences (nothing else matched)", angle, wbMode, preferencesValue);
         return preferencesValue;
     }
 
