@@ -361,7 +361,7 @@ public class TestAutofocusWorkflow {
                     "Objective probe did not answer within {}ms; falling back to the session's selection",
                     OBJECTIVE_PROBE_TIMEOUT_MS);
         } catch (Exception e) {
-            logger.debug("Could not resolve the objective from the MicroManager pixel size ({})", e.getMessage());
+            logger.warn("Objective probe failed ({}); falling back to the session's selection", e.getMessage());
         }
         return null;
     }
@@ -373,15 +373,31 @@ public class TestAutofocusWorkflow {
         //    below is never populated at runtime on these rigs, so everything that trusted it
         //    was really running on the first-in-list fallback.
         String fromHardware = objectiveFromPixelSize(configManager);
+        String selected = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
         if (fromHardware != null) {
+            // Say so when the operator's selection and the mounted objective disagree. Nothing
+            // downstream can tell: exposures, autofocus ranges and pixel sizes are all looked up
+            // per objective, so a wrong selection produces a plausible-looking run with the
+            // wrong numbers throughout. The hardware wins here, but the operator needs to know
+            // their selection is being overruled -- the acquisition that follows uses THEIR
+            // choice, not this one.
+            if (selected != null && !selected.isEmpty() && !selected.equals(fromHardware)) {
+                logger.warn(
+                        "OBJECTIVE MISMATCH: the microscope reports {} but this session is set to {}. "
+                                + "Using {} for hardware settings; check the objective selected for the run, "
+                                + "because acquisition uses the selected one.",
+                        fromHardware,
+                        selected,
+                        fromHardware);
+            }
             return fromHardware;
         }
 
         // 2. What the operator chose for this session. Wrong only if they picked wrongly, which
         //    is a different and much more visible kind of wrong.
-        String fromState = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
-        if (fromState != null && !fromState.isEmpty()) {
-            return fromState;
+        if (selected != null && !selected.isEmpty()) {
+            logger.info("Objective resolved as {} from the session's selection (hardware did not answer)", selected);
+            return selected;
         }
 
         try {
@@ -392,6 +408,7 @@ public class TestAutofocusWorkflow {
             // string, which is what every branch here wanted anyway.
             String objectiveInUse = configManager.getString("microscope", "objective_in_use");
             if (objectiveInUse != null && !objectiveInUse.isEmpty()) {
+                logger.info("Objective resolved as {} from microscope.objective_in_use", objectiveInUse);
                 return objectiveInUse;
             }
 

@@ -242,6 +242,17 @@ public class PPMModalityHandler implements ModalityHandler {
 
         var controller = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
         final double deg = uncrossedDeg;
+        // Name the objective and the numbers being applied. Without this line, applying the
+        // wrong objective's exposures is invisible here and surfaces three steps later as
+        // "98.7% of pixels saturated" from streaming autofocus, which points at the camera
+        // rather than at the lookup that chose these values. Cost: one line per alignment.
+        logger.info(
+                "PPM alignment reference state: {} / {} -> uncrossed ({} deg) exposures {} gains {}",
+                objective,
+                detector,
+                Math.round(deg),
+                java.util.Arrays.toString(expArray),
+                gainArray == null ? "default" : java.util.Arrays.toString(gainArray));
         controller.withLiveModeHandling(
                 () -> controller.applyCameraSettingsForAngle("uncrossed", expArray, gainArray, deg));
         return java.util.Optional.of(String.format("uncrossed (%d deg)", Math.round(deg)));
