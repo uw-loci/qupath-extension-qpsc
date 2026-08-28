@@ -23,6 +23,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -57,6 +58,40 @@ public class LCCalibrationWorkflow {
     /** What the operator chooses; everything else comes from the microscope YAML. */
     public record Params(String outputFolder, String strategy, Double blackLevel) {}
 
+    /**
+     * The reconstruction settings this calibration will run with, read from the microscope YAML.
+     *
+     * <p>Shown rather than made editable. The wavelength is a pure scale on reported retardance,
+     * so a value that disagrees with the one the acquisition uses produces maps that look
+     * entirely correct and are uniformly wrong -- there is no symptom to notice. Keeping one
+     * source of truth is what prevents that, so this displays the value and points at where to
+     * change it instead of offering a second place to set it.
+     *
+     * <p>The wavelength in particular is worth reading before every calibration on this
+     * instrument: the interference filter has never been identified, and the value has already
+     * moved between 546 and 549 once.
+     */
+    private static String describeReconstructionSettings() {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) {
+            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (path != null && !path.isBlank()) {
+                mgr = MicroscopeConfigManager.getInstance(path);
+            }
+        }
+        if (mgr == null) {
+            return "  (microscope configuration not loaded -- cannot show the settings in effect)";
+        }
+        Double swing = mgr.getDouble("modalities", "lcpolscope", "reconstruction", "swing_waves");
+        Double wavelength = mgr.getDouble("modalities", "lcpolscope", "reconstruction", "wavelength_nm");
+        Object scheme = mgr.getSection("modalities", "lcpolscope", "reconstruction") == null
+                ? null
+                : mgr.getSection("modalities", "lcpolscope", "reconstruction").get("scheme");
+        return "  swing       " + (swing == null ? "NOT SET" : String.valueOf(swing)) + " waves\n"
+                + "  wavelength  " + (wavelength == null ? "NOT SET" : String.valueOf(wavelength)) + " nm\n"
+                + "  scheme      " + (scheme == null ? "NOT SET" : String.valueOf(scheme));
+    }
+
     private static Optional<Params> promptForParameters() {
         Alert dialog = new Alert(Alert.AlertType.CONFIRMATION);
         dialog.setTitle("Calibrate Liquid Crystals");
@@ -66,8 +101,12 @@ public class LCCalibrationWorkflow {
                 + "how dark the extinction state can be made, so anything birefringent in the field\n"
                 + "will make the result worse.\n\n"
                 + "Swing, scheme and wavelength are taken from the microscope configuration, so the\n"
-                + "calibration cannot disagree with the acquisition that uses it.");
+                + "calibration cannot disagree with the acquisition that uses it. They are shown below\n"
+                + "so you can check them; change them in the microscope YAML, not here.");
         intro.setStyle("-fx-font-size: 11px;");
+
+        Label fromConfig = new Label(describeReconstructionSettings());
+        fromConfig.setStyle("-fx-font-size: 11px; -fx-font-family: monospace;");
 
         TextField outputField = new TextField(QPPreferenceDialog.getProjectsFolderProperty());
         outputField.setPrefColumnCount(32);
@@ -94,7 +133,7 @@ public class LCCalibrationWorkflow {
                 + "an error of 50 counts moves the extinction ratio by about 10 percent.");
         notes.setStyle("-fx-font-size: 11px;");
 
-        VBox content = new VBox(8, intro, grid, notes);
+        VBox content = new VBox(8, intro, fromConfig, grid, notes);
         dialog.getDialogPane().setContent(content);
 
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
