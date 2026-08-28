@@ -1169,6 +1169,9 @@ public final class MultiSlideExistingImageWorkflow {
                 s.assignment.position(),
                 s.assignment.entry().getImageName());
         AutoAdvanceController.beginSlide();
+        // The next slide's focus is genuinely unknown again -- measured spread across one
+        // carrier was 180 um -- so the first point on it earns a full approach scan.
+        SlotJumpAutofocus.beginSlide();
         s.setStatus(Status.IN_PROGRESS);
         refreshFinish.run();
         CompletableFuture<Boolean> acquired = new CompletableFuture<>();
@@ -1241,6 +1244,9 @@ public final class MultiSlideExistingImageWorkflow {
                 s.assignment.entry().getImageName());
         // A previous slot's operator takeover does not carry into this one.
         AutoAdvanceController.beginSlide();
+        // The next slide's focus is genuinely unknown again -- measured spread across one
+        // carrier was 180 um -- so the first point on it earns a full approach scan.
+        SlotJumpAutofocus.beginSlide();
         CompletableFuture<Void> done = new CompletableFuture<>();
         double[] slotCenter = WorkflowHelpers.resolveSlotCenterStageXY(carrier, s.assignment.position());
         // TEST-ONLY: reuseAlignment (pref + per-batch confirm) lets the setup pass reuse a

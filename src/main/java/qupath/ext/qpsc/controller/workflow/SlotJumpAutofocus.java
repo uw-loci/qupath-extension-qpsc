@@ -456,6 +456,33 @@ public final class SlotJumpAutofocus {
     private static volatile TissueSearchHint pendingTissueSearch;
 
     /**
+     * Focus Z already established on the slide currently being worked on, or null when none is.
+     *
+     * <p>This is what decides between the two very different scans available. Approach-from-safe-Z
+     * retracts to the safe Z and traverses the whole travel bound -- currently ~460 um, about 40
+     * seconds -- because it assumes focus could be anywhere. That assumption is true exactly ONCE
+     * per slide: on arrival. Every reference point after the first is a few hundred micrometres
+     * away IN XY on the same piece of glass, so its focus is microns from the one just measured,
+     * and re-running the full traverse costs a minute and a half per slide to rediscover a number
+     * already in hand.
+     *
+     * <p>Cleared by {@link #beginSlide()}, because the next slide's focus genuinely is unknown
+     * again -- the measured spread across one carrier was 180 um.
+     */
+    private static volatile Double focusZThisSlide;
+
+    /**
+     * Forget the focus established for the previous slide. Call as each slot's turn begins,
+     * alongside the other per-slide resets.
+     */
+    public static void beginSlide() {
+        if (focusZThisSlide != null) {
+            logger.debug("Slot-jump AF: new slide; forgetting the previous slide's focus Z");
+        }
+        focusZThisSlide = null;
+    }
+
+    /**
      * Runs the tissue search, if one was requested. Best-effort: a failure leaves the stage
      * where the prediction put it and lets autofocus try anyway, because a focus scan on
      * glass is a worse outcome than a slow one but not a worse outcome than no scan at all.
@@ -698,7 +725,9 @@ public final class SlotJumpAutofocus {
         //
         // The seed is only available once that slide has been aligned at least once -- a
         // first-time setup pass has nothing to seed from and still scans from where it lands.
-        Double seedZ = resolveSavedFocusZ();
+        // Prefer a focus measured on THIS slide moments ago over the saved one, which may be
+        // from another session at another temperature.
+        Double seedZ = (focusZThisSlide != null) ? focusZThisSlide : resolveSavedFocusZ();
         if (seedZ != null) {
             try {
                 double before = controller.getStagePositionZ();
@@ -757,7 +786,22 @@ public final class SlotJumpAutofocus {
                             // withAllLiveViewingOff). Blocking; returns a typed result. Objective is
                             // null -- the server auto-detects it from the live pixel size, exactly as
                             // the Live Viewer streaming-focus button does.
-                            ApproachPlan plan = resolveApproachPlan(configPath, modalityForServer, objective);
+                            // Approach ONLY when this slide's focus is genuinely unknown. Once a
+                            // point on this slide has focused, the next one is a few hundred
+                            // micrometres away in XY on the same glass -- its focus is microns
+                            // from the number already measured, and a full retract-and-traverse
+                            // spends 40 s rediscovering it. Three points per slide made that
+                            // ~2 minutes of pure travel.
+                            ApproachPlan plan = (focusZThisSlide == null)
+                                    ? resolveApproachPlan(configPath, modalityForServer, objective)
+                                    : ApproachPlan.disabled();
+                            if (focusZThisSlide != null) {
+                                logger.info(
+                                        "Slot-jump AF: focus already established on this slide at {} um; "
+                                                + "using the standard scan from there instead of a "
+                                                + "retract-and-traverse",
+                                        String.format("%.1f", focusZThisSlide));
+                            }
                             MicroscopeSocketClient.StreamingFocusResult result = controller
                                     .getSocketClient()
                                     .streamingFocus(
@@ -784,6 +828,8 @@ public final class SlotJumpAutofocus {
                                         result.nSamples,
                                         result.zSpan);
                                 warnIfImplausible(result);
+                                // Remember it for the remaining points on THIS slide.
+                                focusZThisSlide = result.finalZ;
                                 // Feed the safe-Z clearance monitor: this is a real,
                                 // measured sample plane for the insert currently loaded.
                                 SafeZClearanceMonitor.recordFocus(result.finalZ);
@@ -801,6 +847,15 @@ public final class SlotJumpAutofocus {
                                         result.zShift(),
                                         result.initialZ(),
                                         result.finalZ());
+                                // Same as the streaming branch: a measured focus for this slide,
+                                // so the next point does not start from scratch. Parsed because
+                                // SweepResult carries the server's formatted strings.
+                                try {
+                                    focusZThisSlide =
+                                            Double.parseDouble(result.finalZ().trim());
+                                } catch (RuntimeException parseEx) {
+                                    logger.debug("Slot-jump AF: could not parse sweep final Z '{}'", result.finalZ());
+                                }
                             }
                         }
                     } catch (IOException ex) {
