@@ -439,9 +439,19 @@ The step is deliberately coarse and leaves gaps between fields. That is the righ
 here — the search is looking for a tissue mass many fields across, not for one particular
 field, and covering every micrometre would cost far more stage moves for no benefit.
 
-**Only that first point searches.** The second one, predicted by an estimate the first has
-already corrected, lands within **26 um** — the base transform's error is very nearly a
-constant per-slide offset, so searching again would only cost time.
+**Every measured point searches for tissue.** The earlier version restricted this to the first
+point, reasoning that later points — predicted by an estimate already corrected by the
+first — land within **26 um** and that searching again would only cost time. That
+conflated two different ideas: the 26 um figure describes WHERE a point lands, but the
+search is about whether there IS tissue WHERE IT LANDED. On sparse samples like FNA
+slides, a point can land exactly on its target tile and still find a field that is mostly
+background, leaving the focus scan with nothing to work with and SIFT matching against
+blur.
+
+The cost argument was also overestimated. The search's first offset is always (0, 0) —
+the point's own location — so when the field already has tissue the search returns on
+its first attempt having taken a single frame. It only actually searches (tries other
+offsets) when the field is poor, which is precisely when the search is worth running.
 
 **It only has to find tissue, not the right tile — and it gives the stage back.** What the
 search produces is a Z value, not a position. Once focus is measured, QPSC drives back to
