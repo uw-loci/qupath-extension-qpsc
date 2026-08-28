@@ -224,41 +224,17 @@ public final class FocusApproachValidationWorkflow {
     }
 
     /**
-     * Best guess at which objective is actually mounted.
+     * Which objective is actually mounted.
      *
-     * <p>NOT {@code TestAutofocusWorkflow.getCurrentObjective}: that reads
-     * {@code microscope.objective_in_use}, which is never populated at runtime on these rigs,
-     * and then falls back to the FIRST objective in the hardware list. On PPM that reports 10x
-     * whatever is mounted -- observed in the 2026-08-14 logs on every autofocus call, and
-     * observed again in this dialog.
-     *
-     * <p>Order: the pixel size MicroManager reports (the server resolves the objective the same
-     * way, so the two agree), then the session's objective state, then the stale config value.
+     * <p>This resolution order -- MicroManager's reported pixel size, then the session's
+     * objective state, then the config -- used to live here BECAUSE
+     * {@code TestAutofocusWorkflow.getCurrentObjective} got it wrong. It no longer does: the
+     * order moved there, so every caller resolves the objective the same way instead of this
+     * dialog alone being correct. Kept as a named method because the call reads better here.
      *
      * @return the best available objective ID, or null when nothing resolves
      */
     private static String resolveMountedObjective(MicroscopeConfigManager mgr, MicroscopeController controller) {
-        try {
-            double pixelSize = controller.getSocketClient().getMicroscopePixelSize();
-            var match = mgr.findHardwareByPixelSize(pixelSize, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
-            if (match.isPresent()) {
-                logger.info(
-                        "Focus-approach: objective resolved as {} via MicroManager pixel size {} um/px",
-                        match.get().objectiveId(),
-                        pixelSize);
-                return match.get().objectiveId();
-            }
-            logger.warn(
-                    "Focus-approach: MicroManager pixel size {} um/px matched no configured objective; "
-                            + "falling back to session state",
-                    pixelSize);
-        } catch (Exception e) {
-            logger.warn("Focus-approach: could not read the MicroManager pixel size ({})", e.getMessage());
-        }
-        String fromState = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
-        if (fromState != null && !fromState.isEmpty()) {
-            return fromState;
-        }
         return TestAutofocusWorkflow.getCurrentObjective(mgr);
     }
 

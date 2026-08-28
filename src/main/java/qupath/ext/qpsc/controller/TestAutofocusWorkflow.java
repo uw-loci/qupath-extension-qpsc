@@ -303,6 +303,40 @@ public class TestAutofocusWorkflow {
      */
     @SuppressWarnings("unchecked")
     public static String getCurrentObjective(MicroscopeConfigManager configManager) {
+        // 1. Ask the hardware. The pixel size MicroManager reports identifies the objective,
+        //    and the SERVER resolves it the same way ("resolved objective ... via pixel-match"),
+        //    so the two ends agree by construction. This has to come first: the config field
+        //    below is never populated at runtime on these rigs, so everything that trusted it
+        //    was really running on the first-in-list fallback.
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller != null && controller.isConnected()) {
+                double pixelSize = controller.getSocketClient().getMicroscopePixelSize();
+                var match = configManager.findHardwareByPixelSize(
+                        pixelSize, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+                if (match.isPresent()) {
+                    logger.debug(
+                            "Objective resolved as {} via MicroManager pixel size {} um/px",
+                            match.get().objectiveId(),
+                            pixelSize);
+                    return match.get().objectiveId();
+                }
+                logger.warn(
+                        "MicroManager pixel size {} um/px matches no configured objective; "
+                                + "falling back to the session's selection",
+                        pixelSize);
+            }
+        } catch (Exception e) {
+            logger.debug("Could not resolve the objective from the MicroManager pixel size ({})", e.getMessage());
+        }
+
+        // 2. What the operator chose for this session. Wrong only if they picked wrongly, which
+        //    is a different and much more visible kind of wrong.
+        String fromState = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
+        if (fromState != null && !fromState.isEmpty()) {
+            return fromState;
+        }
+
         try {
             Map<String, Object> config = configManager.getAllConfig();
             Map<String, Object> microscope = (Map<String, Object>) config.get("microscope");
@@ -314,14 +348,22 @@ public class TestAutofocusWorkflow {
                 }
             }
 
-            logger.warn("objective_in_use not found in config, checking hardware objectives");
-
-            // Fallback: try to get first objective from hardware section
+            // 3. Last resort, and a genuinely dangerous answer -- hence WARN, not INFO. It is
+            //    a GUESS with no evidence behind it, and the callers feed it straight into
+            //    per-objective exposure tables. On PPM the first entry is the 10x, whose
+            //    uncrossed exposure is ~4x the 20x one: applying it at 20x saturates the
+            //    sensor and autofocus then reports "99.4% of pixels saturated" three steps
+            //    later, with nothing pointing back here. Observed on the 2026-08-27 run.
             java.util.List<Map<String, Object>> hardwareObjectives = configManager.getHardwareObjectives();
             if (!hardwareObjectives.isEmpty()) {
                 Object objectiveId = hardwareObjectives.get(0).get("id");
                 if (objectiveId != null) {
-                    logger.info("Using first objective from hardware config: {}", objectiveId);
+                    logger.warn(
+                            "GUESSING objective '{}' -- it is simply the first in the hardware list. "
+                                    + "MicroManager could not be asked, no objective is selected for this session, "
+                                    + "and microscope.objective_in_use is not set. Per-objective exposures and "
+                                    + "autofocus settings will be wrong if this is not what is mounted.",
+                            objectiveId);
                     return objectiveId.toString();
                 }
             }
