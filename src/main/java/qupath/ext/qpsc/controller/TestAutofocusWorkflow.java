@@ -302,32 +302,79 @@ public class TestAutofocusWorkflow {
      * @return Objective identifier or null if not found
      */
     @SuppressWarnings("unchecked")
+    /** How long a pixel-size-derived objective is reused before asking the hardware again. */
+    private static final long OBJECTIVE_CACHE_MS = 2000;
+
+    /**
+     * Longest this will block waiting for the microscope to answer. The auxiliary socket's own
+     * read timeout is at least 30 SECONDS, and {@link #getCurrentObjective} is called on the FX
+     * thread (the Live Viewer, the alignment prep dialog) -- so without a bound of its own, a
+     * server that accepts the connection but never replies would freeze the UI for half a
+     * minute. A second and a half is far longer than the round trip actually takes and short
+     * enough not to read as a hang; exceeding it just falls through to the next source.
+     */
+    private static final long OBJECTIVE_PROBE_TIMEOUT_MS = 1500;
+
+    private static volatile String cachedObjective;
+    private static volatile long cachedObjectiveAt;
+
+    /**
+     * The objective whose configured pixel size matches what MicroManager reports, or null.
+     *
+     * <p>Cached briefly because several call sites ask in quick succession (the Live Viewer
+     * alone asks in four places) and each miss is a socket round trip. Two seconds is short
+     * enough that changing objective is reflected almost immediately.
+     */
+    private static String objectiveFromPixelSize(MicroscopeConfigManager configManager) {
+        String cached = cachedObjective;
+        if (cached != null && System.currentTimeMillis() - cachedObjectiveAt < OBJECTIVE_CACHE_MS) {
+            return cached;
+        }
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null || !controller.isConnected()) {
+            return null;
+        }
+        try {
+            double pixelSize = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
+                        try {
+                            return controller.getSocketClient().getMicroscopePixelSize();
+                        } catch (Exception e) {
+                            throw new java.util.concurrent.CompletionException(e);
+                        }
+                    })
+                    .get(OBJECTIVE_PROBE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
+            var match = configManager.findHardwareByPixelSize(
+                    pixelSize, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+            if (match.isPresent()) {
+                cachedObjective = match.get().objectiveId();
+                cachedObjectiveAt = System.currentTimeMillis();
+                logger.debug(
+                        "Objective resolved as {} via MicroManager pixel size {} um/px", cachedObjective, pixelSize);
+                return cachedObjective;
+            }
+            logger.warn(
+                    "MicroManager pixel size {} um/px matches no configured objective; "
+                            + "falling back to the session's selection",
+                    pixelSize);
+        } catch (java.util.concurrent.TimeoutException e) {
+            logger.warn(
+                    "Objective probe did not answer within {}ms; falling back to the session's selection",
+                    OBJECTIVE_PROBE_TIMEOUT_MS);
+        } catch (Exception e) {
+            logger.debug("Could not resolve the objective from the MicroManager pixel size ({})", e.getMessage());
+        }
+        return null;
+    }
+
     public static String getCurrentObjective(MicroscopeConfigManager configManager) {
         // 1. Ask the hardware. The pixel size MicroManager reports identifies the objective,
         //    and the SERVER resolves it the same way ("resolved objective ... via pixel-match"),
         //    so the two ends agree by construction. This has to come first: the config field
         //    below is never populated at runtime on these rigs, so everything that trusted it
         //    was really running on the first-in-list fallback.
-        try {
-            MicroscopeController controller = MicroscopeController.getInstance();
-            if (controller != null && controller.isConnected()) {
-                double pixelSize = controller.getSocketClient().getMicroscopePixelSize();
-                var match = configManager.findHardwareByPixelSize(
-                        pixelSize, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
-                if (match.isPresent()) {
-                    logger.debug(
-                            "Objective resolved as {} via MicroManager pixel size {} um/px",
-                            match.get().objectiveId(),
-                            pixelSize);
-                    return match.get().objectiveId();
-                }
-                logger.warn(
-                        "MicroManager pixel size {} um/px matches no configured objective; "
-                                + "falling back to the session's selection",
-                        pixelSize);
-            }
-        } catch (Exception e) {
-            logger.debug("Could not resolve the objective from the MicroManager pixel size ({})", e.getMessage());
+        String fromHardware = objectiveFromPixelSize(configManager);
+        if (fromHardware != null) {
+            return fromHardware;
         }
 
         // 2. What the operator chose for this session. Wrong only if they picked wrongly, which
