@@ -134,6 +134,7 @@ The slot-center seed (from holder calibration) speeds up multi-slide runs by mov
 - Pixel size differences between the WSI and microscope are handled automatically (both images are rescaled to the lower resolution).
 - Optical flip is applied based on the image's per-slide metadata.
 - The stage moves to correct any offset found by the matching; the status line shows the offset and number of matched features.
+- After the stage move, an automatic refocus runs (Sweep Autofocus) before any position is captured. The sample is not flat, so the field SIFT lands on is often slightly softer than the one focus was set on — and since nothing else re-focuses, that Z is what gets saved and later seeds acquisition. Sweep rather than a full search, because focus is already close by construction. It respects the "Disable All Autofocus" preference and is skipped when disconnected or mid-acquisition; if it fails, the stage stays where SIFT left it and the workflow continues, exactly as before.
 - If matching fails (insufficient features or stage too far off), refine manually.
 
 SIFT auto-alignment works best on tissue with visible structural features. It can struggle on blank areas, very uniform tissue, or regions with repetitive patterns; in those cases use manual alignment.
