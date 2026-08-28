@@ -385,14 +385,14 @@ public class TestAutofocusWorkflow {
         }
 
         try {
-            Map<String, Object> config = configManager.getAllConfig();
-            Map<String, Object> microscope = (Map<String, Object>) config.get("microscope");
-
-            if (microscope != null) {
-                Object objectiveInUse = microscope.get("objective_in_use");
-                if (objectiveInUse != null) {
-                    return objectiveInUse.toString();
-                }
+            // getString rather than walking getAllConfig() by hand: the raw-map read needed an
+            // unchecked cast to Map<String, Object>, which is a cast the compiler cannot verify
+            // and one that would have thrown at runtime if the key ever held a scalar. The
+            // typed accessor does the same lookup and returns null for anything that is not a
+            // string, which is what every branch here wanted anyway.
+            String objectiveInUse = configManager.getString("microscope", "objective_in_use");
+            if (objectiveInUse != null && !objectiveInUse.isEmpty()) {
+                return objectiveInUse;
             }
 
             // 3. Last resort, and a genuinely dangerous answer -- hence WARN, not INFO. It is
