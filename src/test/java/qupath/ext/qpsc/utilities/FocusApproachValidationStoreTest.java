@@ -162,7 +162,8 @@ class FocusApproachValidationStoreTest {
                 50.0,
                 List.of(),
                 "2026-08-26T12:00:00Z");
-        assertEquals(-350.0, ppm.signedApproachBoundUm(1.4), 1e-9);
+        // Additive: 250 um approach + 250 um headroom, signed toward the sample.
+        assertEquals(-500.0, ppm.signedApproachBoundUm(250.0), 1e-9);
 
         // A rig where retract is the negative direction gets the opposite sign from the same
         // arithmetic -- nothing here encodes a convention.
@@ -181,7 +182,7 @@ class FocusApproachValidationStoreTest {
                 50.0,
                 List.of(),
                 "2026-08-26T12:00:00Z");
-        assertEquals(420.0, other.signedApproachBoundUm(1.4), 1e-9);
+        assertEquals(550.0, other.signedApproachBoundUm(250.0), 1e-9);
     }
 
     @Test
@@ -201,7 +202,7 @@ class FocusApproachValidationStoreTest {
                 50.0,
                 List.of(),
                 "2026-08-26T12:00:00Z");
-        assertTrue(Double.isNaN(noFocus.signedApproachBoundUm(1.4)));
+        assertTrue(Double.isNaN(noFocus.signedApproachBoundUm(250.0)));
 
         // Focus AT the safe Z gives no direction, so there is nothing to infer.
         var degenerate = new FocusApproachValidationStore.Record(
@@ -219,7 +220,7 @@ class FocusApproachValidationStoreTest {
                 50.0,
                 List.of(),
                 "2026-08-26T12:00:00Z");
-        assertTrue(Double.isNaN(degenerate.signedApproachBoundUm(1.4)));
+        assertTrue(Double.isNaN(degenerate.signedApproachBoundUm(250.0)));
     }
 
     @Test

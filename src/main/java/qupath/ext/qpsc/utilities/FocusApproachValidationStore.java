@@ -147,7 +147,7 @@ public final class FocusApproachValidationStore {
          *                       slide, so some headroom is needed for slide-to-slide variation
          * @return signed bound in micrometers, or NaN when the record cannot supply one
          */
-        public double signedApproachBoundUm(double headroomFactor) {
+        public double signedApproachBoundUm(double headroomUm) {
             if (Double.isNaN(focusZUm) || Double.isNaN(approachDistanceUm) || approachDistanceUm <= 0) {
                 return Double.NaN;
             }
@@ -155,7 +155,14 @@ public final class FocusApproachValidationStore {
             if (direction == 0) {
                 return Double.NaN;
             }
-            return direction * approachDistanceUm * headroomFactor;
+            // ADDITIVE headroom, not multiplicative. What the headroom covers is slide-to-slide
+            // variation -- glass thickness, how the slide seats in its slot -- and that is an
+            // absolute distance. It does not scale with how deep this particular objective's
+            // focus happens to sit, which is what a multiplier assumed. The multiplier's own
+            // comment cited a measured spread of 236 um, but at 1.4x on a 212 um approach it
+            // only added 85 um, and a carrier whose slides focused between -212 and -324 had
+            // scans that stopped 27 um short of the sample.
+            return direction * (approachDistanceUm + Math.max(0, headroomUm));
         }
 
         public String isStaleAgainst(Double currentSafeZUm) {

@@ -231,7 +231,7 @@ public final class SlotJumpAutofocus {
             // SIGNED from the two positions the validation actually measured. The sign is what
             // lets the server avoid inferring which way retracts; an unsigned bound sends the
             // scan away from the sample on a rig where retract is the positive direction.
-            double bound = record.signedApproachBoundUm(APPROACH_HEADROOM_FACTOR);
+            double bound = record.signedApproachBoundUm(APPROACH_HEADROOM_UM);
             if (Double.isNaN(bound)) {
                 logger.info("Slot-jump AF: validation record has no usable approach bound; using the standard scan");
                 return ApproachPlan.disabled();
@@ -250,12 +250,24 @@ public final class SlotJumpAutofocus {
     }
 
     /**
-     * Headroom on the validated approach distance. The validation measured ONE slide; the
-     * measured slide-to-slide focus spread on a carrier was 236 um against approach distances
-     * of a few hundred, so a bound with no headroom would fall short on a thicker slide. Kept
-     * modest because this is also the travel cap.
+     * Extra travel, in micrometres, allowed beyond the validated approach distance.
+     *
+     * <p>The validation measures ONE slide. What this covers is the spread across the others --
+     * glass thickness, how each slide seats in its slot -- which is an ABSOLUTE distance and
+     * does not scale with how deep this objective's focus sits. It was a 1.4x multiplier, whose
+     * own comment cited a measured spread of 236 um but which only added 85 um on a 212 um
+     * approach: the scan stopped short of the sample and could not have found it however good
+     * the metric was.
+     *
+     * <p>Measured on one 4-slide carrier, 2026-08-28: focus at -212.7, -230, -320, -324 and
+     * -392. That is 180 um of spread from the validated slide, so 250 um covers it with about
+     * 70 um to spare. It is also the TRAVEL CAP, so it is not free -- the objective is driven
+     * this much further toward the slide before the scan gives up, and the scan always
+     * traverses the whole bound rather than stopping when it finds the sample. At 11.5 um/s a
+     * 460 um bound is about 40 s per reference point. The stage's configured Z limit remains
+     * the hard stop.
      */
-    private static final double APPROACH_HEADROOM_FACTOR = 1.4;
+    private static final double APPROACH_HEADROOM_UM = 250.0;
 
     private static void publishSkip(String what) {
         logger.warn("Slot-jump AF SKIPPED: {}", what);
