@@ -291,7 +291,26 @@ public final class FocusProfileAnalysis {
                 .filter(r -> !r.contains("likely a coverslip"))
                 .toList());
 
-        boolean usable = tissuePeakIsDistinct && !Double.isNaN(tissue.globalMaxZ()) && tissue.risingFraction() > 0;
+        // The strongest peak must be AT the sample plane the operator focused on by hand. This
+        // was missing, and its absence produced a self-contradicting verdict: PASSED, alongside
+        // its own finding that "the strongest peak is 207.1 um from the focus you set by hand --
+        // the metric is peaking somewhere other than the sample plane". The single-scan Verdict
+        // gets this right (it fails on any reason); analysePair recomputed usable from scratch
+        // and dropped it.
+        //
+        // Passing that record is worse than failing it. approachDistanceUm is measured to the
+        // STRONGEST peak, so a peak 207 um short of the sample also writes a travel bound 207 um
+        // short -- and the licensed approach then scans a range that never reaches the sample at
+        // all. The previous, unlicensed behaviour at least scanned past it.
+        //
+        // NaN means no manual focus was supplied to check against, which is not evidence of a
+        // problem, so it does not fail here.
+        boolean peakIsAtTheSamplePlane =
+                Double.isNaN(tissue.focusOffsetUm()) || Math.abs(tissue.focusOffsetUm()) <= FOCUS_TOLERANCE_UM;
+        boolean usable = tissuePeakIsDistinct
+                && peakIsAtTheSamplePlane
+                && !Double.isNaN(tissue.globalMaxZ())
+                && tissue.risingFraction() > 0;
         return new PairVerdict(
                 usable,
                 !surfacePeaks.isEmpty(),

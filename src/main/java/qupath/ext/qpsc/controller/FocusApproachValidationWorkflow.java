@@ -168,8 +168,12 @@ public final class FocusApproachValidationWorkflow {
             return;
         }
 
-        double[][] tissueProfile =
-                captureProfile(mgr, controller, configPath, modality, safeZ, manualFocusZ, "tissue", plan.saveFrames());
+        // Which focus metric the server actually measured with. The verdict is only meaningful
+        // FOR THAT METRIC -- it says the metric peaks at the sample, or does not -- so naming it
+        // is part of the result, not decoration.
+        String[] metricUsed = {null};
+        double[][] tissueProfile = captureProfile(
+                mgr, controller, configPath, modality, safeZ, manualFocusZ, "tissue", plan.saveFrames(), metricUsed);
         if (tissueProfile == null) {
             Dialogs.showErrorMessage("Focus Approach Validation", "The over-tissue scan produced no usable profile.");
             return;
@@ -186,8 +190,8 @@ public final class FocusApproachValidationWorkflow {
         if (bgConfirm == null) {
             return;
         }
-        double[][] bgProfile =
-                captureProfile(mgr, controller, configPath, modality, safeZ, manualFocusZ, "blank", plan.saveFrames());
+        double[][] bgProfile = captureProfile(
+                mgr, controller, configPath, modality, safeZ, manualFocusZ, "blank", plan.saveFrames(), metricUsed);
         if (bgProfile == null) {
             Dialogs.showErrorMessage("Focus Approach Validation", "The background scan produced no usable profile.");
             return;
@@ -219,7 +223,7 @@ public final class FocusApproachValidationWorkflow {
         // gate. The measurement is the recommendation, not the decision: it is taken on one
         // slide at one XY, and whether a surface peak shows up there does not settle whether
         // one shows up on every slide the objective will ever see.
-        showVerdict(verdict, record);
+        showVerdict(verdict, record, metricUsed[0]);
     }
 
     /** The same record with a different tissue-gate decision. */
@@ -450,7 +454,8 @@ public final class FocusApproachValidationWorkflow {
             double safeZ,
             double manualFocusZ,
             String scanLabel,
-            boolean saveFrames) {
+            boolean saveFrames,
+            String[] metricOut) {
 
         double direction = Math.signum(manualFocusZ - safeZ);
         double farEnd = manualFocusZ + direction * PAST_FOCUS_MARGIN_UM;
@@ -585,6 +590,9 @@ public final class FocusApproachValidationWorkflow {
                                         poller.stop();
                                         plot.setSamples(
                                                 pts, serverMetric == null ? "focus metric" : serverMetric, true);
+                                        if (metricOut != null && serverMetric != null) {
+                                            metricOut[0] = serverMetric;
+                                        }
                                     });
                                 }
                                 // The server leaves the stage at the traverse start (the safe Z),
@@ -685,7 +693,7 @@ public final class FocusApproachValidationWorkflow {
 
     /** Shows what was measured and what it licenses. */
     private static void showVerdict(
-            FocusProfileAnalysis.PairVerdict verdict, FocusApproachValidationStore.Record record) {
+            FocusProfileAnalysis.PairVerdict verdict, FocusApproachValidationStore.Record record, String scoreMetric) {
         StringBuilder sb = new StringBuilder();
         sb.append(verdict.usable() ? "PASSED\n\n" : "FAILED\n\n");
         sb.append(String.format(
@@ -697,6 +705,10 @@ public final class FocusApproachValidationWorkflow {
         if (!Double.isNaN(record.exposureMs())) {
             sb.append(String.format("Measured at:       %.2f ms exposure%n", record.exposureMs()));
         }
+        sb.append(String.format(
+                "Focus metric:      %s%n", scoreMetric == null ? "unknown (server did not report it)" : scoreMetric));
+        sb.append("                   This verdict describes how THAT metric behaves. Changing\n"
+                + "                   score_metric for this objective invalidates it.\n");
         sb.append('\n');
         if (verdict.requiresTissueGate()) {
             sb.append("A surface peak sits BEFORE focus here, so the tissue gate below is recommended ON: "
