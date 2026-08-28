@@ -11,11 +11,13 @@ import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
 import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
@@ -23,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -108,6 +111,31 @@ public class LCCalibrationWorkflow {
         Label fromConfig = new Label(describeReconstructionSettings());
         fromConfig.setStyle("-fx-font-size: 11px; -fx-font-family: monospace;");
 
+        // The settings above are read-only here on purpose, so the operator needs a way to
+        // reach the file that owns them. Revealing it beats printing the path: these live
+        // wherever the rig was set up, and on the LC-PolScope machine that is several
+        // folders deep in a OneDrive-backed profile.
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        boolean haveConfigPath = configPath != null && !configPath.isBlank();
+        Button showConfig = new Button("Show config file...");
+        showConfig.setDisable(!haveConfigPath);
+        showConfig.setTooltip(new Tooltip(
+                haveConfigPath
+                        ? "Reveal " + configPath + " in the file browser"
+                        : "No microscope configuration file is set in the QPSC preferences."));
+        showConfig.setOnAction(e -> {
+            java.io.File file = new java.io.File(configPath);
+            if (!UIFunctions.revealInFileBrowser(file)) {
+                // Says which path failed: "could not open the file browser" with no path is
+                // useless when the likely cause is the path being wrong or on a disconnected
+                // drive, which is exactly the case on a rig with a cloud-synced profile.
+                Dialogs.showErrorMessage(
+                        "LC-PolScope Calibration",
+                        "Could not reveal the microscope configuration file:\n\n" + file.getAbsolutePath()
+                                + "\n\nCheck that the path in the QPSC preferences still exists.");
+            }
+        });
+
         TextField outputField = new TextField(QPPreferenceDialog.getProjectsFolderProperty());
         outputField.setPrefColumnCount(32);
 
@@ -133,7 +161,7 @@ public class LCCalibrationWorkflow {
                 + "an error of 50 counts moves the extinction ratio by about 10 percent.");
         notes.setStyle("-fx-font-size: 11px;");
 
-        VBox content = new VBox(8, intro, fromConfig, grid, notes);
+        VBox content = new VBox(8, intro, fromConfig, showConfig, grid, notes);
         dialog.getDialogPane().setContent(content);
 
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
