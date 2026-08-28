@@ -712,8 +712,15 @@ public final class MultiSlideExistingImageWorkflow {
         abortBtn.setOnAction(e -> {
             boolean acquiring = MicroscopeController.getInstance().isAcquisitionActive();
             logger.info("MS workflow: Abort All requested, runId={}, acquisitionActive={}", runId, acquiring);
+            // ALWAYS, and before anything else: stop an autofocus that is mid-scan. An
+            // autofocus traverse is the stage MOVING IN Z, and isAcquisitionActive() is false
+            // during the whole setup pass -- so an abort during alignment took the branch below,
+            // set a flag, closed the panel, and left a scan running. The operator saw a stage
+            // that kept moving after they had aborted, with no window left to explain it. An
+            // approach traverse is ~40 s, and retries make it minutes.
+            abortAnyRunningAutofocus();
             if (!acquiring) {
-                // No in-flight acquisition: immediate driver halt + close (today's behavior).
+                // No in-flight acquisition: immediate driver halt + close.
                 aborted.set(true);
                 cancelToken.cancel();
                 stage.close();
@@ -1083,6 +1090,11 @@ public final class MultiSlideExistingImageWorkflow {
         // a disposed label (and a later panel can register its own). Also clear the intended-slot
         // entry so a later single-slide run is not re-asserted against a stale batch entry.
         stage.setOnHidden(e -> {
+            // Whatever closed this panel -- Abort All, the window X, a failure -- an autofocus
+            // scan running on the server does not know about it and keeps driving Z. Stopping it
+            // here covers the routes that do not go through the Abort button. Idempotent: the
+            // server answers ABORTAF whether or not a scan is in flight.
+            abortAnyRunningAutofocus();
             SlotJumpAutofocus.clearStatusSink();
             intendedSlotEntry = null;
             batchAbortAction = null;
@@ -1438,6 +1450,35 @@ public final class MultiSlideExistingImageWorkflow {
      * The failure this addresses is the run being stuck SILENTLY, so it converts a silent stall
      * into an announced one and leaves the decision to a human.
      */
+    /**
+     * Tells the server to stop any autofocus scan in flight, off the FX thread.
+     *
+     * <p>Best-effort and always safe to call: the server answers ABORTAF whether or not a scan
+     * is running, and a scan that has already finished simply is not there to stop. What it must
+     * NOT do is block the FX thread, because it is called from the Abort button's handler and
+     * the aux socket can be slow when the primary is busy inside a scan.
+     */
+    private static void abortAnyRunningAutofocus() {
+        MicroscopeController controller = MicroscopeController.getInstance();
+        if (controller == null || !controller.isConnected()) {
+            return;
+        }
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        controller.getSocketClient().abortStreamingFocus();
+                        logger.info("MS workflow: sent ABORTAF so a mid-scan autofocus stops moving the stage");
+                    } catch (Exception e) {
+                        logger.warn(
+                                "MS workflow: ABORTAF on abort failed ({}); a scan may still be running",
+                                e.getMessage());
+                    }
+                },
+                "MultiSlide-AbortAF");
+        t.setDaemon(true);
+        t.start();
+    }
+
     private static javafx.animation.Timeline startSlotWatchdog(SlotState slot, String passName, long timeoutMs) {
         if (timeoutMs <= 0 || !AutoAdvanceController.isArmed()) {
             return null;
