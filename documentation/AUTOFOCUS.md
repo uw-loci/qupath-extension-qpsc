@@ -343,6 +343,27 @@ Validating the worst case licenses the rest.
 |---|---|
 | Usable | a tissue focus peak exists and is distinguishable from any surface |
 | Requires tissue gate | surfaces sit *before* focus, so the approach must stop only where tissue is detected |
+
+**The tissue gate is yours to set, not just the measurement's.** The validation result dialog
+carries a **"Require a tissue gate on every approach"** checkbox, pre-ticked to what the two
+scans measured. The measurement is a recommendation: it is taken on one slide at one XY, so
+"no surface peak here" is not "no surface peak on every slide this objective will see" — and
+getting it wrong is quiet and expensive, because the approach commits the first peak it meets
+and logs that as a success. On 2026-08-28 that put focus 200 um short of the sample.
+
+**When to turn it on:** whenever focus lands short of the sample, or you simply want the
+safer behaviour. With the gate on, the approach snaps at each candidate peak and stops only
+where tissue is actually detected, so a coverslip or slide surface is rejected and it carries
+on inward. Cost is one extra snap per rejected peak.
+
+**When to turn it off:** only if a sparse sample makes the gate reject the *real* peak. That
+failure looks different — autofocus fails outright (`metric_flat`, stage retracted to the safe
+Z) rather than landing in the wrong place. If you hit it, prefer lowering
+`tissue_area_threshold` for that modality binding over disabling the gate; the LC-PolScope
+binding already does exactly that, to 0.1, because the default 20% floor rejects valid fields.
+
+The value is stored per `(microscope, modality, objective)` in `focus_approach_validation.json`,
+alongside the microscope config — not in a QuPath preference and not in `autofocus_<scope>.yml`.
 | Approach distance | safe Z to focus, which sets the expected scan duration |
 | Peak width (FWHM) | bounds how fast the approach may scan without stepping over focus |
 | Exposure / illumination | the conditions the profile was measured under |

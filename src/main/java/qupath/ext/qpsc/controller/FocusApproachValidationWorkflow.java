@@ -14,6 +14,7 @@ import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressBar;
+import javafx.scene.control.Separator;
 import javafx.scene.control.TextArea;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -214,13 +215,31 @@ public final class FocusApproachValidationWorkflow {
                 Double.NaN,
                 verdict.reasons(),
                 Instant.now().toString());
-        try {
-            FocusApproachValidationStore.save(record);
-        } catch (Exception e) {
-            logger.error("Could not save the focus-approach validation", e);
-            Dialogs.showErrorMessage("Focus Approach Validation", "Could not save the result: " + e.getMessage());
-        }
+        // Saved by showVerdict, AFTER the operator has had a chance to override the tissue
+        // gate. The measurement is the recommendation, not the decision: it is taken on one
+        // slide at one XY, and whether a surface peak shows up there does not settle whether
+        // one shows up on every slide the objective will ever see.
         showVerdict(verdict, record);
+    }
+
+    /** The same record with a different tissue-gate decision. */
+    private static FocusApproachValidationStore.Record withTissueGate(
+            FocusApproachValidationStore.Record r, boolean requiresTissueGate) {
+        return new FocusApproachValidationStore.Record(
+                r.microscope(),
+                r.modality(),
+                r.objective(),
+                r.usable(),
+                requiresTissueGate,
+                r.safeZUm(),
+                r.focusZUm(),
+                r.approachDistanceUm(),
+                r.peakWidthUm(),
+                r.falsePeakZs(),
+                r.exposureMs(),
+                r.illumination(),
+                r.reasons(),
+                r.timestamp());
     }
 
     /**
@@ -680,10 +699,13 @@ public final class FocusApproachValidationWorkflow {
         }
         sb.append('\n');
         if (verdict.requiresTissueGate()) {
-            sb.append("A surface peak sits BEFORE focus, so the approach must stop only on a peak where "
-                    + "tissue is detected -- committing to the first peak would land on glass.\n\n");
+            sb.append("A surface peak sits BEFORE focus here, so the tissue gate below is recommended ON: "
+                    + "committing to the first peak would land on glass.\n\n");
         } else if (verdict.usable()) {
-            sb.append("No surface peaks before focus: the first peak on the way in is the sample.\n\n");
+            sb.append("No surface peak before focus ON THIS SLIDE, at this position -- so the first peak on "
+                    + "the way in was the sample here. That is one measurement, not a property of every "
+                    + "slide this objective will see. If focus ever lands short of the sample, turn the "
+                    + "gate below on.\n\n");
         }
         if (!verdict.reasons().isEmpty()) {
             sb.append("Findings:\n");
@@ -710,10 +732,44 @@ public final class FocusApproachValidationWorkflow {
             TextArea body = new TextArea(sb.toString());
             body.setEditable(false);
             body.setWrapText(true);
-            body.setPrefRowCount(18);
+            body.setPrefRowCount(16);
             body.setPrefColumnCount(64);
-            alert.getDialogPane().setContent(new VBox(body));
+
+            // The operator decides; the measurement recommends. It is taken on ONE slide at ONE
+            // XY, so "no surface peak here" is not "no surface peak ever" -- and getting that
+            // wrong is expensive and quiet: the approach commits the first peak it meets, which
+            // on 2026-08-28 was 200 um off the sample and logged as a success.
+            CheckBox gateBox = new CheckBox("Require a tissue gate on every approach");
+            gateBox.setSelected(verdict.requiresTissueGate());
+            Label gateHelp =
+                    new Label("With this on, the approach snaps at each candidate peak and only stops where tissue is\n"
+                            + "actually detected -- so a coverslip or slide surface is rejected and it carries on to\n"
+                            + "the sample. Costs one extra snap per peak it rejects.\n\n"
+                            + "Turn it on if focus ever lands short of the sample. Turn it off only if a sparse\n"
+                            + "sample makes the gate reject the real peak, which shows up as autofocus failing\n"
+                            + "outright rather than landing in the wrong place.");
+            gateHelp.setWrapText(true);
+            gateHelp.setStyle("-fx-font-size: 11px;");
+
+            VBox content = new VBox(8, body, new Separator(), gateBox, gateHelp);
+            alert.getDialogPane().setContent(content);
             UIFunctions.showAlertOverParent(alert, null);
+
+            boolean chosen = gateBox.isSelected();
+            FocusApproachValidationStore.Record toSave =
+                    (chosen == record.requiresTissueGate()) ? record : withTissueGate(record, chosen);
+            if (chosen != record.requiresTissueGate()) {
+                logger.info(
+                        "Focus approach: operator set the tissue gate to {} (the measurement recommended {})",
+                        chosen,
+                        record.requiresTissueGate());
+            }
+            try {
+                FocusApproachValidationStore.save(toSave);
+            } catch (Exception e) {
+                logger.error("Could not save the focus-approach validation", e);
+                Dialogs.showErrorMessage("Focus Approach Validation", "Could not save the result: " + e.getMessage());
+            }
         });
     }
 }
