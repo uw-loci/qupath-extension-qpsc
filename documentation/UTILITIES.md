@@ -195,7 +195,7 @@ Calibrate the two variable retarders of the universal compensator by finding the
 **Key Points:**
 - Run on a **clear, specimen-free field** — anything birefringent in the field makes the result worse
 - Measures extinction ratio as a quality figure (100 or above is good; this instrument has reached 267)
-- Automatically uses the microscope configuration's swing, scheme (4-State or 5-State), and wavelength settings
+- **Displays the reconstruction settings** (swing, scheme, wavelength) read from the microscope configuration before calibration starts, so you can verify them. To change them, edit the microscope YAML file, not the dialog
 - Produces a human-readable assessment (Good / Acceptable / Poor) based on extinction ratio
 - Supports single-pass or iterative search (iterative refines at ~3x the exposures)
 - Optional manual black level or auto-measurement from a dark frame
