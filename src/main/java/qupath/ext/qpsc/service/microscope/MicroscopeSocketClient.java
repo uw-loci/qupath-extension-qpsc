@@ -2045,14 +2045,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         StringBuilder msgBuilder = new StringBuilder();
         msgBuilder.append("--yaml ").append(yamlPath);
+        // ONCE. It was appended twice, and the server's parse_flags terminates a value at the
+        // nearest OTHER declared flag -- so with no --objective in between, the first
+        // --modality swallowed the second and the server received the modality
+        // "ppm --modality ppm". That matches no binding, so it silently fell back to default
+        // thresholds and the 'unknown' modality: wrong saturation gate, wrong focus metric.
         if (modality != null && !modality.isEmpty()) {
             msgBuilder.append(" --modality ").append(modality);
         }
         if (objective != null && !objective.isEmpty()) {
             msgBuilder.append(" --objective ").append(objective);
-        }
-        if (modality != null && !modality.isEmpty()) {
-            msgBuilder.append(" --modality ").append(modality);
         }
         if (!Double.isNaN(rangeOverrideUm) && rangeOverrideUm > 0) {
             msgBuilder.append(" --range ").append(rangeOverrideUm);

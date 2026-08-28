@@ -629,7 +629,30 @@ public final class SlotJumpAutofocus {
                     resolvedModality = cap.modality.name;
                 }
             } catch (Exception capEx) {
-                logger.warn("Slot-jump AF: GETCAP failed ({}); proceeding with modality=null", capEx.getMessage());
+                logger.warn(
+                        "Slot-jump AF: GETCAP failed ({}); falling back to the selected modality", capEx.getMessage());
+            }
+            if (resolvedModality == null || resolvedModality.isBlank()) {
+                // GETCAP reports the ACTIVE ACQUISITION PROFILE, which is null until an
+                // acquisition has activated one -- and during alignment none has. Observed on
+                // PPM: "GETCAP: profile='(current)' (active='None') ... modality=None", after
+                // which the focus scan ran as the 'unknown' modality with default thresholds
+                // and the tissue search fell back to per-objective ones. The server resolves
+                // its modality bindings from the CLIENT-SUPPLIED name anyway (acquisition does
+                // the same), so QuPath's own selection is the right answer when the scope has
+                // nothing better to say.
+                // modalityProperty().get(), not getModality(): the validating accessor can CLAMP
+                // and call setModality, whose listeners are UI combos and fire synchronously on
+                // the calling thread -- and this runs on the AF daemon. The raw value is the
+                // right one to send regardless: it is a protocol string the server matches
+                // against its bindings, and a value the config does not know falls back to
+                // defaults exactly as null would.
+                resolvedModality = qupath.ext.qpsc.state.ModalityState.getInstance()
+                        .modalityProperty()
+                        .get();
+                logger.info(
+                        "Slot-jump AF: GETCAP reported no modality; using the selected modality '{}'",
+                        resolvedModality);
             }
         }
         if (!useStreaming && !"SWEEP".equals(method)) {

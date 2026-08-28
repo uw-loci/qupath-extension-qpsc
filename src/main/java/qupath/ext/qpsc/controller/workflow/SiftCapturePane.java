@@ -73,6 +73,16 @@ class SiftCapturePane extends VBox {
     private final CompletableFuture<double[]> resultFuture = new CompletableFuture<>();
 
     /**
+     * SIFT confidence at or above which a match is trusted, captured from the first
+     * {@link #capture} call so the MANUAL "Auto-Align (SIFT)" button applies the same bar. It
+     * used to pass 0.0, which meant a hand-run SIFT had no gate at all -- fine while the only
+     * thing that followed was a human deciding whether to press Capture, wrong now that an
+     * automatic batch decides from the same result.
+     */
+    private volatile double confidenceThreshold =
+            qupath.ext.qpsc.preferences.PersistentPreferences.getSiftConfidenceThreshold();
+
+    /**
      * @param gui QuPath GUI (for the WSI server / SIFT and tile centering)
      * @param tile the target reference tile
      * @param gateCaptureOnSift disable Capture until a SIFT run has produced a valid offset
@@ -121,7 +131,7 @@ class SiftCapturePane extends VBox {
         // Amber = the "SIFT" step in the numbered alignment-step list (matches its step label).
         siftButton.setStyle("-fx-font-weight: bold; -fx-base: #E65100; -fx-text-fill: white;");
         siftButton.setTooltip(new Tooltip("Run SIFT to snap the stage to the selected tile automatically."));
-        siftButton.setOnAction(e -> runSift(false, 0.0));
+        siftButton.setOnAction(e -> runSift(false, confidenceThreshold));
 
         Button settingsButton = new Button("Settings...");
         settingsButton.setStyle("-fx-font-size: 10px;");
@@ -171,8 +181,18 @@ class SiftCapturePane extends VBox {
      * @return the result future (idempotent -- returns the same future on repeat calls)
      */
     CompletableFuture<double[]> capture(boolean autoRunSift, double confidenceThreshold) {
-        if (autoRunSift) {
-            runSift(true, confidenceThreshold);
+        this.confidenceThreshold = confidenceThreshold;
+        // An automatic batch runs SIFT whether or not the operator trusts it by default. The
+        // "Trust SIFT alignment" preference is OFF by default and means "always let me confirm"
+        // -- a sensible answer for someone sitting at the microscope, and an unsatisfiable one
+        // for an unattended run, where nobody will ever press Auto-Align. Left as it was, the
+        // pane simply waited: no SIFT, no countdown, no notification, the capture button
+        // pulsing at an empty room. Running SIFT does not ACCEPT anything; the confidence gate
+        // below still decides that.
+        boolean armed = qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
+                && !qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide();
+        if (autoRunSift || armed) {
+            runSift(autoRunSift, confidenceThreshold);
         }
         return resultFuture;
     }
@@ -227,12 +247,36 @@ class SiftCapturePane extends VBox {
                                             // No usable match -- keep pointing at SIFT (nudge + re-run).
                                             pulse.highlight(siftButton, "#E65100");
                                         }
-                                        if (autoAccept) {
-                                            // An automatic batch asked SIFT to settle this point and it
-                                            // did not. Capture is a human judgement from here -- pressing
-                                            // it on an unverified position would record a bad
-                                            // correspondence -- so hand the slide back and say so, rather
-                                            // than leaving the panel silently idle.
+                                        // Whether this pane has to drive itself is a property of the
+                                        // BATCH, not of how SIFT happened to be started. Gating it on
+                                        // autoAccept meant a run with "Trust SIFT alignment" off -- the
+                                        // default -- or a SIFT the operator started by hand left the
+                                        // pane pulsing at nobody: no capture, no hand-back, no
+                                        // notification. The confidence bar is unchanged either way; only
+                                        // who presses the button differs.
+                                        boolean armed = qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
+                                                && !qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide();
+                                        boolean confident =
+                                                validMatch && result.length >= 4 && result[3] >= confidenceThreshold;
+                                        if (armed && confident) {
+                                            // Count down onto Capture rather than completing outright,
+                                            // so AUTOMATIC_WITH_OVERRIDE still gives the operator the
+                                            // window to step in that every other step gives them.
+                                            logger.info(
+                                                    "SiftCapturePane: SIFT confidence {} >= {}; counting down onto "
+                                                            + "\"{}\"",
+                                                    result[3],
+                                                    confidenceThreshold,
+                                                    captureButton.getText());
+                                            qupath.ext.qpsc.ui.AutoAdvanceController.attach(
+                                                    (javafx.stage.Stage)
+                                                            getScene().getWindow(),
+                                                    captureButton);
+                                        } else if (armed) {
+                                            // Capture is a human judgement from here -- pressing it on an
+                                            // unverified position would record a bad correspondence -- so
+                                            // hand the slide back and say so, rather than leaving the
+                                            // panel silently idle.
                                             qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
                                                     "Multi-tile alignment refinement",
                                                     validMatch
@@ -249,7 +293,7 @@ class SiftCapturePane extends VBox {
                                             "SIFT failed: " + ex.getMessage() + " -- nudge manually, then Capture.");
                                     siftButton.setDisable(false);
                                     pulse.highlight(siftButton, "#E65100");
-                                    if (autoAccept) {
+                                    if (qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()) {
                                         // Same hand-back as a below-threshold match. Without it a SIFT
                                         // that THREW (socket dropped, region file missing) leaves the
                                         // panel idle with nothing driving it -- the only thing that
