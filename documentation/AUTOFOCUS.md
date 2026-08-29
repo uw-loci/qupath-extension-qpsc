@@ -362,10 +362,15 @@ reaches the sample. That is exactly what happened on 2026-08-28, when a PASSED r
 
 **The tissue gate is yours to set, not just the measurement's.** The validation result dialog
 carries a **"Require a tissue gate on every approach"** checkbox, pre-ticked to what the two
-scans measured. The measurement is a recommendation: it is taken on one slide at one XY, so
-"no surface peak here" is not "no surface peak on every slide this objective will see" — and
-getting it wrong is quiet and expensive, because the approach commits the first peak it meets
-and logs that as a success.
+scans measured **or whatever you had it set to on your last validation run for this
+(microscope, modality, objective) combination** — whichever is more restrictive. The measurement
+is a recommendation: it is taken on one slide at one XY, so "no surface peak here" is not
+"no surface peak on every slide this objective will see" — and getting it wrong is quiet and
+expensive, because the approach commits the first peak it meets and logs that as a success.
+
+When the checkbox differs from the measurement (the measurement says not required but you had it on
+before), the checkbox text adds a note: **"(kept on from your last run)"** to explain why the
+pre-filled setting does not match the measurement.
 
 **When to turn it on:** whenever focus lands short of the sample, or you simply want the
 safer behaviour. With the gate on, the approach snaps at each candidate peak and stops only

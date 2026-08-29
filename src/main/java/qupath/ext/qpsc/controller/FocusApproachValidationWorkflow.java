@@ -757,8 +757,8 @@ public final class FocusApproachValidationWorkflow {
             // is no observation this workflow can make that licenses turning the gate off.
             // Seeding from the measurement alone silently discarded the operator's ON at the
             // next validation run, which is how it read as "always unchecked".
-            FocusApproachValidationStore.Record previous = FocusApproachValidationStore.find(
-                    record.microscope(), record.modality(), record.objective());
+            FocusApproachValidationStore.Record previous =
+                    FocusApproachValidationStore.find(record.microscope(), record.modality(), record.objective());
             boolean previouslyGated = previous != null && previous.requiresTissueGate();
             CheckBox gateBox = new CheckBox("Require a tissue gate on every approach");
             gateBox.setSelected(verdict.requiresTissueGate() || previouslyGated);
