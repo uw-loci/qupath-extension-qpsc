@@ -74,7 +74,14 @@ In the assignment dialog:
    dialog and shows all assigned slides rendered at their chosen rotations over the
    holder's slots, updating live as you change rotations. The preview stays
    visible after the dialog closes, as a layout reference through the alignments
-   that follow.
+   that follow. Once the batch starts, each slide's position on the map reflects
+   its nominal slot centre initially. As each slide's alignment is saved during
+   the run, the Stage Map automatically updates that slide's position to show
+   where it was actually placed in the holder (measured landing error: median ~600 µm).
+   This improves over the course of the run — by the time all slides are aligned,
+   the Stage Map shows their real positions rather than nominal geometry. Only the
+   position is corrected, not the rotation or size, so a slide sitting slightly
+   askew in its slot still looks approximate.
 
    ![Stage Map preview of a 4-slide vertical holder with tissue bounding boxes](../images/Docs_MultiSlide_StageMap.png)
 
