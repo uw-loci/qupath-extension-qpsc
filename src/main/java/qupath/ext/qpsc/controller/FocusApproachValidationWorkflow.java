@@ -751,8 +751,20 @@ public final class FocusApproachValidationWorkflow {
             // XY, so "no surface peak here" is not "no surface peak ever" -- and getting that
             // wrong is expensive and quiet: the approach commits the first peak it meets, which
             // on 2026-08-28 was 200 um off the sample and logged as a success.
+            // Seeded from the measurement OR whatever the operator chose last time, because a
+            // measurement can only ever argue the gate ON. It is taken at one XY on one slide,
+            // so "no surface peak here" is not evidence of "no surface peak anywhere" -- there
+            // is no observation this workflow can make that licenses turning the gate off.
+            // Seeding from the measurement alone silently discarded the operator's ON at the
+            // next validation run, which is how it read as "always unchecked".
+            FocusApproachValidationStore.Record previous = FocusApproachValidationStore.find(
+                    record.microscope(), record.modality(), record.objective());
+            boolean previouslyGated = previous != null && previous.requiresTissueGate();
             CheckBox gateBox = new CheckBox("Require a tissue gate on every approach");
-            gateBox.setSelected(verdict.requiresTissueGate());
+            gateBox.setSelected(verdict.requiresTissueGate() || previouslyGated);
+            if (previouslyGated && !verdict.requiresTissueGate()) {
+                gateBox.setText("Require a tissue gate on every approach  (kept on from your last run)");
+            }
             Label gateHelp =
                     new Label("With this on, the approach snaps at each candidate peak and only stops where tissue is\n"
                             + "actually detected -- so a coverslip or slide surface is rejected and it carries on to\n"
