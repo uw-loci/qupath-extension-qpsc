@@ -16,6 +16,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.GreenBoxPreviewController;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.*;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -567,6 +568,36 @@ public class ExistingAlignmentPath {
                 flipMacroY,
                 state.sample.objective(),
                 state.sample.detector());
+
+        // Record where this slide's macro centre actually sits in stage microns, now that
+        // an alignment has measured it. This is the only point in the run where the
+        // transform and the macro it maps are both in hand and their frames are certain,
+        // so the frame reasoning happens HERE and consumers get two plain stage-um
+        // scalars. The Stage Map reads them to draw the slide where it is rather than
+        // where its holder slot nominally is -- a difference measured at a median 613 um
+        // on the first alignment point of a multi-slide run.
+        //
+        // state.transform is fullResToStage -- the OPEN ENTRY's full-resolution pixel
+        // frame, which is what pixelFrame="macro" actually denotes here. So the
+        // dimensions passed are the entry server's, NOT processedMacroImage's: that is
+        // the macro thumbnail, and using it would be wrong by the pyramid's downsample
+        // factor while still producing a plausible-looking stage point.
+        if (openEntry != null && state.transform != null && gui.getImageData() != null) {
+            var server = gui.getImageData().getServer();
+            if (server != null) {
+                ImageMetadataManager.setSlideCenterStageXY(
+                        openEntry, state.transform, server.getWidth(), server.getHeight());
+                double[] centre = ImageMetadataManager.getSlideCenterStageXY(openEntry);
+                if (centre != null) {
+                    logger.info(
+                            "Slide '{}' centre measured at stage ({}, {}) um from its alignment",
+                            imageName,
+                            String.format("%.1f", centre[0]),
+                            String.format("%.1f", centre[1]));
+                    StageMapWindow.refreshSlotMacroPlacement();
+                }
+            }
+        }
     }
 
     // Helper methods

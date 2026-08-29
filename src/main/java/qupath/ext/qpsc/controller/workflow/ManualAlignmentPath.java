@@ -14,6 +14,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -481,5 +482,27 @@ public class ManualAlignmentPath {
                 flipMacroY,
                 state.sample.objective(),
                 state.sample.detector());
+
+        // Record where this slide actually is, so the Stage Map can draw it there instead
+        // of on its holder slot's nominal centre. Same frame as the green-box path: this
+        // transform maps the OPEN ENTRY's full-resolution pixels to stage microns, so the
+        // dimensions are the entry server's.
+        ProjectImageEntry<BufferedImage> centreEntry = openEntry;
+        if (centreEntry != null && transform != null && gui.getImageData() != null) {
+            var server = gui.getImageData().getServer();
+            if (server != null) {
+                ImageMetadataManager.setSlideCenterStageXY(
+                        centreEntry, transform, server.getWidth(), server.getHeight());
+                double[] centre = ImageMetadataManager.getSlideCenterStageXY(centreEntry);
+                if (centre != null) {
+                    logger.info(
+                            "Slide '{}' centre measured at stage ({}, {}) um from its manual alignment",
+                            imageName,
+                            String.format("%.1f", centre[0]),
+                            String.format("%.1f", centre[1]));
+                    StageMapWindow.refreshSlotMacroPlacement();
+                }
+            }
+        }
     }
 }

@@ -118,6 +118,25 @@ public class ImageMetadataManager {
     public static final String STITCHER_FLIP_X = "stitcher_flip_x";
     public static final String STITCHER_FLIP_Y = "stitcher_flip_y";
 
+    // Where this slide's CENTRE actually sits in stage coordinates, measured
+    // rather than assumed. Stamped when a per-slide alignment is saved, from that
+    // alignment's own transform and the macro it was built against.
+    //
+    // Exists because a slide sits where it was dropped, not where its holder slot
+    // nominally is: the measured landing error on the first alignment point of a
+    // multi-slide run was a median 613 um (worst 1507). Anything drawing slides from
+    // slot geometry alone is therefore "close but not quite", and never improves as a
+    // run collects alignment data.
+    //
+    // Deliberately two stage-um SCALARS rather than a transform. The frames are
+    // unambiguous at the moment of stamping -- the save site holds both the transform
+    // and the macro it maps -- so the reasoning happens once, there, and consumers
+    // need no frame knowledge at all. The macro CENTRE specifically because it is
+    // flip-invariant: (W/2, H/2) is the same point in flipped and unflipped macro
+    // space, so this number cannot be corrupted by a flip disagreement.
+    public static final String SLIDE_CENTER_STAGE_X_UM = "slide_center_stage_x_um";
+    public static final String SLIDE_CENTER_STAGE_Y_UM = "slide_center_stage_y_um";
+
     // ------------------------------------------------------------------
     // Light-path metadata (the full orientation stack, per entry).
     // Replaces the lossy FLIP_X/FLIP_Y parity bit. Each entry records the
@@ -802,6 +821,59 @@ public class ImageMetadataManager {
             double y2 = Double.parseDouble(y2s);
             if (x2 <= x1 || y2 <= y1) return null;
             return new double[] {x1, y1, x2, y2};
+        } catch (NumberFormatException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Record where this slide's macro centre actually sits in stage microns.
+     *
+     * <p>Call this from a per-slide alignment save site, passing that alignment's own
+     * transform together with the dimensions of the pixel frame it maps FROM. See
+     * {@link #SLIDE_CENTER_STAGE_X_UM} for why the result is stored as two scalars.
+     *
+     * <p>Getting that frame wrong is the easy mistake here, and it is silent: a slide
+     * alignment saved with {@code pixelFrame="macro"} is NOT in the macro thumbnail's
+     * frame -- "macro" names the whole-slide ENTRY, and the transform maps that entry's
+     * FULL-RESOLUTION pixels. Feeding it thumbnail dimensions yields a plausible-looking
+     * stage point that is wrong by the pyramid's downsample factor. Pass the same
+     * width/height the transform was fitted against, normally the entry server's.
+     *
+     * @param entry        the slide's entry
+     * @param imageToStage the alignment transform, image pixels to stage microns
+     * @param imageWidth   width of the pixel frame that transform maps FROM
+     * @param imageHeight  height of that frame
+     */
+    public static void setSlideCenterStageXY(
+            ProjectImageEntry<?> entry, java.awt.geom.AffineTransform imageToStage, int imageWidth, int imageHeight) {
+        if (entry == null || imageToStage == null || imageWidth <= 0 || imageHeight <= 0) {
+            return;
+        }
+        java.awt.geom.Point2D centre =
+                imageToStage.transform(new java.awt.geom.Point2D.Double(imageWidth / 2.0, imageHeight / 2.0), null);
+        Map<String, String> meta = entry.getMetadata();
+        meta.put(SLIDE_CENTER_STAGE_X_UM, String.valueOf(centre.getX()));
+        meta.put(SLIDE_CENTER_STAGE_Y_UM, String.valueOf(centre.getY()));
+    }
+
+    /**
+     * Where this slide's macro centre sits in stage microns, or null when no alignment
+     * has measured it yet.
+     *
+     * @return {@code [stageXUm, stageYUm]}, or null
+     */
+    public static double[] getSlideCenterStageXY(ProjectImageEntry<?> entry) {
+        if (entry == null) return null;
+        Map<String, String> meta = entry.getMetadata();
+        String xs = meta.get(SLIDE_CENTER_STAGE_X_UM);
+        String ys = meta.get(SLIDE_CENTER_STAGE_Y_UM);
+        if (xs == null || ys == null) return null;
+        try {
+            double x = Double.parseDouble(xs);
+            double y = Double.parseDouble(ys);
+            if (!Double.isFinite(x) || !Double.isFinite(y)) return null;
+            return new double[] {x, y};
         } catch (NumberFormatException e) {
             return null;
         }

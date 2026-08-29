@@ -621,8 +621,18 @@ public final class MultiSlideAssignmentDialog {
                 for (int i = 0; i < entries.size(); i++) {
                     BufferedImage macro = macroCache.get(entries.get(i));
                     if (macro == null) continue;
+                    // Where alignment has measured this slide to be, if it has run yet.
+                    // Read fresh on every rebuild rather than cached, so the map moves the
+                    // slide as soon as its alignment is saved -- and so a slide aligned in
+                    // an earlier session is already placed correctly when the dialog opens.
+                    double[] centre = ImageMetadataManager.getSlideCenterStageXY(entries.get(i));
                     previews.add(new StageMapCanvas.SlotMacroPreview(
-                            slotAndRot.get(i)[0], macro, slotAndRot.get(i)[1]));
+                            slotAndRot.get(i)[0],
+                            macro,
+                            slotAndRot.get(i)[1],
+                            centre == null ? Double.NaN : centre[0],
+                            centre == null ? Double.NaN : centre[1],
+                            entries.get(i)));
                 }
                 StageMapWindow.previewSlotMacros(chosen, previews);
             };

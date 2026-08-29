@@ -196,6 +196,51 @@ public class StageMapWindow {
         });
     }
 
+    /**
+     * Re-reads each previewed slide's measured stage centre and redraws.
+     *
+     * <p>Call after a per-slide alignment is saved. Slot previews are drawn on the holder's
+     * nominal slot centres until an alignment measures where a slide actually is, and a slide
+     * sits where it was dropped rather than where the slot is -- the measured landing error on
+     * the first alignment point of a multi-slide run was a median 613 um. Without this the map
+     * would keep showing every slide at its nominal position for the whole run, which is
+     * exactly the "kind of close, but not quite on, and doesn't adjust as we collect alignment
+     * data" the rig reported on 2026-08-28.
+     *
+     * <p>Only the placement changes; the macro rasters are reused, so this is cheap enough to
+     * call on every alignment.
+     */
+    public static void refreshSlotMacroPlacement() {
+        Platform.runLater(() -> {
+            if (instance != null) {
+                instance.refreshSlotMacroPlacementInternal();
+            }
+        });
+    }
+
+    private void refreshSlotMacroPlacementInternal() {
+        if (retainedSlotPreviews == null || retainedSlotPreviews.isEmpty() || canvas == null) {
+            return;
+        }
+        java.util.List<StageMapCanvas.SlotMacroPreview> refreshed =
+                new java.util.ArrayList<>(retainedSlotPreviews.size());
+        int newlyMeasured = 0;
+        for (StageMapCanvas.SlotMacroPreview p : retainedSlotPreviews) {
+            StageMapCanvas.SlotMacroPreview updated = p.withCentreRefreshedFromEntry();
+            if (updated.hasMeasuredCentre() && !p.hasMeasuredCentre()) {
+                newlyMeasured++;
+            }
+            refreshed.add(updated);
+        }
+        retainedSlotPreviews = refreshed;
+        canvas.setSlotMacroPreviews(refreshed);
+        if (newlyMeasured > 0) {
+            logger.info(
+                    "Stage Map: {} slide(s) moved from nominal slot centres to their measured positions",
+                    newlyMeasured);
+        }
+    }
+
     /** Clears the multi-slide macro preview and restores the Apply Flips control. */
     public static void clearSlotMacroPreviews() {
         Platform.runLater(() -> {
