@@ -2,7 +2,7 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: 48bcb657
+last_synced_commit: b845a300
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
@@ -38,6 +38,10 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/modality/ModalityRegistry.java
   - src/main/java/qupath/ext/qpsc/modality/ModalityHandler.java
   - src/main/java/qupath/ext/qpsc/modality/ppm/PPMModalityHandler.java
+  - src/main/java/qupath/ext/qpsc/modality/lcpolscope/LCPolScopeModalityHandler.java
+  - src/main/java/qupath/ext/qpsc/modality/lcpolscope/workflow/LCCalibrationWorkflow.java
+  - src/main/java/qupath/ext/qpsc/controller/FocusApproachValidationWorkflow.java
+  - src/main/java/qupath/ext/qpsc/controller/RegisterObjectiveWorkflow.java
   - src/main/java/qupath/ext/qpsc/modality/ppm/workflow/BirefringenceOptimizationWorkflow.java
   - src/main/java/qupath/ext/qpsc/modality/ppm/workflow/PPMSensitivityTestWorkflow.java
   - src/main/java/qupath/ext/qpsc/modality/ppm/workflow/PolarizerCalibrationWorkflow.java
@@ -253,6 +257,9 @@ surfaces, and cross-workflow dependencies. It is optimized for LLM agents.
 | Make-portable conversion (ZARR -> OME-TIFF) | W15 | DS28, DS32 |
 | Stitching recovery from tile folder | W16 | DS28, DS27 |
 | PPM rotation / calibration | W23, W24, W25, W26 | DS3, DS21, DS47 |
+| LC-PolScope states / LC calibration | W36 | DS19, DS41 (name `lcpolscope`, type `polarized`) |
+| Approach-from-safe-Z autofocus / focus validation | W34, W5, W6, W1b | DS3 (safe Z), DS19, DS24 (stored verdict) |
+| Adding an objective to the config | W35 | DS3, DS19 |
 
 ---
 
@@ -383,8 +390,14 @@ writes:
   - DS9 (per-assigned-entry: SLIDE_POSITION, SLIDE_CARRIER, MS_RUN_ID -- via ImageMetadataManager.setSlideAssignment)
   - DS27 (project sync after assignment)
 key_invariants:
-  - "Adds no new validation gates; each per-slot W1 invocation runs the full validation chain independently."
-  - "Menu hidden by default; requires preference flag."
+  - "Each per-slot W1 invocation runs the full validation chain independently."
+  - "Menu VISIBILITY is driven by SetupScope.configHasMultiSlideHolder() -- the config declaring a multi-slot SLIDE_HOLDER. There is no preference toggle (an earlier revision of this map claimed one; there never was)."
+  - "Setup-pass automation mode auto-advances the dialogs and auto-picks alignment tiles (ReferenceTileSelector / MultiTileRefinement / SiftCapturePane). Every stop is ANNOUNCED: a batch that cannot proceed says why rather than stalling silently."
+  - "Reference tiles are chosen by TISSUE DENSITY first, not texture, and every measured point searches for tissue -- not only the first."
+  - "The tissue search is best-effort: a failed search must not halt the batch, and an operator cancel during it is its own outcome, distinct from a failure."
+  - "Unattended batches must never wait on advisory dialogs."
+  - "Abort All must stop a running autofocus, not just the batch loop -- otherwise the stage keeps being driven after the abort."
+  - "Slot-jump autofocus seeds from the slide's saved focus Z and hands the stage back afterwards; both runAfterSlotMove entry points lock on the pending-search holder."
   - "A rotated slot assigns ONE composed (rotated N)(Camera View) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. Orientation is metadata-driven: MultiSlideAssignmentDialog stamps the light-path snapshot (camera_view flag + baked parity + lp_rotation_deg) on the companion at creation, and code reads rotation from getRotationDegrees / classifies via isCameraView -- the '(rotated N) (Camera View)' name is user-reference only. isCameraView makes validateAndFlipIfNeeded no-op, so both passes open the correct working entry. Base annotations are brought onto the empty companion (AnnotationHelper.bringSourceAnnotationsOntoOpenEntry, rotate+flip) before the acquisition dialogs. Do not reintroduce the intermediate or parse rotation from the name."
 ```
 
@@ -1113,6 +1126,70 @@ key_invariants:
   - "Best-effort; failures are not workflow-fatal."
 ```
 
+### W34: FocusApproachValidationWorkflow
+
+```yaml
+id: W34
+class: qupath.ext.qpsc.controller.FocusApproachValidationWorkflow
+file: src/main/java/qupath/ext/qpsc/controller/FocusApproachValidationWorkflow.java
+entry: run()
+category: calibration
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Focus Approach Validation... (disabled when the config is invalid or the scope is offline)"
+reads:
+  - DS3 (stage YAML: safe Z per insert)
+  - DS19 (modality config: objective, focus channel)
+  - DS17 (live stage + camera)
+writes:
+  - DS24 (persisted validation verdict, keyed by scope / modality / objective)
+key_invariants:
+  - "Scans TWICE -- once over tissue, once over bare slide -- so a peak that is coverslip rather than sample is identified by measurement, not by threshold guesswork."
+  - "The verdict is what licenses approach-from-safe-Z autofocus (W5/W6 and the multi-slide slot jump in W1b). Without a stored validation those paths warn and fall back."
+  - "A peak far from the sample FAILS validation; it does not silently move the tissue gate."
+  - "The operator's tissue-gate choice is sticky across runs."
+```
+
+### W35: RegisterObjectiveWorkflow
+
+```yaml
+id: W35
+class: qupath.ext.qpsc.controller.RegisterObjectiveWorkflow
+file: src/main/java/qupath/ext/qpsc/controller/RegisterObjectiveWorkflow.java
+entry: run(QuPathGUI)
+category: configuration
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... (needs a writable config; disabled offline)"
+reads:
+  - DS17 (MicroManager: pixel size of the objective currently in the light path)
+  - DS3 / DS19 (existing config files)
+writes:
+  - DS3 / DS19 (skeleton objective entries via ObjectiveConfigWriter)
+key_invariants:
+  - "MicroManager exposes ONLY pixel size (plus binning and a raw turret label). Magnification, NA, id and display name cannot be read and are prompted -- never inferred."
+  - "Calibration-heavy fields are written as `calibrated: false` placeholders. This is the registration half of a two-step flow; the autofocus / white-balance / background utilities finish it."
+```
+
+### W36: LCCalibrationWorkflow (LC-PolScope)
+
+```yaml
+id: W36
+class: qupath.ext.qpsc.modality.lcpolscope.workflow.LCCalibrationWorkflow
+file: src/main/java/qupath/ext/qpsc/modality/lcpolscope/workflow/LCCalibrationWorkflow.java
+entry: run()
+category: calibration
+ui_entries:
+  - "Menu contribution: LCPolScopeModalityHandler.getMenuContributions() -> 'Calibrate Liquid Crystals...' (appears only on a scope whose config declares the lcpolscope modality)"
+reads:
+  - DS17 (live camera / LC device)
+  - DS19 (modality config)
+writes:
+  - DS19 (LC palette: extinction point + swing states)
+key_invariants:
+  - "Run on a clear, specimen-free field: the calibration measures how dark extinction can be made, so anything birefringent in the field degrades the result."
+  - "Reports an extinction ratio as its quality figure; 100+ is good."
+  - "Modality NAME vs TYPE: dispatch keys off the NAME (`lcpolscope` / `lcps` prefixes in DS41); the YAML `type:` is `polarized`, deliberately shared with PPM so LC-PolScope inherits the right sample-physics defaults. Writing `type: lcpolscope` in a YAML yields a modality that resolves to nothing."
+```
+
 ---
 
 ## 3. Data surfaces
@@ -1635,6 +1712,7 @@ default_registrations:
   - "bf / brightfield -> BrightfieldModalityHandler"
   - "lsm / shg / 2p / confocal -> LaserScanningModalityHandler"
   - "fl / fluorescence / widefield / epi -> WidefieldFluorescenceModalityHandler"
+  - "lcpolscope / lcps -> LCPolScopeModalityHandler"
   - "bf_if -> BfIfModalityHandler"
 written_by:
   - "Static initializer block in ModalityRegistry"
@@ -1646,6 +1724,8 @@ invariants:
   - "Prefix matching is startsWith. Longer prefixes should register before shorter ones to avoid unintended matches."
   - "Returns NoOpModalityHandler for unknown -- never null."
   - "PPMModalityHandler.getMenuContributions() provides dynamic menu items (polarizerCalibration, ppmSensitivityTest, birefringenceOptimization, sunburstCalibration) -- not in QPScopeController.startWorkflow switch."
+  - "LCPolScopeModalityHandler.getMenuContributions() likewise provides 'Calibrate Liquid Crystals...' (W36) -- also outside the startWorkflow switch, so it appears only on a scope whose config declares the modality."
+  - "A handler's registered PREFIX is the modality NAME, not its YAML `type:`. LC-PolScope registers `lcpolscope`/`lcps` but its type is `polarized` (shared with PPM). Do not conflate them."
 related_surfaces:
   - DS42 (ModalityState active modality)
 ```
