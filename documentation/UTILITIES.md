@@ -357,25 +357,32 @@ Easily submit bug reports directly from QuPath without needing a GitHub account 
 1. Go to **Extensions > QP Scope > Report a Bug...**
 2. Enter a one-line **Summary** (8–80 characters, required) — this becomes the GitHub issue title
 3. Write a **Description** of what went wrong (minimum 20 characters)
-4. Optionally include:
+4. Optionally add contact information so you're notified of replies:
+   - **GitHub username** (e.g., "alice" or "@alice") — will mention you on the issue so GitHub notifies you of replies
+   - **image.sc forum username** (e.g., "alice") — will link to your forum profile in the issue
+   - Both fields are optional and displayed publicly in the issue. Leave both blank to report anonymously.
+5. Optionally include:
    - **System info** (OS version, Java version, QuPath version)
    - **QPSC session log** (activity from the current session)
    - **Microscope server log** (the Python command server's session log, fetched over the socket; only available when connected to the server)
    - **QuPath log** (QuPath's own application log — the same messages shown in **View > Show log**)
    - **Screenshot** (of the QuPath window; you will be shown a preview before sending)
-5. Click **Submit**
+6. Check **"Open the issue in my browser after submitting"** (enabled by default) to automatically open your submitted issue
+7. Click **Submit**
+
+**Important: reports are anonymous by default.** You do not need a GitHub account to file one -- the issue is created by the reporting service, not from your GitHub account, so GitHub does not automatically notify you of replies. To receive notifications, either add your GitHub username (which will @-mention you on the issue) or manually comment on the issue on GitHub after it is created.
 
 The QuPath log is captured live in memory while QuPath runs, so it attaches even though QuPath does not write a log file by default. For a more complete log that also includes QuPath's startup (before the extension loaded), enable **Edit > Preferences > General > "Create log files"** (set a user directory if prompted) and restart QuPath; the reporter then attaches that on-disk log instead.
 
 Large logs are trimmed to fit GitHub's issue size limit: the version/startup banner is always kept (for provenance) along with the most recent lines (where errors usually appear), with an `[N chars omitted]` note in between.
 
-Your report will be filed as a GitHub Issue in the QPSC issue tracker with all the information you provided. You don't need a GitHub account, and the issue URL will be shown once submission completes.
+Your report will be filed as a GitHub Issue in the QPSC issue tracker with all the information you provided, and the issue URL will be shown once submission completes.
 
 **What is redacted, and what is not.** Text attachments -- the logs and the system-info block --
 have your home directory replaced with `~`, so the report does not carry your Windows or Linux
 username. Paths outside your home directory are left as they are: a lab share or a data drive
 (`K:\...`) is usually the most useful part of a log, so it is kept. Note that logs record image
-and project *names*, which are not redacted.
+and project *names*, which are not redacted. Your contact fields (GitHub and image.sc usernames) are user-provided and not redacted.
 
 **Screenshot note:** The screenshot is not automatically redacted. You will see a mandatory preview dialog before anything is sent — close any sensitive windows first (passwords, personal info, etc.).
 
