@@ -29,6 +29,12 @@ const ARTIFACT_SECTIONS = [
   { key: "qupath_log", label: "QuPath log",           lang: "", max: 12000 },
 ];
 
+// Optional reporter contact handles. Validated here as well as in the client:
+// this endpoint is public, and an unchecked handle would be interpolated into a
+// public issue body, where "@anything" mentions a real GitHub account.
+const GITHUB_USER_RE = /^[A-Za-z0-9](?:[A-Za-z0-9]|-(?=[A-Za-z0-9])){0,38}$/;
+const IMAGESC_USER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,38}$/;
+
 const MAX_BODY_CHARS = 64000;                      // GitHub issue body cap is 65,536
 const MAX_SCREENSHOT_B64_CHARS = 4 * 1024 * 1024;  // ~3 MB binary
 const ATTACHMENTS_BRANCH = "bug-attachments";
@@ -53,6 +59,8 @@ export default {
     const appVersion = (payload.app_version || "unknown").toString().trim();
     const extension = (payload.extension || repoKey).toString().trim();
     const artifacts = (payload.artifacts && typeof payload.artifacts === "object") ? payload.artifacts : {};
+    const githubUser = cleanHandle(payload.github_user, GITHUB_USER_RE);
+    const imageScUser = cleanHandle(payload.imagesc_user, IMAGESC_USER_RE);
     const screenshot = (payload.screenshot && typeof payload.screenshot === "object") ? payload.screenshot : null;
 
     if (description.length < 20) return jsonError("Description must be at least 20 characters.", 400);
@@ -80,6 +88,12 @@ export default {
     const title = `[bug] ${titleText.slice(0, 80)}`;
     const bodyLines = ["**Description**", description, "",
                        `**Extension:** ${extension}`, `**App version:** ${appVersion}`];
+    // A bare @mention subscribes the reporter to the thread, which is the point
+    // of asking. The image.sc handle is a link only -- it means nothing to GitHub.
+    const contacts = [];
+    if (githubUser) contacts.push(`@${githubUser} (GitHub)`);
+    if (imageScUser) contacts.push(`[${imageScUser}](https://forum.image.sc/u/${imageScUser}) (image.sc)`);
+    if (contacts.length) bodyLines.push(`**Reported by:** ${contacts.join(" / ")}`);
     if (screenshotUrl) bodyLines.push("", "**Screenshot**", "", `![Screenshot](${screenshotUrl})`);
     else if (screenshotError) bodyLines.push("", `_(Screenshot upload failed: ${screenshotError}.)_`);
     if (sysinfo) bodyLines.push("", "**System info**", "```", sysinfo, "```");
@@ -112,6 +126,20 @@ export default {
     }), { status: 200, headers: jsonHeaders() });
   },
 };
+
+// Normalizes a user-typed handle -- strips a pasted profile URL and one leading
+// '@' -- then returns it only if it matches `re`. An unusable handle is dropped
+// rather than rejected: nothing about a contact field may block a bug report.
+function cleanHandle(value, re) {
+  if (typeof value !== "string") return null;
+  let handle = value.trim()
+    .replace(/^(?:https?:\/\/)?(?:www\.)?(?:github\.com|forum\.image\.sc\/u)\//i, "")
+    .replace(/^@/, "");
+  const slash = handle.indexOf("/");
+  if (slash >= 0) handle = handle.slice(0, slash);
+  handle = handle.trim();
+  return re.test(handle) ? handle : null;
+}
 
 function resolveRepo(keyOrSlug) {
   if (REPOS[keyOrSlug]) return REPOS[keyOrSlug];

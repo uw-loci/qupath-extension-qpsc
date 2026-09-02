@@ -113,8 +113,11 @@ the target repo.
 {
   "repo": "qpsc",                  // allow-list key; omit -> defaults to qpsc
   "extension": "QPSC 0.5.0",       // free-text label shown in the issue body
+  "summary": "one-line title",     // optional; falls back to the first line of description
   "description": "min 20 chars",   // required, 20..10000 chars
   "app_version": "0.5.0",          // shown in the issue body
+  "github_user": "alice",          // optional; @mentioned in the issue so the reporter is notified
+  "imagesc_user": "alice",         // optional; linked to the reporter's forum.image.sc profile
   "sysinfo": "OS / Java / QuPath", // optional, wrapped in a code fence
   "artifacts": {                   // optional text artifacts -> <details> blocks
     "run_log": "....",
@@ -129,6 +132,12 @@ the target repo.
 
 Artifact keys recognized by the Worker are defined in `ARTIFACT_SECTIONS`
 (`run_log`, `qupath_log`). Add more there if a client starts sending them.
+
+`github_user` and `imagesc_user` are re-validated here even though the client
+already validated them -- this endpoint is public, and the handle is interpolated
+into a public issue body where a bare `@name` mentions a real account. A handle
+that does not match `GITHUB_USER_RE` / `IMAGESC_USER_RE` is dropped, never
+rejected: a bad contact field must not cost the user their bug report.
 
 ---
 
