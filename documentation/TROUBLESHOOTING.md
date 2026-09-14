@@ -863,7 +863,7 @@ If you have *old* stitched files with black upper levels from before this fix, r
 4. Verify the pixel size (auto-populated from your microscope config)
 5. Select **Output format**: OME_TIFF (standard, single file) or OME_ZARR (faster, directory format)
 6. Select **Compression**: available options are filtered by format. TIFF allows all compression types (LZW, JPEG, J2K, zstd, etc.), while ZARR-based formats are restricted to LZW, ZLIB, Uncompressed, and Default
-7. For **Matching String**: use `"."` to stitch all subdirectories, or a specific angle or channel name like `"0.0"` or `"DAPI"`
+7. For **Matching String**: sub-folders are selected when their name *contains* this text. Use `"."` to stitch every sub-folder whose name contains a dot (all PPM angle folders such as `0.0` or `90.0`); for channel folders, enter the channel name (e.g. `"DAPI"`), since `"."` skips names without a dot
 8. **Stitch duplicate image types in parallel** (checkbox): PPM angles and fluorescence channels are both "duplicate image types" — multiple captures of the same field at one stage position, captured with different settings. When checked, angles/channels stitch simultaneously (faster on SSDs); when unchecked, they stitch sequentially (safer for spinning-disk HDDs)
 9. Click **Stitch & Import**
 
@@ -874,9 +874,10 @@ The stitched images will be created in `<projectDir>/SlideImages` (project-ancho
 **Alternative method - standalone stitching (file only, no project import):**
 
 If you just need the stitched file without project integration:
-1. Go to **Extensions > Basic Stitching > Stitch Images**
-2. Browse to the tile directory and configure parameters
-3. After stitching, manually add the file to your project via **File > Open** or drag-and-drop
+1. Go to **Extensions > Tiles to Pyramid > Tiles-to-pyramid**
+2. Set **Stitching Method** to **TileConfiguration.txt file**, click **Select Folder**, and choose the annotation folder (e.g. `TempTiles/bounds`)
+3. In **Stitch sub-folders with text string**, enter `.` for PPM angle folders (or the channel name for a channel folder), then click **Stitch**. The pixel-size field is hidden for this method; see the tiles-to-pyramid README's TileConfiguration.txt section before relying on the result
+4. When it finishes, the **Tiles to Pyramid - Result** window lists the output paths; the files are written into the folder you selected. Add them to your project via **File > Open** or drag-and-drop
 
 **Tile directory structure for reference:**
 ```
