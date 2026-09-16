@@ -765,12 +765,20 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         extensionMenu.getItems().add(multiSlideOption);
         extensionMenu.getItems().add(new SeparatorMenuItem());
 
-        // 1. Acquisition
-        extensionMenu.getItems().addAll(boundedAcquisitionOption, existingImageOption);
-        extensionMenu.getItems().add(new SeparatorMenuItem());
-
-        // 2. Viewers & Controls
-        extensionMenu.getItems().addAll(liveViewerOption, cameraControlOption, stageMapOption);
+        // 1. Acquisition controls -- the five items an operator uses during a session,
+        // grouped so the top level stays short enough to scan. Order is the order they
+        // are reached in practice: pick a region, then the tools for driving the scope.
+        Menu acquisitionControlsMenu = new Menu("Acquisition controls");
+        acquisitionControlsMenu
+                .getItems()
+                .addAll(
+                        boundedAcquisitionOption,
+                        existingImageOption,
+                        new SeparatorMenuItem(),
+                        liveViewerOption,
+                        cameraControlOption,
+                        stageMapOption);
+        extensionMenu.getItems().add(acquisitionControlsMenu);
 
         // 3. Modality extensions (dynamic submenus from registered handlers)
         // Only show menu items for modalities that exist in the microscope config.

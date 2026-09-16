@@ -415,6 +415,11 @@ public class BoundedAcquisitionWorkflow {
                                 // tile times sweep + streaming AF and applies neither.
                                 config.commandBuilder().afBenchmark(result.afBenchmark());
 
+                                // "Sample is already in focus" (Advanced panel checkbox). Skips the
+                                // pre-acquisition search and starts from the current Z; per-tile AF
+                                // and drift correction still run.
+                                config.commandBuilder().sampleAlreadyInFocus(result.sampleAlreadyInFocus());
+
                                 // Per-tile snap-loop inner axis (loop-order toggle).
                                 // Null means "use per-modality default" and produces no CLI flag.
                                 config.commandBuilder().innerAxis(result.innerAxis());

@@ -199,7 +199,9 @@ public class StitchingRecoveryWorkflow {
         // Matching string
         Label matchLabel = new Label("Matching string:");
         TextField matchField = new TextField(".");
-        matchField.setPromptText(". = all subdirs, or specific angle like 0.0");
+        // Matching is by substring: "." selects names containing a dot (every PPM angle folder),
+        // not every sub-folder, so a channel folder such as DAPI needs its own name.
+        matchField.setPromptText(". = folders with a dot (angles), or a name like 0.0 or DAPI");
         matchField.setPrefWidth(200);
 
         // Parallel duplicate-image-type checkbox. The sibling subdirectories are polarization angles

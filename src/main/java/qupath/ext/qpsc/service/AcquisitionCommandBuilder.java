@@ -85,6 +85,11 @@ public class AcquisitionCommandBuilder {
     private Integer autofocusNSteps;
     private Double autofocusSearchRange;
 
+    // "The sample is already in focus." Skips ONLY the pre-acquisition search;
+    // per-tile autofocus and drift correction still run. Distinct from the
+    // global disable-all-autofocus preference, which kills both.
+    private boolean sampleAlreadyInFocus;
+
     // Hardware parameters
     private String objective;
     private String detector;
@@ -524,6 +529,23 @@ public class AcquisitionCommandBuilder {
      * @param z Predicted Z-focus position in micrometers
      * @return this builder for method chaining
      */
+    /**
+     * Declares that the sample is already in focus at the current Z, so the server
+     * should adopt that Z rather than running the pre-acquisition autofocus search.
+     *
+     * <p>This is deliberately narrower than the "disable all autofocus" preference:
+     * per-tile autofocus, drift checks and the manual-focus fallback all still run.
+     * Only the up-front search -- which drives to the first diagonal AF position,
+     * a place the operator never focused, and sweeps there -- is skipped.
+     *
+     * @param alreadyInFocus true to skip the pre-acquisition autofocus search
+     * @return this builder
+     */
+    public AcquisitionCommandBuilder sampleAlreadyInFocus(boolean alreadyInFocus) {
+        this.sampleAlreadyInFocus = alreadyInFocus;
+        return this;
+    }
+
     public AcquisitionCommandBuilder hintZ(double z) {
         this.hintZ = z;
         return this;
@@ -842,6 +864,14 @@ public class AcquisitionCommandBuilder {
             // this, dropping the triplet just made the server fall back to
             // YAML defaults and continue running AF normally.
             args.add("--af-disabled");
+        }
+
+        // Independent of the above: the operator has already focused, so the
+        // server adopts the current Z instead of driving to the first diagonal
+        // AF position and sweeping for a focus it was handed. Per-tile AF is
+        // untouched, so drift is still corrected.
+        if (sampleAlreadyInFocus) {
+            args.add("--af-skip-initial");
         }
 
         // Add save-raw flag if enabled in preferences

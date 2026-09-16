@@ -876,7 +876,7 @@ The stitched images will be created in `<projectDir>/SlideImages` (project-ancho
 If you just need the stitched file without project integration:
 1. Go to **Extensions > Tiles to Pyramid > Tiles-to-pyramid**
 2. Set **Stitching Method** to **TileConfiguration.txt file**, click **Select Folder**, and choose the annotation folder (e.g. `TempTiles/bounds`)
-3. In **Stitch sub-folders with text string**, enter `.` for PPM angle folders (or the channel name for a channel folder), then click **Stitch**. The pixel-size field is hidden for this method; see the tiles-to-pyramid README's TileConfiguration.txt section before relying on the result
+3. In **Stitch sub-folders with text string**, enter `.` for PPM angle folders (or the channel name for a channel folder). Check that **Pixel size, microns** matches the camera pixel size for the objective used (tick **Manually edit pixel size** to change it; needs tiles-to-pyramid 0.6.9 or later, which shows this field for the TileConfiguration method), then click **Stitch**
 4. When it finishes, the **Tiles to Pyramid - Result** window lists the output paths; the files are written into the folder you selected. Add them to your project via **File > Open** or drag-and-drop
 
 **Tile directory structure for reference:**

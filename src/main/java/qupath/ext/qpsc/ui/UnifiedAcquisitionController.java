@@ -114,6 +114,10 @@ public class UnifiedAcquisitionController {
             // writes af_benchmark.csv. Diagnostic mode -- acquired images drift
             // out of focus since no AF result is applied.
             boolean afBenchmark,
+            // True when the operator has already focused the sample. Skips ONLY the
+            // pre-acquisition autofocus search; per-tile AF and drift correction
+            // still run. Not the same as the disable-all-autofocus preference.
+            boolean sampleAlreadyInFocus,
             // Channel ids the user marked "Split" -- each is stitched into its own
             // file instead of being merged. Empty = merge all (the default).
             Set<String> splitChannelIds,
@@ -226,6 +230,7 @@ public class UnifiedAcquisitionController {
         private VBox modalityContentBox;
         private ComboBox<String> afStrategyCombo;
         private CheckBox afBenchmarkCheck;
+        private CheckBox alreadyInFocusCheck;
 
         // UI Components - Z-stack Section
         private CheckBox zStackEnableCheck;
@@ -1048,13 +1053,27 @@ public class UnifiedAcquisitionController {
                             + " out of focus; use a small grid (e.g. 3x3) and treat the images"
                             + " as throwaway."));
 
+            // The operator has already focused -- usually the case for a quick
+            // bounding box over a field they are looking at right now. Skips the
+            // pre-acquisition search only; per-tile AF still corrects drift.
+            alreadyInFocusCheck = new CheckBox("Sample is already in focus (skip initial focus search)");
+            alreadyInFocusCheck.setSelected(false);
+            alreadyInFocusCheck.setTooltip(new Tooltip("Start from the current Z instead of searching for focus first."
+                    + " The pre-acquisition search drives to the first diagonal autofocus"
+                    + " position -- not where you focused -- and sweeps there, which can"
+                    + " take over a minute and can land on the wrong plane. Per-tile"
+                    + " autofocus and drift correction are UNAFFECTED; this is not the"
+                    + " same as disabling autofocus. Tick it when you have just focused"
+                    + " the field yourself."));
+
             GridPane afGrid = new GridPane();
             afGrid.setHgap(10);
             afGrid.setVgap(5);
             afGrid.setPadding(new Insets(5));
             afGrid.add(new Label("Autofocus:"), 0, 0);
             afGrid.add(afStrategyCombo, 1, 0);
-            afGrid.add(afBenchmarkCheck, 0, 1, 2, 1);
+            afGrid.add(alreadyInFocusCheck, 0, 1, 2, 1);
+            afGrid.add(afBenchmarkCheck, 0, 2, 2, 1);
 
             // === MODALITY-SPECIFIC SECTION ===
             modalityContentBox = new VBox(5);
@@ -2375,6 +2394,11 @@ public class UnifiedAcquisitionController {
                     logger.info("AF method benchmark enabled -- every tile will time sweep + streaming AF");
                 }
 
+                boolean sampleAlreadyInFocus = alreadyInFocusCheck != null && alreadyInFocusCheck.isSelected();
+                if (sampleAlreadyInFocus) {
+                    logger.info("Sample declared already in focus -- pre-acquisition AF search will be skipped");
+                }
+
                 // Get angle / channel overrides if available
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
@@ -2469,6 +2493,7 @@ public class UnifiedAcquisitionController {
                         wbMode,
                         innerAxis,
                         afBenchmark,
+                        sampleAlreadyInFocus,
                         splitChannelIds,
                         stitchingOrganization);
 
