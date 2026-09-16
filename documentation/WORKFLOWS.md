@@ -14,9 +14,9 @@ QPSC connects QuPath to your microscope via Pycro-Manager and Micro-Manager. You
 
 | I want to... | Workflow | Menu Path |
 |--------------|----------|-----------|
-| Scan a rectangular region by stage coordinates | [Bounded Acquisition](#workflow-1-bounded-acquisition) | Extensions -> QP Scope -> Bounded Acquisition |
-| Acquire high-res images of annotated regions on an overview slide | [Acquire from Existing Image](#workflow-2-acquire-from-existing-image) | Extensions -> QP Scope -> Acquire from Existing Image |
-| Acquire multi-channel widefield immunofluorescence (IF, BF+IF, or LC-PolScope) | [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) | Same menu entries as Bounded / Existing Image |
+| Scan a rectangular region by stage coordinates | [Bounded Acquisition](#workflow-1-bounded-acquisition) | Extensions -> QP Scope -> Acquisition controls -> Bounded Acquisition |
+| Acquire high-res images of annotated regions on an overview slide | [Acquire from Existing Image](#workflow-2-acquire-from-existing-image) | Extensions -> QP Scope -> Acquisition controls -> Acquire from Existing Image |
+| Acquire multi-channel widefield immunofluorescence (IF, BF+IF, or LC-PolScope) | [Multi-Channel Acquisition](#multi-channel-acquisition-widefield-if-bfif) | Same menu entries as Bounded / Existing Image (under Acquisition controls) |
 | Calibrate the coordinate link between a scanner image and the microscope | [Microscope Alignment](#workflow-3-microscope-alignment) | Extensions -> QP Scope -> Utilities -> Microscope Alignment |
 | Get guided help through the full setup-to-acquisition process | [Acquisition Wizard](#acquisition-wizard) | Extensions -> QP Scope -> Acquisition Wizard... |
 

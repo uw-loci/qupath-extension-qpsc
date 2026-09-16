@@ -1,6 +1,6 @@
 # Existing Image Acquisition
 
-> Menu: Extensions > QP Scope > Acquire from Existing Image
+> Menu: Extensions > QP Scope > Acquisition controls > Acquire from Existing Image
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md) | [All Workflows](../WORKFLOWS.md)
 
 ## Purpose

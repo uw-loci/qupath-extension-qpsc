@@ -1,6 +1,6 @@
 # Stage Map
 
-> Menu: Extensions > QP Scope > Stage Map
+> Menu: Extensions > QP Scope > Acquisition controls > Stage Map
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ## Purpose

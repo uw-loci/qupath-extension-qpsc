@@ -1,6 +1,6 @@
 # Bounded Acquisition
 
-> Menu: Extensions > QP Scope > Bounded Acquisition
+> Menu: Extensions > QP Scope > Acquisition controls > Bounded Acquisition
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md) | [All Workflows](../WORKFLOWS.md)
 
 ## Purpose
@@ -129,6 +129,7 @@ If a timepoint takes longer than the requested interval, the remaining timepoint
 
 | Option | Type | Description |
 |--------|------|-------------|
+| Sample is already in focus (skip initial focus search) | CheckBox | When checked, skips only the pre-acquisition autofocus search (the up-front stage movement to the first diagonal AF position, followed by a sweep to find focus). The initial search can take a minute or more and may land on the wrong optical plane. Per-tile autofocus and drift correction remain **unaffected** and continue to run normally. Tick this when you have just focused the field manually and want to preserve that Z position. This is narrower than the global "disable all autofocus" preference, which would kill both the initial search and per-tile corrections. |
 | Benchmark AF methods (sweep vs streaming, per tile) | CheckBox | **Diagnostic mode.** When enabled, every tile runs both the sweep autofocus and the streaming autofocus, times each method, and applies **neither result** -- the stage stays at the pre-AF Z position. The server writes per-tile timing measurements to `af_benchmark.csv` in the acquisition output folder. The acquired images will drift out of focus since no autofocus correction is applied; use a small test grid (e.g., 3×3 tiles) and treat the images as throwaway. The CSV is the deliverable. This mode is off by default and does not persist across dialog opens. |
 
 ### Acquisition Preview

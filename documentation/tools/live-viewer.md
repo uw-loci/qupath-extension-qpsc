@@ -1,6 +1,6 @@
 # Live Viewer
 
-> Menu: Extensions > QP Scope > Live Viewer
+> Menu: Extensions > QP Scope > Acquisition controls > Live Viewer
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ## Purpose

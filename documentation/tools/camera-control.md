@@ -1,6 +1,6 @@
 # Camera Control
 
-> Menu: Extensions > QP Scope > Camera Control...
+> Menu: Extensions > QP Scope > Acquisition controls > Camera Control...
 > [Back to README](../../README.md) | [All Tools](../UTILITIES.md)
 
 ## Purpose

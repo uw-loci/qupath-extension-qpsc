@@ -14,13 +14,14 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 |---------|---------|---------------|
 | **Top-Level Menu** | | |
 | [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup for new acquisitions | Extensions > QP Scope > Acquisition Wizard... |
-| Bounded Acquisition | Direct bounding-box acquisition from stage coordinates | Extensions > QP Scope > Bounded Acquisition |
-| Existing Image Acquisition | Targeted acquisition from annotations on existing images | Extensions > QP Scope > Acquire from Existing Image |
 | [Multi-Slide Acquisition](tools/multi-slide-acquisition.md) | Batch-acquire several slides in one holder (setup pass + walk-away acquire); appears when config has a multi-slide holder | Extensions > QP Scope > Multi-Slide Acquisition... |
-| [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Live Viewer |
-| [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Camera Control... |
-| [Stage Map](tools/stage-map.md) | Visual map with slide positions and macro overlay | Extensions > QP Scope > Stage Map |
 | [Report a Bug...](#report-a-bug) | Submit a bug report directly to the issue tracker | Extensions > QP Scope > Report a Bug... |
+| **Acquisition controls** | | |
+| [Bounded Acquisition](tools/bounded-acquisition.md) | Direct bounding-box acquisition from stage coordinates | Extensions > QP Scope > Acquisition controls > Bounded Acquisition |
+| [Existing Image Acquisition](tools/existing-image-acquisition.md) | Targeted acquisition from annotations on existing images | Extensions > QP Scope > Acquisition controls > Acquire from Existing Image |
+| [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Acquisition controls > Live Viewer |
+| [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Acquisition controls > Camera Control... |
+| [Stage Map](tools/stage-map.md) | Visual map with slide positions and macro overlay | Extensions > QP Scope > Acquisition controls > Stage Map |
 | **Utilities Submenu** -- standalone tools | | |
 | Microscope Alignment | Semi-automated alignment between QuPath and microscope | Extensions > QP Scope > Utilities > Microscope Alignment... |
 | [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) | Single-tile Z-stack or time-lapse acquisition | Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... |
