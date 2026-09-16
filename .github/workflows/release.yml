@@ -11,6 +11,9 @@ permissions:
 jobs:
   build-and-release:
     runs-on: ubuntu-latest
+    # Without a cap a hung task runs to the 6-hour default before GitHub kills
+    # it; v0.10.0's first attempt burned exactly that on a blocked :test.
+    timeout-minutes: 45
 
     steps:
       - name: Checkout code
@@ -45,7 +48,13 @@ jobs:
         run: chmod +x gradlew
 
       - name: Build with Gradle
-        run: ./gradlew build
+        # The test suite initializes the JavaFX toolkit, which BLOCKS rather
+        # than failing when no X display exists -- so a bare `gradlew build` on
+        # a headless runner hangs in :test indefinitely. ci.yml already runs the
+        # Linux build under xvfb for this reason; keep the two in step.
+        run: xvfb-run ./gradlew build
+        env:
+          DISPLAY: ':99'
 
       - name: Find JAR file
         id: find_jar
