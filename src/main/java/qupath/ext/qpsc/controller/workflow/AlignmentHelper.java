@@ -132,6 +132,56 @@ public class AlignmentHelper {
     }
 
     /**
+     * Age in days of a saved preset, or -1 when it carries no creation date.
+     *
+     * <p>Exposed because the confidence score is almost entirely this number: a preset
+     * loses 0.003/day up to 0.3, so anything past ~100 days sits at the floor regardless
+     * of how well it works. A UI that shows the score should show the age too, or the
+     * operator reads a permanent red "LOW" as a judgement on their latest alignment.
+     *
+     * @param preset the preset to age
+     * @return whole days since creation, or -1 if unknown
+     */
+    public static long ageInDays(AffineTransformManager.TransformPreset preset) {
+        if (preset == null || preset.getCreatedDate() == null) return -1;
+        try {
+            java.time.LocalDate created = preset.getCreatedDate()
+                    .toInstant()
+                    .atZone(java.time.ZoneId.systemDefault())
+                    .toLocalDate();
+            return java.time.temporal.ChronoUnit.DAYS.between(created, java.time.LocalDate.now());
+        } catch (Exception e) {
+            logger.debug("Could not age preset '{}': {}", preset.getName(), e.getMessage());
+            return -1;
+        }
+    }
+
+    /**
+     * The most recently created preset in a list, for use as a dialog's default selection.
+     *
+     * <p>The preset list is sorted by NAME, so selecting the first item picked whichever
+     * name sorted first -- on PPM that is a preset from March, while newer ones existed.
+     * The operator then saw that stale preset's age-decayed confidence in red right after
+     * making a fresh alignment.
+     *
+     * @param presets candidates; may be empty
+     * @return the newest by creation date, the first entry when no dates are recorded, or
+     *     null for an empty list
+     */
+    public static AffineTransformManager.TransformPreset newestPreset(
+            java.util.List<AffineTransformManager.TransformPreset> presets) {
+        if (presets == null || presets.isEmpty()) return null;
+        AffineTransformManager.TransformPreset best = null;
+        for (AffineTransformManager.TransformPreset p : presets) {
+            if (p == null || p.getCreatedDate() == null) continue;
+            if (best == null || p.getCreatedDate().after(best.getCreatedDate())) {
+                best = p;
+            }
+        }
+        return best != null ? best : presets.get(0);
+    }
+
+    /**
      * Calculates confidence for a TransformPreset.
      *
      * @param preset The transform preset to evaluate

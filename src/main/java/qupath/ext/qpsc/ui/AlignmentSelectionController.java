@@ -207,7 +207,8 @@ public class AlignmentSelectionController {
                             .findFirst()
                             .ifPresent(transformCombo::setValue);
                 } else if (!availableTransforms.isEmpty()) {
-                    transformCombo.getSelectionModel().selectFirst();
+                    // Newest, not alphabetically first (see AlignmentHelper.newestPreset).
+                    transformCombo.setValue(AlignmentHelper.newestPreset(availableTransforms));
                 }
 
                 // Save selection when changed
@@ -289,7 +290,8 @@ public class AlignmentSelectionController {
                         double conf = AlignmentHelper.calculateConfidence(preset);
                         String level = conf >= 0.8 ? "HIGH" : (conf >= 0.5 ? "MEDIUM" : "LOW");
                         String color = conf >= 0.8 ? "#2E7D32" : (conf >= 0.5 ? "#F57F17" : "#C62828");
-                        confidenceLabel.setText(String.format("Confidence: %s (%.0f%%)", level, conf * 100));
+                        confidenceLabel.setText(String.format(
+                                "Saved transform confidence: %s (%.0f%%) -- based on age", level, conf * 100));
                         confidenceLabel.setStyle(
                                 "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
                     } else {
@@ -302,7 +304,8 @@ public class AlignmentSelectionController {
                     double conf = AlignmentHelper.calculateConfidence(transformCombo.getValue());
                     String level = conf >= 0.8 ? "HIGH" : (conf >= 0.5 ? "MEDIUM" : "LOW");
                     String color = conf >= 0.8 ? "#2E7D32" : (conf >= 0.5 ? "#F57F17" : "#C62828");
-                    confidenceLabel.setText(String.format("Confidence: %s (%.0f%%)", level, conf * 100));
+                    confidenceLabel.setText(String.format(
+                            "Saved transform confidence: %s (%.0f%%) -- based on age", level, conf * 100));
                     confidenceLabel.setStyle(
                             "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
                 }

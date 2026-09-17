@@ -872,7 +872,9 @@ public class ExistingImageAcquisitionController {
                         .findFirst()
                         .ifPresent(transformCombo::setValue);
             } else if (!availableTransforms.isEmpty()) {
-                transformCombo.getSelectionModel().selectFirst();
+                // Newest, not alphabetically first: the list is name-sorted, so selectFirst()
+                // preselected a months-old preset whose age-decayed confidence then read red.
+                transformCombo.setValue(AlignmentHelper.newestPreset(availableTransforms));
             }
 
             // Confidence label
@@ -2042,7 +2044,17 @@ public class ExistingImageAcquisitionController {
                 String color = confidence >= HIGH_CONFIDENCE
                         ? accentColor("green")
                         : (confidence >= MEDIUM_CONFIDENCE ? accentColor("amber") : accentColor("red"));
-                confidenceLabel.setText(String.format("Confidence: %s (%.0f%%)", level, confidence * 100));
+                long ageDays = AlignmentHelper.ageInDays(preset);
+                // Name the subject and the driver: this scores the SAVED SCANNER TRANSFORM by
+                // age, not the alignment the operator may have just made for this slide.
+                confidenceLabel.setText(
+                        ageDays >= 0
+                                ? String.format(
+                                        "Saved transform confidence: %s (%.0f%%) -- based on age, saved %d day%s ago",
+                                        level, confidence * 100, ageDays, ageDays == 1 ? "" : "s")
+                                : String.format(
+                                        "Saved transform confidence: %s (%.0f%%) -- based on age",
+                                        level, confidence * 100));
                 confidenceLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
             } else {
                 confidenceLabel.setText("");
