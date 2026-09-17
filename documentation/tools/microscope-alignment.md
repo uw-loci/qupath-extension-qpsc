@@ -196,7 +196,7 @@ The preset's **Confidence score** (displayed as HIGH/MEDIUM/LOW with a percentag
 - Because a preset starts at 70%, it never reaches the HIGH band (80%). Seeing MEDIUM or LOW here is not a verdict on the alignment you just made -- it is the age of the saved scanner preset
 - The score is blind to stage re-zeroing, which is the event that actually invalidates a saved transform. Re-align (or re-verify with Single-Tile Refinement) after a re-zero regardless of what the number says
 
-The confidence label explicitly states "based on age" and shows how many days ago the preset was saved (e.g., "saved 7 days ago"). This helps you understand that the score reflects when the preset was created, not a judgment on alignment accuracy.
+The confidence label states "based on age" and how many days ago the preset was saved, making clear that the score reflects when the preset was created, not a judgment on alignment accuracy.
 
 ## Output
 
