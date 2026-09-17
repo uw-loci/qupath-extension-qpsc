@@ -66,7 +66,8 @@ public final class InsertCalibrationDialog {
     /** Stage axis a single-axis reference point is measured along. */
     private enum Axis {
         X,
-        Y
+        Y,
+        Z
     }
 
     /** A single-axis calibration field: its YAML key, a friendly label, and its axis. */
@@ -80,6 +81,7 @@ public final class InsertCalibrationDialog {
 
     // Single-axis edge fields (slide holders / legacy dishes). Shown only when present.
     private static final List<CalField> KNOWN_FIELDS = List.of(
+            new CalField("safe_z_um", "Safe Z for THIS insert", Axis.Z),
             new CalField("aperture_left_x_um", "Well / aperture LEFT edge", Axis.X),
             new CalField("aperture_right_x_um", "Well / aperture RIGHT edge", Axis.X),
             new CalField("aperture_top_y_um", "Well / aperture TOP edge", Axis.Y),
@@ -124,10 +126,16 @@ public final class InsertCalibrationDialog {
         }
         List<CalField> fields = new ArrayList<>();
         for (CalField f : KNOWN_FIELDS) {
-            if (isNumber(insertConfig, f.key())) {
+            // Safe Z is offered even when the insert has never had one: an insert with no safe
+            // Z of its own falls back to the scope-wide value, which was measured for whatever
+            // was mounted at the time. A dish stands far taller than a slide, so that fallback
+            // is the one number most worth setting per insert -- it cannot be prompted for if
+            // it is only shown once it already exists.
+            if ("safe_z_um".equals(f.key()) || isNumber(insertConfig, f.key())) {
                 fields.add(f);
             }
         }
+        boolean safeZMissing = !isNumber(insertConfig, "safe_z_um");
 
         // Per-slot slide-center capture for a multi-slot holder. A slot's CENTER is not a
         // point a human can aim at (the middle of a slide is featureless), so the operator
@@ -204,6 +212,16 @@ public final class InsertCalibrationDialog {
                 grid.add(new Separator(), 0, row++, 4, 1);
             }
             grid.addRow(row++, bold("Reference point"), bold("Stage value (um)"), bold(""));
+            if (safeZMissing) {
+                Label safeZPrompt = new Label("This insert has no safe Z of its own yet. Move the objective a safe "
+                        + "distance away from the sample, such that it will not hit any sample mounted in THIS "
+                        + "insert, and capture it below. Moving too far away will make some autofocus functions "
+                        + "slow.");
+                safeZPrompt.setWrapText(true);
+                safeZPrompt.setMaxWidth(560);
+                safeZPrompt.setStyle("-fx-font-size: 10.5px; -fx-text-fill: " + ThemeColors.WARNING + ";");
+                grid.add(safeZPrompt, 0, row++, 4, 1);
+            }
             for (CalField f : fields) {
                 Label nameLabel = new Label(f.label() + "  (" + f.axis() + ")");
                 TextField valueField = new TextField(formatUm(numberOr(insertConfig, f.key(), 0)));
@@ -461,9 +479,15 @@ public final class InsertCalibrationDialog {
                 () -> {
                     try {
                         double[] xy = MicroscopeController.getInstance().getStagePositionXY();
-                        double value = axis == Axis.X ? xy[0] : xy[1];
+                        double value;
+                        if (axis == Axis.Z) {
+                            value = MicroscopeController.getInstance().getStagePositionZ();
+                        } else {
+                            value = axis == Axis.X ? xy[0] : xy[1];
+                        }
+                        final double captured = value;
                         Platform.runLater(() -> {
-                            target.setText(formatUm(value));
+                            target.setText(formatUm(captured));
                             currentPosLabel.setText(String.format("Current stage: X=%.1f  Y=%.1f um", xy[0], xy[1]));
                             button.setDisable(false);
                         });

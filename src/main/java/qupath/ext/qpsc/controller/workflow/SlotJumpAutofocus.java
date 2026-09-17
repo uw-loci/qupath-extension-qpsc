@@ -226,7 +226,10 @@ public final class SlotJumpAutofocus {
                         String.join("; ", record.reasons()));
                 return ApproachPlan.disabled("focus-approach validation failed when it was measured");
             }
-            Double currentSafeZ = mgr.getSafeZUm(null, modality);
+            // Per insert: a dish stands far taller than a slide, so the scope-wide safe Z
+            // clears only whatever was mounted when it was measured.
+            String insertId = qupath.ext.qpsc.preferences.PersistentPreferences.getStageMapInsert();
+            Double currentSafeZ = mgr.getSafeZUm(insertId, modality);
             String stale = record.isStaleAgainst(currentSafeZ);
             if (stale != null) {
                 logger.warn("Slot-jump AF: focus-approach validation is stale ({}); using the standard scan", stale);

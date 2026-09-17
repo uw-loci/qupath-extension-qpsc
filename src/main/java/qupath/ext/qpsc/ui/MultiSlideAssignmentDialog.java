@@ -202,7 +202,8 @@ public final class MultiSlideAssignmentDialog {
                 return "Focus approach: not yet characterised for this modality/objective. "
                         + "Run Utilities > Focus Approach Validation before relying on unattended focus.";
             }
-            String stale = rec.isStaleAgainst(mgr.getSafeZUm(null, modality));
+            String stale = rec.isStaleAgainst(
+                    mgr.getSafeZUm(qupath.ext.qpsc.preferences.PersistentPreferences.getStageMapInsert(), modality));
             if (stale != null) {
                 return "Focus approach: the recorded characterisation no longer applies (" + stale
                         + "). Re-run Utilities > Focus Approach Validation.";

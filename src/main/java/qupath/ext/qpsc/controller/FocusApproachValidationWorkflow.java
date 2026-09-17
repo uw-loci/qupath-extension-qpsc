@@ -90,7 +90,9 @@ public final class FocusApproachValidationWorkflow {
         String modality = qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
         String scope = mgr.getString("microscope", "name");
         String objective = resolveMountedObjective(mgr, controller);
-        Double safeZ = mgr.getSafeZUm(null, modality);
+        // Validate against the safe Z of the insert now in use -- the same value the slot-jump
+        // approach will resolve, or the record is born stale.
+        Double safeZ = mgr.getSafeZUm(qupath.ext.qpsc.preferences.PersistentPreferences.getStageMapInsert(), modality);
 
         if (safeZ == null) {
             Dialogs.showErrorMessage(
