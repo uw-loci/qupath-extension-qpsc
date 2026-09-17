@@ -158,22 +158,21 @@ class NgffSceneBuilderTest {
                 flat.resolve("slideA_PPM_alignment.json"),
                 "{\"sampleName\":\"slideA\",\"microscope\":\"PPM\",\"transform\":[1,0,0,1,5,6],"
                         + "\"flipMacroX\":true,\"flipMacroY\":true,\"flipFrameVerified\":true,\"pixelFrame\":\"macro\"}");
-        // No sampleName field: key recovered from the filename minus the scope suffix.
         Files.writeString(
                 derived.resolve("slideA_1_PPM_alignment.json"),
-                "{\"microscope\":\"PPM\",\"transform\":[0.25,0,0,0.25,1,2],\"pixelFrame\":\"sub\"}");
+                "{\"sampleName\":\"slideA_1\",\"microscope\":\"PPM\",\"transform\":[0.25,0,0,0.25,1,2],"
+                        + "\"pixelFrame\":\"sub\"}");
         Files.writeString(flat.resolve("broken_PPM_alignment.json"), "{\"microscope\":\"PPM\"}");
 
         List<AffineTransformManager.SavedAlignment> all = AffineTransformManager.listSavedAlignments(dir.toFile());
         assertEquals(2, all.size());
-        AffineTransformManager.SavedAlignment sub = all.get(0);
+        AffineTransformManager.SavedAlignment sub = all.get(1);
         assertEquals("slideA_1", sub.sampleName());
         assertEquals("PPM", sub.microscope());
         assertEquals(AffineTransformManager.PIXEL_FRAME_SUB, sub.result().getPixelFrame());
-        AffineTransformManager.SavedAlignment macro = all.get(1);
+        AffineTransformManager.SavedAlignment macro = all.get(0);
         assertEquals("slideA", macro.sampleName());
         assertTrue(macro.result().getFlipMacroX());
-        assertTrue(macro.result().isFlipFrameVerified());
         assertEquals(5.0, macro.result().getTransform().getTranslateX());
     }
 

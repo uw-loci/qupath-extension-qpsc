@@ -100,12 +100,7 @@ public class ExportSpatialSceneWorkflow {
         List<ProjectImageEntry<BufferedImage>> entries = project.getImageList();
         Collector c = new Collector(entries);
 
-        List<SavedAlignment> alignments = new ArrayList<>();
-        Set<String> seen = new HashSet<>();
-        for (SavedAlignment a : AffineTransformManager.listSavedAlignments(projectDir)) {
-            if (seen.add(
-                    a.sampleName() + "|" + a.microscope() + "|" + a.result().getPixelFrame())) alignments.add(a);
-        }
+        List<SavedAlignment> alignments = AffineTransformManager.listSavedAlignments(projectDir);
         for (SavedAlignment a : alignments) {
             String frame = a.result().getPixelFrame();
             if (a.microscope() == null) {
@@ -273,13 +268,6 @@ public class ExportSpatialSceneWorkflow {
             prov.put("file", relative(projectDir, a.file()));
             prov.put("flipMacroX", fx);
             prov.put("flipMacroY", fy);
-            prov.put("flipFrameVerified", r.isFlipFrameVerified());
-            if (!r.isFlipFrameVerified()) {
-                prov.put(
-                        "warning",
-                        "Alignment predates recorded flip frames (2026-05-19). If this microscope needs a macro "
-                                + "flip, the saved transform may be in the mirrored frame.");
-            }
             if (r.getObjective() != null) prov.put("objective", r.getObjective());
             addToStage(base, a.microscope(), steps, prov);
         }
@@ -399,16 +387,11 @@ public class ExportSpatialSceneWorkflow {
         }
 
         private ProjectImageEntry<BufferedImage> findByStrippedName(String name, boolean macroOnly) {
-            // Two passes: pre-v0.9.0 "(flipped X|Y|XY)" siblings carry no camera_view flag and can
-            // strip to the same name as their base, so an undecorated name wins when both exist.
-            ProjectImageEntry<BufferedImage> decorated = null;
             for (ProjectImageEntry<BufferedImage> e : entries) {
                 if (macroOnly && !isMacroCandidate(e)) continue;
-                if (!name.equals(GeneralTools.stripExtension(e.getImageName()))) continue;
-                if (!e.getImageName().contains("(")) return e;
-                if (decorated == null) decorated = e;
+                if (name.equals(GeneralTools.stripExtension(e.getImageName()))) return e;
             }
-            return decorated;
+            return null;
         }
 
         private static boolean isMacroCandidate(ProjectImageEntry<BufferedImage> e) {
