@@ -145,7 +145,8 @@ class NgffSceneBuilderTest {
         try (InputStream in = getClass().getResourceAsStream("ngff_scene_golden.json")) {
             assertNotNull(in, "golden file missing");
             String expected = new String(in.readAllBytes(), StandardCharsets.UTF_8);
-            assertEquals(expected.strip(), actual.strip());
+            // Windows checkouts may convert the golden file to CRLF; Gson always writes LF.
+            assertEquals(expected.replace("\r\n", "\n").strip(), actual.strip());
         }
     }
 
