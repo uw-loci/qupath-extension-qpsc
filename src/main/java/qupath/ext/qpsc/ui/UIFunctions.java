@@ -675,14 +675,16 @@ public class UIFunctions {
         String message;
         if (retriesRemaining > 0) {
             message = "Autofocus was unable to find a reliable focus position.\n\n"
-                    + "Please manually focus the microscope on the tissue, then choose:\n\n"
+                    + "Focus the microscope on the tissue -- at the scope, or with the Live Viewer's "
+                    + "Z controls, which stay unlocked while this dialog is open -- then choose:\n\n"
                     + "- Retry Autofocus - Run autofocus again after manual adjustment ("
                     + retriesRemaining + " retries left)\n"
                     + "- Use Current Focus - Accept current focus and continue\n"
                     + "- Cancel - Stop the acquisition";
         } else {
             message = "Autofocus was unable to find a reliable focus position after all retry attempts.\n\n"
-                    + "Please manually focus the microscope on the tissue, then choose:\n\n"
+                    + "Focus the microscope on the tissue -- at the scope, or with the Live Viewer's "
+                    + "Z controls, which stay unlocked while this dialog is open -- then choose:\n\n"
                     + "- Use Current Focus - Accept current focus and continue\n"
                     + "- Cancel - Stop the acquisition";
         }
@@ -701,7 +703,33 @@ public class UIFunctions {
                 + "To change focus strategy:\n"
                 + "- This run only: acquisition wizard's Advanced panel -> AF strategy dropdown.\n"
                 + "- Persistent: Settings -> Autofocus Configuration -> Modality Bindings.";
-        alert.setContentText(message);
+        // The hint above tells the operator where the AF settings live; this button opens
+        // that editor directly. It sits in the content area rather than the button bar so it
+        // reads as a second row and, crucially, does NOT dismiss the dialog -- the
+        // acquisition is still waiting on a Retry / Use Current / Cancel answer.
+        Label messageLabel = new Label(message);
+        messageLabel.setWrapText(true);
+        Button openAfConfigBtn = new Button("Open Autofocus Configuration...");
+        openAfConfigBtn.setTooltip(new javafx.scene.control.Tooltip(
+                "Open the Autofocus Configuration editor without answering this dialog, "
+                        + "so you can change the bound strategy before retrying."));
+        openAfConfigBtn.setOnAction(evt -> {
+            try {
+                qupath.ext.qpsc.controller.QPScopeController.getInstance().startWorkflow("autofocusEditor");
+            } catch (Exception ex) {
+                logger.error("Could not open the Autofocus Configuration editor", ex);
+                Alert err = new Alert(Alert.AlertType.ERROR);
+                err.setTitle("Autofocus Configuration");
+                err.setHeaderText("Could not open the editor");
+                err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+                showAlertOverParent(err, alert.getDialogPane().getScene().getWindow());
+            }
+        });
+        HBox afConfigRow = new HBox(openAfConfigBtn);
+        afConfigRow.setAlignment(Pos.CENTER_LEFT);
+        VBox content = new VBox(10, messageLabel, afConfigRow);
+        content.setPrefWidth(560);
+        alert.getDialogPane().setContent(content);
         // Modality.NONE so the user can actually interact with the Live
         // Viewer focus controls -- the whole point of this dialog is to
         // prompt a manual-focus action that requires those controls.

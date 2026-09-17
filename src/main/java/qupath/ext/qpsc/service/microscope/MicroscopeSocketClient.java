@@ -10,6 +10,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.concurrent.*;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -337,6 +338,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
          * property + 64-byte value (all UTF-8, null-padded). Total 128 bytes.
          */
         SETPROP("setprop_"),
+        /**
+         * Ask Micro-Manager for the range it accepts for a numeric property,
+         * so an intensity spinner can be bounded by the hardware instead of a
+         * guess. Payload: 32-byte device + 32-byte property (UTF-8,
+         * null-padded), 64 total. Reply: 9 bytes = availability byte + two
+         * big-endian floats (lower, upper).
+         */
+        GETPROPL("getpropl"),
         /** Apply acquisition profile (calls apply_mode_setup on server) */
         APPLYPR("applypr_"),
         /**
@@ -6932,6 +6941,51 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("Failed to set " + device + "." + property + " <- " + value + ": " + responseStr);
         }
         logger.info("set_property: {}.{} <- {}", device, property, value);
+    }
+
+    /**
+     * The inclusive range Micro-Manager accepts for a numeric device property.
+     *
+     * @param lower smallest accepted value
+     * @param upper largest accepted value
+     */
+    public record PropertyLimits(double lower, double upper) {}
+
+    /**
+     * Asks Micro-Manager what range it will accept for a numeric property.
+     *
+     * <p>Used to bound the per-channel intensity spinners: a channel's
+     * {@code intensity_property} is device-specific (0-100 for one DLED
+     * wavelength, 0-2100 for a lamp), and without asking, the UI can only
+     * guess a maximum and let the user enter a value the hardware rejects.
+     *
+     * @param device MM device name (e.g. "DLED")
+     * @param property MM property name (e.g. "Intensity-385nm")
+     * @return the limits, or empty when the property has none (discrete or
+     *     unknown), or the server could not answer. Never invents a range.
+     * @throws IOException on communication failure
+     */
+    public Optional<PropertyLimits> getPropertyLimits(String device, String property) throws IOException {
+        if (device == null || device.isEmpty() || property == null || property.isEmpty()) {
+            return Optional.empty();
+        }
+        byte[] payload = new byte[64];
+        byte[] devBytes = device.getBytes(StandardCharsets.UTF_8);
+        byte[] propBytes = property.getBytes(StandardCharsets.UTF_8);
+        System.arraycopy(devBytes, 0, payload, 0, Math.min(devBytes.length, 32));
+        System.arraycopy(propBytes, 0, payload, 32, Math.min(propBytes.length, 32));
+
+        byte[] response = executeCommand(Command.GETPROPL, payload, 9);
+        ByteBuffer buf = ByteBuffer.wrap(response).order(ByteOrder.BIG_ENDIAN);
+        boolean available = buf.get() != 0;
+        float lower = buf.getFloat();
+        float upper = buf.getFloat();
+        if (!available) {
+            logger.debug("No property limits reported for {}.{}", device, property);
+            return Optional.empty();
+        }
+        logger.info("Property limits for {}.{}: {} .. {}", device, property, lower, upper);
+        return Optional.of(new PropertyLimits(lower, upper));
     }
 
     /**

@@ -107,6 +107,12 @@ public final class ManualFocusHandler {
 
                 CountDownLatch latch = new CountDownLatch(1);
 
+                // Let the Live Viewer drive Z while the dialog is up. Acquisition is still
+                // active, which normally locks all stage movement -- but this dialog asks the
+                // user to focus by hand, so Z has to be reachable for "Use current focus" to
+                // mean anything.
+                qupath.ext.qpsc.controller.MicroscopeController.getInstance().setManualFocusPending(true);
+
                 Platform.runLater(() -> {
                     try {
                         ManualFocusResult result = dialogProvider.showFocusDialog(retriesRemaining);
@@ -162,6 +168,11 @@ public final class ManualFocusHandler {
                 }
             }
         } finally {
+            try {
+                qupath.ext.qpsc.controller.MicroscopeController.getInstance().setManualFocusPending(false);
+            } catch (Exception e) {
+                logger.debug("Could not clear manual-focus-pending flag: {}", e.getMessage());
+            }
             if (guard != null) {
                 guard.set(false);
             }

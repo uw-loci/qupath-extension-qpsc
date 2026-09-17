@@ -1420,7 +1420,7 @@ All keys live under the prefix `widefield.channel.`:
 | `widefield.channel.focus_channel` | String | (empty) | The channel id selected as the autofocus reference channel. Persisted across sessions and dialogs. |
 | `widefield.channel.preset.names` | String (TAB-separated list) | (empty) | List of saved preset names, delimited by TAB characters. Used internally to populate the Preset dropdown. |
 | `widefield.channel.preset.<safeKey>` | String (pipe-delimited blob) | (none) | Preset data for the preset named `<safeKey>`. Format: `v1\|focus=<id>\|<chId>=<sel>:<exp>:<int>\|...` where `sel` is true/false, `exp` and `int` are doubles. `<safeKey>` is the preset name lowercased and with non-alphanumerics replaced by underscores. |
-| `widefield.channel.preset.last` | String | (empty) | The name of the last-selected preset, restored when the dialog reopens. |
+| `widefield.channel.preset.last` | String | (empty) | The name of the last-applied preset. Recorded for reference; it is deliberately NOT pre-selected when a dialog reopens, because the per-channel spinners are seeded from their own persisted values, not from a preset. |
 
 `<id>` is the channel id declared in the YAML library (e.g. `DAPI`, `FITC`, `BF`).
 

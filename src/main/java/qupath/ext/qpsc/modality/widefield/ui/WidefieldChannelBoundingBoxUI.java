@@ -35,6 +35,7 @@ import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.PropertyRef;
+import qupath.ext.qpsc.modality.widefield.IntensityLimits;
 import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore;
 import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.ChannelState;
 import qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.DecodedPreset;
@@ -342,6 +343,11 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             row++;
         }
 
+        // Narrow the intensity spinners to what Micro-Manager will actually accept for each
+        // channel's intensity_property. Runs off the FX thread and leaves the built-in range
+        // alone when the scope is not connected or the property has no limits.
+        IntensityLimits.applyAsync(channelDefs, channelIntensities, msg -> setStatus(msg, false));
+
         // After all rows are built, ensure exactly one focus radio is selected. The
         // modality handler decides the default rather than this dialog: library order is
         // right for fluorescence, where any channel with signal is a usable focus target,
@@ -440,10 +446,16 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         presetCombo.setPromptText("(no preset)");
         presetCombo.setPrefWidth(180);
         presetCombo.setTooltip(
-                new Tooltip("Select a saved channel preset to apply its checkbox / exposure / intensity values."));
+                new Tooltip("Select a saved channel preset to apply its checkbox / exposure / intensity values.\n"
+                        + "The list refreshes when you open it, so presets saved in the Live Viewer appear here."));
         presetCombo.disableProperty().bind(masterOverride.selectedProperty().not());
 
-        refreshPresetCombo(WidefieldChannelPresetStore.getLastPresetName());
+        // Start empty rather than pre-selecting the last-used preset: the spinners below are
+        // seeded from each channel's own persisted values, NOT from a preset, so showing a
+        // preset name here without applying it claimed values the panel was not using.
+        refreshPresetCombo(null);
+        // Presets can be saved from the Live Viewer while this dialog is open.
+        presetCombo.setOnShowing(e -> refreshPresetCombo(presetCombo.getValue()));
 
         presetCombo.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (suppressPresetComboListener || newVal == null || newVal.isEmpty()) return;

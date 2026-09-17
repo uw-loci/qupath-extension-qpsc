@@ -105,11 +105,13 @@ When using a fluorescence-style modality with a channel library, a channel-prese
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Preset Dropdown | ComboBox | Select a saved channel preset to restore per-channel exposure and intensity values from a previous session. |
+| Preset Dropdown | ComboBox | Select a saved channel preset to apply its checked channels, exposures and intensities. Starts empty each time the dialog opens -- the spinners show each channel's own last-used values until you pick a preset, so a name is never shown for settings that are not loaded. The list refreshes when you open the dropdown, so a preset just saved in the Live Viewer appears without reopening the dialog. |
 | Save... | Button | Capture the current checkbox and spinner state (which channels are checked, their exposure and intensity values) as a named preset. Preset names must be unique and under 40 characters. |
 | Delete | Button | Delete the currently-selected preset. |
 
 Presets are shared with the [Live Viewer](live-viewer.md) Camera tab, so a preset saved during acquisition setup in the bounded-acquisition dialog is immediately available in the Live Viewer, and vice versa.
+
+The **Intensity** spinner's range comes from Micro-Manager when the microscope is connected: QPSC asks the device what values the channel's `intensity_property` accepts and limits the spinner to that (so a 0-100 LED will not accept 105). If the scope is offline, or the property has no numeric limits, the spinner keeps its default wide range and the hardware remains the final arbiter.
 
 ### Time-Lapse Options (Collapsed by Default)
 

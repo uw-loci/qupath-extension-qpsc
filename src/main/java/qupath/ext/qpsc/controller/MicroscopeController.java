@@ -64,6 +64,9 @@ public class MicroscopeController implements StagePositionProvider {
     /** Flag to block user-initiated stage movements during acquisition */
     private volatile boolean acquisitionActive = false;
 
+    /** True while the server has paused for manual focus; see setManualFocusPending. */
+    private volatile boolean manualFocusPending = false;
+
     /** Timestamp of last blocked-movement notification (for cooldown) */
     private volatile long lastBlockedNotificationTime = 0;
 
@@ -174,6 +177,25 @@ public class MicroscopeController implements StagePositionProvider {
      */
     public boolean isAcquisitionActive() {
         return acquisitionActive;
+    }
+
+    /**
+     * Marks that the server has paused an acquisition to ask the user to focus manually.
+     *
+     * <p>Set around the manual-focus dialog. While it is true, Z movement from the Live
+     * Viewer is permitted even though {@link #isAcquisitionActive()} is also true: the
+     * dialog's whole purpose is to have the user set focus by hand, and blocking Z made
+     * "Use current focus" impossible to act on. XY stays locked -- moving off the tile
+     * would acquire the wrong field.
+     */
+    public void setManualFocusPending(boolean pending) {
+        this.manualFocusPending = pending;
+        logger.debug("Manual focus pending: {}", pending);
+    }
+
+    /** @return true while a manual-focus dialog is waiting on the user. */
+    public boolean isManualFocusPending() {
+        return manualFocusPending;
     }
 
     /**

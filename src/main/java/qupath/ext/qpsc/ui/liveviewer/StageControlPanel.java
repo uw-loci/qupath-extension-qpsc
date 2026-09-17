@@ -1767,6 +1767,15 @@ public class StageControlPanel extends VBox {
 
             cameraModContent.getChildren().add(grid);
 
+            // Bound each intensity spinner by the range Micro-Manager accepts for that
+            // channel's intensity_property, instead of the wide built-in range. Runs off
+            // the FX thread; leaves the spinner alone when the limits cannot be read.
+            qupath.ext.qpsc.modality.widefield.IntensityLimits.applyAsync(
+                    cameraChannelDefs, cameraChannelIntSpinners, msg -> {
+                        cameraStatusLabel.setText(msg);
+                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";");
+                    });
+
             // Named channel-preset bar -- shares the WidefieldChannelPresetStore
             // with the bounded-acquisition dialog's Fluorescence panel, so a
             // preset saved here is immediately available in the acquisition
@@ -1791,10 +1800,14 @@ public class StageControlPanel extends VBox {
             if (illumControl != null) {
                 cameraModContent.getChildren().addAll(new Separator(), illumControl);
             }
-        }
 
-        // Save/Load preset buttons (shared across both paths)
-        cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
+            // Save/Load Preset captures ONE unified exposure + gains + lamp power, which
+            // describes a single-channel tab only. The channel-library path above has its
+            // own per-channel preset bar; offering both there presented two "presets" that
+            // save different things, and the gain read fails outright on a camera with no
+            // gain (OWS3 fluorescence: "Failed to get gain values").
+            cameraModContent.getChildren().addAll(new Separator(), buildPresetButtons(modality));
+        }
     }
 
     /**
@@ -1897,7 +1910,7 @@ public class StageControlPanel extends VBox {
         saveBtn.setOnAction(e -> doSaveBrightfieldProfile(modality));
         HBox row = new HBox(4, saveBtn);
         row.setAlignment(Pos.CENTER_LEFT);
-        return row;
+        return new VBox(2, row, saveToProfileCaption("this lamp intensity and exposure"));
     }
 
     private void doSaveBrightfieldProfile(String modality) {
@@ -2071,7 +2084,20 @@ public class StageControlPanel extends VBox {
         saveBtn.setOnAction(e -> doSaveFluorescenceChannels(modality));
         HBox row = new HBox(4, saveBtn);
         row.setAlignment(Pos.CENTER_LEFT);
-        return row;
+        return new VBox(2, row, saveToProfileCaption("these channels' exposure and intensity"));
+    }
+
+    /**
+     * One-line explanation under a "Save to Profile" button. The tooltip spells out which
+     * YAML fields are written, but a new user needs to know what the button is FOR before
+     * hovering: it changes the instrument's defaults, not just this preview session.
+     */
+    private static Label saveToProfileCaption(String what) {
+        Label caption = new Label("Makes " + what + " the system default: written to the microscope "
+                + "configuration file, so background collection and acquisition use these values too.");
+        caption.setWrapText(true);
+        caption.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        return caption;
     }
 
     private void doSaveFluorescenceChannels(String modality) {
@@ -2852,24 +2878,28 @@ public class StageControlPanel extends VBox {
         combo.setStyle("-fx-font-size: 10px;");
         combo.setTooltip(
                 new Tooltip("Select a saved channel preset to populate the per-channel exposure / intensity spinners.\n"
-                        + "Presets are shared with the bounded-acquisition Fluorescence panel."));
+                        + "Presets are shared with the bounded-acquisition Fluorescence panel, and the list\n"
+                        + "refreshes when you open it."));
 
         boolean[] suppressListener = {false};
         Runnable refresh = () -> {
             suppressListener[0] = true;
             try {
+                // Keep whatever the user actually applied in this session; never pre-select a
+                // preset that has not been applied. The spinners are seeded from hardware /
+                // profile values, so a preset name shown without applying it would claim
+                // exposures and intensities the panel is not using -- and applying one here
+                // would push exposures to the camera just from opening the tab.
+                String keep = combo.getValue();
                 combo.getItems().setAll(qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.loadNames());
-                String last = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.getLastPresetName();
-                if (!last.isEmpty() && combo.getItems().contains(last)) {
-                    combo.setValue(last);
-                } else {
-                    combo.setValue(null);
-                }
+                combo.setValue(keep != null && combo.getItems().contains(keep) ? keep : null);
             } finally {
                 suppressListener[0] = false;
             }
         };
         refresh.run();
+        // A preset saved in the bounded-acquisition panel should show up without reopening.
+        combo.setOnShowing(e -> refresh.run());
 
         combo.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (suppressListener[0] || newVal == null || newVal.isEmpty()) return;
@@ -3065,8 +3095,18 @@ public class StageControlPanel extends VBox {
                         if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
 
                         var expResult = mc.getSocketClient().getExposures();
-                        var gainResult = mc.getSocketClient().getGains();
                         var illumResult = mc.getSocketClient().getIllumination();
+                        // Not every camera has gain. Saving exposure + illumination is still
+                        // useful there, so a gain read failure leaves the gain field empty
+                        // rather than failing the whole save.
+                        qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.GainsResult gainResult = null;
+                        try {
+                            gainResult = mc.getSocketClient().getGains();
+                        } catch (Exception gainEx) {
+                            logger.info(
+                                    "Camera reports no gain values ({}); saving preset without gain",
+                                    gainEx.getMessage());
+                        }
 
                         // Build string: profile|exp|gain|illum
                         // The leading profile name primes the server's
@@ -3085,9 +3125,11 @@ public class StageControlPanel extends VBox {
                                     ",%.2f,%.2f,%.2f", expResult.red(), expResult.green(), expResult.blue()));
                         }
                         sb.append("|");
-                        sb.append(String.format(
-                                "%.2f,%.2f,%.2f",
-                                gainResult.unifiedGain(), gainResult.analogRed(), gainResult.analogBlue()));
+                        if (gainResult != null) {
+                            sb.append(String.format(
+                                    "%.2f,%.2f,%.2f",
+                                    gainResult.unifiedGain(), gainResult.analogRed(), gainResult.analogBlue()));
+                        }
                         sb.append("|");
                         if (illumResult.available()) {
                             sb.append(String.format("%.1f", illumResult.power()));
@@ -3200,17 +3242,23 @@ public class StageControlPanel extends VBox {
                             individual = false;
                         }
 
-                        // Parse gains
-                        String[] gainParts = parts[expIdx + 1].split(",");
-                        float[] gains = new float[] {
-                            Float.parseFloat(gainParts[0]),
-                            gainParts.length >= 2 ? Float.parseFloat(gainParts[1]) : 1.0f,
-                            gainParts.length >= 3 ? Float.parseFloat(gainParts[2]) : 1.0f
-                        };
-
-                        // Apply atomically via SETCAM
-                        mc.withLiveModeHandling(
-                                () -> mc.getSocketClient().setCameraSettings(individual, exposures, gains));
+                        // Parse gains. An empty field means the preset was saved on a camera
+                        // with no gain -- set the exposures alone rather than inventing gains
+                        // the camera would reject.
+                        String gainField = parts[expIdx + 1].trim();
+                        if (gainField.isEmpty()) {
+                            mc.withLiveModeHandling(() -> mc.getSocketClient().setExposures(exposures));
+                        } else {
+                            String[] gainParts = gainField.split(",");
+                            float[] gains = new float[] {
+                                Float.parseFloat(gainParts[0]),
+                                gainParts.length >= 2 ? Float.parseFloat(gainParts[1]) : 1.0f,
+                                gainParts.length >= 3 ? Float.parseFloat(gainParts[2]) : 1.0f
+                            };
+                            // Apply atomically via SETCAM
+                            mc.withLiveModeHandling(
+                                    () -> mc.getSocketClient().setCameraSettings(individual, exposures, gains));
+                        }
 
                         // Apply illumination if present
                         if (parts.length > expIdx + 2) {
@@ -3692,7 +3740,7 @@ public class StageControlPanel extends VBox {
      * provided by {@link #zScrollWorkerLoop}.
      */
     void streamZTo(double target) {
-        if (isAcquisitionBlocked()) return;
+        if (isAcquisitionBlocked(true)) return;
         if (!internalLiveActive.get()) return;
         if (!mgr.isWithinStageBounds(target)) {
             Platform.runLater(() -> zStatus.setText("Z move out of bounds"));
@@ -3933,11 +3981,23 @@ public class StageControlPanel extends VBox {
      * @return true if movement is blocked
      */
     private boolean isAcquisitionBlocked() {
-        if (MicroscopeController.getInstance().isAcquisitionActive()) {
-            xyStatus.setText("Locked during acquisition");
-            return true;
+        return isAcquisitionBlocked(false);
+    }
+
+    /**
+     * @param allowDuringManualFocus true for Z controls, which stay usable while the server
+     *     is paused asking the user to focus by hand. XY passes false: moving off the tile
+     *     during an acquisition would acquire the wrong field.
+     */
+    private boolean isAcquisitionBlocked(boolean allowDuringManualFocus) {
+        MicroscopeController mc = MicroscopeController.getInstance();
+        if (!mc.isAcquisitionActive()) return false;
+        if (allowDuringManualFocus && mc.isManualFocusPending()) {
+            Platform.runLater(() -> zStatus.setText("Manual focus: Z unlocked"));
+            return false;
         }
-        return false;
+        xyStatus.setText("Locked during acquisition");
+        return true;
     }
 
     /**
@@ -3995,7 +4055,7 @@ public class StageControlPanel extends VBox {
     }
 
     private void handleMoveZ() {
-        if (isAcquisitionBlocked()) return;
+        if (isAcquisitionBlocked(true)) return;
         if (isMovementGatedByLiveView()) return;
         try {
             double z = Double.parseDouble(zField.getText().replace(",", ""));
@@ -4083,7 +4143,7 @@ public class StageControlPanel extends VBox {
      * Z so accumulation starts from the true position.
      */
     private void handleZScroll(ScrollEvent event, TextField zStepField) {
-        if (isAcquisitionBlocked()) {
+        if (isAcquisitionBlocked(true)) {
             event.consume();
             return;
         }

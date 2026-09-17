@@ -709,6 +709,12 @@ stage:
 
 See [PREFERENCES > Safe Z](../PREFERENCES.md#safe-z-retraction-point) for the full configuration hierarchy.
 
+#### Q: Autofocus failed and the dialog asks me to focus, but the Live Viewer Z controls do nothing
+
+**A:** Fixed 2026-09-17. Stage movement is locked while an acquisition is active, and that lock also caught Z during the manual-focus dialog -- the one moment the software is explicitly asking the user to set focus by hand, which made "Use Current Focus" the only reachable answer. The Z field, the Z scroll wheel and the Z bar are now unlocked while that dialog is open (the status line reads "Manual focus: Z unlocked"). XY stays locked on purpose: moving off the tile would acquire the wrong field. If Z still does nothing, check that Live View is on -- movement is gated on it separately, and the Navigate tab shows "Live View is Off".
+
+The same dialog now carries an **Open Autofocus Configuration...** button, which opens the strategy editor without answering the dialog, so a mismatched AF strategy can be changed before choosing Retry.
+
 #### Q: I enabled "Disable All Autofocus" but the manual focus dialog still appeared
 
 **A:** Fixed 2026-04-26. The Java side previously dropped the `--af-tiles`/`--af-steps`/`--af-range` triplet but didn't tell the server "no AF at all", so the server fell back to YAML defaults and ran AF normally (including the manual-focus prompt on the first failure). Now the Java side sends an explicit `--af-disabled` flag the server short-circuits on. If you still see manual focus prompts after this fix, confirm: (1) the QuPath build is current (commit `98edcf2` or later), (2) the server is current (commit `b5ae861` or later), (3) "Disable All Autofocus (Danger)" is actually checked in Preferences (Extensions > QP Scope > Preferences). Server log should show a single `Autofocus DISABLED for this acquisition` line at workflow start.

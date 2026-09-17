@@ -274,10 +274,14 @@ omits it and the client tolerates its absence (lamp checks are then skipped).
 | GETILLM | `getillm_` | none | 14 bytes: avail flag + 3 floats (power/min/max) + 1-byte is_on |
 | SETILLM | `setillm_` | 4-byte big-endian float | `ACK_____` / `ERR_ILLM` |
 | SETILLMD | `setilmd_` | 32-byte device name + 4-byte float | `ACK_____` / `ERR_DEVN` / `ERR_ILLM` |
+| SETPROP | `setprop_` | 32-byte device + 32-byte property + 64-byte value | `ACK_____` / `ERR_PROP` |
+| GETPROPL | `getpropl` | 32-byte device + 32-byte property | 9 bytes: avail flag + 2 floats (lower/upper) |
 | APPLYPR | `applypr_` | 32-byte profile name | `ACK_____` / `ERR_PROF` |
 | APPLYCH | `applych_` | 32-byte profile name + 32-byte channel id | `ACK_____` / `ERR_CHAN` |
 
 **SETILLM** drives whichever source the active profile selected (the legacy single-source endpoint). **SETILLMD** drives a NAMED source independently; the server walks every modality, builds each illumination via `_build_illumination_from_config`, finds the device-name match, and calls `set_power` on it. Lets the dialog tune any declared source without first APPLYPRing to its modality. Note: if the source's optical path is not currently selected, the value is staged but no light reaches the sample until the user APPLYPRs the matching profile.
+
+**GETPROPL** reports the range Micro-Manager accepts for a numeric property (`has_property_limits` / `get_property_lower_limit` / `get_property_upper_limit`), so the per-channel intensity spinners can be bounded by the device instead of a guessed maximum -- a DLED wavelength and a transmitted lamp differ by more than an order of magnitude. The availability flag is 0 (with zeroed floats) whenever the answer is not a real range: discrete property, unknown device, degenerate limits, or an unreadable Core. Clients must keep their own default range in that case rather than treat 0..0 as a bound. The reply is always 9 bytes so a "no limits" answer cannot desync the socket.
 
 **APPLYCH** applies a single channel from a profile's library — `mm_setup_presets` (cube turret, shutter, etc.) + `device_properties` (per-channel light source + intensity) + per-channel exposure, all via the same `apply_channel_hardware_state` helper the acquisition workflow uses. Empty channel id calls `_disable_all_modality_illuminations` to fully unset (used by the Live Viewer's "None" channel radio).
 
