@@ -225,10 +225,20 @@ public final class InsertCalibrationDialog {
             }
             grid.addRow(
                     row++,
-                    bold("Per-slot center (drive to 2 diagonal corners; overrides fixed pitch)"),
+                    bold("Per-slot center of the PHYSICAL SLIDE, not the coverslip (overrides fixed pitch)"),
                     bold("Stage X (um)"),
                     bold("Stage Y (um)"),
                     bold(""));
+            Label centerHint = new Label("Capture the center directly, or from two opposite points (corners, or the "
+                    + "top and bottom edges) when the middle is hard to judge. The captured point centres a "
+                    + "slide-sized rectangle on the map, so use the slide's middle -- a coverslip that sits "
+                    + "off-centre would shift the whole slot.\n"
+                    + "After the stage has been re-zeroed, recapture these centers: they are stage coordinates. "
+                    + "The aperture edges above position the drawn outline and the view extent, not the slots.");
+            centerHint.setWrapText(true);
+            centerHint.setMaxWidth(560);
+            centerHint.setStyle("-fx-font-size: 10.5px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+            grid.add(centerHint, 0, row++, 4, 1);
             for (int k = 1; k <= numSlides; k++) {
                 final int slotIdx = k - 1;
                 String centerXKey = "slide" + k + "_center_x_um";
@@ -247,10 +257,11 @@ public final class InsertCalibrationDialog {
                 for (TextField tf : new TextField[] {cAx, cAy, cBx, cBy, centerX, centerY}) {
                     tf.setPrefWidth(100);
                 }
-                centerX.setEditable(false);
-                centerY.setEditable(false);
-                centerX.setStyle("-fx-control-inner-background: #eef;");
-                centerY.setStyle("-fx-control-inner-background: #eef;");
+                // Editable: on a holder whose slide corners sit under the rails there is no
+                // two-corner capture to derive them from, and the read-only field left the
+                // operator unable to enter a centre at all.
+                centerX.setEditable(true);
+                centerY.setEditable(true);
 
                 Runnable recompute = () -> {
                     Double ax = parseOrNull(cAx.getText());
@@ -267,12 +278,26 @@ public final class InsertCalibrationDialog {
                 cBx.textProperty().addListener((obs, o, v) -> recompute.run());
                 cBy.textProperty().addListener((obs, o, v) -> recompute.run());
 
-                Button captureA = new Button("Capture corner 1");
-                Button captureB = new Button("Capture corner 2");
-                captureA.setTooltip(new Tooltip("Center the objective on one corner of slide " + k
-                        + " (e.g. top-left) in the Live Viewer, then click."));
-                captureB.setTooltip(new Tooltip("Center the objective on the OPPOSITE corner of slide " + k
-                        + " (e.g. bottom-right), then click."));
+                Button captureCenter = new Button("Capture center");
+                captureCenter.setTooltip(new Tooltip("Drive to the middle of slide " + k
+                        + " -- the centre of the physical slide, not the coverslip -- then click.\n"
+                        + "Use this when you can judge the middle directly; it needs no corners."));
+                captureCenter.setOnAction(e -> {
+                    if (slideWireframe != null) {
+                        slideWireframe.setActive(slotIdx);
+                    }
+                    captureCorner(centerX, centerY, currentPosLabel, captureCenter);
+                });
+
+                Button captureA = new Button("Capture point 1");
+                Button captureB = new Button("Capture point 2");
+                captureA.setTooltip(new Tooltip("Optional. Center the objective on one point of slide " + k
+                        + " in the Live Viewer, then click.\n"
+                        + "Any two points either side of the middle work: opposite corners, or the top and "
+                        + "bottom edges when the corners are under the holder."));
+                captureB.setTooltip(new Tooltip("Optional. Center the objective on the OPPOSITE point of slide " + k
+                        + " (across the middle from point 1), then click.\n"
+                        + "The centre is their midpoint, so the two points must straddle it."));
                 captureA.setOnAction(e -> {
                     if (slideWireframe != null) {
                         slideWireframe.setActive(slotIdx);
@@ -286,9 +311,9 @@ public final class InsertCalibrationDialog {
                     captureCorner(cBx, cBy, currentPosLabel, captureB);
                 });
 
-                grid.addRow(row++, new Label("Slide " + k + "  corner 1"), cAx, cAy, captureA);
-                grid.addRow(row++, new Label("Slide " + k + "  corner 2"), cBx, cBy, captureB);
-                grid.addRow(row++, new Label("Slide " + k + "  -> center"), centerX, centerY, new Label(""));
+                grid.addRow(row++, new Label("Slide " + k + "  CENTER"), centerX, centerY, captureCenter);
+                grid.addRow(row++, new Label("   or point 1"), cAx, cAy, captureA);
+                grid.addRow(row++, new Label("   or point 2"), cBx, cBy, captureB);
 
                 keyed.add(new KeyedField(centerXKey, centerX));
                 keyed.add(new KeyedField(centerYKey, centerY));
