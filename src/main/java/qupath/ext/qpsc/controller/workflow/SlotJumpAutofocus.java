@@ -174,9 +174,14 @@ public final class SlotJumpAutofocus {
      * @param approachMaxUm     signed travel bound from the safe Z, or NaN
      * @param requireTissueGate commit only where tissue is detected
      */
-    private record ApproachPlan(double safeZUm, double approachMaxUm, boolean requireTissueGate) {
-        static ApproachPlan disabled() {
-            return new ApproachPlan(Double.NaN, Double.NaN, false);
+    private record ApproachPlan(
+            double safeZUm, double approachMaxUm, boolean requireTissueGate, String disabledReason) {
+        static ApproachPlan disabled(String reason) {
+            return new ApproachPlan(Double.NaN, Double.NaN, false, reason);
+        }
+
+        boolean enabled() {
+            return !Double.isNaN(safeZUm) && !Double.isNaN(approachMaxUm);
         }
     }
 
@@ -202,7 +207,7 @@ public final class SlotJumpAutofocus {
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
             String scope = mgr.getString("microscope", "name");
             if (scope == null || modality == null || objective == null) {
-                return ApproachPlan.disabled();
+                return ApproachPlan.disabled("scope, modality or objective is unknown");
             }
             var record = qupath.ext.qpsc.utilities.FocusApproachValidationStore.find(scope, modality, objective);
             if (record == null) {
@@ -211,7 +216,7 @@ public final class SlotJumpAutofocus {
                         scope,
                         modality,
                         objective);
-                return ApproachPlan.disabled();
+                return ApproachPlan.disabled("no focus-approach validation for this modality/objective");
             }
             if (!record.usable()) {
                 logger.warn(
@@ -219,13 +224,13 @@ public final class SlotJumpAutofocus {
                         modality,
                         objective,
                         String.join("; ", record.reasons()));
-                return ApproachPlan.disabled();
+                return ApproachPlan.disabled("focus-approach validation failed when it was measured");
             }
             Double currentSafeZ = mgr.getSafeZUm(null, modality);
             String stale = record.isStaleAgainst(currentSafeZ);
             if (stale != null) {
                 logger.warn("Slot-jump AF: focus-approach validation is stale ({}); using the standard scan", stale);
-                return ApproachPlan.disabled();
+                return ApproachPlan.disabled(stale);
             }
             // Travel bound: the measured distance plus headroom for slide-to-slide variation,
             // SIGNED from the two positions the validation actually measured. The sign is what
@@ -234,18 +239,18 @@ public final class SlotJumpAutofocus {
             double bound = record.signedApproachBoundUm(APPROACH_HEADROOM_UM);
             if (Double.isNaN(bound)) {
                 logger.info("Slot-jump AF: validation record has no usable approach bound; using the standard scan");
-                return ApproachPlan.disabled();
+                return ApproachPlan.disabled("the validated approach distance is unusable");
             }
             logger.info(
                     "Slot-jump AF: approach-from-safe-Z licensed -- safe Z {} um, bound {} um, tissue gate {}",
                     currentSafeZ,
                     String.format("%.1f", bound),
                     record.requiresTissueGate());
-            return new ApproachPlan(currentSafeZ, bound, record.requiresTissueGate());
+            return new ApproachPlan(currentSafeZ, bound, record.requiresTissueGate(), null);
         } catch (Exception e) {
             logger.debug(
                     "Slot-jump AF: could not resolve an approach plan ({}); using the standard scan", e.getMessage());
-            return ApproachPlan.disabled();
+            return ApproachPlan.disabled("could not read the focus-approach validation");
         }
     }
 
@@ -794,7 +799,14 @@ public final class SlotJumpAutofocus {
                             // ~2 minutes of pure travel.
                             ApproachPlan plan = (focusZThisSlide == null)
                                     ? resolveApproachPlan(configPath, modalityForServer, objective)
-                                    : ApproachPlan.disabled();
+                                    : ApproachPlan.disabled("focus already established on this slide");
+                            // Say which focus is running. The approach is the quiet one: when its
+                            // licence lapses -- most often because stage.safe_z_um was re-measured
+                            // since the validation -- everything still works, just slower and with
+                            // a wandering scan, and only a log line said so.
+                            if (focusZThisSlide == null && !plan.enabled()) {
+                                publish("Focusing (standard scan: " + plan.disabledReason() + ")", false);
+                            }
                             if (focusZThisSlide != null) {
                                 logger.info(
                                         "Slot-jump AF: focus already established on this slide at {} um; "

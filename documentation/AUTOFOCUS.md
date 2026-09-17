@@ -585,6 +585,21 @@ When a tile scheduled for AF lands at the end of the position list (e.g. spatial
 
 ---
 
+## Why a slide change sometimes uses the slow scan
+
+Approach-from-safe-Z (one retract, one traverse toward the sample) is **licensed per scope / modality / objective by a Focus Approach Validation run**, not enabled by a setting. When no licence applies, slot-jump autofocus falls back to the standard edge-retry scan, which starts at the current Z and widens and shifts its window -- the "jump toward the sample, then back off through Z it has already covered" pattern.
+
+The licence lapses when:
+
+- **No validation exists** for that scope / modality / objective.
+- **The validation failed** when it was measured (no usable peak, or the peak was on glass).
+- **`stage.safe_z_um` has changed by more than 1 um since the validation was measured.** Re-measuring the safe Z -- which is exactly what happens after discovering it was on the wrong side -- invalidates every earlier validation for that scope. Re-run Focus Approach Validation afterwards.
+- **Focus is already established on this slide.** Deliberate: later points on the same glass are microns from the number already measured, and a full retract-and-traverse would spend ~40 s rediscovering it.
+
+The Live Viewer status line names the reason when the standard scan is used ("Focusing (standard scan: ...)"), and the server log carries the same detail (`Slot-jump AF: focus-approach validation is stale (...)`).
+
+Note that the standard scan centres on the **current Z**, so where it searches depends on where the stage was left. A search running hundreds of micrometres from the sample means the starting Z was wrong, not the search width.
+
 ## Dedicated focus channel (multi-channel modalities)
 
 On a channel modality, autofocus runs under whichever channel the acquisition loop last applied -- the previous tile's final channel -- so the focus frame's brightness and contrast follow acquisition order rather than any deliberate choice. The **Focus on a dedicated channel** option in the bounded-acquisition dialog names the channel to focus on and gives it its own exposure and intensity, applied before every focus attempt (pre-acquisition search and per-tile AF alike).

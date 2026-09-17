@@ -4,6 +4,8 @@ import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import javafx.animation.KeyFrame;
+import javafx.animation.Timeline;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -16,6 +18,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
+import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
@@ -241,7 +244,8 @@ public class MultiTileRefinement {
         addButton.setDefaultButton(true);
         // Blue = step 1 "Select tile" in the numbered step list.
         addButton.setStyle("-fx-font-weight: bold; -fx-base: #1565C0; -fx-text-fill: white;");
-        addButton.setTooltip(new Tooltip("Pick the next reference tile on the QuPath image; the stage moves to it."));
+        addButton.setTooltip(new Tooltip("Select an unused tile on the QuPath image, then click; the stage moves "
+                + "to it.\nDisabled until exactly one tile is selected that has not already been captured."));
 
         Button solveButton = new Button("Solve & Save");
         solveButton.setStyle("-fx-font-weight: bold; -fx-base: #4CAF50; -fx-text-fill: white;");
@@ -401,7 +405,42 @@ public class MultiTileRefinement {
             return pendingAutoTiles.poll();
         };
 
+        // Enabled only when the operator has actually selected a usable tile: one tile, and not
+        // one already captured. Both used to be discovered AFTER clicking -- the picker opened
+        // with Confirm dead, or the click was accepted and then rejected with "tile already
+        // used" once the stage had already been asked to move.
+        java.util.function.Supplier<PathObject> selectedTile = () -> {
+            try {
+                List<PathObject> tiles = qupath.lib.scripting.QP.getSelectedObjects().stream()
+                        .filter(PathObject::isDetection)
+                        .filter(o -> o.getMeasurements().containsKey("TileNumber"))
+                        .toList();
+                return tiles.size() == 1 ? tiles.get(0) : null;
+            } catch (Exception ex) {
+                logger.debug("Could not read the tile selection: {}", ex.getMessage());
+                return null;
+            }
+        };
+        Runnable refreshAddButton = () -> {
+            // An auto-picked tile needs no selection: the queue supplies it.
+            boolean autoAvailable = ReferenceTileSelector.wouldAutoPick() && !pendingAutoTiles.isEmpty();
+            if (autoAvailable) {
+                addButton.setDisable(false);
+                return;
+            }
+            PathObject tile = selectedTile.get();
+            addButton.setDisable(tile == null || isTileAlreadySelected(tile, points));
+        };
+        refreshAddButton.run();
+        // QuPath fires no event this dialog can bind to for "selection changed", so poll it --
+        // the same 500 ms cadence the tile picker itself uses.
+        Timeline selectionWatch = new Timeline(new KeyFrame(Duration.millis(500), ev -> refreshAddButton.run()));
+        selectionWatch.setCycleCount(Timeline.INDEFINITE);
+        selectionWatch.play();
+        stage.setOnHidden(ev -> selectionWatch.stop());
+
         addButton.setOnAction(e -> {
+            selectionWatch.pause();
             addButton.setDisable(true);
             solveButton.setDisable(true);
             cancelButton.setDisable(true);
@@ -440,7 +479,10 @@ public class MultiTileRefinement {
                         // tile -- relabel so the operator knows to move on (the re-selection guard
                         // in capturePoint rejects re-picking an already-used tile).
                         addButton.setText(points.isEmpty() ? "Select tile" : "Select a new tile");
-                        addButton.setDisable(false);
+                        // Re-gate rather than blanket-enable: the tile just captured is usually
+                        // still selected, and it is no longer a legal pick.
+                        selectionWatch.play();
+                        refreshAddButton.run();
                         cancelButton.setDisable(false);
                         refreshDiagnostics.run();
                         // Panel is idle again -- re-arm the countdown for the next step.
