@@ -14,6 +14,7 @@ import javafx.scene.control.Tooltip;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.ExportSpatialSceneWorkflow;
 import qupath.ext.qpsc.controller.FocusApproachValidationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
@@ -601,6 +602,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         + "Preserves all annotations, metadata, and image settings.");
         makePortableOption.setOnAction(e -> MakePortableWorkflow.run(qupath));
 
+        // Export Spatial Relationships (offline -- reads project state only)
+        MenuItem exportSpatialSceneOption = new MenuItem("Export Spatial Relationships (OME-NGFF 0.6)...");
+        setMenuItemTooltip(
+                exportSpatialSceneOption,
+                "Write how this project's images relate to each other and to the stage as OME-NGFF 0.6 "
+                        + "scene metadata in <project>/ngff/. Reads the saved alignments and image metadata; "
+                        + "changes nothing in the project.");
+        exportSpatialSceneOption.setOnAction(e -> ExportSpatialSceneWorkflow.run(qupath));
+
         // Register Current Objective (needs microscope -- reads MM pixel size)
         MenuItem registerObjectiveOption = new MenuItem("Register Current Objective...");
         registerObjectiveOption.setDisable(!configValid || offlineScope);
@@ -713,7 +723,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         stitchingRecoveryOption,
                         stitchMicroManagerFolderOption,
                         new SeparatorMenuItem(),
-                        makePortableOption);
+                        makePortableOption,
+                        exportSpatialSceneOption);
 
         // Microscope Configuration: one-time / occasional scope setup.
         Menu microscopeConfigMenu = new Menu("Microscope Configuration");

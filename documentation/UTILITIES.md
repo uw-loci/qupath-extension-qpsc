@@ -39,6 +39,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... |
 | Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... |
 | Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... |
+| [Export Spatial Relationships](#export-spatial-relationships-ome-ngff-06) | Write how the project's images relate to each other and to the stage as OME-NGFF 0.6 scene metadata | Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... |
 | **Utilities > Microscope Configuration** | | |
 | [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... |
 | [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Microscope Configuration > Communication Settings... |
@@ -347,6 +348,36 @@ Individual tiles are only needed if you plan to **re-stitch** the acquisition. T
 - You want to archive or share a project with minimal file size (only single-file OME-TIFFs, no ZARR directories or raw tiles)
 - Your project has already been fully converted to OME-TIFF but raw tile folders remain (the tool can clean those up independently)
 - You're copying the project from the acquisition workstation to storage or a shared server
+
+---
+
+## Export Spatial Relationships (OME-NGFF 0.6)
+
+Writes where every image in the project sits relative to the others and to the microscope stage, in the standard [OME-NGFF 0.6](https://ngff.openmicroscopy.org/specifications/0.6/index.html) `scene` format. Use it to hand a project's spatial layout to other software (napari, BigStitcher, ome-zarr-py and other 0.6 readers), or to keep a plain-text record of it next to the data.
+
+It reads the project's saved alignments and image metadata, and **changes nothing** in the project. No microscope connection is needed.
+
+**Output:** one or more `qpsc_scene_<stage>.json` files in `<project folder>/ngff/`. Running it again replaces them.
+
+- One file per group of linked images. Images anchored to one microscope's stage share a file (`qpsc_scene_PPM.json`). A slide aligned on two microscopes links both stages, giving one combined file (`qpsc_scene_OWS3+PPM.json`).
+- Stage coordinates are in micrometres. Image coordinates are full-resolution QuPath pixels.
+
+**What it records:**
+
+| Image | Placed by |
+|---|---|
+| Overview (macro) image with a saved slide alignment | the alignment, including any optical flip |
+| "(Camera View)" companion | a mirror to its overview image |
+| Annotation-driven acquisition | its recorded stage offset and field of view -- the same calculation Propagation Manager uses |
+| Bounding-box acquisition | its saved alignment, or its recorded stage bounds |
+
+**Images it skips** are listed in the completion dialog (expand **Details**) and in the file under `attributes.qpsc.skipped`, each with the reason. The common ones:
+
+- **Slides acquired on a rotated holder position** (e.g. the 4-slide vertical holder). Not exported yet.
+- Acquisitions with no recorded microscope, or whose field of view cannot be found.
+- Images with no alignment or stage position at all.
+
+> **These are sidecar files, not OME-Zarr images.** They follow the 0.6 `scene` schema, but name each image instead of pointing at a Zarr folder; `attributes.qpsc.images` maps each name to its project image. QPSC's stitched images are still OME-TIFF, because QuPath cannot yet read the Zarr v3 files that NGFF 0.6 requires.
 
 ---
 

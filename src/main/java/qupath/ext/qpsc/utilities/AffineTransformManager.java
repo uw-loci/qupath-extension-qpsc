@@ -1555,29 +1555,85 @@ public class AffineTransformManager {
                 if (fileScope == null) return null;
                 if (!fileScope.equals(activeMicroscope)) return null;
             }
-
-            @SuppressWarnings("unchecked")
-            List<Double> tv = (List<Double>) data.get("transform");
-            if (tv == null || tv.size() != 6) return null;
-
-            AffineTransform transform =
-                    new AffineTransform(tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
-
-            Boolean fx = data.get("flipMacroX") instanceof Boolean ? (Boolean) data.get("flipMacroX") : null;
-            Boolean fy = data.get("flipMacroY") instanceof Boolean ? (Boolean) data.get("flipMacroY") : null;
-            Object pfObj = data.get("pixelFrame");
-            String pixelFrame = pfObj instanceof String ? (String) pfObj : PIXEL_FRAME_MACRO;
-            Object objObj = data.get("objective");
-            String objective = objObj instanceof String ? (String) objObj : null;
-            Object detObj = data.get("detector");
-            String detector = detObj instanceof String ? (String) detObj : null;
-            Object verObj = data.get("flipFrameVerified");
-            boolean flipFrameVerified = verObj instanceof Boolean && (Boolean) verObj;
-            return new SlideAlignmentResult(transform, fx, fy, pixelFrame, objective, detector, flipFrameVerified);
+            return alignmentResultFromData(data);
         } catch (Exception e) {
             logger.error("Error reading slide alignment file {}: {}", alignmentFile, e.getMessage());
             return null;
         }
+    }
+
+    /** The transform and recorded frame from a parsed alignment JSON, or null if it has no valid transform. */
+    private static SlideAlignmentResult alignmentResultFromData(Map<String, Object> data) {
+        @SuppressWarnings("unchecked")
+        List<Double> tv = (List<Double>) data.get("transform");
+        if (tv == null || tv.size() != 6) return null;
+
+        AffineTransform transform =
+                new AffineTransform(tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
+
+        Boolean fx = data.get("flipMacroX") instanceof Boolean ? (Boolean) data.get("flipMacroX") : null;
+        Boolean fy = data.get("flipMacroY") instanceof Boolean ? (Boolean) data.get("flipMacroY") : null;
+        Object pfObj = data.get("pixelFrame");
+        String pixelFrame = pfObj instanceof String ? (String) pfObj : PIXEL_FRAME_MACRO;
+        Object objObj = data.get("objective");
+        String objective = objObj instanceof String ? (String) objObj : null;
+        Object detObj = data.get("detector");
+        String detector = detObj instanceof String ? (String) detObj : null;
+        Object verObj = data.get("flipFrameVerified");
+        boolean flipFrameVerified = verObj instanceof Boolean && (Boolean) verObj;
+        return new SlideAlignmentResult(transform, fx, fy, pixelFrame, objective, detector, flipFrameVerified);
+    }
+
+    /**
+     * One per-slide alignment JSON found on disk, with the key and scope it was saved under.
+     *
+     * @param file the JSON file
+     * @param sampleName the lookup key it was saved under: a macro's base name, or a sub-image's
+     *     stripped name for sub-frame JSONs
+     * @param microscope the scope whose stage the transform maps into; null for legacy
+     *     unscoped JSONs
+     * @param result the transform and its recorded pixel frame
+     */
+    public record SavedAlignment(File file, String sampleName, String microscope, SlideAlignmentResult result) {}
+
+    /**
+     * Every readable per-slide alignment JSON in a project, from both {@code alignmentFiles/}
+     * and {@code alignmentFiles/derived/}, regardless of scope. Unlike the per-sample loaders
+     * this does no active-scope filtering: it is for callers that describe the whole project
+     * (e.g. the NGFF scene export), not for driving a stage.
+     */
+    public static List<SavedAlignment> listSavedAlignments(File projectDir) {
+        List<SavedAlignment> out = new ArrayList<>();
+        if (projectDir == null) return out;
+        File alignmentDir = new File(projectDir, "alignmentFiles");
+        // derived/ first: when a sub-frame JSON exists in both places, the derived/ copy is the newer one.
+        for (File dir : List.of(new File(alignmentDir, "derived"), alignmentDir)) {
+            File[] files = dir.listFiles((d, n) -> n.endsWith("_alignment.json"));
+            if (files == null) continue;
+            Arrays.sort(files, Comparator.comparing(File::getName));
+            for (File f : files) {
+                try {
+                    String json = new String(Files.readAllBytes(f.toPath()), StandardCharsets.UTF_8);
+                    Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
+                    Map<String, Object> data = new Gson().fromJson(json, mapType);
+                    if (data == null) continue;
+                    SlideAlignmentResult result = alignmentResultFromData(data);
+                    if (result == null) continue;
+                    String microscope = data.get("microscope") instanceof String m && !m.isEmpty() ? m : null;
+                    String sampleName = data.get("sampleName") instanceof String n && !n.isEmpty() ? n : null;
+                    if (sampleName == null) {
+                        String stem = f.getName().substring(0, f.getName().length() - "_alignment.json".length());
+                        sampleName = (microscope != null && stem.endsWith("_" + microscope))
+                                ? stem.substring(0, stem.length() - microscope.length() - 1)
+                                : stem;
+                    }
+                    out.add(new SavedAlignment(f, sampleName, microscope, result));
+                } catch (Exception e) {
+                    logger.warn("Skipping unreadable alignment file {}: {}", f, e.getMessage());
+                }
+            }
+        }
+        return out;
     }
 
     /**

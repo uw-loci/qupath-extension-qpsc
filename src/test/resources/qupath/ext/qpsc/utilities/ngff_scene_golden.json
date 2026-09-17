@@ -1,0 +1,189 @@
+{
+  "zarr_format": 3,
+  "node_type": "group",
+  "attributes": {
+    "ome": {
+      "version": "0.6",
+      "scene": {
+        "coordinateSystems": [
+          {
+            "name": "stage:PPM",
+            "axes": [
+              {
+                "name": "x",
+                "type": "space",
+                "unit": "micrometer"
+              },
+              {
+                "name": "y",
+                "type": "space",
+                "unit": "micrometer"
+              }
+            ]
+          },
+          {
+            "name": "image:slide.ome.tif",
+            "axes": [
+              {
+                "name": "x",
+                "type": "array"
+              },
+              {
+                "name": "y",
+                "type": "array"
+              }
+            ]
+          },
+          {
+            "name": "image:slide.ome.tif (Camera View)",
+            "axes": [
+              {
+                "name": "x",
+                "type": "array"
+              },
+              {
+                "name": "y",
+                "type": "array"
+              }
+            ]
+          },
+          {
+            "name": "image:slide_1.ome.tif",
+            "axes": [
+              {
+                "name": "x",
+                "type": "array"
+              },
+              {
+                "name": "y",
+                "type": "array"
+              }
+            ]
+          }
+        ],
+        "coordinateTransformations": [
+          {
+            "type": "sequence",
+            "transformations": [
+              {
+                "type": "affine",
+                "affine": [
+                  [
+                    -1.0,
+                    0.0,
+                    4000.0
+                  ],
+                  [
+                    0.0,
+                    -1.0,
+                    3000.0
+                  ]
+                ]
+              },
+              {
+                "type": "affine",
+                "affine": [
+                  [
+                    -0.25,
+                    0.0,
+                    1000.0
+                  ],
+                  [
+                    0.0,
+                    -0.25,
+                    2000.0
+                  ]
+                ]
+              }
+            ],
+            "name": "slide.ome.tif -> stage:PPM",
+            "input": {
+              "name": "image:slide.ome.tif"
+            },
+            "output": {
+              "name": "stage:PPM"
+            }
+          },
+          {
+            "type": "affine",
+            "affine": [
+              [
+                -1.0,
+                0.0,
+                4000.0
+              ],
+              [
+                0.0,
+                -1.0,
+                3000.0
+              ]
+            ],
+            "name": "cam -> base",
+            "input": {
+              "name": "image:slide.ome.tif (Camera View)"
+            },
+            "output": {
+              "name": "image:slide.ome.tif"
+            }
+          },
+          {
+            "type": "affine",
+            "affine": [
+              [
+                0.25,
+                0.0,
+                500.0
+              ],
+              [
+                0.0,
+                0.25,
+                600.0
+              ]
+            ],
+            "name": "slide_1.ome.tif -> stage:PPM",
+            "input": {
+              "name": "image:slide_1.ome.tif"
+            },
+            "output": {
+              "name": "stage:PPM"
+            }
+          }
+        ]
+      }
+    },
+    "qpsc": {
+      "generatedBy": "QPSC test",
+      "generated": "2026-09-17T00:00:00Z",
+      "note": "Sidecar metadata, not an OME-Zarr store: coordinate systems are named, not referenced by path. 'images' maps each image coordinate system to its project entry. Pixel coordinates are QuPath full-resolution pixels.",
+      "images": {
+        "image:slide.ome.tif": {
+          "widthPx": 4000,
+          "heightPx": 3000
+        },
+        "image:slide.ome.tif (Camera View)": {
+          "cameraView": true
+        },
+        "image:slide_1.ome.tif": {
+          "pixelSizeMicrons": 0.25
+        }
+      },
+      "transforms": {
+        "slide.ome.tif -> stage:PPM": {
+          "source": "macro alignment JSON"
+        },
+        "cam -> base": {
+          "source": "baked parity difference"
+        },
+        "slide_1.ome.tif -> stage:PPM": {
+          "source": "xy_offset metadata with half-FOV correction"
+        }
+      },
+      "skipped": [
+        {
+          "image": "unplaced.ome.tif",
+          "reason": "No alignment, stage offset or stage bounds recorded."
+        }
+      ]
+    }
+  }
+}

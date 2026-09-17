@@ -255,6 +255,12 @@ The save sites record the frame they operated in:
 
 The loaded transform is used in its saved frame — no baking applied. The workflow's open entry (determined by `validateAndFlipIfNeeded`) is the same entry the save site wrote from, so the frames match by construction.
 
+## Exporting the transform graph (OME-NGFF 0.6 scene)
+
+`ExportSpatialSceneWorkflow` (Utilities > Project Tools) writes the surfaces above as OME-NGFF 0.6 `scene` metadata to `<project>/ngff/qpsc_scene_*.json`. It **reuses** the builders in this doc rather than restating their math: sub-frame JSON as saved (surface c); `ForwardPropagationWorkflow.buildSubToStageTransform` for `xy_offset` sub-acquisitions (surface e); `ImageMetadataManager.buildBoundingBoxPixelToStageTransform` (surface d); `createFlip(flipMacroX/Y)` then the saved transform for macro JSONs (surface b, forward propagation's chain); and `createFlip` of the baked-parity difference for Camera View companions. **Changing any of those changes the export** -- intended, and why no transform math lives in the exporter. `NgffSceneBuilder` is the pure layout layer: axes `(x, y)`, mirrors as `affine` (the 0.6 schema forbids negative `scale`), one scene per connected component.
+
+Skipped with a written reason instead of guessed: rotated working entries (base -> `(rotated N)` frame is not exported yet), unscoped legacy JSONs, sub-acquisitions with no FOV or no `acquired_on_microscope`. Legacy macro JSONs without `flipFrameVerified` are exported with a warning; note that forward propagation instead prefers the parent entry's parity for that case. Design and schema findings: `claude-reports/design/2026-09-17_ngff-0.6-spatial-scene-export.md`.
+
 ## Camera-orientation calibration (Calibrate Directions tool)
 
 `StageDirectionCalibrationDialog` (`ui/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing `Camera orientation`. It runs in two places:
@@ -481,6 +487,7 @@ is axis-aligned with the QuPath image; the alignment transform's rotation dispro
 |------|---------|
 | `utilities/TransformationFunctions.java` | Complete transform chain (pixel <-> stage) |
 | `utilities/AffineTransformManager.java` | Persistent transform storage (JSON); `TransformPreset.flipMacroX/Y` per-pair flip; `saveSlideAlignment` 7-arg overload writes per-slide `flipMacroX/Y` |
+| `controller/ExportSpatialSceneWorkflow.java` + `utilities/NgffSceneBuilder.java` | OME-NGFF 0.6 scene export of the alignment surfaces (reuses the builders listed here); `AffineTransformManager.listSavedAlignments` enumerates every per-slide JSON regardless of scope |
 | `utilities/AffineTransform3D.java` | 3D transform with Z scale/offset |
 | `utilities/FlipResolver.java` | Resolves macro flip in priority order: per-image metadata (legacy), active preset, per-detector YAML, default false |
 | `utilities/ImageFlipHelper.java` | `validateAndFlipIfNeeded` -- ensures a `(flipped X|Y|XY)` sibling exists and is the open entry on scopes where the active `(source_scanner, target_microscope)` preset has `flipMacroX/Y = true`. For visual UX during alignment only; not authoritative for flip state. **No-op when the open entry is a sub-acquisition** (sub-images do not have flipped siblings). |

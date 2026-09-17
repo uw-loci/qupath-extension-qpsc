@@ -619,7 +619,7 @@ public final class ImageFlipHelper {
      *     non-zero {@code xy_offset} and a {@code base_image} distinct from its
      *     own stripped name. Mirrors {@code ExistingImageWorkflowV2.isSubAcquisition}.
      */
-    private static boolean isSubAcquisitionEntry(ProjectImageEntry<BufferedImage> entry) {
+    public static boolean isSubAcquisitionEntry(ProjectImageEntry<BufferedImage> entry) {
         if (entry == null) return false;
         double[] offset = ImageMetadataManager.getXYOffset(entry);
         if (offset[0] == 0 && offset[1] == 0) return false;
