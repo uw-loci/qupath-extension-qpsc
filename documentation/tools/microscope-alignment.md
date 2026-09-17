@@ -186,6 +186,18 @@ Give the transform a descriptive name and save it. The workflow then writes **tw
 
 Multiple presets can coexist for different scope pairs. The per-slide JSON is overwritten each time you re-align the same slide.
 
+**Preset Selection and Confidence Scoring**
+
+When you use a saved scanner preset (e.g., in [Existing Image Acquisition](existing-image-acquisition.md)), the dialog preselects the **newest saved preset** by creation date. This ensures that after you save a fresh alignment, the next workflow step uses that new preset by default rather than defaulting to an older one that sorted first alphabetically.
+
+The preset's **Confidence score** (displayed as HIGH/MEDIUM/LOW with a percentage) measures the age of the saved transform, not the quality of the alignment itself:
+- Confidence starts at 65% (70% with saved green-box parameters) and loses 0.3% per day, capped at 30 points, so it bottoms out at 35% (40%) after ~100 days
+- Any preset past ~50 days reads LOW, and past ~100 days it cannot read anything else, however well it works
+- Because a preset starts at 70%, it never reaches the HIGH band (80%). Seeing MEDIUM or LOW here is not a verdict on the alignment you just made -- it is the age of the saved scanner preset
+- The score is blind to stage re-zeroing, which is the event that actually invalidates a saved transform. Re-align (or re-verify with Single-Tile Refinement) after a re-zero regardless of what the number says
+
+The confidence label explicitly states "based on age" and shows how many days ago the preset was saved (e.g., "saved 7 days ago"). This helps you understand that the score reflects when the preset was created, not a judgment on alignment accuracy.
+
 ## Output
 
 - A saved transform preset (general, reusable for any slide on this scope pair)

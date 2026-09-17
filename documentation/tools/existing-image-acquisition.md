@@ -62,6 +62,16 @@ When scanning from a sub-image that lacks a macro, the "Use Existing Alignment" 
 
 Selected transforms are validated before use. Invalid transforms show a warning and allow reselection.
 
+**Preset Selection and Confidence Display**
+
+When multiple saved scanner presets are available, the dialog preselects the **newest one by creation date**. This ensures that after you save a fresh alignment, the next acquisition step uses that new preset by default rather than one saved months ago that might sort first alphabetically.
+
+The **Confidence** display (e.g., "Saved transform confidence: MEDIUM (50%) -- based on age, saved 7 days ago") measures the age of the preset, not the alignment accuracy:
+- A scanner preset starts at 65% (70% if green-box parameters were captured) and loses 0.3% per day, with the penalty capped at 30 points -- so the floor is 35% (40%), reached at ~100 days
+- The label shows the age ("saved X days ago"), because the age is what the number is made of
+- A scanner preset can never read HIGH: that band starts at 80% and the preset starts at 70%. Past ~50 days it reads LOW, and the recommendation below shifts to Single-Tile Refinement accordingly
+- The score says nothing about whether the transform still matches the current stage frame. After a stage re-zero an old preset reads exactly as it did before, and a fresh one reads high even though the frame it was built in has moved
+
 **Cross-Scope Alignment:** If no per-slide alignment exists for the active microscope but one was built for another microscope on the same sample, the system can compose an alignment through the shared macro frame. When successful, a modal dialog appears explaining that cross-scope alignment is approximate and asking you to confirm before proceeding. The refinement options are automatically disabled for cross-scope acquisitions (see Refinement Options below). After acquisition, run Microscope Alignment on this microscope to build a native target-scope alignment that future acquisitions can reuse without composition.
 
 If alignment records from other microscopes exist but *cannot* be composed through a shared scanner preset to the active scope, a non-modal info dialog appears listing how many records were considered. This typically means the microscopes use incompatible scanner-preset bridges, or the macro-frame alignment was built on a scope whose presets do not overlap with the active scope. In this case, run Microscope Alignment on the active microscope to build a native alignment for this slide.
