@@ -229,54 +229,77 @@ public final class InsertCalibrationDialog {
                     bold("Stage X (um)"),
                     bold("Stage Y (um)"),
                     bold(""));
-            Label centerHint = new Label("Capture the center directly, or from two opposite points (corners, or the "
-                    + "top and bottom edges) when the middle is hard to judge. The captured point centres a "
-                    + "slide-sized rectangle on the map, so use the slide's middle -- a coverslip that sits "
-                    + "off-centre would shift the whole slot.\n"
-                    + "After the stage has been re-zeroed, recapture these centers: they are stage coordinates. "
-                    + "The aperture edges above position the drawn outline and the view extent, not the slots.");
+            Label centerHint = new Label("Every slot in this holder sits at the same height, so set the center Y "
+                    + "once below and it fills every slot. The slide ends are usually unreachable, so capture it "
+                    + "from the middle of any slide rather than from its top and bottom edges -- or type the "
+                    + "expected value.\n"
+                    + "Only X differs per slide, and the side edges are reachable: capture each slide's LEFT and "
+                    + "RIGHT edge and its center X is their midpoint. Capture center takes both at once when the "
+                    + "middle can be judged directly. Any field can be typed.\n"
+                    + "The captured point centres a slide-sized rectangle on the map, so it is the middle of the "
+                    + "PHYSICAL SLIDE, not the coverslip -- a coverslip sitting off-centre would shift the whole "
+                    + "slot. These are stage coordinates: recapture them after a stage re-zero. The aperture "
+                    + "edges above position the drawn outline and the view extent, not the slots.");
             centerHint.setWrapText(true);
             centerHint.setMaxWidth(560);
             centerHint.setStyle("-fx-font-size: 10.5px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             grid.add(centerHint, 0, row++, 4, 1);
+
+            // One shared center Y for every slot: the slides sit in a row at the same height,
+            // and on this holder their top and bottom ends are under the rails -- so the Y that
+            // can actually be measured is the middle of a slide, not its edges.
+            List<TextField> slotCenterYFields = new ArrayList<>();
+            TextField sharedCenterY = new TextField();
+            sharedCenterY.setPrefWidth(100);
+            sharedCenterY.textProperty().addListener((o, was, is) -> {
+                Double v = parseOrNull(is);
+                if (v == null) return;
+                String text = formatUm(v);
+                for (TextField f : slotCenterYFields) {
+                    f.setText(text);
+                }
+            });
+            Button captureSharedY = new Button("Use current Y");
+            captureSharedY.setTooltip(new Tooltip(
+                    "Drive to the middle of any slide (vertically) and click. Every slot takes this Y, since "
+                            + "they sit at the same height.\nYou can also type the expected value if the middle "
+                            + "is hard to judge."));
+            captureSharedY.setOnAction(e -> captureAxis(Axis.Y, sharedCenterY, currentPosLabel, captureSharedY));
+            grid.addRow(row++, new Label("All slots: center Y"), new Label(""), sharedCenterY, captureSharedY);
+            grid.add(new Separator(), 0, row++, 4, 1);
+
             for (int k = 1; k <= numSlides; k++) {
                 final int slotIdx = k - 1;
                 String centerXKey = "slide" + k + "_center_x_um";
                 String centerYKey = "slide" + k + "_center_y_um";
 
-                // Two transient diagonal-corner fields (not saved) + a read-only derived
-                // center (saved). The center recomputes whenever either corner changes.
+                // Transient edge fields (not saved) feeding the saved center. X edges are
+                // per-slide; Y comes from the shared center above.
                 TextField cAx = new TextField();
-                TextField cAy = new TextField();
                 TextField cBx = new TextField();
-                TextField cBy = new TextField();
                 TextField centerX = new TextField(
                         isNumber(insertConfig, centerXKey) ? formatUm(numberOr(insertConfig, centerXKey, 0)) : "");
                 TextField centerY = new TextField(
                         isNumber(insertConfig, centerYKey) ? formatUm(numberOr(insertConfig, centerYKey, 0)) : "");
-                for (TextField tf : new TextField[] {cAx, cAy, cBx, cBy, centerX, centerY}) {
+                for (TextField tf : new TextField[] {cAx, cBx, centerX, centerY}) {
                     tf.setPrefWidth(100);
                 }
+                slotCenterYFields.add(centerY);
                 // Editable: on a holder whose slide corners sit under the rails there is no
                 // two-corner capture to derive them from, and the read-only field left the
                 // operator unable to enter a centre at all.
                 centerX.setEditable(true);
                 centerY.setEditable(true);
 
-                Runnable recompute = () -> {
-                    Double ax = parseOrNull(cAx.getText());
-                    Double ay = parseOrNull(cAy.getText());
-                    Double bx = parseOrNull(cBx.getText());
-                    Double by = parseOrNull(cBy.getText());
-                    if (ax != null && ay != null && bx != null && by != null) {
-                        centerX.setText(formatUm((ax + bx) / 2.0));
-                        centerY.setText(formatUm((ay + by) / 2.0));
+                Runnable recomputeX = () -> {
+                    Double left = parseOrNull(cAx.getText());
+                    Double right = parseOrNull(cBx.getText());
+                    if (left != null && right != null) {
+                        centerX.setText(formatUm((left + right) / 2.0));
                     }
                 };
-                cAx.textProperty().addListener((obs, o, v) -> recompute.run());
-                cAy.textProperty().addListener((obs, o, v) -> recompute.run());
-                cBx.textProperty().addListener((obs, o, v) -> recompute.run());
-                cBy.textProperty().addListener((obs, o, v) -> recompute.run());
+                cAx.textProperty().addListener((obs, o, v) -> recomputeX.run());
+                cBx.textProperty().addListener((obs, o, v) -> recomputeX.run());
 
                 Button captureCenter = new Button("Capture center");
                 captureCenter.setTooltip(new Tooltip("Drive to the middle of slide " + k
@@ -289,31 +312,28 @@ public final class InsertCalibrationDialog {
                     captureCorner(centerX, centerY, currentPosLabel, captureCenter);
                 });
 
-                Button captureA = new Button("Capture point 1");
-                Button captureB = new Button("Capture point 2");
-                captureA.setTooltip(new Tooltip("Optional. Center the objective on one point of slide " + k
-                        + " in the Live Viewer, then click.\n"
-                        + "Any two points either side of the middle work: opposite corners, or the top and "
-                        + "bottom edges when the corners are under the holder."));
-                captureB.setTooltip(new Tooltip("Optional. Center the objective on the OPPOSITE point of slide " + k
-                        + " (across the middle from point 1), then click.\n"
-                        + "The centre is their midpoint, so the two points must straddle it."));
+                Button captureA = new Button("Capture LEFT X");
+                Button captureB = new Button("Capture RIGHT X");
+                captureA.setTooltip(new Tooltip("Center the objective on the LEFT edge of slide " + k
+                        + ", then click. Center X is the midpoint of this and the right edge."));
+                captureB.setTooltip(
+                        new Tooltip("Center the objective on the RIGHT edge of slide " + k + ", then click."));
                 captureA.setOnAction(e -> {
                     if (slideWireframe != null) {
                         slideWireframe.setActive(slotIdx);
                     }
-                    captureCorner(cAx, cAy, currentPosLabel, captureA);
+                    captureAxis(Axis.X, cAx, currentPosLabel, captureA);
                 });
                 captureB.setOnAction(e -> {
                     if (slideWireframe != null) {
                         slideWireframe.setActive(slotIdx);
                     }
-                    captureCorner(cBx, cBy, currentPosLabel, captureB);
+                    captureAxis(Axis.X, cBx, currentPosLabel, captureB);
                 });
 
                 grid.addRow(row++, new Label("Slide " + k + "  CENTER"), centerX, centerY, captureCenter);
-                grid.addRow(row++, new Label("   or point 1"), cAx, cAy, captureA);
-                grid.addRow(row++, new Label("   or point 2"), cBx, cBy, captureB);
+                grid.addRow(row++, new Label("   slide " + k + " LEFT edge X"), cAx, new Label(""), captureA);
+                grid.addRow(row++, new Label("   slide " + k + " RIGHT edge X"), cBx, new Label(""), captureB);
 
                 keyed.add(new KeyedField(centerXKey, centerX));
                 keyed.add(new KeyedField(centerYKey, centerY));
