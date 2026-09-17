@@ -407,6 +407,19 @@ public class BoundedAcquisitionWorkflow {
                                 // "no preference" and produces no CLI flag.
                                 config.commandBuilder().focusChannel(result.focusChannelId());
 
+                                // Dedicated focus channel: AF runs on this channel at its own
+                                // exposure/intensity. Null unless the operator opted in.
+                                if (result.dedicatedFocusChannel() != null) {
+                                    config.commandBuilder()
+                                            .dedicatedFocusChannel(
+                                                    result.dedicatedFocusChannel()
+                                                            .channelId(),
+                                                    result.dedicatedFocusChannel()
+                                                            .exposureMs(),
+                                                    result.dedicatedFocusChannel()
+                                                            .intensity());
+                                }
+
                                 // Autofocus strategy override (from Advanced panel dropdown).
                                 // Null means "use YAML default" and produces no CLI flag.
                                 config.commandBuilder().afStrategy(result.afStrategy());

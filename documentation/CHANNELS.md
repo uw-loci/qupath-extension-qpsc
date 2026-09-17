@@ -221,9 +221,26 @@ The Focus column is a single column of radio buttons (one per channel row) that 
 The picked focus channel has two effects on the acquisition:
 
 1. It is **moved to position 0** in the per-tile acquisition sequence. The server collects it first on every tile, so the autofocus snap and the first real image share hardware state (filter position, LED, exposure). The remaining channels follow in their original library order.
-2. It is passed to the server as `--focus-channel <id>` on `BGACQUIRE`. The autofocus subsystem uses that channel's hardware state (including any per-run Intensity/Exposure overrides from the picker) when it runs the focus gate and Z search. See [AUTOFOCUS.md](AUTOFOCUS.md) for how the focus channel interacts with modality-aware autofocus strategies.
+2. It is passed to the server as `--focus-channel <id>` on `BGACQUIRE`, which the server uses for that ordering. It does **not** change which channel autofocus itself runs under: the acquisition loop leaves the last acquired channel on the light path, so the focus frame's channel depends on acquisition order. To fix the focus channel, use the **dedicated focus channel** option below.
 
 The picked channel is persisted in `PersistentPreferences` across sessions, keyed per microscope/profile, so reopening the dialog remembers the last focus-channel choice. If no radio button is selected (either because persistence has no value yet or because the user cleared the selection), the server defaults to the first channel in library order.
+
+### Dedicated focus channel (optional)
+
+Ticking **Focus on a dedicated channel** in the bounded-acquisition panel sends three more flags:
+
+```
+--af-channel <id> [--af-channel-exposure <ms>] [--af-channel-intensity <value>]
+```
+
+The server (`apply_af_channel_state` in `acquisition/workflow.py`) applies that channel's hardware state and exposure before **every** focus attempt -- the pre-acquisition tissue search and focus scan, and each per-tile autofocus. Two consequences worth stating:
+
+- **The channel does not have to be acquired.** It is resolved from the modality's channel library, not from `--channels`, so a bright, well-covered stain can focus a run that images only dim ones.
+- **It never reaches an acquired image.** The per-tile loop re-applies each acquired channel's own state and exposure before it snaps, so no restore step is needed.
+
+The exposure is normally set well below the imaging exposure: a focus frame needs contrast, not image quality, and every focus attempt costs that exposure. Omitting either optional flag falls back to the channel's own library value. Absent `--af-channel` entirely, autofocus behaviour is exactly as before.
+
+`Test Focus Settings` in the dialog applies the same channel, exposure and intensity to the hardware and opens the Live Viewer, so the operator can see the frame autofocus will score.
 
 ### Channel Presets (NEW -- 2026-05-13)
 

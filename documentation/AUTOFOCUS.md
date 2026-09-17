@@ -585,6 +585,14 @@ When a tile scheduled for AF lands at the end of the position list (e.g. spatial
 
 ---
 
+## Dedicated focus channel (multi-channel modalities)
+
+On a channel modality, autofocus runs under whichever channel the acquisition loop last applied -- the previous tile's final channel -- so the focus frame's brightness and contrast follow acquisition order rather than any deliberate choice. The **Focus on a dedicated channel** option in the bounded-acquisition dialog names the channel to focus on and gives it its own exposure and intensity, applied before every focus attempt (pre-acquisition search and per-tile AF alike).
+
+Intended use: focus on a bright channel with good coverage, at a short exposure. Focus frames are scored for contrast, not archived, so imaging-quality exposure is wasted time on every attempt. The channel may be one the run does not acquire at all.
+
+Wire format and server behaviour: `--af-channel` / `--af-channel-exposure` / `--af-channel-intensity`, handled by `apply_af_channel_state` (see [CHANNELS.md](CHANNELS.md#dedicated-focus-channel-optional)). Opt-in: without the flags, nothing about autofocus changes. The acquisition loop re-applies each acquired channel before snapping, so the focus channel never appears in an image.
+
 ## Modality-Aware Autofocus
 
 **Status: COMPLETE -- 2026-04-15.** Both AF call sites in `workflow.py` (pre-acquisition validation and per-tile sweep autofocus) now route through `af_strategy.is_valid()` / `af_strategy.brightness_acceptable()`. The strategy's `StrategyFailureMode` (DEFER / PROCEED / MANUAL) drives the existing defer-to-next-tile / manual-focus-dialog dispatch. The autofocus editor GUI (Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor) has been extended with two new tabs that expose the full v2 strategy library and modality bindings for editing. This redesign was driven by autofocus failures on sparse-fluorescence samples (pollen, beads, FISH) where the old `has_sufficient_tissue` area gate was the wrong question to ask.

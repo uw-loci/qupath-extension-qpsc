@@ -102,6 +102,9 @@ public class UnifiedAcquisitionController {
             Map<String, Double> angleOverrides,
             Map<String, Double> channelIntensityOverrides,
             String focusChannelId,
+            // Optional dedicated focus channel (channel + focus exposure/intensity).
+            // Null unless the operator opted in; see BoundingBoxUI.FocusChannelOverride.
+            qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel,
             String afStrategy,
             boolean enableWhiteBalance,
             boolean perAngleWhiteBalance,
@@ -1676,6 +1679,8 @@ public class UnifiedAcquisitionController {
 
                 Map<String, Double> angleOverrides = modalityUI != null ? modalityUI.getAngleOverrides() : null;
                 String focusChannelId = modalityUI != null ? modalityUI.getFocusChannelId() : null;
+                qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel =
+                        modalityUI != null ? modalityUI.getDedicatedFocusChannel() : null;
                 Map<String, Double> channelIntensityOverrides =
                         modalityUI != null ? modalityUI.getChannelIntensityOverrides() : Map.of();
                 if (channelIntensityOverrides == null) {
@@ -1724,6 +1729,12 @@ public class UnifiedAcquisitionController {
                     cmdBuilder.channelIntensityOverrides(channelIntensityOverrides);
                 }
                 cmdBuilder.focusChannel(focusChannelId);
+                if (dedicatedFocusChannel != null) {
+                    cmdBuilder.dedicatedFocusChannel(
+                            dedicatedFocusChannel.channelId(),
+                            dedicatedFocusChannel.exposureMs(),
+                            dedicatedFocusChannel.intensity());
+                }
                 ModalityRegistry.getHandler(modality).configureCommandBuilder(cmdBuilder);
 
                 double[] fov = mgr.getModalityFOV(modality, objective, detector);
@@ -2403,6 +2414,8 @@ public class UnifiedAcquisitionController {
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
                 String focusChannelId = null;
+                qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel =
+                        null;
                 Set<String> splitChannelIds = Set.of();
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
@@ -2419,6 +2432,10 @@ public class UnifiedAcquisitionController {
                     focusChannelId = modalityUI.getFocusChannelId();
                     if (focusChannelId != null) {
                         logger.info("User specified focus channel: {}", focusChannelId);
+                    }
+                    dedicatedFocusChannel = modalityUI.getDedicatedFocusChannel();
+                    if (dedicatedFocusChannel != null) {
+                        logger.info("User specified a dedicated focus channel: {}", dedicatedFocusChannel);
                     }
                     splitChannelIds = modalityUI.getSplitChannelIds();
                     if (splitChannelIds == null) {
@@ -2487,6 +2504,7 @@ public class UnifiedAcquisitionController {
                         angleOverrides,
                         channelIntensityOverrides,
                         focusChannelId,
+                        dedicatedFocusChannel,
                         afStrategyProtocol,
                         enableWhiteBalance,
                         perAngleWhiteBalance,

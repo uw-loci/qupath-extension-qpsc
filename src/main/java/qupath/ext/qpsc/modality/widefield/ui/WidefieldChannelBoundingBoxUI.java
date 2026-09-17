@@ -82,6 +82,17 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private static final String PREF_KEY_PREFIX = "widefield.channel.";
     private static final String PREF_KEY_MASTER = PREF_KEY_PREFIX + "master_override_enabled";
     private static final String PREF_KEY_FOCUS_CHANNEL = PREF_KEY_PREFIX + "focus_channel";
+    // Dedicated focus channel (opt-in): autofocus runs on this channel at its own,
+    // usually shorter, exposure. Persisted so the setup survives a dialog reopen.
+    private static final String PREF_KEY_AF_CHANNEL_ENABLED = PREF_KEY_PREFIX + "af_channel.enabled";
+    private static final String PREF_KEY_AF_CHANNEL_ID = PREF_KEY_PREFIX + "af_channel.id";
+    private static final String PREF_KEY_AF_CHANNEL_EXPOSURE = PREF_KEY_PREFIX + "af_channel.exposure_ms";
+    private static final String PREF_KEY_AF_CHANNEL_INTENSITY = PREF_KEY_PREFIX + "af_channel.intensity";
+
+    private CheckBox afChannelEnabled;
+    private ComboBox<String> afChannelCombo;
+    private Spinner<Double> afChannelExposure;
+    private Spinner<Double> afChannelIntensity;
     // Named-preset persistence lives in WidefieldChannelPresetStore so the
     // Live Viewer's Camera tab can share the same store.
 
@@ -398,6 +409,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                 "Library has %d channels. Default mode uses all of them at YAML exposures.", library.size()));
         hint.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 10.5px;");
 
+        Node focusChannelBar = buildFocusChannelBar();
         HBox presetBar = buildPresetBar();
         HBox testBar = buildTestBar();
         HBox mdaBar = buildMdaBar();
@@ -406,7 +418,17 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         statusLabel.setWrapText(true);
 
         root.getChildren()
-                .addAll(new Separator(), title, masterOverride, grid, presetBar, testBar, mdaBar, statusLabel, hint);
+                .addAll(
+                        new Separator(),
+                        title,
+                        masterOverride,
+                        grid,
+                        focusChannelBar,
+                        presetBar,
+                        testBar,
+                        mdaBar,
+                        statusLabel,
+                        hint);
     }
 
     /**
@@ -440,6 +462,247 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     // ====================================================================
     // Preset bar -- named save/load/delete of channel + exposure + intensity sets
     // ====================================================================
+
+    /**
+     * Dedicated focus-channel controls.
+     *
+     * <p>Autofocus otherwise runs under whichever channel the previous tile last applied,
+     * so which channel focuses the run depends on acquisition order. Here the operator
+     * names the channel to focus on -- ideally bright with complete coverage -- and gives
+     * it its own exposure and intensity. A focus frame only needs contrast, so a much
+     * shorter exposure than the imaging one keeps every focus attempt cheap; nothing from
+     * the focus channel reaches an acquired image, because the acquisition loop re-applies
+     * each channel before it snaps.
+     *
+     * <p>The channel need not be one of the acquired channels.
+     */
+    private Node buildFocusChannelBar() {
+        afChannelEnabled = new CheckBox("Focus on a dedicated channel");
+        afChannelEnabled.setSelected(
+                Boolean.parseBoolean(PersistentPreferences.getStringPreference(PREF_KEY_AF_CHANNEL_ENABLED, "false")));
+        afChannelEnabled.setTooltip(
+                new Tooltip("Run autofocus on one chosen channel, at its own exposure and intensity, for every "
+                        + "focus attempt in this acquisition.\n\n"
+                        + "Without this, autofocus uses whichever channel the previous tile happened to "
+                        + "leave applied. Pick a bright channel with good coverage and give it a short "
+                        + "exposure: focus frames need contrast, not image quality.\n\n"
+                        + "The focus channel does not have to be one of the acquired channels."));
+        afChannelEnabled
+                .disableProperty()
+                .bind(masterOverride.selectedProperty().not());
+
+        afChannelCombo = new ComboBox<>();
+        afChannelCombo.getItems().addAll(channelDefs.keySet());
+        afChannelCombo.setTooltip(new Tooltip("Channel autofocus will use."));
+        String savedId = PersistentPreferences.getStringPreference(PREF_KEY_AF_CHANNEL_ID, "");
+        if (!savedId.isEmpty() && afChannelCombo.getItems().contains(savedId)) {
+            afChannelCombo.setValue(savedId);
+        } else if (!afChannelCombo.getItems().isEmpty()) {
+            String focusId = getFocusChannelId();
+            afChannelCombo.setValue(
+                    focusId != null && afChannelCombo.getItems().contains(focusId)
+                            ? focusId
+                            : afChannelCombo.getItems().get(0));
+        }
+
+        afChannelExposure = new Spinner<>();
+        afChannelExposure.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(
+                0.1, 60000.0, readSavedDouble(PREF_KEY_AF_CHANNEL_EXPOSURE, defaultFocusExposure()), 10.0));
+        afChannelExposure.setEditable(true);
+        afChannelExposure.setPrefWidth(110);
+        afChannelExposure.setTooltip(new Tooltip("Exposure used for focus frames only, in ms."));
+        commitOnFocusLost(afChannelExposure);
+
+        afChannelIntensity = new Spinner<>();
+        afChannelIntensity.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(
+                0.0, 65535.0, readSavedDouble(PREF_KEY_AF_CHANNEL_INTENSITY, defaultFocusIntensity()), 1.0));
+        afChannelIntensity.setEditable(true);
+        afChannelIntensity.setPrefWidth(100);
+        afChannelIntensity.setTooltip(
+                new Tooltip("Illumination intensity used for focus frames only. Leave at the channel's own value "
+                        + "if you do not want to change it."));
+        commitOnFocusLost(afChannelIntensity);
+
+        Button testBtn = new Button("Test Focus Settings");
+        testBtn.setTooltip(
+                new Tooltip("Apply exactly what autofocus will use -- this channel, this exposure, this intensity -- "
+                        + "and open the Live Viewer, so you can see the frame autofocus will score and "
+                        + "focus on it with the Z controls."));
+        testBtn.setOnAction(e -> onTestFocusChannel());
+
+        // Everything but the checkbox is meaningless until it is ticked.
+        javafx.beans.binding.BooleanBinding off = afChannelEnabled
+                .selectedProperty()
+                .not()
+                .or(masterOverride.selectedProperty().not());
+        afChannelCombo.disableProperty().bind(off);
+        afChannelExposure.disableProperty().bind(off);
+        afChannelIntensity.disableProperty().bind(off);
+        testBtn.disableProperty().bind(off);
+
+        // Persist as the operator edits, so the setup survives a dialog reopen.
+        afChannelEnabled
+                .selectedProperty()
+                .addListener((o, was, is) ->
+                        PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_ENABLED, String.valueOf(is)));
+        afChannelCombo.valueProperty().addListener((o, was, is) -> {
+            if (is != null) {
+                PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_ID, is);
+                seedFocusSpinnersFor(is);
+            }
+        });
+        afChannelExposure.valueProperty().addListener((o, was, is) -> {
+            if (is != null) {
+                PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_EXPOSURE, String.valueOf(is));
+            }
+        });
+        afChannelIntensity.valueProperty().addListener((o, was, is) -> {
+            if (is != null) {
+                PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_INTENSITY, String.valueOf(is));
+            }
+        });
+
+        HBox row = new HBox(
+                8,
+                afChannelEnabled,
+                afChannelCombo,
+                new Label("Focus exposure (ms):"),
+                afChannelExposure,
+                new Label("Intensity:"),
+                afChannelIntensity,
+                testBtn);
+        row.setAlignment(Pos.CENTER_LEFT);
+
+        Label caption = new Label("Autofocus only. Acquired images keep their own exposures above.");
+        caption.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 10.5px;");
+        return new VBox(2, row, caption);
+    }
+
+    /** Exposure to start the focus spinner at: the chosen channel's own acquisition exposure. */
+    private double defaultFocusExposure() {
+        String id = afChannelCombo == null ? null : afChannelCombo.getValue();
+        Spinner<Double> exp = id == null ? null : channelExposures.get(id);
+        if (exp != null && exp.getValue() != null) return exp.getValue();
+        Channel ch = id == null ? null : channelDefs.get(id);
+        return ch != null ? ch.defaultExposureMs() : 100.0;
+    }
+
+    /** Intensity to start the focus spinner at: the chosen channel's own intensity. */
+    private double defaultFocusIntensity() {
+        String id = afChannelCombo == null ? null : afChannelCombo.getValue();
+        Spinner<Double> intensity = id == null ? null : channelIntensities.get(id);
+        return (intensity != null && intensity.getValue() != null) ? intensity.getValue() : 0.0;
+    }
+
+    /** Re-seed the focus spinners from a newly-picked channel's own settings. */
+    private void seedFocusSpinnersFor(String channelId) {
+        Spinner<Double> exp = channelExposures.get(channelId);
+        if (exp != null && exp.getValue() != null && afChannelExposure != null) {
+            afChannelExposure.getValueFactory().setValue(exp.getValue());
+        }
+        Spinner<Double> intensity = channelIntensities.get(channelId);
+        if (afChannelIntensity != null) {
+            afChannelIntensity
+                    .getValueFactory()
+                    .setValue(intensity != null && intensity.getValue() != null ? intensity.getValue() : 0.0);
+        }
+    }
+
+    private double readSavedDouble(String key, double fallback) {
+        try {
+            String raw = PersistentPreferences.getStringPreference(key, "");
+            return raw.isEmpty() ? fallback : Double.parseDouble(raw);
+        } catch (NumberFormatException e) {
+            return fallback;
+        }
+    }
+
+    /**
+     * Apply the focus channel exactly as autofocus will and open the Live Viewer, so the
+     * operator can see the frame autofocus is going to score before committing a run to it.
+     */
+    private void onTestFocusChannel() {
+        String channelId = afChannelCombo == null ? null : afChannelCombo.getValue();
+        if (channelId == null) {
+            setStatus("Pick a focus channel first.", true);
+            return;
+        }
+        Channel channel = channelDefs.get(channelId);
+        if (channel == null) {
+            setStatus("Channel definition missing for '" + channelId + "'.", true);
+            return;
+        }
+        MicroscopeController mc = MicroscopeController.getInstance();
+        if (mc == null || !mc.isConnected()) {
+            setStatus("Not connected to microscope server.", true);
+            return;
+        }
+        String profile = findFirstMatchingProfile();
+        if (profile == null) {
+            setStatus("No acquisition profile found for modality '" + loadedModality + "'.", true);
+            return;
+        }
+        Double exposureMs = afChannelExposure.getValue();
+        Double intensity = afChannelIntensity.getValue();
+        PropertyRef intensityProp = channel.intensityProperty();
+
+        LiveViewerWindow.show();
+        setStatus("Applying focus channel " + channelId + " (exp " + exposureMs + " ms)...", false);
+
+        Thread worker = new Thread(
+                () -> {
+                    try {
+                        mc.withLiveModeHandling(() -> {
+                            mc.getSocketClient().applyChannel(profile, channelId);
+                            if (exposureMs != null && exposureMs > 0) {
+                                mc.getSocketClient().setExposures(new float[] {exposureMs.floatValue()});
+                            }
+                            if (intensityProp != null && intensity != null) {
+                                mc.getSocketClient()
+                                        .setProperty(
+                                                intensityProp.device(),
+                                                intensityProp.property(),
+                                                formatIntensityValue(intensity));
+                            }
+                        });
+                        setStatus(
+                                "Live Viewer is showing what autofocus will see on " + channelId
+                                        + ". Focus with the Z controls, then adjust the spinners and test again.",
+                                false);
+                    } catch (Exception ex) {
+                        logger.error("Test Focus Settings failed: {}", ex.getMessage(), ex);
+                        setStatus("Test failed: " + ex.getMessage(), true);
+                    }
+                },
+                "Widefield-TestFocusChannel");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    /**
+     * {@inheritDoc}
+     *
+     * <p>Returns null unless the operator ticked "Focus on a dedicated channel", so the
+     * default remains the server's existing autofocus behaviour.
+     */
+    @Override
+    public qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride getDedicatedFocusChannel() {
+        if (afChannelEnabled == null
+                || !afChannelEnabled.isSelected()
+                || !masterOverride.isSelected()
+                || afChannelCombo == null
+                || afChannelCombo.getValue() == null) {
+            return null;
+        }
+        String id = afChannelCombo.getValue();
+        Double exposure = afChannelExposure != null ? afChannelExposure.getValue() : null;
+        Channel ch = channelDefs.get(id);
+        // Only send an intensity for a channel that actually has an intensity knob.
+        Double intensity = (ch != null && ch.intensityProperty() != null && afChannelIntensity != null)
+                ? afChannelIntensity.getValue()
+                : null;
+        return new qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride(id, exposure, intensity);
+    }
 
     private HBox buildPresetBar() {
         presetCombo = new ComboBox<>();

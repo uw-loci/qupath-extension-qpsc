@@ -99,6 +99,20 @@ When using a PPM modality, the acquisition dialog includes a **PPM Polarization 
 
 The angle selection and override controls are set upfront in this dialog -- there is no per-image angle popup during acquisition. This design supports unattended multi-slide workflows.
 
+**Dedicated focus channel (optional):**
+
+Autofocus normally runs under whichever channel the previous tile happened to leave on the light path, so which channel focuses the run depends on acquisition order. Ticking **Focus on a dedicated channel** names one channel to focus on and gives it its own exposure and intensity:
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Focus on a dedicated channel | CheckBox | Off by default. When off, autofocus behaviour is unchanged. |
+| Channel | ComboBox | The channel every focus attempt uses. **It does not have to be one of the acquired channels** -- focusing on a bright, well-covered stain while imaging dim ones is the main use. |
+| Focus exposure (ms) | Spinner | Exposure for focus frames only. A focus frame needs contrast, not image quality, so this is usually well below the imaging exposure and makes every focus attempt cheaper. |
+| Intensity | Spinner | Illumination for focus frames only. Only sent for channels that declare an `intensity_property`. |
+| Test Focus Settings | Button | Applies exactly what autofocus will use -- that channel, exposure and intensity -- and opens the Live Viewer, so you can see the frame autofocus will score and focus on it with the Z controls before committing a run. |
+
+The settings apply to the pre-acquisition focus search and to every per-tile autofocus. They never affect acquired images: the acquisition loop re-applies each channel's own hardware state and exposure before it snaps.
+
 **Fluorescence / Widefield IF channel presets:**
 
 When using a fluorescence-style modality with a channel library, a channel-preset bar appears below the per-channel checkbox and spinner fields:

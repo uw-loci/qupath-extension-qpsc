@@ -758,6 +758,27 @@ public interface ModalityHandler {
          *
          * @return focus-channel id, or {@code null} if not channel-based
          */
+        /**
+         * Optional dedicated focus channel: autofocus runs on THIS channel, at its own
+         * exposure and intensity, instead of whichever channel the previous tile left on
+         * the light path. The point is to focus on a bright, well-covered channel with a
+         * short exposure -- a focus frame needs contrast, not image quality -- and it may
+         * be a channel the run does not acquire at all.
+         *
+         * @param channelId channel to focus on; never null in a returned override
+         * @param exposureMs focus exposure in ms, or null to use the channel's own
+         * @param intensity focus illumination intensity, or null to use the channel's own
+         */
+        record FocusChannelOverride(String channelId, Double exposureMs, Double intensity) {}
+
+        /**
+         * @return the dedicated focus channel settings, or {@code null} when the operator
+         *     has not opted in (the default: autofocus behaviour is unchanged).
+         */
+        default FocusChannelOverride getDedicatedFocusChannel() {
+            return null;
+        }
+
         default String getFocusChannelId() {
             return null;
         }

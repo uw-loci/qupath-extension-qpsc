@@ -51,6 +51,9 @@ public class AcquisitionCommandBuilder {
     // also the AF reference -- avoiding a hardware switch between AF and
     // the first capture. Emitted as the --focus-channel CLI flag.
     private String focusChannelId;
+    private String afChannelId;
+    private Double afChannelExposureMs;
+    private Double afChannelIntensity;
 
     // Marks this as a non-rotation modality (brightfield, fluorescence, laser
     // scanning without angles). When true, the builder omits --angles entirely
@@ -247,18 +250,40 @@ public class AcquisitionCommandBuilder {
      * Sets the focus channel id for a multi-channel widefield acquisition.
      *
      * <p>The Python server uses this to apply the named channel's hardware
-     * state ({@code mm_setup_presets} + {@code device_properties}) before
-     * the autofocus snap, so AF runs against a representative frame instead
-     * of whatever hardware state the previous tile's last channel left
-     * behind. The Java side has already moved this channel to position 0
-     * in {@code channelExposures} so the first acquired image is also the
-     * AF reference -- no hardware switch between AF and capture.
+     * order: the Java side moves this channel to position 0 in
+     * {@code channelExposures} so it is the first image acquired after the
+     * focus attempt. It does NOT change which channel autofocus itself runs
+     * under -- the acquisition loop leaves the last acquired channel on the
+     * light path. Use {@link #dedicatedFocusChannel(String, Double, Double)}
+     * for that.
      *
      * @param channelId focus-channel id, or {@code null} to skip the flag
      * @return this builder instance for method chaining
      */
     public AcquisitionCommandBuilder focusChannel(String channelId) {
         this.focusChannelId = channelId;
+        return this;
+    }
+
+    /**
+     * Sets a dedicated autofocus channel. The server applies this channel's hardware
+     * state and exposure before every focus attempt -- the pre-acquisition search and
+     * each per-tile AF -- then the acquisition loop re-applies each acquired channel as
+     * usual, so the focus channel never appears in an acquired image.
+     *
+     * <p>Unlike {@link #focusChannel(String)} (which only reorders the acquired
+     * channels), this channel does NOT have to be one of the acquired channels: focusing
+     * on a bright, well-covered stain while imaging dim ones is the main use.
+     *
+     * @param channelId channel to focus on, or {@code null} to leave AF behaviour alone
+     * @param exposureMs focus exposure in ms, or {@code null} for the channel's own
+     * @param intensity focus illumination intensity, or {@code null} for the channel's own
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder dedicatedFocusChannel(String channelId, Double exposureMs, Double intensity) {
+        this.afChannelId = channelId;
+        this.afChannelExposureMs = exposureMs;
+        this.afChannelIntensity = intensity;
         return this;
     }
 
@@ -712,6 +737,27 @@ public class AcquisitionCommandBuilder {
                     "--objective", objective,
                     "--detector", detector,
                     "--pixel-size", String.valueOf(pixelSize)));
+        }
+
+        // Dedicated focus channel: autofocus applies this channel itself. Emitted
+        // regardless of whether it is one of the acquired channels -- focusing on a
+        // bright channel while imaging dim ones is the point of the option.
+        if (afChannelId != null && !afChannelId.isBlank()) {
+            args.add("--af-channel");
+            args.add(afChannelId);
+            if (afChannelExposureMs != null && afChannelExposureMs > 0) {
+                args.add("--af-channel-exposure");
+                args.add(String.valueOf(afChannelExposureMs));
+            }
+            if (afChannelIntensity != null) {
+                args.add("--af-channel-intensity");
+                args.add(String.valueOf(afChannelIntensity));
+            }
+            logger.info(
+                    "Dedicated focus channel: {} (exposure {} ms, intensity {})",
+                    afChannelId,
+                    afChannelExposureMs,
+                    afChannelIntensity);
         }
 
         // Defensive: catch upstream regressions where both resolution paths return
