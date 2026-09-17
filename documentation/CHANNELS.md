@@ -225,6 +225,12 @@ The picked focus channel has two effects on the acquisition:
 
 The picked channel is persisted in `PersistentPreferences` across sessions, keyed per microscope/profile, so reopening the dialog remembers the last focus-channel choice. If no radio button is selected (either because persistence has no value yet or because the user cleared the selection), the server defaults to the first channel in library order.
 
+### End-of-acquisition teardown
+
+`_cleanup_acquisition` (the guaranteed teardown, which also runs on cancel and failure) switches the modality's illumination off when the run was channel-based, using the same `_disable_all_modality_illuminations` helper as the "(None)" channel radio. Two reasons: the tile loop ends with its last acquired channel still applied and still exciting the sample, and the Live Viewer's Camera tab would otherwise go on showing whichever channel the operator previewed before the run.
+
+On the Java side every site that applies a channel reports it through `MicroscopeController.setChannelHardwareState(...)`, and the Camera tab's preview radios follow that state. An acquisition reports `unknown()` at both boundaries, so the tab drops to "(None)" rather than naming a channel it cannot vouch for. Angle modalities are unaffected.
+
 ### Dedicated focus channel (optional)
 
 Ticking **Focus on a dedicated channel** in the bounded-acquisition panel sends three more flags:

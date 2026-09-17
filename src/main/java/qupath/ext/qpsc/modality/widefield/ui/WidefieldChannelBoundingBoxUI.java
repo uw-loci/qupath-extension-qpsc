@@ -665,6 +665,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                                                 formatIntensityValue(intensity));
                             }
                         });
+                        mc.setChannelHardwareState(
+                                qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.active(channelId));
                         setStatus(
                                 "Live Viewer is showing what autofocus will see on " + channelId
                                         + ". Focus with the Z controls, then adjust the spinners and test again.",
@@ -1029,6 +1031,10 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                                                 formatIntensityValue(intensity));
                             }
                         });
+                        // Report the applied channel so the Live Viewer's Camera tab shows
+                        // the channel the hardware is actually on, not its own last click.
+                        mc.setChannelHardwareState(
+                                qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.active(channelId));
                         setStatus(
                                 "Live Viewer streaming " + channelId
                                         + " -- adjust spinners and click Test again to re-apply.",

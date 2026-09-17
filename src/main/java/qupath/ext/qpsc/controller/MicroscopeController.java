@@ -61,6 +61,18 @@ public class MicroscopeController implements StagePositionProvider {
      */
     private final ReadOnlyObjectWrapper<AffineTransform> currentTransformProperty = new ReadOnlyObjectWrapper<>();
 
+    /**
+     * What the light path is actually set to, as far as this process knows.
+     *
+     * <p>Every path that applies a channel reports here, so a UI never has to infer the
+     * hardware state from its own last click. An acquisition ends with the last acquired
+     * channel applied -- not whatever the operator previewed before starting -- so it
+     * reports {@link ChannelHardwareState#unknown()} rather than letting the Camera tab
+     * keep claiming the preview channel.
+     */
+    private final ReadOnlyObjectWrapper<ChannelHardwareState> channelHardwareStateProperty =
+            new ReadOnlyObjectWrapper<>(ChannelHardwareState.unknown());
+
     /** Flag to block user-initiated stage movements during acquisition */
     private volatile boolean acquisitionActive = false;
 
@@ -168,6 +180,60 @@ public class MicroscopeController implements StagePositionProvider {
         logger.info(
                 "Acquisition lock {}",
                 active ? "ENGAGED - user stage movements blocked" : "RELEASED - user stage movements allowed");
+        // An acquisition drives the light path itself and ends on its last acquired
+        // channel, so whatever a UI last showed as "active" is no longer true either
+        // way round the lock.
+        setChannelHardwareState(ChannelHardwareState.unknown());
+    }
+
+    /**
+     * What the light path is set to, as last reported by whoever applied a channel.
+     *
+     * @param channelId the applied channel, or null for "nothing applied"
+     * @param known false when something changed the light path without saying what
+     */
+    public record ChannelHardwareState(String channelId, boolean known) {
+
+        /** A named channel is applied. */
+        public static ChannelHardwareState active(String channelId) {
+            return new ChannelHardwareState(channelId, true);
+        }
+
+        /** Illumination is off; no channel is applied. */
+        public static ChannelHardwareState none() {
+            return new ChannelHardwareState(null, true);
+        }
+
+        /** Something changed the light path and did not say what it left behind. */
+        public static ChannelHardwareState unknown() {
+            return new ChannelHardwareState(null, false);
+        }
+
+        /** True when a UI may describe a specific channel as active. */
+        public boolean hasChannel() {
+            return known && channelId != null;
+        }
+    }
+
+    /**
+     * Report what the light path is now set to. Call this from every site that applies a
+     * channel (preview radios, channel tests, acquisition boundaries) so displayed state
+     * and hardware cannot drift apart.
+     */
+    public void setChannelHardwareState(ChannelHardwareState state) {
+        ChannelHardwareState value = state == null ? ChannelHardwareState.unknown() : state;
+        logger.debug("Channel hardware state: {}", value);
+        Runnable mirror = () -> channelHardwareStateProperty.set(value);
+        if (Platform.isFxApplicationThread()) {
+            mirror.run();
+        } else {
+            Platform.runLater(mirror);
+        }
+    }
+
+    /** Observable view of {@link #setChannelHardwareState}; updated on the FX thread. */
+    public javafx.beans.property.ReadOnlyObjectProperty<ChannelHardwareState> channelHardwareStateProperty() {
+        return channelHardwareStateProperty.getReadOnlyProperty();
     }
 
     /**

@@ -963,6 +963,12 @@ public class StageControlPanel extends VBox {
 
     private ToggleGroup cameraChannelGroup;
     private final Map<String, RadioButton> cameraChannelRadios = new HashMap<>();
+    /** The "(None -- deactivate all)" radio of the current Camera tab, for state sync. */
+    private RadioButton cameraNoneRadio;
+    /** Listener keeping the preview radios honest about the hardware; re-registered per rebuild. */
+    private javafx.beans.value.ChangeListener<qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState>
+            channelStateListener;
+
     private final Map<String, Spinner<Double>> cameraChannelExpSpinners = new HashMap<>();
     private final Map<String, Spinner<Double>> cameraChannelIntSpinners = new HashMap<>();
     private final Map<String, qupath.ext.qpsc.modality.Channel> cameraChannelDefs = new HashMap<>();
@@ -1593,6 +1599,7 @@ public class StageControlPanel extends VBox {
             // Without this the ToggleGroup forces exactly one channel
             // selected at all times.
             RadioButton noneRadio = new RadioButton();
+            cameraNoneRadio = noneRadio;
             noneRadio.setToggleGroup(previewGroup);
             noneRadio.setSelected(true); // Start in deactivated state.
             Label noneLabel = new Label("(None -- deactivate all)");
@@ -1766,6 +1773,8 @@ public class StageControlPanel extends VBox {
             }
 
             cameraModContent.getChildren().add(grid);
+
+            installChannelStateSync();
 
             // Bound each intensity spinner by the range Micro-Manager accepts for that
             // channel's intensity_property, instead of the wide built-in range. Runs off
@@ -2764,6 +2773,48 @@ public class StageControlPanel extends VBox {
      * withLiveModeHandling so the streaming live view is properly stopped
      * around the cube/shutter switch and resumed afterwards.
      */
+    /**
+     * Keep the preview radios describing the hardware rather than the last click.
+     *
+     * <p>An acquisition applies its own channels and ends on the last one it acquired, so
+     * without this the Camera tab goes on showing whichever channel the operator previewed
+     * before starting -- a claim about the instrument that is simply false. The same
+     * applies to a channel test run from the acquisition dialog.
+     *
+     * <p>Selecting a radio programmatically does not fire its action handler, so nothing
+     * here touches the hardware; it only stops the display from lying.
+     */
+    private void installChannelStateSync() {
+        MicroscopeController mc = MicroscopeController.getInstance();
+        if (mc == null) return;
+        if (channelStateListener != null) {
+            mc.channelHardwareStateProperty().removeListener(channelStateListener);
+        }
+        channelStateListener = (obs, was, is) -> applyChannelStateToRadios(is);
+        mc.channelHardwareStateProperty().addListener(channelStateListener);
+        applyChannelStateToRadios(mc.channelHardwareStateProperty().get());
+    }
+
+    private void applyChannelStateToRadios(qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState state) {
+        if (state == null || cameraChannelRadios.isEmpty()) return;
+        if (state.hasChannel()) {
+            RadioButton radio = cameraChannelRadios.get(state.channelId());
+            if (radio != null && !radio.isSelected()) {
+                radio.setSelected(true);
+            }
+            return;
+        }
+        // Either nothing is applied, or something changed the light path without saying
+        // what. Both mean: do not show a channel as active.
+        if (cameraNoneRadio != null && !cameraNoneRadio.isSelected()) {
+            cameraNoneRadio.setSelected(true);
+        }
+        if (cameraStatusLabel != null && !state.known()) {
+            cameraStatusLabel.setText("Light path changed elsewhere -- pick a channel to resume preview.");
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        }
+    }
+
     private void applyChannelInBackground(String profileName, String channelId) {
         applyChannelInBackground(profileName, channelId, null, null, null);
     }
@@ -2820,6 +2871,13 @@ public class StageControlPanel extends VBox {
                                                 intensityProperty.device(), intensityProperty.property(), valueStr);
                             }
                         });
+                        // Tell everyone what the light path is now on, so no UI has to
+                        // infer it from its own last click.
+                        mc.setChannelHardwareState(
+                                (channelId == null || channelId.isEmpty())
+                                        ? qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.none()
+                                        : qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.active(
+                                                channelId));
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Applied: " + label);
                             cameraStatusLabel.setStyle(
