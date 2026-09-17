@@ -591,12 +591,12 @@ Approach-from-safe-Z (one retract, one traverse toward the sample) is **licensed
 
 The licence lapses when:
 
-- **No validation exists** for that scope / modality / objective.
-- **The validation failed** when it was measured (no usable peak, or the peak was on glass).
-- **`stage.safe_z_um` has changed by more than 1 um since the validation was measured.** Re-measuring the safe Z -- which is exactly what happens after discovering it was on the wrong side -- invalidates every earlier validation for that scope. Re-run Focus Approach Validation afterwards.
-- **Focus is already established on this slide.** Deliberate: later points on the same glass are microns from the number already measured, and a full retract-and-traverse would spend ~40 s rediscovering it.
+- **No validation exists** for that scope / modality / objective. *(Appears in status line.)*
+- **The validation failed** when it was measured (no usable peak, or the peak was on glass). *(Appears in status line.)*
+- **`stage.safe_z_um` has changed by more than 1 um since the validation was measured.** Re-measuring the safe Z -- which is exactly what happens after discovering it was on the wrong side -- invalidates every earlier validation for that scope. Re-run Focus Approach Validation afterwards. *(Appears in status line.)*
+- **Focus is already established on this slide.** Deliberate: later points on the same glass are microns from the number already measured, and a full retract-and-traverse would spend ~40 s rediscovering it. Autofocus still runs -- as the standard scan, starting from the Z already measured, which is a short search. *(Server log only, no status line.)*
 
-The Live Viewer status line names the reason when the standard scan is used ("Focusing (standard scan: ...)"), and the server log carries the same detail (`Slot-jump AF: focus-approach validation is stale (...)`).
+When the licence is missing or lapsed (first three reasons), the Live Viewer status line shows "Focusing (standard scan: <reason>)" and the server log carries the same detail. The fourth case is logged only, since it is the expected path for every point after the first on a slide.
 
 Note that the standard scan centres on the **current Z**, so where it searches depends on where the stage was left. A search running hundreds of micrometres from the sample means the starting Z was wrong, not the search width.
 
