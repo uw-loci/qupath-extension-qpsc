@@ -127,8 +127,9 @@ status appears as a separate line when there is a problem:
   on this microscope and whether surfaces (coverslips) sit before the tissue plane,
   ensuring the approach will work on tissue rather than landing on glass.
 - **Stale characterisation:** The stored characterisation no longer applies because
-  safe-Z or imaging conditions (exposure, illumination) have changed since measurement.
-  Re-run the validation tool to update it.
+  the selected insert's safe-Z, or imaging conditions (exposure, illumination), have changed since measurement.
+  Validation is insert-specific: switching to a different slide holder, or calibrating a different safe-Z for the current holder, invalidates the record.
+  Re-run the validation tool to update it, with the insert you plan to use in the batch mounted and selected in the Stage Map.
 - **Failed characterisation:** The validation run completed but found a problem (e.g.
   autofocus keying on glass rather than tissue, or a coverslip sitting before focus).
   The reported reason says which; fix that before relying on unattended focus.
