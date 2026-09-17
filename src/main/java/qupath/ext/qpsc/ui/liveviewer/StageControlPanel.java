@@ -2802,6 +2802,7 @@ public class StageControlPanel extends VBox {
             if (radio != null && !radio.isSelected()) {
                 radio.setSelected(true);
             }
+            setChannelStatus("Applied: " + state.channelId(), ThemeColors.SUCCESS);
             return;
         }
         // Either nothing is applied, or something changed the light path without saying
@@ -2809,9 +2810,28 @@ public class StageControlPanel extends VBox {
         if (cameraNoneRadio != null && !cameraNoneRadio.isSelected()) {
             cameraNoneRadio.setSelected(true);
         }
-        if (cameraStatusLabel != null && !state.known()) {
-            cameraStatusLabel.setText("Light path changed elsewhere -- pick a channel to resume preview.");
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        setChannelStatus(
+                state.known()
+                        ? "Illumination off -- pick a channel to resume preview."
+                        : "Light path changed elsewhere -- pick a channel to resume preview.",
+                ThemeColors.MUTED);
+    }
+
+    /**
+     * Owns the channel status line. It is the one place that says what the light path is
+     * doing, so it is rewritten on every state change: a leftover green "Applied: DAPI"
+     * after an acquisition left the hardware on TRITC is the same lie as a stale radio.
+     */
+    private void setChannelStatus(String text, String colour) {
+        if (cameraStatusLabel == null) return;
+        Runnable set = () -> {
+            cameraStatusLabel.setText(text);
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + colour + ";");
+        };
+        if (Platform.isFxApplicationThread()) {
+            set.run();
+        } else {
+            Platform.runLater(set);
         }
     }
 
@@ -2878,11 +2898,9 @@ public class StageControlPanel extends VBox {
                                         ? qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.none()
                                         : qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.active(
                                                 channelId));
-                        Platform.runLater(() -> {
-                            cameraStatusLabel.setText("Applied: " + label);
-                            cameraStatusLabel.setStyle(
-                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
-                        });
+                        // No status text written here: setChannelHardwareState above drives
+                        // the status line, so it describes the reported hardware state rather
+                        // than what this call hoped to achieve. One writer, one truth.
                     } catch (Exception ex) {
                         logger.error("APPLYCH({}, {}) failed: {}", profileName, label, ex.getMessage());
                         Platform.runLater(() -> {
