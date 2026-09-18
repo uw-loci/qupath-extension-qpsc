@@ -595,7 +595,15 @@ public class BoundedAcquisitionWorkflow {
                                                     result.x2(),
                                                     result.y2(),
                                                     new StitchingHelper.StitchingOptions(
-                                                            result.stitchingOrganization(), result.splitChannelIds()))
+                                                            result.stitchingOrganization(),
+                                                            result.splitChannelIds(),
+                                                            result.alignmentChannelIds(),
+                                                            // The channel autofocus actually ran on: the
+                                                            // dedicated one when opted in, else the Focus radio.
+                                                            result.dedicatedFocusChannel() != null
+                                                                    ? result.dedicatedFocusChannel()
+                                                                            .channelId()
+                                                                    : result.focusChannelId()))
                                             .thenRun(() -> {
                                                 UIFunctions.playWorkflowCompletionBeep();
 

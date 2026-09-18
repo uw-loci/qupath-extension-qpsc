@@ -29,7 +29,7 @@ public class StitchingOptionsTest {
 
     @Test
     public void perChannelSplitsEveryChannel() {
-        StitchingOptions o = new StitchingOptions(OutputFormat.OME_PER_CHANNEL, Set.of());
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_PER_CHANNEL, Set.of(), List.of(), null);
         for (String ch : List.of("DAPI", "FITC", "TRITC")) {
             assertTrue(o.isSplit(ch), ch + " must split under OME_PER_CHANNEL");
         }
@@ -37,7 +37,7 @@ public class StitchingOptionsTest {
 
     @Test
     public void explicitSetSplitsOnlyListedChannels() {
-        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of("FITC"));
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of("FITC"), List.of(), null);
         assertFalse(o.isSplit("DAPI"));
         assertTrue(o.isSplit("FITC"));
         assertFalse(o.isSplit("TRITC"));
@@ -45,17 +45,54 @@ public class StitchingOptionsTest {
 
     @Test
     public void nullsAreNormalized() {
-        StitchingOptions o = new StitchingOptions(null, null);
+        StitchingOptions o = new StitchingOptions(null, null, List.of(), null);
         assertEquals(OutputFormat.OME_SINGLE, o.organization());
         assertNotNull(o.splitChannelIds());
         assertTrue(o.splitChannelIds().isEmpty());
+    }
+
+    // ------------------------------------------------------------ tile alignment
+
+    private static final List<String> ACQUIRED = List.of("DAPI", "FITC", "TRITC");
+
+    @Test
+    public void tickedAlignmentChannelsWin() {
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of(), List.of("FITC", "TRITC"), "DAPI");
+        assertEquals(List.of("FITC", "TRITC"), o.alignmentFor(ACQUIRED));
+    }
+
+    @Test
+    public void nothingTickedAlignsOnTheFocusChannel() {
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of(), List.of(), "TRITC");
+        assertEquals(List.of("TRITC"), o.alignmentFor(ACQUIRED));
+    }
+
+    @Test
+    public void noFocusChannelMergesEveryAcquiredChannel() {
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of(), List.of(), null);
+        assertEquals(ACQUIRED, o.alignmentFor(ACQUIRED));
+    }
+
+    @Test
+    public void focusChannelThatWasNotAcquiredFallsBackToTheMerge() {
+        // A dedicated focus channel need not be one the run images.
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of(), List.of(), "Cy5");
+        assertEquals(ACQUIRED, o.alignmentFor(ACQUIRED));
+    }
+
+    @Test
+    public void tickedChannelsThatWereNotAcquiredAreDropped() {
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of(), List.of("Cy5", "FITC"), "DAPI");
+        assertEquals(List.of("FITC"), o.alignmentFor(ACQUIRED));
+        StitchingOptions none = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of(), List.of("Cy5"), "DAPI");
+        assertEquals(List.of("DAPI"), none.alignmentFor(ACQUIRED), "no ticked channel acquired -> focus channel");
     }
 
     /** The partition that stitchChannelDirectories performs, expressed directly over isSplit. */
     @Test
     public void partitionMatchesExpectedGrouping() {
         List<String> channels = List.of("DAPI", "FITC", "TRITC");
-        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of("TRITC"));
+        StitchingOptions o = new StitchingOptions(OutputFormat.OME_SINGLE, Set.of("TRITC"), List.of(), null);
 
         List<String> merged = channels.stream().filter(c -> !o.isSplit(c)).toList();
         List<String> split = channels.stream().filter(o::isSplit).toList();

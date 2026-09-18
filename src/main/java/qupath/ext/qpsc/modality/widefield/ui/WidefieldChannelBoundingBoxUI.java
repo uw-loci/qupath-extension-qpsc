@@ -82,6 +82,14 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private static final String PREF_KEY_PREFIX = "widefield.channel.";
     private static final String PREF_KEY_MASTER = PREF_KEY_PREFIX + "master_override_enabled";
     private static final String PREF_KEY_FOCUS_CHANNEL = PREF_KEY_PREFIX + "focus_channel";
+    private static final String ALIGN_TOOLTIP =
+            "Channels to line the tiles up on when stitching (content-based tile registration).\n"
+                    + "None ticked: the focus channel; with no focus channel, a merge of all channels.\n"
+                    + "One ticked: that channel only.\n"
+                    + "Several ticked: a merge of them, each scaled once for the whole dataset\n"
+                    + "so a dim channel counts as much as a bright one. A merge reads every ticked\n"
+                    + "channel at every seam, so it takes longer than a single channel.\n"
+                    + "Every channel is placed using the same result.";
     // Dedicated focus channel (opt-in): autofocus runs on this channel at its own,
     // usually shorter, exposure. Persisted so the setup survives a dialog reopen.
     private static final String PREF_KEY_AF_CHANNEL_ENABLED = PREF_KEY_PREFIX + "af_channel.enabled";
@@ -113,6 +121,9 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     // Per-channel "split out" checkboxes. Checked => that channel is written as
     // its own stitched file instead of being merged into one multichannel file.
     private final LinkedHashMap<String, CheckBox> channelSplitCheckboxes = new LinkedHashMap<>();
+    // Per-channel "Align" checkboxes: which channel(s) tile registration measures seams on.
+    // None ticked => the focus channel; one => that channel; several => a normalized merge.
+    private final LinkedHashMap<String, CheckBox> channelAlignCheckboxes = new LinkedHashMap<>();
     // Channel definitions retained so the Test button can look up
     // intensity_property and the preset save/load can capture per-channel state.
     private final LinkedHashMap<String, Channel> channelDefs = new LinkedHashMap<>();
@@ -179,7 +190,9 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         col4.setHalignment(HPos.CENTER);
         ColumnConstraints col5 = new ColumnConstraints();
         col5.setHalignment(HPos.CENTER);
-        grid.getColumnConstraints().addAll(col0, col1, col2, col3, col4, col5);
+        ColumnConstraints col6 = new ColumnConstraints();
+        col6.setHalignment(HPos.CENTER);
+        grid.getColumnConstraints().addAll(col0, col1, col2, col3, col4, col5, col6);
 
         grid.add(boldLabel("Use"), 0, 0);
         grid.add(boldLabel("Channel"), 1, 0);
@@ -190,6 +203,9 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         splitHeader.setTooltip(new Tooltip("Write this channel as its own separate stitched file.\n"
                 + "Unchecked channels are merged into one multichannel file."));
         grid.add(splitHeader, 5, 0);
+        Label alignHeader = boldLabel("Align");
+        alignHeader.setTooltip(new Tooltip(ALIGN_TOOLTIP));
+        grid.add(alignHeader, 6, 0);
 
         // Persisted last focus-channel selection from a previous run.
         String savedFocusChannel = PersistentPreferences.getStringPreference(PREF_KEY_FOCUS_CHANNEL, "");
@@ -347,6 +363,24 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                             PersistentPreferences.setStringPreference(splitPrefKey, String.valueOf(newVal)));
             grid.add(splitCb, 5, row);
             channelSplitCheckboxes.put(id, splitCb);
+
+            // "Align" checkbox: tile registration measures seams on the ticked channel(s).
+            // Same enable rule and per-channel persistence as Split.
+            String alignPrefKey = PREF_KEY_PREFIX + id + ".align";
+            CheckBox alignCb = new CheckBox();
+            alignCb.setSelected(Boolean.parseBoolean(PersistentPreferences.getStringPreference(alignPrefKey, "false")));
+            alignCb.setTooltip(
+                    new Tooltip("Measure tile overlaps on " + channel.displayName() + ".\n\n" + ALIGN_TOOLTIP));
+            alignCb.disableProperty()
+                    .bind(masterOverride
+                            .selectedProperty()
+                            .not()
+                            .or(cb.selectedProperty().not()));
+            alignCb.selectedProperty()
+                    .addListener((obs, oldVal, newVal) ->
+                            PersistentPreferences.setStringPreference(alignPrefKey, String.valueOf(newVal)));
+            grid.add(alignCb, 6, row);
+            channelAlignCheckboxes.put(id, alignCb);
 
             channelCheckboxes.put(id, cb);
             channelExposures.put(id, expSpinner);
@@ -1225,6 +1259,28 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             }
         }
         return split;
+    }
+
+    /**
+     * Returns the ids of currently-selected channels ticked "Align": what tile registration
+     * measures the seams on. One id means that channel alone; several mean a normalized merge of
+     * them. Empty -- nothing ticked, or the master override off -- leaves the choice to the
+     * stitcher's default (the focus channel, else a merge of every acquired channel).
+     */
+    @Override
+    public java.util.List<String> getAlignmentChannelIds() {
+        if (masterOverride == null || !masterOverride.isSelected()) {
+            return java.util.List.of();
+        }
+        java.util.List<String> align = new java.util.ArrayList<>();
+        for (Map.Entry<String, CheckBox> entry : channelAlignCheckboxes.entrySet()) {
+            String id = entry.getKey();
+            CheckBox selectCb = channelCheckboxes.get(id);
+            if (selectCb != null && selectCb.isSelected() && entry.getValue().isSelected()) {
+                align.add(id);
+            }
+        }
+        return align;
     }
 
     /**

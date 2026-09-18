@@ -76,6 +76,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertEquals("TestSample", config.sampleName());
@@ -106,6 +107,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertEquals("BF", config.modality());
@@ -136,6 +138,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertTrue(config.useExistingAlignment());
@@ -171,6 +174,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertNotNull(config.angleOverrides());
@@ -202,6 +206,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertTrue(config.isExistingProject());
@@ -230,6 +235,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertFalse(config.isExistingProject());
@@ -264,6 +270,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertTrue(highConfig.alignmentConfidence() >= highThreshold, "85% confidence should be above high threshold");
@@ -295,6 +302,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         double conf = medConfig.alignmentConfidence();
@@ -326,6 +334,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertTrue(lowConfig.alignmentConfidence() < lowThreshold, "35% confidence should be below low threshold");
@@ -356,6 +365,7 @@ class ExistingImageAcquisitionControllerTest {
                 null,
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertFalse(manualConfig.useExistingAlignment());
@@ -388,6 +398,7 @@ class ExistingImageAcquisitionControllerTest {
                 "per_angle",
                 null,
                 java.util.Set.of(),
+                java.util.List.of(),
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE);
 
         assertTrue(config.enableWhiteBalance());

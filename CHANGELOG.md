@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+**Choose which channel(s) line the tiles up when stitching fluorescence**
+- New **Align** column in the channel picker. It sets what content-based tile registration measures the tile overlaps on. Tick one channel to align on it alone, or several to align on a normalized merge of them: each channel is scaled once for the whole dataset, so a dim channel counts as much as a bright one. With nothing ticked, QPSC aligns on the channel autofocus ran on. If there is no usable focus channel, it uses a merge of every acquired channel. Previously fluorescence always aligned on the first channel in the list. All channels are still placed with the same result, so they keep overlaying each other.
+- For channel acquisitions the alignment is now solved once before any channel is stitched, and then all channels stitch in parallel. Previously the first channel was stitched on its own first.
+- Requires tiles-to-pyramid 0.7.0, now the version QPSC builds against. With an older tiles-to-pyramid installed, QPSC aligns on the first ticked channel (or the focus channel) and logs a warning instead of merging.
+
 ## [0.10.0] - 2026-09-16
 
 ### Added

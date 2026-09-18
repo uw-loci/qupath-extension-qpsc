@@ -166,6 +166,11 @@ public class ExistingImageAcquisitionController {
             // file instead of merged). Empty = merge all (the default).
             java.util.Set<String> splitChannelIds,
 
+            // Channel ids ticked "Align": what tile registration measures seams on
+            // (one = that channel, several = a normalized merge). Empty = default
+            // (the focus channel, else a merge of all acquired channels).
+            java.util.List<String> alignmentChannelIds,
+
             // How the stitched output is grouped (single combined file vs one file
             // per channel). Defaults to OME_SINGLE.
             qupath.ext.qpsc.service.OutputFormat stitchingOrganization) {}
@@ -2641,6 +2646,7 @@ public class ExistingImageAcquisitionController {
                 Map<String, Double> channelIntensityOverrides = Map.of();
                 String focusChannelId = null;
                 java.util.Set<String> splitChannelIds = java.util.Set.of();
+                java.util.List<String> alignmentChannelIds = java.util.List.of();
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
                     Map<String, Double> intensityMap = modalityUI.getChannelIntensityOverrides();
@@ -2648,6 +2654,8 @@ public class ExistingImageAcquisitionController {
                     focusChannelId = modalityUI.getFocusChannelId();
                     java.util.Set<String> split = modalityUI.getSplitChannelIds();
                     splitChannelIds = split == null ? java.util.Set.of() : split;
+                    java.util.List<String> align = modalityUI.getAlignmentChannelIds();
+                    alignmentChannelIds = align == null ? java.util.List.of() : align;
                 }
 
                 qupath.ext.qpsc.service.OutputFormat stitchingOrganization = outputOrganizationCombo != null
@@ -2752,6 +2760,7 @@ public class ExistingImageAcquisitionController {
                         wbMode,
                         innerAxis,
                         splitChannelIds,
+                        alignmentChannelIds,
                         stitchingOrganization);
 
             } catch (Exception e) {

@@ -124,6 +124,10 @@ public class UnifiedAcquisitionController {
             // Channel ids the user marked "Split" -- each is stitched into its own
             // file instead of being merged. Empty = merge all (the default).
             Set<String> splitChannelIds,
+            // Channel ids ticked "Align": what tile registration measures seams on
+            // (one = that channel, several = a normalized merge). Empty = default
+            // (the focus channel, else a merge of all acquired channels).
+            List<String> alignmentChannelIds,
             // How the stitched output is grouped (single combined file vs one file
             // per channel). Defaults to OME_SINGLE.
             OutputFormat stitchingOrganization) {}
@@ -2418,6 +2422,7 @@ public class UnifiedAcquisitionController {
                 qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel =
                         null;
                 Set<String> splitChannelIds = Set.of();
+                List<String> alignmentChannelIds = List.of();
                 if (modalityUI != null) {
                     angleOverrides = modalityUI.getAngleOverrides();
                     if (angleOverrides != null) {
@@ -2444,6 +2449,13 @@ public class UnifiedAcquisitionController {
                     }
                     if (!splitChannelIds.isEmpty()) {
                         logger.info("User chose to split channels into separate files: {}", splitChannelIds);
+                    }
+                    alignmentChannelIds = modalityUI.getAlignmentChannelIds();
+                    if (alignmentChannelIds == null) {
+                        alignmentChannelIds = List.of();
+                    }
+                    if (!alignmentChannelIds.isEmpty()) {
+                        logger.info("User chose tile-alignment channel(s): {}", alignmentChannelIds);
                     }
                 }
 
@@ -2514,6 +2526,7 @@ public class UnifiedAcquisitionController {
                         afBenchmark,
                         sampleAlreadyInFocus,
                         splitChannelIds,
+                        alignmentChannelIds,
                         stitchingOrganization);
 
             } catch (Exception e) {

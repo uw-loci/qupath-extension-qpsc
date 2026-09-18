@@ -48,7 +48,9 @@ public final class TileRegistrationSupport {
      * @return a mode that measures the grid and writes its solution
      */
     public static Object solveMode(Path solutionOut) {
-        return new RegistrationMode.Solve(solutionOut, currentSettings(), null);
+        // The String form: the one constructor every tiles-to-pyramid with RegistrationMode has,
+        // so this call links against old and new jars alike.
+        return new RegistrationMode.Solve(solutionOut, currentSettings(), (String) null);
     }
 
     /**
@@ -63,7 +65,7 @@ public final class TileRegistrationSupport {
      *
      * @return the user-configured settings, or {@link RegistrationSettings#defaults()} on any failure
      */
-    private static RegistrationSettings currentSettings() {
+    static RegistrationSettings currentSettings() {
         try {
             return RegistrationPreferences.toSettings();
         } catch (Throwable t) {

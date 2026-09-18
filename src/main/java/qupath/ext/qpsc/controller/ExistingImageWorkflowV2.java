@@ -1366,6 +1366,8 @@ public class ExistingImageWorkflowV2 {
 
             // Store stitched-output grouping (channel split + organization).
             state.splitChannelIds = config.splitChannelIds() == null ? java.util.Set.of() : config.splitChannelIds();
+            state.alignmentChannelIds =
+                    config.alignmentChannelIds() == null ? java.util.List.of() : config.alignmentChannelIds();
             state.stitchingOrganization = config.stitchingOrganization() == null
                     ? qupath.ext.qpsc.service.OutputFormat.OME_SINGLE
                     : config.stitchingOrganization();
@@ -3079,6 +3081,8 @@ public class ExistingImageWorkflowV2 {
         // Stitched-output grouping: channel ids to write as their own file, and
         // the overall organization. Default: merge all into one combined file.
         public java.util.Set<String> splitChannelIds = java.util.Set.of();
+        // Channel ids to measure tile registration on; empty = the focus channel, else all merged.
+        public java.util.List<String> alignmentChannelIds = java.util.List.of();
         public qupath.ext.qpsc.service.OutputFormat stitchingOrganization =
                 qupath.ext.qpsc.service.OutputFormat.OME_SINGLE;
     }

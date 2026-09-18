@@ -196,7 +196,7 @@ See the inline JavaDoc in `LCPolScopeModalityHandler` for the full design ration
 
 ## 6. The Channel Picker UI
 
-The picker is rendered by `WidefieldChannelBoundingBoxUI` and appears in the Bounded and Existing-Image dialogs whenever the resolved profile has a non-empty channel library. It has one row per channel with four interactive columns:
+The picker is rendered by `WidefieldChannelBoundingBoxUI` and appears in the Bounded and Existing-Image dialogs whenever the resolved profile has a non-empty channel library. It has one row per channel with these interactive columns:
 
 | Column | Control | Purpose |
 |--------|---------|---------|
@@ -205,6 +205,20 @@ The picker is rendered by `WidefieldChannelBoundingBoxUI` and appears in the Bou
 | Intensity | Spinner or "-" | Override the library default value of the channel's `intensity_property` for this run. Shows a grayed "-" placeholder when the library entry does not declare `intensity_property`. |
 | Focus | Radio button | Pick which channel autofocus runs against. Mutually exclusive across rows via a shared JavaFX `ToggleGroup`. Disabled when the row is not selected. |
 | Split | Checkbox | Write this channel as its own separate stitched file instead of merging it into one multichannel file. Only enabled when the row is selected. |
+| Align | Checkbox | Measure tile overlaps on this channel when stitching (content-based tile registration). One ticked: that channel only. Several ticked: a normalized merge of them. None ticked: the focus channel. See [Tile alignment channel](#tile-alignment-channel). Only enabled when the row is selected. |
+
+### Tile alignment channel
+
+When **Register tiles on image content** is on (see [PREFERENCES.md](PREFERENCES.md)), the stitcher measures where neighbouring tiles line up, and every channel is placed with that one result. Channels are captured at the same stage position, so they must share one result or they would stop overlaying each other. The Align column chooses what the overlaps are measured on:
+
+- **Nothing ticked (default):** the channel autofocus ran on. That is the dedicated focus channel if one is set and was acquired, otherwise the Focus radio channel.
+- **No usable focus channel** (for example a dedicated focus channel the run did not acquire): a normalized merge of every acquired channel.
+- **One channel ticked:** that channel only.
+- **Several ticked:** a normalized merge of them. Each channel is scaled by one factor for the whole dataset (from a sample of at most 64 tiles, so the cost does not grow with the size of the acquisition), then they are averaged. A dim channel counts as much as a bright one, and a feature has the same value in both tiles of an overlap. A merge reads every ticked channel at every overlap, so measuring takes about that many times longer than for one channel. It is still small next to writing the stitched images.
+
+The Align boxes, like Split, are only honored when channel customization is on. The choice is recorded in `TileRegistration.txt` (its `reference:` line, plus the scale of each merged channel), beside the channel folders. Merging needs tiles-to-pyramid 0.7.0 or later. With an older version, QPSC aligns on the first ticked channel and logs a warning.
+
+Which channel aligns best depends on the sample. On one 3-channel cell slide, a sparse nuclear stain (clean, separated nuclei) aligned about as well as the brighter cytoplasmic channels, and all choices agreed within about 1 px. A merge helps most when each channel covers different parts of the tissue.
 
 ### Intensity Spinner (NEW -- 2026-04-13)
 

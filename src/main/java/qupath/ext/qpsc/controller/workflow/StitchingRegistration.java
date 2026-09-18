@@ -13,6 +13,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.ChannelRegistrationSupport;
 import qupath.ext.qpsc.utilities.TileRegistrationSupport;
 
 /**
@@ -174,35 +175,128 @@ public final class StitchingRegistration {
                 remaining.add(i);
             }
         }
-        if (remaining.isEmpty()) {
+        stitchInParallel(targets, remaining, applyMode, maxConcurrency, total - remaining.size(), stitcher, results);
+        return results;
+    }
+
+    /**
+     * Stitch a channel acquisition, measuring registration on the chosen channel(s).
+     *
+     * <p>With a current tiles-to-pyramid the solve runs <b>before</b> any channel is stitched,
+     * with every channel subdirectory in view, and every channel then applies the written
+     * solution -- in parallel, the reference included. That is what lets {@code alignOn} name
+     * several channels: a normalized merge needs them all at once, and a solve run inside one
+     * channel's own isolated stitch can only see that channel.
+     *
+     * <p>An older tiles-to-pyramid has no channel solve. It falls back to solving on the first
+     * {@code alignOn} channel during that channel's stitch, as {@link #stitchTargets} always has,
+     * and says so when a merge was asked for.
+     *
+     * @param channels channel subdirectory names, in stitch order
+     * @param alignOn channel(s) to measure on; one for a single channel, several for a merge
+     * @param tileBaseDir directory holding the channel subdirectories and the solution file
+     * @param pixelSizeMicrons pixel size every channel's stitch uses
+     * @param downsample downsample every channel's stitch uses
+     * @param maxConcurrency cap on parallel writers
+     * @param stitcher builds and runs the stitch for one channel with the mode supplied
+     * @return each channel's output path (null where it failed), in input order
+     */
+    public static List<String> stitchChannels(
+            List<String> channels,
+            List<String> alignOn,
+            Path tileBaseDir,
+            double pixelSizeMicrons,
+            double downsample,
+            int maxConcurrency,
+            TargetStitcher<String> stitcher) {
+        List<String> results = new ArrayList<>(Collections.nCopies(channels.size(), null));
+        if (channels.isEmpty()) {
             return results;
         }
+        if (!enabled() || alignOn.isEmpty()) {
+            return stitchTargets(channels, tileBaseDir, maxConcurrency, 0, stitcher);
+        }
+        if (!channelSolveSupported()) {
+            int reference = Math.max(0, channels.indexOf(alignOn.get(0)));
+            if (alignOn.size() > 1) {
+                logger.warn(
+                        "Aligning on a merge of {} needs a newer tiles-to-pyramid; aligning on '{}' only",
+                        alignOn,
+                        channels.get(reference));
+            }
+            return stitchTargets(channels, tileBaseDir, maxConcurrency, reference, stitcher);
+        }
 
-        int concurrency = Math.max(1, Math.min(remaining.size(), maxConcurrency));
-        int offset = total - remaining.size();
-        final Object mode = applyMode;
+        Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
+        // If the solve fails no file exists (it is deleted first), so every channel's Apply warns and
+        // stitches at nominal -- still mutually consistent, since none of them moved.
+        ChannelRegistrationSupport.solve(tileBaseDir, channels, alignOn, pixelSizeMicrons, downsample, solutionFile);
+        Object applyMode = TileRegistrationSupport.applyMode(solutionFile);
+        List<Integer> all = new ArrayList<>(channels.size());
+        for (int i = 0; i < channels.size(); i++) {
+            all.add(i);
+        }
+        stitchInParallel(channels, all, applyMode, maxConcurrency, 0, stitcher, results);
+        return results;
+    }
+
+    /**
+     * Whether the installed tiles-to-pyramid can solve across channels before stitching. Checked
+     * by name so that asking never loads the types themselves.
+     */
+    static boolean channelSolveSupported() {
+        return CHANNEL_SOLVE_SUPPORTED;
+    }
+
+    private static final boolean CHANNEL_SOLVE_SUPPORTED = probe(ChannelRegistrationSupport.PROBE_CLASS);
+
+    private static boolean probe(String className) {
+        try {
+            Class.forName(className, false, StitchingRegistration.class.getClassLoader());
+            return true;
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
+    /**
+     * Stitch the targets at {@code indices} with one mode, bounded-parallel, writing each output
+     * into {@code results} at its target's index.
+     */
+    private static <X> void stitchInParallel(
+            List<X> targets,
+            List<Integer> indices,
+            Object mode,
+            int maxConcurrency,
+            int positionOffset,
+            TargetStitcher<X> stitcher,
+            List<String> results) {
+        if (indices.isEmpty()) {
+            return;
+        }
+        int total = targets.size();
+        int concurrency = Math.max(1, Math.min(indices.size(), maxConcurrency));
         ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
             Thread t = new Thread(r, "stitch-target");
             t.setDaemon(true);
             return t;
         });
         try {
-            List<CompletableFuture<String>> futures = new ArrayList<>(remaining.size());
-            for (int i = 0; i < remaining.size(); i++) {
-                X target = targets.get(remaining.get(i));
-                int position = offset + i + 1;
+            List<CompletableFuture<String>> futures = new ArrayList<>(indices.size());
+            for (int i = 0; i < indices.size(); i++) {
+                X target = targets.get(indices.get(i));
+                int position = positionOffset + i + 1;
                 futures.add(CompletableFuture.supplyAsync(() -> runOne(stitcher, target, mode, position, total), pool));
             }
             CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
             for (int i = 0; i < futures.size(); i++) {
                 try {
-                    results.set(remaining.get(i), futures.get(i).get());
+                    results.set(indices.get(i), futures.get(i).get());
                 } catch (Exception e) {
                     logger.error("Failed to retrieve a stitch result: {}", e.getMessage());
-                    results.set(remaining.get(i), null);
+                    results.set(indices.get(i), null);
                 }
             }
-            return results;
         } finally {
             pool.shutdown();
         }

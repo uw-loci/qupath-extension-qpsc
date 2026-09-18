@@ -440,11 +440,10 @@ public interface ModalityHandler {
      * <p>The default returns empty, meaning "no preference" -- the caller falls back to the first
      * target, which is the historical behaviour and is correct for single-target modalities.
      *
-     * <p>Not yet implemented for fluorescence, where the right choice is likely per-edge rather
-     * than per-target: different channels carry the structure in different places, so a sum
-     * projection across channels, or picking the most informative channel for each overlap band
-     * individually, would beat any single fixed channel. Until that exists, fluorescence falls
-     * through to the default and solves on the first channel.
+     * <p>Channel acquisitions do not use this. Their reference is the operator's choice in the
+     * channel picker (one channel, or a normalized merge of several), defaulting to the focus
+     * channel; see {@code StitchingHelper.StitchingOptions#alignmentFor} and
+     * {@code StitchingRegistration#stitchChannels}.
      *
      * @param targetNames the sibling target names, in order (e.g. angle names {@code "7.0"},
      *     {@code "-7.0"}, {@code "90.0"}, or channel names)
@@ -797,6 +796,21 @@ public interface ModalityHandler {
          */
         default java.util.Set<String> getSplitChannelIds() {
             return java.util.Set.of();
+        }
+
+        /**
+         * Returns the channel ids tile registration should measure seams on: one id for that
+         * channel alone, several for a normalized merge of them. Empty -- the default -- leaves the
+         * choice to the stitcher, which uses the focus channel, or a merge of every acquired
+         * channel when there is none.
+         *
+         * <p>Only meaningful for channel-based modalities; angle-based modalities choose their
+         * reference through {@link ModalityHandler#registrationReferenceIndex}.
+         *
+         * @return channel ids to align on, in library order; empty for the default
+         */
+        default java.util.List<String> getAlignmentChannelIds() {
+            return java.util.List.of();
         }
     }
 }

@@ -1618,7 +1618,11 @@ public class AcquisitionManager {
                 projectsFolder.toString(),
                 dualProgressDialog,
                 parentEntry,
-                new StitchingHelper.StitchingOptions(state.stitchingOrganization, state.splitChannelIds),
+                new StitchingHelper.StitchingOptions(
+                        state.stitchingOrganization,
+                        state.splitChannelIds,
+                        state.alignmentChannelIds,
+                        state.focusChannelId),
                 state.pipelinedBatchAcquire);
 
         state.stitchingFutures.add(stitchFuture);

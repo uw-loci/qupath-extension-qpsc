@@ -82,18 +82,52 @@ public class StitchingHelper {
      * @param splitChannelIds channel ids the user chose to write as their own
      *     separate file even under {@code OME_SINGLE}; the remaining channels are
      *     merged. Ignored when {@code organization == OME_PER_CHANNEL} (all split).
+     * @param alignmentChannelIds channel ids tile registration should measure seams on:
+     *     one for that channel alone, several for a normalized merge. Empty means the
+     *     default, see {@link #alignmentFor}.
+     * @param focusChannelId the channel autofocus used, the default alignment channel;
+     *     null when there is none
      */
-    public record StitchingOptions(qupath.ext.qpsc.service.OutputFormat organization, Set<String> splitChannelIds) {
+    public record StitchingOptions(
+            qupath.ext.qpsc.service.OutputFormat organization,
+            Set<String> splitChannelIds,
+            List<String> alignmentChannelIds,
+            String focusChannelId) {
         public StitchingOptions {
             if (organization == null) {
                 organization = qupath.ext.qpsc.service.OutputFormat.OME_SINGLE;
             }
             splitChannelIds = splitChannelIds == null ? Set.of() : Set.copyOf(splitChannelIds);
+            alignmentChannelIds = alignmentChannelIds == null ? List.of() : List.copyOf(alignmentChannelIds);
         }
 
         /** The behavior-preserving default: one combined multichannel file, no per-channel split. */
         public static StitchingOptions defaults() {
-            return new StitchingOptions(qupath.ext.qpsc.service.OutputFormat.OME_SINGLE, Set.of());
+            return new StitchingOptions(qupath.ext.qpsc.service.OutputFormat.OME_SINGLE, Set.of(), List.of(), null);
+        }
+
+        /**
+         * The channels to align on, among those actually acquired.
+         *
+         * <p>In order of preference: the channels the operator ticked "Align" (those that were
+         * acquired); otherwise the focus channel, if it was acquired; otherwise every acquired
+         * channel, merged. The last is the fallback for a run with no focus channel at all --
+         * never an empty answer, so registration always has something to measure.
+         *
+         * @param acquired channel ids with tiles on disk, in stitch order
+         * @return one id for a single channel, several for a normalized merge; empty only when
+         *     {@code acquired} is
+         */
+        public List<String> alignmentFor(List<String> acquired) {
+            List<String> ticked =
+                    alignmentChannelIds.stream().filter(acquired::contains).toList();
+            if (!ticked.isEmpty()) {
+                return ticked;
+            }
+            if (focusChannelId != null && acquired.contains(focusChannelId)) {
+                return List.of(focusChannelId);
+            }
+            return List.copyOf(acquired);
         }
 
         /** True when channel {@code id} should be written as its own file. */
@@ -389,6 +423,9 @@ public class StitchingHelper {
      * mix flip values) is intentionally NOT introduced here: the caller's
      * {@code STITCH_EXECUTOR} keeps one annotation batch running at a time.
      *
+     * @param alignOn for channel targets, the channel(s) registration measures on (see
+     *     {@link StitchingOptions#alignmentFor}); null for angle targets, whose reference comes
+     *     from the modality handler
      * @return a list the SAME size and order as {@code targetSubdirs}; element i is
      *         the stitched output path for target i, or {@code null} if that target
      *         failed. Positional alignment lets callers that pair targets with
@@ -408,34 +445,42 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler,
-            Map<String, Object> stitchParams) {
+            Map<String, Object> stitchParams,
+            List<String> alignOn) {
 
-        // The registration barrier (solve the first target, reuse that solve for the rest) and the
+        // The registration barrier (solve once, reuse that solve for every target) and the
         // bounded-parallel stitch are centralised in StitchingRegistration, so every stitch path --
         // acquisition, recovery, MicroManager folder -- goes through the same gate and no path can
         // silently skip registration.
+        StitchingRegistration.TargetStitcher<String> stitcher = (sub, mode, position, count) -> stitchOne(
+                sub,
+                targetKind,
+                position,
+                count,
+                withRegistrationMode(stitchParams, mode),
+                tileBaseDir,
+                projectsFolder,
+                sampleName,
+                modeWithIndex,
+                annotationName,
+                compression,
+                pixelSize,
+                downsampleFactor,
+                gui,
+                project,
+                handler);
+        int maxConcurrency = QPPreferenceDialog.getStitchingConcurrency();
+        if (alignOn != null) {
+            // Channels: the operator's alignment choice, solved with every channel in view.
+            return StitchingRegistration.stitchChannels(
+                    targetSubdirs, alignOn, tileBaseDir, pixelSize, downsampleFactor, maxConcurrency, stitcher);
+        }
         return StitchingRegistration.stitchTargets(
                 targetSubdirs,
                 tileBaseDir,
-                QPPreferenceDialog.getStitchingConcurrency(),
+                maxConcurrency,
                 StitchingRegistration.referenceIndexFor(targetSubdirs, handler),
-                (sub, mode, position, count) -> stitchOne(
-                        sub,
-                        targetKind,
-                        position,
-                        count,
-                        withRegistrationMode(stitchParams, mode),
-                        tileBaseDir,
-                        projectsFolder,
-                        sampleName,
-                        modeWithIndex,
-                        annotationName,
-                        compression,
-                        pixelSize,
-                        downsampleFactor,
-                        gui,
-                        project,
-                        handler));
+                stitcher);
     }
 
     /** Stitch one target, converting any failure into a null result so siblings still complete. */
@@ -681,7 +726,8 @@ public class StitchingHelper {
                                     gui,
                                     project,
                                     handler,
-                                    stitchParams)) {
+                                    stitchParams,
+                                    null)) {
                                 if (outPath != null) {
                                     stitchedImages.add(outPath);
                                 }
@@ -1301,7 +1347,8 @@ public class StitchingHelper {
                                 gui,
                                 project,
                                 handler,
-                                stitchParams);
+                                stitchParams,
+                                options.alignmentFor(acquiredChannelIds));
                         List<String> successfullyStitchedChannelIds = new ArrayList<>();
                         for (int i = 0; i < acquiredChannelIds.size(); i++) {
                             String outPath = channelResults.get(i);
