@@ -62,7 +62,7 @@ public final class MdaSettingsWriter {
         boolean ppm = isPpm(req.modalityBaseName());
 
         MdaSequenceSettings settings = buildSequenceSettings(req, ppm);
-        MdaPositionList positions = buildPositionList(req.tiles(), req.stageDevices());
+        Map<String, Object> positions = MmPositionListJson.build(req.tiles(), req.stageDevices());
         String notes = buildNotes(req, ppm);
 
         Path settingsFile = req.regionDir().resolve("MDA_" + req.regionName() + ".txt");
@@ -108,7 +108,7 @@ public final class MdaSettingsWriter {
                 .disableHtmlEscaping()
                 .serializeNulls()
                 .create();
-        MdaPositionList positions = buildPositionList(tiles, devices);
+        Map<String, Object> positions = MmPositionListJson.build(tiles, devices);
         Path positionsFile = regionDir.resolve("MDA_" + regionName + ".pos");
         writeAtomic(positionsFile, gson.toJson(positions));
         return positionsFile;
@@ -229,22 +229,6 @@ public final class MdaSettingsWriter {
         return out;
     }
 
-    private static MdaPositionList buildPositionList(List<TileStagePos> tilesIn, MmStageDevices dev) {
-        List<TileStagePos> tiles = tilesIn == null ? List.of() : tilesIn;
-        String xy = dev != null && dev.xyStage() != null ? dev.xyStage() : "XYStage";
-        String z = dev != null && dev.zStage() != null ? dev.zStage() : "ZStage";
-
-        List<MdaMultiStagePosition> list = new ArrayList<>(tiles.size());
-        for (TileStagePos tile : tiles) {
-            List<MdaStagePosition> devicePositions = List.of(
-                    new MdaStagePosition(xy, tile.xUm(), tile.yUm(), 0.0, 2),
-                    new MdaStagePosition(z, 0.0, 0.0, tile.zUm(), 1));
-            list.add(new MdaMultiStagePosition(
-                    tile.label() == null ? "" : tile.label(), xy, z, 0, 0, Map.of(), devicePositions));
-        }
-        return new MdaPositionList(list);
-    }
-
     private static String buildComment(MdaWriteRequest req, boolean ppm) {
         StringBuilder sb = new StringBuilder();
         sb.append("QPSC MDA export. ");
@@ -276,6 +260,27 @@ public final class MdaSettingsWriter {
         sb.append("2. Open the Stage Position List window. Click Load... and select\n");
         sb.append("   MDA_").append(req.regionName()).append(".pos (in this folder).\n");
         sb.append("3. The two windows are independent: loading the .txt does NOT load the .pos.\n\n");
+
+        sb.append("Focus (Z) in the position list\n");
+        sb.append("------------------------------\n");
+        boolean anyZ = false;
+        List<TileStagePos> tiles = req.tiles() == null ? List.of() : req.tiles();
+        for (TileStagePos tp : tiles) {
+            if (tp.zUm() != null) {
+                anyZ = true;
+                break;
+            }
+        }
+        if (anyZ) {
+            sb.append("Each position carries the focal plane QPSC achieved for this region, so\n");
+            sb.append("loading the list will drive the focus drive to that plane.\n\n");
+        } else {
+            sb.append("These positions carry XY only -- no Z. QPSC writes the MDA files before\n");
+            sb.append("autofocus has run, so the focal plane is not known yet, and a position\n");
+            sb.append("list with a placeholder Z of 0 would send the objective to absolute zero.\n");
+            sb.append("Focus the sample yourself in MM before running the list. If QPSC goes on\n");
+            sb.append("to acquire this region, it rewrites the .pos with the achieved plane.\n\n");
+        }
 
         sb.append("Autofocus\n");
         sb.append("---------\n");

@@ -247,7 +247,8 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 **File locations** (per region, in the per-region folder beside `TileConfiguration.txt`):
 
 - `<projects>/<sample>/<enhancedModality>/<region>/MDA_<region>.txt` -- MM `SequenceSettings` JSON. MM's MDA "Load..." filter shows `.txt` by default.
-- `<projects>/<sample>/<enhancedModality>/<region>/MDA_<region>.pos` -- MM `PositionList` JSON.
+- `<projects>/<sample>/<enhancedModality>/<region>/MDA_<region>.pos` -- MM `PositionList`, written in MM 2.0's
+  "Micro-Manager Property Map" v2 encoding (the same format the Stage Position List window itself saves).
 - `<projects>/<sample>/<enhancedModality>/<region>/MDA_NOTES.txt` -- plaintext provenance, the autofocus caveat, and any dropped multi-group presets or fallback device names.
 
 **How to load in Micro-Manager 2.0:**
@@ -257,6 +258,8 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 3. Review channels, Z range and step, and positions in the MM dialogs -- they should match the QPSC plan.
 
 **Triggers.** The MDA files are written automatically at the start of every acquisition (auto-save). They can also be exported without acquiring via the **Save as MicroManager MDA...** button on the widefield, PPM, and Existing Image Acquisition setup dialogs; the button opens a confirmation alert with the saved path so you can jump straight to the folder. **Note:** To export MDA files, alignment must be run first (either manually or by acquiring once) — without alignment, the export button will show an error message asking you to run alignment first.
+
+**Focus (Z) in the position list.** MDA files are written at the *start* of an acquisition, before autofocus has run, so the focal plane is not known yet. Those up-front exports carry XY only -- no Z device position and an empty `DefaultZStage` -- which is deliberate: a position list with a placeholder Z of 0 would drive the objective to absolute zero the moment the list is run in MM. Focus the sample yourself in MM before running an XY-only list. Once QPSC finishes acquiring the region it rewrites the `.pos` with the achieved plane, one Z per region (the server reports a single `final_z` per acquisition, not per tile). `MDA_NOTES.txt` states which of the two you are holding.
 
 **Autofocus.** QPSC runs per-tile, server-side streaming autofocus. MM 2.0 uses its own per-position `AutofocusManager`, which is a different mechanism. To keep MM from fighting our AF after the fact, the exported MDA sets `useAutofocus: false`. If you want MM to autofocus when re-running the plan, re-enable the "Autofocus" checkbox in the MDA window and pick an MM AF method.
 

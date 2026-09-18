@@ -1852,7 +1852,8 @@ public class UnifiedAcquisitionController {
                 for (int c = 0; c < cols; c++) {
                     double cx = minX + c * strideX + frameWidthUm / 2.0;
                     double cy = minY + r * strideY + frameHeightUm / 2.0;
-                    out.add(new TileStagePos(String.valueOf(idx++), cx, cy, 0.0));
+                    // Z is unknown until autofocus runs; null keeps it out of the MM position list.
+                    out.add(new TileStagePos(String.valueOf(idx++), cx, cy, null));
                 }
             }
             return out;

@@ -798,7 +798,23 @@ See [UTILITIES.md -- Exporting to Micro-Manager MDA](UTILITIES.md#exporting-to-m
 
 #### Q: Stage Position List "Load..." button shows the .pos file but positions don't appear.
 
-**A:** The `.pos` file references stage devices by name. Confirm the `mm_stage_devices:` block in the microscope YAML (`xy_stage` and `z_stage`) names the same device labels as your MM hardware config (default `XYStage` and `ZStage`). If they differ, edit the YAML and re-export, or hand-edit the `stageName` entries in `MDA_<region>.pos` to match the MM device labels. If the YAML block was omitted, the writer falls back to `("XYStage", "ZStage")` and logs a WARN to that effect.
+**A:** The `.pos` file references stage devices by name. Confirm the `mm_stage_devices:` block in the microscope YAML (`xy_stage` and `z_stage`) names the same device labels as your MM hardware config (default `XYStage` and `ZStage`). If they differ, edit the YAML and re-export, or hand-edit the `Device` entries in `MDA_<region>.pos` to match the MM device labels. If the YAML block was omitted, the writer falls back to `("XYStage", "ZStage")` and logs a WARN to that effect.
+
+#### Q: Stage Position List "Load..." silently ignores the .pos file -- no positions, no error.
+
+**A:** The file is not in MM's property-map format. MM 2.0 saves position lists as a "Micro-Manager Property Map" version 2 document: every value is wrapped in a `{"type": ..., "scalar"|"array": ...}` envelope under a top-level `map` key. A plain JSON object carrying the same field names parses as JSON but has no `map` key, so `PositionListDlg` discards it without raising a dialog -- the Load appears to do nothing at all. QPSC wrote that wrong shape before 2026-09-18; re-export the region with a current build. A valid QPSC `.pos` begins:
+
+```json
+{
+  "encoding": "UTF-8",
+  "format": "Micro-Manager Property Map",
+  "major_version": 2,
+  "minor_version": 0,
+  "map": {
+    "StagePositions": { "type": "PROPERTY_MAP", "array": [
+```
+
+If the first key you see is `STAGE_POSITIONS`, the file is from an old build and will never load.
 
 #### Q: Live progress shows "Dimension counters out of sync".
 

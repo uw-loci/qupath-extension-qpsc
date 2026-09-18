@@ -1779,7 +1779,8 @@ public class ExistingImageAcquisitionController {
                     // centroid to real stage micrometers.
                     double[] stage =
                             TransformationFunctions.transformQuPathFullResToStage(new double[] {cxPx, cyPx}, transform);
-                    out.add(new TileStagePos(String.valueOf(idx++), stage[0], stage[1], 0.0));
+                    // Z is unknown until autofocus runs; null keeps it out of the MM position list.
+                    out.add(new TileStagePos(String.valueOf(idx++), stage[0], stage[1], null));
                 }
             }
             return out;

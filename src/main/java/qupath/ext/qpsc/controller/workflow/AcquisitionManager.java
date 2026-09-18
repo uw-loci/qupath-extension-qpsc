@@ -2072,7 +2072,7 @@ public class AcquisitionManager {
                 try {
                     double x = Double.parseDouble(m.group(2).trim());
                     double y = Double.parseDouble(m.group(3).trim());
-                    tiles.add(new TileStagePos(label, x, y, 0.0));
+                    tiles.add(new TileStagePos(label, x, y, null));
                 } catch (NumberFormatException nfe) {
                     logger.debug("Skipping unparseable TileConfiguration line: {}", line);
                 }

@@ -94,26 +94,43 @@ class MdaSettingsWriterTest {
         assertThat(firstCh.get("useChannel").getAsBoolean()).isTrue();
         assertThat(firstCh.getAsJsonObject("color").get("value").getAsInt()).isEqualTo(BLUE_ARGB);
 
+        // The .pos must be MM 2.0's "Micro-Manager Property Map" v2 encoding, not a plain
+        // JSON mirror of PositionList's fields -- MM silently ignores anything else.
         JsonObject positions = parseJsonObject(result.positionsFile());
-        JsonArray stagePositions = positions.getAsJsonArray("STAGE_POSITIONS");
+        assertThat(positions.get("format").getAsString()).isEqualTo("Micro-Manager Property Map");
+        assertThat(positions.get("encoding").getAsString()).isEqualTo("UTF-8");
+        assertThat(positions.get("major_version").getAsInt()).isEqualTo(2);
+        assertThat(positions.get("minor_version").getAsInt()).isZero();
+
+        JsonObject stagePositionsProp = positions.getAsJsonObject("map").getAsJsonObject("StagePositions");
+        assertThat(stagePositionsProp.get("type").getAsString()).isEqualTo("PROPERTY_MAP");
+        JsonArray stagePositions = stagePositionsProp.getAsJsonArray("array");
         assertThat(stagePositions.size()).isEqualTo(4);
+
         JsonObject firstPos = stagePositions.get(0).getAsJsonObject();
-        assertThat(firstPos.get("label").getAsString()).isEqualTo("Pos00");
-        assertThat(firstPos.get("defaultXYStage").getAsString()).isEqualTo("XYStage");
-        assertThat(firstPos.get("defaultZStage").getAsString()).isEqualTo("ZStage");
-        JsonArray devicePositions = firstPos.getAsJsonArray("devicePositions");
+        assertThat(scalarString(firstPos, "Label")).isEqualTo("Pos00");
+        assertThat(scalarString(firstPos, "DefaultXYStage")).isEqualTo("XYStage");
+        assertThat(scalarString(firstPos, "DefaultZStage")).isEqualTo("ZStage");
+        assertThat(firstPos.getAsJsonObject("GridRow").get("type").getAsString())
+                .isEqualTo("INTEGER");
+
+        JsonArray devicePositions = firstPos.getAsJsonObject("DevicePositions").getAsJsonArray("array");
         assertThat(devicePositions.size()).isEqualTo(2);
 
+        // MM infers the axis count from the length of Position_um: 2 for XY, 1 for focus.
         JsonObject xy = devicePositions.get(0).getAsJsonObject();
-        assertThat(xy.get("stageName").getAsString()).isEqualTo("XYStage");
-        assertThat(xy.get("numAxes").getAsInt()).isEqualTo(2);
-        assertThat(xy.get("x").getAsDouble()).isEqualTo(100.0);
-        assertThat(xy.get("y").getAsDouble()).isEqualTo(200.0);
+        assertThat(scalarString(xy, "Device")).isEqualTo("XYStage");
+        JsonArray xyCoords = xy.getAsJsonObject("Position_um").getAsJsonArray("array");
+        assertThat(xy.getAsJsonObject("Position_um").get("type").getAsString()).isEqualTo("DOUBLE");
+        assertThat(xyCoords.size()).isEqualTo(2);
+        assertThat(xyCoords.get(0).getAsDouble()).isEqualTo(100.0);
+        assertThat(xyCoords.get(1).getAsDouble()).isEqualTo(200.0);
 
         JsonObject zDev = devicePositions.get(1).getAsJsonObject();
-        assertThat(zDev.get("stageName").getAsString()).isEqualTo("ZStage");
-        assertThat(zDev.get("numAxes").getAsInt()).isEqualTo(1);
-        assertThat(zDev.get("z").getAsDouble()).isEqualTo(50.0);
+        assertThat(scalarString(zDev, "Device")).isEqualTo("ZStage");
+        JsonArray zCoords = zDev.getAsJsonObject("Position_um").getAsJsonArray("array");
+        assertThat(zCoords.size()).isEqualTo(1);
+        assertThat(zCoords.get(0).getAsDouble()).isEqualTo(50.0);
 
         String notes = Files.readString(result.notesFile(), StandardCharsets.UTF_8);
         assertThat(notes).contains("Multi-Dimensional Acquisition");
@@ -164,7 +181,12 @@ class MdaSettingsWriterTest {
         assertThat(settings.get("usePositionList").getAsBoolean()).isTrue();
 
         JsonObject positions = parseJsonObject(result.positionsFile());
-        assertThat(positions.getAsJsonArray("STAGE_POSITIONS").size()).isEqualTo(3);
+        assertThat(positions
+                        .getAsJsonObject("map")
+                        .getAsJsonObject("StagePositions")
+                        .getAsJsonArray("array")
+                        .size())
+                .isEqualTo(3);
 
         String notes = Files.readString(result.notesFile(), StandardCharsets.UTF_8);
         assertThat(notes).contains("polarization");
@@ -172,6 +194,56 @@ class MdaSettingsWriterTest {
         assertThat(notes).contains("7.0");
 
         assertNoTmpFiles(regionDir);
+    }
+
+    @Test
+    void unknownZ_writesNoZDevicePositionAndWarnsInNotes(@TempDir Path tmp) throws Exception {
+        Path regionDir = tmp.resolve("bounds");
+        Files.createDirectories(regionDir);
+
+        SampleSetupResult sample =
+                new SampleSetupResult("Slide_A", new File("/tmp/projects"), "bf_if_20x", "Olympus 20X", "JAI");
+
+        // Z is null before autofocus has run. A placeholder 0 here would command the focus
+        // drive to absolute zero as soon as the list is run in MM, so no Z is written at all.
+        List<TileStagePos> tiles =
+                List.of(new TileStagePos("0", 9864.6, -536.7, null), new TileStagePos("1", 11068.2, -536.7, null));
+
+        MdaWriteRequest req = new MdaWriteRequest(
+                regionDir,
+                "bounds",
+                "bf_if_20x",
+                sample,
+                List.of(new ResolvedChannel("DAPI", "DAPI (385 nm)", "Channel", "DAPI", 50.0, BLUE_ARGB)),
+                List.of(),
+                null,
+                null,
+                tiles,
+                new MmStageDevices("XYStage", "ZStage"),
+                Map.of());
+
+        MdaWriteResult result = MdaSettingsWriter.write(req);
+
+        JsonObject positions = parseJsonObject(result.positionsFile());
+        JsonArray stagePositions = positions
+                .getAsJsonObject("map")
+                .getAsJsonObject("StagePositions")
+                .getAsJsonArray("array");
+        assertThat(stagePositions.size()).isEqualTo(2);
+
+        JsonObject firstPos = stagePositions.get(0).getAsJsonObject();
+        assertThat(scalarString(firstPos, "DefaultZStage")).isEmpty();
+        JsonArray devicePositions = firstPos.getAsJsonObject("DevicePositions").getAsJsonArray("array");
+        assertThat(devicePositions.size()).isEqualTo(1);
+        assertThat(scalarString(devicePositions.get(0).getAsJsonObject(), "Device"))
+                .isEqualTo("XYStage");
+
+        String notes = Files.readString(result.notesFile(), StandardCharsets.UTF_8);
+        assertThat(notes).contains("XY only");
+    }
+
+    private static String scalarString(JsonObject parent, String key) {
+        return parent.getAsJsonObject(key).get("scalar").getAsString();
     }
 
     private static JsonObject parseJsonObject(Path file) throws Exception {
