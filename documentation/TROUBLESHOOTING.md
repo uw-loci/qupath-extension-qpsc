@@ -893,6 +893,19 @@ A progress dialog appears and updates as each angle (for PPM) or channel (for fl
 
 The stitched images will be created in `<projectDir>/SlideImages` (project-anchored, matching the regular acquisition path) and automatically imported into your project. Filenames follow your configured naming pattern (respecting Objective, Annotation, Angle, and other preferences).
 
+### Stitch record: how an image was produced
+
+Every stitched image in `SlideImages/` has a plain-text `<image name>.stitch-info.txt` beside it (for `X.ome.tif` or `X.ome.zarr`, the file is `X.stitch-info.txt`). Open it in any text editor to see how that image was made. It has these sections:
+
+- `[image]`: the file and when it was written.
+- `[source tiles]`: the tile folder, number of tile positions, tile size, and mosaic size.
+- `[stitching]`: method, pixel size, downsample, stage-axis negation, overlap blending, format, compression.
+- `[registration]`: whether tile positions were corrected from image content and how. The possible results are off, solved, reused from a sibling channel/angle, refused, or failed. It also records which channel(s) were aligned on, how many overlaps were accepted, the settings, and, for a merged alignment, each channel's scale. It includes a copy of the header of `TileRegistration.txt`.
+- `[software]`: tiles-to-pyramid, QuPath, Java and OS versions, and the computer.
+- `[acquisition]` (added by QPSC): sample, modality, objective, detector, microscope, region, parent image and offset, stage bounds, field of view, the stage/camera transform, the QPSC version, the acquisition folder and its record files (`acquisition_command_*.txt`, `acquisition_metadata.*`, `MMproperties.txt`, autofocus diagnostics, tile manifests), and the full acquisition command. Stitching Recovery and the MicroManager folder stitch note that they produced the image.
+
+A merged multichannel image's record lists the per-channel images it was built from and includes each one's record. The record follows the image when QPSC renames it, but not if you rename or move the image yourself. Rename the `.stitch-info.txt` to match, or it will no longer be next to its image. Needs tiles-to-pyramid 0.7.1 or later. With an older version, images have no record.
+
 **Alternative method - standalone stitching (file only, no project import):**
 
 If you just need the stitched file without project integration:

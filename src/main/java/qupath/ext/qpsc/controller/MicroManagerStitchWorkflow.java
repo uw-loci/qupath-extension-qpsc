@@ -438,6 +438,7 @@ public class MicroManagerStitchWorkflow {
         if (!initial.getAbsolutePath().equals(desired.getAbsolutePath())) {
             if (initial.renameTo(desired)) {
                 finalOutPath = desired.getAbsolutePath();
+                qupath.ext.qpsc.utilities.StitchInfoSupport.moveWith(initial, desired);
                 logger.info("Renamed stitched output: {} -> {}", initial.getName(), desired.getName());
             } else {
                 logger.warn(
@@ -449,6 +450,17 @@ public class MicroManagerStitchWorkflow {
 
         // Sidecar JSON with as much MicroManager metadata as we can preserve.
         writeMmMetadataSidecar(finalOutPath, extension, baseName, inDir, firstSidecar);
+        qupath.ext.qpsc.utilities.StitchInfoSupport.appendAcquisition(
+                finalOutPath,
+                null,
+                inDir,
+                java.util.Map.of(
+                        "produced by",
+                        "MicroManager folder stitch",
+                        "MicroManager folder",
+                        inDir.getAbsolutePath(),
+                        "MicroManager metadata",
+                        baseName + ".mm-metadata.json"));
 
         final String displayPath = finalOutPath;
         Platform.runLater(() -> Dialogs.showInfoNotification("Stitch Complete", "Output written to:\n" + displayPath));

@@ -68,6 +68,10 @@ allprojects {
 }
 val javafxVersion = "17.0.2"
 // TODO: Define your dependencies here
+// One place for the tiles-to-pyramid version: the provided dependency, the test classpath, and --
+// by hand -- the `ref:` tag in .github/workflows/ci.yml and release.yml must all agree.
+val tilesToPyramid = "io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.7.1"
+
 dependencies {
 
     // Main dependencies for most QuPath extensions
@@ -94,7 +98,7 @@ dependencies {
     // against image content. QPSC only sets the mode; the algorithm lives in tiles-to-pyramid so it
     // is usable outside QPSC too. 0.7.0 adds RegistrationReference and solveRegistration, which the
     // channel "Align" choice uses (ChannelRegistrationSupport; older jars fall back, see there).
-    shadow("io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.7.0")
+    shadow(tilesToPyramid)
     // CompileOnly - QuPath provides bioformats at runtime, we just compile against it
     // This avoids trying to resolve OME transitive dependencies during build
     compileOnly("io.github.qupath:qupath-extension-bioformats:0.7.0")
@@ -117,6 +121,8 @@ dependencies {
     // (e.g. ConfigYamlEditorAppendTest) need it on the test compile classpath.
     testImplementation(libs.snakeyaml)
     //testImplementation(libs.junit)
+    // Tests that exercise the stitch record and registration wiring need the real classes.
+    testImplementation(tilesToPyramid)
     testImplementation("org.junit.jupiter:junit-jupiter:5.13.4")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher:1.13.4")
     testImplementation("org.assertj:assertj-core:3.24.2")

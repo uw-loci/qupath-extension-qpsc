@@ -305,7 +305,7 @@ Standalone stitching utility for tile folders acquired with MicroManager 2.0. Un
 
 **Input:** A folder containing MicroManager OME-TIFF tiles (`*_MMStack_*.ome.tif`) with `*_metadata.txt` sidecars that record tile positions and other acquisition parameters.
 
-**Output:** A single stitched OME-TIFF or OME-ZARR image, plus a `<stem>.mm-metadata.json` sidecar preserving channel names, exposure, pixel size, grid dimensions, and other MicroManager metadata.
+**Output:** A single stitched OME-TIFF or OME-ZARR image, plus a `<stem>.mm-metadata.json` sidecar preserving channel names, exposure, pixel size, grid dimensions, and other MicroManager metadata, and a `<stem>.stitch-info.txt` stitch record (see [Stitch record](TROUBLESHOOTING.md#stitch-record-how-an-image-was-produced)).
 
 **Key features:**
 - Reads tile positions directly from MMStack `*_metadata.txt` files (no `TileConfiguration.txt` required).

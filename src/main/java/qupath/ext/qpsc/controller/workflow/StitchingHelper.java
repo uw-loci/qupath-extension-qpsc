@@ -1484,6 +1484,11 @@ public class StitchingHelper {
 
                                 if (mergedPath != null) {
                                     logger.info("Multichannel merge succeeded for {}: {}", annotationName, mergedPath);
+                                    qupath.ext.qpsc.utilities.StitchInfoSupport.appendAcquisition(
+                                            mergedPath,
+                                            metadata,
+                                            tileBaseDir.toFile(),
+                                            Map.of("channels merged", String.join(", ", mergeIds)));
 
                                     // Per-channel intermediates were never imported to the
                                     // project (skipProjectImport=true above), so we only need

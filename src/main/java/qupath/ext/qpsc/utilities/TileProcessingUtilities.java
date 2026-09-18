@@ -378,6 +378,8 @@ public class TileProcessingUtilities {
                 logger.info("Renaming {} -> {}", originalName, baseName);
                 if (stitchedFile.renameTo(renamed)) {
                     lastPath = renamed.getAbsolutePath();
+                    StitchInfoSupport.moveWith(stitchedFile, renamed);
+                    StitchInfoSupport.appendAcquisition(lastPath, batchMetadata, new File(tileFolder), Map.of());
                     logger.info("Successfully renamed to: {}", baseName);
                     // Note: metadata was already extracted earlier (batchMetadata) for filename generation
 
@@ -614,10 +616,12 @@ public class TileProcessingUtilities {
             if (orig.renameTo(renamed)) {
                 outPath = renamed.getAbsolutePath();
                 logger.info("Successfully renamed. Full path: {}", outPath);
+                StitchInfoSupport.moveWith(orig, renamed);
             } else {
                 logger.error("Failed to rename {} to {}", orig.getName(), baseName);
                 // Continue with original path if rename fails
             }
+            StitchInfoSupport.appendAcquisition(outPath, metadata, new File(tileFolder), Map.of());
             // Note: metadata was already extracted earlier for filename generation
             // If metadata doesn't have the identification fields, use the extracted values
             final String finalModality = (metadata != null && metadata.modality != null) ? metadata.modality : modality;

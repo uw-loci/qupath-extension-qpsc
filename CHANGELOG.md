@@ -9,6 +9,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+**Stitch record beside every stitched image**
+- Each stitched image now has a `<image name>.stitch-info.txt` in `SlideImages/` describing how it was produced. tiles-to-pyramid writes the stitching part: source tiles, stitch settings, what tile registration did, and software versions. QPSC adds an `[acquisition]` section: sample, modality, objective, detector, microscope, region, parent image and offset, stage bounds, field of view, stage/camera transform, the acquisition folder and its record files, and the full acquisition command. The record follows the image through QPSC's renames. A merged multichannel image's record includes each channel's record. Stitching Recovery and the MicroManager folder stitch write one too. Requires tiles-to-pyramid 0.7.1.
+
 **Choose which channel(s) line the tiles up when stitching fluorescence**
 - New **Align** column in the channel picker. It sets what content-based tile registration measures the tile overlaps on. Tick one channel to align on it alone, or several to align on a normalized merge of them: each channel is scaled once for the whole dataset, so a dim channel counts as much as a bright one. With nothing ticked, QPSC aligns on the channel autofocus ran on. If there is no usable focus channel, it uses a merge of every acquired channel. Previously fluorescence always aligned on the first channel in the list. All channels are still placed with the same result, so they keep overlaying each other.
 - For channel acquisitions the alignment is now solved once before any channel is stitched, and then all channels stitch in parallel. Previously the first channel was stitched on its own first.

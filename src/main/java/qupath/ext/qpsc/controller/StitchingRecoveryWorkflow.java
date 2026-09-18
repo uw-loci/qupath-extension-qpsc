@@ -607,6 +607,14 @@ public class StitchingRecoveryWorkflow {
                     isRootDir ? null : angleName,
                     extension);
             final String outPath = renameStitchedOutput(stitchedOutPath, desiredName, extension);
+            java.util.Map<String, String> recovered = new java.util.LinkedHashMap<>();
+            recovered.put("produced by", "Stitching Recovery (re-stitch of existing tiles)");
+            if (finalSampleName != null) recovered.put("sample", finalSampleName);
+            if (finalModality != null) recovered.put("modality", finalModality);
+            if (finalObjective != null) recovered.put("objective", finalObjective);
+            if (finalAnnotationName != null) recovered.put("region", finalAnnotationName);
+            if (!isRootDir) recovered.put("angle / channel", angleName);
+            qupath.ext.qpsc.utilities.StitchInfoSupport.appendAcquisition(outPath, null, tileFolderFile, recovered);
             logger.info("Stitching completed for '{}': {}", angleName, outPath);
             if (progressDialog != null && opId != null) {
                 progressDialog.completeOperation(opId);
@@ -1008,6 +1016,7 @@ public class StitchingRecoveryWorkflow {
         File target = uniqueWithExtension(desired, extension);
         if (initial.renameTo(target)) {
             logger.info("Renamed stitched output to configured pattern: {} -> {}", initial.getName(), target.getName());
+            qupath.ext.qpsc.utilities.StitchInfoSupport.moveWith(initial, target);
             return target.getAbsolutePath();
         }
         logger.warn(
