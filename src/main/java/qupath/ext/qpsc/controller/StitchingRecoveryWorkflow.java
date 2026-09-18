@@ -536,121 +536,140 @@ public class StitchingRecoveryWorkflow {
         // featureless to the matcher.
         java.util.List<String> angleNames =
                 angleDirs.stream().map(java.io.File::getName).toList();
-        java.util.List<String> stitchedPaths = StitchingRegistration.stitchTargets(
-                angleDirs,
-                tileFolderFile.toPath(),
-                threadCount,
-                StitchingRegistration.referenceIndexFor(angleNames, modalityHandler),
-                (angleDir, registrationMode, angleNum, total) -> {
-                    final String angleName = angleDir.getName();
-                    final boolean isRootDir = angleDir.equals(tileFolderFile);
-                    logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);
-                    final String opId = operationIds.get(angleDir);
-                    if (progressDialog != null && opId != null) {
-                        // Name the PHASE, because the phases are genuinely staggered: the reference
-                        // angle solves registration first (the barrier) and only then do the
-                        // siblings stitch, reusing that solve. Saying "stitching..." for every row
-                        // would misreport the reference's slow solve, and the old
-                        // "(angleNum/total)" collided visually with the "N operations in progress"
-                        // count. The row already carries the name, so the phase alone is enough.
-                        String phase;
-                        if (registrationMode instanceof qupath.ext.basicstitching.registration.RegistrationMode.Solve) {
-                            phase = "solving registration...";
-                        } else if (registrationMode
-                                instanceof qupath.ext.basicstitching.registration.RegistrationMode.Apply) {
-                            phase = "stitching (reusing solve)...";
-                        } else {
-                            phase = "stitching...";
-                        }
-                        progressDialog.updateStatus(opId, phase);
-                    }
+        StitchingRegistration.TargetStitcher<File> stitchDir = (angleDir, registrationMode, angleNum, total) -> {
+            final String angleName = angleDir.getName();
+            final boolean isRootDir = angleDir.equals(tileFolderFile);
+            logger.info("=== Processing angle {}/{}: '{}' ===", angleNum, total, angleName);
+            final String opId = operationIds.get(angleDir);
+            if (progressDialog != null && opId != null) {
+                // Name the PHASE, because the phases are genuinely staggered: the reference
+                // angle solves registration first (the barrier) and only then do the
+                // siblings stitch, reusing that solve. Saying "stitching..." for every row
+                // would misreport the reference's slow solve, and the old
+                // "(angleNum/total)" collided visually with the "N operations in progress"
+                // count. The row already carries the name, so the phase alone is enough.
+                String phase;
+                if (registrationMode instanceof qupath.ext.basicstitching.registration.RegistrationMode.Solve) {
+                    phase = "solving registration...";
+                } else if (registrationMode instanceof qupath.ext.basicstitching.registration.RegistrationMode.Apply) {
+                    phase = "stitching (reusing solve)...";
+                } else {
+                    phase = "stitching...";
+                }
+                progressDialog.updateStatus(opId, phase);
+            }
 
-                    // The stitcher appends "_<subdirName>" (the angle dir name); the user-pattern
-                    // rename happens after the stitch (below).
-                    StitchingConfig config = new StitchingConfig(
-                            "Coordinates in TileConfiguration.txt file",
-                            angleDir.getAbsolutePath(),
-                            outputFolder,
-                            compression,
-                            pixelSize,
-                            1, // downsample
-                            ".", // match everything in this single-angle directory
-                            1.0, // zSpacingMicrons
-                            outputFormat);
-                    config.outputFilename = ImageNameGenerator.sanitizeForFilename(finalSampleName);
-                    // The mode the barrier chose for this angle: solve on the first, apply on the
-                    // rest, so the angles stay co-registered.
-                    StitchingRegistration.attachMode(config, registrationMode, ".");
+            // The stitcher appends "_<subdirName>" (the angle dir name); the user-pattern
+            // rename happens after the stitch (below).
+            StitchingConfig config = new StitchingConfig(
+                    "Coordinates in TileConfiguration.txt file",
+                    angleDir.getAbsolutePath(),
+                    outputFolder,
+                    compression,
+                    pixelSize,
+                    1, // downsample
+                    ".", // match everything in this single-angle directory
+                    1.0, // zSpacingMicrons
+                    outputFormat);
+            config.outputFilename = ImageNameGenerator.sanitizeForFilename(finalSampleName);
+            // The mode the barrier chose for this angle: solve on the first, apply on the
+            // rest, so the angles stay co-registered.
+            StitchingRegistration.attachMode(config, registrationMode, ".");
 
-                    // Composite stage/camera transform; must match the acquisition path so
-                    // re-stitching reproduces the original layout.
-                    boolean[] stitcherFlags = qupath.ext.qpsc.utilities.StageImageTransform.current()
-                            .stitcherFlipFlags();
-                    final String outputStem =
-                            ImageNameGenerator.sanitizeForFilename(finalSampleName) + "_" + angleDir.getName();
+            // Composite stage/camera transform; must match the acquisition path so
+            // re-stitching reproduces the original layout.
+            boolean[] stitcherFlags =
+                    qupath.ext.qpsc.utilities.StageImageTransform.current().stitcherFlipFlags();
+            final String outputStem =
+                    ImageNameGenerator.sanitizeForFilename(finalSampleName) + "_" + angleDir.getName();
 
-                    String stitchedOutPath;
-                    try {
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX =
-                                stitcherFlags[0];
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY =
-                                stitcherFlags[1];
-                        stitchedOutPath = qupath.ext.basicstitching.workflow.StitchingWorkflow.run(config);
-                    } finally {
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
-                        qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
-                    }
-                    if (stitchedOutPath == null) {
-                        deleteStitchOutputs(new File(outputFolder), outputStem);
-                        throw new IllegalStateException("Stitching produced no output for " + angleName);
-                    }
+            String stitchedOutPath;
+            try {
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
+                stitchedOutPath = qupath.ext.basicstitching.workflow.StitchingWorkflow.run(config);
+            } finally {
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
+                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
+            }
+            if (stitchedOutPath == null) {
+                deleteStitchOutputs(new File(outputFolder), outputStem);
+                throw new IllegalStateException("Stitching produced no output for " + angleName);
+            }
 
-                    String extension = stitchedOutPath.endsWith(".ome.zarr") ? ".ome.zarr" : ".ome.tif";
-                    String desiredName = ImageNameGenerator.generateImageName(
+            String extension = stitchedOutPath.endsWith(".ome.zarr") ? ".ome.zarr" : ".ome.tif";
+            String desiredName = ImageNameGenerator.generateImageName(
+                    finalSampleName,
+                    finalImageIndex,
+                    finalModality,
+                    finalObjective,
+                    finalAnnotationName,
+                    isRootDir ? null : angleName,
+                    extension);
+            final String outPath = renameStitchedOutput(stitchedOutPath, desiredName, extension);
+            logger.info("Stitching completed for '{}': {}", angleName, outPath);
+            if (progressDialog != null && opId != null) {
+                progressDialog.completeOperation(opId);
+            }
+
+            // Import to project with metadata (async).
+            final String finalAngle = isRootDir ? null : angleName;
+            Platform.runLater(() -> {
+                try {
+                    File outputFile = new File(outPath);
+                    QPProjectFunctions.addImageToProjectWithMetadata(
+                            project,
+                            outputFile,
+                            finalParentEntry,
+                            0, // xOffset -- unknown in recovery
+                            0, // yOffset -- unknown in recovery
+                            false, // isFlippedX -- stitched images don't need flipping
+                            false, // isFlippedY -- stitched images don't need flipping
                             finalSampleName,
-                            finalImageIndex,
                             finalModality,
                             finalObjective,
+                            finalAngle,
                             finalAnnotationName,
-                            isRootDir ? null : angleName,
-                            extension);
-                    final String outPath = renameStitchedOutput(stitchedOutPath, desiredName, extension);
-                    logger.info("Stitching completed for '{}': {}", angleName, outPath);
-                    if (progressDialog != null && opId != null) {
-                        progressDialog.completeOperation(opId);
-                    }
+                            finalImageIndex,
+                            modalityHandler);
+                    gui.refreshProject();
+                    logger.info("Imported angle '{}' to project ({}/{})", finalAngle, angleNum, total);
+                    Dialogs.showInfoNotification(
+                            "Angle Imported",
+                            String.format("Imported %s (%d/%d)", outputFile.getName(), angleNum, total));
+                } catch (IOException e) {
+                    logger.error("Failed to import {}: {}", outPath, e.getMessage());
+                }
+            });
+            return outPath;
+        };
 
-                    // Import to project with metadata (async).
-                    final String finalAngle = isRootDir ? null : angleName;
-                    Platform.runLater(() -> {
-                        try {
-                            File outputFile = new File(outPath);
-                            QPProjectFunctions.addImageToProjectWithMetadata(
-                                    project,
-                                    outputFile,
-                                    finalParentEntry,
-                                    0, // xOffset -- unknown in recovery
-                                    0, // yOffset -- unknown in recovery
-                                    false, // isFlippedX -- stitched images don't need flipping
-                                    false, // isFlippedY -- stitched images don't need flipping
-                                    finalSampleName,
-                                    finalModality,
-                                    finalObjective,
-                                    finalAngle,
-                                    finalAnnotationName,
-                                    finalImageIndex,
-                                    modalityHandler);
-                            gui.refreshProject();
-                            logger.info("Imported angle '{}' to project ({}/{})", finalAngle, angleNum, total);
-                            Dialogs.showInfoNotification(
-                                    "Angle Imported",
-                                    String.format("Imported %s (%d/%d)", outputFile.getName(), angleNum, total));
-                        } catch (IOException e) {
-                            logger.error("Failed to import {}: {}", outPath, e.getMessage());
-                        }
-                    });
-                    return outPath;
-                });
+        // Channel folders get the same alignment an acquisition does: solved once across every
+        // channel before any is stitched, on the channel(s) the acquisition chose. Angle folders
+        // keep the modality's reference (PPM: 90 degrees).
+        java.util.List<String> alignOn = recoveryAlignment(tileFolderFile, angleNames);
+        java.util.List<String> stitchedPaths;
+        if (alignOn != null) {
+            java.util.Map<String, File> dirByName = new java.util.HashMap<>();
+            for (File dir : angleDirs) {
+                dirByName.put(dir.getName(), dir);
+            }
+            stitchedPaths = StitchingRegistration.stitchChannels(
+                    angleNames,
+                    alignOn,
+                    tileFolderFile.toPath(),
+                    pixelSize,
+                    1,
+                    threadCount,
+                    (name, mode, position, total) -> stitchDir.stitch(dirByName.get(name), mode, position, total));
+        } else {
+            stitchedPaths = StitchingRegistration.stitchTargets(
+                    angleDirs,
+                    tileFolderFile.toPath(),
+                    threadCount,
+                    StitchingRegistration.referenceIndexFor(angleNames, modalityHandler),
+                    stitchDir);
+        }
 
         // Count from the barrier's ordered results (null = that angle failed).
         for (String stitched : stitchedPaths) {
@@ -720,6 +739,126 @@ public class StitchingRecoveryWorkflow {
                             NotificationPriority.HIGH,
                             NotificationEvent.STITCHING_ERROR);
         }
+    }
+
+    /**
+     * The channel(s) a re-stitch should align on, or null when the subdirectories are not channels.
+     *
+     * <p>Reads what the acquisition left beside the tiles: the previous {@code TileRegistration.txt}
+     * (what the last solve actually aligned on) and the newest {@code acquisition_command_*.txt}
+     * (the channel list and focus channel). Read before the solve, which deletes the old solution.
+     *
+     * @param tileFolder the folder holding the subdirectories
+     * @param subdirs the subdirectory names about to be stitched
+     * @return channel ids to align on, or null to stitch them as angles
+     */
+    static java.util.List<String> recoveryAlignment(File tileFolder, java.util.List<String> subdirs) {
+        String previousReference = null;
+        Path solution = tileFolder.toPath().resolve("TileRegistration.txt");
+        if (Files.exists(solution)) {
+            try {
+                for (String line : Files.readAllLines(solution, StandardCharsets.US_ASCII)) {
+                    if (line.startsWith("# reference:")) {
+                        previousReference =
+                                line.substring("# reference:".length()).trim();
+                        break;
+                    }
+                }
+            } catch (IOException | RuntimeException e) {
+                logger.debug("Could not read previous solution {}: {}", solution, e.toString());
+            }
+        }
+
+        java.util.List<String> channels = java.util.List.of();
+        String afChannel = null;
+        String focusChannel = null;
+        File[] commands =
+                tileFolder.listFiles((dir, name) -> name.startsWith("acquisition_command_") && name.endsWith(".txt"));
+        if (commands != null && commands.length > 0) {
+            // Timestamped names sort chronologically; the newest describes this acquisition.
+            java.util.Arrays.sort(commands, java.util.Comparator.comparing(File::getName));
+            try {
+                String[] tokens = Files.readString(commands[commands.length - 1].toPath(), StandardCharsets.UTF_8)
+                        .trim()
+                        .split("\\s+");
+                for (int k = 0; k + 1 < tokens.length; k++) {
+                    String value = tokens[k + 1].replaceAll("[\"'()]", "");
+                    switch (tokens[k]) {
+                        case "--channels" ->
+                            channels = java.util.Arrays.stream(value.split(","))
+                                    .map(String::trim)
+                                    .filter(v -> !v.isEmpty())
+                                    .toList();
+                        case "--af-channel" -> afChannel = value;
+                        case "--focus-channel" -> focusChannel = value;
+                        default -> {}
+                    }
+                }
+            } catch (IOException | RuntimeException e) {
+                logger.debug("Could not read acquisition command in {}: {}", tileFolder, e.toString());
+            }
+        }
+
+        java.util.List<String> alignOn =
+                chooseRecoveryAlignment(subdirs, previousReference, channels, afChannel, focusChannel);
+        if (alignOn != null) {
+            logger.info(
+                    "Re-stitch aligns channels {} on {} (previous solve: {}, focus channel: {})",
+                    subdirs,
+                    alignOn,
+                    previousReference == null ? "none" : previousReference,
+                    afChannel != null ? afChannel : focusChannel);
+        }
+        return alignOn;
+    }
+
+    /**
+     * Decide a re-stitch's alignment from what the acquisition recorded.
+     *
+     * <p>The subdirectories count as channels only when there are at least two and every one is
+     * in the acquisition's {@code --channels} list; anything else (PPM angles, an old acquisition
+     * without a command record) returns null and keeps the angle path. For channels, in order:
+     * whatever the previous solve aligned on (one channel, or {@code projection(A+B)}), so a
+     * re-stitch reproduces the acquisition; else the dedicated autofocus channel, else the focus
+     * channel; else a normalized merge of every channel -- the same fallbacks the acquisition uses.
+     *
+     * @param subdirs subdirectory names being stitched
+     * @param previousReference the {@code reference:} of the previous solution, or null
+     * @param commandChannels the acquisition's {@code --channels}, or empty
+     * @param afChannel the acquisition's {@code --af-channel}, or null
+     * @param focusChannel the acquisition's {@code --focus-channel}, or null
+     * @return channel ids to align on, or null when the subdirectories are not channels
+     */
+    static java.util.List<String> chooseRecoveryAlignment(
+            java.util.List<String> subdirs,
+            String previousReference,
+            java.util.List<String> commandChannels,
+            String afChannel,
+            String focusChannel) {
+        if (subdirs.size() < 2 || !commandChannels.containsAll(subdirs)) {
+            return null;
+        }
+        if (previousReference != null && !previousReference.isBlank()) {
+            String ref = previousReference.trim();
+            java.util.List<String> previous = ref.startsWith("projection(") && ref.endsWith(")")
+                    ? java.util.Arrays.asList(ref.substring("projection(".length(), ref.length() - 1)
+                            .split("\\+"))
+                    : java.util.List.of(ref);
+            java.util.List<String> usable = previous.stream()
+                    .map(String::trim)
+                    .filter(subdirs::contains)
+                    .toList();
+            if (!usable.isEmpty()) {
+                return usable;
+            }
+        }
+        if (afChannel != null && subdirs.contains(afChannel)) {
+            return java.util.List.of(afChannel);
+        }
+        if (focusChannel != null && subdirs.contains(focusChannel)) {
+            return java.util.List.of(focusChannel);
+        }
+        return java.util.List.copyOf(subdirs);
     }
 
     /**

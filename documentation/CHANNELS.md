@@ -216,6 +216,13 @@ When **Register tiles on image content** is on (see [PREFERENCES.md](PREFERENCES
 - **One channel ticked:** that channel only.
 - **Several ticked:** a normalized merge of them. Each channel is scaled by one factor for the whole dataset (from a sample of at most 64 tiles, so the cost does not grow with the size of the acquisition), then they are averaged. A dim channel counts as much as a bright one, and a feature has the same value in both tiles of an overlap. A merge reads every ticked channel at every overlap, so measuring takes about that many times longer than for one channel. It is still small next to writing the stitched images.
 
+**Stitching Recovery** repeats the acquisition's choice. When the folders being re-stitched are the channels listed in the acquisition's `acquisition_command_*.txt`, it aligns on:
+1. whatever the previous `TileRegistration.txt` aligned on (one channel, or `projection(A+B)`);
+2. if there is no previous solve, the recorded dedicated focus channel (`--af-channel`), then the Focus channel (`--focus-channel`);
+3. otherwise a merge of all the channels.
+
+It solves once before stitching, as an acquisition does. Angle folders (PPM) are unaffected.
+
 The Align boxes, like Split, are only honored when channel customization is on. The choice is recorded in `TileRegistration.txt` (its `reference:` line, plus the scale of each merged channel), beside the channel folders. Merging needs tiles-to-pyramid 0.7.0 or later. With an older version, QPSC aligns on the first ticked channel and logs a warning.
 
 Which channel aligns best depends on the sample. On one 3-channel cell slide, a sparse nuclear stain (clean, separated nuclei) aligned about as well as the brighter cytoplasmic channels, and all choices agreed within about 1 px. A merge helps most when each channel covers different parts of the tissue.
