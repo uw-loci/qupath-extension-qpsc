@@ -16,7 +16,7 @@ slides once and then let the run proceed on its own.
 
 ![Multi-slide carrier assignment dialog](../images/Docs_MultiSlide_Assignment.png)
 
-![Multi-slide batch progress panel](../images/Docs_MultiSlide_BatchPanel.png)
+![Multi-slide batch progress panel at the end of a run: all four slots Done, with the measured run estimate](../images/Docs_MultiSlide_BatchPanel.png)
 
 > **Dialogs you will see.** Two are specific to this workflow -- the **carrier /
 > slot assignment** dialog and the **batch progress panel** (above). The rest
@@ -331,6 +331,35 @@ Progress** / **Set up** if a run is cancelled at a gate or hits a handled error
 (so you can retry or mark it Skipped). Once every slot is **Done** or
 **Skipped**, click **Finish**. A combined saturation summary is shown if any
 tiles had concerning saturation during the run.
+
+![Saturation summary for a multi-slide run: three flagged acquisitions expanded worst-first, clean ones collapsed](../images/Docs_SaturationSummary.png)
+
+The summary covers the **whole run**, not one slide. The red banner names every
+acquisition that had concerning saturation, worst-first; below it each
+acquisition gets its own section, expanded for the flagged ones and collapsed
+for the clean ones (here, three of seven). Within a section the tiles are sorted
+by **Worst %** descending, so the first row is the worst tile in that
+acquisition.
+
+Two things are worth reading carefully:
+
+- **The Role column separates "concerning" from "normal".** A `Low signal` row
+  means saturation turned up on an image the microscope expected to be *dim* --
+  on PPM, the low-transmission angles -- which is where saturation actually
+  indicates a defect. Tiles that are bright because the modality expects them to
+  be bright are counted separately in the collapsed **Expected bright tiles**
+  row (1105 of them in the top acquisition), and are not a problem.
+- **Double-click any row to drive the stage to that tile** and look at it. This
+  needs a live microscope connection; the Stage X / Stage Y columns are the
+  coordinates it will move to.
+
+**Worst %** is the percentage of pixels at or above the sensor's saturation
+threshold (250 for 8-bit, 64000 for 16-bit data), taken from the worst single
+channel of that tile. A few percent on a handful of tiles is common; the banner
+exists to make a *systematic* exposure problem obvious. Sustained high values
+mean the sample exposure or illumination should come down -- see
+[AUTOFOCUS.md](../AUTOFOCUS.md) for why saturation also degrades focus, and why
+the automatic exposure reduction there is a stopgap rather than a fix.
 
 After the run finishes, if the microscope configuration declares a safe Z for the
 insert/modality combination used in this run, a **Safe-Z Clearance** notification

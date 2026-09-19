@@ -46,7 +46,8 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_mainmenu.png` | `SetupScope.java` | 2026-08-22 | OK -- re-captured after the Light Path Orientation / Migrate Flipped Duplicates menu additions |
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |
 | `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | 2026-07-23 | OK |
-| `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | 2026-07-23 | OK |
+| `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | 2026-09-19 | OK -- re-captured at the END of a run (all four slots Done, Finish enabled, measured run estimate shown). Supersedes the 2026-07-23 figure, whose title bar still read "MS Workflow Progress (experimental)" before the rename to "Multi-Slide Acquisition Progress". The Advanced / SIFT settings pane is collapsed here; it was expanded in the old figure |
+| `Docs_SaturationSummary.png` | `ui/SaturationSummaryDialog.java` | 2026-09-19 | OK -- multi-slide run (7 acquisitions); 3 flagged samples expanded worst-first, clean ones collapsed, and the collapsed "Expected bright tiles" row that separates modality-normal brightness from concerning saturation |
 | `Docs_MultiSlide_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` (four-slide vertical carrier) | 2026-08-22 | OK -- re-captured; also used in stage-map.md as the multi-slot counterpart to the single-slide figure |
 
 ## Missing Screenshots (UI exists but no image)
@@ -55,7 +56,6 @@ This file tracks the relationship between documentation screenshots and the Java
 |-------------|------------|-------------------|
 | Hardware Error Recovery Dialog | `controller/workflow/AcquisitionManager.java` | `Docs_HardwareErrorDialog.png` |
 | Alignment Quality Summary | `controller/MicroscopeAlignmentWorkflow.java` | `Docs_AlignmentQualitySummary.png` |
-| Saturation Summary Dialog | `ui/SaturationSummaryDialog.java` | `Docs_SaturationSummary.png` |
 | Autofocus Validation Result | `controller/AutofocusEditorWorkflow.java` | `Docs_AutofocusValidation.png` |
 | Setup Wizard | `ui/setupwizard/SetupWizardDialog.java` | `Docs_SetupWizard.png` |
 | Alignment Refinement with SIFT | `controller/workflow/SingleTileRefinement.java` | `Docs_AlignmentRefinementSIFT.png` |
