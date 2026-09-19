@@ -2,7 +2,22 @@
 
 This document provides an overview of all utilities available in the QPSC extension. Click any tool name for full documentation including all options, workflow details, and troubleshooting.
 
-![QP Scope main menu](images/Docs_mainmenu.png)
+The menu is nested three levels deep in places, so it is documented as three
+figures -- one per branch you are likely to be hunting in:
+
+![Extensions > QP Scope > Acquisition controls](images/Docs_menu_acquisition_controls.png)
+
+![Extensions > QP Scope > Utilities > Image Quality](images/Docs_menu_image_quality.png)
+
+![Extensions > QP Scope > Utilities > Microscope Configuration](images/Docs_menu_microscope_configuration.png)
+
+> These three are **representations of the menu, not screenshots**. The item
+> text and the structure are accurate and are checked against the source; the
+> spacing, shading and the non-QPSC entries around them are approximations.
+> They are generated from short text specs in
+> [`images/menus/`](images/menus/) by `tools/render_menu_mock.py`, so when a
+> menu item moves, the fix is a one-line edit and a re-run rather than four
+> re-captured nested screenshots.
 
 The **QP Scope** entry in the menu bar shows a coloured dot so it stands out when multiple QuPath extensions are installed. The dot colour and visibility are configured in `Preferences > QuPath Scope > Show menu colour dot` and `Menu dot colour`.
 

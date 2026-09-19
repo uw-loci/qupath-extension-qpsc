@@ -1,0 +1,32 @@
+# Extensions > QuPath SCope > Utilities > Microscope Configuration
+# Rendered by tools/render_menu_mock.py -- edit this, not the PNG.
+panel Extensions
+  > QuPath SCope [open]
+  > QuIET
+  > Class Distribution
+
+panel QuPath SCope
+  Acquisition Wizard...
+  Multi-Slide Acquisition...
+  ---
+  > Acquisition controls
+  > PPM
+  > Utilities [open]
+  ---
+  Report a Bug...
+
+panel Utilities
+  Microscope Alignment
+  Z-Stack / Time-Lapse...
+  ---
+  > Image Quality
+  > Project Tools
+  > Microscope Configuration [open]
+
+panel Microscope Configuration
+  * Setup Wizard...
+  Communication Settings...
+  ---
+  Register Current Objective...
+  Light Path Orientation...
+  Calibrate Parfocality...

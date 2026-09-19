@@ -10,13 +10,13 @@ This file tracks the relationship between documentation screenshots and the Java
 
 | Screenshot | Java Source File(s) | Last Verified | Status |
 |------------|-------------------|---------------|--------|
-| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-05-27 | OK |
+| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-09-19 | OK -- re-captured (unannotated); shows the hardware-status dots and the per-mode white-balance / background lines |
 | `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-05-27 | OK |
 | `Docs_AnnotationAcquisition.png` | `ui/AnnotationAcquisitionDialog.java` | 2026-08-22 | OK -- re-captured (unannotated). Mapped to the actual class selection dialog rather than the broad ExistingImageAcquisitionController; the multi-tile refinement radio lives in the consolidated dialog, not here, so this no longer false-flags |
 | `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | 2026-05-27 | OK |
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
 | `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | OK |
-| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-08-22 | OK -- re-captured (unannotated; the numbered callouts from the 2026-05-27 figure are gone) |
+| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-09-19 | OK -- re-captured (unannotated); includes the "Sample is already in focus" checkbox. NOTE: autofocus is currently drawn inside MODALITY-SPECIFIC OPTIONS, which is a known layout bug (see TODO_LIST) -- this figure will need re-capturing when it moves out |
 | `Docs_BoundedAcquisition_TileGrid.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
 | `Docs_CameraControl.png` | `ui/CameraControlController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
@@ -24,10 +24,10 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_CrossInstrumentWorkflow.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
 | `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-08-22 | OK -- re-captured (unannotated). Modality / Z-stack panes are collapsed here; see `Docs_ExistingImage_Modality_Zstack.png` for those expanded |
 | `Docs_ExistingImage_FluorescenceProject.png` | Lab-meeting slide deck (QuPath project view; not a single UI class) | 2026-06-01 | OK |
-| `Docs_ExistingImage_Modality_Zstack.png` | `ui/ExistingImageAcquisitionController.java`, `modality/ppm/ui/PPMBoundingBoxUI.java` | 2026-08-22 | OK -- the MODALITY-SPECIFIC + Z-STACK panes expanded (PPM angles shown); companion to the consolidated-dialog figure |
+| `Docs_ExistingImage_Modality_Zstack.png` | `ui/ExistingImageAcquisitionController.java`, `modality/ppm/ui/PPMBoundingBoxUI.java` | 2026-09-19 | OK -- re-captured; MODALITY-SPECIFIC + Z-STACK panes expanded (PPM angles, projection, loop order) |
 | `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | 2026-08-22 | OK -- re-captured (unannotated; the numbered callouts from the 2026-05-27 figure are gone) |
-| `Docs_LiveViewer_Navigate.png` | `ui/liveviewer/StageControlPanel.java` | -- | CHECK -- renamed from `Docs_LiveViewer_Position.png` (tab renamed Position -> Navigate 2026-07-22); needs re-capture |
-| `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` | 2026-07-22 | OK -- drift check false-flagged it on 2026-07-22 (shared source with Navigate); no visible change, no re-capture needed |
+| `Docs_LiveViewer_Navigate.png` | `ui/liveviewer/StageControlPanel.java` (Navigate tab only) | 2026-09-19 | OK -- re-captured. The class also builds the Camera tab, so camera-only edits flag this figure spuriously; the Navigate tab has the joystick, Coarse/Fine Z bars, Move to Position and Calibrate Directions, and no camera controls |
+| `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` (Saved Points tab only) | 2026-07-22 | CHECK -- shares a source class with the Navigate and Camera tabs, so it flags on camera edits that cannot affect it; verify before re-capturing |
 | `Docs_LiveViewer_Camera.png` | `ui/liveviewer/LiveViewerWindow.java` (camera tab) | -- | CHECK -- previously untracked |
 | `Docs_MicroscopeAlignment_SelectSourceMicroscope.png` | `ui/MicroscopeSelectionDialog.java` | -- | CHECK |
 | `Docs_MicroscopeAlignment_RefineAlignment.png` | `controller/workflow/SingleTileRefinement.java` (3-point / single-tile refinement dialog) | -- | CHECK -- SIFT refinement dialogs changed substantially; verify or re-capture |
@@ -43,12 +43,14 @@ This file tracks the relationship between documentation screenshots and the Java
 | `Docs_SystemArchitecture.png` | Lab-meeting slide deck (architecture diagram; not a UI class) | 2026-06-01 | OK |
 | `Docs_WorkflowOverview_Desktop.png` | Lab-meeting slide deck (full-desktop composite; multiple UI classes) | 2026-06-01 | OK |
 | `Docs_WhiteBalanceCalibration.png` | `ui/WhiteBalanceDialog.java` | 2026-05-27 | OK |
-| `Docs_mainmenu.png` | `SetupScope.java` | 2026-08-22 | OK -- re-captured after the Light Path Orientation / Migrate Flipped Duplicates menu additions |
 | `Docs_ppmmenu.png` | `SetupScope.java` (PPM modality submenu) | -- | CHECK |
-| `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | 2026-07-23 | OK |
+| `Docs_menu_acquisition_controls.png` | GENERATED from `images/menus/Docs_menu_acquisition_controls.menu` by `tools/render_menu_mock.py` | 2026-09-19 | OK -- mock-up, not a screenshot. Do not re-capture; edit the `.menu` spec and re-run |
+| `Docs_menu_image_quality.png` | GENERATED from `images/menus/Docs_menu_image_quality.menu` by `tools/render_menu_mock.py` | 2026-09-19 | OK -- mock-up, not a screenshot. Do not re-capture; edit the `.menu` spec and re-run |
+| `Docs_menu_microscope_configuration.png` | GENERATED from `images/menus/Docs_menu_microscope_configuration.menu` by `tools/render_menu_mock.py` | 2026-09-19 | OK -- mock-up, not a screenshot. Do not re-capture; edit the `.menu` spec and re-run |
+| `Docs_MultiSlide_Assignment.png` | `ui/MultiSlideAssignmentDialog.java` | 2026-09-19 | OK -- re-captured; shows the Modality / Objective / Detector block and the per-mode calibration status lines incl. a FAILED focus-approach characterisation |
 | `Docs_MultiSlide_BatchPanel.png` | `controller/MultiSlideExistingImageWorkflow.java` | 2026-09-19 | OK -- re-captured at the END of a run (all four slots Done, Finish enabled, measured run estimate shown). Supersedes the 2026-07-23 figure, whose title bar still read "MS Workflow Progress (experimental)" before the rename to "Multi-Slide Acquisition Progress". The Advanced / SIFT settings pane is collapsed here; it was expanded in the old figure |
 | `Docs_SaturationSummary.png` | `ui/SaturationSummaryDialog.java` | 2026-09-19 | OK -- multi-slide run (7 acquisitions); 3 flagged samples expanded worst-first, clean ones collapsed, and the collapsed "Expected bright tiles" row that separates modality-normal brightness from concerning saturation |
-| `Docs_MultiSlide_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` (four-slide vertical carrier) | 2026-08-22 | OK -- re-captured; also used in stage-map.md as the multi-slot counterpart to the single-slide figure |
+| `Docs_MultiSlide_StageMap.png` | `ui/stagemap/StageMapWindow.java`, `ui/stagemap/StageMapCanvas.java` (four-slide vertical carrier) | 2026-09-19 | OK -- re-captured; zoomed to show per-slide tissue bounding boxes, the camera-FOV crosshair, and a 180-degree-rotated slide label |
 
 ## Missing Screenshots (UI exists but no image)
 

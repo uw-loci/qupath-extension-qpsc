@@ -1,0 +1,24 @@
+# Extensions > QuPath SCope > Acquisition controls
+# Rendered by tools/render_menu_mock.py -- edit this, not the PNG.
+panel Extensions
+  > QuPath SCope [open]
+  > QuIET
+  > Class Distribution
+
+panel QuPath SCope
+  Acquisition Wizard...
+  Multi-Slide Acquisition...
+  ---
+  > Acquisition controls [open]
+  > PPM
+  > Utilities
+  ---
+  Report a Bug...
+
+panel Acquisition controls
+  * Bounded Acquisition
+  Acquire from Existing Image
+  ---
+  Live Viewer
+  Camera Control...
+  Stage Map
