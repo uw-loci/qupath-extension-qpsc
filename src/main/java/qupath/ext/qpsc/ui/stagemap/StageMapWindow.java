@@ -1112,6 +1112,15 @@ public class StageMapWindow {
     /**
      * Scans all project images for alignment transforms and loads thumbnails
      * on a background thread. Updates the canvas on the FX thread when done.
+     *
+     * <p>Only images this microscope actually acquired are painted. Having a
+     * pixel-to-stage transform is not sufficient: an imported scanner macro has
+     * one too (that is what aligning it produces), as do its {@code (flipped X|Y|XY)}
+     * and {@code (Camera View)} companions, and none of them is an acquisition.
+     * Images acquired on a DIFFERENT microscope are excluded as well, because
+     * their stage coordinates live in that scope's frame and mean nothing on this
+     * stage. The macro image has its own overlay ("Show macro"), so nothing is
+     * lost by keeping it out of the acquisition list.
      */
     @SuppressWarnings("unchecked")
     private void loadAndPaintAcquisitions() {
@@ -1134,12 +1143,34 @@ public class StageMapWindow {
                         Project<java.awt.image.BufferedImage> project =
                                 (Project<java.awt.image.BufferedImage>) gui.getProject();
 
+                        MicroscopeConfigManager acqMgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                        String activeScopeName = (acqMgr != null) ? acqMgr.getMicroscopeName() : null;
+
                         List<StageMapCanvas.AcquisitionThumbnail> thumbnails = new ArrayList<>();
                         int count = 0;
+                        int skippedNotAcquired = 0;
+                        int skippedOtherScope = 0;
 
                         for (ProjectImageEntry<java.awt.image.BufferedImage> entry : project.getImageList()) {
                             String imageName = entry.getImageName();
                             String strippedName = qupath.lib.common.GeneralTools.stripExtension(imageName);
+
+                            // Filter before the thumbnail read: readImageData + readRegion is the
+                            // expensive part of this scan, and there is no point paying it for an
+                            // entry that will not be painted.
+                            String acquiredOn = ImageMetadataManager.getAcquiredOnMicroscope(entry);
+                            if (acquiredOn == null || acquiredOn.isBlank()) {
+                                skippedNotAcquired++;
+                                continue;
+                            }
+                            // A blank active name means the config could not be read; rather than
+                            // hide everything, fall back to "acquired by some microscope".
+                            if (activeScopeName != null
+                                    && !activeScopeName.isBlank()
+                                    && !activeScopeName.equals(acquiredOn)) {
+                                skippedOtherScope++;
+                                continue;
+                            }
 
                             // Three-tier fallback to find a pixel->stage transform for this entry:
                             //   1. Macro-frame per-slide JSON (alignmentFiles/) -- hand-saved
@@ -1207,17 +1238,40 @@ public class StageMapWindow {
                         final int totalEntries = project.getImageList().size();
                         final List<StageMapCanvas.AcquisitionThumbnail> finalThumbs = thumbnails;
                         logger.info(
-                                "Show Acquisitions scan complete: {}/{} project entries have a usable alignment "
-                                        + "(macro-frame JSON, sub-frame JSON, or STAGE_BOUNDS_* metadata on the entry)",
+                                "Show Acquisitions scan complete: {}/{} project entries painted "
+                                        + "(usable alignment from macro-frame JSON, sub-frame JSON, or STAGE_BOUNDS_* "
+                                        + "metadata). Skipped {} not acquired on a microscope (imported macros and "
+                                        + "their flipped / Camera View companions) and {} acquired on another "
+                                        + "microscope (active='{}')",
                                 finalCount,
-                                totalEntries);
+                                totalEntries,
+                                skippedNotAcquired,
+                                skippedOtherScope,
+                                activeScopeName);
+
+                        // An empty result reads as a failure unless we say why. The common
+                        // innocent cause is a project that holds only imported slides which
+                        // have not been acquired yet.
+                        final int finalSkippedOther = skippedOtherScope;
+                        final boolean nothingButImports = finalCount == 0 && skippedNotAcquired > 0;
+                        final String activeForStatus = activeScopeName;
 
                         Platform.runLater(() -> {
                             canvas.setAcquisitionThumbnails(finalThumbs);
                             canvas.setAcquisitionOverlayVisible(true);
                             populateAcquisitionVisibilityMenu(finalThumbs);
-                            statusLabel.setText(finalCount + " acquisitions loaded");
-                            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
+                            if (finalCount == 0 && finalSkippedOther > 0) {
+                                statusLabel.setText("No acquisitions from "
+                                        + (activeForStatus == null ? "this microscope" : activeForStatus)
+                                        + " (" + finalSkippedOther + " from another microscope)");
+                                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
+                            } else if (nothingButImports) {
+                                statusLabel.setText("No acquisitions yet (imported slides only)");
+                                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
+                            } else {
+                                statusLabel.setText(finalCount + " acquisitions loaded");
+                                statusLabel.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
+                            }
                         });
 
                     } catch (Exception e) {
@@ -1294,7 +1348,10 @@ public class StageMapWindow {
         showAcquisitionsCheckbox.setTooltip(new Tooltip("Show / hide the acquisition overlay.\n"
                 + "First check scans the project for per-slide alignments\n"
                 + "and paints a translucent thumbnail at each acquired\n"
-                + "image's stage position. Unchecking hides the overlay\n"
+                + "image's stage position. Only images acquired on this\n"
+                + "microscope are shown -- imported slides are not\n"
+                + "acquisitions, and another scope's stage coordinates\n"
+                + "do not apply here. Unchecking hides the overlay\n"
                 + "but keeps the cached thumbnails and the Images list\n"
                 + "so re-checking is instant. Use Clear to drop the cache\n"
                 + "and force a fresh project rescan next time."));
@@ -1317,8 +1374,10 @@ public class StageMapWindow {
         // Right-click on the button surface offers Select All / Select None.
         acquisitionVisibilityMenu = new MenuButton("Images");
         acquisitionVisibilityMenu.setStyle("-fx-font-size: 10; -fx-padding: 1 4;");
-        acquisitionVisibilityMenu.setTooltip(new Tooltip(
-                "Toggle visibility of individual acquired images.\n" + "Right-click for Select All / Select None."));
+        acquisitionVisibilityMenu.setTooltip(new Tooltip("Toggle visibility of individual acquired images.\n"
+                + "Lists only what this microscope acquired; imported\n"
+                + "slides and other scopes' acquisitions are excluded.\n"
+                + "Right-click for Select All / Select None."));
         acquisitionVisibilityMenu.setDisable(true);
         ContextMenu visibilityCtx = new ContextMenu();
         MenuItem selectAllItem = new MenuItem("Select All");
