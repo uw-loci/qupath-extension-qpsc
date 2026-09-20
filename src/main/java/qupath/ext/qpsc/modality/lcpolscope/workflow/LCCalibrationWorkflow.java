@@ -193,7 +193,7 @@ public class LCCalibrationWorkflow {
 
     private static void startWithProgress(Params params) {
         Alert progress = new Alert(Alert.AlertType.INFORMATION);
-        progress.setTitle("Calibration In Progress");
+        progress.setTitle("LC Calibration In Progress");
         progress.setHeaderText("Calibrating liquid crystals");
 
         Label status = new Label("Starting...");
@@ -270,7 +270,7 @@ public class LCCalibrationWorkflow {
         // and inspectable, and the operator decides whether to accept it.
         Alert.AlertType type = ratio >= ER_ACCEPTABLE ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
         Alert dialog = new Alert(type);
-        dialog.setTitle("Calibration Complete");
+        dialog.setTitle("LC Calibration Complete");
         dialog.setHeaderText(String.format("Extinction ratio %.1f (%s)", ratio, assessment));
 
         List<String> lines = new ArrayList<>();

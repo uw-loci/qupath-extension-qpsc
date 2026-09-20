@@ -91,7 +91,7 @@ public final class PropagationManagerDialog {
             return;
         }
         if (qupath == null || qupath.getProject() == null) {
-            Dialogs.showErrorMessage("Propagation Manager", "No project is open.");
+            Dialogs.showErrorMessage("Propagation Manager - Error", "No project is open.");
             return;
         }
         new PropagationManagerDialog().build(qupath, defaultDirection);

@@ -271,7 +271,7 @@ public final class FocusApproachValidationWorkflow {
     private static Plan confirmPlan(
             MicroscopeConfigManager mgr, String modality, String resolvedObjective, double safeZ) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Focus Approach Validation");
+        alert.setTitle("Focus Approach Validation - Plan");
         alert.setHeaderText("Measure how focus behaves approaching from the safe Z");
         // Non-modal: this dialog tells the operator to set exposure and illumination, so it
         // must not block the controls that do that. showAndWait still waits for the answer.
@@ -387,7 +387,7 @@ public final class FocusApproachValidationWorkflow {
         double delta = safeZ - focusZ;
         String direction = delta >= 0 ? "POSITIVE (+Z)" : "NEGATIVE (-Z)";
         Alert alert = new Alert(Alert.AlertType.WARNING);
-        alert.setTitle("Focus Approach Validation");
+        alert.setTitle("Focus Approach Validation - Confirm Retraction");
         alert.setHeaderText("Confirm the retraction direction before the stage moves");
         // Non-modal so the operator can act on its own advice: verify the retraction by hand in
         // the Live Viewer before committing.
@@ -419,7 +419,7 @@ public final class FocusApproachValidationWorkflow {
     /** Prompts, then reads the stage Z the operator settled on. Null when cancelled. */
     private static Double promptAndReadZ(MicroscopeController controller, String header, String instruction) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Focus Approach Validation");
+        alert.setTitle("Focus Approach Validation - Set Position");
         alert.setHeaderText(header);
         // These prompts ask the operator to move the stage in XY and focus by hand. An
         // application-modal dialog would block exactly the controls it is asking them to use.
@@ -473,7 +473,7 @@ public final class FocusApproachValidationWorkflow {
 
         Stage progress = new Stage();
         progress.initModality(Modality.APPLICATION_MODAL);
-        progress.setTitle("Focus Approach Validation");
+        progress.setTitle("Focus Approach Validation - Progress");
         progress.setAlwaysOnTop(true);
 
         Label status = new Label(String.format(
@@ -738,7 +738,7 @@ public final class FocusApproachValidationWorkflow {
 
         Platform.runLater(() -> {
             Alert alert = new Alert(verdict.usable() ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING);
-            alert.setTitle("Focus Approach Validation");
+            alert.setTitle("Focus Approach Validation - Result");
             alert.setHeaderText(
                     verdict.usable()
                             ? "Focus approach characterised"

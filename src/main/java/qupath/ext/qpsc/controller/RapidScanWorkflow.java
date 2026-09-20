@@ -52,7 +52,7 @@ public class RapidScanWorkflow {
     public static void show(QuPathGUI qupath) {
         MicroscopeController mc = MicroscopeController.getInstance();
         if (mc == null || !mc.isConnected()) {
-            Dialogs.showErrorMessage("Rapid Scan", "Not connected to microscope server.");
+            Dialogs.showErrorMessage("Rapid Scan - Error", "Not connected to microscope server.");
             return;
         }
 
@@ -62,18 +62,18 @@ public class RapidScanWorkflow {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             mgr = MicroscopeConfigManager.getInstance(configPath);
         } catch (Exception e) {
-            Dialogs.showErrorMessage("Rapid Scan", "Cannot load microscope config: " + e.getMessage());
+            Dialogs.showErrorMessage("Rapid Scan - Error", "Cannot load microscope config: " + e.getMessage());
             return;
         }
 
         Set<String> objectives = mgr.getAvailableObjectives();
         if (objectives.isEmpty()) {
-            Dialogs.showErrorMessage("Rapid Scan", "No objectives found in microscope configuration.");
+            Dialogs.showErrorMessage("Rapid Scan - Error", "No objectives found in microscope configuration.");
             return;
         }
         Set<String> detectors = mgr.getHardwareDetectors();
         if (detectors.isEmpty()) {
-            Dialogs.showErrorMessage("Rapid Scan", "No detectors found in microscope configuration.");
+            Dialogs.showErrorMessage("Rapid Scan - Error", "No detectors found in microscope configuration.");
             return;
         }
 
@@ -165,7 +165,7 @@ public class RapidScanWorkflow {
                 centerXField.setText(String.format("%.1f", pos[0]));
                 centerYField.setText(String.format("%.1f", pos[1]));
             } catch (Exception ex) {
-                Dialogs.showErrorMessage("Rapid Scan", "Failed to read stage position: " + ex.getMessage());
+                Dialogs.showErrorMessage("Rapid Scan - Error", "Failed to read stage position: " + ex.getMessage());
             }
         });
 

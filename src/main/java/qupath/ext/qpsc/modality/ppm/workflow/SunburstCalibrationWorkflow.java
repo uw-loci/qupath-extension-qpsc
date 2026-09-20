@@ -93,7 +93,7 @@ public class SunburstCalibrationWorkflow {
     private static void startCalibrationWithProgress(SunburstCalibrationParams params) {
         // Must be called on FX thread - create progress dialog here
         Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
-        progressDialog.setTitle("Calibration In Progress");
+        progressDialog.setTitle("Reference Slide Calibration In Progress");
         progressDialog.setHeaderText("PPM Reference Slide Calibration");
 
         Label progressLabel = new Label(

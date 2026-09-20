@@ -302,7 +302,7 @@ public class PolarizerCalibrationWorkflow {
     private static void startCalibrationWithProgress(CalibrationParams params) {
         // Must be called on FX thread - create progress dialog here
         Alert progressDialog = new Alert(Alert.AlertType.INFORMATION);
-        progressDialog.setTitle("Calibration In Progress");
+        progressDialog.setTitle("Polarizer Calibration In Progress");
         progressDialog.setHeaderText("Polarizer Calibration Running");
 
         Label progressLabel =
@@ -420,7 +420,7 @@ public class PolarizerCalibrationWorkflow {
                 progressDialog.close();
 
                 Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                alert.setTitle("Calibration Complete");
+                alert.setTitle("Polarizer Calibration Complete");
                 alert.setHeaderText("Polarizer calibration completed successfully!");
 
                 // Create scrollable content with results

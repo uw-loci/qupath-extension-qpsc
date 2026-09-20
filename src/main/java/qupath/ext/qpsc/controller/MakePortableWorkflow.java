@@ -86,7 +86,7 @@ public class MakePortableWorkflow {
     public static void run(QuPathGUI gui) {
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage("Make Project Portable", "No project is open. Open a project first.");
+            Dialogs.showErrorMessage("Make Project Portable - Error", "No project is open. Open a project first.");
             return;
         }
 
@@ -412,7 +412,8 @@ public class MakePortableWorkflow {
             boolean willDeleteTiles = hasTiles && !keepTiles;
 
             boolean confirmed = Dialogs.showConfirmDialog(
-                    "Make Project Portable", buildConfirmMessage(entries, tileScan, action, willDeleteTiles, hasTiles));
+                    "Make Project Portable - Confirm",
+                    buildConfirmMessage(entries, tileScan, action, willDeleteTiles, hasTiles));
             if (!confirmed) {
                 return;
             }

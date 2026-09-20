@@ -130,7 +130,7 @@ public class NoiseCharacterizationWorkflow {
      */
     private static void startWithProgress(NoiseCharacterizationDialog.NoiseCharParams params) {
         Stage progressStage = new Stage();
-        progressStage.setTitle("JAI Noise Characterization");
+        progressStage.setTitle("JAI Noise Characterization - Progress");
         progressStage.initModality(Modality.NONE);
 
         QuPathGUI gui = QuPathGUI.getInstance();

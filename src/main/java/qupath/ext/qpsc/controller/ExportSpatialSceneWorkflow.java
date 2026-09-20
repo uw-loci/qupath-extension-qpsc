@@ -74,7 +74,8 @@ public class ExportSpatialSceneWorkflow {
     public static void run(QuPathGUI qupath) {
         Project<BufferedImage> project = qupath.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage("Export Spatial Relationships", "No project is open. Open a project first.");
+            Dialogs.showErrorMessage(
+                    "Export Spatial Relationships - Error", "No project is open. Open a project first.");
             return;
         }
         Thread worker = new Thread(
@@ -85,7 +86,7 @@ public class ExportSpatialSceneWorkflow {
                     } catch (Exception e) {
                         logger.error("NGFF scene export failed", e);
                         Platform.runLater(() -> Dialogs.showErrorMessage(
-                                "Export Spatial Relationships", "Export failed: " + e.getMessage()));
+                                "Export Spatial Relationships - Error", "Export failed: " + e.getMessage()));
                     }
                 },
                 "qpsc-ngff-scene-export");

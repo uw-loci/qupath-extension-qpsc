@@ -218,7 +218,7 @@ public class AutofocusBenchmarkWorkflow {
             // Create progress window
             Stage progressStage = new Stage();
             progressStage.initModality(Modality.NONE);
-            progressStage.setTitle("Autofocus Parameter Benchmark");
+            progressStage.setTitle("Autofocus Parameter Benchmark - Progress");
             progressStage.setAlwaysOnTop(true);
             progressStage.setResizable(false);
 
