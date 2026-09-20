@@ -83,6 +83,49 @@ public class MultiTileRefinement {
     private static final double SCALE_WARN_HIGH = 1.1;
 
     /**
+     * Softer band, below the axis-swap band above, at which a THIRD point is worth asking for.
+     *
+     * <p>A similarity transform has four degrees of freedom and two correspondences supply
+     * exactly four equations, so a 2-point fit is exactly determined: it reproduces both points
+     * perfectly and its RMS residual is identically zero however badly a point was clicked. The
+     * zero is arithmetic, not evidence. Any disagreement between the two points has nowhere to
+     * go except rotation and scale, so one mis-measured point does not look like error -- it
+     * looks like a rotated, rescaled slide.
+     *
+     * <p>Measured on the 4-slide run of 2026-09-17, where three slides fitted at 0.111-0.255 deg
+     * with scale inside 0.13%, and the fourth returned 1.418 deg at scale 0.99367 from two points
+     * that disagreed by ~198 um over a 7.7 mm baseline. That fit reported RMS 0.00 um and nothing
+     * questioned it. These thresholds sit between the two populations: past them, a third point
+     * is what tells a genuinely rotated slide apart from a bad click, because with three points
+     * the RMS finally measures something.
+     */
+    private static final double THIRD_POINT_ROTATION_DEG = 0.5;
+
+    private static final double THIRD_POINT_SCALE_DEVIATION = 0.003;
+
+    /**
+     * True when a fit is exactly determined -- RMS is structurally zero and says nothing about
+     * quality. Reporting "0.0 um" for these reads as a perfect fit, which is the opposite of
+     * what it means.
+     */
+    private static boolean isExactlyDetermined(TransformationFunctions.SimilarityFit fit) {
+        return fit.pointCount() <= MIN_POINTS;
+    }
+
+    /**
+     * True when a 2-point correction is large enough that it could equally be one bad point, and
+     * small enough that the axis-swap warning above will not fire. Only meaningful while the fit
+     * is exactly determined; with three or more points the RMS carries this signal instead.
+     */
+    private static boolean shouldAskForThirdPoint(TransformationFunctions.SimilarityFit fit) {
+        if (!isExactlyDetermined(fit)) {
+            return false;
+        }
+        return Math.abs(fit.rotationDegrees()) > THIRD_POINT_ROTATION_DEG
+                || Math.abs(fit.scale() - 1.0) > THIRD_POINT_SCALE_DEVIATION;
+    }
+
+    /**
      * One measured correspondence for the similarity solve: the tile's QuPath centroid and
      * the stage position it actually landed at. The centroid (not a precomputed predicted
      * stage) is stored so the solve can recompute predicted positions against the ORIGINAL
@@ -338,15 +381,45 @@ public class MultiTileRefinement {
                                 + "the wrong entry orientation). Re-check the alignment before saving; Solve is still "
                                 + "available if you are sure.",
                         fit.rotationDegrees(), fit.scale()));
+            } else if (shouldAskForThirdPoint(fit)) {
+                // Not implausible enough to be an axis swap, but too large to accept from two
+                // points that cannot contradict each other. A third point is the only thing that
+                // can tell "the slide really is rotated" from "one of these two clicks is off".
+                logger.warn(
+                        "Multi-tile correction from {} points is rotation {} deg, scale {} -- larger than "
+                                + "slide play and not checkable at this point count (a 2-point similarity fit is "
+                                + "exactly determined, so its RMS is always 0). Advising a third point.",
+                        fit.pointCount(),
+                        String.format("%.3f", fit.rotationDegrees()),
+                        String.format("%.5f", fit.scale()));
+                diagLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
+                diagLabel.setText(String.format(
+                        "Add a third point. From %d points the correction is rotation %.2f deg, scale %.4f -- "
+                                + "bigger than slide play usually accounts for. Two points fit a rotation and scale "
+                                + "exactly, so the fit RMS is 0 no matter how good the points are, and a single "
+                                + "mis-measured point looks identical to a genuinely rotated slide. A third point "
+                                + "makes the RMS meaningful and settles which it is. Solve is still available.",
+                        fit.pointCount(), fit.rotationDegrees(), fit.scale()));
+                // Keep the operator pointed at "Select tile" rather than "Solve & Save".
+                solveButton.setDisable(false);
+                outerPulse.highlight(addButton, "#EF6C00");
+                return;
             } else {
                 diagLabel.setStyle("-fx-font-style: italic; -fx-text-fill: " + ThemeColors.MUTED + ";");
+                String rmsText = isExactlyDetermined(fit)
+                        // Do not print a residual that is zero by construction: it reads as a
+                        // perfect fit when it is really "no check was possible".
+                        ? "fit RMS n/a (2 points fit exactly; a third point makes it meaningful)"
+                        : String.format("fit RMS %.1f um", fit.rmsResidualUm());
                 diagLabel.setText(String.format(
-                        "Correction from %d points: rotation %.2f deg, scale %.4f, fit RMS %.1f um.%s",
+                        "Correction from %d points: rotation %.2f deg, scale %.4f, %s.%s",
                         fit.pointCount(),
                         fit.rotationDegrees(),
                         fit.scale(),
-                        fit.rmsResidualUm(),
-                        fit.rmsResidualUm() > 25.0 ? "  High RMS -- check the captured points before saving." : ""));
+                        rmsText,
+                        !isExactlyDetermined(fit) && fit.rmsResidualUm() > 25.0
+                                ? "  High RMS -- check the captured points before saving."
+                                : ""));
             }
             solveButton.setDisable(false);
             outerPulse.highlight(solveButton, "#2E7D32");
@@ -495,12 +568,26 @@ public class MultiTileRefinement {
             TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
             AffineTransform refined = new AffineTransform(fit.correction());
             refined.concatenate(initialTransform);
+            // The RMS of an exactly-determined fit is zero by construction. Logging "RMS=0.00"
+            // put a false quality signal in the run record, which is how a 1.418 deg correction
+            // from two disagreeing points went unquestioned on 2026-09-17.
             logger.info(
-                    "Multi-tile refinement accepted: {} points, rotation={} deg, scale={}, RMS={} um",
+                    "Multi-tile refinement accepted: {} points, rotation={} deg, scale={}, RMS={}",
                     fit.pointCount(),
                     String.format("%.3f", fit.rotationDegrees()),
                     String.format("%.5f", fit.scale()),
-                    String.format("%.2f", fit.rmsResidualUm()));
+                    isExactlyDetermined(fit)
+                            ? "n/a (exactly determined by 2 points)"
+                            : String.format("%.2f um", fit.rmsResidualUm()));
+            if (shouldAskForThirdPoint(fit)) {
+                logger.warn(
+                        "Multi-tile refinement saved with an unchecked correction: rotation={} deg, scale={} "
+                                + "from only {} points. If this slide's acquisition lands off-target, this fit is "
+                                + "the first thing to re-examine.",
+                        String.format("%.3f", fit.rotationDegrees()),
+                        String.format("%.5f", fit.scale()),
+                        fit.pointCount());
+            }
             SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             Dialogs.showInfoNotification(
                     "Multi-Tile Refinement",
