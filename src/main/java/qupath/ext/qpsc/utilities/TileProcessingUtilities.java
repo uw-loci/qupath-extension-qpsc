@@ -1073,8 +1073,12 @@ public class TileProcessingUtilities {
                 return false;
             }
 
-            // Count files to zip
-            long fileCount = Files.walk(dir).filter(Files::isRegularFile).count();
+            // Count files to zip. try-with-resources: Files.walk holds an open directory stream
+            // until the stream is closed, and this used to leak one per call.
+            long fileCount;
+            try (java.util.stream.Stream<Path> walk = Files.walk(dir)) {
+                fileCount = walk.filter(Files::isRegularFile).count();
+            }
             if (fileCount == 0) {
                 logger.warn("No files found to compress in: {}", folderPath);
                 return false;
@@ -1095,8 +1099,9 @@ public class TileProcessingUtilities {
             logger.info("Creating ZIP file: {}", zipPath);
 
             final long[] zippedCount = {0};
-            try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipPath.toFile()))) {
-                Files.walk(dir).filter(Files::isRegularFile).forEach(p -> {
+            try (ZipOutputStream zos = new ZipOutputStream(new FileOutputStream(zipPath.toFile()));
+                    java.util.stream.Stream<Path> walk = Files.walk(dir)) {
+                walk.filter(Files::isRegularFile).forEach(p -> {
                     // Use relative path to preserve subdirectory structure
                     String relativePath = dir.relativize(p).toString();
                     ZipEntry e = new ZipEntry(relativePath);
@@ -1125,7 +1130,10 @@ public class TileProcessingUtilities {
                 return false;
             }
 
-        } catch (IOException ex) {
+        } catch (IOException | RuntimeException ex) {
+            // RuntimeException too: Files.walk reports an unreadable directory as an
+            // UncheckedIOException thrown while the stream is consumed, which an IOException catch
+            // does not see. Compressing tiles must not take the workflow down with it.
             logger.error("Error zipping tiles: {}", ex.getMessage(), ex);
             return false;
         }
