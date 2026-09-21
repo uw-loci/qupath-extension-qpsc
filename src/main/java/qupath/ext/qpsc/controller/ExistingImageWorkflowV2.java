@@ -222,6 +222,9 @@ public class ExistingImageWorkflowV2 {
                 Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ(), false);
         o.state.cancellationToken = cancellationToken;
         o.state.pipelinedBatchAcquire = pipelined;
+        // ACQUIRE_ONLY is reached only from the multi-slide driver, pipelined or one
+        // slide at a time, so this is exactly the batch case.
+        o.state.batchAcquire = true;
         CompletableFuture<WorkflowState> acquisitionComplete = o.execute();
         return new AcquireHandle(acquisitionComplete, o.stitchingSettled);
     }
@@ -3038,6 +3041,20 @@ public class ExistingImageWorkflowV2 {
          * bounded acquisition), leaving their behavior unchanged.
          */
         public boolean pipelinedBatchAcquire = false;
+
+        /**
+         * True for every slide of a multi-slide batch acquire pass, pipelined or not.
+         *
+         * <p>Distinct from {@link #pipelinedBatchAcquire}, which is about whether the
+         * driver may start the next slot while this one stitches. This one is about the
+         * absence of an operator: it tells the server not to park the stage at the
+         * "starting position" it captured, because in a batch that position is inherited
+         * from whichever slide ran before and is usually on a different slide entirely.
+         *
+         * <p>Default false everywhere else (single-slide menu path, FULL, bounded
+         * acquisition), leaving their end-of-acquisition behavior unchanged.
+         */
+        public boolean batchAcquire = false;
 
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();

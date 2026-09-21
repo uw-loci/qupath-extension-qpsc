@@ -944,6 +944,9 @@ public class AcquisitionManager {
                 }
                 // Let the modality handler configure builder flags (e.g., no debayer for LSM)
                 ModalityRegistry.getHandler(baseModality).configureCommandBuilder(config.commandBuilder());
+                // Multi-slide batches park the stage on the region they just acquired
+                // rather than on an inherited "starting position" from another slide.
+                config.commandBuilder().batchAcquire(state.batchAcquire);
 
                 String commandString = config.commandBuilder().buildSocketMessage();
                 MinorFunctions.saveAcquisitionCommand(

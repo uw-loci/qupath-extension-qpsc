@@ -55,6 +55,14 @@ public class AcquisitionCommandBuilder {
     private Double afChannelExposureMs;
     private Double afChannelIntensity;
 
+    /**
+     * True when this acquisition is one slide of a multi-slide batch. Emitted as
+     * {@code --batch-acquire}, and it changes exactly one thing on the server: where
+     * the stage is parked once the region finishes. See
+     * {@code _cleanup_acquisition} in the command server's workflow.py.
+     */
+    private boolean batchAcquire;
+
     // Marks this as a non-rotation modality (brightfield, fluorescence, laser
     // scanning without angles). When true, the builder omits --angles entirely
     // and sends --exposures from the first entry in angleExposures so the
@@ -284,6 +292,25 @@ public class AcquisitionCommandBuilder {
         this.afChannelId = channelId;
         this.afChannelExposureMs = exposureMs;
         this.afChannelIntensity = intensity;
+        return this;
+    }
+
+    /**
+     * Marks this acquisition as one slide of a multi-slide batch.
+     *
+     * <p>The server parks the stage at the end of every acquisition. For an interactive
+     * single-slide run that target is the position the operator started from, which is
+     * what they expect to come back to. In a batch there is no such position: the
+     * server captures "start" from wherever the stage happens to be, so each slide
+     * inherits the previous one's start and the whole batch drives back to a point on
+     * whichever slide the setup pass finished on. Setting this makes the server park on
+     * the region it just acquired instead.
+     *
+     * @param batchAcquire true for a multi-slide batch acquisition
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder batchAcquire(boolean batchAcquire) {
+        this.batchAcquire = batchAcquire;
         return this;
     }
 
@@ -737,6 +764,10 @@ public class AcquisitionCommandBuilder {
                     "--objective", objective,
                     "--detector", detector,
                     "--pixel-size", String.valueOf(pixelSize)));
+        }
+
+        if (batchAcquire) {
+            args.add("--batch-acquire");
         }
 
         // Dedicated focus channel: autofocus applies this channel itself. Emitted
