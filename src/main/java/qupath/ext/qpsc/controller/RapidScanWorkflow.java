@@ -15,6 +15,7 @@ import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -486,6 +487,7 @@ public class RapidScanWorkflow {
 
         dialog.getDialogPane().setContent(grid);
         dialog.setResizable(true);
+        DialogOwner.own(dialog);
         dialog.show();
     }
 

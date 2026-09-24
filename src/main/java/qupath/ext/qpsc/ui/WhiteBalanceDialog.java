@@ -476,6 +476,7 @@ public class WhiteBalanceDialog {
                         alert.setContentText("Pick a detector in Shared Settings before running calibration. "
                                 + "Calibration is written into the detector-specific YAML section, "
                                 + "so picking the wrong one leaves the active detector with stale values.");
+                        DialogOwner.own(alert);
                         alert.showAndWait();
                         return null;
                     }

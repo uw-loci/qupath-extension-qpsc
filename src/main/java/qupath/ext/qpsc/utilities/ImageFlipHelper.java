@@ -454,6 +454,7 @@ public final class ImageFlipHelper {
                 headerLabel.setWrapText(true);
                 headerLabel.setMaxWidth(660);
             }
+            qupath.ext.qpsc.ui.DialogOwner.own(alert);
             alert.showAndWait();
         };
         if (Platform.isFxApplicationThread()) {

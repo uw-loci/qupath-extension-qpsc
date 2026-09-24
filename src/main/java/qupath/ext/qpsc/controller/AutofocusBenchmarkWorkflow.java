@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AutofocusBenchmarkDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.fx.dialogs.Dialogs;
@@ -118,6 +119,7 @@ public class AutofocusBenchmarkWorkflow {
                                 alert.setTitle("Invalid Output Directory");
                                 alert.setHeaderText("Output directory does not exist");
                                 alert.setContentText("Please create the directory:\n" + params.outputPath());
+                                DialogOwner.own(alert);
                                 alert.showAndWait();
                             });
                             closeClient(client);
@@ -174,6 +176,7 @@ public class AutofocusBenchmarkWorkflow {
                                     estimatedTime,
                                     warningText));
 
+                            DialogOwner.own(confirm);
                             confirm.showAndWait().ifPresent(response -> {
                                 if (response == ButtonType.OK) {
                                     // Run benchmark
@@ -357,6 +360,7 @@ public class AutofocusBenchmarkWorkflow {
                                     alert.setContentText("The benchmark has been stopped.\n\n"
                                             + "Partial results may have been saved to:\n"
                                             + params.outputPath());
+                                    DialogOwner.own(alert);
                                     alert.showAndWait();
                                     return;
                                 }
@@ -375,6 +379,7 @@ public class AutofocusBenchmarkWorkflow {
                                             + "Check server logs for details.");
                                 }
 
+                                DialogOwner.own(alert);
                                 alert.showAndWait();
                             });
 
@@ -513,6 +518,7 @@ public class AutofocusBenchmarkWorkflow {
         resultsDialog.getDialogPane().setContent(textArea);
         resultsDialog.setResizable(true);
 
+        DialogOwner.own(resultsDialog);
         resultsDialog.showAndWait();
 
         logger.info("Results displayed to user");

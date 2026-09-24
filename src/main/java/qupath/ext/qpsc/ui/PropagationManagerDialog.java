@@ -561,14 +561,16 @@ public final class PropagationManagerDialog {
                 .collect(Collectors.toSet());
         boolean includeUnclassified = unclassifiedCheck.isSelected();
         if (selectedClasses.isEmpty() && !includeUnclassified) {
-            new Alert(Alert.AlertType.WARNING, "No object classes selected.").showAndWait();
+            DialogOwner.own(new Alert(Alert.AlertType.WARNING, "No object classes selected."))
+                    .showAndWait();
             return;
         }
 
         List<PropagationGroupItem> checkedGroups =
                 groups.stream().filter(PropagationGroupItem::isSelected).collect(Collectors.toList());
         if (checkedGroups.isEmpty()) {
-            new Alert(Alert.AlertType.WARNING, "No groups checked. Tick one or more rows in the Groups table.")
+            DialogOwner.own(new Alert(
+                            Alert.AlertType.WARNING, "No groups checked. Tick one or more rows in the Groups table."))
                     .showAndWait();
             return;
         }
@@ -584,10 +586,10 @@ public final class PropagationManagerDialog {
         String refKey = refKeyCombo.getValue();
         String refValue = refValueCombo.getValue();
         if (siftRefine && (refKey == null || refValue == null || refKey.isBlank() || refValue.isBlank())) {
-            new Alert(
+            DialogOwner.own(new Alert(
                             Alert.AlertType.WARNING,
                             "SIFT refinement is enabled but the reference image selection is incomplete. "
-                                    + "Pick a metadata key and a value, or uncheck the option.")
+                                    + "Pick a metadata key and a value, or uncheck the option."))
                     .showAndWait();
             return;
         }
@@ -1092,6 +1094,7 @@ public final class PropagationManagerDialog {
                                                         .sum()));
                                 alert.getDialogPane().setContent(ta);
                                 alert.getDialogPane().setPrefWidth(620);
+                                DialogOwner.own(alert);
                                 alert.showAndWait();
                             });
                         }
@@ -1137,26 +1140,30 @@ public final class PropagationManagerDialog {
     private static void stampSourceRoi(
             QuPathGUI qupath, Project<BufferedImage> project, List<PropagationGroupItem> groups, TextArea results) {
         if (qupath.getImageData() == null) {
-            new Alert(Alert.AlertType.WARNING, "No image is open. Open the unflipped base image first.").showAndWait();
+            DialogOwner.own(new Alert(
+                            Alert.AlertType.WARNING, "No image is open. Open the unflipped base image first."))
+                    .showAndWait();
             return;
         }
         ProjectImageEntry<BufferedImage> openEntry = project.getEntry(qupath.getImageData());
         if (openEntry == null) {
-            new Alert(Alert.AlertType.WARNING, "The open image is not a project entry.").showAndWait();
+            DialogOwner.own(new Alert(Alert.AlertType.WARNING, "The open image is not a project entry."))
+                    .showAndWait();
             return;
         }
         var selected = qupath.getImageData().getHierarchy().getSelectionModel().getSelectedObjects();
         if (selected == null || selected.size() != 1) {
-            new Alert(
+            DialogOwner.own(new Alert(
                             Alert.AlertType.WARNING,
                             "Select exactly ONE annotation on the base image to use as the source rectangle, "
-                                    + "then click again.")
+                                    + "then click again."))
                     .showAndWait();
             return;
         }
         ROI roi = selected.iterator().next().getROI();
         if (roi == null) {
-            new Alert(Alert.AlertType.WARNING, "Selected object has no ROI.").showAndWait();
+            DialogOwner.own(new Alert(Alert.AlertType.WARNING, "Selected object has no ROI."))
+                    .showAndWait();
             return;
         }
         double rx = roi.getBoundsX();
@@ -1164,7 +1171,8 @@ public final class PropagationManagerDialog {
         double rw = roi.getBoundsWidth();
         double rh = roi.getBoundsHeight();
         if (rw <= 0 || rh <= 0) {
-            new Alert(Alert.AlertType.WARNING, "Selected ROI has zero area.").showAndWait();
+            DialogOwner.own(new Alert(Alert.AlertType.WARNING, "Selected ROI has zero area."))
+                    .showAndWait();
             return;
         }
         String openBase = ImageMetadataManager.getBaseImage(openEntry);
@@ -1198,7 +1206,7 @@ public final class PropagationManagerDialog {
                     rx, ry, rw, rh, stampedSubs, matchedGroups);
         }
         results.appendText(msg + "\n");
-        new Alert(Alert.AlertType.INFORMATION, msg).showAndWait();
+        DialogOwner.own(new Alert(Alert.AlertType.INFORMATION, msg)).showAndWait();
     }
 
     private static void appendStatus(TextArea results, String s) {

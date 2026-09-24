@@ -17,6 +17,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
 
 /**
  * Estimates the disk space required for an acquisition and warns the user if
@@ -253,6 +254,7 @@ public class AcquisitionSpaceCheck {
         ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(proceedButton, cancelButton);
 
+        DialogOwner.own(alert);
         var response = alert.showAndWait();
         boolean proceed = response.isPresent() && response.get() == proceedButton;
 

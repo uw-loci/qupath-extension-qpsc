@@ -14,6 +14,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.ui.DialogOwner;
 
 /**
  * Pre-acquisition check that flags a mismatch between the acquisition settings
@@ -260,6 +261,7 @@ public final class BackgroundIlluminationCheck {
         ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
         alert.getButtonTypes().setAll(proceedButton, cancelButton);
 
+        DialogOwner.own(alert);
         var response = alert.showAndWait();
         boolean proceed = response.isPresent() && response.get() == proceedButton;
         if (!proceed) {

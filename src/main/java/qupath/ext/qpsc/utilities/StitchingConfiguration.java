@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
 
 /**
@@ -187,6 +188,7 @@ public class StitchingConfiguration {
                 alert.getDialogPane().setMinWidth(500);
                 alert.getButtonTypes().setAll(retryButton, cancelButton);
 
+                DialogOwner.own(alert);
                 var response = alert.showAndWait();
                 userWantsRetry.set(response.isPresent() && response.get() == retryButton);
                 latch.countDown();

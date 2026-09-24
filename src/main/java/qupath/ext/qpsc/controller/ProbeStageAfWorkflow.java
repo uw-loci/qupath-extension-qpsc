@@ -31,6 +31,7 @@ import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.ProbeStageAfResult;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -67,6 +68,7 @@ public class ProbeStageAfWorkflow {
                 a.setHeaderText("No active microscope configuration");
                 a.setContentText("Set the microscope config file in Preferences before running "
                         + "Re-probe Stage AF, or run the Setup Wizard first.");
+                DialogOwner.own(a);
                 a.showAndWait();
             });
             return;
@@ -115,6 +117,7 @@ public class ProbeStageAfWorkflow {
                             a.setContentText("Reason: "
                                     + (finalError == null ? "no result" : finalError)
                                     + "\n\nCheck the server is running and reachable.");
+                            DialogOwner.own(a);
                             a.showAndWait();
                             return;
                         }
@@ -192,6 +195,7 @@ public class ProbeStageAfWorkflow {
                     Alert a = new Alert(Alert.AlertType.ERROR);
                     a.setHeaderText("Invalid slow speed (um/s)");
                     a.setContentText("Must be numeric or blank.");
+                    DialogOwner.own(a);
                     a.showAndWait();
                     return;
                 }
@@ -210,12 +214,14 @@ public class ProbeStageAfWorkflow {
                 ok.setHeaderText("stage.streaming_af updated");
                 ok.setContentText("Wrote new streaming-AF parameters to:\n  " + yamlPath
                         + "\n\nThe next streaming autofocus run will use these values.");
+                DialogOwner.own(ok);
                 ok.showAndWait();
             } catch (IOException ex) {
                 logger.error("Failed to write streaming_af block to {}", yamlPath, ex);
                 Alert err = new Alert(Alert.AlertType.ERROR);
                 err.setHeaderText("Failed to save YAML");
                 err.setContentText(ex.getMessage());
+                DialogOwner.own(err);
                 err.showAndWait();
             }
         });

@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -164,6 +165,7 @@ public class LCCalibrationWorkflow {
         VBox content = new VBox(8, intro, fromConfig, showConfig, grid, notes);
         dialog.getDialogPane().setContent(content);
 
+        DialogOwner.own(dialog);
         if (dialog.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
             return Optional.empty();
         }
@@ -204,6 +206,7 @@ public class LCCalibrationWorkflow {
 
         progress.getDialogPane().setContent(new VBox(10, status, spinner, hint));
         progress.getButtonTypes().setAll(ButtonType.CANCEL);
+        DialogOwner.own(progress);
         progress.show();
 
         CompletableFuture.runAsync(() -> execute(params, progress, status)).exceptionally(ex -> {
@@ -316,6 +319,7 @@ public class LCCalibrationWorkflow {
         Label body = new Label(String.join("\n", lines));
         body.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
         dialog.getDialogPane().setContent(body);
+        DialogOwner.own(dialog);
         dialog.showAndWait();
     }
 

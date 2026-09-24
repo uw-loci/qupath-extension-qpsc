@@ -4259,6 +4259,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     "Dismiss", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
             alert.getButtonTypes().setAll(retry, dismiss);
             try {
+                qupath.ext.qpsc.ui.DialogOwner.own(alert);
                 alert.showAndWait().ifPresent(bt -> {
                     if (bt == retry) {
                         userTriggeredReconnect();

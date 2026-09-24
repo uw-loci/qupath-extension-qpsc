@@ -19,6 +19,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.CalibrationResultDialog;
 import qupath.ext.qpsc.ui.CalibrationResultDialog.CalibrationResultData;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.SunburstCalibrationDialog;
 import qupath.ext.qpsc.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
 import qupath.ext.qpsc.ui.ThresholdPreviewDialog;
@@ -108,6 +109,7 @@ public class SunburstCalibrationWorkflow {
         progressDialog.getButtonTypes().add(ButtonType.CANCEL);
 
         // Show progress dialog (non-blocking)
+        DialogOwner.own(progressDialog);
         progressDialog.show();
 
         // Now run the actual calibration on a background thread
@@ -273,6 +275,7 @@ public class SunburstCalibrationWorkflow {
                             progressDialog.getDialogPane().setContent(content);
                             progressDialog.getButtonTypes().clear();
                             progressDialog.getButtonTypes().add(ButtonType.CANCEL);
+                            DialogOwner.own(progressDialog);
                             progressDialog.show();
 
                             CompletableFuture.runAsync(() -> {
@@ -397,6 +400,7 @@ public class SunburstCalibrationWorkflow {
             progressDialog.getButtonTypes().clear();
             progressDialog.getButtonTypes().add(ButtonType.CANCEL);
 
+            DialogOwner.own(progressDialog);
             progressDialog.show();
 
             CompletableFuture.runAsync(() -> {

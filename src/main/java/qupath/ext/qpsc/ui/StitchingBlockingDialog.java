@@ -559,6 +559,7 @@ public class StitchingBlockingDialog {
                 errorAlert.setTitle("Stitching Error");
                 errorAlert.setHeaderText("Stitching operation failed");
                 errorAlert.setContentText("Operation: " + operationId + "\n\nError:\n" + errorMessage);
+                DialogOwner.own(errorAlert);
                 errorAlert.show();
 
                 updateStatusList();

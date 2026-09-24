@@ -711,6 +711,7 @@ public class AlignmentHelper {
                 headerLabel.setWrapText(true);
                 headerLabel.setMaxWidth(660);
             }
+            qupath.ext.qpsc.ui.DialogOwner.own(alert);
             result[0] = alert.showAndWait()
                     .filter(b -> b == javafx.scene.control.ButtonType.OK)
                     .isPresent();
@@ -762,6 +763,7 @@ public class AlignmentHelper {
             headerLabel.setWrapText(true);
             headerLabel.setMaxWidth(660);
         }
+        qupath.ext.qpsc.ui.DialogOwner.own(alert);
         alert.showAndWait();
     }
 

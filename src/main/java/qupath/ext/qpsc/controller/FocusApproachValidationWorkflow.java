@@ -24,6 +24,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.FocusApproachValidationStore;
@@ -779,7 +780,7 @@ public final class FocusApproachValidationWorkflow {
 
             VBox content = new VBox(8, body, new Separator(), gateBox, gateHelp);
             alert.getDialogPane().setContent(content);
-            UIFunctions.showAlertOverParent(alert, null);
+            UIFunctions.showAlertOverParent(alert, DialogOwner.mainStage());
 
             boolean chosen = gateBox.isSelected();
             FocusApproachValidationStore.Record toSave =

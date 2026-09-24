@@ -358,6 +358,7 @@ public class UIFunctions {
                 contentLabel.setMaxWidth(550);
             }
 
+            DialogOwner.own(alert);
             alert.showAndWait();
         });
     }
@@ -639,6 +640,7 @@ public class UIFunctions {
         alert.setHeaderText(null);
         alert.setContentText(message);
         alert.initModality(Modality.APPLICATION_MODAL);
+        DialogOwner.own(alert);
         alert.showAndWait();
     }
 
@@ -935,6 +937,7 @@ public class UIFunctions {
         dialog.setHeaderText(message);
         dialog.getButtonTypes()
                 .setAll(new ButtonType("Yes", ButtonBar.ButtonData.YES), new ButtonType("No", ButtonBar.ButtonData.NO));
+        DialogOwner.own(dialog);
         var result = dialog.showAndWait();
         return result.isPresent() && result.get().getButtonData() == ButtonBar.ButtonData.YES;
     }
@@ -1406,14 +1409,16 @@ public class UIFunctions {
      *               the EDF settings pane) get the same co-floating behaviour
      *               instead of growing a second copy of it
      * @param parent the parent window (typically the always-on-top stage);
-     *               may be null, in which case no owner is set but
-     *               always-on-top is still applied
+     *               may be null (e.g. a panel not yet in a scene), in which
+     *               case the alert is owned by the QuPath main window instead
      * @return the user's chosen button, or empty if the alert was closed
      *         without a selection
      */
     public static Optional<ButtonType> showAlertOverParent(Dialog<ButtonType> alert, Window parent) {
         if (parent != null) {
             alert.initOwner(parent);
+        } else {
+            DialogOwner.own(alert);
         }
         alert.setOnShown(e -> {
             if (alert.getDialogPane() != null && alert.getDialogPane().getScene() != null) {

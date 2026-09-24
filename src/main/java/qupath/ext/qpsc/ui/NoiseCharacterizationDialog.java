@@ -190,6 +190,7 @@ public class NoiseCharacterizationDialog {
                             alert.setHeaderText("Custom Values Required");
                             alert.setContentText(
                                     "Please enter comma-separated gain and exposure values for Custom mode.");
+                            DialogOwner.own(alert);
                             alert.showAndWait();
                             return null;
                         }

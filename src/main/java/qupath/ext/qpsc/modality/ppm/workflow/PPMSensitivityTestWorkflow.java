@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -424,6 +425,7 @@ public class PPMSensitivityTestWorkflow {
         progressDialog.getButtonTypes().add(ButtonType.CANCEL);
 
         // Show progress dialog (non-blocking)
+        DialogOwner.own(progressDialog);
         progressDialog.show();
 
         // Now run the actual test on a background thread
@@ -515,6 +517,7 @@ public class PPMSensitivityTestWorkflow {
                 ButtonType closeBtn = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
                 alert.getButtonTypes().setAll(openFolderBtn, closeBtn);
 
+                DialogOwner.own(alert);
                 Optional<ButtonType> result = alert.showAndWait();
                 if (result.isPresent() && result.get() == openFolderBtn) {
                     qupath.ext.qpsc.ui.UIFunctions.revealInFileBrowser(

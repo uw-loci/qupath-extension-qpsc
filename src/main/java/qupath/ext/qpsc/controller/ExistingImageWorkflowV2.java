@@ -1141,6 +1141,7 @@ public class ExistingImageWorkflowV2 {
             javafx.scene.control.ButtonType cancel = new javafx.scene.control.ButtonType(
                     "Cancel", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
             alert.getButtonTypes().setAll(fix, proceed, cancel);
+            DialogOwner.own(alert);
             Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
             if (result.isEmpty() || result.get() == cancel) {
                 logger.info(
@@ -1266,6 +1267,7 @@ public class ExistingImageWorkflowV2 {
                             + "' from the project pane and re-run the workflow.\n\n"
                             + "You can delete this orphaned sibling from the project pane when convenient -- it is no longer needed.");
             alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+            DialogOwner.own(alert);
             alert.showAndWait();
             logger.info(
                     "Orphaned-sibling guard: refused workflow on '{}' (base '{}' source='{}' active='{}')",
@@ -2868,6 +2870,7 @@ public class ExistingImageWorkflowV2 {
                     headerLabel.setWrapText(true);
                     headerLabel.setMaxWidth(660);
                 }
+                DialogOwner.own(alert);
                 alert.showAndWait();
             };
             if (Platform.isFxApplicationThread()) {
@@ -2931,6 +2934,7 @@ public class ExistingImageWorkflowV2 {
                     headerLabel.setWrapText(true);
                     headerLabel.setMaxWidth(660);
                 }
+                DialogOwner.own(alert);
                 alert.showAndWait();
             };
             if (Platform.isFxApplicationThread()) {

@@ -11,6 +11,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
@@ -416,6 +417,7 @@ public class QPScopeChecks {
         if (parent != null) {
             UIFunctions.showAlertOverParent(alert, parent);
         } else {
+            DialogOwner.own(alert);
             alert.showAndWait();
         }
     }

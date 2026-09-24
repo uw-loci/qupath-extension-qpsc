@@ -135,6 +135,7 @@ public final class CalibrationAdviceDialog {
         alert.getDialogPane().setContent(wrapper);
         alert.getDialogPane().setMinWidth(580);
         alert.setResizable(true);
+        DialogOwner.own(alert);
         alert.show(); // Non-blocking so user can reference while working
     }
 }

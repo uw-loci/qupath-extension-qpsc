@@ -430,6 +430,7 @@ public class MicroscopeConfigManager {
                             + "are correct for PPM and likely wrong for other stages.\n\n"
                             + "Run 'Re-probe Stage AF' from the QuPath SCope menu to "
                             + "calibrate for your hardware.");
+                    qupath.ext.qpsc.ui.DialogOwner.own(a);
                     a.showAndWait();
                 } catch (Throwable inner) {
                     logger.debug("notifyStreamingAfMigrationOnce alert failed: {}", inner.toString());

@@ -65,6 +65,7 @@ public class MicroscopeErrorHandler {
             expContent.add(textArea, 0, 1);
 
             alert.getDialogPane().setExpandableContent(expContent);
+            DialogOwner.own(alert);
             alert.showAndWait();
         });
     }
@@ -147,6 +148,7 @@ public class MicroscopeErrorHandler {
         alert.setContentText(message + "\n\nDo you want to continue anyway?");
 
         alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.NO);
+        DialogOwner.own(alert);
         return alert.showAndWait().orElse(ButtonType.NO) == ButtonType.YES;
     }
 }

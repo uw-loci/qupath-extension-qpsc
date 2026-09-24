@@ -30,6 +30,7 @@ import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
@@ -252,6 +253,7 @@ public class StitchingRecoveryWorkflow {
             okButton.setDisable(!valid);
         });
 
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(result -> {
             if (result == ButtonType.OK) {
                 String tileFolder = folderField.getText().trim();

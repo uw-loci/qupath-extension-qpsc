@@ -7,6 +7,7 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 
 /**
@@ -157,6 +158,7 @@ public final class AcquisitionMonitorService {
                     text.setPrefHeight(200);
                     alert.getDialogPane().setContent(text);
                     alert.getDialogPane().setMinWidth(500);
+                    DialogOwner.own(alert);
                     alert.showAndWait();
                 });
             }

@@ -401,6 +401,7 @@ public class MicroscopeAlignmentWorkflow {
                 ButtonType cancelButton = ButtonType.CANCEL;
                 alert.getButtonTypes().setAll(saveButton, cancelButton);
 
+                DialogOwner.own(alert);
                 alert.showAndWait()
                         .ifPresentOrElse(
                                 response -> result.complete(response == saveButton), () -> result.complete(false));

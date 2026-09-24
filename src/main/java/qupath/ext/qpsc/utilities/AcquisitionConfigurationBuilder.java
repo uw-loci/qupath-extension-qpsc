@@ -437,6 +437,7 @@ public class AcquisitionConfigurationBuilder {
             warning.getDialogPane().setPrefWidth(500);
             warning.getDialogPane().setPrefHeight(350);
 
+            qupath.ext.qpsc.ui.DialogOwner.own(warning);
             warning.showAndWait();
         });
     }

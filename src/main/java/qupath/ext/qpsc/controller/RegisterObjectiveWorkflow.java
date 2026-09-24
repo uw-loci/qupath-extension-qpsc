@@ -10,6 +10,7 @@ import javafx.scene.layout.GridPane;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveConfigWriter;
@@ -202,6 +203,7 @@ public final class RegisterObjectiveWorkflow {
         detectorCombo.valueProperty().addListener((o, a, b) -> validate.run());
         validate.run();
 
+        DialogOwner.own(dialog);
         Optional<ButtonType> result = dialog.showAndWait();
         if (result.isEmpty() || result.get() != registerType) {
             return Optional.empty();

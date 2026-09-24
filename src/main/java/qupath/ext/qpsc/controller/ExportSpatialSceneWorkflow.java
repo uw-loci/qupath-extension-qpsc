@@ -22,6 +22,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.TextArea;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.AffineTransformManager.SavedAlignment;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
@@ -453,6 +454,7 @@ public class ExportSpatialSceneWorkflow {
             area.setWrapText(true);
             alert.getDialogPane().setExpandableContent(area);
         }
+        DialogOwner.own(alert);
         alert.showAndWait();
     }
 }

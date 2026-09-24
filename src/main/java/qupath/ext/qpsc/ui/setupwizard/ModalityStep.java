@@ -14,6 +14,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.ui.DialogOwner;
 
 /**
  * Step 5: Modality Setup.
@@ -854,6 +855,7 @@ public class ModalityStep implements WizardStep {
         Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
         alert.setTitle(title);
         alert.setHeaderText(null);
+        DialogOwner.own(alert);
         alert.showAndWait();
     }
 

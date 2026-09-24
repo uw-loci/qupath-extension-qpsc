@@ -60,6 +60,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.VirtualJoystick;
@@ -2991,6 +2992,7 @@ public class StageControlPanel extends VBox {
             dialog.setTitle("Save Channel Preset");
             dialog.setHeaderText("Save current channel spinner state");
             dialog.setContentText("Preset name:");
+            DialogOwner.own(dialog);
             dialog.showAndWait().ifPresent(rawName -> {
                 String name = rawName == null ? "" : rawName.trim();
                 String error = qupath.ext.qpsc.modality.widefield.WidefieldChannelPresetStore.validateName(name);
@@ -4902,6 +4904,7 @@ public class StageControlPanel extends VBox {
         dialog.setHeaderText("Save current position");
         dialog.setContentText("Point name:");
 
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(name -> {
             if (name.trim().isEmpty()) {
                 savedPointsStatus.setText("Name cannot be empty");
@@ -5014,6 +5017,7 @@ public class StageControlPanel extends VBox {
         confirm.setHeaderText("Remove all saved points?");
         confirm.setContentText("This cannot be undone.");
 
+        DialogOwner.own(confirm);
         confirm.showAndWait().ifPresent(response -> {
             if (response == ButtonType.OK) {
                 int count = savedPointsListView.getItems().size();

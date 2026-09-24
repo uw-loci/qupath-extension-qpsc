@@ -48,6 +48,7 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.DualProgressDialog;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -1472,6 +1473,7 @@ public class AcquisitionManager {
                                     satAlert.initModality(javafx.stage.Modality.WINDOW_MODAL);
                                     satAlert.initOwner(progressDialog.getStage());
                                 }
+                                DialogOwner.own(satAlert);
                                 satAlert.showAndWait();
                             });
                         }
@@ -1702,6 +1704,7 @@ public class AcquisitionManager {
             alert.initModality(javafx.stage.Modality.WINDOW_MODAL);
             alert.initOwner(owner);
         }
+        DialogOwner.own(alert);
         java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
         if (result.isPresent()) {
             if (result.get() == retryButton) return "retry";
@@ -1777,6 +1780,7 @@ public class AcquisitionManager {
             alert.initModality(javafx.stage.Modality.WINDOW_MODAL);
             alert.initOwner(owner);
         }
+        DialogOwner.own(alert);
         java.util.Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
         if (result.isPresent() && result.get() == continueButton) {
             return "continue";
@@ -1902,6 +1906,7 @@ public class AcquisitionManager {
                             + "This may take several minutes per annotation.",
                     state.annotations.size(),
                     angleExposures == null || angleExposures.isEmpty() ? 1 : angleExposures.size()));
+            DialogOwner.own(alert);
             alert.show();
 
             // Auto-close after 3 seconds

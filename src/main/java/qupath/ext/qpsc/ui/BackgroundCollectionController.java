@@ -876,6 +876,7 @@ public class BackgroundCollectionController {
                 ButtonType.CANCEL);
         alert.setTitle("Override profile exposure");
         alert.setHeaderText("Override profile exposure with adaptive target");
+        DialogOwner.own(alert);
         Optional<ButtonType> r = alert.showAndWait();
         return r.isPresent() && r.get() == ButtonType.OK;
     }

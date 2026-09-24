@@ -20,6 +20,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -329,6 +330,7 @@ public class PolarizerCalibrationWorkflow {
         progressDialog.getButtonTypes().add(ButtonType.CANCEL);
 
         // Show progress dialog (non-blocking)
+        DialogOwner.own(progressDialog);
         progressDialog.show();
 
         // Now run the actual calibration on a background thread
@@ -460,6 +462,7 @@ public class PolarizerCalibrationWorkflow {
                     alert.getDialogPane().lookupButton(writeYamlBtn).setDisable(true);
                 }
 
+                DialogOwner.own(alert);
                 Optional<ButtonType> result = alert.showAndWait();
                 if (result.isPresent() && result.get() == writeYamlBtn) {
                     writeOffsetToYaml(parsedOffset);

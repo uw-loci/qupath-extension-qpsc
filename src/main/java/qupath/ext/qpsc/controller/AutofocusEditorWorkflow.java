@@ -26,6 +26,7 @@ import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
@@ -458,6 +459,7 @@ public class AutofocusEditorWorkflow {
         scroll.setPrefSize(620, 480);
         alert.getDialogPane().setContent(scroll);
         alert.getDialogPane().setMinWidth(640);
+        DialogOwner.own(alert);
         alert.showAndWait();
     }
 
@@ -2228,6 +2230,7 @@ public class AutofocusEditorWorkflow {
             TextInputDialog nameDialog = new TextInputDialog("new_strategy");
             nameDialog.setTitle("New Strategy");
             nameDialog.setHeaderText("Enter a name for the new strategy:");
+            DialogOwner.own(nameDialog);
             nameDialog.showAndWait().ifPresent(name -> {
                 String key = name.trim().toLowerCase().replaceAll("\\s+", "_");
                 if (key.isEmpty() || strategies.containsKey(key)) {
@@ -2639,6 +2642,7 @@ public class AutofocusEditorWorkflow {
             TextInputDialog nameDialog = new TextInputDialog("modality_name");
             nameDialog.setTitle("New Modality Binding");
             nameDialog.setHeaderText("Enter the modality key (e.g. bf, fluorescence, ppm):");
+            DialogOwner.own(nameDialog);
             nameDialog.showAndWait().ifPresent(name -> {
                 String key = name.trim().toLowerCase();
                 if (key.isEmpty()) {
@@ -3311,6 +3315,7 @@ public class AutofocusEditorWorkflow {
         javafx.scene.layout.VBox content = new javafx.scene.layout.VBox(8, textArea, afConfigBtn);
         alert.getDialogPane().setContent(content);
         alert.getDialogPane().setMinWidth(500);
+        DialogOwner.own(alert);
         alert.showAndWait();
 
         if (statusLabel != null) {

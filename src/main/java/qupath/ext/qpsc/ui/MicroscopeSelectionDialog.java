@@ -49,6 +49,7 @@ public class MicroscopeSelectionDialog {
                     alert.setHeaderText("Current microscope configuration is invalid");
                     alert.setContentText(
                             "The current microscope configuration file does not have a 'microscope: name:' entry.");
+                    DialogOwner.own(alert);
                     alert.showAndWait();
                     future.complete(null);
                     return;
@@ -106,6 +107,7 @@ public class MicroscopeSelectionDialog {
                     alert.setContentText("No microscope configuration files were found in:\n" + configDir + "\n\n"
                             + "To create alignments, you need configuration files for the source microscopes.\n"
                             + "Create a config_[MicroscopeName].yml file for each microscope you want to align from.");
+                    DialogOwner.own(alert);
                     alert.showAndWait();
                     future.complete(null);
                     return;

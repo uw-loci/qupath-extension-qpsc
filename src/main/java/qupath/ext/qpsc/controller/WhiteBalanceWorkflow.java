@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -89,6 +90,7 @@ public class WhiteBalanceWorkflow {
                                 alert.setTitle("Invalid Output Directory");
                                 alert.setHeaderText("Could not create output directory");
                                 alert.setContentText("Failed to create:\n" + outputPath);
+                                DialogOwner.own(alert);
                                 alert.showAndWait();
                             });
                             return;
@@ -148,6 +150,7 @@ public class WhiteBalanceWorkflow {
 
                         confirm.setContentText(details.toString());
 
+                        DialogOwner.own(confirm);
                         confirm.showAndWait().ifPresent(response -> {
                             if (response == ButtonType.OK) {
                                 String wbObjective = result.isSimple()
@@ -589,6 +592,7 @@ public class WhiteBalanceWorkflow {
         alert.setContentText(content.toString());
 
         configureResultDialog(alert, outputPath);
+        DialogOwner.own(alert);
         alert.show();
     }
 
@@ -643,6 +647,7 @@ public class WhiteBalanceWorkflow {
 
         // Non-modal so user can reference results while continuing work
         configureResultDialog(alert, outputPath);
+        DialogOwner.own(alert);
         alert.show();
     }
 

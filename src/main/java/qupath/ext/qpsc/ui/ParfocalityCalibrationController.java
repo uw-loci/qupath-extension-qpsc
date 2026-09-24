@@ -124,15 +124,17 @@ public class ParfocalityCalibrationController {
             }
             MicroscopeController controller = MicroscopeController.getInstance();
             if (!controller.isConnected()) {
-                new Alert(
-                                Alert.AlertType.WARNING,
-                                "Parfocality calibration needs an active microscope connection -- the dialog reads the current Z from the stage.")
+                DialogOwner.own(
+                                new Alert(
+                                        Alert.AlertType.WARNING,
+                                        "Parfocality calibration needs an active microscope connection -- the dialog reads the current Z from the stage."))
                         .showAndWait();
                 return;
             }
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath == null || configPath.isBlank()) {
-                new Alert(Alert.AlertType.WARNING, "No microscope config selected.").showAndWait();
+                DialogOwner.own(new Alert(Alert.AlertType.WARNING, "No microscope config selected."))
+                        .showAndWait();
                 return;
             }
             createAndShow(configPath);
@@ -145,7 +147,8 @@ public class ParfocalityCalibrationController {
 
         Set<String> objectives = mgr.getAvailableObjectives();
         if (objectives.isEmpty()) {
-            new Alert(Alert.AlertType.WARNING, "No objectives are declared in the active microscope config.")
+            DialogOwner.own(new Alert(
+                            Alert.AlertType.WARNING, "No objectives are declared in the active microscope config."))
                     .showAndWait();
             return;
         }
@@ -366,7 +369,8 @@ public class ParfocalityCalibrationController {
                 }
                 refreshZ.run();
             } catch (IOException ex) {
-                new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage()).showAndWait();
+                DialogOwner.own(new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage()))
+                        .showAndWait();
             }
         });
 
@@ -395,10 +399,12 @@ public class ParfocalityCalibrationController {
                     }
                 }
                 table.refresh();
-                new Alert(Alert.AlertType.INFORMATION, "Parfocality calibration saved.").showAndWait();
+                DialogOwner.own(new Alert(Alert.AlertType.INFORMATION, "Parfocality calibration saved."))
+                        .showAndWait();
             } catch (IOException ex) {
                 logger.error("Failed to save parfocality sidecar", ex);
-                new Alert(Alert.AlertType.ERROR, "Failed to save: " + ex.getMessage()).showAndWait();
+                DialogOwner.own(new Alert(Alert.AlertType.ERROR, "Failed to save: " + ex.getMessage()))
+                        .showAndWait();
             }
         });
 
@@ -414,7 +420,8 @@ public class ParfocalityCalibrationController {
             Label currentZLabel,
             TableView<ProfileRow> table) {
         if (Double.isNaN(referenceZ.get())) {
-            new Alert(Alert.AlertType.WARNING, "Capture the Reference Z first.").showAndWait();
+            DialogOwner.own(new Alert(Alert.AlertType.WARNING, "Capture the Reference Z first."))
+                    .showAndWait();
             return;
         }
         try {
@@ -424,7 +431,8 @@ public class ParfocalityCalibrationController {
             currentZLabel.setText(String.format("Current stage Z: %.2f um", z));
             table.refresh();
         } catch (IOException ex) {
-            new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage()).showAndWait();
+            DialogOwner.own(new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage()))
+                    .showAndWait();
         }
     }
 }

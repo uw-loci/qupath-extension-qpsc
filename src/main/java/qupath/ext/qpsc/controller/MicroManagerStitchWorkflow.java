@@ -32,6 +32,7 @@ import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.StageImageTransform;
@@ -263,6 +264,7 @@ public class MicroManagerStitchWorkflow {
         nameField.textProperty().addListener((obs, o, n) -> revalidate.run());
         revalidate.run();
 
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(result -> {
             if (result != ButtonType.OK) return;
 

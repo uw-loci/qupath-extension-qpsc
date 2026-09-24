@@ -43,6 +43,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
+import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
@@ -915,6 +916,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         dialog.setTitle("Save Channel Preset");
         dialog.setHeaderText("Save current channel selection + exposures + intensities");
         dialog.setContentText("Preset name:");
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(rawName -> {
             String name = rawName == null ? "" : rawName.trim();
             String error = WidefieldChannelPresetStore.validateName(name);
