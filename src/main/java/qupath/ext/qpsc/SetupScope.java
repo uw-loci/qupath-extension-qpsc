@@ -11,6 +11,8 @@ import javafx.scene.control.Menu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
 import javafx.scene.control.Tooltip;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -132,10 +134,10 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         }
 
         // Check if tiles-to-pyramid extension is available (required for stitching).
-        // A modal warning (not an error) so the user must acknowledge it -- a toast
-        // notification at startup is easy to miss, and acquisition silently can't stitch
-        // without this dependency. QPPreferenceDialog detects it by reflection and degrades
-        // gracefully, so the extension still loads; this dialog just explains the gap.
+        // An alert (not a toast) so the user must dismiss it -- a notification at startup
+        // is easy to miss, and acquisition silently can't stitch without this dependency.
+        // QPPreferenceDialog detects it by reflection and degrades gracefully, so the
+        // extension still loads; this dialog just explains the gap.
         if (!QPPreferenceDialog.isStitchingAvailable()) {
             Platform.runLater(() -> {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
@@ -159,7 +161,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 if (content != null) {
                     content.setWrapText(true);
                 }
-                alert.showAndWait();
+                showStartupAlert(qupath, alert);
             });
         }
 
@@ -169,7 +171,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // old/new state is easy to mistake for the update having applied (which is exactly how an
         // "installed but still running the old version" confusion arises). Fires once at install
         // time, not on every launch; skipped for unpackaged IDE/dev runs.
-        warnIfExtensionRecentlyUpdated();
+        warnIfExtensionRecentlyUpdated(qupath);
 
         // 1b) On a fresh install (no microscope config chosen), auto-install and
         // select the bundled "Offline / Analysis" placeholder so the extension
@@ -898,7 +900,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
      * advisory fires once per install/update, not on every launch. Unpackaged IDE/dev runs report
      * "dev" (no manifest version) and are skipped so developers are not nagged.
      */
-    private void warnIfExtensionRecentlyUpdated() {
+    private void warnIfExtensionRecentlyUpdated(QuPathGUI qupath) {
         String current = VersionInfo.getQpscVersion();
         if (current == null || current.isBlank() || "dev".equals(current)) {
             return;
@@ -933,8 +935,26 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             if (content != null) {
                 content.setWrapText(true);
             }
-            alert.showAndWait();
+            showStartupAlert(qupath, alert);
         });
+    }
+
+    /**
+     * Shows a startup alert owned by the QuPath main window and non-modal. An owned window
+     * always stays above its owner, and a non-modal one can never block input to QuPath --
+     * an unowned APPLICATION_MODAL alert fired during startup can land behind the main window
+     * and leave QuPath accepting no input with nothing visible to explain why. Skipped when
+     * the main window is not showing (headless run).
+     */
+    private static void showStartupAlert(QuPathGUI qupath, Alert alert) {
+        Stage stage = qupath == null ? null : qupath.getStage();
+        if (stage == null || !stage.isShowing()) {
+            logger.info("Main window not showing; skipping startup alert '{}'", alert.getTitle());
+            return;
+        }
+        alert.initOwner(stage);
+        alert.initModality(Modality.NONE);
+        alert.show();
     }
 
     private void setMenuItemTooltip(MenuItem menuItem, String tooltipText) {
