@@ -215,6 +215,7 @@ public class NoiseCharacterizationDialog {
                 });
 
                 // Show dialog
+                DialogOwner.own(dialog);
                 dialog.showAndWait().ifPresentOrElse(future::complete, () -> {
                     logger.info("Noise characterization dialog cancelled");
                     future.complete(null);

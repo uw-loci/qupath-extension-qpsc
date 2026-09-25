@@ -374,6 +374,7 @@ public class BackgroundCollectionController {
                 dialog.setResultConverter(dialogButton -> null);
 
                 // Show dialog
+                DialogOwner.own(dialog);
                 dialog.showAndWait().ifPresent(result -> {});
                 // If future wasn't completed by the OK handler (user cancelled), complete with null
                 if (!future.isDone()) {

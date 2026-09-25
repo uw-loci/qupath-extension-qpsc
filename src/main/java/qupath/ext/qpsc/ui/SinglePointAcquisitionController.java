@@ -372,6 +372,7 @@ public class SinglePointAcquisitionController {
                 }
             });
 
+            DialogOwner.own(dialog);
             dialog.show();
         });
 

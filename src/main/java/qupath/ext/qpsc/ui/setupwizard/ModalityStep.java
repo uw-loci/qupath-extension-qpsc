@@ -241,6 +241,7 @@ public class ModalityStep implements WizardStep {
             return result;
         });
 
+        DialogOwner.own(dialog);
         Optional<Map<String, Object>> result = dialog.showAndWait();
         if (result.isPresent()) {
             Map<String, Object> mod = result.get();
@@ -385,6 +386,7 @@ public class ModalityStep implements WizardStep {
             }
             return null;
         });
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(angleItems::add);
     }
 

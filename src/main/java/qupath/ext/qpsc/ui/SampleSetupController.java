@@ -526,6 +526,7 @@ public class SampleSetupController {
                 }
             });
 
+            DialogOwner.own(dlg);
             Optional<SampleSetupResult> resOpt = dlg.showAndWait();
             if (resOpt.isPresent()) {
                 lastSampleSetup = resOpt.get();

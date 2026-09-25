@@ -116,6 +116,7 @@ public final class LightPathSetupDialog {
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
         ((javafx.scene.control.Button) dialog.getDialogPane().lookupButton(ButtonType.OK)).setText("Save");
 
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(bt -> {
             if (bt != ButtonType.OK) {
                 return;

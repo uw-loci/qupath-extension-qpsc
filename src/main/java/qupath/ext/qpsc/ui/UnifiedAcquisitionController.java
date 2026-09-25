@@ -398,6 +398,7 @@ public class UnifiedAcquisitionController {
             // one added elsewhere would silently replace the first and leak the reference.
             activeDialog = dialog;
             try {
+                DialogOwner.own(dialog);
                 return dialog.showAndWait();
             } finally {
                 activeDialog = null;

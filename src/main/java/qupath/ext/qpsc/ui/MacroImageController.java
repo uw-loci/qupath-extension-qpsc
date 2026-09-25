@@ -189,6 +189,7 @@ public class MacroImageController {
                 return null;
             });
 
+            DialogOwner.own(dialog);
             dialog.showAndWait()
                     .ifPresentOrElse(
                             config -> {

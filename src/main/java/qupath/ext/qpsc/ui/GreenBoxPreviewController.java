@@ -520,6 +520,7 @@ public class GreenBoxPreviewController {
                 });
 
                 logger.debug("Showing green box detection dialog with auto-detection");
+                DialogOwner.own(dialog);
                 dialog.showAndWait()
                         .ifPresentOrElse(
                                 result -> {

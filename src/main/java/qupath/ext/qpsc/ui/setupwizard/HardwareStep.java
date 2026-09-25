@@ -212,6 +212,7 @@ public class HardwareStep implements WizardStep {
             dialog.setSelectedItem(labels.get(0));
         }
 
+        DialogOwner.own(dialog);
         Optional<String> result = dialog.showAndWait();
         return result.map(labelToId::get).orElse(null);
     }
@@ -272,6 +273,7 @@ public class HardwareStep implements WizardStep {
             return null;
         });
 
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(entry -> {
             String id = (String) entry.get("id");
             if (objectiveItems.stream().anyMatch(m -> id.equals(m.get("id")))) {
@@ -353,6 +355,7 @@ public class HardwareStep implements WizardStep {
             return null;
         });
 
+        DialogOwner.own(dialog);
         dialog.showAndWait().ifPresent(entry -> {
             String id = (String) entry.get("id");
             if (detectorItems.stream().anyMatch(m -> id.equals(m.get("id")))) {

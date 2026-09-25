@@ -268,6 +268,7 @@ public class MicroscopeSelectionDialog {
                 });
 
                 // Show dialog
+                DialogOwner.own(dialog);
                 dialog.showAndWait().ifPresent(future::complete);
                 if (!future.isDone()) {
                     logger.info("Dialog closed without selection");
