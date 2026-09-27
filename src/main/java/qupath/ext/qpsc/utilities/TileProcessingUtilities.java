@@ -211,20 +211,38 @@ public class TileProcessingUtilities {
             outputDir.mkdirs();
         }
 
-        // Track files before stitching for batch operations
+        // Snapshot of what was already in the output folder before this stitch ran.
+        //
+        // UNCONDITIONAL, and it has to stay that way. The batch branch below uses it to pick
+        // out the files this run produced, but cleanupCorruptStitchingOutput uses it as the
+        // KEEP list on the failure path -- and that failure path runs in every mode. When this
+        // scan was gated on batch mode, a per-angle stitch (matchingString "90.0", "7.0", ...)
+        // reached the catch block with an empty set, every file in the folder therefore counted
+        // as "not pre-existing", and the cleanup deleted the lot.
+        //
+        // outputDir is <projects>/<sample>/SlideImages, shared by every region and every run of
+        // that sample, so the blast radius was the sample's entire stitched history. That is what
+        // happened on 2026-09-27: a ZStage fault failed one acquisition, its stitch threw, and
+        // the cleanup took out PDAC_2 through PDAC_5 across run indices 007-015. The only
+        // survivors were the files QuPath happened to hold open, which Windows refused to delete.
         Set<String> existingFiles = new HashSet<>();
-        if (matchingString.equals(".")) {
-            logger.info("Batch mode detected - scanning for existing OME-TIFF files");
-            if (outputDir.exists()) {
-                File[] existing = outputDir.listFiles((dir, name) -> name.endsWith(".ome.tif"));
-                if (existing != null) {
-                    for (File f : existing) {
-                        existingFiles.add(f.getName());
-                    }
+        if (outputDir.exists()) {
+            File[] existing =
+                    outputDir.listFiles((dir, name) -> name.endsWith(".ome.tif") || name.endsWith(".ome.zarr"));
+            if (existing != null) {
+                for (File f : existing) {
+                    existingFiles.add(f.getName());
                 }
             }
-            logger.info("Found {} existing OME-TIFF files before stitching", existingFiles.size());
         }
+        // Second, independent bound on the cleanup: anything it deletes must ALSO have been
+        // written after this point. Either check alone would have prevented the 2026-09-27 loss.
+        final long stitchStartMillis = System.currentTimeMillis();
+        logger.info(
+                "Found {} existing stitched file(s) in {} before stitching; only files created after now "
+                        + "are eligible for failure cleanup",
+                existingFiles.size(),
+                outputDir.getName());
 
         // Configure and run the stitching workflow
         // Get output format from preferences
@@ -297,7 +315,7 @@ public class TileProcessingUtilities {
                 throw new IOException("Stitching produced no output");
             }
         } catch (Exception stitchEx) {
-            cleanupCorruptStitchingOutput(outputDir, existingFiles);
+            cleanupCorruptStitchingOutput(outputDir, existingFiles, stitchStartMillis);
             throw new IOException("Stitching failed: " + stitchEx.getMessage(), stitchEx);
         } finally {
             TileConfigurationTxtStrategy.flipStitchingX = false;
@@ -813,13 +831,44 @@ public class TileProcessingUtilities {
         }
     }
 
-    private static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles) {
+    /**
+     * Deletes the partial output a FAILED stitch left behind, and nothing else.
+     *
+     * <p>{@code outputDir} is the sample's shared {@code SlideImages} folder, holding every
+     * region and every previous run. A file is removed only when BOTH bounds agree it belongs
+     * to the stitch that just failed: it was absent from {@code existingFiles} (the snapshot
+     * taken immediately before this stitch started) AND it was written at or after
+     * {@code stitchStartMillis}.
+     *
+     * <p>The redundancy is deliberate. This method previously trusted the snapshot alone, the
+     * snapshot was only populated in batch mode, and on 2026-09-27 a per-angle stitch failure
+     * deleted a sample's entire stitched history. A cleanup routine that can empty a directory
+     * when its keep-list arrives empty is one refactor away from doing it again, so each file
+     * now has to clear two independent tests to be considered this run's garbage.
+     *
+     * @param outputDir         the shared stitched-output folder
+     * @param existingFiles     names present before this stitch began
+     * @param stitchStartMillis wall-clock time this stitch began
+     */
+    // Package-private rather than private so the regression test can drive it directly;
+    // the 2026-09-27 data loss is worth a test that exercises the real method.
+    static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles, long stitchStartMillis) {
         File[] candidates = outputDir.listFiles((dir, name) ->
                 (name.endsWith(".ome.tif") || name.endsWith(".ome.zarr")) && !existingFiles.contains(name));
         if (candidates == null || candidates.length == 0) {
             return;
         }
         for (File f : candidates) {
+            // lastModified() is 0 when unreadable; treat that as "cannot prove it is mine".
+            long modified = f.lastModified();
+            if (modified < stitchStartMillis) {
+                logger.warn(
+                        "NOT deleting {}: it predates this stitch (modified {} ms before start) despite being "
+                                + "absent from the pre-stitch snapshot. Leaving it alone.",
+                        f.getName(),
+                        stitchStartMillis - modified);
+                continue;
+            }
             logger.info("Cleaning up corrupt stitching output: {}", f.getName());
             if (f.isDirectory()) {
                 // OME-ZARR is a directory tree
