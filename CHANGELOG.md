@@ -18,6 +18,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Stitching Recovery** re-stitches channel folders with the same alignment as the acquisition. It first uses whatever the previous `TileRegistration.txt` aligned on, then the recorded focus channel, then a merge of all channels. Previously it treated channel folders like angles and aligned on the first one.
 - Requires tiles-to-pyramid 0.7.0, now the version QPSC builds against. With an older tiles-to-pyramid installed, QPSC aligns on the first ticked channel (or the focus channel) and logs a warning instead of merging.
 
+**Acquisition failure push notifications**
+- A failed region now sends an urgent push notification as well as opening the modal error dialog. The dialog waits at the workstation, so an unattended run that died hours ago was only discovered at the next login -- the same channel that reports "slide acquired" said nothing about "slide failed". Requires ntfy.sh to be configured in Communication Settings; see [Alerts](documentation/PREFERENCES.md#alerts-qupath-scope-alerts).
+
 ## [0.10.0] - 2026-09-16
 
 ### Added

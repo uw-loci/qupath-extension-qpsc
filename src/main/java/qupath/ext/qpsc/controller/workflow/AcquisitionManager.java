@@ -1948,11 +1948,34 @@ public class AcquisitionManager {
     }
 
     /**
-     * Shows error notification for failed acquisition.
+     * Reports a failed acquisition: a push notification first, then the modal dialog.
+     *
+     * <p>The push is the load-bearing half. This is the end of a run that may have been
+     * unattended for hours, and {@link UIFunctions#notifyUserOfError} only logs and opens a
+     * modal -- which nobody sees until they next sit down at the workstation. On 2026-09-27 a
+     * long PPM run died on a ZStage error and the operator found out at next login, having had
+     * no reason to check; the same alert channel that reports "slide acquired" said nothing
+     * about "slide failed".
+     *
+     * <p>Sent at URGENT rather than HIGH because, unlike the saturation and time-lapse
+     * warnings, nothing continues after this: the region is over and the stage is idle.
      */
     private void showAcquisitionError(String annotationName, String errorMessage) {
+        String detail = errorMessage == null ? "no error message" : errorMessage;
+        try {
+            qupath.ext.qpsc.service.notification.NotificationService.getInstance()
+                    .notify(
+                            "Acquisition Failed",
+                            "Region \"" + annotationName + "\" failed and is not being retried.\n" + detail,
+                            qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
+                            qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
+        } catch (Exception e) {
+            // Never let the alert channel swallow the error it is reporting.
+            logger.warn("Could not send acquisition-failure notification: {}", e.getMessage());
+        }
+        UIFunctions.playWorkflowCompletionBeep();
         Platform.runLater(() -> UIFunctions.notifyUserOfError(
-                "Acquisition failed for " + annotationName + ":\n\n" + errorMessage, "Acquisition Error"));
+                "Acquisition failed for " + annotationName + ":\n\n" + detail, "Acquisition"));
     }
 
     /**
