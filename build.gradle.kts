@@ -76,6 +76,8 @@ dependencies {
 
     // Main dependencies for most QuPath extensions
     shadow(libs.bundles.qupath)
+    // QuPath ships this at runtime but does not export it; used to watch for in-session updates
+    shadow(libs.extensionmanager)
     shadow(libs.bundles.logging)
     shadow(libs.qupath.fxtras)
 

@@ -21,6 +21,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Acquisition failure push notifications**
 - A failed region now sends an urgent push notification as well as opening the modal error dialog. The dialog waits at the workstation, so an unattended run that died hours ago was only discovered at the next login -- the same channel that reports "slide acquired" said nothing about "slide failed". Requires ntfy.sh to be configured in Communication Settings; see [Alerts](documentation/PREFERENCES.md#alerts-qupath-scope-alerts).
 
+### Fixed
+
+**"QPSC - restart recommended" now appears when you update, not after you restart**
+- QuPath installs an updated jar in the running session but keeps running the classes it already loaded, and only runs the new version's start-up code at the next launch, so the start-up version check could only ever fire on the launch after the restart it asked for. QPSC now watches for its own jar being replaced while QuPath runs and advises the restart then, once. Nothing shows at start-up, including after a fresh install. The unused `lastLoadedQpscVersion` preference is removed.
+
+
 ## [0.10.0] - 2026-09-16
 
 ### Added
