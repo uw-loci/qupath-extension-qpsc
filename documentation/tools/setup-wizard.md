@@ -28,6 +28,7 @@ These files are required before any acquisition workflow can run.
 - **First-time QPSC setup** -- the wizard appears automatically as the first menu item
 - **Setting up a new microscope** -- creates config files for a different microscope system
 - **Starting from scratch** -- when existing config files are missing or corrupted
+- **Re-configuring an existing setup** -- the wizard merges into existing configs rather than replacing them, so re-running it to change objectives, detectors, stage limits or modality settings no longer costs you background calibrations, white-balance gains, tuned autofocus parameters, stage-insert calibration or light-path settings.
 
 ---
 
@@ -145,7 +146,10 @@ Review all configured values before saving:
 
 ## What Happens on Save
 
-1. **Three YAML files** are created in the chosen directory
+1. **Three YAML files** are merged in the chosen directory:
+   - For new files: created from scratch with complete defaults
+   - For existing files: the wizard's values merge over what is already there, preserving any settings, calibrations, or measured values outside the wizard's scope (e.g., background_correction folders, white-balance gains, tuned autofocus parameters, stage inserts, light path configuration)
+   - A backup file (`<name>.bak-<timestamp>`) is created before any file is modified
 2. **Resources file** (`resources_LOCI.yml`) is copied to the config directory if not already present
 3. **QuPath preferences** are updated automatically:
    - Microscope Config File path
@@ -164,6 +168,21 @@ Once configuration files are created, follow these steps:
 3. **Run Background Collection** for flat-field correction images
 4. **Run White Balance Calibration** (for JAI/prism cameras)
 5. **Run Autofocus Benchmark** to tune focus parameters for your objectives
+
+### Safe Re-runs
+
+You can re-run the Setup Wizard to update your hardware configuration (objectives, detectors, modalities, stage limits). Anything **outside** the wizard's own fields is preserved, including:
+
+- Background collection folders and settings
+- Measured white-balance gains and exposure times
+- Tuned autofocus parameters (per-objective score metrics and thresholds)
+- Stage insert calibrations and configurations
+- Light path definitions and acquisition profiles
+- Any other key the wizard does not itself write
+
+What the wizard **does** overwrite is what it asks you for: objectives, detectors, pixel sizes, stage limits, modality definitions and the streaming-AF block. Those are measured values too, so check the numbers on screen before saving -- the pixel-size grid in particular is pre-filled from the existing config and will be written back as shown.
+
+A timestamped backup (`<name>.bak-<timestamp>`) is written before any file is modified. If the existing config cannot be parsed, the wizard refuses to write rather than overwriting it.
 
 ---
 
@@ -186,6 +205,7 @@ The wizard uses `ConfigSchema.java` as a single source of truth for all required
 | Config created but QPSC says invalid | Restart QuPath to reload configuration |
 | Hardware not in catalog | Use "Add Custom" to enter specifications manually |
 | Server test fails | Verify the server is running and host/port are correct |
+| Need to undo a wizard change | A timestamped backup (e.g., `config_PPM.yml.bak-20260928-143022`) is created in the config directory before any file is modified. You can restore from this backup if needed. |
 
 ---
 
