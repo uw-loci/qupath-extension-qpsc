@@ -176,12 +176,23 @@ public final class MultiSlideExistingImageWorkflow {
      */
     public static void applyAlignStartViewAssists() {
         if (intendedSlotEntry == null) {
-            return; // not in a multi-slide batch -- leave the Stage Map view as the user set it
+            // Not in a multi-slide batch -- leave the Stage Map view as the user set it.
+            // Logged because every no-op below is otherwise invisible: when the Stage Map does
+            // not switch to Camera View the operator sees a feature that "stopped working", with
+            // nothing in the log to say which of the four reasons it was.
+            logger.debug("Align-start view assists skipped: no multi-slide batch is active");
+            return;
         }
-        if (PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart()) {
+        boolean forceCameraView = PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart();
+        boolean zoomToTissue = PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart();
+        logger.info(
+                "Align-start view assists: forceCameraView={}, zoomToTissue={} (Advanced / SIFT settings)",
+                forceCameraView,
+                zoomToTissue);
+        if (forceCameraView) {
             StageMapWindow.forceCameraView();
         }
-        if (PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart()) {
+        if (zoomToTissue) {
             StageMapWindow.zoomToBoundingBoxPreview();
         }
     }

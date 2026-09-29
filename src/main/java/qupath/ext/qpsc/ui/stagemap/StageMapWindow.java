@@ -413,6 +413,9 @@ public class StageMapWindow {
     public static void setCameraView(boolean cameraView) {
         Platform.runLater(() -> {
             if (instance == null || instance.applyFlipsCheckbox == null) {
+                // The Stage Map is not open. Callers treat this as best-effort, but silence here
+                // reads to the operator as "Camera View stopped working", so say which it is.
+                logger.debug("setCameraView({}) ignored: the Stage Map window is not open", cameraView);
                 return;
             }
             if (instance.applyFlipsCheckbox.isSelected() != cameraView) {

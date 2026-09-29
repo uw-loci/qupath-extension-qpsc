@@ -756,19 +756,32 @@ public class MultiTileRefinement {
                                     });
                                 } catch (Exception ex) {
                                     logger.warn(
-                                            "Multi-tile point {} stage move failed: {} -- manual capture",
+                                            "Multi-tile point {} stage move failed: {} -- falling back to MANUAL "
+                                                    + "capture for this point (no auto-SIFT). The move goes over the "
+                                                    + "same serial link as the stage, so repeated hits here usually "
+                                                    + "mean the controller, not the refinement.",
                                             pointNumber,
                                             ex.getMessage());
                                     // Move failed: present the pane in manual mode (no auto-SIFT).
-                                    Platform.runLater(() -> hostCapturePane(
-                                            stage,
-                                            captureSlot,
-                                            gui,
-                                            tile,
-                                            tileCoords,
-                                            false,
-                                            confidenceThreshold,
-                                            future));
+                                    //
+                                    // The view assists run here too. They are pure Stage Map view changes with no
+                                    // hardware involvement, so a failed stage move is no reason to skip them -- and
+                                    // skipping them is what made a serial fault look like "Camera View stopped
+                                    // working": the feature was fine, the run was just taking this branch.
+                                    Platform.runLater(() -> {
+                                        if (pointNumber == 1) {
+                                            MultiSlideExistingImageWorkflow.applyAlignStartViewAssists();
+                                        }
+                                        hostCapturePane(
+                                                stage,
+                                                captureSlot,
+                                                gui,
+                                                tile,
+                                                tileCoords,
+                                                false,
+                                                confidenceThreshold,
+                                                future);
+                                    });
                                 }
                             },
                             "MultiTile-Point-" + pointNumber)
