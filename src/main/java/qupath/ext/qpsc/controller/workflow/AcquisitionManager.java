@@ -54,11 +54,13 @@ import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AcquisitionSpaceCheck;
+import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.BackgroundIlluminationCheck;
 import qupath.ext.qpsc.utilities.FlipResolver;
 import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
+import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TilingUtilities;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -125,6 +127,16 @@ public class AcquisitionManager {
 
     /** Last known good Z from a completed acquisition -- persists across annotation resets
      *  so the next annotation's AF search is centered near reality, not the user's initial Z. */
+    /**
+     * Focus surface measured on this slide at refinement time, or null.
+     *
+     * <p>Used only to pick a starting Z for a region's autofocus. It is never allowed to
+     * stand in for a measurement: it can be hours old, it can have been measured through
+     * a different objective, and when it came from exactly three refinement points its
+     * residual is zero by construction and says nothing about whether it is right.
+     */
+    private AffineTransformManager.SlideFocusSurface slideFocusSurface = null;
+
     private Double lastAcquisitionZ = null;
 
     /** Maximum plausible focal-plane step (um) between consecutive acquisitions.
@@ -580,6 +592,7 @@ public class AcquisitionManager {
                     String.format("%.2f", state.seedZ));
         }
         zFocusModel.reset();
+        loadSlideFocusSurface();
 
         // Defensive re-check: if capturedImageData was not set during prepareForAcquisition
         // (e.g. bounded acquisition with no parent image), try once more here.
@@ -1054,6 +1067,26 @@ public class AcquisitionManager {
                                         String.format("%.0f", distFromLast));
                             }
                         });
+                    } else if (slideFocusHint(stageCoords) != null) {
+                        // No in-run prediction yet, but this slide has a focus surface measured
+                        // at refinement time. That surface knows the slide's tilt, so it gives a
+                        // starting Z that varies with WHERE the region is -- which the carried-
+                        // forward scalar below cannot. This is the first annotation of a region
+                        // and the first tile of it, which is exactly where the wide search runs
+                        // and where a quarter of its results land more than 5 um out.
+                        //
+                        // A hint only. The server still autofocuses from here, and the
+                        // MAX_FOCUS_STEP clamp still bounds a stale surface, so a wrong hint
+                        // costs a slower search rather than an out-of-focus region.
+                        Double surfaceHint = slideFocusHint(stageCoords);
+                        config.commandBuilder().hintZ(surfaceHint);
+                        logger.info(
+                                "Using this slide's focus surface as the Z hint for {}: {} um "
+                                        + "(tilt {} um/mm from {} points measured at refinement)",
+                                annotation.getName(),
+                                String.format("%.2f", surfaceHint),
+                                String.format("%.2f", slideFocusSurface.tiltUmPerMm()),
+                                slideFocusSurface.pointCount());
                     } else {
                         // No prediction available (first annotation or too far from known points).
                         // Prefer the last acquisition's final Z (which is near the actual focal
@@ -2487,6 +2520,75 @@ public class AcquisitionManager {
         if (underexposed != null) {
             detection.getMeasurements().put("underexposed", underexposed ? 1.0 : 0.0);
         }
+    }
+
+    /**
+     * Load the focus surface saved for the open slide, if there is one.
+     *
+     * <p>Resolved through the same macro lookup key the transform uses, so the surface
+     * and the alignment always come from the same record. A surface measured through a
+     * different objective is refused: tilt is geometric and would carry across, but the
+     * absolute height does not, and we have no measured parfocal offset to correct it
+     * with -- so using it would hand the server a hint that is wrong by exactly the
+     * amount nobody has measured.
+     */
+    private void loadSlideFocusSurface() {
+        slideFocusSurface = null;
+        try {
+            var project = gui.getProject();
+            if (project == null || capturedImageData == null) {
+                return;
+            }
+            String imageName = QPProjectFunctions.getActualImageFileName(capturedImageData);
+            if (imageName == null) {
+                return;
+            }
+            String lookupKey = AlignmentHelper.resolveMacroLookupKey(project, capturedImageData, imageName);
+            if (lookupKey == null) {
+                return;
+            }
+            var surface = AffineTransformManager.loadSlideFocusSurface(project, lookupKey);
+            if (surface == null) {
+                return;
+            }
+            String measuredWith = surface.objective();
+            String nowUsing = state.sample.objective();
+            if (measuredWith != null && nowUsing != null && !measuredWith.equals(nowUsing)) {
+                logger.info(
+                        "This slide has a focus surface, but it was measured with {} and the "
+                                + "acquisition is using {}. Tilt would carry across objectives; the "
+                                + "absolute height would not, and the parfocal offset between them "
+                                + "has not been measured -- so it is not used as a hint.",
+                        measuredWith,
+                        nowUsing);
+                return;
+            }
+            slideFocusSurface = surface;
+            logger.info(
+                    "Loaded this slide's focus surface: z0 {} um, tilt {} um/mm, {} points, " + "RMS {}, measured {}",
+                    String.format("%.2f", surface.z0Um()),
+                    String.format("%.2f", surface.tiltUmPerMm()),
+                    surface.pointCount(),
+                    Double.isNaN(surface.rmsUm())
+                            ? "n/a (exactly determined)"
+                            : String.format("%.2f um", surface.rmsUm()),
+                    surface.measuredAt());
+        } catch (Exception e) {
+            logger.debug("No slide focus surface available: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Starting Z this slide's focus surface suggests at a stage position, or null.
+     *
+     * @param stageCoords stage {x, y} in um, as sent to the server
+     */
+    private Double slideFocusHint(double[] stageCoords) {
+        if (slideFocusSurface == null || stageCoords == null || stageCoords.length < 2) {
+            return null;
+        }
+        double z = slideFocusSurface.predict(stageCoords[0], stageCoords[1]);
+        return Double.isNaN(z) ? null : z;
     }
 
     /**

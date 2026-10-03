@@ -2632,6 +2632,70 @@ public class ExistingImageWorkflowV2 {
                         state.objective,
                         state.detector,
                         refinedFocusZ == null ? "n/a" : String.format("%.2f", refinedFocusZ));
+
+                // Multi-tile refinement autofocused at every point it visited -- two or
+                // three places millimetres apart on this slide, each one looked at by a
+                // human. Fit a plane through them and keep it, so a later pass over this
+                // slide can approach each region at roughly the right height instead of
+                // from wherever the stage is. Consumed (not read) so these heights cannot
+                // reach a different slide. Single-tile refinement yields one point, which
+                // is the focusZ scalar above and not a surface.
+                List<double[]> focusPoints = MultiTileRefinement.consumeFocusPoints();
+                if (focusPoints.size() >= 3) {
+                    AffineTransformManager.SlideFocusSurface surface = AffineTransformManager.saveSlideFocusSurface(
+                            project, lookupKey, focusPoints, state.objective);
+                    if (surface != null) {
+                        HolderTiltRegistry.record(lookupKey, surface);
+                        if (!surface.hasRedundancy()) {
+                            logger.info("This slide's focus surface came from exactly 3 points, so it is "
+                                    + "exactly determined and its residual says nothing about "
+                                    + "whether it is right. It will be used to approach the "
+                                    + "slide, never to overrule a measurement. A fourth "
+                                    + "refinement point would make it checkable.");
+                        }
+                    }
+                } else if (!focusPoints.isEmpty()) {
+                    // Too few points for a plane of its own. If other slides in this holder
+                    // loading have agreed on a tilt, this slide only needs its own height --
+                    // which is the one thing it did measure.
+                    boolean inherited = false;
+                    if (QPPreferenceDialog.getInheritHolderTilt()) {
+                        var tilt = HolderTiltRegistry.agreedTilt(lookupKey);
+                        if (tilt.isPresent()) {
+                            double[] anchor = focusPoints.get(focusPoints.size() - 1);
+                            var synthesized = new AffineTransformManager.SlideFocusSurface(
+                                    anchor[2],
+                                    tilt.get().umPerMmX(),
+                                    tilt.get().umPerMmY(),
+                                    anchor[0],
+                                    anchor[1],
+                                    focusPoints.size(),
+                                    Double.NaN,
+                                    state.objective,
+                                    java.time.Instant.now().toString());
+                            inherited = AffineTransformManager.saveSlideFocusSurface(
+                                    project, lookupKey, synthesized, focusPoints);
+                            if (inherited) {
+                                logger.info(
+                                        "This slide measured {} focus point(s), too few for a plane, "
+                                                + "so its tilt was inherited from {} slides in this "
+                                                + "holder that agree to {} um/mm. Its own height "
+                                                + "({} um) anchors it. Approach hint only -- an "
+                                                + "inherited tilt never overrules a measurement.",
+                                        focusPoints.size(),
+                                        tilt.get().slideCount(),
+                                        String.format("%.2f", tilt.get().spreadUmPerMm()),
+                                        String.format("%.2f", anchor[2]));
+                            }
+                        }
+                    }
+                    if (!inherited) {
+                        logger.info(
+                                "{} refinement focus point(s) measured -- a plane needs 3, so no focus "
+                                        + "surface was saved for this slide",
+                                focusPoints.size());
+                    }
+                }
             }
         }
 

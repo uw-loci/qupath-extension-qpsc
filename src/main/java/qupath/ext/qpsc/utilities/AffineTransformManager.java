@@ -957,6 +957,26 @@ public class AffineTransformManager {
                 alignmentData.put("focusZ", focusZ);
             }
 
+            // Carry over the measured focus surface. It is written by
+            // saveSlideFocusSurface after this method has run, so without this a later
+            // re-save of the alignment would silently delete it -- the same way the
+            // Autofocus Editor used to delete keys it did not model. Unconditional,
+            // because a re-save with a new macro image is still a re-save.
+            if (alignmentFile.exists()) {
+                try {
+                    String existingJson =
+                            new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
+                    @SuppressWarnings("unchecked")
+                    Map<String, Object> existingData = new Gson().fromJson(existingJson, Map.class);
+                    if (existingData != null && existingData.get("focusSurface") != null) {
+                        alignmentData.put("focusSurface", existingData.get("focusSurface"));
+                        logger.debug("Preserved focusSurface from existing alignment JSON");
+                    }
+                } catch (Exception e) {
+                    logger.debug("Could not preserve focusSurface: {}", e.getMessage());
+                }
+            }
+
             // Mark that the saved macro image is in raw format (no display flips baked in).
             // Old alignment files without this flag have preference flips baked into the PNG.
             if (processedMacroImage != null) {
@@ -1121,49 +1141,61 @@ public class AffineTransformManager {
      * insert now in use (e.g. a single-slide-layout alignment is not valid for a quad
      * holder), so the workflow can recommend re-aligning instead of trusting it.
      */
-    public static String loadSlideAlignmentInsert(Project<BufferedImage> project, String sampleName) {
+    /**
+     * The per-slide alignment JSON for this sample on the active microscope, or null.
+     *
+     * <p>Prefers the scope-namespaced file and falls back to the legacy unscoped name.
+     * Shared by every reader so none of them can resolve a different file than the
+     * others -- a seed read from the wrong slide's record would drive the stage
+     * somewhere arbitrary.
+     */
+    private static File resolveAlignmentFile(Project<BufferedImage> project, String sampleName) {
         if (project == null || sampleName == null) {
             return null;
         }
+        File projectDir = project.getPath().toFile().getParentFile();
+        File alignmentDir = new File(projectDir, "alignmentFiles");
+        if (!alignmentDir.exists()) {
+            return null;
+        }
+        String activeMicroscope = null;
         try {
-            File projectDir = project.getPath().toFile().getParentFile();
-            File alignmentDir = new File(projectDir, "alignmentFiles");
-            if (!alignmentDir.exists()) {
-                return null;
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                activeMicroscope = mgr.getMicroscopeName();
             }
-            String activeMicroscope = null;
-            try {
-                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-                if (mgr != null) {
-                    activeMicroscope = mgr.getMicroscopeName();
-                }
-            } catch (Exception ignore) {
+        } catch (Exception ignore) {
+        }
+        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
+            if (scoped.exists()) {
+                return scoped;
             }
-            File file = null;
-            if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
-                File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
-                if (scoped.exists()) {
-                    file = scoped;
-                }
-            }
-            if (file == null) {
-                File legacy = new File(alignmentDir, sampleName + "_alignment.json");
-                if (legacy.exists()) {
-                    file = legacy;
-                }
-            }
-            if (file == null) {
-                return null;
-            }
+        }
+        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
+        return legacy.exists() ? legacy : null;
+    }
+
+    /** Parse an alignment JSON into a mutable map, or null when unreadable. */
+    private static Map<String, Object> readAlignmentJson(File file) {
+        if (file == null) {
+            return null;
+        }
+        try {
             String json = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
             Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
             Map<String, Object> data = new Gson().fromJson(json, mapType);
-            Object si = data != null ? data.get("stageInsert") : null;
-            return si instanceof String ? (String) si : null;
+            return data == null ? null : new LinkedHashMap<>(data);
         } catch (Exception e) {
-            logger.debug("Could not read stageInsert for '{}': {}", sampleName, e.getMessage());
+            logger.debug("Could not read alignment JSON {}: {}", file.getName(), e.getMessage());
             return null;
         }
+    }
+
+    public static String loadSlideAlignmentInsert(Project<BufferedImage> project, String sampleName) {
+        Map<String, Object> data = readAlignmentJson(resolveAlignmentFile(project, sampleName));
+        Object si = data != null ? data.get("stageInsert") : null;
+        return si instanceof String ? (String) si : null;
     }
 
     /**
@@ -1174,48 +1206,287 @@ public class AffineTransformManager {
      * Used when an alignment is reused to seed the first-annotation autofocus.
      */
     public static Double loadSlideFocusZ(Project<BufferedImage> project, String sampleName) {
-        if (project == null || sampleName == null) {
+        Map<String, Object> data = readAlignmentJson(resolveAlignmentFile(project, sampleName));
+        Object z = data != null ? data.get("focusZ") : null;
+        return z instanceof Number ? ((Number) z).doubleValue() : null;
+    }
+
+    /**
+     * A focus surface measured on one slide: a plane in stage coordinates, plus the
+     * evidence behind it.
+     *
+     * <p>Persisted alongside the alignment so a later pass over the same slide can
+     * approach each region at roughly the right Z instead of from wherever the stage
+     * happens to be. The point count and RMS travel with it because a plane from three
+     * points has no residual by construction, so a consumer has to be able to tell a
+     * measured surface from an exactly-determined guess.
+     *
+     * @param z0Um focus Z (um) at the centre point
+     * @param tiltXUmPerMm focus change per mm of stage X
+     * @param tiltYUmPerMm focus change per mm of stage Y
+     * @param centreXUm stage X the plane is expressed about
+     * @param centreYUm stage Y the plane is expressed about
+     * @param pointCount how many focus measurements it was fitted to
+     * @param rmsUm residual RMS, or NaN when the fit was exactly determined
+     * @param objective objective in use when it was measured; tilt is geometric and
+     *     carries across objectives, but z0 does not
+     * @param measuredAt ISO-8601 instant, so a stale surface can be recognised
+     */
+    public record SlideFocusSurface(
+            double z0Um,
+            double tiltXUmPerMm,
+            double tiltYUmPerMm,
+            double centreXUm,
+            double centreYUm,
+            int pointCount,
+            double rmsUm,
+            String objective,
+            String measuredAt) {
+
+        /** Focus Z this surface predicts at a stage position. */
+        public double predict(double stageXUm, double stageYUm) {
+            return z0Um
+                    + tiltXUmPerMm * (stageXUm - centreXUm) / 1000.0
+                    + tiltYUmPerMm * (stageYUm - centreYUm) / 1000.0;
+        }
+
+        /** Tilt magnitude, um per mm. */
+        public double tiltUmPerMm() {
+            return Math.hypot(tiltXUmPerMm, tiltYUmPerMm);
+        }
+
+        /**
+         * Whether the fit had any redundancy at all.
+         *
+         * <p>Three points determine a plane exactly: the residual is zero whatever the
+         * points were, so the fit cannot report its own failure. Such a surface is a
+         * reasonable thing to approach a slide with and not a reasonable thing to
+         * overrule a measurement with.
+         */
+        public boolean hasRedundancy() {
+            return pointCount > 3;
+        }
+    }
+
+    /**
+     * Fit a plane to focus measurements and persist it on the slide's alignment record.
+     *
+     * <p>Merges into the existing JSON rather than rewriting it, and is a no-op when no
+     * alignment file exists -- a focus surface with no alignment has no lookup key
+     * anything would find it by.
+     *
+     * @param project the open project
+     * @param sampleName the macro lookup key, resolved the same way the transform is
+     * @param points measured focus points as {stageX, stageY, focusZ} in um
+     * @param objective objective in use while measuring
+     * @return the surface that was saved, or null when there were too few points or no
+     *     alignment file to attach it to
+     */
+    public static SlideFocusSurface saveSlideFocusSurface(
+            Project<BufferedImage> project, String sampleName, List<double[]> points, String objective) {
+        if (points == null || points.size() < 3) {
+            logger.debug(
+                    "Not saving a focus surface for '{}': {} points, a plane needs at least 3",
+                    sampleName,
+                    points == null ? 0 : points.size());
+            return null;
+        }
+        File file = resolveAlignmentFile(project, sampleName);
+        Map<String, Object> data = readAlignmentJson(file);
+        if (data == null) {
+            logger.debug("Not saving a focus surface for '{}': no alignment record to attach it to", sampleName);
+            return null;
+        }
+        SlideFocusSurface surface = fitFocusSurface(points, objective);
+        if (surface == null) {
+            return null;
+        }
+        return writeFocusSurfaceRecord(file, sampleName, surface, points) ? surface : null;
+    }
+
+    /**
+     * Persist a focus surface that was built some other way than by fitting this slide's
+     * own points -- in practice, one measured point plus a tilt inherited from the holder.
+     *
+     * @param project the open project
+     * @param sampleName the macro lookup key
+     * @param surface the surface to record
+     * @param points the measurements behind it, which may be fewer than a plane needs
+     * @return true when it was written
+     */
+    public static boolean saveSlideFocusSurface(
+            Project<BufferedImage> project, String sampleName, SlideFocusSurface surface, List<double[]> points) {
+        if (surface == null) {
+            return false;
+        }
+        File file = resolveAlignmentFile(project, sampleName);
+        if (readAlignmentJson(file) == null) {
+            logger.debug("Not saving a focus surface for '{}': no alignment record to attach it to", sampleName);
+            return false;
+        }
+        return writeFocusSurfaceRecord(file, sampleName, surface, points);
+    }
+
+    private static boolean writeFocusSurfaceRecord(
+            File file, String sampleName, SlideFocusSurface surface, List<double[]> points) {
+        Map<String, Object> data = readAlignmentJson(file);
+        if (data == null) {
+            return false;
+        }
+        Map<String, Object> record = new LinkedHashMap<>();
+        record.put("z0Um", surface.z0Um());
+        record.put("tiltXUmPerMm", surface.tiltXUmPerMm());
+        record.put("tiltYUmPerMm", surface.tiltYUmPerMm());
+        record.put("centreXUm", surface.centreXUm());
+        record.put("centreYUm", surface.centreYUm());
+        record.put("pointCount", surface.pointCount());
+        if (!Double.isNaN(surface.rmsUm())) {
+            record.put("rmsUm", surface.rmsUm());
+        }
+        if (surface.objective() != null) {
+            record.put("objective", surface.objective());
+        }
+        record.put("measuredAt", surface.measuredAt());
+        if (points != null) {
+            List<List<Double>> savedPoints = new ArrayList<>();
+            for (double[] p : points) {
+                savedPoints.add(List.of(p[0], p[1], p[2]));
+            }
+            record.put("points", savedPoints);
+        }
+        data.put("focusSurface", record);
+        try {
+            String json = new GsonBuilder().setPrettyPrinting().create().toJson(data);
+            Files.write(file.toPath(), json.getBytes(StandardCharsets.UTF_8));
+            logger.info(
+                    "Saved focus surface for '{}': {} points, tilt {} um/mm, z0 {} um, RMS {}",
+                    sampleName,
+                    surface.pointCount(),
+                    String.format("%.2f", surface.tiltUmPerMm()),
+                    String.format("%.2f", surface.z0Um()),
+                    Double.isNaN(surface.rmsUm())
+                            ? "n/a (exactly determined)"
+                            : String.format("%.2f um", surface.rmsUm()));
+            return true;
+        } catch (Exception e) {
+            logger.warn("Could not save focus surface for '{}': {}", sampleName, e.getMessage());
+            return false;
+        }
+    }
+
+    /** Least-squares plane through {stageX, stageY, focusZ} points, or null if degenerate. */
+    static SlideFocusSurface fitFocusSurface(List<double[]> points, String objective) {
+        int n = points.size();
+        double cx = 0;
+        double cy = 0;
+        for (double[] p : points) {
+            cx += p[0];
+            cy += p[1];
+        }
+        cx /= n;
+        cy /= n;
+
+        // Fit in mm about the centroid: stage coordinates run to tens of thousands of
+        // microns, and the raw normal equations are badly scaled at that magnitude.
+        double sxx = 0, sxy = 0, syy = 0, sx = 0, sy = 0, sz = 0, sxz = 0, syz = 0;
+        for (double[] p : points) {
+            double x = (p[0] - cx) / 1000.0;
+            double y = (p[1] - cy) / 1000.0;
+            double z = p[2];
+            sxx += x * x;
+            sxy += x * y;
+            syy += y * y;
+            sx += x;
+            sy += y;
+            sz += z;
+            sxz += x * z;
+            syz += y * z;
+        }
+        double[][] a = {{sxx, sxy, sx}, {sxy, syy, sy}, {sx, sy, n}};
+        double[] rhs = {sxz, syz, sz};
+        double det = det3(a);
+        if (Math.abs(det) < 1e-9) {
+            logger.info(
+                    "Focus surface not fitted: the {} measured points are collinear, so they "
+                            + "constrain a tilt along one direction only",
+                    n);
+            return null;
+        }
+        double tiltX = det3(substitute(a, rhs, 0)) / det;
+        double tiltY = det3(substitute(a, rhs, 1)) / det;
+        double z0 = det3(substitute(a, rhs, 2)) / det;
+
+        // Three points determine the plane exactly, so a residual would be zero whatever
+        // the points were. Report NaN rather than a reassuring 0.00.
+        double rms = Double.NaN;
+        if (n > 3) {
+            double sumSq = 0;
+            for (double[] p : points) {
+                double predicted = z0 + tiltX * (p[0] - cx) / 1000.0 + tiltY * (p[1] - cy) / 1000.0;
+                double e = p[2] - predicted;
+                sumSq += e * e;
+            }
+            rms = Math.sqrt(sumSq / n);
+        }
+        return new SlideFocusSurface(
+                z0,
+                tiltX,
+                tiltY,
+                cx,
+                cy,
+                n,
+                rms,
+                objective,
+                java.time.Instant.now().toString());
+    }
+
+    private static double det3(double[][] m) {
+        return m[0][0] * (m[1][1] * m[2][2] - m[1][2] * m[2][1])
+                - m[0][1] * (m[1][0] * m[2][2] - m[1][2] * m[2][0])
+                + m[0][2] * (m[1][0] * m[2][1] - m[1][1] * m[2][0]);
+    }
+
+    private static double[][] substitute(double[][] matrix, double[] vector, int col) {
+        double[][] out = new double[3][3];
+        for (int i = 0; i < 3; i++) {
+            for (int j = 0; j < 3; j++) {
+                out[i][j] = (j == col) ? vector[i] : matrix[i][j];
+            }
+        }
+        return out;
+    }
+
+    /**
+     * Read the focus surface persisted for this slide, or null when there is none.
+     *
+     * <p>Returns whatever was saved, including an exactly-determined three-point plane;
+     * callers decide what they are willing to do with it via
+     * {@link SlideFocusSurface#hasRedundancy()}.
+     */
+    public static SlideFocusSurface loadSlideFocusSurface(Project<BufferedImage> project, String sampleName) {
+        Map<String, Object> data = readAlignmentJson(resolveAlignmentFile(project, sampleName));
+        if (data == null || !(data.get("focusSurface") instanceof Map<?, ?> record)) {
             return null;
         }
         try {
-            File projectDir = project.getPath().toFile().getParentFile();
-            File alignmentDir = new File(projectDir, "alignmentFiles");
-            if (!alignmentDir.exists()) {
-                return null;
-            }
-            String activeMicroscope = null;
-            try {
-                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-                if (mgr != null) {
-                    activeMicroscope = mgr.getMicroscopeName();
-                }
-            } catch (Exception ignore) {
-            }
-            File file = null;
-            if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
-                File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
-                if (scoped.exists()) {
-                    file = scoped;
-                }
-            }
-            if (file == null) {
-                File legacy = new File(alignmentDir, sampleName + "_alignment.json");
-                if (legacy.exists()) {
-                    file = legacy;
-                }
-            }
-            if (file == null) {
-                return null;
-            }
-            String json = new String(Files.readAllBytes(file.toPath()), StandardCharsets.UTF_8);
-            Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
-            Map<String, Object> data = new Gson().fromJson(json, mapType);
-            Object z = data != null ? data.get("focusZ") : null;
-            return z instanceof Number ? ((Number) z).doubleValue() : null;
+            return new SlideFocusSurface(
+                    asDouble(record.get("z0Um"), Double.NaN),
+                    asDouble(record.get("tiltXUmPerMm"), 0),
+                    asDouble(record.get("tiltYUmPerMm"), 0),
+                    asDouble(record.get("centreXUm"), 0),
+                    asDouble(record.get("centreYUm"), 0),
+                    (int) asDouble(record.get("pointCount"), 0),
+                    asDouble(record.get("rmsUm"), Double.NaN),
+                    record.get("objective") instanceof String o ? o : null,
+                    record.get("measuredAt") instanceof String t ? t : null);
         } catch (Exception e) {
-            logger.debug("Could not read focusZ for '{}': {}", sampleName, e.getMessage());
+            logger.debug("Could not read focus surface for '{}': {}", sampleName, e.getMessage());
             return null;
         }
+    }
+
+    private static double asDouble(Object value, double fallback) {
+        return value instanceof Number n ? n.doubleValue() : fallback;
     }
 
     /**

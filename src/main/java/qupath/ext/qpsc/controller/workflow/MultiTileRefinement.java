@@ -2,6 +2,7 @@ package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.geom.AffineTransform;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javafx.animation.KeyFrame;
@@ -135,6 +136,54 @@ public class MultiTileRefinement {
     private record PointMeasure(double[] tileCentroidQP, double[] measuredStage, PathObject tile) {}
 
     /**
+     * Focus points measured during the current refinement, as {stageX, stageY, focusZ}.
+     *
+     * <p>Refinement already autofocuses at every point it visits -- two or three places
+     * millimetres apart on the slide about to be acquired, each one checked by a human
+     * looking at the capture pane. Those are the best focus measurements the whole
+     * workflow produces, and until now only the last one survived, as a single scalar.
+     * Collected here so the slide's focus surface can be fitted from all of them.
+     *
+     * <p>Static for the same reason {@code SlotJumpAutofocus.focusZThisSlide} is:
+     * refinement is one interactive flow at a time, and threading a collector through
+     * the capture-pane callbacks would touch every signature between here and there.
+     * Cleared at the start of each refinement so one run cannot inherit another's.
+     */
+    private static final List<double[]> focusPointsThisRun = Collections.synchronizedList(new ArrayList<>());
+
+    /**
+     * Take the focus points measured by the refinement that just ran, and forget them.
+     *
+     * <p>Consuming rather than reading: these describe one specific slide in one specific
+     * holder position, and handing the same list to a second slide would put the first
+     * slide's focus heights into the second slide's surface.
+     */
+    public static List<double[]> consumeFocusPoints() {
+        synchronized (focusPointsThisRun) {
+            List<double[]> copy = new ArrayList<>(focusPointsThisRun);
+            focusPointsThisRun.clear();
+            return copy;
+        }
+    }
+
+    /** Record where autofocus left the stage at one refinement point. Best-effort. */
+    private static void recordFocusPoint(int pointNumber) {
+        try {
+            double[] xyz = MicroscopeController.getInstance().getSocketClient().getStageXYZ();
+            focusPointsThisRun.add(new double[] {xyz[0], xyz[1], xyz[2]});
+            logger.info(
+                    "Multi-tile point {}: focus measured at X={}, Y={}, Z={} um (kept for the "
+                            + "slide's focus surface)",
+                    pointNumber,
+                    String.format("%.0f", xyz[0]),
+                    String.format("%.0f", xyz[1]),
+                    String.format("%.2f", xyz[2]));
+        } catch (Exception e) {
+            logger.debug("Could not record a focus point for refinement point {}: {}", pointNumber, e.getMessage());
+        }
+    }
+
+    /**
      * Multi-tile refinement using the trust-SIFT and confidence preferences.
      */
     public static CompletableFuture<SingleTileRefinement.RefinementResult> performRefinement(
@@ -161,6 +210,8 @@ public class MultiTileRefinement {
             double confidenceThreshold) {
 
         CompletableFuture<SingleTileRefinement.RefinementResult> future = new CompletableFuture<>();
+        // Forget the previous slide's focus points before measuring this one's.
+        focusPointsThisRun.clear();
         logger.info(
                 "Starting multi-tile refinement (trustSift={}, threshold={}, annotations={})",
                 trustSift,
@@ -735,6 +786,10 @@ public class MultiTileRefinement {
                                                     estimate);
                                     SlotJumpAutofocus.runAfterSlotMove(tissueSearch)
                                             .join();
+                                    // Autofocus has settled at this point's tissue height.
+                                    // Only here, not in the catch below: that path never got
+                                    // to focus, so the stage Z there describes nothing.
+                                    recordFocusPoint(pointNumber);
                                     Platform.runLater(() -> {
                                         // Multi-slide alignment-step start: force Camera View
                                         // + zoom to tissue once, at the first point (no-op

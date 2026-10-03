@@ -188,6 +188,11 @@ public class QPPreferenceDialog {
     private static final IntegerProperty focusSurveyPointsProperty =
             PathPrefs.createPersistentPreference("focusSurveyPoints", 0);
 
+    // Inherit a slide's focus tilt from other slides in the same holder loading, when
+    // they agree. Default off: the premise rests on two measured slides.
+    private static final BooleanProperty inheritHolderTiltProperty =
+            PathPrefs.createPersistentPreference("inheritHolderTilt", false);
+
     // Live Viewer: show the current XYZ(R) stage position overlaid on the live image.
     // Also toggleable from the Live Viewer toolbar (the toggle binds to this property).
     private static final BooleanProperty showLiveViewerPositionOverlayProperty =
@@ -619,6 +624,27 @@ public class QPPreferenceDialog {
                         + "a 1,332-tile PPM region spent 5.7 hours on per-tile autofocus.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(inheritHolderTiltProperty, Boolean.class)
+                .name("Inherit focus tilt within a holder (experimental)")
+                .category(MULTISLIDE_CATEGORY)
+                .description("Let a slide take its focus TILT from the other slides in the same "
+                        + "holder loading, so it only has to measure its own height.\n"
+                        + "\n"
+                        + "Measured on this rig, two slides in one loading tilted (-7.67, -4.78) "
+                        + "and (-7.65, -5.59) um/mm, while their heights differed by 95 um. That "
+                        + "suggests tilt belongs to the holder and height to the slide -- but it "
+                        + "is two slides of evidence, which is why this is off by default.\n"
+                        + "\n"
+                        + "It checks the premise rather than assuming it: nothing is inherited "
+                        + "until at least two slides in this loading have measured tilts that "
+                        + "agree with each other, and if they disagree it says so and inherits "
+                        + "nothing. An inherited tilt is only ever used to approach a region at "
+                        + "roughly the right height; it never replaces a measurement.\n"
+                        + "\n"
+                        + "Measurements are forgotten when QuPath restarts. Clear them by hand "
+                        + "after changing the insert or re-zeroing the stage.")
+                .build());
+
         // Show Position Overlay is intentionally NOT exposed as a Preferences-pane
         // entry: the Live Viewer toolbar's XYZ toggle controls it and its state is
         // persisted via showLiveViewerPositionOverlayProperty (a persistent
@@ -974,6 +1000,15 @@ public class QPPreferenceDialog {
 
     public static IntegerProperty focusSurveyPointsProperty() {
         return focusSurveyPointsProperty;
+    }
+
+    /** Whether a slide may take its focus tilt from others in the same holder loading. */
+    public static boolean getInheritHolderTilt() {
+        return inheritHolderTiltProperty.get();
+    }
+
+    public static BooleanProperty inheritHolderTiltProperty() {
+        return inheritHolderTiltProperty;
     }
 
     /** Whether the Live Viewer shows the XYZ(R) position overlay on the image. */
