@@ -179,6 +179,11 @@ public class QPPreferenceDialog {
     private static final BooleanProperty disableAllAutofocusProperty =
             PathPrefs.createPersistentPreference("disableAllAutofocus", false);
 
+    // Focus surface: off / observe / enforce. Default off, so an update changes nothing
+    // about how a tile's Z is chosen until someone opts in.
+    private static final StringProperty focusSurfaceModeProperty =
+            PathPrefs.createPersistentPreference("focusSurfaceMode", "off");
+
     // Live Viewer: show the current XYZ(R) stage position overlaid on the live image.
     // Also toggleable from the Live Viewer toolbar (the toggle binds to this property).
     private static final BooleanProperty showLiveViewerPositionOverlayProperty =
@@ -563,6 +568,32 @@ public class QPPreferenceDialog {
                         + "Wizard shows a read-only status reflecting this preference.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(focusSurfaceModeProperty, String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+                .name("Focus surface (experimental)")
+                .category(CATEGORY)
+                .choices(Arrays.asList("off", "observe", "enforce"))
+                .description("Fit a tilted plane through an acquisition's autofocus results and "
+                        + "use it to judge each new result.\n"
+                        + "\n"
+                        + "Measured over ten regions on this rig, a single plane describes focus "
+                        + "to under about 1 um across a whole slide, the narrow drift sweep agrees "
+                        + "with it 99% of the time, and the wide search disagrees by more than 5 um "
+                        + "a quarter of the time -- usually at the first tile of a region, where "
+                        + "the bad value then seeds every tile around it.\n"
+                        + "\n"
+                        + "off -- today's behaviour: each tile holds the Z of the nearest focused "
+                        + "tile, whatever that Z was.\n"
+                        + "observe -- fit the surface and log every disagreement, but change "
+                        + "nothing. Start here: one run tells you what enforcing would have done.\n"
+                        + "enforce -- predict Z from the surface, and replace an autofocus result "
+                        + "that disagrees with it beyond the gate.\n"
+                        + "\n"
+                        + "The surface declines to act unless it has enough spread-out, mutually "
+                        + "agreeing points, so a folded section or a single-row annotation falls "
+                        + "back to the 'off' behaviour on its own.")
+                .build());
+
         // Show Position Overlay is intentionally NOT exposed as a Preferences-pane
         // entry: the Live Viewer toolbar's XYZ toggle controls it and its state is
         // persisted via showLiveViewerPositionOverlayProperty (a persistent
@@ -888,6 +919,22 @@ public class QPPreferenceDialog {
 
     public static BooleanProperty disableAllAutofocusProperty() {
         return disableAllAutofocusProperty;
+    }
+
+    /**
+     * Focus-surface mode for acquisition: {@code off}, {@code observe} or {@code enforce}.
+     *
+     * <p>Sent to the server as {@code --focus-surface}. The server treats anything it does not
+     * recognise as {@code off}, so a stale preference degrades to today's behaviour rather than
+     * to a guess.
+     */
+    public static String getFocusSurfaceMode() {
+        String mode = focusSurfaceModeProperty.get();
+        return (mode == null || mode.isBlank()) ? "off" : mode;
+    }
+
+    public static StringProperty focusSurfaceModeProperty() {
+        return focusSurfaceModeProperty;
     }
 
     /** Whether the Live Viewer shows the XYZ(R) position overlay on the image. */

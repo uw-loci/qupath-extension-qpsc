@@ -943,6 +943,16 @@ public class AcquisitionCommandBuilder {
             args.add("--af-disabled");
         }
 
+        // Focus surface: fit a plane through this region's autofocus results and judge
+        // each new one against it. Read straight from the preference, like
+        // --af-disabled above, and emitted only when opted in, so an unchanged rig's
+        // command line stays byte-identical. Pointless with autofocus off -- there
+        // would be no measurements to fit -- so it is not sent in that case.
+        String focusSurfaceMode = QPPreferenceDialog.getFocusSurfaceMode();
+        if (!"off".equals(focusSurfaceMode) && !QPPreferenceDialog.getDisableAllAutofocus()) {
+            args.addAll(Arrays.asList("--focus-surface", focusSurfaceMode));
+        }
+
         // Independent of the above: the operator has already focused, so the
         // server adopts the current Z instead of driving to the first diagonal
         // AF position and sweeping for a focus it was handed. Per-tile AF is
