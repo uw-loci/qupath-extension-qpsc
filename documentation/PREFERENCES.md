@@ -44,6 +44,9 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Auto-connect to Server](#auto-connect-to-server) | Boolean | ON | Connect on QuPath startup |
 | [No Manual Autofocus (Danger)](#no-manual-autofocus-danger) | Boolean | OFF | Skip manual focus dialogs |
 | [Disable All Autofocus (Danger)](#disable-all-autofocus-danger) | Boolean | OFF | Send `--af-disabled` on the wire so server runs zero AF |
+| [Focus surface (experimental)](#focus-surface-experimental) | Choice | off | Fit a plane through an acquisition's AF results and judge each new result against it |
+| [Focus survey points (experimental)](#focus-survey-points-experimental) | Integer | 0 | Measure the focus surface at N spread-out tiles before the tile loop |
+| [Inherit focus tilt within a holder (experimental)](#inherit-focus-tilt-within-a-holder-experimental) | Boolean | OFF | Let a slide take its focus tilt from agreeing slides in the same loading |
 | Save Raw Tiles | Boolean | OFF | Save unprocessed tiles alongside corrected |
 | Warn On Low Disk Space | Boolean | ON | Alert when disk space is low before acquisition |
 | [Setup-pass automation](#setup-pass-automation) | Choice | MANUAL | How much of the multi-slide setup pass runs without a human |
@@ -1293,6 +1296,84 @@ This is broader than [No Manual Autofocus](#no-manual-autofocus-danger): No-Manu
 - No drift correction at all
 - Sample drift over a long acquisition will gradually defocus
 - No way for the system to recover from a Z mistake
+
+---
+
+### Focus surface (experimental)
+
+| Property | Value |
+|----------|-------|
+| Type | Choice (`off`, `observe`, `enforce`) |
+| Default | `off` |
+| Requires Restart | No |
+
+**Description:**
+
+Fits a tilted plane through the autofocus results an acquisition has already produced, and uses it to judge each new result.
+
+Why it exists. Today each tile that does not autofocus holds the Z of the spatially nearest tile that did — a focus map with no fitting and no outlier rejection, so a wrong measurement is indistinguishable from a right one. Measured over ten regions on PPM and OWS3 slides, a single plane describes focus to 0.27–1.11 µm RMS across a whole region while focus itself travels 4–150 µm; the narrow drift sweep agrees with that plane 98.8% of the time, and the wide standard search disagrees by more than 5 µm **25%** of the time (more than 15 µm, 21% of the time; worst case 73 µm). The wide search is what runs at the first tissue tile of every region and after every jump, so one bad result could put a whole region out of focus with nothing in the log. Full measurement: `claude-reports/design/autofocus-empirical/summaries/focus_surface.md`.
+
+| Mode | Behaviour |
+|---|---|
+| `off` | Today's behaviour, unchanged. |
+| `observe` | Fits the surface and logs every disagreement, changing nothing. One run tells you what enforcing would have done. |
+| `enforce` | Predicts Z for tiles that do not autofocus, and replaces an autofocus result that disagrees with the surface beyond the gate. |
+
+**Start with `observe`.** It cannot affect a run, and it measures the premise on your sample before anything acts on it.
+
+The surface declines to act unless four conditions hold, so an unsuitable sample falls back to the `off` behaviour by itself: at least 6 mutually agreeing points, a fit residual under 3 µm, at least 60% of points agreeing with it, and points spread at least 0.5 mm in their weaker direction. The last matters because scan order produces a *column* of points first, which fixes one tilt and says nothing about the other. The rejection gate is `max(5 µm, 4 × fit RMS)`, so a noisier fit is less willing to overrule a measurement.
+
+If three consecutive rejected results agree with *each other* and not with the surface, the surface treats the sample as having moved and rebuilds from them. Scattered rejections, which are failed autofocus attempts, do not trigger that.
+
+Sent to the server as `--focus-surface <mode>`. Not sent when [Disable All Autofocus](#disable-all-autofocus-danger) is on, since there would be no measurements to fit.
+
+---
+
+### Focus survey points (experimental)
+
+| Property | Value |
+|----------|-------|
+| Type | Integer |
+| Default | 0 (no survey) |
+| Requires Restart | No |
+
+**Description:**
+
+Measures the focus surface at this many spread-out, tissue-bearing tiles **before** the tile loop, instead of discovering it tile by tile.
+
+Requires **Focus surface** set to `observe` or `enforce`. With the surface off there is nothing to fit the points to, so the survey is skipped rather than run for nothing.
+
+**Sizing, from measurement:** 9 points reproduce a region's surface to 0.3–1.4 µm RMS, 16 is marginally better, and past that nothing changes. Below 5 there is too little redundancy for the fit to report its own failure, and the surface will refuse to act on it. Three points is a trap — three parameters, three points, residual zero by construction.
+
+**Cost:** one wide autofocus per point, roughly 10 s each. For comparison, a 1,332-tile PPM region spent 5.7 hours on per-tile autofocus, and the 2026-09-24 session spent 8.95 hours in total with 21% of its sweeps returning no measurement at all.
+
+Tiles are chosen from the macro image: scored for tissue (autofocus on blank glass still finds a peak, and that peak is the coverslip), then selected for spread by farthest-point sampling (a plane needs points spread in both axes). Only a strided subset of up to 150 tiles is scored, since a 1,300-tile annotation would otherwise cost 1,300 macro reads to pick a dozen points.
+
+Nothing in the survey is load-bearing. A point that will not move, will not focus, or has no tissue is skipped and the next candidate tried; it never prompts for manual focus, because it runs unattended. If too few points survive, the surface stays unlicensed and the acquisition chooses each tile's Z exactly as it does today.
+
+Sent as `--focus-survey <n>` plus `--focus-survey-tiles <i,j,k,...>`.
+
+---
+
+### Inherit focus tilt within a holder (experimental)
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | OFF |
+| Requires Restart | No (measurements are forgotten on restart) |
+
+**Description:**
+
+Lets a slide take its focus **tilt** from the other slides in the same holder loading, so it only has to measure its own **height**.
+
+The evidence is thin and the preference is off because of it: within one loading, two slides tilted (−7.67, −4.78) and (−7.65, −5.59) µm/mm while their heights differed by 95 µm, which suggests tilt belongs to the holder and height to the slide. Across sessions, tilt ranged from −10.4 to +2.9 µm/mm, so it certainly cannot be calibrated once and reused.
+
+Rather than assume the premise, it tests it on every use: nothing is inherited until at least two slides in the current loading have measured tilts agreeing within 2 µm/mm, and if they disagree it logs that and inherits nothing. An unchecked three-point surface is not accepted as evidence at all, since three points fit a plane exactly and so its tilt could be anything.
+
+An inherited tilt is only ever used to approach a region at roughly the right height. It never replaces a measurement.
+
+Measurements live in memory for the session. **Clear them by restarting QuPath after changing the insert or re-zeroing the stage** — a re-zero translates the stage frame the tilts were measured in.
 
 ---
 
