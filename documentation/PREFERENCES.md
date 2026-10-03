@@ -1321,7 +1321,9 @@ Why it exists. Today each tile that does not autofocus holds the Z of the spatia
 
 **Start with `observe`.** It cannot affect a run, and it measures the premise on your sample before anything acts on it.
 
-The surface declines to act unless four conditions hold, so an unsuitable sample falls back to the `off` behaviour by itself: at least 6 mutually agreeing points, a fit residual under 3 µm, at least 60% of points agreeing with it, and points spread at least 0.5 mm in their weaker direction. The last matters because scan order produces a *column* of points first, which fixes one tilt and says nothing about the other. The rejection gate is `max(5 µm, 4 × fit RMS)`, so a noisier fit is less willing to overrule a measurement.
+The surface declines to act unless four conditions hold, so an unsuitable sample falls back to the `off` behaviour by itself: at least 6 mutually agreeing points, a fit residual under 3 µm, at least 60% of points agreeing with it, and enough spread in the weaker direction to constrain the second tilt (0.5 mm, or 60% of the region's own narrow dimension for a region too thin to provide that). The spread condition matters because scan order produces a *column* of points first, which fixes one tilt and says nothing about the other. The rejection gate is `max(5 µm, 4 × fit RMS)`, so a noisier fit is less willing to overrule a measurement.
+
+Replayed over all 34 available server logs, the surface becomes licensed after a median of 8 measurements (p90 12), is licensed for a median 93% of a region's measurements, and would have overruled 21% of wide standard searches against 2.9% of narrow drift sweeps. Six of 51 regions never licensed: three had almost no usable autofocus results at all, and three were correct refusals where under half the measurements agreed with any plane.
 
 If three consecutive rejected results agree with *each other* and not with the surface, the surface treats the sample as having moved and rebuilds from them. Scattered rejections, which are failed autofocus attempts, do not trigger that.
 
@@ -1345,11 +1347,26 @@ Measures the focus surface at this many spread-out, tissue-bearing tiles **befor
 
 Requires **Focus surface** set to `observe` or `enforce`. With the surface off there is nothing to fit the points to, so the survey is skipped rather than run for nothing.
 
-**Sizing, from measurement:** 9 points reproduce a region's surface to 0.3–1.4 µm RMS, 16 is marginally better, and past that nothing changes. Below 5 there is too little redundancy for the fit to report its own failure, and the surface will refuse to act on it. Three points is a trap — three parameters, three points, residual zero by construction.
+**Sizing, measured by replaying 45 real regions** (surface built from N survey points, error scored at *every* autofocus result in the region):
+
+| N | licenses a surface | median RMS | p90 RMS |
+|---|---|---|---|
+| 5 | **never** | — | — |
+| 9 | 91% of regions | 1.24 µm | 5.8 µm |
+| 12 | 91% of regions | 1.05 µm | 5.9 µm |
+| 16 | 89% of regions | 1.03 µm | 6.1 µm |
+
+**5 is not a valid setting** — the surface needs six mutually agreeing points, so a five-point survey cannot produce one however good the points are. The practical minimum is 9, and 12 is a sensible default. Past 12 the differences are within noise. Three points is a trap in a different way: three parameters, three points, residual zero by construction.
+
+Note the p90. The plane describes a region's *agreeing* measurements to 0.3–1.1 µm, but predicts *all* of them to a median 1.05 µm with a p90 near 6 µm. The gap is the autofocus outliers — which are what the surface exists to catch, so they do not belong inside its accuracy claim.
 
 **Cost:** one wide autofocus per point, roughly 10 s each. For comparison, a 1,332-tile PPM region spent 5.7 hours on per-tile autofocus, and the 2026-09-24 session spent 8.95 hours in total with 21% of its sweeps returning no measurement at all.
 
-Tiles are chosen from the macro image: scored for tissue (autofocus on blank glass still finds a peak, and that peak is the coverslip), then selected for spread by farthest-point sampling (a plane needs points spread in both axes). Only a strided subset of up to 150 tiles is scored, since a 1,300-tile annotation would otherwise cost 1,300 macro reads to pick a dozen points.
+**What the survey does not do:** it does not change how often the tile loop autofocuses. That is still `n_tiles` in `autofocus_<scope>.yml`. What the survey buys is a licensed surface from the first tile instead of after a median 8 measurements — which is what would make raising `n_tiles` safe, and what lets the surface vet the wide search at the *start* of a region rather than only the ones after a jump.
+
+Tiles are chosen from the macro image: scored for tissue (autofocus on blank glass still finds a peak, and that peak is the coverslip), kept one camera frame clear of the region's edge, then selected for spread by farthest-point sampling (a plane needs points spread in both axes). Only a strided subset of up to 150 tiles is scored, since a 1,300-tile annotation would otherwise cost 1,300 macro reads to pick a dozen points.
+
+The edge inset exists because spread and trustworthiness pull in opposite directions: farthest-point sampling fills the region's extremes first, and a boundary tile is the one most likely to be half off the tissue. Measured on real regions, the inset improves the p90 prediction error from 7.1 to 5.8 µm at N=9.
 
 Nothing in the survey is load-bearing. A point that will not move, will not focus, or has no tissue is skipped and the next candidate tried; it never prompts for manual focus, because it runs unattended. If too few points survive, the surface stays unlicensed and the acquisition chooses each tile's Z exactly as it does today.
 
