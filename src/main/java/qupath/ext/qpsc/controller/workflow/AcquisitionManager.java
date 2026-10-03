@@ -2814,11 +2814,61 @@ public class AcquisitionManager {
             return List.of();
         }
 
-        List<Integer> picked = farthestPointSelect(pool, Math.min(count, pool.size()));
+        // Keep clear of the region boundary before spreading. Farthest-point sampling
+        // fills the extremes first, and a boundary tile is the one most likely to be half
+        // off the tissue -- the same reason the first AF position has been inset one
+        // diagonal FOV since 2025-12-12. Replaying real regions measured the cost of not
+        // doing this: a 16-point farthest-point survey produced a worse point set than a
+        // 9-point one on five regions, the extra picks all being edge. Tissue scoring
+        // catches the blank ones, but a boundary tile that is half tissue still passes it
+        // and is then actively preferred.
+        List<TileSite> spreadPool = insetFromRegionEdge(pool, scan, count);
+        List<Integer> picked = farthestPointSelect(spreadPool, Math.min(count, spreadPool.size()));
         logger.info(
                 "Focus survey: {} tiles selected from {} candidates in {} (tissue >= {}%, " + "spread over the region)",
                 picked.size(), pool.size(), annotation.getName(), (int) (minTissueScore * 100));
         return picked;
+    }
+
+    /**
+     * Drop candidates within one camera frame of the candidate cloud's bounding box.
+     *
+     * <p>Abandoned rather than applied when it would leave too few to spread over: a
+     * smaller survey is worse than an edge-heavy one, because below about five points the
+     * fit has no redundancy and the surface refuses to act on it at all.
+     */
+    private static List<TileSite> insetFromRegionEdge(List<TileSite> pool, WsiTileScan scan, int count) {
+        if (pool.size() <= count) {
+            return pool;
+        }
+        double minX = pool.stream().mapToDouble(TileSite::cx).min().orElse(0);
+        double maxX = pool.stream().mapToDouble(TileSite::cx).max().orElse(0);
+        double minY = pool.stream().mapToDouble(TileSite::cy).min().orElse(0);
+        double maxY = pool.stream().mapToDouble(TileSite::cy).max().orElse(0);
+        double marginX = scan.frameW();
+        double marginY = scan.frameH();
+        List<TileSite> inside = new ArrayList<>();
+        for (TileSite s : pool) {
+            if (s.cx() >= minX + marginX
+                    && s.cx() <= maxX - marginX
+                    && s.cy() >= minY + marginY
+                    && s.cy() <= maxY - marginY) {
+                inside.add(s);
+            }
+        }
+        if (inside.size() < Math.max(count, 4)) {
+            logger.info(
+                    "Focus survey: insetting one frame from the region edge would leave only {} "
+                            + "candidates for {} points, so using the full pool including edge tiles",
+                    inside.size(),
+                    count);
+            return pool;
+        }
+        logger.debug(
+                "Focus survey: {} of {} candidates are at least one frame inside the region edge",
+                inside.size(),
+                pool.size());
+        return inside;
     }
 
     /**
