@@ -1327,6 +1327,8 @@ If three consecutive rejected results agree with *each other* and not with the s
 
 Sent to the server as `--focus-surface <mode>`. Not sent when [Disable All Autofocus](#disable-all-autofocus-danger) is on, since there would be no measurements to fit.
 
+**This preference also governs the per-slide surface** saved by multi-tile refinement (see [AUTOFOCUS.md](AUTOFOCUS.md#focus-surface-measurement-experimental)). While it is `off`, a saved surface is not read, so an update is inert even on a slide that already carries one. Measurement is separate and unconditional: a refinement with three or more points always records its surface, because writing the record costs nothing and acting on it is the part worth gating.
+
 ---
 
 ### Focus survey points (experimental)

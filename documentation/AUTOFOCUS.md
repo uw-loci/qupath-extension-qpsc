@@ -31,13 +31,14 @@ When you start a multi-annotation acquisition, QPSC sorts annotations by **spati
 Before each annotation's autofocus runs, the system provides a **Z-focus hint** -- an estimate of where focus should be. This centers the AF search range so it covers the correct Z neighborhood.
 
 The hint comes from (in order of preference):
-1. **Tilt prediction model** -- After 6+ completed annotations, a least-squares plane fit predicts Z based on the target annotation's XY position (see [Tilt Prediction](#z-focus-tilt-prediction))
-2. **Last acquisition Z** -- The final Z from the previous annotation (good for nearby annotations thanks to proximity ordering)
-3. **First-annotation starting Z** -- for the very first annotation, before any acquisition or tilt data exists:
+1. **Focus surface** (experimental, opt-in, if available) -- When the **"Focus surface"** preference is not `off`, and the slide carries a surface measured at a previous refinement with the same objective, it predicts Z from the target annotation's XY position. A focus plane is more spatially aware than a scalar, so position-dependent Z variation across the slide is captured rather than averaged. See [Focus Surface Measurement](#focus-surface-measurement-experimental) for details.
+2. **Tilt prediction model** -- After 6+ completed annotations, a least-squares plane fit predicts Z based on the target annotation's XY position (see [Tilt Prediction](#z-focus-tilt-prediction))
+3. **Last acquisition Z** -- The final Z from the previous annotation (good for nearby annotations thanks to proximity ordering)
+4. **First-annotation starting Z** -- for the very first annotation, before any acquisition or tilt data exists:
    - **Persisted focus-Z seed** -- when an alignment is reused and its JSON carries a focus Z captured during a previous refinement, that value seeds the first annotation's AF so it starts near focus instead of searching from scratch (a meaningful saving at high magnification).
    - **Current microscope Z** -- otherwise, the user's current focus position.
 
-   Either way this is only the *starting* hint: the first annotation's AF still runs, and the tilt model / last-acquisition Z take over for subsequent annotations. A stale seed is bounded by the max-focus-step clamp, so it degrades to a normal search rather than driving the stage to a wrong Z.
+   Either way this is only the *starting* hint: the first annotation's AF still runs, and the focus surface / tilt model / last-acquisition Z take over for subsequent annotations. A stale hint is bounded by the max-focus-step clamp, so it degrades to a normal search rather than driving the stage to a wrong Z.
 
 ### 3. Per-Tile Focus During Acquisition
 
@@ -52,9 +53,14 @@ At each AF position:
 2. **Focus measurement** -- Either Standard AF (first position) or Sweep Autofocus (subsequent positions) runs to find optimal Z.
 3. **Quality validation** -- The focus curve is checked for a clear peak. If validation fails, a [manual focus dialog](#manual-focus-fallback) may appear.
 
-### 4. WSI Tissue Scoring (Existing Image Workflow)
+### 4. WSI Tile Pre-Scoring (Existing Image Workflow)
 
-When acquiring from an existing image, QPSC can pre-score tiles from the overview image to select the best starting tile for autofocus. This avoids placing the first AF on a hole in tissue or a blank region. The scoring uses three configurable thresholds in the autofocus YAML:
+When acquiring from an existing image, QPSC pre-scores tiles from the overview image for two purposes:
+
+1. **Best starting tile selection** -- Picks the first autofocus tile, avoiding holes in tissue or blank regions.
+2. **Focus surface pre-measurement** (optional, experimental) -- If enabled via the **"Focus survey points"** preference, QPSC selects N spread-out, tissue-bearing tiles and measures focus at each one before the tile loop begins. These measurements populate the focus surface, so the tile loop itself runs with a measured, position-aware focus hint instead of discovering the plane tile by tile.
+
+Both use the same tissue-detection thresholds, configured in the autofocus YAML:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|
@@ -239,6 +245,49 @@ When any check fails, the system falls back to the **last known good Z** from th
 ### When It Helps
 
 The tilt model is most valuable when proximity ordering must eventually jump back across the slide (e.g., after working along one edge, the closest remaining annotation is far away). Without the model, the Z hint would come from the distant last annotation. With the model, Z is predicted from the global tilt, which is much more accurate for the target position.
+
+---
+
+## Focus Surface Measurement (Experimental)
+
+A **focus surface** is a tilted plane fitted to focus measurements, capturing how the focal plane varies across a slide. Once measured on a slide, it persists in the alignment record and is reused on subsequent acquisitions to provide spatially-aware Z-focus hints.
+
+### Why It Helps
+
+Measured across ten regions, a single tilted plane describes focus to 0.3–1.1 µm RMS across a whole annotation while the focal plane itself travels 4–150 µm. The wide standard autofocus at the first tile of a region starts from a scalar hint (last acquisition Z, or the tilt model), and measured against that plane it lands more than 5 µm out **25% of the time** and more than 15 µm out 21% of the time, worst case 73 µm — and its answer then seeds every tile around it. A position-aware hint centres the search near the actual focal plane at that position instead, which is the difference between a wide search that starts inside the sample's focus range and one that does not.
+
+Note what this does **not** claim: nobody has yet measured how much it improves first-tile autofocus success on this rig. The 25% figure says how often the wide search is wrong today; whether a better starting hint fixes that is the point of the hardware check in `claude-reports/MANUAL_TEST_QUEUE.md`.
+
+### When It's Measured
+
+A focus surface is fitted and saved when **multi-tile refinement** completes having measured **three or more** reference tiles. A plane has three parameters, so two points cannot define one -- a two-point refinement saves nothing, and single-tile refinement saves only the scalar focal-plane height it always did. Each point is the stage Z where that reference tile's autofocus settled, which is also the focus the operator confirmed by eye in the capture pane.
+
+Measuring is unconditional and costs nothing: the record is additive and the next refinement replaces it. **Using** it is opt-in -- see [Enabling](#enabling-focus-surface-optimization).
+
+### How It's Used
+
+On subsequent acquisitions of the same slide (with the same objective):
+
+1. **On first annotation of a run:** The surface predicts Z for each region's first autofocus, replacing the generic scalar hint with a position-specific one. The wide initial search still runs, but from the right starting height.
+2. **Inherited hint chain:** If no focus surface is available, the tilt model takes over (after 6+ annotations). Both sources describe position-dependent focus, but the surface draws from a previous session's direct measurement while the tilt model is built fresh from this run's AF results.
+
+The surface is only ever used to **approach** a region at roughly the right height; it never overrules a measurement. A measurement from an autofocus search is authoritative; the surface is an initial guess.
+
+### Caveats
+
+- **Objective-specific, and the other way round from what you might expect:** the *tilt* is geometry -- it is the slide sitting at an angle, and it is the same angle whichever objective looks at it. What does not carry is the *absolute height*, which shifts by the parfocal offset between the two objectives, and that offset has never been measured on this rig. So a surface measured at 20x is refused for a 10x scan: its tilt would have been fine, but its height would be wrong by exactly the amount nobody knows. The refusal happens in QPSC, before the acquisition command is built -- the server never sees the surface.
+- **Three points cannot check themselves:** three points determine a plane exactly, so the residual is zero whatever those points were. The record stores no residual at all in that case rather than a reassuring `0.00`, and the log says the surface is exactly determined. It is a reasonable thing to approach a slide with and not evidence that the plane is right -- which is a second, independent reason to add a fourth refinement point, alongside the rotation/scale advisory.
+- **Session-scoped holder tilt** (experimental): When a slide yields fewer than 3 points, it can inherit the focus tilt from other slides in the same holder loading if they agree. This hypothesis rests on thin evidence (two slides) and is off by default. See [Preferences: Inherit focus tilt within a holder](PREFERENCES.md#inherit-focus-tilt-within-a-holder-experimental).
+
+### Enabling Focus Surface Optimization
+
+Measurement needs no preference: a multi-tile refinement with three or more points always saves its surface. Nothing reads it while **"Focus surface"** is `off`, which is the default, so an update is inert even on a slide that has already accumulated a record.
+
+Set **"Focus surface"** to `observe` or `enforce` to use it ([Preferences: Focus surface](PREFERENCES.md#focus-surface-experimental)). The same preference governs the in-acquisition surface the server fits from this run's own autofocus results, because they are two uses of one idea and splitting them into two switches would invite turning on half of it.
+
+To measure the surface up front rather than inheriting it from a previous refinement, set **"Focus survey points"** ([Preferences](PREFERENCES.md#focus-survey-points-experimental)).
+
+Start with `observe`. It changes nothing and reports what enforcing would have done.
 
 ---
 

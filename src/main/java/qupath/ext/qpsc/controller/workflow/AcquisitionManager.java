@@ -2534,6 +2534,14 @@ public class AcquisitionManager {
      */
     private void loadSlideFocusSurface() {
         slideFocusSurface = null;
+        // Measuring a surface is unconditional -- it writes an additive record and costs
+        // nothing. USING one is opt-in, under the same preference that governs the
+        // server-side surface, because it changes which Z a region's autofocus starts
+        // from. So a pull is inert until somebody turns the feature on, even on a slide
+        // that has already accumulated a record.
+        if ("off".equals(QPPreferenceDialog.getFocusSurfaceMode())) {
+            return;
+        }
         try {
             var project = gui.getProject();
             if (project == null || capturedImageData == null) {
