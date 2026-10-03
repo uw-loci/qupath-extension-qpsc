@@ -66,6 +66,7 @@ import qupath.ext.qpsc.utilities.ZFocusPredictionModel;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
+import qupath.lib.images.servers.ImageServer;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.classes.PathClass;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
@@ -138,6 +139,15 @@ public class AcquisitionManager {
      *  Z=7 -> 34 -> 104 um, never recovering). Defense-in-depth behind the
      *  Python-side drift-check and standard-AF edge-retry guards. */
     private static final double MAX_FOCUS_STEP_UM = 25.0;
+
+    /**
+     * Macro-image reads to spend choosing focus-survey tiles.
+     *
+     * <p>A 1,300-tile annotation would otherwise cost 1,300 reads to choose a dozen
+     * points. A stride samples the region evenly, which is what the spread pass wants
+     * anyway, so the cap costs nothing but time saved.
+     */
+    private static final int MAX_SURVEY_TILES_SCORED = 150;
 
     /** Parent image entry captured at session start -- stable reference for metadata inheritance.
      *  Do NOT look this up from gui.getImageData() later, as the viewer state can change
@@ -1091,13 +1101,37 @@ public class AcquisitionManager {
                                 wsiDarkThreshold = ((Number) afParams.get("wsi_tissue_dark_threshold")).intValue();
                         }
                         int preferredTile = findBestAfTileFromWSI(
-                                annotation, modalityWithIndex, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                                annotation, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
                         if (preferredTile >= 0) {
                             config.commandBuilder().preferredAfTile(preferredTile);
                             logger.info(
                                     "WSI tissue scoring: preferred AF tile = {} for {}",
                                     preferredTile,
                                     annotation.getName());
+                        }
+
+                        // Focus survey: measure the focus surface before the tile loop
+                        // rather than discovering it tile by tile. Opt-in, 0 = off.
+                        int surveyPoints = QPPreferenceDialog.getFocusSurveyPoints();
+                        if (surveyPoints > 0) {
+                            List<Integer> surveyTiles = findSpreadAfTilesFromWSI(
+                                    annotation, surveyPoints, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                            config.commandBuilder().focusSurvey(surveyPoints);
+                            if (!surveyTiles.isEmpty()) {
+                                config.commandBuilder().focusSurveyTiles(surveyTiles);
+                                logger.info(
+                                        "Focus survey: {} tiles for {} -> {}",
+                                        surveyTiles.size(),
+                                        annotation.getName(),
+                                        surveyTiles);
+                            } else {
+                                // No usable list: the server spreads its own points over
+                                // the tile grid and relies on its per-point tissue check.
+                                logger.info(
+                                        "Focus survey: no tiles could be scored for {}; "
+                                                + "letting the server choose by spread",
+                                        annotation.getName());
+                            }
                         }
                     } catch (Exception e) {
                         logger.debug("WSI tissue scoring skipped: {}", e.getMessage());
@@ -2456,52 +2490,60 @@ public class AcquisitionManager {
     }
 
     /**
-     * Scores tiles from the WSI to find the best tile for initial autofocus.
+     * One tile's position in the macro image, for tissue scoring.
      *
-     * <p>Reads the TileConfiguration_QP.txt (QuPath pixel coordinates) and checks
-     * each tile's region in the WSI for tissue content. Returns the index of the
-     * first tile (in acquisition order) that has sufficient tissue.
-     *
-     * @param annotation The annotation being acquired
-     * @param modalityWithIndex e.g. "ppm_20x_1"
-     * @return Index of the best AF tile, or -1 if scoring fails
+     * @param index tile index as the acquisition numbers it, which is what the server expects
+     * @param cx tile centre X in macro-image pixels
+     * @param cy tile centre Y in macro-image pixels
      */
-    private int findBestAfTileFromWSI(
-            PathObject annotation,
-            String modalityWithIndex,
-            double minTissueScore,
-            int whiteThreshold,
-            int darkThreshold) {
+    private record TileSite(int index, double cx, double cy) {}
+
+    /**
+     * Everything needed to read tile regions out of the macro image, resolved once.
+     *
+     * @param server the macro image
+     * @param frameW camera frame width in macro-image pixels
+     * @param frameH camera frame height in macro-image pixels
+     * @param downsample read downsample, chosen for speed
+     * @param sites the annotation's tiles in acquisition order
+     */
+    private record WsiTileScan(
+            ImageServer<BufferedImage> server, int frameW, int frameH, double downsample, List<TileSite> sites) {}
+
+    /**
+     * Resolve the macro image and this annotation's tile positions, or null when
+     * anything needed is missing.
+     *
+     * <p>Shared by the single-tile and spread selectors so there is one parser for
+     * {@code TileConfiguration_QP.txt} rather than two that can disagree.
+     */
+    private WsiTileScan prepareWsiTileScan(PathObject annotation) {
         // Use the ImageData captured at session start -- gui.getImageData() may be null
         // after stitching dialogs close and the viewer loses its image reference.
-        if (capturedImageData == null) return -1;
+        if (capturedImageData == null) return null;
 
         var server = capturedImageData.getServer();
         double pixelSize = server.getPixelCalibration().getAveragedPixelSizeMicrons();
-        if (pixelSize <= 0 || Double.isNaN(pixelSize)) return -1;
+        if (pixelSize <= 0 || Double.isNaN(pixelSize)) return null;
 
-        // Read tile positions from TileConfiguration_QP.txt (pixel coordinates)
         Path tileDir = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName());
         Path tileConfigQP = tileDir.resolve("TileConfiguration_QP.txt");
         if (!Files.exists(tileConfigQP)) {
             logger.debug("No TileConfiguration_QP.txt for {}", annotation.getName());
-            return -1;
+            return null;
         }
 
-        // Get frame size in pixels (from camera FOV)
         double[] fovMicrons;
         try {
             fovMicrons = MicroscopeController.getInstance()
                     .getCameraFOVFromConfig(state.sample.modality(), state.sample.objective(), state.sample.detector());
         } catch (Exception e) {
-            return -1;
+            return null;
         }
         int frameW = (int) Math.round(fovMicrons[0] / pixelSize);
         int frameH = (int) Math.round(fovMicrons[1] / pixelSize);
 
-        // Parse tile positions
-        List<double[]> tilePositions = new ArrayList<>();
-        List<Integer> tileIndices = new ArrayList<>();
+        List<TileSite> sites = new ArrayList<>();
         try {
             for (String line : Files.readAllLines(tileConfigQP)) {
                 // Format: "0.tif; ; (123.456, 789.012)"
@@ -2510,60 +2552,77 @@ public class AcquisitionManager {
                 int parenEnd = line.indexOf(')');
                 if (parenStart < 0 || parenEnd < 0) continue;
                 String[] coords = line.substring(parenStart + 1, parenEnd).split(",");
-                double cx = Double.parseDouble(coords[0].trim());
-                double cy = Double.parseDouble(coords[1].trim());
-                int idx = Integer.parseInt(line.substring(0, line.indexOf('.')).trim());
-                tilePositions.add(new double[] {cx, cy});
-                tileIndices.add(idx);
+                sites.add(new TileSite(
+                        Integer.parseInt(line.substring(0, line.indexOf('.')).trim()),
+                        Double.parseDouble(coords[0].trim()),
+                        Double.parseDouble(coords[1].trim())));
             }
         } catch (Exception e) {
             logger.debug("Failed to parse tile config: {}", e.getMessage());
+            return null;
+        }
+        if (sites.isEmpty()) return null;
+
+        // Lower-res reads are ~4x faster and tissue fraction survives downsampling.
+        double downsample = Math.max(1.0, pixelSize < 0.5 ? 4.0 : 2.0);
+        return new WsiTileScan(server, frameW, frameH, downsample, sites);
+    }
+
+    /** Tissue fraction of one tile's region in the macro image, or -1 when unreadable. */
+    private double scoreSite(WsiTileScan scan, TileSite site, int whiteThreshold, int darkThreshold) {
+        var server = scan.server();
+        int x = Math.max(0, (int) (site.cx() - scan.frameW() / 2.0));
+        int y = Math.max(0, (int) (site.cy() - scan.frameH() / 2.0));
+        int w = Math.min(scan.frameW(), server.getWidth() - x);
+        int h = Math.min(scan.frameH(), server.getHeight() - y);
+        if (w <= 0 || h <= 0) return -1;
+        try {
+            var request =
+                    qupath.lib.regions.RegionRequest.createInstance(server.getPath(), scan.downsample(), x, y, w, h);
+            BufferedImage img = server.readRegion(request);
+            if (img == null) return -1;
+            return scoreTissueContent(img, whiteThreshold, darkThreshold);
+        } catch (Exception e) {
+            logger.debug("Failed to read WSI region for tile {}: {}", site.index(), e.getMessage());
             return -1;
         }
+    }
 
-        if (tilePositions.isEmpty()) return -1;
+    /**
+     * Scores tiles from the WSI to find the best tile for initial autofocus.
+     *
+     * <p>Reads the TileConfiguration_QP.txt (QuPath pixel coordinates) and checks
+     * each tile's region in the WSI for tissue content. Returns the index of the
+     * first tile (in acquisition order) that has sufficient tissue.
+     *
+     * @param annotation The annotation being acquired
+     * @param minTissueScore Tissue fraction that is good enough to stop looking
+     * @param whiteThreshold Pixel mean RGB above this = white/blank
+     * @param darkThreshold Pixel mean RGB below this = background/artifact
+     * @return Index of the best AF tile, or -1 if scoring fails
+     */
+    private int findBestAfTileFromWSI(
+            PathObject annotation, double minTissueScore, int whiteThreshold, int darkThreshold) {
+        WsiTileScan scan = prepareWsiTileScan(annotation);
+        if (scan == null) return -1;
 
-        // Score tiles in acquisition order (first N, then keep going if needed)
         int bestTile = -1;
         double bestScore = 0;
-
-        // Use a lower-res downsample for speed (4x faster reads)
-        double downsample = Math.max(1.0, pixelSize < 0.5 ? 4.0 : 2.0);
-
-        for (int i = 0; i < tilePositions.size(); i++) {
-            double cx = tilePositions.get(i)[0];
-            double cy = tilePositions.get(i)[1];
-            int tileIdx = tileIndices.get(i);
-
-            // Convert centroid to top-left corner
-            int x = Math.max(0, (int) (cx - frameW / 2.0));
-            int y = Math.max(0, (int) (cy - frameH / 2.0));
-            int w = Math.min(frameW, server.getWidth() - x);
-            int h = Math.min(frameH, server.getHeight() - y);
-            if (w <= 0 || h <= 0) continue;
-
-            try {
-                var request = qupath.lib.regions.RegionRequest.createInstance(server.getPath(), downsample, x, y, w, h);
-                BufferedImage img = server.readRegion(request);
-                if (img == null) continue;
-
-                double tissueScore = scoreTissueContent(img, whiteThreshold, darkThreshold);
-                if (tissueScore > bestScore) {
-                    bestScore = tissueScore;
-                    bestTile = tileIdx;
-                }
-
-                // Accept first tile that meets the threshold
-                if (tissueScore >= minTissueScore) {
-                    logger.info(
-                            "WSI tissue scoring: tile {} has {}% tissue (threshold {}%)",
-                            tileIdx,
-                            String.format("%.1f", tissueScore * 100),
-                            String.format("%.0f", minTissueScore * 100));
-                    return tileIdx;
-                }
-            } catch (Exception e) {
-                logger.debug("Failed to read WSI region for tile {}: {}", tileIdx, e.getMessage());
+        for (TileSite site : scan.sites()) {
+            double tissueScore = scoreSite(scan, site, whiteThreshold, darkThreshold);
+            if (tissueScore < 0) continue;
+            if (tissueScore > bestScore) {
+                bestScore = tissueScore;
+                bestTile = site.index();
+            }
+            // Accept first tile that meets the threshold
+            if (tissueScore >= minTissueScore) {
+                logger.info(
+                        "WSI tissue scoring: tile {} has {}% tissue (threshold {}%)",
+                        site.index(),
+                        String.format("%.1f", tissueScore * 100),
+                        String.format("%.0f", minTissueScore * 100));
+                return site.index();
             }
         }
 
@@ -2579,6 +2638,124 @@ public class AcquisitionManager {
         return -1;
     }
 
+    /**
+     * Picks tiles for a pre-scan focus survey: tissue-bearing, and spread out.
+     *
+     * <p>A focus survey measures the slide's focus surface before the tile loop instead
+     * of discovering it tile by tile. Both properties of the chosen set matter, and they
+     * come from different places: the <b>surface</b> needs points spread in both axes,
+     * because a set along one line fixes one tilt and says nothing about the other; the
+     * <b>metric</b> needs tissue, because autofocus on blank glass still finds a peak and
+     * that peak is the coverslip. So this scores for tissue and then selects for spread
+     * among the tiles that qualify.
+     *
+     * <p>Only a strided subset of tiles is scored. A 1,300-tile annotation would otherwise
+     * cost 1,300 macro-image reads to choose a dozen points, and a stride samples the
+     * region evenly anyway, which is what the spread pass wants.
+     *
+     * @param annotation The annotation being acquired
+     * @param count How many survey tiles to return
+     * @param minTissueScore Tissue fraction a tile must have to qualify
+     * @param whiteThreshold Pixel mean RGB above this = white/blank
+     * @param darkThreshold Pixel mean RGB below this = background/artifact
+     * @return Tile indices in acquisition order, or an empty list when scoring fails
+     */
+    private List<Integer> findSpreadAfTilesFromWSI(
+            PathObject annotation, int count, double minTissueScore, int whiteThreshold, int darkThreshold) {
+        if (count <= 0) return List.of();
+        WsiTileScan scan = prepareWsiTileScan(annotation);
+        if (scan == null) return List.of();
+
+        List<TileSite> all = scan.sites();
+        int stride = Math.max(1, all.size() / MAX_SURVEY_TILES_SCORED);
+        List<TileSite> qualifying = new ArrayList<>();
+        List<TileSite> scored = new ArrayList<>();
+        List<Double> scoredScores = new ArrayList<>();
+        for (int i = 0; i < all.size(); i += stride) {
+            TileSite site = all.get(i);
+            double tissueScore = scoreSite(scan, site, whiteThreshold, darkThreshold);
+            if (tissueScore < 0) continue;
+            scored.add(site);
+            scoredScores.add(tissueScore);
+            if (tissueScore >= minTissueScore) {
+                qualifying.add(site);
+            }
+        }
+
+        List<TileSite> pool = qualifying;
+        if (pool.size() < count) {
+            // Not enough tiles cleared the bar. Rather than return a short list -- which
+            // would leave the surface under-determined -- fall back to the most
+            // tissue-bearing of the tiles we scored. The server re-checks tissue at each
+            // point anyway and skips the ones that turn out to be empty, so a weak
+            // candidate costs a skipped point, not a wrong one.
+            List<Integer> order = new ArrayList<>();
+            for (int i = 0; i < scored.size(); i++) order.add(i);
+            order.sort((a, b) -> Double.compare(scoredScores.get(b), scoredScores.get(a)));
+            pool = new ArrayList<>();
+            for (int i : order) pool.add(scored.get(i));
+            logger.info(
+                    "Focus survey: only {} of {} scored tiles reached {}% tissue; offering the "
+                            + "{} most tissue-bearing instead",
+                    qualifying.size(), scored.size(), (int) (minTissueScore * 100), Math.min(count, pool.size()));
+        }
+        if (pool.isEmpty()) {
+            logger.info("Focus survey: no tile in {} had readable tissue", annotation.getName());
+            return List.of();
+        }
+
+        List<Integer> picked = farthestPointSelect(pool, Math.min(count, pool.size()));
+        logger.info(
+                "Focus survey: {} tiles selected from {} candidates in {} (tissue >= {}%, " + "spread over the region)",
+                picked.size(), pool.size(), annotation.getName(), (int) (minTissueScore * 100));
+        return picked;
+    }
+
+    /**
+     * Farthest-point sampling: each pick is the candidate furthest from everything
+     * already picked.
+     *
+     * <p>Fills the region's extremes first, which is the geometry that constrains a
+     * tilt. Starting from the candidate furthest from the centroid means the first pick
+     * is a corner rather than the middle.
+     */
+    private static List<Integer> farthestPointSelect(List<TileSite> candidates, int count) {
+        List<TileSite> chosen = new ArrayList<>();
+        double cx = candidates.stream().mapToDouble(TileSite::cx).average().orElse(0);
+        double cy = candidates.stream().mapToDouble(TileSite::cy).average().orElse(0);
+        TileSite first = candidates.get(0);
+        double bestDist = -1;
+        for (TileSite s : candidates) {
+            double d = Math.hypot(s.cx() - cx, s.cy() - cy);
+            if (d > bestDist) {
+                bestDist = d;
+                first = s;
+            }
+        }
+        chosen.add(first);
+        while (chosen.size() < count) {
+            TileSite next = null;
+            double bestMin = -1;
+            for (TileSite s : candidates) {
+                if (chosen.contains(s)) continue;
+                double minDist = Double.MAX_VALUE;
+                for (TileSite c : chosen) {
+                    minDist = Math.min(minDist, Math.hypot(s.cx() - c.cx(), s.cy() - c.cy()));
+                }
+                if (minDist > bestMin) {
+                    bestMin = minDist;
+                    next = s;
+                }
+            }
+            if (next == null) break;
+            chosen.add(next);
+        }
+        List<Integer> indices = new ArrayList<>();
+        for (TileSite s : chosen) indices.add(s.index());
+        // Acquisition order, so the log reads in the order the stage will visit them.
+        indices.sort(Integer::compareTo);
+        return indices;
+    }
     /**
      * Scores a BufferedImage for tissue content.
      * Returns the fraction of pixels that appear to contain tissue (0.0 to 1.0).

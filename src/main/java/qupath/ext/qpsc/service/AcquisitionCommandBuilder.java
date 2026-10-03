@@ -161,6 +161,8 @@ public class AcquisitionCommandBuilder {
 
     // Preferred first AF tile index (from WSI tissue scoring)
     private Integer preferredAfTile;
+    private Integer focusSurveyPoints;
+    private List<Integer> focusSurveyTiles;
 
     /**
      * Private constructor - use static builder() method
@@ -641,6 +643,25 @@ public class AcquisitionCommandBuilder {
      * @param tileIndex Index of the tile with best tissue for autofocus
      * @return this builder for method chaining
      */
+    /**
+     * How many focus points to measure before the tile loop, for the pre-scan focus
+     * survey. Zero or unset leaves the flag off the command line entirely.
+     */
+    public AcquisitionCommandBuilder focusSurvey(int points) {
+        this.focusSurveyPoints = points > 0 ? points : null;
+        return this;
+    }
+
+    /**
+     * Which tiles the survey should visit, chosen from the macro image for tissue
+     * content and geometric spread. Optional: without it the server spreads its own
+     * points over the tile grid and relies on its per-point tissue check.
+     */
+    public AcquisitionCommandBuilder focusSurveyTiles(List<Integer> tileIndices) {
+        this.focusSurveyTiles = (tileIndices == null || tileIndices.isEmpty()) ? null : List.copyOf(tileIndices);
+        return this;
+    }
+
     public AcquisitionCommandBuilder preferredAfTile(int tileIndex) {
         this.preferredAfTile = tileIndex;
         return this;
@@ -1041,6 +1062,17 @@ public class AcquisitionCommandBuilder {
         // Add preferred AF tile from WSI tissue scoring
         if (preferredAfTile != null) {
             args.addAll(Arrays.asList("--preferred-af-tile", String.valueOf(preferredAfTile)));
+        }
+
+        // Pre-scan focus survey. Only emitted when opted in, so an unchanged rig's
+        // command line is byte-identical.
+        if (focusSurveyPoints != null) {
+            args.addAll(Arrays.asList("--focus-survey", String.valueOf(focusSurveyPoints)));
+            if (focusSurveyTiles != null) {
+                args.addAll(Arrays.asList(
+                        "--focus-survey-tiles",
+                        focusSurveyTiles.stream().map(String::valueOf).collect(Collectors.joining(","))));
+            }
         }
 
         // Add time-lapse + output-format flags (Z-stack + time-lapse refactor).

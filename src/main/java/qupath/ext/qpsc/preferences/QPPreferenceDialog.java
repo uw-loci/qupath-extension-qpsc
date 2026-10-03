@@ -184,6 +184,10 @@ public class QPPreferenceDialog {
     private static final StringProperty focusSurfaceModeProperty =
             PathPrefs.createPersistentPreference("focusSurfaceMode", "off");
 
+    // Focus points to measure before the tile loop. 0 = no survey (today's behaviour).
+    private static final IntegerProperty focusSurveyPointsProperty =
+            PathPrefs.createPersistentPreference("focusSurveyPoints", 0);
+
     // Live Viewer: show the current XYZ(R) stage position overlaid on the live image.
     // Also toggleable from the Live Viewer toolbar (the toggle binds to this property).
     private static final BooleanProperty showLiveViewerPositionOverlayProperty =
@@ -594,6 +598,27 @@ public class QPPreferenceDialog {
                         + "back to the 'off' behaviour on its own.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(focusSurveyPointsProperty, Integer.class)
+                .name("Focus survey points (experimental)")
+                .category(CATEGORY)
+                .description("Measure the focus surface at this many spread-out, tissue-bearing "
+                        + "tiles BEFORE the tile loop, instead of discovering it tile by tile.\n"
+                        + "\n"
+                        + "0 disables the survey, which is the current behaviour.\n"
+                        + "\n"
+                        + "Needs 'Focus surface' set to observe or enforce -- the survey measures "
+                        + "points for the surface to be fitted to, so with the surface off the "
+                        + "survey is skipped rather than run for nothing.\n"
+                        + "\n"
+                        + "Sizing, measured on this rig: 9 points reproduce a region's surface to "
+                        + "between 0.3 and 1.4 um RMS, 16 is marginally better, and past that "
+                        + "nothing changes. Below 5 there is too little redundancy for the fit to "
+                        + "report its own failure, and the surface will refuse to act on it.\n"
+                        + "\n"
+                        + "Cost is one wide autofocus per point, around 10 s each. For comparison, "
+                        + "a 1,332-tile PPM region spent 5.7 hours on per-tile autofocus.")
+                .build());
+
         // Show Position Overlay is intentionally NOT exposed as a Preferences-pane
         // entry: the Live Viewer toolbar's XYZ toggle controls it and its state is
         // persisted via showLiveViewerPositionOverlayProperty (a persistent
@@ -935,6 +960,20 @@ public class QPPreferenceDialog {
 
     public static StringProperty focusSurfaceModeProperty() {
         return focusSurfaceModeProperty;
+    }
+
+    /**
+     * Focus points to measure before the tile loop, or 0 for no survey.
+     *
+     * <p>Sent as {@code --focus-survey}. Negative values read as 0 -- a nonsensical
+     * preference should not be an error, it should just mean "no survey".
+     */
+    public static int getFocusSurveyPoints() {
+        return Math.max(0, focusSurveyPointsProperty.get());
+    }
+
+    public static IntegerProperty focusSurveyPointsProperty() {
+        return focusSurveyPointsProperty;
     }
 
     /** Whether the Live Viewer shows the XYZ(R) position overlay on the image. */
