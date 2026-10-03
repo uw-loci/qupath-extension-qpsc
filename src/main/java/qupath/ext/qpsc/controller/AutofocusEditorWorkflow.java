@@ -1,7 +1,6 @@
 package qupath.ext.qpsc.controller;
 
 import java.io.File;
-import java.io.FileWriter;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
@@ -22,7 +21,6 @@ import javafx.stage.Stage;
 import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -30,6 +28,7 @@ import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
+import qupath.ext.qpsc.utilities.AutofocusYamlUpdater;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.FocusMetricsManifest;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -3186,27 +3185,25 @@ public class AutofocusEditorWorkflow {
             root.put("modalities", modalitiesMap);
         }
 
-        // Configure YAML dumper for clean output
-        DumperOptions options = new DumperOptions();
-        options.setDefaultFlowStyle(DumperOptions.FlowStyle.BLOCK);
-        options.setPrettyFlow(true);
-
-        Yaml yaml = new Yaml(options);
-
-        // Write with manifest-sourced header comment so the comment block
-        // can never drift from the actual metric / strategy / modality
-        // vocabulary the runtime accepts.
-        try (FileWriter writer = new FileWriter(autofocusFile, StandardCharsets.UTF_8)) {
-            writer.write(FocusMetricsManifest.get(
-                            autofocusFile.getParentFile() != null
-                                    ? autofocusFile.getParentFile().toPath()
-                                    : null)
-                    .headerCommentBlock());
-            yaml.dump(root, writer);
-        }
+        // Update in place rather than re-rendering. A dump would drop every key this
+        // editor does not model -- channel_reduction on PPM 20x is one, and dropping it
+        // silently reverts a shipped fix -- along with every comment in the file. See
+        // AutofocusYamlUpdater.
+        //
+        // The header is the deliberate exception: it is generated from the manifest so the
+        // documented vocabulary cannot drift from what the runtime accepts.
+        String header = FocusMetricsManifest.get(
+                        autofocusFile.getParentFile() != null
+                                ? autofocusFile.getParentFile().toPath()
+                                : null)
+                .headerCommentBlock();
+        AutofocusYamlUpdater.Result result = AutofocusYamlUpdater.update(autofocusFile.toPath(), header, root);
 
         logger.info(
-                "Saved autofocus settings for {} objectives to: {}", settings.size(), autofocusFile.getAbsolutePath());
+                "Saved autofocus settings for {} objectives to {}: {}",
+                settings.size(),
+                autofocusFile.getAbsolutePath(),
+                result.summary());
 
         // Reload config so acquisition uses the updated autofocus parameters.
         // The config manager is a singleton keyed by config path -- we use
