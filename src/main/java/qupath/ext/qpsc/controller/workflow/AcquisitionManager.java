@@ -61,6 +61,7 @@ import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.StageFrameWatchdog;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TilingUtilities;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -74,6 +75,7 @@ import qupath.lib.objects.classes.PathClass;
 import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
+import qupath.lib.roi.interfaces.ROI;
 import qupath.lib.scripting.QP;
 
 /**
@@ -1171,12 +1173,27 @@ public class AcquisitionManager {
                     }
                 }
 
-                // Start acquisition
-                MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
+                // Watch the stage position stream against this region's own stage bounds
+                // for the length of the acquisition. StagePositionManager was already
+                // polling twice a second for the Live Viewer and discarding every reading;
+                // those readings are the only thing on this side that can notice the
+                // controller's 0,0 moving, which no commanded-vs-reported check can see.
+                armStageFrameWatchdog(annotation);
+                try {
+                    // Start acquisition
+                    MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
 
-                // Monitor progress
-                return monitorAcquisition(
-                        annotation, angleExposures, channelExposures, acquisitionPlan, mdaSettingsPath, progressDialog);
+                    // Monitor progress
+                    return monitorAcquisition(
+                            annotation,
+                            angleExposures,
+                            channelExposures,
+                            acquisitionPlan,
+                            mdaSettingsPath,
+                            progressDialog);
+                } finally {
+                    StageFrameWatchdog.getInstance().disarm();
+                }
 
             } catch (Exception e) {
                 logger.error("Acquisition failed for {}", annotation.getName(), e);
@@ -1185,6 +1202,61 @@ public class AcquisitionManager {
             }
         });
     }
+    /**
+     * Arms {@link StageFrameWatchdog} for one region, and cancels the acquisition if it trips.
+     *
+     * <p>The envelope is the region's own stage bounding box rather than the slide's, because a
+     * slide box can straddle the stage origin -- slot 2 of the PPM quad holder does -- and a
+     * re-zeroed controller reporting 0,0 would then look like it was sitting legally on the
+     * slide. A region box never contains the origin in practice and is tight enough that a frame
+     * shift of even a couple of millimetres shows.
+     *
+     * <p>Does nothing without a transform or a region ROI: an envelope that cannot be computed
+     * is left unarmed rather than guessed at, since a wrong envelope would either cancel good
+     * runs or watch nothing.
+     *
+     * @param annotation the region about to be acquired
+     */
+    private void armStageFrameWatchdog(PathObject annotation) {
+        if (state.transform == null || annotation == null || annotation.getROI() == null) {
+            logger.debug("Stage frame watchdog not armed: no transform or no region ROI");
+            return;
+        }
+        try {
+            ROI roi = annotation.getROI();
+            double[] topLeft = TransformationFunctions.transformQuPathFullResToStage(
+                    new double[] {roi.getBoundsX(), roi.getBoundsY()}, state.transform);
+            double[] botRight = TransformationFunctions.transformQuPathFullResToStage(
+                    new double[] {roi.getBoundsX() + roi.getBoundsWidth(), roi.getBoundsY() + roi.getBoundsHeight()},
+                    state.transform);
+            StageFrameWatchdog.getInstance()
+                    .arm(
+                            topLeft[0],
+                            topLeft[1],
+                            botRight[0],
+                            botRight[1],
+                            annotation.getName(),
+                            () -> new Thread(
+                                            () -> {
+                                                // Off the FX thread: CANC waits on the server's per-client
+                                                // lock and can sit behind a tile capture for tens of seconds.
+                                                try {
+                                                    logger.error(
+                                                            "Cancelling the acquisition because the stage frame is no longer trustworthy");
+                                                    MicroscopeController.getInstance()
+                                                            .getSocketClient()
+                                                            .cancelAcquisition();
+                                                } catch (Exception e) {
+                                                    logger.error("Could not cancel after a stage frame fault", e);
+                                                }
+                                            },
+                                            "StageFrameCancelSender")
+                                    .start());
+        } catch (Exception e) {
+            logger.warn("Could not arm the stage frame watchdog for {}: {}", annotation.getName(), e.getMessage());
+        }
+    }
+
     /**
      * Monitors acquisition progress with cancellation support.
      *

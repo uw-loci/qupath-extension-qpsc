@@ -57,6 +57,7 @@ import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MultiSlideAcquisitionEstimator;
 import qupath.ext.qpsc.utilities.SafeZClearanceMonitor;
+import qupath.ext.qpsc.utilities.StageFrameWatchdog;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -780,6 +781,10 @@ public final class MultiSlideExistingImageWorkflow {
             boolean reuse = resolveReuseForBatch(reuseDecision);
             setBusy.accept(true);
             logger.info("MS workflow: Set Up All Remaining started, runId={}", runId);
+            // Setting up again is the other deliberate restart; same reasoning as the
+            // acquire pass below.
+            StageFrameWatchdog.getInstance().clearSuspect();
+            frameSuspectWarned = false;
             driveSequential(
                     gui,
                     states,
@@ -811,6 +816,9 @@ public final class MultiSlideExistingImageWorkflow {
             // Keep the panel visible for the whole unattended pass (see autoCollapseEnabled above).
             autoCollapseEnabled[0] = false;
             logger.info("MS workflow: Acquire All Set-Up started (unattended, pipelined), runId={}", runId);
+            // The operator has seen the alert and chosen to go again; let them.
+            StageFrameWatchdog.getInstance().clearSuspect();
+            frameSuspectWarned = false;
             // Collect every slot's saturation report into ONE combined dialog at batch end instead of
             // popping a per-acquisition dialog (a 4-slide run otherwise pops 4+). Paired with
             // endBatchAndShow() (normal end) / endBatchAndShow() after abort settles.
@@ -1378,6 +1386,33 @@ public final class MultiSlideExistingImageWorkflow {
                 }));
     }
 
+    /** Set once a frame-suspect alert has been shown, so a halted pass does not stack dialogs. */
+    private static boolean frameSuspectWarned = false;
+
+    /**
+     * Tells the operator, once per run, that the pass stopped because the stage frame moved.
+     *
+     * <p>Worth a dialog rather than only a log line: this is unattended, the run has just given
+     * up hours of planned work, and the recovery is a physical procedure at the microscope that
+     * nothing in software can do for them.
+     *
+     * @param reason the watchdog's description of what disagreed
+     */
+    private static void warnFrameSuspectOnce(String reason) {
+        if (frameSuspectWarned) {
+            return;
+        }
+        frameSuspectWarned = true;
+        Platform.runLater(() -> Dialogs.showErrorMessage(
+                "Stage position is not trustworthy",
+                "The run has been stopped because the stage is not where its coordinates say it is.\n\n"
+                        + reason
+                        + "\n\nThe remaining slides have not been acquired. Their alignments were measured "
+                        + "against the old origin, so acquiring them now would image the wrong part of each "
+                        + "slide. Re-establish the stage origin at the calibration slide fiducial, then set "
+                        + "the slides up again."));
+    }
+
     /**
      * Sequentially drives every slot matching {@code match} from {@code index} onward:
      * apply {@code op} to it, wait for the op to settle, then advance to the next. Slots
@@ -1406,6 +1441,18 @@ public final class MultiSlideExistingImageWorkflow {
         // it wins over stop-after-current and the match scan.
         if (abortRequested.getAsBoolean()) {
             logger.info("MS workflow: driver aborted (Abort All) at slot index {}", index);
+            onDone.run();
+            return;
+        }
+
+        // A moved stage origin halts the whole pass, not only the slide that noticed it. Every
+        // remaining slot's alignment was measured against the old origin, so running them would
+        // image the same wrong field -- which is exactly what the 2026-10-02 run did for three
+        // slides and thirty hours after the first one went wrong.
+        String frameSuspect = StageFrameWatchdog.getInstance().suspectReason();
+        if (frameSuspect != null) {
+            logger.error("MS workflow: {} pass halted at slot index {} -- {}", passName, index, frameSuspect);
+            warnFrameSuspectOnce(frameSuspect);
             onDone.run();
             return;
         }
