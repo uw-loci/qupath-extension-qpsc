@@ -22,7 +22,7 @@ import qupath.ext.qpsc.modality.ppm.PPMModalityHandler;
  * <ul>
  *   <li><strong>Registration:</strong> Modality handlers register with a string prefix (e.g., "ppm", "fl", "bf")</li>
  *   <li><strong>Prefix Matching:</strong> Configuration modality names are matched against registered prefixes using startsWith semantics</li>
- *   <li><strong>Handler Resolution:</strong> The first matching handler is returned, or a no-op handler if no match is found</li>
+ *   <li><strong>Handler Resolution:</strong> The handler with the longest matching prefix is returned, or a no-op handler if no match is found</li>
  *   <li><strong>Case Insensitive:</strong> All prefix matching is performed case-insensitively for robust configuration handling</li>
  * </ul>
  *
@@ -143,7 +143,7 @@ public final class ModalityRegistry {
      * <ul>
      *   <li>Prefixes are stored and matched in lowercase for case-insensitive behavior</li>
      *   <li>Matching uses {@link String#startsWith(String)} semantics</li>
-     *   <li>Longer prefixes should be registered before shorter ones to avoid unintended matches</li>
+     *   <li>When several registered prefixes match a name, the longest one wins, in any registration order</li>
      *   <li>Empty or null prefixes are ignored and logged as warnings</li>
      * </ul>
      *
@@ -203,14 +203,13 @@ public final class ModalityRegistry {
      * Returns a handler appropriate for the given modality name using prefix matching.
      *
      * <p>This method implements the core lookup mechanism for the modality plugin system. Given a
-     * modality name from configuration files (e.g., "ppm_20x", "fl_405_40x"), it searches through
-     * registered prefixes to find the first matching handler. The search is performed case-insensitively
-     * and uses {@link String#startsWith(String)} semantics.</p>
+     * modality name from configuration files (e.g., "ppm_20x", "fl_405_40x"), it searches the
+     * registered prefixes for the longest one the name starts with. The search is performed
+     * case-insensitively and uses {@link String#startsWith(String)} semantics.</p>
      *
-     * <p>The lookup algorithm iterates through registered handlers in insertion order (as maintained by
-     * {@link ConcurrentHashMap}), returning the first handler whose prefix matches the start of the
-     * provided modality name. This means that registration order can matter when prefixes might overlap
-     * (e.g., "fl" vs "fluorescence").</p>
+     * <p>When several registered prefixes match, the longest wins, so "bf_if_20x" resolves to the
+     * handler registered under "bf_if" and not to the one under "bf". Registration order does not
+     * affect the result.</p>
      *
      * <p><strong>Fallback Behavior:</strong> If no registered handler matches the modality name, a
      * {@link NoOpModalityHandler} is returned instead of throwing an exception. This ensures that
@@ -252,18 +251,25 @@ public final class ModalityRegistry {
         String normalizedName = modalityName.toLowerCase().trim();
         logger.debug("Looking up handler for modality name: '{}'", normalizedName);
 
-        // Iterate through registered handlers to find first matching prefix
+        // The longest matching prefix wins. A first-match scan is wrong here because the map's
+        // iteration order is unspecified: with both "bf" and "bf_if" registered, "bf_if_20x"
+        // resolved to the brightfield handler, which has no channel library.
+        String bestPrefix = null;
+        ModalityHandler bestHandler = null;
         for (Map.Entry<String, ModalityHandler> entry : HANDLERS.entrySet()) {
             String prefix = entry.getKey();
-            if (normalizedName.startsWith(prefix)) {
-                ModalityHandler handler = entry.getValue();
-                logger.debug(
-                        "Found matching handler for modality '{}' with prefix '{}': {}",
-                        modalityName,
-                        prefix,
-                        handler.getClass().getSimpleName());
-                return handler;
+            if (normalizedName.startsWith(prefix) && (bestPrefix == null || prefix.length() > bestPrefix.length())) {
+                bestPrefix = prefix;
+                bestHandler = entry.getValue();
             }
+        }
+        if (bestHandler != null) {
+            logger.debug(
+                    "Found matching handler for modality '{}' with prefix '{}': {}",
+                    modalityName,
+                    bestPrefix,
+                    bestHandler.getClass().getSimpleName());
+            return bestHandler;
         }
 
         // No matching handler found - log warning and return no-op handler

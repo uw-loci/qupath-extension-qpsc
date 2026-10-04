@@ -1718,7 +1718,7 @@ written_by:
   - "Static initializer block in ModalityRegistry"
   - "registerHandler(prefix, handler) -- runtime extension"
 read_by:
-  - "getHandler(modality) -- startsWith prefix match; returns NoOpModalityHandler if unmatched"
+  - "getHandler(modality) -- longest registered prefix the name starts with; returns NoOpModalityHandler if unmatched"
   - "Every acquisition workflow"
 invariants:
   - "Prefix matching is startsWith. Longer prefixes should register before shorter ones to avoid unintended matches."
@@ -2269,8 +2269,9 @@ real outages. Each item names the surface(s) and workflow(s) it applies to.
     for "performance". Affects: W1b.
 
 31. **`ModalityRegistry.getHandler` returns `NoOpModalityHandler` for unknown
-    modalities, never null.** Prefix matching is `startsWith`. Longer prefixes
-    must register before shorter ones to avoid unintended matches. Affects: DS41.
+    modalities, never null.** Prefix matching is `startsWith`, and the longest
+    matching prefix wins (`bf_if_20x` resolves to `bf_if`, not `bf`), in any
+    registration order. Affects: DS41.
 
 32. **Either-socket-connected counts as "connected" for UI purposes.** Primary
     and aux sockets are independent. Route long-running ops to primary; anything
