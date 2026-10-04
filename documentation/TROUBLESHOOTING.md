@@ -725,6 +725,26 @@ The same dialog now carries an **Open Autofocus Configuration...** button, which
 
 **A:** Fixed 2026-04-26 (commit `df1092f`). The mid-run estimator previously computed `(now - workflowStartTime) / totalTilesCompleted`, which folded everything that happened *before* the first tile finished -- pre-acquisition AF, blocking modals, manual-focus dialog wait time -- into the per-tile mean. A 30-second pause at the start could turn a 12-tile / 4 s-per-tile acquisition into "5 hours remaining" once the first tile finished. Now the estimator uses the rolling `allTileTimes` mean (already collected with tile 1 excluded for this exact reason). The first-tile fallback keeps the legacy formula because there's no sample yet, but from tile 2 onward the estimate reflects steady-state cadence only.
 
+#### Q: Multi-slide batch halted with "Stage position is not trustworthy"
+
+**A:** The stage reported a position well outside the region being acquired, for several samples running. The region's acquisition is cancelled and the rest of the pass is halted.
+
+**What it means.** A Prior controller has no absolute reference and nothing to home to: it knows only where it is relative to wherever it was zeroed. A controller that restarts resumes with position 0,0 wherever it happens to be standing, and from then on it moves exactly where commanded and reports exactly that -- which is why nothing that compares a commanded position against the position reported after the move can see it. A moved origin is the most likely explanation for this alert, but a stage that physically failed to reach a commanded position looks the same from here, so the alert says the position and the coordinates disagree rather than naming a cause.
+
+**Why the whole pass stops.** Every slide in the batch had its alignment measured against the old origin. Acquiring the rest would image the wrong part of each one. On 2026-10-02 a four-slide run did exactly that: the first slide, acquired seconds after its alignment was measured, was correct, and the three acquired 9, 12 and 30 hours later were progressively offset -- the last badly enough to return two regions of slide label.
+
+**To recover.** Re-establish the origin; nothing in software can do it for you.
+
+1. Fit the calibration slide, face up, text in the upper right, and select the 40x objective.
+2. Position so the grid inside the circle sits in the upper-right corner of the Micro-Manager viewer.
+3. On the controller itself: **Menu -> XY mode -> Zero**. This is a controller operation, not a Micro-Manager one.
+4. Verify before trusting it. On PPM, slide 2's centre should read about `(10598, -12592)`. If a slide centre reads outside the configured travel limits, the frame is still wrong.
+5. Run **Set Up All Remaining** to re-measure every alignment against the corrected origin. Do **not** use **Acquire All Set-Up** -- those alignments are the ones measured against the old origin, which is why the pass stopped.
+
+**If it fires again.** The alert is re-armed each time you start a pass, so a second alert is a second detection, not an echo of the first. Check for an intermittent controller fault, and consider capping the XY motion profile (`stage.xy_motion` in `config_<SCOPE>.yml`) if it is not already set -- maximum speed and acceleration on the long slot-to-slot traverses is the suspected trigger.
+
+**What this check cannot do.** It only sees the disagreement while the stage is still parked at the reading that exposed it; after the next commanded move the controller's reports agree with the region again. The deterministic detectors live in the command server, which compares the reported position against the last commanded one before each move and reads the motion profile back after long moves.
+
 #### Q: "Saturation Limit Exceeded" dialog appears during acquisition (PPM)
 
 **A:** This dialog appears when the birefringence saturation guard (PPM modalities) detects that the initial monitoring tiles are saturated. The acquisition pauses and offers two options:

@@ -446,6 +446,39 @@ done. Push notifications require ntfy.sh configured in
 [Communication Settings](server-connection.md); see
 [Alerts](../PREFERENCES.md#alerts-qupath-scope-alerts).
 
+### Stage position alert: "Stage position is not trustworthy"
+
+A batch that halts with this alert has detected that the stage's reported
+position and the coordinates in use disagree: the stage was reported well
+outside the region being acquired, for several samples running. The region's
+acquisition is cancelled and the rest of the pass is halted.
+
+**What it means.** A Prior controller has no absolute reference and nothing to
+home to. One that restarts resumes with position 0,0 wherever it is standing,
+and from then on moves exactly where commanded and reports exactly that -- so no
+check that compares a commanded position against the position reported after the
+move can see it. That is the most likely explanation; a stage that physically
+failed to reach a commanded position looks the same from here.
+
+The check uses the region's own bounding box rather than the slide's, because a
+slide box can straddle the stage origin -- slot 2 of the PPM quad holder does --
+which would make a re-zeroed controller reporting 0,0 look like it was sitting
+legally on the slide. It allows a 2 mm margin for the autofocus tissue search,
+and ignores the first 30 seconds after a region starts, which is when the stage
+is still travelling to it.
+
+**Why the whole pass stops.** Every slide's alignment was measured against the
+old origin, so acquiring the remaining ones would image the wrong part of each.
+
+**To recover.** Re-establish the origin at the calibration fiducial (the full
+procedure is in [Troubleshooting](../TROUBLESHOOTING.md)), then run **Set Up All
+Remaining** to re-measure every alignment against the corrected origin. Do not
+reach for **Acquire All Set-Up**: those alignments are the ones measured against
+the old origin.
+
+The alert is re-armed whenever you start a pass, so a second alert is a second
+detection rather than an echo of the first.
+
 ## Provenance and recovery
 
 Each assigned entry gets `slide_position`, `slide_carrier`, and `ms_run_id`
