@@ -31,6 +31,8 @@ public class StageStep implements WizardStep {
     private final ResourceCatalog catalog;
     private final ComboBox<String> stageIdCombo;
     private final javafx.scene.control.TextField zDeviceField;
+    private final javafx.scene.control.TextField xySpeedField;
+    private final javafx.scene.control.TextField xyAccelField;
     private final Spinner<Double> xLowSpinner;
     private final Spinner<Double> xHighSpinner;
     private final Spinner<Double> yLowSpinner;
@@ -126,7 +128,54 @@ public class StageStep implements WizardStep {
         grid.add(zLowSpinner, 1, 3);
         grid.add(zHighSpinner, 2, 3);
 
-        content.getChildren().addAll(stageLabel, stageIdCombo, zDeviceLabel, zDeviceField, warningLabel, grid);
+        // --- XY motion profile -------------------------------------------------
+        // Held for the whole session rather than left wherever the device adapter put it.
+        Label motionHeader = new Label("XY motion profile (optional)");
+        motionHeader.setStyle("-fx-font-weight: bold;");
+
+        Label motionWarning =
+                new Label("WARNING: large, fast stage moves can have effects that do not announce themselves. "
+                        + "An open-loop stage can skip steps while still reporting the position it was "
+                        + "told to go to, so the coordinates stay self-consistent while the sample has "
+                        + "moved under them -- which is how a multi-slide run can image the wrong part "
+                        + "of every slide after the first. Capping speed and acceleration reduces that "
+                        + "risk and gives a readback that reveals a controller restart.\n\n"
+                        + "Leave both blank to change nothing. If you set them, TEST the result, and "
+                        + "check with the stage manufacturer what this hardware is rated for rather "
+                        + "than assuming a value is safe.");
+        motionWarning.setWrapText(true);
+        motionWarning.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
+
+        Label motionHelp = new Label("Raw device-property values, as the stage adapter expects them "
+                + "(on Prior these are 1-100 percent, where lower is gentler). Blank = leave alone.");
+        motionHelp.setWrapText(true);
+
+        GridPane motionGrid = new GridPane();
+        motionGrid.setHgap(10);
+        motionGrid.setVgap(6);
+        motionGrid.add(new Label("MaxSpeed:"), 0, 0);
+        xySpeedField = new javafx.scene.control.TextField();
+        xySpeedField.setPrefWidth(120);
+        xySpeedField.setPromptText("leave blank");
+        motionGrid.add(xySpeedField, 1, 0);
+        motionGrid.add(new Label("Acceleration:"), 0, 1);
+        xyAccelField = new javafx.scene.control.TextField();
+        xyAccelField.setPrefWidth(120);
+        xyAccelField.setPromptText("leave blank");
+        motionGrid.add(xyAccelField, 1, 1);
+
+        content.getChildren()
+                .addAll(
+                        stageLabel,
+                        stageIdCombo,
+                        zDeviceLabel,
+                        zDeviceField,
+                        warningLabel,
+                        grid,
+                        motionHeader,
+                        motionWarning,
+                        motionHelp,
+                        motionGrid);
     }
 
     private Spinner<Double> createLimitSpinner(double initialValue) {
@@ -201,6 +250,44 @@ public class StageStep implements WizardStep {
             return "Z low limit must be less than Z high limit.";
         }
 
+        // These are written straight to a device property, so a typo becomes a real
+        // instruction to the stage. Reject anything that is not a number here rather than
+        // discovering it as an adapter rejection halfway through a run.
+        String speedError = validateMotionValue(xySpeedField.getText(), "MaxSpeed");
+        if (speedError != null) {
+            return speedError;
+        }
+        String accelError = validateMotionValue(xyAccelField.getText(), "Acceleration");
+        if (accelError != null) {
+            return accelError;
+        }
+
+        return null;
+    }
+
+    /**
+     * Checks one XY motion value: blank is fine, anything non-numeric is not.
+     *
+     * <p>Deliberately does NOT police the range. The scale is the adapter's, not ours --
+     * Prior takes 1-100 percent, other adapters take um/s or a fixed enum -- so a limit
+     * imposed here would be a guess about hardware this wizard is being used to describe.
+     * What it can say is that the value has to be a number.
+     *
+     * @return an error message, or null when acceptable
+     */
+    private String validateMotionValue(String raw, String label) {
+        String text = raw == null ? "" : raw.trim();
+        if (text.isEmpty()) {
+            return null;
+        }
+        try {
+            double value = Double.parseDouble(text);
+            if (value <= 0) {
+                return label + " must be greater than zero, or blank to leave the stage alone.";
+            }
+        } catch (NumberFormatException e) {
+            return label + " must be a number (or blank to leave the stage alone): \"" + text + "\"";
+        }
         return null;
     }
 
@@ -228,6 +315,8 @@ public class StageStep implements WizardStep {
         yHighSpinner.getValueFactory().setValue(data.stageLimitYHigh);
         zLowSpinner.getValueFactory().setValue(data.stageLimitZLow);
         zHighSpinner.getValueFactory().setValue(data.stageLimitZHigh);
+        xySpeedField.setText(data.xyMaxSpeedValue == null ? "" : data.xyMaxSpeedValue);
+        xyAccelField.setText(data.xyAccelerationValue == null ? "" : data.xyAccelerationValue);
     }
 
     @Override
@@ -248,6 +337,8 @@ public class StageStep implements WizardStep {
         data.stageLimitYHigh = yHighSpinner.getValue();
         data.stageLimitZLow = zLowSpinner.getValue();
         data.stageLimitZHigh = zHighSpinner.getValue();
+        data.xyMaxSpeedValue = xySpeedField.getText().trim();
+        data.xyAccelerationValue = xyAccelField.getText().trim();
 
         logger.debug(
                 "StageStep: saved stageId={}, X=[{}, {}], Y=[{}, {}], Z=[{}, {}]",

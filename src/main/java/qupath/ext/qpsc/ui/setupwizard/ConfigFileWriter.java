@@ -209,6 +209,25 @@ public final class ConfigFileWriter {
         streamingAf.put("normal_speed_value", data.streamingAfNormalSpeedValue);
         stage.put("streaming_af", streamingAf);
 
+        // stage.xy_motion: only when the operator supplied values. Omitting the block leaves
+        // the adapter's own speed and acceleration in force, which is what every rig did
+        // before this existed -- and writing a cap for a stage nobody has driven would be
+        // inventing a number that moves real hardware.
+        String xySpeed = data.xyMaxSpeedValue == null ? "" : data.xyMaxSpeedValue.trim();
+        String xyAccel = data.xyAccelerationValue == null ? "" : data.xyAccelerationValue.trim();
+        if (!xySpeed.isEmpty() || !xyAccel.isEmpty()) {
+            Map<String, Object> xyProperties = new LinkedHashMap<>();
+            if (!xySpeed.isEmpty()) {
+                xyProperties.put("MaxSpeed", xySpeed);
+            }
+            if (!xyAccel.isEmpty()) {
+                xyProperties.put("Acceleration", xyAccel);
+            }
+            Map<String, Object> xyMotion = new LinkedHashMap<>();
+            xyMotion.put("properties", xyProperties);
+            stage.put("xy_motion", xyMotion);
+        }
+
         config.put("stage", stage);
 
         // Slide size

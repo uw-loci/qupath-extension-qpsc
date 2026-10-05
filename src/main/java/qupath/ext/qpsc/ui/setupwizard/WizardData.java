@@ -45,6 +45,16 @@ public class WizardData {
     public double stageLimitZLow = -5000;
     public double stageLimitZHigh = 0;
 
+    // stage.xy_motion.properties.* -- the speed and acceleration the XY stage is HELD at
+    // for the whole session, rather than left at whatever the device adapter came up with.
+    //
+    // Blank means "write no xy_motion block", which leaves the adapter's own values in
+    // force and disables the readback check that rides on them. That is the honest default
+    // for a rig nobody has characterised: we cannot pick a safe cap for a stage we have
+    // never driven, and a guess here moves a real stage.
+    public String xyMaxSpeedValue = "";
+    public String xyAccelerationValue = "";
+
     // ====== Step 5b: Streaming Autofocus (probed via PRBSAFZ) ======
     // Populated by ProbeStageAfStep / ProbeStageAfWorkflow. Maps to
     // stage.streaming_af.* in config_<scope>.yml. The streaming-AF
