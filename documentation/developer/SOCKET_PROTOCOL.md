@@ -93,13 +93,19 @@ sequenceDiagram
 | Command | Wire Format | Payload | Response |
 |---------|------------|---------|----------|
 | GETXY | `getxy___` | none | 8 bytes: X,Y as big-endian 32-bit floats (`HW_ERROR` on a hardware error) |
-| GETZ | `getz____` | none | 4 bytes: Z as a big-endian 32-bit float |
+| GETZ | `getz____` | none | 4 bytes: Z as a big-endian 32-bit float (`HWERR`, 5 bytes, on a hardware error) |
 | GETXYZ | `getxyz__` | none | 12 bytes: X,Y,Z as big-endian 32-bit floats |
 | MOVE | `move____` | 8 bytes: X,Y floats | none |
 | MOVEZ | `move_z__` | 4 bytes: Z float | none |
 | MOVEXYZ | `movexyz_` | 12 bytes: X,Y,Z floats | none |
-| MOVER | `move_r__` | 4 bytes: angle float | none |
-| GETR | `getr____` | none | 4 bytes: angle as a big-endian 32-bit float (NaN if there is no rotation stage) |
+| MOVER | `move_r__` | 4 bytes: angle float, in ticks | none |
+| GETR | `getr____` | none | 4 bytes: angle in ticks as a big-endian 32-bit float (NaN if there is no rotation stage; `HWERR`, 5 bytes, on a hardware error) |
+
+One tick is one optical degree: the angle of the rotating polarizer, measured from the crossed position.
+
+`GETZ` and `GETR` report a hardware error as the 5 ASCII bytes `HWERR` where the 4-byte value would be. The client reads 4 bytes, recognizes `HWER`, and reads the fifth before raising the error, so the next reply starts where it should.
+
+The move commands (`MOVE`, `MOVEZ`, `MOVZNW`, `MOVEXYZ`, `MOVER`) are ignored until `CONFIG` has loaded a microscope configuration. The server reads the payload, logs a warning and does not move. Until then the server holds a generic configuration with wide stage limits.
 
 ### Acquisition
 
@@ -107,7 +113,7 @@ sequenceDiagram
 |---------|------------|---------|----------|
 | ACQUIRE | `acquire_` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
 | BGACQUIRE | `bgacquir` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
-| STATUS | `status__` | none | status string |
+| STATUS | `status__` | none | state name padded to 16 bytes; or `COMPLETED\|final_z:<z>`, optionally followed by `\|sat:<summary>`; or `FAILED: <message>`, space-padded to at least 32 bytes and at most 500 |
 | PROGRESS | `progress` | none | 8 bytes: images done and images total as two big-endian unsigned 32-bit integers |
 | CANCEL | `cancel__` | none | `ACK` (3 bytes) |
 

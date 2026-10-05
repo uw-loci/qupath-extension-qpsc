@@ -130,7 +130,7 @@ Each per-slide alignment JSON records, in `flipMacroX/Y`, the pixel frame the tr
 
 ### Step 3: Affine Transform (alignment calibration)
 
-The affine transform maps macro pixel coordinates to stage micrometers. It is computed either during the Microscope Alignment workflow (by collecting 3+ corresponding points in both coordinate spaces) or is auto-registered at import time by a BoundingBox acquisition (see "Auto-Registered Transforms" below).
+The affine transform maps macro pixel coordinates to stage micrometers. It is computed either during the Microscope Alignment workflow (scale and sign from the source image's pixel size and the stage-inversion settings; translation from tiles the user lines up with the live view) or is auto-registered at import time by a BoundingBox acquisition (see "Auto-Registered Transforms" below).
 
 ```
 | a  b  tx |     | macro_x |     | stage_x |

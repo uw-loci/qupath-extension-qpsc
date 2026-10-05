@@ -753,10 +753,11 @@ git clone https://github.com/uw-loci/qupath-extension-qpsc.git
 
 ```bash
 cd qupath-extension-tiles-to-pyramid
+git checkout v0.7.1
 ./gradlew publishToMavenLocal
 ```
 
-This installs the tiles-to-pyramid dependency to your local Maven repository (`~/.m2/repository/`).
+This installs the tiles-to-pyramid dependency to your local Maven repository (`~/.m2/repository/`). Check out the version that `build.gradle.kts` in `qupath-extension-qpsc` pins (0.7.1 at the time of writing); the head of `main` is a later version and will not satisfy the build.
 
 **3. Build the QPSC extension:**
 
@@ -772,7 +773,7 @@ The built JAR will be at:
 build/libs/qupath-extension-qpsc-<version>-all.jar
 ```
 
-The `-all` suffix indicates this is a "fat JAR" that includes the tiles-to-pyramid dependency bundled inside.
+The `-all` JAR does not contain tiles-to-pyramid. That extension is installed separately, and QPSC needs it at run time to stitch tiles.
 
 ### Troubleshooting Build Issues
 
@@ -796,10 +797,10 @@ This can happen when the OME artifact server is down. The build configuration ha
 
 If you see:
 ```
-Could not resolve io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.1.0
+Could not resolve io.github.uw-loci:qupath-extension-tiles-to-pyramid:0.7.1
 ```
 
-Make sure you completed Step 2 (publishToMavenLocal) in the tiles-to-pyramid directory.
+Make sure you completed Step 2 (publishToMavenLocal) in the tiles-to-pyramid directory, on the `v0.7.1` tag.
 
 ### Development in IntelliJ IDEA
 

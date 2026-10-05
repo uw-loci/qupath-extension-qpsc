@@ -1083,45 +1083,27 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public double getStageZ() throws IOException {
         // Use auxiliary socket for stage control operations
-        byte[] response = executeCommandOnAux(Command.GETZ, null, 4);
-
-        // Check for hardware error response
-        String responseStr = new String(response, StandardCharsets.UTF_8);
-        if (responseStr.startsWith("HWERR")) {
-            throw new MicroscopeHardwareException(
-                    "Hardware error getting Z position. Check that MicroManager is running and the Z stage is loaded.");
-        }
-
-        ByteBuffer buffer = ByteBuffer.wrap(response);
-        buffer.order(ByteOrder.BIG_ENDIAN);
-
-        float z = buffer.getFloat();
+        float z = queryFloatOnAux(
+                Command.GETZ,
+                "Hardware error getting Z position. Check that MicroManager is running and the Z stage is loaded.");
         logger.trace("Stage Z position: {}", z);
         return z;
     }
 
     /**
-     * Gets the current rotation angle (in ticks) of the stage.
+     * Gets the current angle of the rotation stage.
      *
-     * @return Rotation angle in ticks (double the angle)
+     * @return Rotation angle in ticks, the unit of {@code rotation_angles} in the microscope
+     *     configuration: optical degrees from the crossed position. NaN when the microscope has no
+     *     rotation stage.
      * @throws IOException if communication fails
      * @throws MicroscopeHardwareException if hardware error occurs
      */
     public double getStageR() throws IOException {
         // Use auxiliary socket for stage control operations
-        byte[] response = executeCommandOnAux(Command.GETR, null, 4);
-
-        // Check for hardware error response
-        String responseStr = new String(response, StandardCharsets.UTF_8);
-        if (responseStr.startsWith("HWERR")) {
-            throw new MicroscopeHardwareException(
-                    "Hardware error getting rotation angle. Check that MicroManager is running and the rotation stage is loaded.");
-        }
-
-        ByteBuffer buffer = ByteBuffer.wrap(response);
-        buffer.order(ByteOrder.BIG_ENDIAN);
-
-        float angle = buffer.getFloat();
+        float angle = queryFloatOnAux(
+                Command.GETR,
+                "Hardware error getting rotation angle. Check that MicroManager is running and the rotation stage is loaded.");
         logger.debug("Stage rotation ticks: {}", angle);
         return angle;
     }
@@ -7396,6 +7378,57 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return Response bytes from server
      * @throws IOException if communication fails
      */
+    /**
+     * Sends a query whose reply is one big-endian float, on the auxiliary socket.
+     *
+     * @param command the query (GETZ or GETR)
+     * @param hardwareErrorMessage message for the exception raised when the server reports a hardware error
+     * @return the value
+     * @throws MicroscopeHardwareException if the server replied HWERR
+     * @throws IOException if communication fails
+     */
+    private float queryFloatOnAux(Command command, String hardwareErrorMessage) throws IOException {
+        synchronized (auxSocketLock) {
+            ensureAuxConnected();
+            try {
+                auxOutput.write(command.getValue());
+                auxOutput.flush();
+                return readFloatOrHwErr(auxInput, hardwareErrorMessage);
+            } catch (MicroscopeHardwareException e) {
+                // The reply was read in full; the socket is still in step, so keep it.
+                throw e;
+            } catch (IOException e) {
+                cleanupAuxiliary();
+                throw e;
+            }
+        }
+    }
+
+    /**
+     * Reads a one-float reply, or the server's hardware-error marker in its place.
+     *
+     * <p>On a hardware error the server sends the 5 ASCII bytes {@code HWERR} where the 4-byte
+     * value would be. Reading 4 bytes and comparing them with a 5-character string could never
+     * match: the marker was decoded as a position and its last byte was left on the socket,
+     * where it shifted every later reply by one. Here the first four bytes identify the marker
+     * and the fifth is consumed.
+     *
+     * @param in the socket's input stream, positioned at the start of the reply
+     * @param hardwareErrorMessage message for the exception raised on the marker
+     * @return the value
+     * @throws MicroscopeHardwareException if the reply was the marker
+     * @throws IOException if the stream ends or times out
+     */
+    static float readFloatOrHwErr(DataInputStream in, String hardwareErrorMessage) throws IOException {
+        byte[] reply = new byte[4];
+        in.readFully(reply);
+        if (reply[0] == 'H' && reply[1] == 'W' && reply[2] == 'E' && reply[3] == 'R') {
+            in.readFully(new byte[1]);
+            throw new MicroscopeHardwareException(hardwareErrorMessage);
+        }
+        return ByteBuffer.wrap(reply).order(ByteOrder.BIG_ENDIAN).getFloat();
+    }
+
     private byte[] executeCommandOnAux(Command command, byte[] payload, int responseLength) throws IOException {
         synchronized (auxSocketLock) {
             ensureAuxConnected();

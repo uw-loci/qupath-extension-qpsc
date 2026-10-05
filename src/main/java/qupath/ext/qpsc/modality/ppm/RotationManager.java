@@ -12,7 +12,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Manages rotation strategies for different imaging modalities.
- * Reads PPM angles in ticks (double the angle) from config and applies appropriate strategy.
+ * Reads PPM angles in ticks (optical degrees from crossed) from config and applies appropriate strategy.
  */
 public class RotationManager {
     private static final Logger logger = LoggerFactory.getLogger(RotationManager.class);

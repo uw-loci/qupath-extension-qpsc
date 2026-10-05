@@ -8,12 +8,14 @@ PPM acquires images at 2-4 rotation angles per tile position. Each angle has an 
 
 The standard PPM angle set is:
 
-| Name | Ticks | Degrees | Typical Exposure | Purpose |
-|------|-------|---------|-----------------|---------|
-| negative | -7.0 | -14 deg | 500 ms | Birefringence signal (negative offset) |
-| crossed | 0.0 | 0 deg | 800 ms | Crossed polarizers (minimum transmission) |
-| positive | 7.0 | +14 deg | 500 ms | Birefringence signal (positive offset) |
-| uncrossed | 90.0 | 180 deg | 10 ms | Uncrossed polarizers (maximum transmission) |
+| Name | Ticks | Typical Exposure | Purpose |
+|------|-------|-----------------|---------|
+| negative | -7.0 | 500 ms | Birefringence signal (negative offset) |
+| crossed | 0.0 | 800 ms | Crossed polarizers (minimum transmission) |
+| positive | 7.0 | 500 ms | Birefringence signal (positive offset) |
+| uncrossed | 90.0 | 10 ms | Uncrossed polarizers (maximum transmission) |
+
+One tick is one optical degree: the angle of the rotating polarizer, measured from the crossed position. The rotation stage classes in `microscope_control` (`hardware/rotation.py`) convert it to device units. On the PI stage that is 1000 encoder counts per degree plus a calibrated offset. The separate word dates from the earlier PPM rotation mount, a Thorlabs stage geared 2:1, whose own scale moved two degrees for each optical degree. An earlier version of this table doubled the tick values into a "Degrees" column; that factor belonged to the Thorlabs mount's scale and does not apply to the optical angle.
 
 The birefringence image is computed from the positive and negative angles. The crossed image shows extinction. The uncrossed image provides a brightfield-like reference.
 
@@ -156,7 +158,7 @@ modalities:
       type: 'polarizer'
     rotation_angles:
       - name: 'negative'
-        tick: -7                         # Hardware units (degrees for PI stage)
+        tick: -7                         # Optical degrees from crossed
       - name: 'crossed'
         tick: 0
       - name: 'positive'

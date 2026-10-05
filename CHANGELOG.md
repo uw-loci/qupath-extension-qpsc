@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Z and rotation reads no longer misread a server hardware error**
+- When the microscope server could not read the Z or rotation stage, it replied `HWERR` (5 bytes) where a 4-byte value was expected. QPSC decoded the first four bytes as a position and left the fifth on the socket, which shifted every later reply on the auxiliary connection by one byte. QPSC now raises a hardware error and the connection stays in step. No server update is needed for this fix.
+
 **"QPSC - restart recommended" now appears when you update, not after you restart**
 - QuPath installs an updated jar in the running session but keeps running the classes it already loaded, and only runs the new version's start-up code at the next launch, so the start-up version check could only ever fire on the launch after the restart it asked for. QPSC now watches for its own jar being replaced while QuPath runs and advises the restart then, once. Nothing shows at start-up, including after a fresh install. The unused `lastLoadedQpscVersion` preference is removed.
 
