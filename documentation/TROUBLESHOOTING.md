@@ -434,6 +434,48 @@ If matching still fails on a tile that visually overlaps the camera's live view:
 
 Drive the stage roughly close (a few hundred microns is enough) using the joystick, Live Viewer click-to-center, or the initial transform estimate before clicking SIFT. If you genuinely need a wider capture range, raise the search margin -- but matching cost grows with margin squared, so 300-400 um is a reasonable upper bound.
 
+#### Q: Multi-slide batch stopped with "Alignment could not be confirmed"
+
+**A:** Before each slide in an unattended multi-slide acquire pass, the system
+verifies the stored alignment by matching the camera against the macro image. If
+the match fails or disagrees by more than 500 µm, the batch stops because every
+slide was aligned in the same frame.
+
+**What the message means depends on the outcome:**
+
+- **"Alignment confirmed against the sample: ... within the 500 µm tolerance"** —
+  Proceed normally; acquired data will be correctly positioned.
+- **"The sample is ... from where this slide's alignment says it is, ... beyond the
+  500 µm tolerance"** — A *measurement*: the camera matched, but at a distance
+  too large to be noise. The sample is not where this alignment says it is. Set
+  the slides up again before acquiring.
+- **"The camera could not be matched to the macro image at any of ... points on
+  this slide"** — Nothing recognisable is under the objective (consistent with a
+  slide displaced by more than a field, but also with a blank or badly defocused
+  field). Check the live image first: if it is in focus and on tissue, the stage
+  is not where it reports. If it is blank or defocused, check the stage and
+  objective. Either way, set the slides up again.
+
+**How to see the numbers before the check stops a run:**
+
+Change the preference **Check alignment against the sample before acquiring** to
+`warn` mode (Edit > Preferences > QuPath SCope Multi-Slide). The check will measure and
+report, but acquire anyway, so you can see what tolerances look like on your rig
+before letting it stop a run.
+
+**Why this check exists:**
+
+A Prior stage is open-loop: the controller reports the step count it was given,
+so a reported position always agrees with a commanded position whether or not the
+stage actually travelled. On 2026-10-02 a four-slide run showed a provably clean
+position counter across 34 hours while three of four slides came out offset in Y,
+the last badly enough to image the slide label for 1,714 tiles. Nothing that asks
+the controller where it is can catch that; only matching against the sample can.
+
+See [PREFERENCES > Check alignment against the sample before
+acquiring](PREFERENCES.md#check-alignment-against-the-sample-before-acquiring)
+for the technical details and tolerance rationale.
+
 ### Acquisition Problems
 
 #### Q: "Macro image pixel size is not set" when starting Existing Image Acquisition

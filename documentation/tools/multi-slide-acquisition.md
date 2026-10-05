@@ -156,9 +156,12 @@ There are two ways to run, and you can mix them:
    **Set up (ready to acquire)** and remembers its acquisition settings.
 2. **Step 2: Acquire All Set-Up** -- acquires every set-up slot **unattended,
    with no dialogs**, replaying each slot's settings against the alignment saved
-   during setup. The acquire pass **pipelines over stitching**: a slot advances
-   to the next as soon as its stage work completes, while stitching and import
-   happen in the background, so later slots acquire while earlier ones stitch.
+   during setup. Before each slide is acquired, the system verifies the stored
+   alignment against the sample by matching the camera to the macro image (see
+   [Alignment verification](#alignment-verification-before-acquire) below). The
+   acquire pass **pipelines over stitching**: a slot advances to the next as soon
+   as its stage work completes, while stitching and import happen in the
+   background, so later slots acquire while earlier ones stitch.
 
 Front-load your decisions in the setup pass, then leave it running.
 
@@ -478,6 +481,60 @@ the old origin.
 
 The alert is re-armed whenever you start a pass, so a second alert is a second
 detection rather than an echo of the first.
+
+### Alignment verification alert: "Alignment could not be confirmed"
+
+Before each slide in the acquire pass, the system verifies the stored alignment
+by matching the camera against the macro image, to confirm the slide is still
+positioned where its alignment says it is. If verification fails, the batch stops.
+
+**Why this check exists.** A Prior stage is open-loop: it reports the step count
+it was given, so a commanded position and the reported position always agree
+whether or not the stage actually travelled that far. Logging shows a provably
+clean counter over 34 hours while three of four slides came out offset by
+millimetres. Nothing that asks the controller where it is can see that; only
+matching against the sample can.
+
+**Three outcomes:**
+
+| Outcome | Meaning | Action |
+|---------|---------|--------|
+| **Confirmed** | Matched within 500 µm tolerance | Acquire normally |
+| **Misaligned** | Matched, but further than 500 µm away | Stop the batch; the sample is not where this alignment says it is |
+| **Unconfirmed** | Could not match at any of three points | Stop the batch; nothing recognisable is under the objective (consistent with a large displacement, but also with a blank or badly defocused field) |
+
+The 500 µm tolerance sits between the two things it must separate: a refined
+alignment's typical residual is 20–40 µm, and a failure being caught was
+millimetres. It is also about one and a half 20x fields, so anything under it
+still images the intended tissue.
+
+**When the batch stops.** Both MISALIGNED and UNCONFIRMED stop the run, because
+every slide in the batch was aligned in the same frame. One slide failing to
+confirm means the rest are suspect too. A stopped batch does not resume.
+
+**If you would rather see the numbers before it stops anything.** The preference
+**Check alignment against the sample before acquiring** (Edit > Preferences > QuPath SCope Multi-Slide) has three modes:
+
+- **`halt`** (default) -- Stop the batch on confirmation failure.
+- **`warn`** -- Measure and report, but acquire anyway. Use this for the first
+  few runs if you want to see what the numbers look like on your rig before the
+  check stops anything.
+- **`off`** -- No check.
+
+**How to recover.** Check the live image:
+
+- If it is in focus and on tissue, the stage is not where it reports, or the
+  alignment was measured in the wrong frame. Set the slides up again before
+  acquiring.
+- If the live image is blank or badly defocused, check the stage and objective,
+  then re-run alignment. The verification alert will distinguish a measured
+  disagreement (MISALIGNED) from a failure to match (UNCONFIRMED) so you know
+  which to check first.
+
+Costs about a minute per slide, against acquisitions of several hours. Only the
+first region of each slide is checked, not every region. See [PREFERENCES >
+Check alignment against the sample before acquiring](../PREFERENCES.md#check-alignment-against-the-sample-before-acquiring)
+for the full technical details and tolerance rationale.
 
 ## Provenance and recovery
 

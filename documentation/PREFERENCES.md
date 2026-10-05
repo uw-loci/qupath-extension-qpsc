@@ -1301,6 +1301,7 @@ This is broader than [No Manual Autofocus](#no-manual-autofocus-danger): No-Manu
 
 ### Check alignment against the sample before acquiring
 
+**Location:** Edit > Preferences > QuPath SCope Multi-Slide
 **Default: `halt`.** Values: `off`, `warn`, `halt`.
 
 Before each slide of an **unattended batch** (the two-pass multi-slide acquire), the stage

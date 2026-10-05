@@ -586,7 +586,9 @@ public class QPPreferenceDialog {
         items.add(new PropertyItemBuilder<>(alignmentCheckModeProperty, String.class)
                 .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
                 .name("Check alignment against the sample before acquiring")
-                .category(CATEGORY)
+                // Only the unattended multi-slide acquire pass runs this, so it belongs
+                // beside the other batch settings rather than in the general category.
+                .category(MULTISLIDE_CATEGORY)
                 .choices(Arrays.asList("off", "warn", "halt"))
                 .description("Before each slide of an unattended batch, move to a point in the "
                         + "region and match the camera against the macro image, to confirm the "
