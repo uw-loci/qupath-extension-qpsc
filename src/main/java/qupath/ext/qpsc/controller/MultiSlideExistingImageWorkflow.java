@@ -33,6 +33,8 @@ import javafx.stage.Stage;
 import javafx.util.StringConverter;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.workflow.AlignmentVerification;
+import qupath.ext.qpsc.controller.workflow.AlignmentVerificationGate;
 import qupath.ext.qpsc.controller.workflow.CancellationToken;
 import qupath.ext.qpsc.controller.workflow.MultiSlidePreflight;
 import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
@@ -785,6 +787,8 @@ public final class MultiSlideExistingImageWorkflow {
             // acquire pass below.
             StageFrameWatchdog.getInstance().clearSuspect();
             frameSuspectWarned = false;
+            AlignmentVerificationGate.clear();
+            alignmentWarned = false;
             driveSequential(
                     gui,
                     states,
@@ -819,6 +823,8 @@ public final class MultiSlideExistingImageWorkflow {
             // The operator has seen the alert and chosen to go again; let them.
             StageFrameWatchdog.getInstance().clearSuspect();
             frameSuspectWarned = false;
+            AlignmentVerificationGate.clear();
+            alignmentWarned = false;
             // Collect every slot's saturation report into ONE combined dialog at batch end instead of
             // popping a per-acquisition dialog (a 4-slide run otherwise pops 4+). Paired with
             // endBatchAndShow() (normal end) / endBatchAndShow() after abort settles.
@@ -1389,6 +1395,46 @@ public final class MultiSlideExistingImageWorkflow {
     /** Set once a frame-suspect alert has been shown, so a halted pass does not stack dialogs. */
     private static boolean frameSuspectWarned = false;
 
+    /** Set once an alignment-unconfirmed alert has been shown, so a halted pass does not stack dialogs. */
+    private static boolean alignmentWarned = false;
+
+    /**
+     * Tells the operator, once per run, that the pass stopped because an alignment could not
+     * be confirmed against the sample.
+     *
+     * <p>Distinguishes the two outcomes, because the recovery differs. A measured
+     * disagreement names how far off the slide is. A failure to match says nothing
+     * recognisable was under the objective, which is what a large displacement looks like --
+     * but also what a blank or badly defocused field looks like, and saying so is the
+     * difference between the operator checking the stage and checking the focus.
+     *
+     * @param reason the gate's description of what failed
+     */
+    private static void warnAlignmentUnconfirmedOnce(String reason) {
+        if (alignmentWarned) {
+            return;
+        }
+        alignmentWarned = true;
+        AlignmentVerification.Verdict verdict = AlignmentVerificationGate.lastVerdict();
+        String advice;
+        if (verdict != null && verdict.status() == AlignmentVerification.Status.MISALIGNED) {
+            advice = "The camera matched the macro image, but at a distance: the sample is not where this "
+                    + "slide's alignment says it is. The remaining slides were aligned in the same frame, so "
+                    + "they are suspect too. Set the slides up again before acquiring.";
+        } else {
+            advice = "The camera could not be matched to the macro image anywhere on this slide. That is what "
+                    + "a slide displaced by more than a field looks like -- but a blank or badly defocused "
+                    + "field looks the same. Check the live image first: if it is in focus and on tissue, the "
+                    + "stage is not where it reports, and the slides need setting up again.";
+        }
+        Platform.runLater(() -> Dialogs.showErrorMessage(
+                "Alignment could not be confirmed",
+                "The run has been stopped before acquiring on an alignment that does not hold.\n\n"
+                        + reason
+                        + "\n\n"
+                        + advice));
+    }
+
     /**
      * Tells the operator, once per run, that the pass stopped because the stage frame moved.
      *
@@ -1453,6 +1499,18 @@ public final class MultiSlideExistingImageWorkflow {
         if (frameSuspect != null) {
             logger.error("MS workflow: {} pass halted at slot index {} -- {}", passName, index, frameSuspect);
             warnFrameSuspectOnce(frameSuspect);
+            onDone.run();
+            return;
+        }
+
+        // An alignment that could not be confirmed against the sample halts the pass for the
+        // same reason, and it is the check that catches a stage which did not travel as far as
+        // it was told -- which the one above cannot see, because the controller reports the
+        // count it was given either way.
+        String unconfirmed = AlignmentVerificationGate.reason();
+        if (unconfirmed != null) {
+            logger.error("MS workflow: {} pass halted at slot index {} -- {}", passName, index, unconfirmed);
+            warnAlignmentUnconfirmedOnce(unconfirmed);
             onDone.run();
             return;
         }

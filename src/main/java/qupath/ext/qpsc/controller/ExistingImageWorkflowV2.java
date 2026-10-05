@@ -2269,6 +2269,75 @@ public class ExistingImageWorkflowV2 {
          * between wizard and refinement). The pre-acquisition gate further downstream is
          * a third layer of defense for state that changes during refinement.
          */
+        /**
+         * Confirms this slide's stored alignment against the sample before acquiring on it.
+         *
+         * <p>Returns null to proceed, or the exception to fail the slide with. Failing is what
+         * stops the batch: {@link AlignmentVerificationGate} records why, and the multi-slide
+         * driver refuses to start another slide while that is set -- every remaining slide's
+         * alignment was measured in the same frame, so they would be wrong the same way.
+         *
+         * <p>Honours the {@code alignmentCheckMode} preference. {@code warn} measures and
+         * reports but acquires anyway, which is the setting to use while learning what the
+         * numbers look like on a given rig.
+         */
+        private CancellationException verifyAlignmentBeforeUnattendedAcquire(WorkflowState state) {
+            String checkMode = QPPreferenceDialog.getAlignmentCheckMode();
+            if ("off".equalsIgnoreCase(checkMode)) {
+                return null;
+            }
+            if (state.transform == null || state.annotations == null || state.annotations.isEmpty()) {
+                logger.info("Alignment check skipped: no transform or no annotations to check against");
+                return null;
+            }
+
+            double[] fov = resolveFovUm(state);
+            if (fov == null) {
+                logger.info("Alignment check skipped: the camera field of view could not be resolved");
+                return null;
+            }
+
+            AlignmentVerification.Verdict verdict = AlignmentVerification.verify(
+                    QuPathGUI.getInstance(), state.annotations.get(0), state.transform, state.seedZ, fov[0], fov[1]);
+
+            String slide = state.sample != null ? state.sample.sampleName() : "this slide";
+            if (!verdict.shouldStop()) {
+                logger.info("Alignment check for {}: {}", slide, verdict.message());
+                return null;
+            }
+
+            if ("warn".equalsIgnoreCase(checkMode)) {
+                logger.warn(
+                        "Alignment check for {} FAILED but the mode is 'warn', so acquiring anyway: {}",
+                        slide,
+                        verdict.message());
+                return null;
+            }
+
+            logger.error("Alignment check for {} FAILED: {}", slide, verdict.message());
+            AlignmentVerificationGate.record(slide, verdict);
+            return new CancellationException("Alignment could not be confirmed for " + slide);
+        }
+
+        /** Camera field of view (um) for the modality/objective/detector in use, or null. */
+        private double[] resolveFovUm(WorkflowState state) {
+            try {
+                var mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+                if (mgr == null || state.sample == null) {
+                    return null;
+                }
+                double[] fov =
+                        mgr.getModalityFOV(state.sample.modality(), state.sample.objective(), state.sample.detector());
+                if (fov == null || fov.length < 2 || !(fov[0] > 0) || !(fov[1] > 0)) {
+                    return null;
+                }
+                return fov;
+            } catch (Exception e) {
+                logger.debug("Could not resolve the camera FOV for the alignment check: {}", e.getMessage());
+                return null;
+            }
+        }
+
         private CompletableFuture<WorkflowState> handleRefinement(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
 
@@ -2284,6 +2353,16 @@ public class ExistingImageWorkflowV2 {
             switch (state.refinementChoice) {
                 case NONE:
                     logger.info("Proceeding without refinement");
+                    // An unattended slide is about to be acquired on a stored alignment that
+                    // nothing has checked since it was measured -- up to 30 hours earlier in a
+                    // four-slide batch. Confirm it against the sample first; see
+                    // AlignmentVerification for why no cheaper check can see this.
+                    if (mode == Mode.ACQUIRE_ONLY) {
+                        CancellationException refused = verifyAlignmentBeforeUnattendedAcquire(state);
+                        if (refused != null) {
+                            return CompletableFuture.failedFuture(refused);
+                        }
+                    }
                     return CompletableFuture.completedFuture(state);
 
                 case SINGLE_TILE:

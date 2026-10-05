@@ -184,6 +184,12 @@ public class QPPreferenceDialog {
     private static final StringProperty focusSurfaceModeProperty =
             PathPrefs.createPersistentPreference("focusSurfaceMode", "off");
 
+    // Confirm a stored alignment against the sample before an unattended acquire pass:
+    // off / warn / halt. Defaults to halt -- the failure it catches cost 30 hours of
+    // imaging a slide label on 2026-10-02, and a false stop costs a restart.
+    private static final StringProperty alignmentCheckModeProperty =
+            PathPrefs.createPersistentPreference("alignmentCheckMode", "halt");
+
     // Focus points to measure before the tile loop. 0 = no survey (today's behaviour).
     private static final IntegerProperty focusSurveyPointsProperty =
             PathPrefs.createPersistentPreference("focusSurveyPoints", 0);
@@ -575,6 +581,32 @@ public class QPPreferenceDialog {
                         + "is flat and already in focus.\n\n"
                         + "This is the single autofocus on/off switch. The Acquisition "
                         + "Wizard shows a read-only status reflecting this preference.")
+                .build());
+
+        items.add(new PropertyItemBuilder<>(alignmentCheckModeProperty, String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
+                .name("Check alignment against the sample before acquiring")
+                .category(CATEGORY)
+                .choices(Arrays.asList("off", "warn", "halt"))
+                .description("Before each slide of an unattended batch, move to a point in the "
+                        + "region and match the camera against the macro image, to confirm the "
+                        + "slide is still where its alignment says.\n"
+                        + "\n"
+                        + "This is the only check that can catch the stage not travelling as far "
+                        + "as it was told. The controller reports the step count it was given, so "
+                        + "a commanded position and the position read back always agree whether or "
+                        + "not the stage followed -- on 2026-10-02 the Micro-Manager log showed a "
+                        + "provably clean counter across 34 hours while three of four slides came "
+                        + "out offset in Y, the last imaging its label for 1,714 tiles.\n"
+                        + "\n"
+                        + "halt: stop the batch when the match disagrees by more than 500 um, or "
+                        + "when nothing can be matched at all (which is what a slide displaced by "
+                        + "more than a field looks like).\n"
+                        + "warn: measure and report, but acquire anyway. Use this first if you "
+                        + "want to see the numbers before letting it stop a run.\n"
+                        + "off: no check.\n"
+                        + "\n"
+                        + "Costs about a minute per slide, against acquisitions of several hours.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(focusSurfaceModeProperty, String.class)
@@ -979,6 +1011,20 @@ public class QPPreferenceDialog {
      * recognise as {@code off}, so a stale preference degrades to today's behaviour rather than
      * to a guess.
      */
+    /**
+     * How to treat an alignment that cannot be confirmed against the sample: {@code off},
+     * {@code warn} or {@code halt}. Defaults to {@code halt}; an unreadable value is
+     * treated as {@code halt} rather than silently disabling the check.
+     */
+    public static String getAlignmentCheckMode() {
+        String mode = alignmentCheckModeProperty.get();
+        return (mode == null || mode.isBlank()) ? "halt" : mode;
+    }
+
+    public static StringProperty alignmentCheckModeProperty() {
+        return alignmentCheckModeProperty;
+    }
+
     public static String getFocusSurfaceMode() {
         String mode = focusSurfaceModeProperty.get();
         return (mode == null || mode.isBlank()) ? "off" : mode;

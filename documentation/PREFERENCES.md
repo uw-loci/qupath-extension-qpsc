@@ -1299,6 +1299,52 @@ This is broader than [No Manual Autofocus](#no-manual-autofocus-danger): No-Manu
 
 ---
 
+### Check alignment against the sample before acquiring
+
+**Default: `halt`.** Values: `off`, `warn`, `halt`.
+
+Before each slide of an **unattended batch** (the two-pass multi-slide acquire), the stage
+moves to a point inside the first region and matches the live camera against the macro
+image, to confirm the slide is still where its stored alignment says.
+
+This is the only check that can catch the stage not travelling as far as it was told. The
+Prior controller reports the step count it was given, so a commanded position and the
+position read back agree whether or not the stage followed, and a slip during a move leaves
+no discontinuity to find. On the four-slide run of 2026-10-02 the Micro-Manager log showed
+293,227 position reads across 34 hours with no unexplained change, no device
+re-initialisation and no serial fault -- a provably clean counter -- while three of the four
+slides came out offset in Y, the last imaging its own label for 1,714 tiles. Nothing that
+asks the controller where it is can see that; only matching against the sample can.
+
+Three outcomes, because a failure to match and a measured disagreement are different facts:
+
+| outcome | meaning | `halt` behaviour |
+|---|---|---|
+| confirmed | matched within 500 um | acquire |
+| misaligned | matched, but further than 500 um away | stop the batch, reporting the distance |
+| unconfirmed | nothing could be matched at up to three points | stop the batch |
+
+The 500 um tolerance sits between the two things it has to separate: a refined alignment's
+own residual was 20-40 um on every slide of that run, and the failure being caught was
+millimetres. It is also about one and a half 20x fields, so anything inside it still images
+the intended tissue.
+
+**Unconfirmed stops the run too, and that is deliberate.** A slide displaced by more than a
+field lands on its label or on bare glass, where there is nothing to match -- so the gross
+case can only ever present as "no match". But a blank or badly defocused field looks
+identical, which is why up to three points are tried before concluding it, and why the
+dialog tells you which outcome you got. If the live image is in focus and on tissue when it
+stops, the stage is not where it reports.
+
+`warn` measures and reports but acquires anyway. Use it for the first few runs on a rig if
+you would rather see the numbers before letting the check stop anything.
+
+Costs roughly a minute per slide, against acquisitions of several hours. Only the first
+region of each slide is checked, not every region.
+
+A stopped batch does not resume: every remaining slide was aligned in the same frame, so
+they are suspect for the same reason. Set the slides up again.
+
 ### Focus surface (experimental)
 
 | Property | Value |

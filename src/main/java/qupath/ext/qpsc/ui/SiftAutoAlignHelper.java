@@ -60,7 +60,7 @@ public final class SiftAutoAlignHelper {
     private SiftAutoAlignHelper() {}
 
     /**
-     * Performs SIFT auto-alignment against the given tile.
+     * Performs SIFT auto-alignment against the given tile, and moves the stage onto it.
      *
      * <p>Side-effects: stops live view, takes a snapshot via the server,
      * moves the stage by the matched offset, restores live view.
@@ -76,6 +76,43 @@ public final class SiftAutoAlignHelper {
      *     return null rather than throwing.
      */
     public static double[] autoAlign(QuPathGUI gui, PathObject tile) throws Exception {
+        return match(gui, tile, true);
+    }
+
+    /**
+     * Measures the SIFT offset for a tile WITHOUT moving the stage.
+     *
+     * <p>For checking an alignment rather than applying one. The caller gets the same
+     * numbers {@link #autoAlign} would act on and decides what they mean -- which is the
+     * point: a tile that matched during setup and cannot be matched now, or matches at a
+     * large offset, says the coordinates no longer describe the sample.
+     *
+     * <p>This is the only check that can see a stage that did not travel as far as it was
+     * told. An open-loop controller reports the count it was given, so the reported
+     * position agrees with the commanded one whether or not the stage followed, and a slip
+     * during a move leaves no discontinuity. Confirming against the SAMPLE is the only
+     * external reference available to us.
+     *
+     * <p>Shares one body with {@link #autoAlign} so the measurement cannot drift between
+     * the two uses.
+     *
+     * @param gui  QuPath GUI (for accessing the image server and project entry)
+     * @param tile the tile to match against
+     * @return {@code [offsetX, offsetY, inliers, confidence]}, or {@code null} when the
+     *     server could not match. The offset is the raw server offset in the WSI-entry
+     *     frame, pointing FROM the tile TO where the camera actually is.
+     * @throws Exception on a low-level error (server I/O, missing pixel calibration)
+     */
+    public static double[] measureOffsetWithoutMoving(QuPathGUI gui, PathObject tile) throws Exception {
+        return match(gui, tile, false);
+    }
+
+    /**
+     * The shared body: capture, match, and move only when asked.
+     *
+     * @param moveStage true to apply the matched offset, false to measure only
+     */
+    private static double[] match(QuPathGUI gui, PathObject tile, boolean moveStage) throws Exception {
 
         var imageData = gui.getImageData();
         if (imageData == null) throw new IllegalStateException("No image data available");
@@ -308,7 +345,11 @@ public final class SiftAutoAlignHelper {
                     String.format("%.1f", currentPos[1]),
                     String.format("%.1f", newX),
                     String.format("%.1f", newY));
-            mc.moveStageXY(newX, newY);
+            if (moveStage) {
+                mc.moveStageXY(newX, newY);
+            } else {
+                logger.info("SIFT measure-only: not moving the stage (checking the alignment, not applying it)");
+            }
 
             return new double[] {offsetX, offsetY, inliers, confidence};
 
