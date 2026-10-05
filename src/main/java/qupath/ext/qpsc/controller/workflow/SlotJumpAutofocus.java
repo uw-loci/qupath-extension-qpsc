@@ -212,7 +212,7 @@ public final class SlotJumpAutofocus {
         try {
             MicroscopeSocketClient.StreamingFocusResult narrow =
                     client.streamingFocus(configPath, null, modality, narrowRangeUm);
-            if (narrow != null && narrow.status == MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
+            if (narrow.status == MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
                 logger.info(
                         "Alignment-check focus: narrow {} um search succeeded, z {} -> {}",
                         String.format("%.0f", narrowRangeUm),
@@ -224,7 +224,7 @@ public final class SlotJumpAutofocus {
                     "Alignment-check focus: narrow {} um search did not succeed ({}); trying the "
                             + "retract-and-approach scan",
                     String.format("%.0f", narrowRangeUm),
-                    narrow == null ? "no result" : narrow.status);
+                    narrow.status);
         } catch (Exception e) {
             logger.warn("Alignment-check focus: narrow search failed ({}); trying the approach scan", e.getMessage());
         }
@@ -248,16 +248,14 @@ public final class SlotJumpAutofocus {
                     plan.safeZUm(),
                     plan.approachMaxUm(),
                     plan.requireTissueGate());
-            if (approach != null && approach.status == MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
+            if (approach.status == MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
                 logger.info(
                         "Alignment-check focus: approach scan succeeded, z {} -> {}",
                         String.format("%.2f", approach.initialZ),
                         String.format("%.2f", approach.finalZ));
                 return approach.finalZ;
             }
-            logger.warn(
-                    "Alignment-check focus: approach scan did not succeed ({})",
-                    approach == null ? "no result" : approach.status);
+            logger.warn("Alignment-check focus: approach scan did not succeed ({})", approach.status);
         } catch (Exception e) {
             logger.warn("Alignment-check focus: approach scan failed ({})", e.getMessage());
         }
