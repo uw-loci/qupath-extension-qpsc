@@ -195,15 +195,21 @@ public final class SlotJumpAutofocus {
      * the objective the whole way toward the sample along a path nobody watches, which is
      * why it is measured rather than assumed. Unlicensed, the narrow failure stands.
      *
+     * <p>Neither range is chosen here. The narrow scan passes no override, so the server uses
+     * {@code sweep_range_um} from {@code autofocus_<scope>.yml} -- the same value every other
+     * narrow drift check on this rig uses, and the one an operator tunes when the stage
+     * changes. The approach distance comes from the Focus Approach Validation measurement. A
+     * range invented in Java would be a third, invisible answer to a question the
+     * configuration already answers.
+     *
      * <p>Lives here rather than in the caller so the licensing rule has one home.
      *
-     * @param configPath     server-side microscope config path
-     * @param modality       modality the server resolves autofocus settings by
-     * @param objective      objective id, for the approach licence
-     * @param narrowRangeUm  range for the first attempt
+     * @param configPath server-side microscope config path
+     * @param modality   modality the server resolves autofocus settings by
+     * @param objective  objective id, for the approach licence
      * @return the focused Z (um) if either attempt succeeded, else null
      */
-    static Double focusForAlignmentCheck(String configPath, String modality, String objective, double narrowRangeUm) {
+    static Double focusForAlignmentCheck(String configPath, String modality, String objective) {
         if (configPath == null || configPath.isBlank() || modality == null || modality.isBlank()) {
             return null;
         }
@@ -211,19 +217,19 @@ public final class SlotJumpAutofocus {
 
         try {
             MicroscopeSocketClient.StreamingFocusResult narrow =
-                    client.streamingFocus(configPath, null, modality, narrowRangeUm);
+                    // Double.NaN = no override, so the server uses sweep_range_um from the
+                    // autofocus YAML. It logs the value it picked, so the log still says what ran.
+                    client.streamingFocus(configPath, null, modality, Double.NaN);
             if (narrow.status == MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
                 logger.info(
-                        "Alignment-check focus: narrow {} um search succeeded, z {} -> {}",
-                        String.format("%.0f", narrowRangeUm),
+                        "Alignment-check focus: narrow search succeeded, z {} -> {}",
                         String.format("%.2f", narrow.initialZ),
                         String.format("%.2f", narrow.finalZ));
                 return narrow.finalZ;
             }
             logger.warn(
-                    "Alignment-check focus: narrow {} um search did not succeed ({}); trying the "
+                    "Alignment-check focus: narrow search did not succeed ({}); trying the "
                             + "retract-and-approach scan",
-                    String.format("%.0f", narrowRangeUm),
                     narrow.status);
         } catch (Exception e) {
             logger.warn("Alignment-check focus: narrow search failed ({}); trying the approach scan", e.getMessage());

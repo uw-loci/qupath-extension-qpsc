@@ -57,13 +57,24 @@ public final class AlignmentVerification {
     /**
      * How far the camera may sit from the matched point before the alignment is called wrong.
      *
-     * <p>Sized between the two things it must separate. A refined alignment's own residual
-     * was 20-40 um on every slide of the 2026-10-02 run (SIFT point-2 offsets of (20.8, 8.0),
-     * (-21.6, 21.1) and (36.3, -3.9) um), and the failure being caught was millimetres. 500 um
-     * is an order of magnitude above the former and an order below the latter, and is also
-     * about one and a half 20x fields, so anything under it still images the intended tissue.
+     * <p>Derived from the camera field rather than chosen: one field DIAGONAL, computed from
+     * the FOV the config already supplies for the modality, objective and detector in use. The
+     * criterion is then physical instead of numeric -- beyond one diagonal, the field the
+     * acquisition would image does not overlap the field the alignment intended at all, so the
+     * tissue is simply not there. It also scales with the objective for free, where a constant
+     * tuned at 20x would be wrong at 10x and wrong again at 40x.
+     *
+     * <p>Comfortably clear of both things it must separate: the refined alignments on the
+     * 2026-10-02 run sat 20-40 um out, and the failure being caught was millimetres. At 20x on
+     * PPM (357.5 x 267.4 um) this works out near 446 um.
+     *
+     * @param fovWidthUm  camera field width (um), from the microscope config
+     * @param fovHeightUm camera field height (um), from the microscope config
+     * @return the tolerance in um
      */
-    public static final double MAX_OFFSET_UM = 500.0;
+    public static double toleranceUm(double fovWidthUm, double fovHeightUm) {
+        return Math.hypot(fovWidthUm, fovHeightUm);
+    }
 
     /**
      * Minimum match confidence to treat the offset as a measurement rather than a guess.
@@ -76,16 +87,6 @@ public final class AlignmentVerification {
 
     /** How many points to try before concluding nothing can be matched. */
     private static final int MAX_ATTEMPTS = 3;
-
-    /**
-     * Search range (um) for the refocus before each match.
-     *
-     * <p>Correcting drift since the slide was aligned, not hunting for focus from scratch.
-     * 100 um is several times the slide-to-slide focus spread measured across one carrier
-     * (236 um over four slides, so about 60 um between neighbours) while staying far short
-     * of the 693 um approach-from-safe-Z scan, which costs most of a minute.
-     */
-    private static final double REFOCUS_RANGE_UM = 100.0;
 
     public enum Status {
         /** Matched, and the alignment is good. */
@@ -205,6 +206,7 @@ public final class AlignmentVerification {
                     "The macro image has no pixel-size calibration, so it cannot be matched against the camera.");
         }
 
+        double maxOffsetUm = toleranceUm(fovWidthUm, fovHeightUm);
         List<double[]> points = candidatePoints(annotation.getROI());
         double patchW = fovWidthUm / pixelSize;
         double patchH = fovHeightUm / pixelSize;
@@ -251,7 +253,7 @@ public final class AlignmentVerification {
                 }
 
                 double[] measurement = SiftAutoAlignHelper.measureOffsetWithoutMoving(gui, patch);
-                Status status = judge(measurement, MAX_OFFSET_UM);
+                Status status = judge(measurement, maxOffsetUm);
                 if (status == Status.INCONCLUSIVE) {
                     logger.warn(
                             "Alignment check {}/{}: no usable match at this point{}",
@@ -275,8 +277,9 @@ public final class AlignmentVerification {
                             attempt,
                             String.format(
                                     "Alignment confirmed against the sample: %.0f um off, within the %.0f um "
-                                            + "tolerance (%d inliers, confidence %.3f).",
-                                    offset, MAX_OFFSET_UM, inliers, confidence),
+                                            + "tolerance of one camera field diagonal (%d inliers, "
+                                            + "confidence %.3f).",
+                                    offset, maxOffsetUm, inliers, confidence),
                             focusedZUm);
                 }
                 return new Verdict(
@@ -287,9 +290,10 @@ public final class AlignmentVerification {
                         attempt,
                         String.format(
                                 "The sample is %.0f um from where this slide's alignment says it is, which is "
-                                        + "beyond the %.0f um tolerance (%d inliers, confidence %.3f). Acquiring "
-                                        + "now would image the wrong part of the slide.",
-                                offset, MAX_OFFSET_UM, inliers, confidence),
+                                        + "beyond the %.0f um tolerance -- one camera field diagonal, so the intended "
+                                        + "tissue is not in frame at all (%d inliers, confidence %.3f). "
+                                        + "Acquiring now would image the wrong part of the slide.",
+                                offset, maxOffsetUm, inliers, confidence),
                         focusedZUm);
             } catch (Exception e) {
                 logger.warn("Alignment check {} could not be completed: {}", attempt, e.getMessage());
@@ -322,8 +326,8 @@ public final class AlignmentVerification {
      * alignment ran autofocus before matching; so must the check that re-tests it, or the
      * two are not comparing like with like.
      *
-     * <p>Narrow search first, because the correction wanted is drift of tens of microns
-     * rather than a fresh hunt for focus. Only if that fails does
+     * <p>Narrow search first, at the {@code sweep_range_um} the autofocus YAML already
+     * declares for this rig. Only if that fails does
      * {@link SlotJumpAutofocus#focusForAlignmentCheck} escalate to the retract-and-approach
      * scan, and only where a Focus Approach Validation licenses it for this combination.
      *
@@ -347,7 +351,7 @@ public final class AlignmentVerification {
             logger.debug("Alignment check: no microscope config path, matching at the stored Z");
             return null;
         }
-        return SlotJumpAutofocus.focusForAlignmentCheck(configPath, modalityForServer, objectiveId, REFOCUS_RANGE_UM);
+        return SlotJumpAutofocus.focusForAlignmentCheck(configPath, modalityForServer, objectiveId);
     }
 
     /**

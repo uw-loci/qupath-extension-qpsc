@@ -1321,14 +1321,18 @@ Three outcomes, because a failure to match and a measured disagreement are diffe
 
 | outcome | meaning | `halt` behaviour |
 |---|---|---|
-| confirmed | matched within 500 um | acquire |
-| misaligned | matched, but further than 500 um away | stop the batch, reporting the distance |
+| confirmed | matched within one camera field diagonal | acquire |
+| misaligned | matched, but further than that | stop the batch, reporting the distance |
 | unconfirmed | nothing could be matched at up to three points | stop the batch |
 
-The 500 um tolerance sits between the two things it has to separate: a refined alignment's
-own residual was 20-40 um on every slide of that run, and the failure being caught was
-millimetres. It is also about one and a half 20x fields, so anything inside it still images
-the intended tissue.
+**The tolerance is not a setting, it is the camera field.** One field diagonal, computed
+from the FOV the microscope config already declares for the modality, objective and
+detector in use -- about 446 um at 20x on PPM (357.5 x 267.4 um). The criterion is physical
+rather than numeric: beyond one diagonal, the field the acquisition would image does not
+overlap the field the alignment intended, so the tissue is not there at all. It also scales
+with the objective, where a fixed number tuned at 20x would be wrong at 10x. For scale, the
+refined alignments on that run sat 20-40 um out and the failure being caught was
+millimetres.
 
 **Unconfirmed stops the run too, and that is deliberate.** A slide displaced by more than a
 field lands on its label or on bare glass, where there is nothing to match -- so the gross
@@ -1344,10 +1348,12 @@ you would rather see the numbers before letting the check stop anything.
 Z is measured during setup and would otherwise be used up to thirty hours later; drift over
 that interval leaves the field blurred, and a blurred field yields few features -- which
 this check would read as "nothing could be matched" and stop the run on. So it focuses
-first: a narrow 100 um search, escalating to the retract-and-approach scan only if that
-fails and only where a Focus Approach Validation licenses it on that objective. A focus
-failure never decides the verdict on its own; the match is attempted anyway, because a
-failed autofocus is not evidence about the alignment.
+first: a narrow search at the `sweep_range_um` already declared in
+`autofocus_<scope>.yml` (30 um on PPM -- the same value every other narrow drift check on
+the rig uses, and the one you tune when the stage changes), escalating to the
+retract-and-approach scan only if that fails and only where a Focus Approach Validation
+licenses it on that objective. A focus failure never decides the verdict on its own; the
+match is attempted anyway, because a failed autofocus is not evidence about the alignment.
 
 Whatever Z it ends up focusing at becomes the seed for the acquisition's first tile,
 replacing the setup-pass value. Having just measured focus at a point inside the region,

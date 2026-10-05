@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.within;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -24,6 +25,9 @@ class AlignmentVerificationTest {
         AlignmentVerificationGate.clear();
     }
 
+    /** PPM at 20x: 357.5 x 267.4 um, so one field diagonal. Read from config at runtime. */
+    private static final double PPM_20X_TOLERANCE = AlignmentVerification.toleranceUm(357.4848, 267.4208);
+
     /** A server match: offset X, offset Y, inliers, confidence. */
     private static double[] match(double dx, double dy, int inliers, double confidence) {
         return new double[] {dx, dy, inliers, confidence};
@@ -36,23 +40,23 @@ class AlignmentVerificationTest {
     @Test
     void aCloseConfidentMatchConfirmsTheAlignment() {
         // The refined residuals actually measured on 2026-10-02: 20-40 um on every slide.
-        assertThat(AlignmentVerification.judge(match(20.8, 8.0, 269, 0.996), AlignmentVerification.MAX_OFFSET_UM))
+        assertThat(AlignmentVerification.judge(match(20.8, 8.0, 269, 0.996), PPM_20X_TOLERANCE))
                 .isEqualTo(Status.CONFIRMED);
-        assertThat(AlignmentVerification.judge(match(36.3, -3.9, 1019, 0.999), AlignmentVerification.MAX_OFFSET_UM))
+        assertThat(AlignmentVerification.judge(match(36.3, -3.9, 1019, 0.999), PPM_20X_TOLERANCE))
                 .isEqualTo(Status.CONFIRMED);
     }
 
     @Test
     void aWeakButConfidentMatchStillCounts() {
         // 91 inliers at 0.958 was the weakest real match in that run, and it was correct.
-        assertThat(AlignmentVerification.judge(match(-49.5, -60.6, 91, 0.958), AlignmentVerification.MAX_OFFSET_UM))
+        assertThat(AlignmentVerification.judge(match(-49.5, -60.6, 91, 0.958), PPM_20X_TOLERANCE))
                 .isEqualTo(Status.CONFIRMED);
     }
 
     @Test
     void aDistantConfidentMatchIsMisalignment() {
         // Matched, so the number is believed: the slide is 3 mm from where it should be.
-        assertThat(AlignmentVerification.judge(match(3000, 0, 800, 0.999), AlignmentVerification.MAX_OFFSET_UM))
+        assertThat(AlignmentVerification.judge(match(3000, 0, 800, 0.999), PPM_20X_TOLERANCE))
                 .isEqualTo(Status.MISALIGNED);
     }
 
@@ -68,17 +72,16 @@ class AlignmentVerificationTest {
     void noMatchAtAllIsInconclusiveNotMisaligned() {
         // This is the slide-4 case: nothing recognisable under the objective. It must not be
         // reported as a measurement, because no distance was measured.
-        assertThat(AlignmentVerification.judge(null, AlignmentVerification.MAX_OFFSET_UM))
-                .isEqualTo(Status.INCONCLUSIVE);
+        assertThat(AlignmentVerification.judge(null, PPM_20X_TOLERANCE)).isEqualTo(Status.INCONCLUSIVE);
     }
 
     @Test
     void aLowConfidenceMatchIsInconclusiveEitherWay() {
         // Believing it would stop a run on a number we do not trust; dismissing it would
         // clear an alignment on the same number. Neither is honest.
-        assertThat(AlignmentVerification.judge(match(5, 5, 12, 0.4), AlignmentVerification.MAX_OFFSET_UM))
+        assertThat(AlignmentVerification.judge(match(5, 5, 12, 0.4), PPM_20X_TOLERANCE))
                 .isEqualTo(Status.INCONCLUSIVE);
-        assertThat(AlignmentVerification.judge(match(9000, 0, 12, 0.4), AlignmentVerification.MAX_OFFSET_UM))
+        assertThat(AlignmentVerification.judge(match(9000, 0, 12, 0.4), PPM_20X_TOLERANCE))
                 .isEqualTo(Status.INCONCLUSIVE);
     }
 
@@ -241,5 +244,38 @@ class AlignmentVerificationTest {
         // the whole way toward the sample, which is why it is licensed rather than assumed.
         assertThat(body).contains("if (!plan.enabled())");
         assertThat(body.indexOf("if (!plan.enabled())")).isLessThan(body.indexOf("plan.safeZUm()"));
+    }
+
+    // ----------------------------------------------------------------------
+    // nothing about the tolerance or the focus range is invented in Java
+    // ----------------------------------------------------------------------
+
+    @Test
+    void theToleranceIsOneCameraFieldDiagonal() {
+        // Physical criterion, not a tuned number: beyond one diagonal the field the
+        // acquisition would image does not overlap the one the alignment intended.
+        assertThat(AlignmentVerification.toleranceUm(357.4848, 267.4208)).isCloseTo(446.4, within(0.5));
+        // And it scales with the objective, which a constant could not.
+        assertThat(AlignmentVerification.toleranceUm(714.97, 534.84))
+                .as("10x sees twice the field, so tolerates twice the offset")
+                .isCloseTo(892.8, within(1.0));
+    }
+
+    @Test
+    void noSearchRangeOrToleranceConstantIsHardcoded() throws Exception {
+        // The autofocus YAML already declares sweep_range_um, and the config already declares
+        // the FOV. A number here would be a second, invisible answer to the same question.
+        String src = Files.readString(
+                Path.of("src/main/java/qupath/ext/qpsc/controller/workflow/AlignmentVerification.java"));
+        assertThat(src).doesNotContain("REFOCUS_RANGE_UM").doesNotContain("MAX_OFFSET_UM");
+        assertThat(src).contains("Math.hypot(fovWidthUm, fovHeightUm)");
+
+        String slotJump =
+                Files.readString(Path.of("src/main/java/qupath/ext/qpsc/controller/workflow/SlotJumpAutofocus.java"));
+        int m = slotJump.indexOf("static Double focusForAlignmentCheck(");
+        assertThat(m).isGreaterThan(0);
+        String body = slotJump.substring(m, m + 3200);
+        // No override, so the server reads sweep_range_um from autofocus_<scope>.yml.
+        assertThat(body).contains("streamingFocus(configPath, null, modality, Double.NaN)");
     }
 }

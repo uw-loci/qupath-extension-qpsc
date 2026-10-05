@@ -438,15 +438,18 @@ Drive the stage roughly close (a few hundred microns is enough) using the joysti
 
 **A:** Before each slide in an unattended multi-slide acquire pass, the system
 verifies the stored alignment by matching the camera against the macro image. If
-the match fails or disagrees by more than 500 µm, the batch stops because every
-slide was aligned in the same frame.
+the match fails, or disagrees by more than one camera field diagonal, the batch
+stops -- every slide was aligned in the same frame, so one failing means the rest
+are suspect.
 
 **What the message means depends on the outcome:**
 
-- **"Alignment confirmed against the sample: ... within the 500 µm tolerance"** —
-  Proceed normally; acquired data will be correctly positioned.
+- **"Alignment confirmed against the sample: NN µm off, within the ... µm
+  tolerance of one camera field diagonal"** — Proceed normally. The NN value is
+  worth noting: it is how far the frame moved between this slide's alignment and
+  its acquisition.
 - **"The sample is ... from where this slide's alignment says it is, ... beyond the
-  500 µm tolerance"** — A *measurement*: the camera matched, but at a distance
+  field-diagonal tolerance"** — A *measurement*: the camera matched, but at a distance
   too large to be noise. The sample is not where this alignment says it is. Set
   the slides up again before acquiring.
 - **"The camera could not be matched to the macro image at any of ... points on

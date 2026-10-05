@@ -40,7 +40,7 @@ All commands are **8-byte ASCII strings**, padded with underscores:
 **Simple command (no payload):**
 ```
 Client: [8-byte command]
-Server: [8-byte response]
+Server: [response; its size depends on the command, see Command Reference]
 ```
 
 **Command with string payload:**
@@ -80,6 +80,8 @@ sequenceDiagram
         S->>C: error message (UTF-8)
     else Blocked
         S->>C: "CFG_BLCK" (8 bytes)
+        S->>C: message length (4 bytes)
+        S->>C: message (UTF-8)
         Note over S: Another client already connected
     end
 ```
@@ -90,14 +92,14 @@ sequenceDiagram
 
 | Command | Wire Format | Payload | Response |
 |---------|------------|---------|----------|
-| GETXY | `getxy___` | none | 16 bytes: X,Y as big-endian doubles |
-| GETZ | `getz____` | none | 8 bytes: Z as big-endian double |
-| GETXYZ | `getxyz__` | none | 24 bytes: X,Y,Z as big-endian doubles |
-| MOVE | `move____` | 16 bytes: X,Y doubles | 8-byte ack |
-| MOVEZ | `move_z__` | 8 bytes: Z double | 8-byte ack |
-| MOVEXYZ | `movexyz_` | 24 bytes: X,Y,Z doubles | 8-byte ack |
-| MOVER | `move_r__` | 8 bytes: angle double | 8-byte ack |
-| GETR | `getr____` | none | 8 bytes: angle double |
+| GETXY | `getxy___` | none | 8 bytes: X,Y as big-endian 32-bit floats (`HW_ERROR` on a hardware error) |
+| GETZ | `getz____` | none | 4 bytes: Z as a big-endian 32-bit float |
+| GETXYZ | `getxyz__` | none | 12 bytes: X,Y,Z as big-endian 32-bit floats |
+| MOVE | `move____` | 8 bytes: X,Y floats | none |
+| MOVEZ | `move_z__` | 4 bytes: Z float | none |
+| MOVEXYZ | `movexyz_` | 12 bytes: X,Y,Z floats | none |
+| MOVER | `move_r__` | 4 bytes: angle float | none |
+| GETR | `getr____` | none | 4 bytes: angle as a big-endian 32-bit float (NaN if there is no rotation stage) |
 
 ### Acquisition
 
@@ -106,8 +108,8 @@ sequenceDiagram
 | ACQUIRE | `acquire_` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
 | BGACQUIRE | `bgacquir` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
 | STATUS | `status__` | none | status string |
-| PROGRESS | `progress` | none | progress string |
-| CANCEL | `cancel__` | none | 8-byte ack |
+| PROGRESS | `progress` | none | 8 bytes: images done and images total as two big-endian unsigned 32-bit integers |
+| CANCEL | `cancel__` | none | `ACK` (3 bytes) |
 
 ### Acquisition Monitoring Poll Commands
 
@@ -605,8 +607,8 @@ See `handlers/streaming_focus.py` for the implementation.
 | CONFIG | `config__` | path length + path | CFG___OK/CFG_FAIL/CFG_BLCK |
 | SHUTDOWN | `shutdown` | none | none (server exits) |
 | DISCONNECT | `quitclnt` | none | none (close connection) |
-| GETPXSZ | `getpxsz_` | none | 8 bytes: pixel size double |
-| GETFOV | `getfov__` | none | 16 bytes: FOV X,Y doubles |
+| GETPXSZ | `getpxsz_` | none | 4 bytes: pixel size as a big-endian 32-bit float (0 before CONFIG or on error) |
+| GETFOV | `getfov__` | none | 8 bytes: FOV X,Y as big-endian 32-bit floats (-1,-1 before CONFIG or on error) |
 | GETLOG | `getlog__` | none | 4-byte big-endian length + UTF-8 bytes (or 0 for no active log) |
 
 #### GETLOG

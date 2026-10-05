@@ -499,14 +499,16 @@ matching against the sample can.
 
 | Outcome | Meaning | Action |
 |---------|---------|--------|
-| **Confirmed** | Matched within 500 µm tolerance | Acquire normally |
-| **Misaligned** | Matched, but further than 500 µm away | Stop the batch; the sample is not where this alignment says it is |
+| **Confirmed** | Matched within one camera field diagonal | Acquire normally |
+| **Misaligned** | Matched, but further than one field diagonal away | Stop the batch; the sample is not where this alignment says it is |
 | **Unconfirmed** | Could not match at any of three points | Stop the batch; nothing recognisable is under the objective (consistent with a large displacement, but also with a blank or badly defocused field) |
 
-The 500 µm tolerance sits between the two things it must separate: a refined
-alignment's typical residual is 20–40 µm, and a failure being caught was
-millimetres. It is also about one and a half 20x fields, so anything under it
-still images the intended tissue.
+The tolerance is one camera field diagonal, computed from the FOV the microscope
+config declares for the objective in use -- about 446 µm at 20x on PPM. Beyond one
+diagonal the field the acquisition would image does not overlap the field the
+alignment intended, so the tissue is not there at all; and it scales with the
+objective, where a fixed number tuned at 20x would be wrong at 10x. For scale, a
+refined alignment's residual on that run was 20-40 µm.
 
 **When the batch stops.** Both MISALIGNED and UNCONFIRMED stop the run, because
 every slide in the batch was aligned in the same frame. One slide failing to
