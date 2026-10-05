@@ -95,15 +95,15 @@ class AlignmentVerificationTest {
 
     @Test
     void bothFailureKindsStopTheRunAndSuccessDoesNot() {
-        assertThat(new Verdict(Status.CONFIRMED, 20, 800, 0.99, 1, "").shouldStop())
+        assertThat(Verdict.of(Status.CONFIRMED, 20, 800, 0.99, 1, "").shouldStop())
                 .isFalse();
-        assertThat(new Verdict(Status.SKIPPED, Double.NaN, 0, 0, 0, "").shouldStop())
+        assertThat(Verdict.of(Status.SKIPPED, Double.NaN, 0, 0, 0, "").shouldStop())
                 .isFalse();
-        assertThat(new Verdict(Status.MISALIGNED, 3000, 800, 0.99, 1, "").shouldStop())
+        assertThat(Verdict.of(Status.MISALIGNED, 3000, 800, 0.99, 1, "").shouldStop())
                 .isTrue();
         // Unconfirmed stops too. Not stopping here would miss the only case that produced
         // thirty hours of slide label, since a slide that far off cannot be matched.
-        assertThat(new Verdict(Status.INCONCLUSIVE, Double.NaN, 0, 0, 3, "").shouldStop())
+        assertThat(Verdict.of(Status.INCONCLUSIVE, Double.NaN, 0, 0, 3, "").shouldStop())
                 .isTrue();
     }
 
@@ -115,7 +115,7 @@ class AlignmentVerificationTest {
     void theGateStartsOpenAndRemembersTheFirstFailure() {
         assertThat(AlignmentVerificationGate.isBlocked()).isFalse();
 
-        Verdict first = new Verdict(Status.MISALIGNED, 3000, 800, 0.99, 1, "first failure");
+        Verdict first = Verdict.of(Status.MISALIGNED, 3000, 800, 0.99, 1, "first failure");
         AlignmentVerificationGate.record("PDAC_2", first);
         assertThat(AlignmentVerificationGate.isBlocked()).isTrue();
         assertThat(AlignmentVerificationGate.reason()).contains("PDAC_2").contains("first failure");
@@ -123,14 +123,14 @@ class AlignmentVerificationTest {
 
         // A later slide must not overwrite the first explanation: the operator needs to know
         // which slide stopped the batch, not which one failed last.
-        AlignmentVerificationGate.record("PDAC_3", new Verdict(Status.INCONCLUSIVE, Double.NaN, 0, 0, 3, "second"));
+        AlignmentVerificationGate.record("PDAC_3", Verdict.of(Status.INCONCLUSIVE, Double.NaN, 0, 0, 3, "second"));
         assertThat(AlignmentVerificationGate.reason()).contains("PDAC_2");
         assertThat(AlignmentVerificationGate.lastVerdict()).isSameAs(first);
     }
 
     @Test
     void onlyAnExplicitClearReopensTheGate() {
-        AlignmentVerificationGate.record("PDAC_4", new Verdict(Status.INCONCLUSIVE, Double.NaN, 0, 0, 3, "x"));
+        AlignmentVerificationGate.record("PDAC_4", Verdict.of(Status.INCONCLUSIVE, Double.NaN, 0, 0, 3, "x"));
         assertThat(AlignmentVerificationGate.isBlocked()).isTrue();
         AlignmentVerificationGate.clear();
         assertThat(AlignmentVerificationGate.isBlocked()).isFalse();
@@ -196,5 +196,50 @@ class AlignmentVerificationTest {
         // Both passes clear it when the operator deliberately starts again.
         assertThat(src.split("AlignmentVerificationGate\\.clear\\(\\);", -1).length - 1)
                 .isEqualTo(2);
+    }
+
+    // ----------------------------------------------------------------------
+    // the Z the check measures becomes the acquisition's baseline
+    // ----------------------------------------------------------------------
+
+    @Test
+    void aVerdictCarriesTheFocusItMeasured() {
+        // Needed on EVERY outcome, not just failures: a confirmed slide that was refocused
+        // must still hand the fresh Z to the tile loop.
+        Verdict confirmed = new Verdict(Status.CONFIRMED, 25, 900, 0.998, 1, "ok", -405.6);
+        assertThat(confirmed.focusedZUm()).isEqualTo(-405.6);
+        assertThat(Verdict.of(Status.CONFIRMED, 25, 900, 0.998, 1, "ok").focusedZUm())
+                .as("no refocus happened, so there is nothing to adopt")
+                .isNull();
+    }
+
+    @Test
+    void theAcquisitionAdoptsTheMeasuredZRatherThanTheStoredOne() throws Exception {
+        String src = Files.readString(Path.of("src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java"));
+        // state.seedZ seeds the first tile's autofocus. After refocusing at a point inside
+        // this region, the setup-pass value is the stale one.
+        int verify = src.indexOf("AlignmentVerification.verify(");
+        assertThat(verify).isGreaterThan(0);
+        String after = src.substring(verify, verify + 1600);
+        assertThat(after).contains("verdict.focusedZUm()");
+        assertThat(after).contains("state.seedZ = verdict.focusedZUm();");
+        // Adopted before the stop decision, so a confirmed slide benefits too.
+        assertThat(after.indexOf("state.seedZ = verdict.focusedZUm();"))
+                .isLessThan(after.indexOf("verdict.shouldStop()"));
+    }
+
+    @Test
+    void focusEscalatesOnlyWhereTheApproachIsLicensed() throws Exception {
+        String src =
+                Files.readString(Path.of("src/main/java/qupath/ext/qpsc/controller/workflow/SlotJumpAutofocus.java"));
+        int m = src.indexOf("static Double focusForAlignmentCheck(");
+        assertThat(m).isGreaterThan(0);
+        String body = src.substring(m, m + 3200);
+        // Narrow first.
+        assertThat(body.indexOf("narrowRangeUm)")).isLessThan(body.indexOf("resolveApproachPlan("));
+        // And the approach only when measured for this combination: it drives the objective
+        // the whole way toward the sample, which is why it is licensed rather than assumed.
+        assertThat(body).contains("if (!plan.enabled())");
+        assertThat(body.indexOf("if (!plan.enabled())")).isLessThan(body.indexOf("plan.safeZUm()"));
     }
 }

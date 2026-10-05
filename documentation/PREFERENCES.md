@@ -1340,6 +1340,19 @@ stops, the stage is not where it reports.
 `warn` measures and reports but acquires anyway. Use it for the first few runs on a rig if
 you would rather see the numbers before letting the check stop anything.
 
+**It refocuses before matching, and the acquisition inherits that focus.** The stored focus
+Z is measured during setup and would otherwise be used up to thirty hours later; drift over
+that interval leaves the field blurred, and a blurred field yields few features -- which
+this check would read as "nothing could be matched" and stop the run on. So it focuses
+first: a narrow 100 um search, escalating to the retract-and-approach scan only if that
+fails and only where a Focus Approach Validation licenses it on that objective. A focus
+failure never decides the verdict on its own; the match is attempted anyway, because a
+failed autofocus is not evidence about the alignment.
+
+Whatever Z it ends up focusing at becomes the seed for the acquisition's first tile,
+replacing the setup-pass value. Having just measured focus at a point inside the region,
+handing the tile loop the older number would be passing on a value we know to be worse.
+
 Costs roughly a minute per slide, against acquisitions of several hours. Only the first
 region of each slide is checked, not every region.
 

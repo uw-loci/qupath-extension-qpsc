@@ -186,6 +186,85 @@ public final class SlotJumpAutofocus {
     }
 
     /**
+     * Focuses for the pre-acquisition alignment check, escalating only if it has to.
+     *
+     * <p>Narrow search first, because the correction wanted is drift since the slide was
+     * aligned rather than a fresh hunt: it is quick and it cannot wander. Only when that
+     * fails does this reach for approach-from-safe-Z, and only when
+     * {@link #resolveApproachPlan} licenses it for this combination -- the approach drives
+     * the objective the whole way toward the sample along a path nobody watches, which is
+     * why it is measured rather than assumed. Unlicensed, the narrow failure stands.
+     *
+     * <p>Lives here rather than in the caller so the licensing rule has one home.
+     *
+     * @param configPath     server-side microscope config path
+     * @param modality       modality the server resolves autofocus settings by
+     * @param objective      objective id, for the approach licence
+     * @param narrowRangeUm  range for the first attempt
+     * @return the focused Z (um) if either attempt succeeded, else null
+     */
+    static Double focusForAlignmentCheck(String configPath, String modality, String objective, double narrowRangeUm) {
+        if (configPath == null || configPath.isBlank() || modality == null || modality.isBlank()) {
+            return null;
+        }
+        MicroscopeSocketClient client = MicroscopeController.getInstance().getSocketClient();
+
+        try {
+            MicroscopeSocketClient.StreamingFocusResult narrow =
+                    client.streamingFocus(configPath, null, modality, narrowRangeUm);
+            if (narrow != null && narrow.status == MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
+                logger.info(
+                        "Alignment-check focus: narrow {} um search succeeded, z {} -> {}",
+                        String.format("%.0f", narrowRangeUm),
+                        String.format("%.2f", narrow.initialZ),
+                        String.format("%.2f", narrow.finalZ));
+                return narrow.finalZ;
+            }
+            logger.warn(
+                    "Alignment-check focus: narrow {} um search did not succeed ({}); trying the "
+                            + "retract-and-approach scan",
+                    String.format("%.0f", narrowRangeUm),
+                    narrow == null ? "no result" : narrow.status);
+        } catch (Exception e) {
+            logger.warn("Alignment-check focus: narrow search failed ({}); trying the approach scan", e.getMessage());
+        }
+
+        ApproachPlan plan = resolveApproachPlan(configPath, modality, objective);
+        if (!plan.enabled()) {
+            logger.warn(
+                    "Alignment-check focus: approach-from-safe-Z is not licensed here ({}), so the narrow "
+                            + "failure stands. The check will match at the Z it has.",
+                    plan.disabledReason());
+            return null;
+        }
+        try {
+            MicroscopeSocketClient.StreamingFocusResult approach = client.streamingFocus(
+                    configPath,
+                    null,
+                    modality,
+                    Double.NaN,
+                    false,
+                    SLOT_JUMP_MAX_AF_ATTEMPTS,
+                    plan.safeZUm(),
+                    plan.approachMaxUm(),
+                    plan.requireTissueGate());
+            if (approach != null && approach.status == MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS) {
+                logger.info(
+                        "Alignment-check focus: approach scan succeeded, z {} -> {}",
+                        String.format("%.2f", approach.initialZ),
+                        String.format("%.2f", approach.finalZ));
+                return approach.finalZ;
+            }
+            logger.warn(
+                    "Alignment-check focus: approach scan did not succeed ({})",
+                    approach == null ? "no result" : approach.status);
+        } catch (Exception e) {
+            logger.warn("Alignment-check focus: approach scan failed ({})", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
      * Licenses approach-from-safe-Z only when a Focus Approach Validation run has measured
      * this combination and still applies.
      *

@@ -6,6 +6,7 @@ import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
@@ -76,6 +77,16 @@ public final class AlignmentVerification {
     /** How many points to try before concluding nothing can be matched. */
     private static final int MAX_ATTEMPTS = 3;
 
+    /**
+     * Search range (um) for the refocus before each match.
+     *
+     * <p>Correcting drift since the slide was aligned, not hunting for focus from scratch.
+     * 100 um is several times the slide-to-slide focus spread measured across one carrier
+     * (236 um over four slides, so about 60 um between neighbours) while staying far short
+     * of the 693 um approach-from-safe-Z scan, which costs most of a minute.
+     */
+    private static final double REFOCUS_RANGE_UM = 100.0;
+
     public enum Status {
         /** Matched, and the alignment is good. */
         CONFIRMED,
@@ -98,7 +109,18 @@ public final class AlignmentVerification {
      * @param message    operator-facing sentence, suitable for a dialog
      */
     public record Verdict(
-            Status status, double offsetUm, int inliers, double confidence, int attempts, String message) {
+            Status status,
+            double offsetUm,
+            int inliers,
+            double confidence,
+            int attempts,
+            String message,
+            Double focusedZUm) {
+
+        /** Convenience for the cases that never focused. */
+        static Verdict of(Status status, double offsetUm, int inliers, double confidence, int attempts, String msg) {
+            return new Verdict(status, offsetUm, inliers, confidence, attempts, msg, null);
+        }
 
         /** True when the run should not continue on this alignment. */
         public boolean shouldStop() {
@@ -148,10 +170,14 @@ public final class AlignmentVerification {
      * @param gui        QuPath GUI, for the macro image and project entry
      * @param annotation the region about to be acquired, used to choose where to look
      * @param transform  the alignment being checked (QuPath full-res to stage)
-     * @param focusZUm   the slide's focus Z from setup, moved to before matching so the
-     *                   camera is not matching a blurred field; null to leave Z alone
+     * @param focusZUm   the slide's focus Z from setup, used as the starting point for the
+     *                   refocus below; null to start from wherever Z is
      * @param fovWidthUm  camera field width (um), for the size of the matched patch
      * @param fovHeightUm camera field height (um)
+     * @param modalityForServer modality name the server resolves autofocus settings by, or
+     *                   null to skip the refocus and match at the stored Z
+     * @param objectiveId objective id, used to decide whether the escalated
+     *                   approach-from-safe-Z scan is licensed on this rig
      * @return the verdict; never null
      */
     public static Verdict verify(
@@ -160,15 +186,17 @@ public final class AlignmentVerification {
             AffineTransform transform,
             Double focusZUm,
             double fovWidthUm,
-            double fovHeightUm) {
+            double fovHeightUm,
+            String modalityForServer,
+            String objectiveId) {
 
         if (gui == null || annotation == null || annotation.getROI() == null || transform == null) {
-            return new Verdict(Status.SKIPPED, Double.NaN, 0, 0, 0, "Nothing to verify the alignment against.");
+            return Verdict.of(Status.SKIPPED, Double.NaN, 0, 0, 0, "Nothing to verify the alignment against.");
         }
 
         double pixelSize = pixelSizeUm(gui);
         if (!Double.isFinite(pixelSize) || pixelSize <= 0) {
-            return new Verdict(
+            return Verdict.of(
                     Status.SKIPPED,
                     Double.NaN,
                     0,
@@ -183,6 +211,7 @@ public final class AlignmentVerification {
 
         MicroscopeController mc = MicroscopeController.getInstance();
         int attempt = 0;
+        Double focusedZUm = null;
         for (double[] centre : points) {
             if (attempt >= MAX_ATTEMPTS) {
                 break;
@@ -213,6 +242,13 @@ public final class AlignmentVerification {
                 if (focusZUm != null && Double.isFinite(focusZUm)) {
                     mc.moveStageZ(focusZUm);
                 }
+                Double focused = refocusBeforeMatching(modalityForServer, objectiveId);
+                if (focused != null) {
+                    // The acquisition must start from the focus we just MEASURED, not the one
+                    // stored during setup hours ago. Carrying the stale value forward would
+                    // hand the tile loop a seed we have just proved wrong.
+                    focusedZUm = focused;
+                }
 
                 double[] measurement = SiftAutoAlignHelper.measureOffsetWithoutMoving(gui, patch);
                 Status status = judge(measurement, MAX_OFFSET_UM);
@@ -240,7 +276,8 @@ public final class AlignmentVerification {
                             String.format(
                                     "Alignment confirmed against the sample: %.0f um off, within the %.0f um "
                                             + "tolerance (%d inliers, confidence %.3f).",
-                                    offset, MAX_OFFSET_UM, inliers, confidence));
+                                    offset, MAX_OFFSET_UM, inliers, confidence),
+                            focusedZUm);
                 }
                 return new Verdict(
                         status,
@@ -252,7 +289,8 @@ public final class AlignmentVerification {
                                 "The sample is %.0f um from where this slide's alignment says it is, which is "
                                         + "beyond the %.0f um tolerance (%d inliers, confidence %.3f). Acquiring "
                                         + "now would image the wrong part of the slide.",
-                                offset, MAX_OFFSET_UM, inliers, confidence));
+                                offset, MAX_OFFSET_UM, inliers, confidence),
+                        focusedZUm);
             } catch (Exception e) {
                 logger.warn("Alignment check {} could not be completed: {}", attempt, e.getMessage());
             }
@@ -269,7 +307,47 @@ public final class AlignmentVerification {
                                 + "That is what a slide displaced by more than a field looks like -- there is "
                                 + "nothing recognisable under the objective -- but a badly defocused or blank "
                                 + "field looks the same, so this is unconfirmed rather than proven wrong.",
-                        attempt));
+                        attempt),
+                focusedZUm);
+    }
+
+    /**
+     * Brings the field into focus before matching, so defocus cannot masquerade as a
+     * displaced slide.
+     *
+     * <p>The stored focus Z is measured during setup and used up to thirty hours later in a
+     * four-slide batch. Thermal drift over that interval, or any Z shift, leaves the field
+     * blurred -- and a blurred field yields few SIFT features, which this check would read
+     * as "nothing could be matched" and stop the run on. The setup pass that produced the
+     * alignment ran autofocus before matching; so must the check that re-tests it, or the
+     * two are not comparing like with like.
+     *
+     * <p>Narrow search first, because the correction wanted is drift of tens of microns
+     * rather than a fresh hunt for focus. Only if that fails does
+     * {@link SlotJumpAutofocus#focusForAlignmentCheck} escalate to the retract-and-approach
+     * scan, and only where a Focus Approach Validation licenses it for this combination.
+     *
+     * <p><b>Failure is not a verdict.</b> Autofocus can fail for its own reasons -- a blank
+     * field, no tissue under the chosen point -- and letting that halt a batch would make
+     * this check less trustworthy than no check. So a failure is logged and the match is
+     * attempted anyway at the stored Z: if the slide really is where it should be, SIFT can
+     * still succeed, and if it cannot, the next candidate point gets a turn.
+     *
+     * @param modalityForServer modality the server resolves autofocus settings by; null skips
+     * @param objectiveId objective id, for the approach licence
+     * @return the focused Z (um) if focusing succeeded, else null
+     */
+    private static Double refocusBeforeMatching(String modalityForServer, String objectiveId) {
+        if (modalityForServer == null || modalityForServer.isBlank()) {
+            logger.debug("Alignment check: no modality given, matching at the stored Z without refocusing");
+            return null;
+        }
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isBlank()) {
+            logger.debug("Alignment check: no microscope config path, matching at the stored Z");
+            return null;
+        }
+        return SlotJumpAutofocus.focusForAlignmentCheck(configPath, modalityForServer, objectiveId, REFOCUS_RANGE_UM);
     }
 
     /**

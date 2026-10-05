@@ -2298,7 +2298,27 @@ public class ExistingImageWorkflowV2 {
             }
 
             AlignmentVerification.Verdict verdict = AlignmentVerification.verify(
-                    QuPathGUI.getInstance(), state.annotations.get(0), state.transform, state.seedZ, fov[0], fov[1]);
+                    QuPathGUI.getInstance(),
+                    state.annotations.get(0),
+                    state.transform,
+                    state.seedZ,
+                    fov[0],
+                    fov[1],
+                    state.sample != null ? state.sample.modality() : null,
+                    state.sample != null ? state.sample.objective() : null);
+
+            // Adopt the Z the check actually measured. The acquisition seeds its first tile
+            // from state.seedZ, and after a refocus here the setup-pass value is the stale
+            // one -- we have just measured a better answer at a point inside this region.
+            if (verdict.focusedZUm() != null && Double.isFinite(verdict.focusedZUm())) {
+                if (state.seedZ == null || Math.abs(state.seedZ - verdict.focusedZUm()) > 0.5) {
+                    logger.info(
+                            "Alignment check refocused: seed Z for this slide {} -> {} um",
+                            state.seedZ == null ? "(none)" : String.format("%.2f", state.seedZ),
+                            String.format("%.2f", verdict.focusedZUm()));
+                }
+                state.seedZ = verdict.focusedZUm();
+            }
 
             String slide = state.sample != null ? state.sample.sampleName() : "this slide";
             if (!verdict.shouldStop()) {
