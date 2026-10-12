@@ -24,6 +24,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Apply an LC-PolScope calibration to acquisition**
 - The LC-PolScope calibration result dialog has an **Apply to acquisition** button. It writes the calibrated palette into the microscope YAML, so acquisition uses that calibration rather than whatever calibrated the Micro-Manager Channel presets. Each state's LC retardances are written in waves, its stale voltage preset is dropped, `reconstruction.state_order` is reset to the palette's order, and the calibration file, time and extinction ratio are recorded under `reconstruction`. A calibration below an extinction ratio of 80 asks for confirmation first. The server reads the crystals back on the first tile, and derived tiles record `polscope.lc_readback_agrees`. See [UTILITIES.md](documentation/UTILITIES.md#lc-polscope-calibration).
 
+**Switch microscope without restarting QuPath**
+- Changing the Microscope Config File preference now offers a **Switch Microscope** action instead of requiring a restart. The switch disconnects from the command server, reloads the config, rebuilds the QP Scope menu, and reopens the Live Viewer and Stage Map if they were open. Other QP Scope windows are closed, since they describe the previous microscope. It is also available any time from Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope... It is refused during an acquisition, and a file that fails validation is rolled back to the previous configuration. See [PREFERENCES.md](documentation/PREFERENCES.md#microscope-config-file).
+
 ### Fixed
 
 **LC-PolScope calibration dialog shows the LC control mode**
