@@ -23,6 +23,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Setup Wizard shows detectors for configs that list them in the shared resources**
+- Some configs (the LC-PolScope config is one) keep detector definitions in the shared resources file and list only their IDs under `hardware.detectors`. The wizard's Detectors table was empty for these configs. It now shows each listed detector, with its name, camera type, device and sensor size taken from the bundled detector catalog. An ID missing from the catalog still appears in the table, with only its ID filled in, and is logged as a warning.
+
+**Modality submenus no longer repeat when a modality has several names**
+- A modality registered under more than one name (LC-PolScope is registered as both `lcpolscope` and `lcps`) got one QP Scope submenu per name when the config was invalid. Each modality now gets one submenu.
+
 **XYZ and fast Z reads no longer report a hardware error as a position**
 - When the microscope server could not read the stage, `GETXYZ` replied three zeros and `GETZF` one zero, which QPSC took for the stage sitting at the origin. The server now sends `HW_ERROR____` (12 bytes) and `HWERR` (5 bytes) in their place, and QPSC raises a hardware error for both, as it already did for `GETXY` and `GETZ`. Requires the matching microscope server update; against an older server nothing changes, since it never sent the markers.
 
