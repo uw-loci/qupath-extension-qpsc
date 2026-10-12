@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**LC-PolScope calibration dialog shows the LC control mode**
+- The pre-calibration summary now lists the LC control mode from the microscope YAML. A config that sets `MM-Voltage` is marked NOT SUPPORTED, because the microscope server refuses that mode until a retardance/voltage curve is wired up. Calibration failures and dialog errors are also written to the QuPath log, so they reach a bug report and not only the dialog.
+
 **Setup Wizard shows detectors for configs that list them in the shared resources**
 - Some configs (the LC-PolScope config is one) keep detector definitions in the shared resources file and list only their IDs under `hardware.detectors`. The wizard's Detectors table was empty for these configs. It now shows each listed detector, with its name, camera type, device and sensor size taken from the bundled detector catalog. An ID missing from the catalog still appears in the table, with only its ID filled in, and is logged as a warning.
 
