@@ -104,6 +104,22 @@ id_detector:
         flip_y: false
         description: 'JAI 3-CCD prism detector'
 
+    LCPS_DETECTOR_FLIR_ORYX_001:
+        name: 'Oryx ORX-10G-51S5M'
+        manufacturer: 'Teledyne FLIR'
+        camera_type: 'generic'
+        # MM device label is the model string itself (SpinnakerCamera adapter).
+        device: 'Oryx ORX-10G-51S5M'
+        # Sony IMX250 mono, 5.0 MP, 3.45 um pixels. Mono variant: no debayering.
+        width_px: 2448
+        height_px: 2048
+        sensor_pixel_width_um: 3.45
+        sensor_pixel_height_um: 3.45
+        requires_debayering: false
+        flip_x: false
+        flip_y: false
+        description: 'Teledyne FLIR Oryx 10GigE mono, LC-PolScope'
+
 id_objective_lens:
     LOCI_OBJECTIVE_NIKON_20X_001:
         name: '20x Nikon' 
