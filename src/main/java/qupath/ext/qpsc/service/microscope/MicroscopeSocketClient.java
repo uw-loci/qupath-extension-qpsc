@@ -1184,13 +1184,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public double[] getStageXYZ() throws IOException {
         byte[] response = executeCommandOnAux(Command.GETXYZ, null, 12);
-        ByteBuffer buffer = ByteBuffer.wrap(response);
-        buffer.order(ByteOrder.BIG_ENDIAN);
-        double x = buffer.getFloat();
-        double y = buffer.getFloat();
-        double z = buffer.getFloat();
-        logger.trace("Stage XYZ position: ({}, {}, {})", x, y, z);
-        return new double[] {x, y, z};
+        double[] xyz = decodeXyzReply(response);
+        logger.trace("Stage XYZ position: ({}, {}, {})", xyz[0], xyz[1], xyz[2]);
+        return xyz;
+    }
+
+    /**
+     * Decodes a GETXYZ reply: three big-endian floats, or the 12-byte marker the server sends in
+     * their place when it could not read the stage. The marker starts with {@code HW_ERROR}, as the
+     * GETXY one does, and is the same length as the values so the fixed-length read stays in step.
+     * @param reply the 12 bytes read for the command
+     * @return [x, y, z] in microns
+     * @throws MicroscopeHardwareException if the reply was the marker
+     */
+    static double[] decodeXyzReply(byte[] reply) throws MicroscopeHardwareException {
+        if (new String(reply, 0, 8, StandardCharsets.US_ASCII).equals("HW_ERROR")) {
+            throw new MicroscopeHardwareException(
+                    "Hardware error getting XYZ position. Check that MicroManager is running and the stages are loaded.");
+        }
+        ByteBuffer buffer = ByteBuffer.wrap(reply).order(ByteOrder.BIG_ENDIAN);
+        return new double[] {buffer.getFloat(), buffer.getFloat(), buffer.getFloat()};
     }
 
     /**
@@ -1235,13 +1248,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * Gets the current Z position only (fast, no X/Y read). Used by sweep focus.
      *
      * @return Z position in microns
+     * @throws MicroscopeHardwareException if the server could not read the Z stage (it replies
+     *     {@code HWERR}, as for GETZ)
      * @throws IOException if communication fails
      */
     public double getStageZFast() throws IOException {
-        byte[] response = executeCommandOnAux(Command.GETZF, null, 4);
-        ByteBuffer buf = ByteBuffer.wrap(response);
-        buf.order(ByteOrder.BIG_ENDIAN);
-        return buf.getFloat();
+        return queryFloatOnAux(
+                Command.GETZF,
+                "Hardware error getting Z position. Check that MicroManager is running and the Z stage is loaded.");
     }
 
     /**
@@ -7381,7 +7395,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * Sends a query whose reply is one big-endian float, on the auxiliary socket.
      *
-     * @param command the query (GETZ or GETR)
+     * @param command the query (GETZ, GETZF or GETR)
      * @param hardwareErrorMessage message for the exception raised when the server reports a hardware error
      * @return the value
      * @throws MicroscopeHardwareException if the server replied HWERR

@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**XYZ and fast Z reads no longer report a hardware error as a position**
+- When the microscope server could not read the stage, `GETXYZ` replied three zeros and `GETZF` one zero, which QPSC took for the stage sitting at the origin. The server now sends `HW_ERROR____` (12 bytes) and `HWERR` (5 bytes) in their place, and QPSC raises a hardware error for both, as it already did for `GETXY` and `GETZ`. Requires the matching microscope server update; against an older server nothing changes, since it never sent the markers.
+
 **Z and rotation reads no longer misread a server hardware error**
 - When the microscope server could not read the Z or rotation stage, it replied `HWERR` (5 bytes) where a 4-byte value was expected. QPSC decoded the first four bytes as a position and left the fifth on the socket, which shifted every later reply on the auxiliary connection by one byte. QPSC now raises a hardware error and the connection stays in step. No server update is needed for this fix.
 

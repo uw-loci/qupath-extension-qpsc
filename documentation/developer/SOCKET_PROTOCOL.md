@@ -94,7 +94,8 @@ sequenceDiagram
 |---------|------------|---------|----------|
 | GETXY | `getxy___` | none | 8 bytes: X,Y as big-endian 32-bit floats (`HW_ERROR` on a hardware error) |
 | GETZ | `getz____` | none | 4 bytes: Z as a big-endian 32-bit float (`HWERR`, 5 bytes, on a hardware error) |
-| GETXYZ | `getxyz__` | none | 12 bytes: X,Y,Z as big-endian 32-bit floats |
+| GETXYZ | `getxyz__` | none | 12 bytes: X,Y,Z as big-endian 32-bit floats (`HW_ERROR____`, 12 bytes, on a hardware error) |
+| GETZF | `getzf___` | none | 4 bytes: Z as a big-endian 32-bit float, read without X and Y (`HWERR`, 5 bytes, on a hardware error) |
 | MOVE | `move____` | 8 bytes: X,Y floats | none |
 | MOVEZ | `move_z__` | 4 bytes: Z float | none |
 | MOVEXYZ | `movexyz_` | 12 bytes: X,Y,Z floats | none |
@@ -103,7 +104,7 @@ sequenceDiagram
 
 One tick is one optical degree: the angle of the rotating polarizer, measured from the crossed position.
 
-`GETZ` and `GETR` report a hardware error as the 5 ASCII bytes `HWERR` where the 4-byte value would be. The client reads 4 bytes, recognizes `HWER`, and reads the fifth before raising the error, so the next reply starts where it should.
+`GETZ`, `GETZF` and `GETR` report a hardware error as the 5 ASCII bytes `HWERR` where the 4-byte value would be. The client reads 4 bytes, recognizes `HWER`, and reads the fifth before raising the error, so the next reply starts where it should. `GETXY` and `GETXYZ` use a marker the same length as their reply (`HW_ERROR`, padded with `_` to 12 bytes for `GETXYZ`), so the client's fixed-length read stays in step. No position query answers an error with zeros.
 
 The move commands (`MOVE`, `MOVEZ`, `MOVZNW`, `MOVEXYZ`, `MOVER`) are ignored until `CONFIG` has loaded a microscope configuration. The server reads the payload, logs a warning and does not move. Until then the server holds a generic configuration with wide stage limits.
 
