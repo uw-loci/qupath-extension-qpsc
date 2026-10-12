@@ -2,6 +2,7 @@ package qupath.ext.qpsc.controller;
 
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
+import java.io.IOException;
 import java.util.*;
 import java.util.concurrent.*;
 import java.util.stream.Collectors;
@@ -2378,6 +2379,20 @@ public class ExistingImageWorkflowV2 {
                     // four-slide batch. Confirm it against the sample first; see
                     // AlignmentVerification for why no cheaper check can see this.
                     if (mode == Mode.ACQUIRE_ONLY) {
+                        // The check moves the stage and refocuses. If the server still owns the
+                        // stage for a previous acquisition -- one the client gave up on but the
+                        // server has not -- this would drive Z out from under it (2026-10-12).
+                        try {
+                            if (!MicroscopeController.getInstance()
+                                    .awaitServerIdle(AcquisitionManager.SERVER_IDLE_WAIT_MS)) {
+                                return CompletableFuture.failedFuture(new WorkflowBlockedException(
+                                        "The microscope server is still running a previous acquisition; "
+                                                + "cancel it or restart the command server before acquiring"));
+                            }
+                        } catch (IOException e) {
+                            return CompletableFuture.failedFuture(new WorkflowBlockedException(
+                                    "Could not ask the server whether it is idle: " + e.getMessage()));
+                        }
                         CancellationException refused = verifyAlignmentBeforeUnattendedAcquire(state);
                         if (refused != null) {
                             return CompletableFuture.failedFuture(refused);

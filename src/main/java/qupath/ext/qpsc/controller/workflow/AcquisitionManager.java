@@ -141,6 +141,17 @@ public class AcquisitionManager {
 
     private Double lastAcquisitionZ = null;
 
+    /** How long to wait for the server to finish its previous acquisition before sending ours. */
+    public static final long SERVER_IDLE_WAIT_MS = 30_000;
+
+    /**
+     * The exception that made the most recent annotation fail, or null when none did. Lets the
+     * end of the chain tell a failure from a cancellation: both arrive as {@code false}, and
+     * reporting a refused or broken acquisition as "cancelled by user" is a false statement
+     * about a run nobody touched (2026-10-12, twice).
+     */
+    private volatile Throwable lastAnnotationFailure = null;
+
     /** Maximum plausible focal-plane step (um) between consecutive acquisitions.
      *  A finalZ that jumps more than this from {@link #lastAcquisitionZ} is treated
      *  as a runaway autofocus result (e.g. a contrast-inverted metric chasing the
@@ -249,6 +260,11 @@ public class AcquisitionManager {
                         // Save timing data to persistent preferences for future estimates
                         saveTimingDataToPreferences();
                         return state;
+                    }
+                    Throwable failure = lastAnnotationFailure;
+                    if (failure != null) {
+                        // Something broke or the server refused; say that, not "cancelled".
+                        throw new RuntimeException("Acquisition failed: " + failure.getMessage(), failure);
                     }
                     // User cancelled (e.g. dismissed annotation dialog) - not an error
                     throw new CancellationException("Acquisition cancelled by user");
@@ -588,6 +604,7 @@ public class AcquisitionManager {
         // downstream still bound how far a bad seed can push the search, so a stale
         // seed degrades gracefully to normal AF rather than driving a runaway.
         lastAcquisitionZ = state.seedZ;
+        lastAnnotationFailure = null;
         if (state.seedZ != null) {
             logger.info(
                     "Seeding first-annotation AF hint with setup-pass focus Z={} um",
@@ -1180,6 +1197,16 @@ public class AcquisitionManager {
                 // controller's 0,0 moving, which no commanded-vs-reported check can see.
                 armStageFrameWatchdog(annotation);
                 try {
+                    // The server owns one stage and marks a socket busy until the previous
+                    // acquisition's thread has fully finished, retract and return move included.
+                    // Sending before then gets BUSY:ACQUIRING; ask first, with a bound.
+                    if (!MicroscopeController.getInstance().awaitServerIdle(SERVER_IDLE_WAIT_MS)) {
+                        throw new IOException("The microscope server is still running a previous acquisition after "
+                                + (SERVER_IDLE_WAIT_MS / 1000)
+                                + " s. Cancel it from the server side, or restart the command server, "
+                                + "before acquiring " + annotation.getName());
+                    }
+
                     // Start acquisition
                     MicroscopeController.getInstance().startAcquisition(config.commandBuilder());
 
@@ -1197,6 +1224,7 @@ public class AcquisitionManager {
 
             } catch (Exception e) {
                 logger.error("Acquisition failed for {}", annotation.getName(), e);
+                lastAnnotationFailure = e;
                 showAcquisitionError(annotation.getName(), e.getMessage());
                 return false;
             }

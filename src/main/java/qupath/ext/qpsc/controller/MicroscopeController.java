@@ -308,6 +308,51 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
+     * Waits until the server reports no acquisition RUNNING or CANCELLING, or the time is up.
+     *
+     * <p>The server marks a socket busy the moment it admits an ACQUIRE and clears it only when
+     * that acquisition's thread finishes -- including the retract and return move after the last
+     * tile. A client that sends the next ACQUIRE, or moves the stage for an alignment check,
+     * before then is either refused or is driving the stage under a thread still entitled to it.
+     * Both happened on 2026-10-12. This asks first.
+     *
+     * <p>Blocking socket calls -- never from the JavaFX thread.
+     *
+     * @param timeoutMs how long to wait before giving up
+     * @return true when the server is idle; false when it was still busy at the deadline
+     * @throws IOException if STATUS cannot be read at all
+     */
+    public boolean awaitServerIdle(long timeoutMs) throws IOException {
+        long deadline = System.currentTimeMillis() + timeoutMs;
+        boolean waited = false;
+        while (true) {
+            var state = socketClient.getAcquisitionStatus();
+            boolean busy = state == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.RUNNING
+                    || state == qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.AcquisitionState.CANCELLING;
+            if (!busy) {
+                if (waited) {
+                    logger.info("Server is idle again (state={})", state);
+                }
+                return true;
+            }
+            if (System.currentTimeMillis() >= deadline) {
+                logger.warn("Server still reports {} after {} ms; not proceeding", state, timeoutMs);
+                return false;
+            }
+            if (!waited) {
+                logger.info("Server reports {}; waiting up to {} s for it to finish", state, timeoutMs / 1000);
+                waited = true;
+            }
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted while waiting for the server to be idle", e);
+            }
+        }
+    }
+
+    /**
      * Checks whether user-initiated stage movement should be blocked.
      * If blocked, logs a warning and shows a throttled user notification.
      *

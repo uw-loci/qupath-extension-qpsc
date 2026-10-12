@@ -112,7 +112,7 @@ The move commands (`MOVE`, `MOVEZ`, `MOVZNW`, `MOVEXYZ`, `MOVER`) are ignored un
 
 | Command | Wire Format | Payload | Response |
 |---------|------------|---------|----------|
-| ACQUIRE | `acquire_` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
+| ACQUIRE | `acquire_` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED, or `BUSY:ACQUIRING` when any client's acquisition is still RUNNING/CANCELLING (the server then reads and discards the message body, which the client has already sent) |
 | BGACQUIRE | `bgacquir` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
 | STATUS | `status__` | none | state name padded to 16 bytes; or `COMPLETED\|final_z:<z>`, optionally followed by `\|sat:<summary>`; or `FAILED: <message>`, space-padded to at least 32 bytes and at most 500 |
 | PROGRESS | `progress` | none | 8 bytes: images done and images total as two big-endian unsigned 32-bit integers |
@@ -395,7 +395,11 @@ Response formats:
 #### STRMAFZ
 
 Streaming autofocus scan. Used by the Live Viewer's **Autofocus**
-button. Streams frames during continuous Z motion and fits the focus
+button.
+Refused with `FAILED:busy: ...` while any client's acquisition is RUNNING or
+CANCELLING, because the scan moves the focus stage and the acquisition thread
+still owns it; the client asks the server's STATUS first (`awaitServerIdle`)
+so this is a backstop, not the normal path. Streams frames during continuous Z motion and fits the focus
 curve, replacing the stepped Sweep Autofocus on calibrated hardware.
 
 Payload flags (text, terminated by `ENDOFSTR`):

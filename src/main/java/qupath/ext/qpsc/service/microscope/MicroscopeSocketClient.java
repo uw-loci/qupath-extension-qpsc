@@ -1324,10 +1324,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         // The server refused because it is already acquiring. Say so in the
                         // terms the user will recognise, because the alternative -- two
                         // acquisitions driving one stage -- corrupts the tiles silently and
-                        // is only visible as a scrambled mosaic hours later.
-                        throw new IOException("The microscope is already running an acquisition. "
-                                + "Wait for it to finish, or cancel it, before starting another. "
-                                + "(server replied: " + ackStr + ")");
+                        // is only visible as a scrambled mosaic hours later. Its own type,
+                        // because the catch below must NOT treat it as a broken socket.
+                        throw new AcquisitionRefusedException(ackStr);
                     }
                     if (!ackStr.startsWith("STARTED")) {
                         throw new IOException("Unexpected acquisition acknowledgment: " + ackStr);
@@ -1341,6 +1340,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 lastActivityTime.set(System.currentTimeMillis());
                 logger.info("Acquisition command sent successfully");
 
+            } catch (AcquisitionRefusedException refused) {
+                // An answer, not a fault. The socket is fine and the server did its job;
+                // routing this through handleIOException counted it as a connection error,
+                // dropped a healthy socket and reconnected -- which the still-running
+                // acquisition then blocked for fifteen seconds (2026-10-12).
+                throw refused;
             } catch (IOException | InterruptedException e) {
                 handleIOException(new IOException("Failed to send acquisition command", e));
                 throw new IOException("Failed to send acquisition command", e);
@@ -5277,6 +5282,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 retryCount = 0;
                 transientFailureCount = 0;
 
+                // A STATUS reply IS the liveness signal. The timer below used to run from the
+                // last change in the saved-file count, so a server that was answering every
+                // poll while its acquisition thread ran two 100-step autofocus sweeps in a row
+                // -- 318 s with zero files, a normal start for a region whose first tile is far
+                // from the AF tile -- was declared dead at 300 s (2026-10-12). Liveness is now
+                // "the server answered"; a server that stops answering still trips this via
+                // the read-failure path, which never reaches here.
+                lastProgressUpdateTime.set(System.currentTimeMillis());
+
                 // Check if terminal state reached
                 if (currentState == AcquisitionState.COMPLETED
                         || currentState == AcquisitionState.FAILED
@@ -5400,15 +5414,21 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
                 }
 
-                // Check timeout based on last progress, not total time
+                // Ceiling on time since the server last ANSWERED (see the reset above).
                 if (timeoutMs > 0) {
-                    long timeSinceProgress = System.currentTimeMillis() - lastProgressUpdateTime.get();
-                    if (timeSinceProgress > timeoutMs) {
+                    long sinceReply = System.currentTimeMillis() - lastProgressUpdateTime.get();
+                    if (sinceReply > timeoutMs) {
                         logger.warn(
-                                "No progress for {} ms (last progress: {} files), timing out",
-                                timeSinceProgress,
+                                "Server has not answered STATUS for {} ms (last progress: {} files); "
+                                        + "cancelling the acquisition rather than abandoning it",
+                                sinceReply,
                                 lastProgressCount);
-                        break;
+                        // Never walk away from a RUNNING acquisition. The thread we leave behind
+                        // keeps the socket marked busy, then parks at a manual-focus prompt
+                        // nobody is listening to, and every later ACQUIRE is refused.
+                        cancelAbandonedAcquisition();
+                        throw new IOException("The microscope server stopped answering for " + (sinceReply / 1000)
+                                + " s; the acquisition was cancelled, not completed");
                     }
                 }
 
@@ -5466,8 +5486,44 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 throw e;
             }
         }
+    }
 
-        return lastState;
+    /** How long a timed-out monitor waits for the server to confirm the cancel it sent. */
+    static final long ABANDON_CANCEL_WAIT_MS = 30_000;
+
+    /**
+     * Sends CANC for an acquisition this client has given up monitoring, and waits a bounded time
+     * for the server to reach a terminal state, so the socket is not left owning a RUNNING thread.
+     *
+     * <p>Best effort on every step: the reason we are here is that the server is not answering
+     * well, so each call may fail, and none of those failures should hide the timeout itself.
+     */
+    private void cancelAbandonedAcquisition() {
+        try {
+            cancelAcquisition();
+        } catch (IOException e) {
+            logger.warn("Could not send CANCEL for the abandoned acquisition: {}", e.getMessage());
+            return;
+        }
+        long deadline = System.currentTimeMillis() + ABANDON_CANCEL_WAIT_MS;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                AcquisitionState state = getAcquisitionStatus();
+                if (state != AcquisitionState.RUNNING && state != AcquisitionState.CANCELLING) {
+                    logger.info("Abandoned acquisition reached {} after cancel", state);
+                    return;
+                }
+                Thread.sleep(500);
+            } catch (IOException e) {
+                logger.debug("STATUS after cancel failed: {}", e.getMessage());
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+        }
+        logger.warn(
+                "Server did not confirm the cancel within {} s; its acquisition thread may still hold the socket",
+                ABANDON_CANCEL_WAIT_MS / 1000);
     }
 
     // ==================== WHITE BALANCE CALIBRATION ====================
