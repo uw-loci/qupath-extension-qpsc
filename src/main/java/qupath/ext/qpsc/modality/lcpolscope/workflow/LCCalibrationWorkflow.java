@@ -91,9 +91,20 @@ public class LCCalibrationWorkflow {
         Object scheme = mgr.getSection("modalities", "lcpolscope", "reconstruction") == null
                 ? null
                 : mgr.getSection("modalities", "lcpolscope", "reconstruction").get("scheme");
+        Object mode = mgr.getSection("modalities", "lcpolscope", "reconstruction") == null
+                ? null
+                : mgr.getSection("modalities", "lcpolscope", "reconstruction").get("lc_control_mode");
+        // Shown because the server refuses MM-Voltage (no retardance/voltage curve is wired
+        // up), and before this line existed the operator had no way to see the setting that
+        // made the calibration fail.
+        String modeText = mode == null ? "MM-Retardance (default)" : String.valueOf(mode);
+        if ("MM-Voltage".equals(String.valueOf(mode))) {
+            modeText += "  -- NOT SUPPORTED by calibration; set MM-Retardance in the YAML";
+        }
         return "  swing       " + (swing == null ? "NOT SET" : String.valueOf(swing)) + " waves\n"
                 + "  wavelength  " + (wavelength == null ? "NOT SET" : String.valueOf(wavelength)) + " nm\n"
-                + "  scheme      " + (scheme == null ? "NOT SET" : String.valueOf(scheme));
+                + "  scheme      " + (scheme == null ? "NOT SET" : String.valueOf(scheme)) + "\n"
+                + "  LC control  " + modeText;
     }
 
     private static Optional<Params> promptForParameters() {
@@ -104,9 +115,10 @@ public class LCCalibrationWorkflow {
         Label intro = new Label("Move to a clear, specimen-free area before running this. The calibration measures\n"
                 + "how dark the extinction state can be made, so anything birefringent in the field\n"
                 + "will make the result worse.\n\n"
-                + "Swing, scheme and wavelength are taken from the microscope configuration, so the\n"
-                + "calibration cannot disagree with the acquisition that uses it. They are shown below\n"
-                + "so you can check them; change them in the microscope YAML, not here.");
+                + "Swing, scheme, wavelength and LC control mode are taken from the microscope\n"
+                + "configuration, so the calibration cannot disagree with the acquisition that uses\n"
+                + "it. They are shown below so you can check them; change them in the microscope\n"
+                + "YAML (Show config file...), not here.");
         intro.setStyle("-fx-font-size: 11px;");
 
         Label fromConfig = new Label(describeReconstructionSettings());
@@ -130,6 +142,7 @@ public class LCCalibrationWorkflow {
                 // Says which path failed: "could not open the file browser" with no path is
                 // useless when the likely cause is the path being wrong or on a disconnected
                 // drive, which is exactly the case on a rig with a cloud-synced profile.
+                logger.error("Could not reveal the microscope configuration file {}", file.getAbsolutePath());
                 Dialogs.showErrorMessage(
                         "LC-PolScope Calibration",
                         "Could not reveal the microscope configuration file:\n\n" + file.getAbsolutePath()
@@ -172,6 +185,7 @@ public class LCCalibrationWorkflow {
         String folder =
                 outputField.getText() == null ? "" : outputField.getText().trim();
         if (folder.isEmpty()) {
+            logger.error("LC-PolScope calibration not started: no output folder given");
             Dialogs.showErrorMessage("LC-PolScope Calibration", "An output folder is required.");
             return Optional.empty();
         }
@@ -182,6 +196,7 @@ public class LCCalibrationWorkflow {
             try {
                 black = Double.parseDouble(blackText);
             } catch (NumberFormatException e) {
+                logger.error("LC-PolScope calibration not started: black level '{}' is not a number", blackText);
                 Dialogs.showErrorMessage("LC-PolScope Calibration", "Black level must be a number, or blank.");
                 return Optional.empty();
             }
@@ -261,6 +276,9 @@ public class LCCalibrationWorkflow {
         boolean success = result.has("success") && result.get("success").getAsBoolean();
         if (!success) {
             String error = result.has("error") ? result.get("error").getAsString() : "unknown error";
+            // The server logs this in its own log; log it here too so it reaches the QuPath
+            // log and a bug report, not only the dialog.
+            logger.error("LC-PolScope calibration failed on the microscope server: {}", error);
             Dialogs.showErrorMessage("LC-PolScope Calibration", error);
             return;
         }
