@@ -22,6 +22,7 @@ import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
@@ -126,6 +127,40 @@ public class LCCalibrationWorkflow {
                 + "  LC control  " + modeText;
     }
 
+    /** {@code reconstruction.black_level} from the microscope YAML, or null when unset or 0 (0 means
+     *  "no clamp" to the reconstruction, not a measurement). */
+    private static Double configuredBlackLevel() {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) {
+            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (path == null || path.isBlank()) {
+                return null;
+            }
+            mgr = MicroscopeConfigManager.getInstance(path);
+        }
+        Double value = mgr.getDouble("modalities", MODALITY_KEY, "reconstruction", "black_level");
+        return value == null || value <= 0 ? null : value;
+    }
+
+    private static String formatCounts(double counts) {
+        return counts == Math.rint(counts) ? String.valueOf((long) counts) : String.valueOf(counts);
+    }
+
+    /**
+     * A dialog body the operator can read, resize and copy. The first rig result dialog used a
+     * plain Label: one long warning line stretched it to the width of the screen, nothing wrapped,
+     * and the palette could not be selected to paste anywhere.
+     */
+    private static TextArea copyableBody(String text, int rows) {
+        TextArea area = new TextArea(text);
+        area.setEditable(false);
+        area.setWrapText(true);
+        area.setPrefRowCount(rows);
+        area.setPrefColumnCount(72);
+        area.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        return area;
+    }
+
     private static Optional<Params> promptForParameters() {
         Alert dialog = new Alert(Alert.AlertType.CONFIRMATION);
         dialog.setTitle("Calibrate Liquid Crystals");
@@ -176,8 +211,11 @@ public class LCCalibrationWorkflow {
         strategyBox.getItems().addAll("single_pass", "iterative");
         strategyBox.setValue("single_pass");
 
-        TextField blackField = new TextField();
-        blackField.setPromptText("blank = measure it");
+        // Prefilled from the YAML: the camera's own offset lives there (reconstruction.black_level)
+        // and the first rig calibration ran with "0.0 (assumed)" while 103 sat in the file.
+        Double configuredBlack = configuredBlackLevel();
+        TextField blackField = new TextField(configuredBlack == null ? "" : formatCounts(configuredBlack));
+        blackField.setPromptText("blank = measure a dark frame");
         blackField.setPrefColumnCount(10);
 
         GridPane grid = new GridPane();
@@ -190,8 +228,10 @@ public class LCCalibrationWorkflow {
 
         Label notes = new Label("Search: one pass is usually enough. Iterative refines until the residual is small,\n"
                 + "at roughly three times the exposures -- a trade, not an upgrade.\n\n"
-                + "Black level: leave blank and the camera measures a dark frame. It matters --\n"
-                + "an error of 50 counts moves the extinction ratio by about 10 percent.");
+                + "Black level: the camera's offset in counts, from the microscope YAML\n"
+                + "(reconstruction.black_level) when it is set there. Blank measures a dark frame,\n"
+                + "which needs lamp control this scope does not have; it then falls to 0, assumed,\n"
+                + "and the extinction ratio is overstated by about 10 percent per 50 counts.");
         notes.setStyle("-fx-font-size: 11px;");
 
         VBox content = new VBox(8, intro, fromConfig, showConfig, grid, notes);
@@ -345,12 +385,23 @@ public class LCCalibrationWorkflow {
             if (warnings.size() > 0) {
                 lines.add("");
                 lines.add("Warnings:");
-                warnings.forEach(w -> lines.add("    " + w.getAsString()));
+                warnings.forEach(w -> {
+                    lines.add("    " + w.getAsString());
+                    logger.warn("LC-PolScope calibration warning: {}", w.getAsString());
+                });
             }
         }
         if (result.has("metadata_path")) {
             lines.add("");
             lines.add("Written to " + result.get("metadata_path").getAsString());
+        }
+        // The dialog is not a record. Everything it shows goes to the QuPath log too, so a
+        // calibration can be compared with the next one, or attached to a bug report, without
+        // anyone having transcribed it.
+        logger.info("LC-PolScope calibration result:\n{}", String.join("\n", lines));
+        if (!(ratio >= ER_ACCEPTABLE)) {
+            logger.warn(
+                    "LC-PolScope calibration extinction ratio {} is below {} ({})", ratio, ER_ACCEPTABLE, assessment);
         }
 
         boolean canApply = result.has("palette_waves")
@@ -367,9 +418,8 @@ public class LCCalibrationWorkflow {
             dialog.getButtonTypes().setAll(close);
         }
 
-        Label body = new Label(String.join("\n", lines));
-        body.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
-        dialog.getDialogPane().setContent(body);
+        dialog.getDialogPane().setContent(copyableBody(String.join("\n", lines), Math.min(lines.size() + 1, 28)));
+        dialog.setResizable(true);
         DialogOwner.own(dialog);
         if (dialog.showAndWait().orElse(close) != apply) {
             return;
@@ -437,9 +487,8 @@ public class LCCalibrationWorkflow {
         Alert done = new Alert(Alert.AlertType.INFORMATION);
         done.setTitle("LC palette applied");
         done.setHeaderText("Acquisition now uses this calibration");
-        Label body = new Label(String.join("\n", summary));
-        body.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
-        done.getDialogPane().setContent(body);
+        done.getDialogPane().setContent(copyableBody(String.join("\n", summary), Math.min(summary.size() + 1, 24)));
+        done.setResizable(true);
         DialogOwner.own(done);
         done.showAndWait();
     }

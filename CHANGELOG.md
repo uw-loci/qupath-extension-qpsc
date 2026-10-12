@@ -29,6 +29,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**LC-PolScope calibration result is readable, copyable and logged**
+- The **LC Calibration Complete** dialog, and the **LC palette applied** dialog after it, now use a resizable, wrapping, selectable text body. A long warning line used to stretch the dialog to the width of the screen, nothing wrapped, and the palette could not be copied. Everything the dialog shows is also written to the QuPath log, with each warning at WARN; previously the log held only the command that was sent.
+- The black level field is prefilled from `reconstruction.black_level` in the microscope YAML. Left blank, the server measures a dark frame, which needs lamp control; on a scope without it the calibration assumed 0 and overstated the extinction ratio, even with 103 recorded in the file. The server now also falls back to the YAML value itself.
+
 **LC-PolScope calibration dialog shows the LC control mode**
 - The pre-calibration summary now lists the LC control mode from the microscope YAML. A config that sets `MM-Voltage` is marked NOT SUPPORTED, because the microscope server refuses that mode until a retardance/voltage curve is wired up. Calibration failures and dialog errors are also written to the QuPath log, so they reach a bug report and not only the dialog.
 

@@ -218,7 +218,9 @@ Calibrate the two variable retarders of the universal compensator by finding the
 - **LC control mode must be `MM-Retardance`.** `MM-Voltage` is refused by the microscope server because no retardance/voltage curve is wired up yet; the dialog marks it NOT SUPPORTED when the YAML asks for it
 - Produces a human-readable assessment (Good / Acceptable / Poor) based on extinction ratio
 - Supports single-pass or iterative search (iterative refines at ~3x the exposures)
-- Optional manual black level or auto-measurement from a dark frame
+- Black level in counts, prefilled from `reconstruction.black_level` in the microscope YAML;
+  override it in the dialog, or leave it blank to measure a dark frame (which needs lamp
+  control; without it the calibration assumes 0 and overstates the extinction ratio)
 
 **Access:** Extensions > QP Scope > [Modality Name] > Calibrate Liquid Crystals... (only visible when using an LC-PolScope microscope)
 
