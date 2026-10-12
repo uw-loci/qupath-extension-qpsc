@@ -3,7 +3,13 @@ package qupath.ext.qpsc.modality.lcpolscope.workflow;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
+import java.io.IOException;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -27,6 +33,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -48,6 +55,18 @@ public class LCCalibrationWorkflow {
     private static final double ER_GOOD = 100.0;
 
     private static final double ER_ACCEPTABLE = 80.0;
+
+    /** The modality key in the microscope YAML whose channels the palette is written to. */
+    static final String MODALITY_KEY = "lcpolscope";
+
+    /** Where the calibration's provenance is recorded, beside the settings it was made with. */
+    static final String[] RECONSTRUCTION_BLOCK = {"modalities", MODALITY_KEY, "reconstruction"};
+
+    /** Fallbacks for a server that predates the property names in the reply. */
+    private static final String DEFAULT_LC_DEVICE = "MeadowlarkLC";
+
+    private static final Map<String, String> DEFAULT_RETARDANCE_PROPERTIES_WAVES =
+            Map.of("LCA", "Retardance LC-A [in waves]", "LCB", "Retardance LC-B [in waves]");
 
     private LCCalibrationWorkflow() {}
 
@@ -298,8 +317,8 @@ public class LCCalibrationWorkflow {
         lines.add(bandExplanation(ratio));
         lines.add("");
         lines.add("Palette (LC-A, LC-B in waves):");
-        if (result.has("palette")) {
-            JsonObject palette = result.getAsJsonObject("palette");
+        if (result.has("palette_waves")) {
+            JsonObject palette = result.getAsJsonObject("palette_waves");
             for (Map.Entry<String, com.google.gson.JsonElement> entry : palette.entrySet()) {
                 JsonArray pair = entry.getValue().getAsJsonArray();
                 lines.add(String.format(
@@ -334,11 +353,213 @@ public class LCCalibrationWorkflow {
             lines.add("Written to " + result.get("metadata_path").getAsString());
         }
 
+        boolean canApply = result.has("palette_waves")
+                && result.getAsJsonObject("palette_waves").size() > 0;
+        ButtonType apply = new ButtonType("Apply to acquisition", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        ButtonType close = new ButtonType("Close", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        if (canApply) {
+            lines.add("");
+            lines.add("Apply to acquisition writes these retardances into the microscope YAML as the");
+            lines.add("LC settings each state uses, replacing the Micro-Manager Channel presets. Until");
+            lines.add("you do, acquisition keeps using whatever calibrated the presets.");
+            dialog.getButtonTypes().setAll(apply, close);
+        } else {
+            dialog.getButtonTypes().setAll(close);
+        }
+
         Label body = new Label(String.join("\n", lines));
         body.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
         dialog.getDialogPane().setContent(body);
         DialogOwner.own(dialog);
-        dialog.showAndWait();
+        if (dialog.showAndWait().orElse(close) != apply) {
+            return;
+        }
+        if (!(ratio >= ER_ACCEPTABLE)) {
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Apply a poor calibration?");
+            confirm.setHeaderText(String.format("Extinction ratio %.1f is below %.0f", ratio, ER_ACCEPTABLE));
+            confirm.setContentText("Reconstruction from this palette will be noisy. Apply it anyway?");
+            DialogOwner.own(confirm);
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                return;
+            }
+        }
+        applyToAcquisition(result);
+    }
+
+    // ------------------------------------------------------------------
+    // Apply: palette -> microscope YAML
+    // ------------------------------------------------------------------
+
+    /** Applies the palette to the active configuration, then reloads it here and on the server. */
+    private static void applyToAcquisition(JsonObject result) {
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isBlank()) {
+            logger.error("Cannot apply the LC palette: no microscope configuration file is set");
+            Dialogs.showErrorMessage(
+                    "LC-PolScope Calibration", "No microscope configuration file is set in the QPSC preferences.");
+            return;
+        }
+        List<String> summary;
+        try {
+            summary = applyPaletteToConfig(Path.of(configPath), result);
+        } catch (IOException | IllegalStateException e) {
+            logger.error("Applying the LC palette to {} failed", configPath, e);
+            Dialogs.showErrorMessage(
+                    "LC-PolScope Calibration",
+                    "Could not write the palette to the microscope YAML:\n\n" + e.getMessage());
+            return;
+        }
+        // The in-memory config and the server both hold the old channels until told otherwise.
+        try {
+            MicroscopeConfigManager.getInstance(configPath).reload();
+        } catch (Exception e) {
+            logger.error("Palette written but the configuration did not reload", e);
+            summary.add("");
+            summary.add("The file was written but QPSC could not reload it: " + e.getMessage());
+            summary.add("Restart QuPath before acquiring.");
+        }
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller.isConnected()) {
+                controller.sendReconfig();
+                summary.add("Microscope server reloaded the configuration.");
+            } else {
+                summary.add("Not connected: the microscope server will read the new file when it next loads it.");
+            }
+        } catch (Exception e) {
+            logger.error("Palette written but the microscope server did not reload it", e);
+            summary.add("");
+            summary.add("The server did not reload the configuration: " + e.getMessage());
+            summary.add("Reconnect, or restart the server, before acquiring.");
+        }
+        logger.info("LC palette applied to {}:\n{}", configPath, String.join("\n", summary));
+        Alert done = new Alert(Alert.AlertType.INFORMATION);
+        done.setTitle("LC palette applied");
+        done.setHeaderText("Acquisition now uses this calibration");
+        Label body = new Label(String.join("\n", summary));
+        body.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        done.getDialogPane().setContent(body);
+        DialogOwner.own(done);
+        done.showAndWait();
+    }
+
+    /**
+     * Write a calibration's palette into the microscope YAML so acquisition reproduces it.
+     *
+     * <p>For every state in {@code palette_waves}, the channel of the same id under
+     * {@code modalities.lcpolscope.channels} gets its {@code device_properties} replaced with the
+     * two retardance writes (in waves; the Meadowlark adapter converts to volts) and loses its
+     * {@code mm_setup_presets}, which hold the previous calibration as volts and would otherwise
+     * be applied first on every state. Then {@code reconstruction.state_order} is reset to the
+     * palette's own order, because polscope_library names its states so that State0..State4 is
+     * already the order {@code reconstruct()} consumes -- the permutation that suited OpenPolScope's
+     * presets would rotate the orientation map with no visible symptom. Finally the calibration
+     * file, time and extinction ratio are recorded under {@code reconstruction}.
+     *
+     * <p>Checks that every palette state has a channel before writing anything, so a config that
+     * does not match the palette is left untouched.
+     *
+     * @return human-readable lines describing what changed
+     * @throws IllegalStateException if the palette does not match the channels in the file
+     */
+    static List<String> applyPaletteToConfig(Path configPath, JsonObject result) throws IOException {
+        JsonObject palette = result.getAsJsonObject("palette_waves");
+        if (palette == null || palette.size() == 0) {
+            throw new IllegalStateException("the calibration result carries no palette_waves");
+        }
+        String device = result.has("lc_device") ? result.get("lc_device").getAsString() : DEFAULT_LC_DEVICE;
+        Map<String, String> propertyNames = new LinkedHashMap<>(DEFAULT_RETARDANCE_PROPERTIES_WAVES);
+        if (result.has("lc_retardance_properties_waves")) {
+            for (Map.Entry<String, com.google.gson.JsonElement> e :
+                    result.getAsJsonObject("lc_retardance_properties_waves").entrySet()) {
+                propertyNames.put(e.getKey(), e.getValue().getAsString());
+            }
+        }
+        String calibratedAt = result.has("calibrated_at")
+                ? result.get("calibrated_at").getAsString()
+                : LocalDateTime.now().format(DateTimeFormatter.ISO_LOCAL_DATE_TIME);
+        String extinction = result.has("extinction_ratio")
+                ? String.format("%.1f", result.get("extinction_ratio").getAsDouble())
+                : "unmeasured";
+        String metadataPath =
+                result.has("metadata_path") ? result.get("metadata_path").getAsString() : null;
+
+        List<String> states = new ArrayList<>(palette.keySet());
+        List<String> missing = missingChannels(configPath, states);
+        if (!missing.isEmpty()) {
+            throw new IllegalStateException("the palette names states with no channel under modalities." + MODALITY_KEY
+                    + ".channels: " + missing + ". Nothing was written.");
+        }
+
+        List<String> summary = new ArrayList<>();
+        List<String> comment = List.of(
+                "LC calibration " + calibratedAt + ", extinction ratio " + extinction + ".",
+                "Retardance in WAVES; the " + device + " adapter converts to volts. Written by QPSC.");
+        for (String state : states) {
+            JsonArray pair = palette.getAsJsonArray(state);
+            double lcaWaves = pair.get(0).getAsDouble();
+            double lcbWaves = pair.get(1).getAsDouble();
+            List<Map<String, Object>> items = List.of(
+                    propertyWrite(device, propertyNames.get("LCA"), lcaWaves),
+                    propertyWrite(device, propertyNames.get("LCB"), lcbWaves));
+            ConfigYamlEditor.replaceChannelListField(
+                    configPath, MODALITY_KEY, state, "device_properties", items, comment);
+            ConfigYamlEditor.replaceChannelListField(configPath, MODALITY_KEY, state, "mm_setup_presets", null, null);
+            summary.add(String.format("%-8s LC-A %.4f  LC-B %.4f waves", state, lcaWaves, lcbWaves));
+        }
+
+        String order = "[" + String.join(", ", states) + "]";
+        ConfigYamlEditor.Result orderResult =
+                ConfigYamlEditor.setNestedChildScalar(configPath, RECONSTRUCTION_BLOCK, "state_order", order);
+        summary.add("");
+        summary.add("state_order " + order + (orderResult.changed ? "  (changed)" : "  (unchanged)"));
+        ConfigYamlEditor.setNestedChildScalar(
+                configPath, RECONSTRUCTION_BLOCK, "lc_calibrated_at", "'" + calibratedAt + "'");
+        ConfigYamlEditor.setNestedChildScalar(configPath, RECONSTRUCTION_BLOCK, "lc_extinction_ratio", extinction);
+        if (metadataPath != null) {
+            ConfigYamlEditor.setNestedChildScalar(
+                    configPath,
+                    RECONSTRUCTION_BLOCK,
+                    "lc_calibration_file",
+                    "'" + metadataPath.replace("'", "''") + "'");
+        }
+        summary.add("Micro-Manager Channel presets are no longer applied by these states.");
+        summary.add("Written to " + configPath);
+        return summary;
+    }
+
+    private static Map<String, Object> propertyWrite(String device, String property, double valueWaves) {
+        Map<String, Object> m = new LinkedHashMap<>();
+        m.put("device", device);
+        m.put("property", property);
+        m.put("value", valueWaves);
+        return m;
+    }
+
+    /** States in the palette that have no channel of the same id in the YAML. */
+    @SuppressWarnings("unchecked")
+    private static List<String> missingChannels(Path configPath, List<String> states) throws IOException {
+        Map<String, Object> root;
+        try (var in = Files.newInputStream(configPath)) {
+            root = new org.yaml.snakeyaml.Yaml().load(in);
+        }
+        List<String> present = new ArrayList<>();
+        Object modalities = root == null ? null : root.get("modalities");
+        if (modalities instanceof Map<?, ?> mods && mods.get(MODALITY_KEY) instanceof Map<?, ?> mod) {
+            if (mod.get("channels") instanceof List<?> channels) {
+                for (Object c : channels) {
+                    if (c instanceof Map<?, ?> cm && cm.get("id") != null) {
+                        present.add(cm.get("id").toString());
+                    }
+                }
+            }
+        }
+        List<String> missing = new ArrayList<>();
+        for (String s : states) {
+            if (!present.contains(s)) missing.add(s);
+        }
+        return missing;
     }
 
     private static String bandExplanation(double ratio) {

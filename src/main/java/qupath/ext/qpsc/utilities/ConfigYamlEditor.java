@@ -22,7 +22,8 @@ import org.slf4j.LoggerFactory;
  * blocks and rewrites just that one value, so the rest of the file is
  * byte-identical.
  *
- * <p>Two write surfaces are exposed today:
+ * <p>Write surfaces exposed today (the channel ones are what the LC calibration's
+ * "Apply to acquisition" uses, see {@link #replaceChannelListField}):
  * <ul>
  *   <li>{@link #setProfileScalar} -- updates a scalar field directly under
  *       {@code acquisition_profiles.<profileKey>}, e.g.
@@ -478,6 +479,158 @@ public final class ConfigYamlEditor {
         return new Result(true, "added " + blockKey + "." + field + " = " + formatted);
     }
 
+    /**
+     * Set (create or update) a scalar {@code field} directly under the block reached by walking
+     * {@code blockPath}, e.g. {@code {"modalities","lcpolscope","reconstruction"}}. The block must
+     * exist; unlike {@link #setTopLevelChildScalar} this never creates it, because a missing
+     * nested block means the caller is pointed at the wrong config. Idempotent. Trailing comments
+     * on an existing line are dropped when the value changes, which is what every other setter
+     * here does.
+     *
+     * <p>The value is written verbatim after {@link #formatScalarString}, so callers that need
+     * quoting -- a timestamp, which YAML 1.1 would otherwise read as a date, or a Windows path --
+     * pass it already single-quoted. The no-change comparison strips quotes on both sides.
+     */
+    public static Result setNestedChildScalar(Path configPath, String[] blockPath, String field, String value)
+            throws IOException {
+        List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
+        int blockLine = navigatePath(lines, blockPath);
+        if (blockLine < 0) {
+            return new Result(false, pathStr(blockPath) + " not found");
+        }
+        int blockIndent = leadingSpaces(lines.get(blockLine)).length();
+        int childIndent = detectChildIndent(lines, blockLine, blockIndent);
+        int blockEnd = findBlockEnd(lines, blockLine + 1, blockIndent);
+        String formatted = formatScalarString(value);
+        String wanted = stripQuotes(value == null ? "" : value.trim());
+        int fieldLine = -1;
+        for (int i = blockLine + 1; i < blockEnd; i++) {
+            if (matchesKey(lines.get(i), childIndent, field)) {
+                fieldLine = i;
+                break;
+            }
+        }
+        if (fieldLine >= 0) {
+            String existing = scalarValueOf(lines.get(fieldLine));
+            if (existing != null && existing.equals(wanted)) {
+                return new Result(false, "No change (already " + formatted + ")");
+            }
+            lines.set(fieldLine, repeat(' ', childIndent) + field + ": " + formatted);
+            Files.write(configPath, lines, StandardCharsets.UTF_8);
+            logger.info("ConfigYamlEditor: {}.{} {} -> {}", pathStr(blockPath), field, existing, formatted);
+            return new Result(true, pathStr(blockPath) + "." + field + " -> " + formatted);
+        }
+        int insertAt = blockEnd;
+        while (insertAt - 1 > blockLine && lines.get(insertAt - 1).isBlank()) insertAt--;
+        lines.add(insertAt, repeat(' ', childIndent) + field + ": " + formatted);
+        Files.write(configPath, lines, StandardCharsets.UTF_8);
+        logger.info("ConfigYamlEditor: added {}.{} = {}", pathStr(blockPath), field, formatted);
+        return new Result(true, "added " + pathStr(blockPath) + "." + field + " = " + formatted);
+    }
+
+    /**
+     * Marker that opens every comment line this editor writes above a channel list field, so a
+     * later rewrite can find and replace its own commentary without touching anyone else's.
+     */
+    public static final String EDITOR_COMMENT_TAG = "# [config-editor]";
+
+    /**
+     * Replace the whole {@code fieldName} list on one channel under
+     * {@code modalities.<modalityKey>.channels[id=<channelId>]} -- or remove it, when
+     * {@code items} is null or empty.
+     *
+     * <p>This exists for the LC calibration, which has to swap a channel's
+     * {@code device_properties} from voltage entries to retardance entries and drop its
+     * {@code mm_setup_presets}; {@link #setChannelDevicePropertyValue} deliberately cannot add or
+     * remove entries. Everything outside the field block, including comments, is byte-identical
+     * afterwards. Comment lines this method wrote on an earlier call (tagged
+     * {@link #EDITOR_COMMENT_TAG}) directly above the field are replaced, not accumulated.
+     *
+     * @param items        list items, each an ordered map rendered as block YAML; null or empty
+     *                     removes the field
+     * @param commentLines explanatory lines written above the field, without a leading '#';
+     *                     may be null
+     */
+    public static Result replaceChannelListField(
+            Path configPath,
+            String modalityKey,
+            String channelId,
+            String fieldName,
+            List<Map<String, Object>> items,
+            List<String> commentLines)
+            throws IOException {
+        List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
+        int[] channelRange = locateChannelBlock(lines, modalityKey, channelId);
+        if (channelRange == null) {
+            return new Result(false, "Channel '" + channelId + "' not found under modalities." + modalityKey);
+        }
+        int chStart = channelRange[0];
+        int chEnd = channelRange[1];
+        int fieldIndent = leadingSpaces(lines.get(chStart)).length() + 2;
+
+        int header = -1;
+        for (int i = chStart + 1; i < chEnd; i++) {
+            if (matchesKey(lines.get(i), fieldIndent, fieldName)) {
+                header = i;
+                break;
+            }
+        }
+        // [removeFrom, removeTo) is what goes: our own tagged comments above the header, the
+        // header, and every list item under it. Items sit at fieldIndent (compact style) or
+        // deeper; a non-list line at fieldIndent is the channel's next field.
+        int removeFrom;
+        int removeTo;
+        if (header >= 0) {
+            removeFrom = header;
+            while (removeFrom - 1 > chStart && lines.get(removeFrom - 1).trim().startsWith(EDITOR_COMMENT_TAG)) {
+                removeFrom--;
+            }
+            removeTo = chEnd;
+            for (int i = header + 1; i < chEnd; i++) {
+                String line = lines.get(i);
+                if (line.isBlank()) continue;
+                int lead = leadingSpaces(line).length();
+                if (lead < fieldIndent || (lead == fieldIndent && !line.trim().startsWith("-"))) {
+                    removeTo = i;
+                    break;
+                }
+            }
+            while (removeTo - 1 > header && lines.get(removeTo - 1).isBlank()) removeTo--;
+        } else {
+            removeFrom = chEnd;
+            while (removeFrom - 1 > chStart && lines.get(removeFrom - 1).isBlank()) removeFrom--;
+            removeTo = removeFrom;
+        }
+
+        List<String> rendered = new ArrayList<>();
+        if (items != null && !items.isEmpty()) {
+            String pad = repeat(' ', fieldIndent);
+            if (commentLines != null) {
+                for (String c : commentLines) {
+                    rendered.add(pad + EDITOR_COMMENT_TAG + " " + c);
+                }
+            }
+            rendered.add(pad + fieldName + ":");
+            for (Map<String, Object> item : items) {
+                List<String> raw = renderYamlLines(item);
+                for (int i = 0; i < raw.size(); i++) {
+                    rendered.add(pad + (i == 0 ? "- " : "  ") + raw.get(i));
+                }
+            }
+        }
+
+        List<String> current = new ArrayList<>(lines.subList(removeFrom, removeTo));
+        if (current.equals(rendered)) {
+            return new Result(false, "No change to " + channelId + "." + fieldName);
+        }
+        lines.subList(removeFrom, removeTo).clear();
+        lines.addAll(removeFrom, rendered);
+        Files.write(configPath, lines, StandardCharsets.UTF_8);
+        String what = rendered.isEmpty() ? "removed" : "replaced (" + items.size() + " items)";
+        logger.info("ConfigYamlEditor: modalities.{}.channels[{}].{} {}", modalityKey, channelId, fieldName, what);
+        return new Result(true, channelId + "." + fieldName + " " + what);
+    }
+
     // ---------- internals ----------
 
     /** Walk a key path, returning the line index of the deepest key, or -1. */
@@ -593,7 +746,9 @@ public final class ConfigYamlEditor {
         Pattern anyKeyPat = Pattern.compile("^(\\s*)\\S.*$");
         for (int i = channelsHeader + 1; i < modEnd; i++) {
             String line = lines.get(i);
-            if (line.isBlank()) continue;
+            // Comment lines never end the list: the LC-PolScope config opens its channel
+            // library with a comment block at the list's own indent.
+            if (line.isBlank() || line.trim().startsWith("#")) continue;
             Matcher m = itemPat.matcher(line);
             if (m.matches()) {
                 if (listItemIndent < 0) listItemIndent = m.group(1).length();

@@ -202,7 +202,7 @@ LC-PolScope functionality includes a liquid-crystal calibration workflow:
 
 ### LC-PolScope Calibration
 
-Calibrate the two variable retarders of the universal compensator by finding the extinction point (where the crystals transmit the least light) and the swing states either side of it. The calibration measures the palette the acquisition will use.
+Calibrate the two variable retarders of the universal compensator by finding the extinction point (where the crystals transmit the least light) and the swing states either side of it. The calibration measures the palette; **Apply to acquisition** on the result makes it the one the acquisition uses.
 
 **When You Need It:**
 - After initial system setup or when optical alignment changes
@@ -213,6 +213,7 @@ Calibrate the two variable retarders of the universal compensator by finding the
 - Run on a **clear, specimen-free field** — anything birefringent in the field makes the result worse
 - Measures extinction ratio as a quality figure (100 or above is good; this instrument has reached 267)
 - **Displays the reconstruction settings** (swing, scheme, wavelength, LC control mode) read from the microscope configuration before calibration starts, so you can verify them. To change them, edit the microscope YAML file -- the **Show config file...** button reveals it in your file browser -- not in this dialog
+- **Apply to acquisition** (button on the result dialog) writes the palette into the microscope YAML so acquisition reproduces it: each state's `device_properties` becomes two retardance writes in waves (the Meadowlark adapter converts to volts), the state's Micro-Manager `Channel` preset is dropped (it holds the previous calibration as volts and would be applied first), `reconstruction.state_order` is reset to the palette's own order, and the calibration file, time and extinction ratio are recorded under `reconstruction`. Until you apply, acquisition keeps using whatever calibrated the presets -- the server logs which at the start of every LC-PolScope run, and reads the crystals back on the first tile so the derived tiles record `polscope.lc_readback_agrees`
 - **LC control mode must be `MM-Retardance`.** `MM-Voltage` is refused by the microscope server because no retardance/voltage curve is wired up yet; the dialog marks it NOT SUPPORTED when the YAML asks for it
 - Produces a human-readable assessment (Good / Acceptable / Poor) based on extinction ratio
 - Supports single-pass or iterative search (iterative refines at ~3x the exposures)
