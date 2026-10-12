@@ -127,7 +127,7 @@ valid real config is selected, the wizard stays under Utilities.
 
 #### Q: The Setup Wizard created config files but QPSC still says "no valid configuration"
 
-**A:** Restart QuPath after the wizard completes. The config file preference is set automatically, but some components require a restart to reload.
+**A:** Accept the **Switch Microscope** offer if QuPath shows one after the wizard completes (or run Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope...). Otherwise restart QuPath. The config file preference is set automatically, but a restart always reloads every component.
 
 #### Q: Can I re-run the Setup Wizard to modify my configuration?
 
@@ -2235,7 +2235,7 @@ QuPath: Extensions > QPSC > Utilities > Microscope Configuration > Communication
 QuPath: Help > Show log file location
 
 **Reload Configuration:**
-QuPath: Edit > Preferences > QPSC > Browse to config file, restart QuPath
+QuPath: Edit > Preferences > QPSC > Browse to config file, then accept the Switch Microscope offer (or Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope...). Restart QuPath if no switch is offered.
 
 ### File Locations Summary
 

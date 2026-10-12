@@ -163,7 +163,7 @@ Review all configured values before saving:
 
 Once configuration files are created, follow these steps:
 
-1. **Restart QuPath** to fully load the new configuration
+1. **Load the new configuration** -- accept the **Switch Microscope** offer if QuPath shows one (or use Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope...), otherwise **restart QuPath**
 2. **Connect to the microscope server** (Extensions > QP Scope > Communication Settings)
 3. **Run Background Collection** for flat-field correction images
 4. **Run White Balance Calibration** (for JAI/prism cameras)
@@ -202,7 +202,7 @@ The wizard uses `ConfigSchema.java` as a single source of truth for all required
 |---------|----------|
 | Wizard doesn't appear in menu | Check that QPSC extension is loaded (Extensions menu) |
 | "Save Failed" error | Verify write permissions to the chosen directory |
-| Config created but QPSC says invalid | Restart QuPath to reload configuration |
+| Config created but QPSC says invalid | Use Switch Microscope... to reload configuration, or restart QuPath |
 | Hardware not in catalog | Use "Add Custom" to enter specifications manually |
 | Server test fails | Verify the server is running and host/port are correct |
 | Need to undo a wizard change | A timestamped backup (e.g., `config_PPM.yml.bak-20260928-143022`) is created in the config directory before any file is modified. You can restore from this backup if needed. |
