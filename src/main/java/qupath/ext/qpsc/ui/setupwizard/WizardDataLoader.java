@@ -170,19 +170,45 @@ public final class WizardDataLoader {
 
     @SuppressWarnings("unchecked")
     private static void loadDetectorSection(Map<String, Object> doc, WizardData target) {
-        Object detsObj = doc.get("id_detector");
-        if (!(detsObj instanceof Map)) return;
         target.detectors.clear();
-        Map<String, Object> dets = (Map<String, Object>) detsObj;
-        for (Map.Entry<String, Object> e : dets.entrySet()) {
-            if (!(e.getValue() instanceof Map)) continue;
-            Map<String, Object> det = (Map<String, Object>) e.getValue();
-            Map<String, Object> copy = new LinkedHashMap<>();
-            copy.put("id", e.getKey());
-            for (String k : List.of("name", "camera_type", "device", "width_px", "height_px")) {
-                if (det.containsKey(k)) copy.put(k, det.get(k));
+        List<String> detKeys = List.of("name", "camera_type", "device", "width_px", "height_px");
+        Object detsObj = doc.get("id_detector");
+        if (detsObj instanceof Map) {
+            Map<String, Object> dets = (Map<String, Object>) detsObj;
+            for (Map.Entry<String, Object> e : dets.entrySet()) {
+                if (!(e.getValue() instanceof Map)) continue;
+                Map<String, Object> det = (Map<String, Object>) e.getValue();
+                Map<String, Object> copy = new LinkedHashMap<>();
+                copy.put("id", e.getKey());
+                for (String k : detKeys) {
+                    if (det.containsKey(k)) copy.put(k, det.get(k));
+                }
+                target.detectors.add(copy);
             }
-            target.detectors.add(copy);
+        }
+
+        // Configs that keep detector definitions in the shared resources file list only
+        // the IDs under hardware.detectors and have no id_detector block (the LC-PolScope
+        // config is one). Resolve those IDs against the bundled catalog so the wizard
+        // shows them instead of an empty table.
+        Object hwObj = doc.get("hardware");
+        if (hwObj instanceof Map && ((Map<String, Object>) hwObj).get("detectors") instanceof List<?> ids) {
+            Map<String, Map<String, Object>> catalog = ResourceCatalog.load().getDetectors();
+            for (Object idObj : ids) {
+                if (!(idObj instanceof String id) || id.isBlank()) continue;
+                if (target.detectors.stream().anyMatch(m -> id.equals(m.get("id")))) continue;
+                Map<String, Object> copy = new LinkedHashMap<>();
+                copy.put("id", id);
+                Map<String, Object> known = catalog.get(id);
+                if (known != null) {
+                    for (String k : detKeys) {
+                        if (known.containsKey(k)) copy.put(k, known.get(k));
+                    }
+                } else {
+                    logger.warn("WizardDataLoader: detector {} is not in the bundled catalog", id);
+                }
+                target.detectors.add(copy);
+            }
         }
     }
 

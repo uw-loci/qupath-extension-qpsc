@@ -26,6 +26,22 @@ class WizardDataLoaderTest {
     Path tempDir;
 
     @Test
+    @DisplayName("Detector IDs under hardware.detectors resolve against the catalog when id_detector is absent")
+    void detectorIdsOnlyConfigResolvesFromCatalog() throws IOException {
+        java.nio.file.Files.writeString(
+                tempDir.resolve("config_IdsOnly.yml"),
+                "microscope:\n  name: IdsOnly\n  type: Multimodal\n"
+                        + "hardware:\n  objectives: []\n  detectors:\n  - LCPS_DETECTOR_FLIR_ORYX_001\n");
+
+        WizardData in = new WizardData();
+        assertTrue(WizardDataLoader.loadFromExistingConfigs(tempDir, "IdsOnly", in));
+
+        assertEquals(1, in.detectors.size());
+        assertEquals("LCPS_DETECTOR_FLIR_ORYX_001", in.detectors.get(0).get("id"));
+        assertEquals("Oryx ORX-10G-51S5M", in.detectors.get(0).get("device"));
+    }
+
+    @Test
     @DisplayName("Round-trip preserves all populated WizardData fields (PPM-shaped fixture)")
     void roundTripPreservesAllFields() throws IOException {
         WizardData out = makeFullyPopulatedWizardData(tempDir, "RoundTripScope");

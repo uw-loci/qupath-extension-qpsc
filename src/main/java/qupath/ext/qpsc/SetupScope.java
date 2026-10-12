@@ -801,9 +801,17 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         : java.util.Set.of()
                 : java.util.Set.of();
 
+        // A handler can be registered under several prefixes (lcpolscope + lcps); without
+        // this it would get one submenu per alias whenever the config filter below lets
+        // them through, which is every alias when the config is invalid.
+        java.util.Set<Object> menuHandlersAdded =
+                java.util.Collections.newSetFromMap(new java.util.IdentityHashMap<>());
         for (var entry : ModalityRegistry.getAllHandlers().entrySet()) {
             String prefix = entry.getKey();
             var handler = entry.getValue();
+            if (menuHandlersAdded.contains(handler)) {
+                continue;
+            }
 
             // Skip modalities not present in the microscope config
             boolean modalityInConfig =
@@ -814,6 +822,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
             var contributions = handler.getMenuContributions();
             if (!contributions.isEmpty()) {
+                menuHandlersAdded.add(handler);
                 String name = handler.getDisplayName();
                 if (name == null) {
                     name = entry.getKey().toUpperCase();
