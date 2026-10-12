@@ -21,6 +21,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 **Acquisition failure push notifications**
 - A failed region now sends an urgent push notification as well as opening the modal error dialog. The dialog waits at the workstation, so an unattended run that died hours ago was only discovered at the next login -- the same channel that reports "slide acquired" said nothing about "slide failed". Requires ntfy.sh to be configured in Communication Settings; see [Alerts](documentation/PREFERENCES.md#alerts-qupath-scope-alerts).
 
+**Apply an LC-PolScope calibration to acquisition**
+- The LC-PolScope calibration result dialog has an **Apply to acquisition** button. It writes the calibrated palette into the microscope YAML, so acquisition uses that calibration rather than whatever calibrated the Micro-Manager Channel presets. Each state's LC retardances are written in waves, its stale voltage preset is dropped, `reconstruction.state_order` is reset to the palette's order, and the calibration file, time and extinction ratio are recorded under `reconstruction`. A calibration below an extinction ratio of 80 asks for confirmation first. The server reads the crystals back on the first tile, and derived tiles record `polscope.lc_readback_agrees`. See [UTILITIES.md](documentation/UTILITIES.md#lc-polscope-calibration).
+
 ### Fixed
 
 **LC-PolScope calibration dialog shows the LC control mode**
