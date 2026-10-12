@@ -26,6 +26,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.AttentionPulse;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -270,6 +271,7 @@ public class MultiTileRefinement {
         final AffineTransform[] workingEstimate = {new AffineTransform(initialTransform)};
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.setTitle("Multi-Tile Alignment Refinement");
         // Dropped setAlwaysOnTop(true): floating over the multi-slide panel occluded
         // its Abort All. Own the QuPath main window instead so this co-floats.

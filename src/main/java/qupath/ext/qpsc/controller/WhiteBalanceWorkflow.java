@@ -17,6 +17,7 @@ import qupath.ext.qpsc.QPScopeChecks;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -263,6 +264,7 @@ public class WhiteBalanceWorkflow {
     private static void runSimpleCalibration(MicroscopeSocketClient client, WhiteBalanceDialog.SimpleWBParams params) {
         // Show progress dialog
         Stage progressStage = new Stage();
+        QpscWindows.track(progressStage);
         progressStage.initModality(Modality.NONE);
         qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
         if (gui != null && gui.getStage() != null) {
@@ -425,6 +427,7 @@ public class WhiteBalanceWorkflow {
     private static void runPPMCalibration(MicroscopeSocketClient client, WhiteBalanceDialog.PPMWBParams params) {
         // Show progress dialog
         Stage progressStage = new Stage();
+        QpscWindows.track(progressStage);
         progressStage.initModality(Modality.NONE);
         qupath.lib.gui.QuPathGUI guiPPM = qupath.lib.gui.QuPathGUI.getInstance();
         if (guiPPM != null && guiPPM.getStage() != null) {

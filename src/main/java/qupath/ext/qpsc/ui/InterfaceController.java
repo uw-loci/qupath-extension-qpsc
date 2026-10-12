@@ -57,6 +57,7 @@ public class InterfaceController extends VBox {
         InterfaceController controller = loader.getController();
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.initModality(Modality.APPLICATION_MODAL);
         stage.setScene(new Scene(root));
         stage.setTitle(resources.getString("stage.title"));

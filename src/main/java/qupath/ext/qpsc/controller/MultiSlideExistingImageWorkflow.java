@@ -49,6 +49,7 @@ import qupath.ext.qpsc.ui.AttentionPulse;
 import qupath.ext.qpsc.ui.AutoAdvanceController;
 import qupath.ext.qpsc.ui.DialogPlacement;
 import qupath.ext.qpsc.ui.MultiSlideAssignmentDialog;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.SectionBuilder;
 import qupath.ext.qpsc.ui.ThemeColors;
@@ -285,6 +286,7 @@ public final class MultiSlideExistingImageWorkflow {
             String runId) {
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.initModality(Modality.NONE);
         stage.initOwner(gui.getStage());
         stage.setTitle("Multi-Slide Acquisition Progress");

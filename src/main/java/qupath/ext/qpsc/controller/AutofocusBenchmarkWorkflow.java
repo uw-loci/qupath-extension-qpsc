@@ -25,6 +25,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.AutofocusBenchmarkDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.fx.dialogs.Dialogs;
@@ -220,6 +221,7 @@ public class AutofocusBenchmarkWorkflow {
         Platform.runLater(() -> {
             // Create progress window
             Stage progressStage = new Stage();
+            QpscWindows.track(progressStage);
             progressStage.initModality(Modality.NONE);
             progressStage.setTitle("Autofocus Parameter Benchmark - Progress");
             progressStage.setAlwaysOnTop(true);

@@ -80,6 +80,7 @@ public class ThresholdPreviewDialog {
             Image fxImage = SwingFXUtils.toFXImage(bufferedImage, null);
 
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             stage.setTitle("Threshold Preview - Tune Detection Thresholds");
             stage.initModality(Modality.NONE);
 

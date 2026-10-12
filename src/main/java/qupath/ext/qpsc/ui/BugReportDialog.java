@@ -87,6 +87,7 @@ public class BugReportDialog {
     private BugReportDialog(QuPathGUI qupath) {
         this.owner = qupath != null && qupath.getStage() != null ? qupath.getStage() : null;
         this.stage = new Stage();
+        QpscWindows.track(this.stage);
         stage.setTitle("Report a bug");
         if (owner != null) {
             stage.initOwner(owner);

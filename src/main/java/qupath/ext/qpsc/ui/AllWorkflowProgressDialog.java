@@ -76,6 +76,7 @@ public final class AllWorkflowProgressDialog {
         this.batch = AcquisitionTimeEstimator.estimateBatch(estimates);
         this.startMillis = nowMillis;
         this.stage = new Stage();
+        QpscWindows.track(this.stage);
         this.stage.setTitle("All-Workflow Acquisition Prediction");
         if (owner != null) {
             this.stage.initOwner(owner);

@@ -2,6 +2,7 @@ package qupath.ext.qpsc;
 
 import java.io.IOException;
 import java.util.ResourceBundle;
+import javafx.animation.PauseTransition;
 import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.scene.control.Alert;
@@ -20,6 +21,7 @@ import qupath.ext.qpsc.controller.ExportSpatialSceneWorkflow;
 import qupath.ext.qpsc.controller.FocusApproachValidationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
+import qupath.ext.qpsc.controller.MicroscopeSwitcher;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.RegisterObjectiveWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
@@ -70,6 +72,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
     /** True if the microscope YAML passed validation. */
     private boolean configValid;
+
+    /**
+     * The one installed instance, so a microscope switch can rebuild the menu it built. QuPath
+     * instantiates an extension exactly once per session.
+     */
+    private static volatile SetupScope installed;
+
+    /** Set once a menu has been built; from then on {@link #addMenuItem} replaces, not appends. */
+    private QuPathGUI menuOwner;
 
     @Override
     public String getName() {
@@ -200,6 +211,42 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         }
 
+        installed = this;
+        loadConfigState(autoInstalledOffline);
+
+        // A changed config-file preference is an intent to use a different microscope. Offer
+        // to apply it now -- disconnect, reload, rebuild, reopen -- rather than requiring a
+        // restart. Debounced, because the preferences text field fires on every keystroke and
+        // this must fire once, on the path the user finished typing or picked.
+        PauseTransition settle = new PauseTransition(Duration.millis(1500));
+        settle.setOnFinished(e -> MicroscopeSwitcher.offerSwitch(QPPreferenceDialog.getMicroscopeConfigFileProperty()));
+        QPPreferenceDialog.microscopeConfigFileProperty().addListener((obs, was, now) -> settle.playFromStart());
+
+        // 4) Start project-scoped logging
+        ProjectLogger.enableTempLogging();
+
+        // Auto-switch log files when QuPath project changes
+        qupath.projectProperty().addListener((obs, oldProject, newProject) -> {
+            if (newProject != null) {
+                ProjectLogger.enable(newProject);
+            } else {
+                ProjectLogger.disable();
+            }
+        });
+
+        // 5) Build our menu on the FX thread
+        Platform.runLater(() -> addMenuItem(qupath));
+    }
+
+    /**
+     * Loads everything about the extension that depends on which microscope YAML is active:
+     * the config manager singleton, its validity, whether it is the offline placeholder, and
+     * whether a JAI camera is configured. Called at install and again on a microscope switch.
+     *
+     * @param autoInstalledOffline true only on a fresh install that just received the
+     *                             offline placeholder, which earns a one-time notice
+     */
+    void loadConfigState(boolean autoInstalledOffline) {
         MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
         // 2) Validate microscope YAML up-front via QPScopeChecks
@@ -237,26 +284,30 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 logger.warn("Could not check for JAI camera: {}", e.getMessage());
             }
         }
+    }
 
-        // 4) Start project-scoped logging
-        ProjectLogger.enableTempLogging();
-
-        // Auto-switch log files when QuPath project changes
-        qupath.projectProperty().addListener((obs, oldProject, newProject) -> {
-            if (newProject != null) {
-                ProjectLogger.enable(newProject);
-            } else {
-                ProjectLogger.disable();
-            }
-        });
-
-        // 5) Build our menu on the FX thread
-        Platform.runLater(() -> addMenuItem(qupath));
+    /**
+     * Re-reads the config-dependent state and rebuilds the QP Scope menu against it. Used by
+     * {@link MicroscopeSwitcher} after the config manager has been reloaded. FX thread.
+     */
+    public static void reloadForNewConfig() {
+        SetupScope me = installed;
+        if (me == null || me.menuOwner == null) {
+            logger.warn("Cannot rebuild the QP Scope menu: the extension is not installed");
+            return;
+        }
+        me.loadConfigState(false);
+        me.addMenuItem(me.menuOwner);
     }
 
     private void addMenuItem(QuPathGUI qupath) {
         // Create or get the top level Extensions > QP Scope menu
         var extensionMenu = qupath.getMenu("Extensions>" + EXTENSION_NAME, true);
+        // Idempotent: a microscope switch rebuilds this menu against the new config, and the
+        // items that depend on it (modality submenus, multi-slide, JAI tools) must not pile up.
+        extensionMenu.getItems().clear();
+        extensionMenu.setGraphic(null);
+        menuOwner = qupath;
 
         // Add colored indicator dot for quick identification in the menu
         if (PersistentPreferences.isShowMenuDot()) {
@@ -471,6 +522,16 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 throw new RuntimeException(ex);
             }
         });
+
+        // Switch microscope: apply the config-file preference without restarting QuPath.
+        MenuItem switchMicroscopeOption = new MenuItem(res.getString("menu.switchMicroscope"));
+        setMenuItemTooltip(
+                switchMicroscopeOption,
+                "Apply the Microscope Config File preference now: reconnect the server to the new "
+                        + "config, rebuild this menu, reopen the Live Viewer and Stage Map, and close "
+                        + "other QP Scope windows. Refused while an acquisition is running.");
+        switchMicroscopeOption.setOnAction(
+                e -> MicroscopeSwitcher.switchTo(QPPreferenceDialog.getMicroscopeConfigFileProperty(), true));
 
         // Autofocus parameter benchmark
         MenuItem autofocusBenchmarkOption = new MenuItem(res.getString("menu.autofocusBenchmark"));
@@ -735,6 +796,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 .addAll(
                         setupWizardOption,
                         serverConnectionOption,
+                        switchMicroscopeOption,
                         new SeparatorMenuItem(),
                         registerObjectiveOption,
                         lightPathOption,

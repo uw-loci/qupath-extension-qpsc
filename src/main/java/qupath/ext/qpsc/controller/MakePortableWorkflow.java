@@ -30,6 +30,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.fx.dialogs.Dialogs;
@@ -319,6 +320,7 @@ public class MakePortableWorkflow {
         boolean hasTiles = !tileScan.tileDirs.isEmpty();
 
         Stage dialog = new Stage();
+        QpscWindows.track(dialog);
         dialog.setTitle("Make Project Portable");
         dialog.initOwner(gui.getStage());
 

@@ -56,6 +56,7 @@ public final class MacroOrientationDialog {
         Platform.runLater(() -> {
             try {
                 Stage stage = new Stage();
+                QpscWindows.track(stage);
                 stage.initModality(Modality.NONE);
                 if (owner != null) {
                     stage.initOwner(owner);

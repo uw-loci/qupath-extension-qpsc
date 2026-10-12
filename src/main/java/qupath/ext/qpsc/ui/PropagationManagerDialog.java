@@ -105,6 +105,7 @@ public final class PropagationManagerDialog {
         List<PropagationGroupItem> groups = ForwardPropagationWorkflow.buildGroups(project);
 
         Stage dialog = new Stage();
+        QpscWindows.track(dialog);
         dialog.setTitle("Propagation Manager");
         // Deliberately NOT initOwner(qupath.getStage()): owner-bound stages can be hidden
         // by the FX runtime when the owner's window state changes (image switch, focus

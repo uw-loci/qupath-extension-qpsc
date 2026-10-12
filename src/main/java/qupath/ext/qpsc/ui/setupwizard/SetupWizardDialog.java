@@ -19,6 +19,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -122,6 +123,7 @@ public class SetupWizardDialog {
 
         // Create and show stage
         stage = new Stage();
+        QpscWindows.track(stage);
         stage.setTitle("QPSC Setup Wizard");
         stage.setScene(new javafx.scene.Scene(root));
         stage.setMinWidth(700);

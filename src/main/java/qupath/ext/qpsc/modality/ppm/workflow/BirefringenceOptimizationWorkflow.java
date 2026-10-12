@@ -20,6 +20,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BirefringenceOptimizationDialog;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -104,6 +105,7 @@ public class BirefringenceOptimizationWorkflow {
     private static void startOptimizationWithProgress(BirefringenceOptimizationDialog.BirefringenceParams params) {
         // Must be called on FX thread - create non-modal progress window
         Stage progressStage = new Stage();
+        QpscWindows.track(progressStage);
         progressStage.setTitle("Birefringence Optimization");
         progressStage.initModality(Modality.NONE); // Non-modal - allows other dialogs
 
@@ -234,6 +236,7 @@ public class BirefringenceOptimizationWorkflow {
                 Platform.runLater(() -> {
                     // Create NON-MODAL stage move dialog (allows using Stage Control)
                     Stage stageMoveStage = new Stage();
+                    QpscWindows.track(stageMoveStage);
                     stageMoveStage.setTitle("Move Stage to Tissue");
                     stageMoveStage.initModality(Modality.NONE); // Non-modal!
 

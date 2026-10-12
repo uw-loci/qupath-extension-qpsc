@@ -136,6 +136,7 @@ public final class StageDirectionCalibrationDialog {
 
     private void build(Window owner, CompletableFuture<CalibrationResult> future) {
         stage = new Stage();
+        QpscWindows.track(stage);
         stage.initModality(Modality.NONE);
         if (owner != null) {
             stage.initOwner(owner);

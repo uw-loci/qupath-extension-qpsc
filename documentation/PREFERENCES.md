@@ -281,11 +281,23 @@ Settings for file locations and paths.
 |----------|-------|
 | Type | File |
 | Default | Offline placeholder (auto-installed on first launch) |
-| Requires Restart | Yes |
+| Requires Restart | No -- changing it offers a **Switch Microscope** (see below) |
 | **REQUIRED** | Yes |
 
 **Description:**
 Path to the YAML configuration file describing your microscope setup. This file defines available modalities, objectives, detectors, stage limits, and other hardware parameters.
+
+**Changing it while QuPath is open:**
+About a second and a half after you finish editing this field (or pick a file), if the new path
+is a different, existing file, QPSC offers to switch to it. The same action is available any time
+from **Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope...**.
+A switch disconnects from the command server and reconnects with the new config, rebuilds the
+QP Scope menu (modality submenus, Multi-Slide, JAI tools), closes and reopens the Live Viewer
+and Stage Map if they were open, and closes every other QP Scope window (camera control,
+calibration and progress windows), since they describe a microscope that is no longer
+connected. It is refused while an acquisition is running, and a file that fails validation is
+rolled back -- the previous configuration and preference value are restored. Declining the
+offer leaves the preference as you set it; nothing changes until you switch or restart.
 
 **Offline / Analysis default:**
 If this preference is empty on launch (a fresh install), QPSC auto-installs and

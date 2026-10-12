@@ -151,6 +151,7 @@ public class CalibrationResultDialog {
             Runnable onTuneThresholds) {
         Platform.runLater(() -> {
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             stage.setTitle("PPM Reference Slide Calibration Results");
             stage.initModality(Modality.NONE);
 

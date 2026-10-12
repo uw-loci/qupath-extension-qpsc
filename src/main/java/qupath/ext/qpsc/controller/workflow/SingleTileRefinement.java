@@ -20,6 +20,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -443,6 +444,7 @@ public class SingleTileRefinement {
 
         // Create non-modal stage
         Stage dialogStage = new Stage();
+        QpscWindows.track(dialogStage);
         dialogStage.setTitle("Refine Alignment");
         dialogStage.initModality(Modality.NONE); // Non-modal - allows QuPath interaction
         dialogStage.setResizable(false);

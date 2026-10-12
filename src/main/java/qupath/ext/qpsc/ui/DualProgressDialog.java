@@ -176,6 +176,7 @@ public class DualProgressDialog {
 
         // Create UI components
         stage = new Stage();
+        QpscWindows.track(stage);
         stage.initModality(Modality.NONE);
         stage.setTitle("Acquisition Workflow Progress");
         stage.setAlwaysOnTop(true);

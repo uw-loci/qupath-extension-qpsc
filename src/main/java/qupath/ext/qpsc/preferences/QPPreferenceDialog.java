@@ -1150,6 +1150,11 @@ public class QPPreferenceDialog {
         return microscopeConfigFileProperty.get();
     }
 
+    /** The config-file preference itself, for code that needs to observe changes to it. */
+    public static StringProperty microscopeConfigFileProperty() {
+        return microscopeConfigFileProperty;
+    }
+
     public static void setMicroscopeConfigFileProperty(String path) {
         microscopeConfigFileProperty.set(path);
     }

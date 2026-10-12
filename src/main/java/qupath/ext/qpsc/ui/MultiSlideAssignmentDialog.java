@@ -410,6 +410,7 @@ public final class MultiSlideAssignmentDialog {
         }
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         // NOT modal. This dialog's own instructions tell the operator to open the Stage Map
         // beside it and rotate each slide until the live preview matches how the slide is
         // physically mounted -- which an application-modal window makes impossible, since it

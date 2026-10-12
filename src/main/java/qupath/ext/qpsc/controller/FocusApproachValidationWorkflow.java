@@ -25,6 +25,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.FocusApproachValidationStore;
@@ -473,6 +474,7 @@ public final class FocusApproachValidationWorkflow {
         final boolean[] cancelled = {false};
 
         Stage progress = new Stage();
+        QpscWindows.track(progress);
         progress.initModality(Modality.APPLICATION_MODAL);
         progress.setTitle("Focus Approach Validation - Progress");
         progress.setAlwaysOnTop(true);

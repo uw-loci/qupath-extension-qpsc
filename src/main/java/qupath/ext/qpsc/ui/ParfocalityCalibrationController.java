@@ -154,6 +154,7 @@ public class ParfocalityCalibrationController {
         }
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         activeStage = stage;
         stage.setTitle("Calibrate Parfocality");
         stage.initModality(Modality.NONE);

@@ -989,6 +989,8 @@ public class CameraControlController {
         dlg.setOnShown(event -> {
             Stage stage = (Stage) dlg.getDialogPane().getScene().getWindow();
             stage.setAlwaysOnTop(true);
+            // Non-modal and long-lived: a microscope switch must be able to close it.
+            QpscWindows.track(stage);
         });
 
         dlg.show();

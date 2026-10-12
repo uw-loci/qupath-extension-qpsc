@@ -124,6 +124,7 @@ public class UIFunctions {
                     totalPositions,
                     stepsPerPositionFinal);
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             ProgressBar progressBar = new ProgressBar(0);
             progressBar.setPrefWidth(300);
             Label timeLabel = new Label("Estimating time...");
@@ -369,6 +370,7 @@ public class UIFunctions {
     public static void checkValidAnnotationsGUI(List<String> validNames, Consumer<Boolean> callback) {
         Platform.runLater(() -> {
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             stage.initModality(Modality.NONE);
             stage.setTitle("Validate annotation boundaries");
             stage.setAlwaysOnTop(true);
@@ -444,6 +446,7 @@ public class UIFunctions {
         }
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.initModality(Modality.NONE);
         stage.setTitle("Position Confirmation");
         stage.setAlwaysOnTop(true);
@@ -540,6 +543,7 @@ public class UIFunctions {
 
         Runnable showDialog = () -> {
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             stage.initModality(Modality.NONE);
             stage.setTitle("Position Confirmation");
             stage.setAlwaysOnTop(true);
@@ -815,6 +819,7 @@ public class UIFunctions {
         Platform.runLater(() -> {
             // Create a non-modal stage instead of a modal dialog
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             stage.initModality(Modality.NONE);
             stage.setTitle("Select Tile");
             // Dropped setAlwaysOnTop(true): floating over the multi-slide panel
@@ -960,6 +965,7 @@ public class UIFunctions {
 
             // Create a simple progress stage instead of Alert
             Stage progressStage = new Stage();
+            QpscWindows.track(progressStage);
             progressStage.setTitle(title);
             progressStage.initModality(Modality.APPLICATION_MODAL);
             progressStage.setResizable(false);
@@ -1031,6 +1037,7 @@ public class UIFunctions {
             Platform.runLater(() -> {
                 try {
                     Stage progressStage = new Stage();
+                    QpscWindows.track(progressStage);
                     stageHolder[0] = progressStage;
 
                     progressStage.setTitle(title);
@@ -1161,6 +1168,7 @@ public class UIFunctions {
 
         Platform.runLater(() -> {
             Stage notificationStage = new Stage();
+            QpscWindows.track(notificationStage);
             stageHolder[0] = notificationStage;
 
             notificationStage.setTitle(title);
@@ -1247,6 +1255,7 @@ public class UIFunctions {
 
         Platform.runLater(() -> {
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             stage.initModality(Modality.NONE);
             stage.setTitle("Annotation Setup");
             stage.setAlwaysOnTop(true);

@@ -26,6 +26,7 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 
@@ -149,6 +150,7 @@ public final class InsertCalibrationDialog {
         boolean showPerSlot = numSlides > 1;
 
         Stage win = new Stage();
+        QpscWindows.track(win);
         win.setTitle("Calibrate Insert: " + insertName);
         if (owner != null) {
             win.initOwner(owner);

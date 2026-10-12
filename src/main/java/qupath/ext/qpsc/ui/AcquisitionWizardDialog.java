@@ -180,6 +180,7 @@ public class AcquisitionWizardDialog {
 
     private void createAndShow() {
         wizardStage = new Stage();
+        QpscWindows.track(wizardStage);
         wizardStage.initStyle(StageStyle.TRANSPARENT);
         wizardStage.setAlwaysOnTop(true);
         wizardStage.setTitle("Acquisition Wizard");

@@ -87,6 +87,7 @@ public class SunburstCalibrationDialog {
 
         Platform.runLater(() -> {
             Stage stage = new Stage();
+            QpscWindows.track(stage);
             stage.setTitle("PPM Reference Slide Calibration");
             stage.initModality(Modality.NONE);
 

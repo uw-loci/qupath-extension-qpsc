@@ -25,6 +25,7 @@ import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
@@ -787,6 +788,7 @@ public class AutofocusEditorWorkflow {
         }
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.setTitle("Streaming Autofocus Test Result");
         stage.setScene(new javafx.scene.Scene(root, 1100, 600));
         stage.show();

@@ -32,6 +32,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.ProbeStageAfResult;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -79,6 +80,7 @@ public class ProbeStageAfWorkflow {
 
         // Show a progress window while the probe runs.
         Stage progressStage = new Stage();
+        QpscWindows.track(progressStage);
         // Progress only -- the probe runs entirely on the server and reads no QuPath
         // state, so there is nothing for modality to protect. Kept on top instead.
         progressStage.initModality(Modality.NONE);
@@ -135,6 +137,7 @@ public class ProbeStageAfWorkflow {
      */
     private static void showResultDialog(String yamlPath, ProbeStageAfResult result) {
         Stage dialog = new Stage();
+        QpscWindows.track(dialog);
         dialog.initModality(Modality.APPLICATION_MODAL);
         dialog.setTitle("Re-probe Stage AF -- Results");
 

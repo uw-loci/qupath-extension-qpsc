@@ -17,6 +17,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.NoiseCharacterizationDialog;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -130,6 +131,7 @@ public class NoiseCharacterizationWorkflow {
      */
     private static void startWithProgress(NoiseCharacterizationDialog.NoiseCharParams params) {
         Stage progressStage = new Stage();
+        QpscWindows.track(progressStage);
         progressStage.setTitle("JAI Noise Characterization - Progress");
         progressStage.initModality(Modality.NONE);
 

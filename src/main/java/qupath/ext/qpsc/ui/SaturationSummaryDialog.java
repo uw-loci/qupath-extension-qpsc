@@ -269,6 +269,7 @@ public class SaturationSummaryDialog {
         ModalityHandler.ChannelDisplay channelDisplay = parsed.channelDisplay();
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.setTitle("Saturation Summary" + (modality != null && !modality.isBlank() ? " -- " + modality : ""));
         stage.initModality(Modality.NONE);
 
@@ -380,6 +381,7 @@ public class SaturationSummaryDialog {
                 .toList();
 
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.setTitle("Saturation Summary -- Multi-Slide Run (" + totalAcquisitions + " acquisitions)");
         stage.initModality(Modality.NONE);
 
