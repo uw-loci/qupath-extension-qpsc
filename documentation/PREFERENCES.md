@@ -282,13 +282,21 @@ When enabled, QuPath automatically attempts to connect to the microscope server 
 
 **Description:**
 The program QPSC runs, with `--demo`, when **Connect to a Demo Microscope...** finds no
-command server listening on the configured port: the `microscope-command-server`
+microscope server listening on the configured port: the `microscope-command-server`
 executable from the Python environment that holds the QPSC packages (its `Scripts`
-folder on Windows, `bin` elsewhere), or the repository's `start_server.bat`. Empty means
-"whatever `microscope-command-server` is on the PATH", which a virtual environment is
-not unless it is activated. Set from the **Locate server program...** button in the
-dialog that appears when the server could not be started; it is not on the preferences
-pane. A server already listening is always used instead of starting one.
+folder on Windows, `bin` elsewhere), or the repository's `start_server.bat` (batch files
+run through `cmd.exe /c`). Empty means "whatever `microscope-command-server` is on the
+PATH"; a virtual environment's programs are found only while it is activated, see
+[Troubleshooting: Demo microscope](TROUBLESHOOTING.md#demo-microscope). A server already
+listening is always used instead of starting one.
+
+**Changing it:** the only control is the **Locate server program...** button in the dialog
+that appears when the server could not be started; it is not on the preferences pane. A
+value that starts a working server cannot be changed or cleared from QuPath.
+
+**Example:** `C:\Users\<you>\venv_qpsc\Scripts\microscope-command-server.exe` (the
+Windows virtual environment from Installation step 3) or
+`/home/<you>/venv_qpsc/bin/microscope-command-server` (Linux).
 
 ---
 
@@ -332,9 +340,12 @@ overwritten.
 
 **Demo microscope:** **Extensions > QP Scope > Connect to a Demo Microscope...**
 extracts a second bundled config, `<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`
-(marked `microscope.demo: true`), and switches this preference to it. Unlike the
-placeholder it is a complete, acquisition-capable configuration, driven by the command
-server started with `--demo`. Switch back to your own config with Switch Microscope.
+(marked `microscope.demo: true`), and switches this preference to it; on Windows the value
+becomes `C:\Users\<you>\QuPath\v0.7\qpsc-demo-microscope\config_Demo.yml`. Unlike the
+placeholder it is a complete, acquisition-capable configuration, driven by the microscope
+server started with `--demo`. The connect also sets the Live Viewer's remembered exposure
+to the demo's 10 ms. Switch back with **Extensions > QP Scope > Utilities > Microscope
+Configuration > Switch Microscope...**, or change this preference and accept the offer.
 
 **CRITICAL WARNING:**
 Using the wrong configuration file could damage the microscope! Ensure this points to the correct configuration for your specific microscope system.

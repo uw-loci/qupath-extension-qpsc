@@ -221,43 +221,70 @@ You should see "QP Scope" as a top-level menu. If it does not appear, verify the
 
 ## Try It Without a Microscope (optional)
 
-QPSC ships a simulated microscope, the way Micro-Manager ships a demo configuration.
-It needs Steps 1, 3 and 4 only -- QuPath, the Python packages and the two JARs. No
-Micro-Manager, no hardware, no Setup Wizard.
+QPSC ships a simulated microscope. It needs Steps 1, 3 and 4 only: QuPath, the Python
+packages and the two JARs. No Micro-Manager, no hardware, no Setup Wizard. Use it to learn
+the dialogs before booking scope time, to check an install on a new PC, or to reproduce a
+bug for a report.
 
-1. In QuPath, choose **Extensions -> QP Scope -> Connect to a Demo Microscope...**
-2. QPSC starts the command server in demo mode on this computer
-   (`microscope-command-server --demo`), switches to the bundled demo configuration,
-   connects, and opens the Live Viewer.
-3. Turn **Live** on. You are looking at a virtual H&E slide: the stage arrows pan across
-   it, the Z controls defocus it, and Autofocus finds the focal plane again. Open the
-   Stage Map to see the slide outline, or run a Bounded Acquisition to acquire and stitch
-   tiles.
+**If you installed the Python packages in a virtual environment (Step 3.1), QPSC will not
+find the server program the first time.** Expect the dialog *QPSC could not start the
+microscope command server*. Step 2 below says what to do.
 
-Everything above the camera and stage is the production code path -- the socket
-protocol, autofocus, tiled acquisition, stitching -- so what you see is what a real
-scope does.
+1. Choose **Extensions -> QP Scope -> Connect to a Demo Microscope...**. Starting the server
+   takes a few seconds (QPSC waits up to a minute). When it is up, a notification reads
+   *Started the demo server and connected.* and the Live Viewer opens.
+2. If the dialog *QPSC could not start the microscope command server* appears instead, click
+   **Locate server program...** and pick `venv_qpsc\Scripts\microscope-command-server`
+   (Windows) or `venv_qpsc/bin/microscope-command-server` (Linux/macOS). QPSC remembers the
+   choice as the *Server launcher* preference, starts the server, and connects.
+3. If QPSC asks *Point the server connection at this computer?*, click **Use localhost**. It
+   means Communication Settings pointed at another computer; the demo server runs on this
+   one. Set the host back when you return to the real microscope.
+4. Click **Live: OFF** at the top left of the Live Viewer. It turns green, reads **Live: ON**,
+   and shows a virtual H&E slide: pink is eosin-stained stroma, the small dark purple spots
+   (about 9 um) are nuclei, and near-white is bare glass. The stage starts at the slide
+   center, which is tissue, but best focus there is at about Z = +4 um, so the first frame is
+   slightly soft: click **Autofocus**. The arrow buttons on the **Navigate** tab pan across
+   the slide. Tissue sits in islands a few millimeters across, and about half the slide is
+   glass.
+5. Optional: **Extensions -> QP Scope -> Acquisition controls -> Stage Map** shows the slide
+   outline with the stage crosshair at its center.
+6. Optional: **Extensions -> QP Scope -> Acquisition controls -> Bounded Acquisition** acquires
+   and stitches tiles. A worked example: Sample Name `DemoSample01`; **Center Point + Size**
+   with Center X `0`, Center Y `0`, Width `2000`, Height `2000` (the preview reads *Tile Grid:
+   8 x 8 = 64 tiles*); **Use background correction** unticked; **Start Acquisition**. About
+   70 s later `DemoSample01_0.0_001.ome.tif` (3737 x 3737 px at 0.65 um/px) appears in the
+   project.
 
-![Live Viewer on the demo microscope: the virtual H&E slide at 10x](images/Docs_DemoMicroscope_LiveViewer.png)
+Only the camera and stage are simulated. The connection, autofocus, tiled acquisition and
+stitching run the same code as a real microscope. The demo is a 10x objective (0.65 um/px)
+on a 512 x 512 camera, a 333 x 333 um field of view, looking at a 40 x 20 mm slide centered
+on the stage origin; beyond it the camera sees bare glass. The slide pattern is fixed, so the
+same stage position always shows the same tissue, and each frame adds simulated read noise.
+What the simulation leaves out is listed in the
+[server README](https://github.com/uw-loci/microscope_command_server#demo-mode---demo).
 
-![Stage Map on the demo microscope: the synthesized single-slide insert](images/Docs_DemoMicroscope_StageMap.png)
+![Live Viewer on the demo microscope: Live: ON, a pink virtual H&E slide with purple nuclei at 10x, Exposure 10 ms, Demo lamp 25](images/Docs_DemoMicroscope_LiveViewer.png)
 
-**If QPSC cannot start the server.** It looks for `microscope-command-server` on the
-PATH, which a virtual environment is not on unless it is activated. QPSC then shows the
-command to run yourself (activate the environment, run
-`microscope-command-server --demo`, choose the menu item again) and offers
-**Locate server program...**: point it at the `microscope-command-server` executable in
-the environment's `Scripts` folder (Windows) or `bin` folder (Linux/macOS), or at the
-repository's `start_server.bat`, and it is started for you from then on. The choice is
-kept in the QPSC preferences (*Server launcher*).
+![Stage Map on the demo microscope: one slide outline labeled Slide 1 with the stage crosshair at its center, Source set to Demo](images/Docs_DemoMicroscope_StageMap.png)
+
+Already have the server environment open? Run the server there, then choose the menu item.
+QPSC connects to a server that is already listening instead of starting one:
+
+```bash
+microscope-command-server --demo
+```
 
 **Where things go.** The demo configuration is extracted once to
 `<QuPath user directory>/qpsc-demo-microscope/` (`config_Demo.yml` with its autofocus,
-imageprocessing and resources sidecars) and selected as the Microscope Config File.
-Acquired tiles go wherever the acquisition dialog sends them, as on a real scope. A server
-QPSC started is stopped when QuPath exits. To return to a real microscope, point the
-Microscope Config File preference at your own config and use **Switch Microscope...**, or
-run the Setup Wizard below.
+imageprocessing and resources files) and selected as the Microscope Config File. Your edits
+to those files survive updates; delete the folder for a fresh copy. Acquired tiles and the
+stitched image go into the project, as on a real scope. A server QPSC started is stopped when
+QuPath exits. To return to a real microscope, set **Edit -> Preferences -> QuPath SCope ->
+Microscope Config File** to your own `config_<scope>.yml` and accept the Switch Microscope
+offer, or choose **Extensions -> QP Scope -> Utilities -> Microscope Configuration -> Switch
+Microscope...**, or run the Setup Wizard below. Problems and their messages are in
+[Troubleshooting: Demo microscope](TROUBLESHOOTING.md#demo-microscope).
 
 ---
 

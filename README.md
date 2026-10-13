@@ -132,9 +132,11 @@ running**. See the [Installation Guide](documentation/INSTALLATION.md) for the f
 > - **[Brightfield / PPM Quick Start](documentation/QUICKSTART-BF.md)** -- transmitted light imaging in 15 minutes
 > - **[Laser Scanning / SHG Quick Start](documentation/QUICKSTART-LSM.md)** -- multiphoton / second harmonic generation setup
 >
-> **No microscope yet?** Install QuPath, the Python packages and the two JARs, then choose
-> **Extensions > QP Scope > Connect to a Demo Microscope...** QPSC starts the command server in demo
-> mode (a simulated slide on an XYZ stage, no Micro-Manager needed) and opens the Live Viewer. See
+> **No microscope yet?** Do Steps 1, 3 and 4 of the [Installation Guide](documentation/INSTALLATION.md)
+> (QuPath, the Python packages, the QPSC and tiles-to-pyramid JARs), then choose
+> **Extensions > QP Scope > Connect to a Demo Microscope...** QPSC starts the microscope server in demo
+> mode (a simulated slide on an XYZ stage, no Micro-Manager needed) and opens the Live Viewer. Click
+> **Live: OFF** to see the simulated slide. See
 > [Try It Without a Microscope](documentation/INSTALLATION.md#try-it-without-a-microscope-optional).
 
 ### Prerequisites

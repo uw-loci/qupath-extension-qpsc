@@ -30,7 +30,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | **Top-Level Menu** | | |
 | [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup for new acquisitions | Extensions > QP Scope > Acquisition Wizard... |
 | [Multi-Slide Acquisition](tools/multi-slide-acquisition.md) | Batch-acquire several slides in one holder (setup pass + walk-away acquire); appears when config has a multi-slide holder | Extensions > QP Scope > Multi-Slide Acquisition... |
-| [Connect to a Demo Microscope](#connect-to-a-demo-microscope) | Try QPSC with no hardware: start the command server in demo mode, switch to the bundled demo config, connect, open the Live Viewer | Extensions > QP Scope > Connect to a Demo Microscope... |
+| [Connect to a Demo Microscope](#connect-to-a-demo-microscope) | Try QPSC with no hardware: start the microscope server in demo mode, switch to the bundled demo config, connect, open the Live Viewer | Extensions > QP Scope > Connect to a Demo Microscope... |
 | [Report a Bug...](#report-a-bug) | Submit a bug report directly to the issue tracker | Extensions > QP Scope > Report a Bug... |
 | **Acquisition controls** | | |
 | [Bounded Acquisition](tools/bounded-acquisition.md) | Direct bounding-box acquisition from stage coordinates | Extensions > QP Scope > Acquisition controls > Bounded Acquisition |
@@ -109,18 +109,35 @@ Adds the objective currently in the light path to the microscope configuration w
 ### Connect to a Demo Microscope
 
 QPSC driving a simulated microscope, the way Micro-Manager's demo configuration lets you try
-that program with no hardware. Always enabled, even with no configuration. It extracts the
-bundled demo configuration (`<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`) if
-needed, makes sure the server host preference names this computer, finds a command server
-already listening on the configured port or starts one with `microscope-command-server --demo`
-(the *Server launcher* preference first, then the PATH), switches to the demo configuration
-through Switch Microscope, connects, and opens the Live Viewer. The demo is the real server
-with its Micro-Manager core replaced by an in-memory microscope: a virtual H&E slide on an XYZ
-stage with a focal surface, so the Live Viewer, Stage Map, autofocus, acquisition and
-stitching all run the production code path. If the server cannot be started, a dialog shows
-the command to run yourself and offers **Locate server program...**, which stores the
-executable in the *Server launcher* preference. A server QPSC started stops when QuPath
-exits. See [Try It Without a Microscope](INSTALLATION.md#try-it-without-a-microscope-optional).
+that program with no hardware. Always enabled, even with no configuration.
+
+**Needs:** QuPath, the Python packages and the two JARs. No Micro-Manager, no configuration.
+
+**Does:** extracts the demo configuration
+(`<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`) if it is missing; asks to
+point the server host at this computer (**Use localhost**) if it names another machine, and
+Cancel aborts; uses a server already listening on the configured port, or starts
+`microscope-command-server --demo` (the *Server launcher* preference first, then the PATH);
+switches to the demo configuration through Switch Microscope, or just reconnects if the demo
+is already active; sets the Live Viewer's remembered exposure to the demo's 10 ms; opens the
+Live Viewer. On success a notification reads *Started the demo server and connected.* or
+*Connected to the server already running on port 5000.*; the second means QPSC reused
+whatever was listening.
+
+**Simulated:** the camera and stage only, a virtual H&E slide on an XYZ stage with a focal
+surface (10x, 0.65 um/px, 512 x 512 px, a 333 um field, a 40 x 20 mm slide, 8-bit RGB). The
+Live Viewer, Stage Map, autofocus, acquisition and stitching run the real server's code. No
+command-line flag or YAML key changes the slide, the stage speeds or the seed; only the
+ordinary QPSC settings apply.
+
+**If the server cannot start:** a dialog shows the command to run yourself and offers
+**Locate server program...**, which stores the executable (for example
+`C:\Users\<you>\venv_qpsc\Scripts\microscope-command-server.exe`) in the *Server launcher*
+preference.
+
+**Leaving:** a server QPSC started stops when QuPath exits; return to a real microscope with
+Switch Microscope. See [Try It Without a Microscope](INSTALLATION.md#try-it-without-a-microscope-optional)
+and [Troubleshooting: Demo microscope](TROUBLESHOOTING.md#demo-microscope).
 
 ### [Communication Settings](tools/server-connection.md)
 

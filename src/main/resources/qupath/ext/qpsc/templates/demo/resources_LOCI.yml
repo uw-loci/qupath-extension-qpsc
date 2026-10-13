@@ -4,8 +4,10 @@
 # config and is the single definition of the demo's stage, detector and
 # objective. Both QPSC and the command server merge the id_* sections of
 # this file into the config, so the entries live here rather than inline.
-# Device names (DCam, DStage, XYStage) are those of Micro-Manager's Demo
-# adapter and of the server's --demo simulation.
+# Device names are the server's --demo simulation's; DCam and DStage also
+# match Micro-Manager's Demo adapter, XYStage is the simulation's own label.
+# NA and working distance below are metadata only; the simulation's depth
+# response comes from its blur-per-micrometer constant, not from NA.
 
 id_stage:
   DEMO_STAGE:

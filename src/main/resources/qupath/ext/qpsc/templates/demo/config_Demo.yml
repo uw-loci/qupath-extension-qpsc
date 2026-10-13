@@ -9,9 +9,10 @@
 #
 # The server then answers every command from an in-memory microscope: a
 # virtual H&E slide on an XYZ stage, with a focal surface so autofocus has
-# something real to find. Device names below are the ones Micro-Manager's
-# own Demo adapter uses (DCam, DStage, XYStage, DLamp), so this file also
-# works against a real Micro-Manager started with its demo configuration.
+# something real to find. Device labels follow Micro-Manager's Demo adapter
+# where it has an obvious counterpart (DCam, DStage); XYStage and DLamp are
+# the simulation's own labels. Running this file against a real Micro-Manager
+# Demo configuration has not been tried.
 #
 # The 'demo: true' flag is what marks this as the demo scope. Acquisition
 # is fully enabled (unlike the Offline / Analysis placeholder); tiles land
@@ -59,7 +60,7 @@ hardware:
 stage:
   stage_id: DEMO_STAGE
   z_stage: DStage
-  # In the simulation the focal surface sits within about +/-25 um of Z = 0
+  # In the simulation the focal surface sits between about -22 and +20 um of Z = 0
   # and the slide is "below" the objective: more negative Z is further away,
   # so retracting is the negative direction and the safe height is -400 um.
   focus:

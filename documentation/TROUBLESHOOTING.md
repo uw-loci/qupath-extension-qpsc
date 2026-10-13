@@ -119,32 +119,80 @@ running the Setup Wizard) replaces it and re-enables acquisition.
 
 #### Q: Connect to a Demo Microscope says it could not start the microscope command server
 
-**A:** QPSC runs `microscope-command-server --demo` and looks for that program on the
-PATH. A Python virtual environment is not on the PATH unless it is activated, so from
-QuPath the console script is usually not found. Either start the server yourself --
-activate the environment, run `microscope-command-server --demo`, then choose the menu
-item again (it uses a server that is already listening) -- or click **Locate server
-program...** in that dialog and pick the `microscope-command-server` executable in the
-environment's `Scripts` (Windows) or `bin` (Linux/macOS) folder, or the repository's
-`start_server.bat`. The choice is stored in the *Server launcher* preference and used
-from then on. The dialog also shows the server's last output lines when it started and
-then exited, which is where a missing Python package shows up.
+**A:** The dialog is headed *QPSC could not start the microscope command server* and begins
+*Nothing is listening on port 5000 and the server did not start:*, followed by one of three
+details.
+
+- `microscope-command-server: Cannot run program "microscope-command-server"`: the program
+  was not found. A Python virtual environment's programs are found only while it is
+  activated, so when QuPath starts the server the `microscope-command-server` program
+  installed with the Python packages is usually not found. **Fix A, start it yourself:**
+  1. Activate the environment (`venv_qpsc\Scripts\activate.bat`). 2. Run
+  `microscope-command-server --demo`. 3. Choose **Connect to a Demo Microscope...** again;
+  QPSC uses the server that is already listening. **Fix B, point QPSC at the program once:**
+  1. Click **Locate server program...**. 2. Pick `venv_qpsc\Scripts\microscope-command-server`
+  (Windows), `venv_qpsc/bin/microscope-command-server` (Linux/macOS), or the repository's
+  `start_server.bat`. The choice is stored in the *Server launcher* preference and used
+  from then on.
+- `<program> exited with code N:` followed by the server's last output lines. A line
+  `ModuleNotFoundError: No module named '...'` means a Python package is missing from that
+  environment; see [Step 3.4](INSTALLATION.md#34-troubleshooting-python-installation).
+- `<program>: still no server on port 5000 after 60 s` with nothing else: the program ran but
+  never listened. With `start_server.bat` this is usually a preflight failure waiting at
+  `pause` on a console you cannot see; run the batch file by hand once to read the message.
+
+#### Q: The demo asks "Point the server connection at this computer?"
+
+**A:** The server host preference names your scope PC, but the demo server runs here.
+**Use localhost** sets the host to `localhost` for the demo; **Cancel** aborts the connect.
+Restore the old host under **Extensions > QP Scope > Utilities > Microscope Configuration >
+Communication Settings...** when you return to the real microscope.
 
 #### Q: The demo connected, but the Live Viewer is blank white or black
 
-**A:** Turn **Live** on (the button at the top left of the Live Viewer). The simulated
-camera renders bare glass as white at 10 ms exposure and lamp intensity 25; a much longer
-exposure saturates the frame, a much shorter one is dark, exactly like a real camera. Set
-the exposure on the Camera tab. The stage starts at the slide centre, which is tissue.
+**A:** Click **Live: OFF** (top left of the Live Viewer) so it reads **Live: ON**. The
+simulated camera renders bare glass near-white (about 243 of 255) at 10 ms exposure and
+lamp intensity 25, and brightness scales as (exposure / 10 ms) x (intensity / 25). At
+intensity 25 the glass clips above about 10.5 ms, the pink tissue above about 11 ms, and
+the whole frame is white above about 50 ms; below about 2 ms it is nearly black. Lamp
+**State** off or intensity 0 gives a black frame at any exposure. To change the exposure,
+click **Stage Control**, open the **Camera** tab and set **Exposure (ms)** to 10 and the Demo
+lamp **Intensity** to 25; the demo connect sets 10 ms for you. The stage starts at the
+slide center, which is tissue, but best focus there is at about Z = +4 um, so a frame that
+looks blurred rather than blank is focus, not exposure: click **Autofocus**.
+
+#### Q: Autofocus defers, or says the field has no tissue
+
+**A:** About half the demo slide is bare glass. The demo's `dense_texture` strategy scores
+only fields with at least 20 % tissue and defers the rest to a neighbor, as it would on a
+real slide. Pan into a pink island. The camera's **Gain** property is accepted but changes
+nothing, and **Binning** 1, 2 or 4 shrinks the frame while keeping the same 333 um field.
+
+#### Q: Connect to a Demo Microscope shows "Could not connect to the demo server", or a Switch Microscope error
+
+**A:** *Could not connect to the demo server: ...* means the demo config was already active
+and a server answered on the port, but the CONFIG handshake failed, usually a server that
+was not started with `--demo`; its console should show `DEMO MODE: no Micro-Manager,
+driving a simulated microscope`. *The new config did not validate; the previous microscope
+configuration has been restored* means `config_Demo.yml` or one of its sidecars was edited
+and no longer validates: delete `<QuPath user directory>/qpsc-demo-microscope/` and choose
+the menu item again, and the bundle is re-extracted. *An acquisition is running in this
+QuPath* or *The microscope server reports an acquisition in progress* means the switch the
+demo needs is refused during an acquisition; wait for it to finish or cancel it. *Could not
+write the demo microscope config* means the QuPath user directory is not writable; choose a
+writable one in QuPath's preferences.
 
 #### Q: How do I get back to my real microscope after the demo?
 
-**A:** Point the Microscope Config File preference at your own `config_<scope>.yml` and
-choose **Utilities > Microscope Configuration > Switch Microscope...** (or accept the offer
-QPSC makes when the preference changes). If the demo changed the server host to
-`localhost`, set it back under Communication Settings. A demo server that QPSC started
-stops when QuPath exits; one you started yourself keeps running until you close it, and
-holds port 5000 until then.
+**A:** Set the Microscope Config File preference to your own `config_<scope>.yml` and accept
+the offer QPSC makes, or choose **Extensions > QP Scope > Utilities > Microscope
+Configuration > Switch Microscope...**. If the demo changed the server host to `localhost`,
+set **Host** back under **Communication Settings...**. The demo also set the Live Viewer's
+remembered exposure to its 10 ms; if your first live frame on the real scope is dark, set
+**Exposure (ms)** again on the Camera tab. A demo server that QPSC started stops when
+QuPath exits; one you started yourself keeps running until you close its window, and while
+it runs nothing else can use the server port (5000 by default), so your real server will
+not start on this computer.
 
 ### Setup Wizard
 

@@ -1,9 +1,10 @@
 # Imaging profiles for the demo microscope (config_Demo.yml).
 #
-# The simulated camera renders bare glass at full white with a 10 ms
-# exposure and lamp intensity 25, so that is the reference exposure.
-# Background correction is off: the virtual slide has no vignette to
-# divide out.
+# The simulated camera renders bare glass near-white (about 243 of 255,
+# just under clipping) with a 10 ms exposure and lamp intensity 25, so that
+# is the reference exposure. Background correction is off: the virtual
+# slide has no vignette to divide out, so a collected background would be
+# flat and correcting with it would only add noise.
 
 imaging_profiles:
   Brightfield:

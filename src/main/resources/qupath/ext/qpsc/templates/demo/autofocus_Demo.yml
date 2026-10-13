@@ -1,10 +1,13 @@
 # ========== DEMO AUTOFOCUS CONFIGURATION (schema v2) ==========
 #
 # Paired with config_Demo.yml. The simulated slide lies on a focal surface
-# that tilts and undulates within about +/-25 um of Z = 0, and the camera
-# blurs the image in proportion to the distance from it, so a sweep scores
-# a single clear peak. The brightfield binding uses the real dense_texture
-# strategy; nothing here is a stub.
+# that tilts and undulates between about -22 and +20 um of Z = 0, and the
+# camera blurs the image by 0.35 px per micrometer from it, so the 5 um step
+# below (60 um over 13 samples) moves the blur by about 1.75 px per step and
+# the laplacian_variance curve has a single clear peak; the 60 um range covers
+# the whole focal surface from any Z inside it. The brightfield binding uses
+# the real dense_texture strategy with the production validity gates
+# (texture_threshold, tissue_area_threshold); nothing here is a stub.
 
 schema_version: 2
 
