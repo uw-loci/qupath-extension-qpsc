@@ -252,9 +252,25 @@ Calibrate the two variable retarders of the universal compensator by finding the
 - **LC control mode must be `MM-Retardance`.** `MM-Voltage` is refused by the microscope server because no retardance/voltage curve is wired up yet; the dialog marks it NOT SUPPORTED when the YAML asks for it
 - Produces a human-readable assessment (Good / Acceptable / Poor) based on extinction ratio
 - Supports single-pass or iterative search (iterative refines at ~3x the exposures)
+- Exposure in milliseconds, prefilled with the acquisition's exposure for the LC-PolScope
+  states (the first channel under `modalities.lcpolscope.channels`). The server sets it on the
+  camera for the calibration and restores the previous value afterwards. Leave it blank to
+  calibrate at whatever Micro-Manager is set to. The palette does not depend on exposure, so
+  this never changes the acquisition's exposure; it only has to be long enough for the field to
+  register
+- The result records the camera as the frames were taken (device, exposure and where it came
+  from, bit depth, pixel format, frame size, binning, gain) and what the frames held in raw
+  counts (the extinction state, the brightest swing state, the brightest frame of the
+  extinction search and that peak as a fraction of the camera's range). A field whose brightest
+  frame averages less than a tenth of the camera's range is **refused as too dark** after about
+  25 exposures, with the counts and the camera state in the message. A search on a dark field
+  does not fail; it converges on noise and returns a palette that looks like any other, which
+  is what the first two runs on the LC-PolScope did (frame means of 1 to 17 counts)
 - Black level in counts, prefilled from `reconstruction.black_level` in the microscope YAML;
   override it in the dialog, or leave it blank to measure a dark frame (which needs lamp
-  control; without it the calibration assumes 0 and overstates the extinction ratio)
+  control; without it the calibration assumes 0 and overstates the extinction ratio). It must
+  be in the counts of the camera's **current** pixel format: a black level above the darkest
+  state measured is reported as a warning and makes the ratio unmeasurable
 
 **Access:** Extensions > QP Scope > [Modality Name] > Calibrate Liquid Crystals... (only visible when using an LC-PolScope microscope)
 

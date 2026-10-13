@@ -7977,6 +7977,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param scheme {@code 4-State} or {@code 5-State}, or null for the YAML value
      * @param wavelengthNm illumination wavelength, or null for the YAML value
      * @param blackLevel explicit black level, or null to let the server measure one
+     * @param exposureMs camera exposure for the calibration frames, set for the run and restored
+     *     afterwards; null snaps at whatever Micro-Manager is set to. Recorded in the result either way
      * @param strategy {@code single_pass} or {@code iterative}
      * @param statusCallback receives human-readable progress messages, may be null
      * @return the raw JSON result
@@ -7990,6 +7992,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String scheme,
             Double wavelengthNm,
             Double blackLevel,
+            Double exposureMs,
             String strategy,
             Consumer<String> statusCallback)
             throws IOException {
@@ -8011,6 +8014,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (blackLevel != null) {
             messageBuilder.append(" --black-level ").append(blackLevel);
+        }
+        if (exposureMs != null) {
+            messageBuilder.append(" --exposure-ms ").append(exposureMs);
         }
         if (strategy != null && !strategy.isBlank()) {
             messageBuilder.append(" --strategy ").append(strategy);

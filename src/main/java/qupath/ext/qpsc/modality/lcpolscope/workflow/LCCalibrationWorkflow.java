@@ -80,7 +80,7 @@ public class LCCalibrationWorkflow {
     // ------------------------------------------------------------------
 
     /** What the operator chooses; everything else comes from the microscope YAML. */
-    public record Params(String outputFolder, String strategy, Double blackLevel) {}
+    public record Params(String outputFolder, String strategy, Double blackLevel, Double exposureMs) {}
 
     /**
      * The reconstruction settings this calibration will run with, read from the microscope YAML.
@@ -92,8 +92,9 @@ public class LCCalibrationWorkflow {
      * change it instead of offering a second place to set it.
      *
      * <p>The wavelength in particular is worth reading before every calibration on this
-     * instrument: the interference filter has never been identified, and the value has already
-     * moved between 546 and 549 once.
+     * instrument: the value moved between 546 and 549 before the filter was read. It is a
+     * Semrock FF01-549/15 on the transmission lamp (identified 2026-10-13), so 549 is right; the
+     * LC adapter's own Wavelength property still says 546 and the server warns about the gap.
      */
     private static String describeReconstructionSettings() {
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
@@ -127,6 +128,37 @@ public class LCCalibrationWorkflow {
                 + "  LC control  " + modeText;
     }
 
+    /**
+     * The exposure the acquisition uses for the LC-PolScope states, from the first channel in
+     * {@code modalities.lcpolscope.channels}; null when none is declared.
+     *
+     * <p>Offered as the default calibration exposure because it answers the question that
+     * matters: whether the field has enough signal at the exposure the acquisition will run at.
+     * The states all share one exposure by contract (see the YAML), so the first one stands for
+     * all of them.
+     */
+    private static Double acquisitionExposureMs() {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) {
+            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (path == null || path.isBlank()) {
+                return null;
+            }
+            mgr = MicroscopeConfigManager.getInstance(path);
+        }
+        try {
+            var channels = mgr.getModalityChannels("lcpolscope");
+            if (channels == null || channels.isEmpty()) {
+                return null;
+            }
+            double exposure = channels.get(0).defaultExposureMs();
+            return exposure > 0 ? exposure : null;
+        } catch (RuntimeException e) {
+            logger.debug("Could not read the LC-PolScope channel exposure from the YAML", e);
+            return null;
+        }
+    }
+
     /** {@code reconstruction.black_level} from the microscope YAML, or null when unset or 0 (0 means
      *  "no clamp" to the reconstruction, not a measurement). */
     private static Double configuredBlackLevel() {
@@ -140,6 +172,66 @@ public class LCCalibrationWorkflow {
         }
         Double value = mgr.getDouble("modalities", MODALITY_KEY, "reconstruction", "black_level");
         return value == null || value <= 0 ? null : value;
+    }
+
+    /** {@code Oryx, 50 ms (request), 12-bit Mono12, 2448x2048, binning 1, gain 0}; whatever the server knew. */
+    private static String describeCamera(JsonObject camera) {
+        List<String> parts = new ArrayList<>();
+        if (camera.has("device")) {
+            parts.add(camera.get("device").getAsString());
+        }
+        if (camera.has("exposure_ms")) {
+            String exposure = formatCounts(camera.get("exposure_ms").getAsDouble()) + " ms";
+            if (camera.has("exposure_source")) {
+                exposure += " (" + camera.get("exposure_source").getAsString() + ")";
+            }
+            parts.add(exposure);
+        }
+        if (camera.has("bit_depth")) {
+            String depth = camera.get("bit_depth").getAsInt() + "-bit";
+            if (camera.has("pixel_type")) {
+                depth += " " + camera.get("pixel_type").getAsString();
+            }
+            parts.add(depth);
+        }
+        if (camera.has("width") && camera.has("height")) {
+            parts.add(
+                    camera.get("width").getAsInt() + "x" + camera.get("height").getAsInt());
+        }
+        if (camera.has("binning")) {
+            parts.add("binning " + camera.get("binning").getAsString());
+        }
+        if (camera.has("gain")) {
+            parts.add("gain " + camera.get("gain").getAsString());
+        }
+        return parts.isEmpty() ? "unknown (the camera could not be asked)" : String.join(", ", parts);
+    }
+
+    /** {@code extinction 410, brightest state 1890, grid peak 3950 of 4095 (96%) counts}. */
+    private static String describeSignal(JsonObject signal) {
+        List<String> parts = new ArrayList<>();
+        if (signal.has("extinction") && !signal.get("extinction").isJsonNull()) {
+            parts.add("extinction " + formatCounts(signal.get("extinction").getAsDouble()));
+        }
+        if (signal.has("brightest_state") && !signal.get("brightest_state").isJsonNull()) {
+            parts.add("brightest state "
+                    + formatCounts(signal.get("brightest_state").getAsDouble()));
+        }
+        if (signal.has("grid_peak") && !signal.get("grid_peak").isJsonNull()) {
+            String peak = "grid peak " + formatCounts(signal.get("grid_peak").getAsDouble());
+            if (signal.has("full_scale") && !signal.get("full_scale").isJsonNull()) {
+                peak += " of " + formatCounts(signal.get("full_scale").getAsDouble());
+                if (signal.has("grid_peak_fraction")
+                        && !signal.get("grid_peak_fraction").isJsonNull()) {
+                    peak += String.format(
+                            " (%.0f%%)", 100 * signal.get("grid_peak_fraction").getAsDouble());
+                }
+            } else {
+                peak += " (full scale unknown)";
+            }
+            parts.add(peak);
+        }
+        return parts.isEmpty() ? "not reported" : String.join(", ", parts) + " counts";
     }
 
     private static String formatCounts(double counts) {
@@ -218,20 +310,34 @@ public class LCCalibrationWorkflow {
         blackField.setPromptText("blank = measure a dark frame");
         blackField.setPrefColumnCount(10);
 
+        // Prefilled with the acquisition's exposure: the first two rig runs snapped at whatever
+        // Micro-Manager happened to be set to, and nothing recorded what that was.
+        Double acquisitionExposure = acquisitionExposureMs();
+        TextField exposureField = new TextField(acquisitionExposure == null ? "" : formatCounts(acquisitionExposure));
+        exposureField.setPromptText("blank = current Micro-Manager exposure");
+        exposureField.setPrefColumnCount(10);
+
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
         grid.setPadding(new Insets(10, 0, 0, 0));
         grid.addRow(0, new Label("Output folder:"), outputField);
         grid.addRow(1, new Label("Search:"), strategyBox);
-        grid.addRow(2, new Label("Black level:"), blackField);
+        grid.addRow(2, new Label("Exposure (ms):"), exposureField);
+        grid.addRow(3, new Label("Black level:"), blackField);
 
         Label notes = new Label("Search: one pass is usually enough. Iterative refines until the residual is small,\n"
                 + "at roughly three times the exposures -- a trade, not an upgrade.\n\n"
+                + "Exposure: set on the camera for the calibration and restored afterwards. Prefilled\n"
+                + "with the acquisition's exposure from the YAML, so the run shows whether the field\n"
+                + "has signal at the exposure acquisition will use. The result records the exposure,\n"
+                + "bit depth and pixel format the frames were taken with, and a field that reaches\n"
+                + "less than a tenth of the camera's range anywhere is refused as too dark.\n\n"
                 + "Black level: the camera's offset in counts, from the microscope YAML\n"
-                + "(reconstruction.black_level) when it is set there. Blank measures a dark frame,\n"
-                + "which needs lamp control this scope does not have; it then falls to 0, assumed,\n"
-                + "and the extinction ratio is overstated by about 10 percent per 50 counts.");
+                + "(reconstruction.black_level) when it is set there. It must be in the counts of the\n"
+                + "camera's current pixel format. Blank measures a dark frame, which needs lamp\n"
+                + "control this scope does not have; it then falls to 0, assumed, and the extinction\n"
+                + "ratio is overstated by about 10 percent per 50 counts.");
         notes.setStyle("-fx-font-size: 11px;");
 
         VBox content = new VBox(8, intro, fromConfig, showConfig, grid, notes);
@@ -260,7 +366,25 @@ public class LCCalibrationWorkflow {
                 return Optional.empty();
             }
         }
-        return Optional.of(new Params(folder, strategyBox.getValue(), black));
+        Double exposure = null;
+        String exposureText =
+                exposureField.getText() == null ? "" : exposureField.getText().trim();
+        if (!exposureText.isEmpty()) {
+            try {
+                exposure = Double.parseDouble(exposureText);
+            } catch (NumberFormatException e) {
+                logger.error("LC-PolScope calibration not started: exposure '{}' is not a number", exposureText);
+                Dialogs.showErrorMessage(
+                        "LC-PolScope Calibration", "Exposure must be a number of milliseconds, or blank.");
+                return Optional.empty();
+            }
+            if (!(exposure > 0)) {
+                logger.error("LC-PolScope calibration not started: exposure {} ms is not positive", exposure);
+                Dialogs.showErrorMessage("LC-PolScope Calibration", "Exposure must be greater than 0 ms.");
+                return Optional.empty();
+            }
+        }
+        return Optional.of(new Params(folder, strategyBox.getValue(), black, exposure));
     }
 
     // ------------------------------------------------------------------
@@ -310,6 +434,7 @@ public class LCCalibrationWorkflow {
                     null, // cannot drift from the acquisition that will use them
                     null,
                     params.blackLevel(),
+                    params.exposureMs(),
                     params.strategy(),
                     message -> Platform.runLater(() -> status.setText(message)));
 
@@ -379,6 +504,14 @@ public class LCCalibrationWorkflow {
             lines.add(String.format(
                     "%d exposures in %.1f s",
                     result.get("exposures").getAsInt(), result.get("elapsed_s").getAsDouble()));
+        }
+        // The counts above mean nothing without these two lines: what the camera was set to,
+        // and how much of its range the field actually used.
+        if (result.has("camera") && result.get("camera").isJsonObject()) {
+            lines.add("Camera: " + describeCamera(result.getAsJsonObject("camera")));
+        }
+        if (result.has("signal") && result.get("signal").isJsonObject()) {
+            lines.add("Signal: " + describeSignal(result.getAsJsonObject("signal")));
         }
         if (result.has("warnings")) {
             JsonArray warnings = result.getAsJsonArray("warnings");
