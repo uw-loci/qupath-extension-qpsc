@@ -132,14 +132,17 @@ details.
   QPSC uses the server that is already listening. **Fix B, point QPSC at the program once:**
   1. Click **Locate server program...**. 2. Pick `venv_qpsc\Scripts\microscope-command-server`
   (Windows), `venv_qpsc/bin/microscope-command-server` (Linux/macOS), or the repository's
-  `start_server.bat`. The choice is stored in the *Server launcher* preference and used
-  from then on.
+  `start_server.bat`. The choice is stored in the *Server launcher* preference (**Edit >
+  Preferences > QuPath SCope > Server Launcher**, where it can be changed or cleared) and
+  used from then on.
 - `<program> exited with code N:` followed by the server's last output lines. A line
   `ModuleNotFoundError: No module named '...'` means a Python package is missing from that
   environment; see [Step 3.4](INSTALLATION.md#34-troubleshooting-python-installation).
 - `<program>: still no server on port 5000 after 60 s` with nothing else: the program ran but
   never listened. With `start_server.bat` this is usually a preflight failure waiting at
   `pause` on a console you cannot see; run the batch file by hand once to read the message.
+  Every one of these dialogs is also written to the QuPath log at ERROR, with the server's
+  output, so a bug report carries it.
 
 #### Q: The demo asks "Point the server connection at this computer?"
 

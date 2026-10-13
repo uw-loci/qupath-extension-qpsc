@@ -82,6 +82,11 @@ public class PersistentPreferences {
         serverLauncherProperty.set(path == null ? "" : path);
     }
 
+    /** The launcher preference itself, for the preferences pane. */
+    public static StringProperty serverLauncherProperty() {
+        return serverLauncherProperty;
+    }
+
     /** Last "Rotate all slides" value (deg) in the Multi-Slide dialog -- slides are usually
      * mounted the same way, so it is restored across sessions. */
     private static final StringProperty multiSlideRotateAllProperty =

@@ -555,6 +555,17 @@ public class QPPreferenceDialog {
                 .description("Port number for the microscope control server (default: 5000)")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(PersistentPreferences.serverLauncherProperty(), String.class)
+                .propertyType(PropertyItemBuilder.PropertyType.FILE)
+                .name("Server Launcher")
+                .category(CATEGORY)
+                .description("Program QPSC runs (with --demo) to start the microscope server for "
+                        + "Connect to a Demo Microscope when nothing is listening on the server port: "
+                        + "the microscope-command-server executable in the Python environment's Scripts "
+                        + "(Windows) or bin folder, or the repository's start_server.bat. Empty means "
+                        + "whatever microscope-command-server is on the PATH. Clear it to go back to the PATH.")
+                .build());
+
         items.add(new PropertyItemBuilder<>(autoConnectToServerProperty, Boolean.class)
                 .name("Auto-connect to Server")
                 .category(CATEGORY)

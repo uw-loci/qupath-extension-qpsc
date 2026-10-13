@@ -87,6 +87,41 @@ class DemoMicroscopeTest {
     }
 
     @Test
+    void theLauncherPreferenceIsOnThePaneAndEveryErrorDialogReachesTheLog() throws IOException {
+        String prefs = Files.readString(MAIN.resolve("preferences/QPPreferenceDialog.java"));
+        assertTrue(
+                prefs.contains("PersistentPreferences.serverLauncherProperty()"), "launcher on the preferences pane");
+        assertTrue(prefs.contains(".name(\"Server Launcher\")"), "pane item named Server Launcher");
+
+        // Project rule: an error dialog with no ERROR log cannot be found from a bug report.
+        String demo = Files.readString(MAIN.resolve("controller/DemoMicroscope.java"));
+        int connectLog = demo.indexOf("logger.error(\"Demo microscope: could not connect to the demo server\"");
+        int connectDialog = demo.indexOf("\"Could not connect to the demo server: \"");
+        assertTrue(connectLog > 0 && connectLog < connectDialog, "connect failure logged at ERROR before its dialog");
+        int failDef = demo.indexOf("private static void fail(String message) {");
+        assertTrue(
+                demo.indexOf("logger.error(\"Demo microscope: {}\", message);", failDef) > failDef,
+                "fail() logs at ERROR");
+        int launchDef = demo.indexOf("private static void explainLaunchFailure(");
+        int launchLog = demo.indexOf("logger.error(", launchDef);
+        int launchAlert = demo.indexOf("new Alert(Alert.AlertType.WARNING)", launchDef);
+        assertTrue(
+                launchLog > launchDef && launchLog < launchAlert, "launch failure logged at ERROR before its dialog");
+
+        String switcher = Files.readString(MAIN.resolve("controller/MicroscopeSwitcher.java"));
+        int missing = switcher.indexOf("The config file does not exist:");
+        assertTrue(
+                switcher.lastIndexOf(
+                                "logger.error(\"Microscope switch refused: the config file does not exist", missing)
+                        > 0,
+                "missing-file refusal logged at ERROR");
+        int refuseDef = switcher.indexOf("private static void refuse(String why) {");
+        assertTrue(
+                switcher.indexOf("logger.error(\"Microscope switch refused: {}\", why);", refuseDef) > refuseDef,
+                "refuse() logs at ERROR");
+    }
+
+    @Test
     void theSwitcherCanConnectAfterSwitchingAndReportsSuccess() throws IOException {
         String s = Files.readString(MAIN.resolve("controller/MicroscopeSwitcher.java"));
         assertTrue(s.contains("switchTo(String newPath, boolean confirm, boolean connectAfter, Runnable onSuccess)"));

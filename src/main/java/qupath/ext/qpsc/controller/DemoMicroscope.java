@@ -175,6 +175,7 @@ public final class DemoMicroscope {
                             onConnected.run();
                         } else {
                             Throwable cause = err.getCause() != null ? err.getCause() : err;
+                            logger.error("Demo microscope: could not connect to the demo server", cause);
                             Dialogs.showErrorMessage(
                                     "Demo microscope", "Could not connect to the demo server: " + cause.getMessage());
                         }
@@ -374,7 +375,7 @@ public final class DemoMicroscope {
 
     private static void fail(String message) {
         inProgress.set(false);
-        logger.warn("Demo microscope: {}", message);
+        logger.error("Demo microscope: {}", message);
         Dialogs.showErrorMessage("Demo microscope", message);
     }
 
@@ -395,6 +396,12 @@ public final class DemoMicroscope {
     }
 
     private static void explainLaunchFailure(ServerOutcome outcome, int port) {
+        // The dialog text and the server's last output must both reach the log, or a bug
+        // report shows a user who saw an error that the log never recorded.
+        logger.error(
+                "Demo microscope: could not start the microscope command server; nothing is listening on port {} and the launch failed:\n{}",
+                port,
+                outcome.detail());
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle("Demo microscope");
         alert.setHeaderText("QPSC could not start the microscope command server");
@@ -404,7 +411,9 @@ public final class DemoMicroscope {
                 + "installed (see the Installation Guide, step 3):\n\n    " + SERVER_COMMAND + " " + DEMO_FLAG
                 + "\n\nthen choose Connect to a Demo Microscope again. Or point QPSC at the program -- "
                 + "the microscope-command-server executable in that environment's Scripts or bin folder, "
-                + "or the repository's start_server.bat -- and it will be started for you from now on.");
+                + "or the repository's start_server.bat -- and it will be started for you from now on. "
+                + "The choice is the Server Launcher preference (Edit > Preferences > QuPath SCope), "
+                + "where it can be changed or cleared later.");
         text.setWrapText(true);
         text.setMaxWidth(560);
         alert.getDialogPane().setContent(text);

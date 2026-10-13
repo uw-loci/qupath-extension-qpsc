@@ -16,7 +16,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Inverted Y stage](#inverted-y-stage) | Boolean | ON | Stage Y wiring is inverted |
 | [Camera orientation](#camera-orientation) | Enum | NORMAL | How the displayed image is oriented relative to the sample frame |
 | [Microscope Config File](#microscope-config-file) | File | - | Path to microscope YAML config |
-| [Server launcher](#server-launcher) | File | (empty) | Program QPSC runs to start the command server for the demo microscope |
+| [Server launcher](#server-launcher) | File | (empty) | Program QPSC runs to start the microscope server for the demo microscope |
 | [Macro image pixel size in microns](#macro-image-pixel-size-in-microns) | String | (empty) | (Deprecated — auto-resolved from image calibration) |
 | [Projects Folder](#projects-folder) | Directory | - | Root folder for slide projects |
 | [Tissue Detection Script](#tissue-detection-script) | File | - | Optional Groovy script for tissue detection |
@@ -290,9 +290,9 @@ PATH"; a virtual environment's programs are found only while it is activated, se
 [Troubleshooting: Demo microscope](TROUBLESHOOTING.md#demo-microscope). A server already
 listening is always used instead of starting one.
 
-**Changing it:** the only control is the **Locate server program...** button in the dialog
-that appears when the server could not be started; it is not on the preferences pane. A
-value that starts a working server cannot be changed or cleared from QuPath.
+**Changing it:** edit or clear the **Server Launcher** entry under **Edit > Preferences >
+QuPath SCope**, or click **Locate server program...** in the dialog that appears when the
+server could not be started. Cleared, QPSC goes back to the PATH.
 
 **Example:** `C:\Users\<you>\venv_qpsc\Scripts\microscope-command-server.exe` (the
 Windows virtual environment from Installation step 3) or

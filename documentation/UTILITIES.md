@@ -133,7 +133,7 @@ ordinary QPSC settings apply.
 **If the server cannot start:** a dialog shows the command to run yourself and offers
 **Locate server program...**, which stores the executable (for example
 `C:\Users\<you>\venv_qpsc\Scripts\microscope-command-server.exe`) in the *Server launcher*
-preference.
+preference (**Edit > Preferences > QuPath SCope > Server Launcher**, editable there too).
 
 **Leaving:** a server QPSC started stops when QuPath exits; return to a real microscope with
 Switch Microscope. See [Try It Without a Microscope](INSTALLATION.md#try-it-without-a-microscope-optional)

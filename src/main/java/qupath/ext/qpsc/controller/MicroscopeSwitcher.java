@@ -123,6 +123,7 @@ public final class MicroscopeSwitcher {
             return;
         }
         if (newPath == null || newPath.isBlank() || !Files.isRegularFile(Path.of(newPath))) {
+            logger.error("Microscope switch refused: the config file does not exist: {}", newPath);
             Dialogs.showErrorMessage("Switch Microscope", "The config file does not exist:\n" + newPath);
             return;
         }
@@ -268,7 +269,7 @@ public final class MicroscopeSwitcher {
 
     private static void refuse(String why) {
         inProgress.set(false);
-        logger.warn("Microscope switch refused: {}", why);
+        logger.error("Microscope switch refused: {}", why);
         Dialogs.showErrorMessage("Switch Microscope", why);
     }
 
