@@ -1,0 +1,58 @@
+# ========== DEMO AUTOFOCUS CONFIGURATION (schema v2) ==========
+#
+# Paired with config_Demo.yml. The simulated slide lies on a focal surface
+# that tilts and undulates within about +/-25 um of Z = 0, and the camera
+# blurs the image in proportion to the distance from it, so a sweep scores
+# a single clear peak. The brightfield binding uses the real dense_texture
+# strategy; nothing here is a stub.
+
+schema_version: 2
+
+autofocus_settings:
+  - objective: DEMO_OBJECTIVE_10X
+    calibrated: true
+    n_steps: 13
+    search_range_um: 60.0
+    n_tiles: 4
+    interp_strength: 100
+    interp_kind: quadratic
+    score_metric: laplacian_variance
+    texture_threshold: 0.010
+    tissue_area_threshold: 0.2
+    sweep_range_um: 20.0
+    sweep_n_steps: 7
+    gap_index_multiplier: 3
+    gap_spatial_multiplier: 2.0
+
+# ========== STRATEGY LIBRARY (v2) ==========
+strategies:
+  dense_texture:
+    description: >
+      Dense-tissue gate: score only fields that carry texture over enough
+      of the frame. The virtual slide's tissue islands pass; bare glass
+      between them defers to a neighbouring tile's focus.
+    score_metric: laplacian_variance
+    validity_check: texture_and_area
+    validity_params:
+      texture_threshold: 0.010
+      tissue_area_threshold: 0.200
+      rgb_brightness_threshold: 240.0
+      tissue_mask_range: [0.10, 0.90]
+      median_floor: 15.0
+    on_failure: defer
+
+  manual_only:
+    description: >
+      Always fails validity so the manual-focus dialog appears. Bind a
+      modality to this to see that path without a real failure.
+    score_metric: none
+    validity_check: always_false
+    validity_params: {}
+    on_failure: manual
+
+# ========== PER-MODALITY STRATEGY BINDINGS (v2) ==========
+modalities:
+  brightfield:
+    strategy: dense_texture
+  bf:
+    strategy: dense_texture

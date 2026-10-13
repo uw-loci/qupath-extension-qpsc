@@ -16,6 +16,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Inverted Y stage](#inverted-y-stage) | Boolean | ON | Stage Y wiring is inverted |
 | [Camera orientation](#camera-orientation) | Enum | NORMAL | How the displayed image is oriented relative to the sample frame |
 | [Microscope Config File](#microscope-config-file) | File | - | Path to microscope YAML config |
+| [Server launcher](#server-launcher) | File | (empty) | Program QPSC runs to start the command server for the demo microscope |
 | [Macro image pixel size in microns](#macro-image-pixel-size-in-microns) | String | (empty) | (Deprecated — auto-resolved from image calibration) |
 | [Projects Folder](#projects-folder) | Directory | - | Root folder for slide projects |
 | [Tissue Detection Script](#tissue-detection-script) | File | - | Optional Groovy script for tissue detection |
@@ -271,6 +272,26 @@ When enabled, QuPath automatically attempts to connect to the microscope server 
 
 ---
 
+### Server launcher
+
+| Property | Value |
+|----------|-------|
+| Type | File path |
+| Default | (empty) |
+| Requires Restart | No |
+
+**Description:**
+The program QPSC runs, with `--demo`, when **Connect to a Demo Microscope...** finds no
+command server listening on the configured port: the `microscope-command-server`
+executable from the Python environment that holds the QPSC packages (its `Scripts`
+folder on Windows, `bin` elsewhere), or the repository's `start_server.bat`. Empty means
+"whatever `microscope-command-server` is on the PATH", which a virtual environment is
+not unless it is activated. Set from the **Locate server program...** button in the
+dialog that appears when the server could not be started; it is not on the preferences
+pane. A server already listening is always used instead of starting one.
+
+---
+
 ## File & Path Configuration
 
 Settings for file locations and paths.
@@ -308,6 +329,12 @@ and project utilities are available while hardware/acquisition workflows are
 disabled. Point this preference at a real `config_<scope>.yml` (or run the Setup
 Wizard) to enable acquisition. The placeholder is created once and never
 overwritten.
+
+**Demo microscope:** **Extensions > QP Scope > Connect to a Demo Microscope...**
+extracts a second bundled config, `<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`
+(marked `microscope.demo: true`), and switches this preference to it. Unlike the
+placeholder it is a complete, acquisition-capable configuration, driven by the command
+server started with `--demo`. Switch back to your own config with Switch Microscope.
 
 **CRITICAL WARNING:**
 Using the wrong configuration file could damage the microscope! Ensure this points to the correct configuration for your specific microscope system.

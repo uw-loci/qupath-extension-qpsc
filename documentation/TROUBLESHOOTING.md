@@ -115,6 +115,37 @@ overwritten, so any edits survive restarts. If you delete it while it is still
 selected, QPSC re-extracts it on the next launch. Selecting any real config (or
 running the Setup Wizard) replaces it and re-enables acquisition.
 
+### Demo microscope
+
+#### Q: Connect to a Demo Microscope says it could not start the microscope command server
+
+**A:** QPSC runs `microscope-command-server --demo` and looks for that program on the
+PATH. A Python virtual environment is not on the PATH unless it is activated, so from
+QuPath the console script is usually not found. Either start the server yourself --
+activate the environment, run `microscope-command-server --demo`, then choose the menu
+item again (it uses a server that is already listening) -- or click **Locate server
+program...** in that dialog and pick the `microscope-command-server` executable in the
+environment's `Scripts` (Windows) or `bin` (Linux/macOS) folder, or the repository's
+`start_server.bat`. The choice is stored in the *Server launcher* preference and used
+from then on. The dialog also shows the server's last output lines when it started and
+then exited, which is where a missing Python package shows up.
+
+#### Q: The demo connected, but the Live Viewer is blank white or black
+
+**A:** Turn **Live** on (the button at the top left of the Live Viewer). The simulated
+camera renders bare glass as white at 10 ms exposure and lamp intensity 25; a much longer
+exposure saturates the frame, a much shorter one is dark, exactly like a real camera. Set
+the exposure on the Camera tab. The stage starts at the slide centre, which is tissue.
+
+#### Q: How do I get back to my real microscope after the demo?
+
+**A:** Point the Microscope Config File preference at your own `config_<scope>.yml` and
+choose **Utilities > Microscope Configuration > Switch Microscope...** (or accept the offer
+QPSC makes when the preference changes). If the demo changed the server host to
+`localhost`, set it back under Communication Settings. A demo server that QPSC started
+stops when QuPath exits; one you started yourself keeps running until you close it, and
+holds port 5000 until then.
+
 ### Setup Wizard
 
 #### Q: How do I run the Setup Wizard?

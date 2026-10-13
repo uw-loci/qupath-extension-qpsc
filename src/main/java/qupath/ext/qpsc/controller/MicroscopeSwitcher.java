@@ -103,8 +103,23 @@ public final class MicroscopeSwitcher {
      * @param confirm whether to ask the operator first; false only for tests and scripts
      */
     public static void switchTo(String newPath, boolean confirm) {
+        switchTo(newPath, confirm, false, null);
+    }
+
+    /**
+     * Performs the switch to {@code newPath}, optionally connecting afterwards even if no
+     * server was connected before (the demo microscope uses this) and running a callback on
+     * the FX thread once the switch has fully succeeded.
+     *
+     * @param newPath the YAML to switch to
+     * @param confirm whether to ask the operator first
+     * @param connectAfter connect to the server after the switch regardless of prior state
+     * @param onSuccess run on the FX thread after the menu is rebuilt and viewers reopened;
+     *                  not run on refusal, decline or failure. May be null.
+     */
+    public static void switchTo(String newPath, boolean confirm, boolean connectAfter, Runnable onSuccess) {
         if (!Platform.isFxApplicationThread()) {
-            Platform.runLater(() -> switchTo(newPath, confirm));
+            Platform.runLater(() -> switchTo(newPath, confirm, connectAfter, onSuccess));
             return;
         }
         if (newPath == null || newPath.isBlank() || !Files.isRegularFile(Path.of(newPath))) {
@@ -160,6 +175,7 @@ public final class MicroscopeSwitcher {
                     closed);
 
             boolean wasConnected = controller.getSocketClient().isConnected();
+            boolean connect = wasConnected || connectAfter;
             CompletableFuture.runAsync(() -> {
                         // 4. Disconnect, reload, validate -- or roll back.
                         if (wasConnected) {
@@ -187,7 +203,7 @@ public final class MicroscopeSwitcher {
                         }
 
                         // 6. Reconnect: connect() re-sends CONFIG with the preference, now the new path.
-                        reconnectIf(wasConnected, controller);
+                        reconnectIf(connect, controller);
                         StagePositionManager.getInstance().forceRefresh();
                     })
                     .whenComplete((v, err) -> Platform.runLater(() -> {
@@ -204,7 +220,10 @@ public final class MicroscopeSwitcher {
                                 Dialogs.showInfoNotification(
                                         "Switch Microscope",
                                         "Now using " + Path.of(newPath).getFileName()
-                                                + (wasConnected ? " (server reconnected)" : " (not connected)"));
+                                                + (connect ? " (server connected)" : " (not connected)"));
+                                if (onSuccess != null) {
+                                    onSuccess.run();
+                                }
                             } else {
                                 Throwable cause = err.getCause() != null ? err.getCause() : err;
                                 logger.error("Microscope switch failed", cause);

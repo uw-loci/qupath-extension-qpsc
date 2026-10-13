@@ -1,0 +1,98 @@
+# ========== DEMO MICROSCOPE ==========
+#
+# A simulated microscope for trying QPSC with no hardware and no
+# Micro-Manager. QPSC extracts this bundle to the QuPath user directory
+# when you choose Extensions > QP Scope > Connect to a Demo Microscope...,
+# and drives it through the command server started as
+#
+#     microscope-command-server --demo
+#
+# The server then answers every command from an in-memory microscope: a
+# virtual H&E slide on an XYZ stage, with a focal surface so autofocus has
+# something real to find. Device names below are the ones Micro-Manager's
+# own Demo adapter uses (DCam, DStage, XYStage, DLamp), so this file also
+# works against a real Micro-Manager started with its demo configuration.
+#
+# The 'demo: true' flag is what marks this as the demo scope. Acquisition
+# is fully enabled (unlike the Offline / Analysis placeholder); tiles land
+# wherever the acquisition dialog sends them, as on a real scope.
+#
+# Edits survive QPSC updates: the bundle is written only when missing.
+# Delete the qpsc-demo-microscope folder to get a fresh copy.
+
+microscope:
+  name: Demo
+  type: Brightfield
+  demo: true
+  detector_in_use: null
+  objective_in_use: null
+  modality: null
+
+modalities:
+  Brightfield:
+    type: brightfield
+    illumination:
+      device: DLamp
+      type: device_property
+      state_property: State
+      intensity_property: Intensity
+      max_intensity: 100.0
+      label: Demo lamp
+    background_correction:
+      enabled: false
+      method: divide
+      base_folder: ''
+
+hardware:
+  objectives:
+    - id: DEMO_OBJECTIVE_10X
+      pixel_size_xy_um:
+        DEMO_CAMERA: 0.65
+  detectors:
+    - DEMO_CAMERA
+
+# The detector, objective and stage are defined in the sibling
+# resources/resources_LOCI.yml that ships with this bundle. The command
+# server replaces a config's id_* sections with the resources file's when
+# one is present, so defining them inline here would not reach it.
+
+stage:
+  stage_id: DEMO_STAGE
+  z_stage: DStage
+  # In the simulation the focal surface sits within about +/-25 um of Z = 0
+  # and the slide is "below" the objective: more negative Z is further away,
+  # so retracting is the negative direction and the safe height is -400 um.
+  focus:
+    retract_sign: negative
+  safe_z_um: -400.0
+  limits:
+    x_um:
+      low: -25000.0
+      high: 25000.0
+    y_um:
+      low: -15000.0
+      high: 15000.0
+    z_um:
+      low: -500.0
+      high: 500.0
+  # Present (and disabled) so a fresh extract is not auto-migrated on first
+  # load. The simulated Z drive moves at a fixed speed; streaming autofocus
+  # is a hardware technique with nothing to teach here.
+  streaming_af:
+    enabled: false
+    speed_property: null
+    slow_speed_value: '1'
+    slow_speed_um_per_s: 11.5
+    normal_speed_value: '100'
+
+# The virtual slide spans 40 x 20 mm centred on the stage origin; beyond
+# it the camera sees bare glass.
+slide_size_um:
+  x: 40000
+  y: 20000
+
+acquisition_profiles:
+  Brightfield_10x:
+    modality: Brightfield
+    detector: DEMO_CAMERA
+    illumination_intensity: 25

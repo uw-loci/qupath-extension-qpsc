@@ -1,0 +1,39 @@
+# Hardware resources for the demo microscope (config_Demo.yml).
+#
+# This file is installed as resources/resources_LOCI.yml next to the demo
+# config and is the single definition of the demo's stage, detector and
+# objective. Both QPSC and the command server merge the id_* sections of
+# this file into the config, so the entries live here rather than inline.
+# Device names (DCam, DStage, XYStage) are those of Micro-Manager's Demo
+# adapter and of the server's --demo simulation.
+
+id_stage:
+  DEMO_STAGE:
+    name: Demo XYZ stage
+    manufacturer: Demo
+    device: XYStage
+    description: Simulated XY stage with a DStage focus drive.
+
+id_detector:
+  DEMO_CAMERA:
+    name: Demo Camera
+    manufacturer: Demo
+    camera_type: generic
+    device: DCam
+    width_px: 512
+    height_px: 512
+    sensor_pixel_width_um: 6.5
+    sensor_pixel_height_um: 6.5
+    flip_x: false
+    flip_y: false
+    description: Simulated colour camera looking at a virtual H&E slide.
+
+id_objective_lens:
+  DEMO_OBJECTIVE_10X:
+    name: 10x Demo
+    magnification: 10.0
+    na: 0.3
+    wd_um: 10000
+    description: Simulated 10x objective for the demo microscope.
+    manufacturer_id: DEMO
+    on_scope: Demo

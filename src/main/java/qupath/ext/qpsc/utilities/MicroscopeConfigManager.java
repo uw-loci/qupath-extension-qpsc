@@ -164,6 +164,19 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Whether the currently loaded config is the bundled demo microscope (marked with
+     * {@code microscope.demo: true}), the simulated scope behind
+     * <em>Connect to a Demo Microscope...</em>. Unlike the offline placeholder, the demo is
+     * a complete acquisition-capable config; the flag only lets the UI say what it is
+     * driving. Missing or false flag means a real scope.
+     *
+     * @return true only when the active config explicitly declares {@code microscope.demo: true}
+     */
+    public boolean isDemoScope() {
+        return Boolean.TRUE.equals(getBoolean("microscope", "demo"));
+    }
+
+    /**
      * Build a NON-singleton config manager pointing at {@code configPath}.
      *
      * <p>Use this for cross-scope lookups (e.g. back-propagation needs the FOV

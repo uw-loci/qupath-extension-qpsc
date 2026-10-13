@@ -17,6 +17,7 @@ import javafx.stage.Stage;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.DemoMicroscope;
 import qupath.ext.qpsc.controller.ExportSpatialSceneWorkflow;
 import qupath.ext.qpsc.controller.FocusApproachValidationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
@@ -34,10 +35,10 @@ import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
+import qupath.ext.qpsc.utilities.BundledScopeInstaller;
 import qupath.ext.qpsc.utilities.LightPathModel;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.OfflineScopeInstaller;
 import qupath.ext.qpsc.utilities.ProjectLogger;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.fx.dialogs.Dialogs;
@@ -195,11 +196,12 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // missing (user dir moved, files deleted) -- otherwise the old "settings
         // missing" warning would resurface from a dangling selection.
         boolean staleOffline = !blank
-                && OfflineScopeInstaller.isOfflineConfigPath(cfg)
+                && BundledScopeInstaller.isBundleConfigPath(BundledScopeInstaller.Bundle.OFFLINE, cfg)
                 && !java.nio.file.Files.exists(java.nio.file.Paths.get(cfg));
         if (blank || staleOffline) {
             try {
-                java.nio.file.Path offline = OfflineScopeInstaller.ensureInstalled();
+                java.nio.file.Path offline =
+                        BundledScopeInstaller.ensureInstalled(BundledScopeInstaller.Bundle.OFFLINE);
                 QPPreferenceDialog.setMicroscopeConfigFileProperty(offline.toString());
                 autoInstalledOffline = blank; // first-run notice only for a truly fresh install
                 logger.info(
@@ -270,7 +272,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                     EXTENSION_NAME + " - Offline / Analysis mode",
                     "No microscope is configured, so QPSC is running in Offline / Analysis mode.\n"
                             + "PPM analysis and project utilities are available.\n"
-                            + "Run the Setup Wizard to configure a microscope and enable acquisition."));
+                            + "Run the Setup Wizard to configure a microscope and enable acquisition, "
+                            + "or choose Connect to a Demo Microscope to try QPSC on a simulated one."));
         }
 
         // 3) Check if any configured detector is a JAI camera
@@ -333,6 +336,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 throw new RuntimeException(ex);
             }
         });
+
+        // === DEMO MICROSCOPE (always available, like Micro-Manager's demo configuration) ===
+        MenuItem demoOption = new MenuItem(res.getString("menu.connectDemoMicroscope"));
+        setMenuItemTooltip(
+                demoOption,
+                "Try QPSC with no hardware: start the command server in demo mode on this computer "
+                        + "(a simulated slide on an XYZ stage), switch to the bundled demo configuration, "
+                        + "connect, and open the Live Viewer. Needs the QPSC Python packages installed.");
+        demoOption.setOnAction(e -> DemoMicroscope.connect());
 
         // === MAIN WORKFLOW MENU ITEMS ===
 
@@ -838,6 +850,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // visible (a multi-slide holder is configured); it stays hidden on single-slide scopes.
         extensionMenu.getItems().add(wizardOption);
         extensionMenu.getItems().add(multiSlideOption);
+        extensionMenu.getItems().add(demoOption);
         extensionMenu.getItems().add(new SeparatorMenuItem());
 
         // 1. Acquisition controls -- the five items an operator uses during a session,

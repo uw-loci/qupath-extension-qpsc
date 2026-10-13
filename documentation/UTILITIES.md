@@ -30,6 +30,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | **Top-Level Menu** | | |
 | [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup for new acquisitions | Extensions > QP Scope > Acquisition Wizard... |
 | [Multi-Slide Acquisition](tools/multi-slide-acquisition.md) | Batch-acquire several slides in one holder (setup pass + walk-away acquire); appears when config has a multi-slide holder | Extensions > QP Scope > Multi-Slide Acquisition... |
+| [Connect to a Demo Microscope](#connect-to-a-demo-microscope) | Try QPSC with no hardware: start the command server in demo mode, switch to the bundled demo config, connect, open the Live Viewer | Extensions > QP Scope > Connect to a Demo Microscope... |
 | [Report a Bug...](#report-a-bug) | Submit a bug report directly to the issue tracker | Extensions > QP Scope > Report a Bug... |
 | **Acquisition controls** | | |
 | [Bounded Acquisition](tools/bounded-acquisition.md) | Direct bounding-box acquisition from stage coordinates | Extensions > QP Scope > Acquisition controls > Bounded Acquisition |
@@ -104,6 +105,22 @@ Step-by-step wizard that creates all required microscope YAML configuration file
 ### Register Current Objective
 
 Adds the objective currently in the light path to the microscope configuration without re-running the full Setup Wizard -- handy when objectives are swapped on the scope frequently. Reads the pixel size from MicroManager (the only optical fact MM exposes; it does not know magnification, NA, or a human name), then prompts for that missing metadata (id, display name, magnification, NA, working distance, detector). It writes skeleton entries to `hardware.objectives`, `autofocus_settings` (`calibrated: false`), `imaging_profiles` (placeholder per modality), and `id_objective_lens`, then reloads so the objective is immediately selectable with the correct pixel size. The calibration data itself (autofocus, white balance, exposures, background) stays a placeholder -- run the corresponding calibration utilities afterwards to make the objective acquisition-ready. Requires a live microscope connection; comment-preserving and idempotent.
+
+### Connect to a Demo Microscope
+
+QPSC driving a simulated microscope, the way Micro-Manager's demo configuration lets you try
+that program with no hardware. Always enabled, even with no configuration. It extracts the
+bundled demo configuration (`<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`) if
+needed, makes sure the server host preference names this computer, finds a command server
+already listening on the configured port or starts one with `microscope-command-server --demo`
+(the *Server launcher* preference first, then the PATH), switches to the demo configuration
+through Switch Microscope, connects, and opens the Live Viewer. The demo is the real server
+with its Micro-Manager core replaced by an in-memory microscope: a virtual H&E slide on an XYZ
+stage with a focal surface, so the Live Viewer, Stage Map, autofocus, acquisition and
+stitching all run the production code path. If the server cannot be started, a dialog shows
+the command to run yourself and offers **Locate server program...**, which stores the
+executable in the *Server launcher* preference. A server QPSC started stops when QuPath
+exits. See [Try It Without a Microscope](INSTALLATION.md#try-it-without-a-microscope-optional).
 
 ### [Communication Settings](tools/server-connection.md)
 

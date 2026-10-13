@@ -65,6 +65,23 @@ public class PersistentPreferences {
         stageMapInsertProperty.set(insertId == null ? "" : insertId);
     }
 
+    /**
+     * Program QPSC runs to start the microscope command server for the demo microscope: the
+     * {@code microscope-command-server} executable from the Python environment that holds the
+     * QPSC packages, or the repository's {@code start_server.bat}. Empty means "whatever is on
+     * the PATH". Set from the dialog that appears when the server could not be started.
+     */
+    private static final StringProperty serverLauncherProperty =
+            PathPrefs.createPersistentPreference("qpscServerLauncher", "");
+
+    public static String getServerLauncher() {
+        return serverLauncherProperty.get();
+    }
+
+    public static void setServerLauncher(String path) {
+        serverLauncherProperty.set(path == null ? "" : path);
+    }
+
     /** Last "Rotate all slides" value (deg) in the Multi-Slide dialog -- slides are usually
      * mounted the same way, so it is restored across sessions. */
     private static final StringProperty multiSlideRotateAllProperty =
