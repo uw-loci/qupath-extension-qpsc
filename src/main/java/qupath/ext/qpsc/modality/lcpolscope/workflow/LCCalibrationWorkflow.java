@@ -207,22 +207,46 @@ public class LCCalibrationWorkflow {
         return parts.isEmpty() ? "unknown (the camera could not be asked)" : String.join(", ", parts);
     }
 
-    /** {@code extinction 410, brightest state 1890, grid peak 3950 of 4095 (96%) counts}. */
+    private static boolean hasNumber(JsonObject object, String key) {
+        return object.has(key)
+                && object.get(key).isJsonPrimitive()
+                && object.get(key).getAsJsonPrimitive().isNumber();
+    }
+
+    /**
+     * {@code extinction 410 (308 above black), swing contrast 1480 (36% of range), grid peak 3950 of
+     * 4095 (96%) counts}. The swing contrast is what the palette was resolved from; the server warns
+     * separately when it is under 1 percent of the camera's range.
+     */
     private static String describeSignal(JsonObject signal) {
         List<String> parts = new ArrayList<>();
-        if (signal.has("extinction") && !signal.get("extinction").isJsonNull()) {
-            parts.add("extinction " + formatCounts(signal.get("extinction").getAsDouble()));
+        if (hasNumber(signal, "extinction")) {
+            String extinction =
+                    "extinction " + formatCounts(signal.get("extinction").getAsDouble());
+            if (hasNumber(signal, "extinction_above_black")) {
+                extinction +=
+                        " (" + formatCounts(signal.get("extinction_above_black").getAsDouble()) + " above black)";
+            }
+            parts.add(extinction);
         }
-        if (signal.has("brightest_state") && !signal.get("brightest_state").isJsonNull()) {
+        if (hasNumber(signal, "swing_contrast")) {
+            String contrast = "swing contrast "
+                    + formatCounts(signal.get("swing_contrast").getAsDouble());
+            if (hasNumber(signal, "swing_contrast_fraction")) {
+                contrast += String.format(
+                        " (%.1f%% of range)",
+                        100 * signal.get("swing_contrast_fraction").getAsDouble());
+            }
+            parts.add(contrast);
+        } else if (hasNumber(signal, "brightest_state")) {
             parts.add("brightest state "
                     + formatCounts(signal.get("brightest_state").getAsDouble()));
         }
-        if (signal.has("grid_peak") && !signal.get("grid_peak").isJsonNull()) {
+        if (hasNumber(signal, "grid_peak")) {
             String peak = "grid peak " + formatCounts(signal.get("grid_peak").getAsDouble());
-            if (signal.has("full_scale") && !signal.get("full_scale").isJsonNull()) {
+            if (hasNumber(signal, "full_scale")) {
                 peak += " of " + formatCounts(signal.get("full_scale").getAsDouble());
-                if (signal.has("grid_peak_fraction")
-                        && !signal.get("grid_peak_fraction").isJsonNull()) {
+                if (hasNumber(signal, "grid_peak_fraction")) {
                     peak += String.format(
                             " (%.0f%%)", 100 * signal.get("grid_peak_fraction").getAsDouble());
                 }
@@ -232,6 +256,36 @@ public class LCCalibrationWorkflow {
             parts.add(peak);
         }
         return parts.isEmpty() ? "not reported" : String.join(", ", parts) + " counts";
+    }
+
+    /**
+     * {@code At the acquisition exposure (50 ms): swing contrast 148 counts; usable 17 to 1370 ms at
+     * this illumination}. The palette does not depend on exposure, but the acquisition runs at the
+     * YAML's, so the server scales the measured counts there. Absent when the YAML declares none.
+     */
+    private static Optional<String> describeAcquisitionExposure(JsonObject signal) {
+        if (!hasNumber(signal, "acquisition_exposure_ms")) {
+            return Optional.empty();
+        }
+        StringBuilder text = new StringBuilder("At the acquisition exposure (")
+                .append(formatCounts(signal.get("acquisition_exposure_ms").getAsDouble()))
+                .append(" ms)");
+        if (hasNumber(signal, "projected_swing_contrast")) {
+            text.append(": swing contrast ")
+                    .append(formatCounts(signal.get("projected_swing_contrast").getAsDouble()))
+                    .append(" counts");
+        }
+        if (signal.has("usable_exposure_ms") && signal.get("usable_exposure_ms").isJsonArray()) {
+            JsonArray range = signal.getAsJsonArray("usable_exposure_ms");
+            if (range.size() == 2 && !range.get(0).isJsonNull() && !range.get(1).isJsonNull()) {
+                text.append("; usable ")
+                        .append(formatCounts(range.get(0).getAsDouble()))
+                        .append(" to ")
+                        .append(formatCounts(range.get(1).getAsDouble()))
+                        .append(" ms at this illumination");
+            }
+        }
+        return Optional.of(text.toString());
     }
 
     private static String formatCounts(double counts) {
@@ -511,7 +565,12 @@ public class LCCalibrationWorkflow {
             lines.add("Camera: " + describeCamera(result.getAsJsonObject("camera")));
         }
         if (result.has("signal") && result.get("signal").isJsonObject()) {
-            lines.add("Signal: " + describeSignal(result.getAsJsonObject("signal")));
+            JsonObject signal = result.getAsJsonObject("signal");
+            lines.add("Signal: " + describeSignal(signal));
+            describeAcquisitionExposure(signal).ifPresent(lines::add);
+            if (signal.has("histogram_path") && !signal.get("histogram_path").isJsonNull()) {
+                lines.add("Histograms: " + signal.get("histogram_path").getAsString());
+            }
         }
         if (result.has("warnings")) {
             JsonArray warnings = result.getAsJsonArray("warnings");

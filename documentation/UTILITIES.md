@@ -266,6 +266,14 @@ Calibrate the two variable retarders of the universal compensator by finding the
   25 exposures, with the counts and the camera state in the message. A search on a dark field
   does not fail; it converges on noise and returns a palette that looks like any other, which
   is what the first two runs on the LC-PolScope did (frame means of 1 to 17 counts)
+- Three checks on the result, each a warning with the number to change: the **swing contrast**
+  (brightest swing state minus extinction, what the palette was resolved from) must be over
+  1 percent of the camera's range; no state may have more than 0.1 percent of its pixels at the
+  top of the range; and the measured counts are scaled to the **acquisition exposure** from the
+  YAML's channels, with a warning naming the exposure to set when the acquisition would be dark
+  or would clip. The result also gives the usable exposure range at this illumination. A PNG of
+  per-state pixel histograms is written beside the calibration file, for the check a frame mean
+  cannot make: a dim lamp, a closed diaphragm and a slide in the beam look alike as a mean
 - Black level in counts, prefilled from `reconstruction.black_level` in the microscope YAML;
   override it in the dialog, or leave it blank to measure a dark frame (which needs lamp
   control; without it the calibration assumes 0 and overstates the extinction ratio). It must
