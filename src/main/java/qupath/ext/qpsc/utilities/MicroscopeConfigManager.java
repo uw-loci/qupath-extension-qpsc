@@ -2041,8 +2041,12 @@ public class MicroscopeConfigManager {
     public String getBackgroundCorrectionFolder(String modality) {
         logger.debug("Getting background correction folder for modality: {}", modality);
         Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
-        if (modalityBg != null && modalityBg.containsKey("base_folder")) {
-            String folder = modalityBg.get("base_folder").toString();
+        // A key that is present but empty ("base_folder: null" or '') means "no folder", the same
+        // as an absent key. The LC-PolScope image-processing YAML declares it that way, and the
+        // first tiled acquisition on that scope died here with an NPE before reaching the server.
+        Object folderValue = modalityBg == null ? null : modalityBg.get("base_folder");
+        if (folderValue != null && !folderValue.toString().isBlank()) {
+            String folder = folderValue.toString();
             logger.debug("Found background folder in imageprocessing config: {}", folder);
             return folder;
         }
@@ -2057,10 +2061,9 @@ public class MicroscopeConfigManager {
      */
     public boolean isBackgroundCorrectionEnabled(String modality) {
         Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
-        if (modalityBg != null && modalityBg.containsKey("enabled")) {
-            Boolean enabled = (Boolean) modalityBg.get("enabled");
+        if (modalityBg != null && modalityBg.get("enabled") instanceof Boolean enabled) {
             logger.debug("Found background_correction.enabled in imageprocessing config for {}: {}", modality, enabled);
-            return enabled != null && enabled;
+            return enabled;
         }
         return false;
     }
@@ -2073,8 +2076,9 @@ public class MicroscopeConfigManager {
      */
     public String getBackgroundCorrectionMethod(String modality) {
         Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
-        if (modalityBg != null && modalityBg.containsKey("method")) {
-            String method = modalityBg.get("method").toString();
+        Object methodValue = modalityBg == null ? null : modalityBg.get("method");
+        if (methodValue != null && !methodValue.toString().isBlank()) {
+            String method = methodValue.toString();
             logger.debug("Found background_correction.method in imageprocessing config for {}: {}", modality, method);
             return method;
         }
