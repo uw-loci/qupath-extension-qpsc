@@ -269,7 +269,9 @@ What the simulation leaves out is listed in the
 ![Stage Map on the demo microscope: one slide outline labeled Slide 1 with the stage crosshair at its center, Source set to Demo](images/Docs_DemoMicroscope_StageMap.png)
 
 Already have the server environment open? Run the server there, then choose the menu item.
-QPSC connects to a server that is already listening instead of starting one:
+QPSC connects to a demo server that is already listening instead of starting one. It asks
+the server for its camera first and refuses one with a real camera, so the demo
+configuration never reaches a real microscope:
 
 ```bash
 microscope-command-server --demo

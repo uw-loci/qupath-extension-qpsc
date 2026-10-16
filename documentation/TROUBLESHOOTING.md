@@ -129,7 +129,7 @@ details.
   installed with the Python packages is usually not found. **Fix A, start it yourself:**
   1. Activate the environment (`venv_qpsc\Scripts\activate.bat`). 2. Run
   `microscope-command-server --demo`. 3. Choose **Connect to a Demo Microscope...** again;
-  QPSC uses the server that is already listening. **Fix B, point QPSC at the program once:**
+  QPSC uses the demo server that is already listening. **Fix B, point QPSC at the program once:**
   1. Click **Locate server program...**. 2. Pick `venv_qpsc\Scripts\microscope-command-server`
   (Windows), `venv_qpsc/bin/microscope-command-server` (Linux/macOS), or the repository's
   `start_server.bat`. The choice is stored in the *Server launcher* preference (**Edit >
@@ -138,11 +138,26 @@ details.
 - `<program> exited with code N:` followed by the server's last output lines. A line
   `ModuleNotFoundError: No module named '...'` means a Python package is missing from that
   environment; see [Step 3.4](INSTALLATION.md#34-troubleshooting-python-installation).
-- `<program>: still no server on port 5000 after 60 s` with nothing else: the program ran but
-  never listened. With `start_server.bat` this is usually a preflight failure waiting at
-  `pause` on a console you cannot see; run the batch file by hand once to read the message.
+  With `start_server.bat`, a failed preflight check (no Python found, a missing package, a
+  conda environment that cannot be activated) also lands here, as `exited with code 1` with
+  the batch file's own message.
+- `<program>: still no server on port 5000 after 60 s` followed by its last output, or by
+  `and no output.`: the program kept running but never listened. QPSC stops it and everything
+  it started. Run the same command by hand to watch it start.
   Every one of these dialogs is also written to the QuPath log at ERROR, with the server's
   output, so a bug report carries it.
+
+#### Q: Connect to a Demo Microscope says a microscope server is already running with a real camera
+
+**A:** Something already listens on the server port, and it is not the demo. QPSC asks it for
+its camera before sending anything else. A server reporting a camera other than the demo's
+`DCam` is driving real hardware, so QPSC refuses rather than send it the demo configuration
+and its stage limits. The message names the camera, for example
+*A microscope server is already running on port 5000 with a real camera (JAICamera), not the
+demo.* If nothing answers like a microscope server, the message says *Something is listening
+on port 5000 but did not answer as a microscope server.* The server always listens on port 5000,
+so the demo cannot run beside it: stop that server, then choose **Connect to a Demo
+Microscope...** again.
 
 #### Q: The demo asks "Point the server connection at this computer?"
 

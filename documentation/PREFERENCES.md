@@ -288,7 +288,9 @@ folder on Windows, `bin` elsewhere), or the repository's `start_server.bat` (bat
 run through `cmd.exe /c`). Empty means "whatever `microscope-command-server` is on the
 PATH"; a virtual environment's programs are found only while it is activated, see
 [Troubleshooting: Demo microscope](TROUBLESHOOTING.md#demo-microscope). A server already
-listening is always used instead of starting one.
+listening is used instead of starting one, provided it is the demo server (its camera is
+`DCam`); a server with a real camera is refused, see
+[Troubleshooting](TROUBLESHOOTING.md#q-connect-to-a-demo-microscope-says-a-microscope-server-is-already-running-with-a-real-camera).
 
 **Changing it:** edit or clear the **Server Launcher** entry under **Edit > Preferences >
 QuPath SCope**, or click **Locate server program...** in the dialog that appears when the

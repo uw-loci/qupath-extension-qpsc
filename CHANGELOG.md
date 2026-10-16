@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Demo microscope: a batch-launched server stops with QuPath, and a real server is never adopted**
+- A demo server started through `start_server.bat` kept running after QuPath quit, holding port 5000. QPSC stopped only `cmd.exe`, not the Python server it had started. QPSC now stops the launcher and everything it started, at exit and when a start times out. Verified on Windows 11 with the real batch file.
+- A failed `start_server.bat` preflight check no longer waits silently at `pause` until the 60 s timeout. QPSC closes the launcher's input, so the batch file exits at once and its message appears in the dialog. A start that does time out now also shows the program's last output.
+- **Connect to a Demo Microscope** used to adopt any server already listening on the port and send it the demo configuration. It now asks the server for its camera first and refuses one that is not the demo's `DCam`, naming the camera. See [TROUBLESHOOTING.md](documentation/TROUBLESHOOTING.md#q-connect-to-a-demo-microscope-says-a-microscope-server-is-already-running-with-a-real-camera).
+
 **The alignment check before an unattended acquire now sets up the camera first**
 - Before its snaps, the check now starts the Live Viewer and applies the modality's alignment state, the same one the refinement dialogs use. On PPM that is the uncrossed angle with its white-balanced exposures and gains. Previously it matched against whatever angle and exposure the last step had left, and a slide could fail all three points with "SIFT matching failed - insufficient features or matches". If the camera cannot be set up, `halt` stops the batch with the reason and `warn` acquires unchecked. The result line in the log names the camera state used. See [PREFERENCES.md](documentation/PREFERENCES.md#check-alignment-against-the-sample-before-acquiring).
 - The check also no longer runs on QuPath's interface thread, which had frozen QuPath for about 30 seconds per slide.

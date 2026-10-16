@@ -134,4 +134,96 @@ class DemoMicroscopeTest {
         int failure = s.indexOf("} else {", success);
         assertTrue(callback > success && callback < failure, "onSuccess runs inside the success branch");
     }
+
+    /**
+     * A fake server: accepts connections until the listener closes. A connection that sends
+     * nothing is the port-open check; one that sends a command is recorded and answered with
+     * {@code reply}, or closed unanswered when {@code reply} is null.
+     */
+    private static Thread fakeServer(ServerSocket listener, String reply, StringBuilder received) {
+        Thread t = new Thread(() -> {
+            while (!listener.isClosed()) {
+                try (var socket = listener.accept()) {
+                    byte[] cmd = socket.getInputStream().readNBytes(8);
+                    if (cmd.length < 8) {
+                        continue;
+                    }
+                    synchronized (received) {
+                        received.append(new String(cmd, java.nio.charset.StandardCharsets.US_ASCII));
+                    }
+                    if (reply != null) {
+                        byte[] out =
+                                java.util.Arrays.copyOf(reply.getBytes(java.nio.charset.StandardCharsets.UTF_8), 32);
+                        socket.getOutputStream().write(out);
+                        socket.getOutputStream().flush();
+                        socket.getInputStream().readNBytes(8); // the goodbye
+                    }
+                } catch (IOException ignored) {
+                    // listener closed, or the client went away; the test asserts on the result
+                }
+            }
+        });
+        t.setDaemon(true);
+        t.start();
+        return t;
+    }
+
+    @Test
+    void theProbeAsksForTheCameraWithoutConfiguring() throws Exception {
+        try (ServerSocket listener = new ServerSocket(0)) {
+            StringBuilder received = new StringBuilder();
+            Thread server = fakeServer(listener, "DCam", received);
+            assertEquals("DCam", DemoMicroscope.probeCameraName("localhost", listener.getLocalPort(), 3000));
+            server.join(3000);
+            assertEquals("getcam__", received.toString(), "GETCAM only; CONFIG could take over a session");
+        }
+    }
+
+    @Test
+    void aServerWithARealCameraIsNotAdoptedAsTheDemo() throws Exception {
+        try (ServerSocket listener = new ServerSocket(0)) {
+            fakeServer(listener, "JAICamera", new StringBuilder());
+            DemoMicroscope.ServerOutcome outcome = DemoMicroscope.ensureServer("localhost", listener.getLocalPort());
+            assertFalse(outcome.ok());
+            assertTrue(outcome.alreadyRunning(), "refused, not a launch failure");
+            assertTrue(outcome.detail().contains("JAICamera"), outcome.detail());
+        }
+    }
+
+    @Test
+    void somethingThatDoesNotAnswerIsNotAdoptedEither() throws Exception {
+        try (ServerSocket listener = new ServerSocket(0)) {
+            fakeServer(listener, null, new StringBuilder());
+            assertNull(DemoMicroscope.probeCameraName("localhost", listener.getLocalPort(), 2000));
+        }
+    }
+
+    @Test
+    void theDemoServerIsAdoptedWhenItIsAlreadyRunning() throws Exception {
+        try (ServerSocket listener = new ServerSocket(0)) {
+            fakeServer(listener, DemoMicroscope.DEMO_CAMERA, new StringBuilder());
+            DemoMicroscope.ServerOutcome outcome = DemoMicroscope.ensureServer("localhost", listener.getLocalPort());
+            assertTrue(outcome.ok(), outcome.detail());
+            assertTrue(outcome.alreadyRunning());
+        }
+    }
+
+    @Test
+    void stoppingALaunchedServerStopsWhatItStarted() throws Exception {
+        org.junit.jupiter.api.Assumptions.assumeTrue(Files.isExecutable(Path.of("/bin/sh")), "needs /bin/sh");
+        // The start_server.bat shape: a shell that starts the real server and waits on it.
+        Process shell = new ProcessBuilder("/bin/sh", "-c", "sleep 120 & wait").start();
+        ProcessHandle child = null;
+        for (int i = 0; i < 50 && child == null; i++) {
+            child = shell.toHandle().children().findFirst().orElse(null);
+            if (child == null) {
+                Thread.sleep(50);
+            }
+        }
+        assertNotNull(child, "the shell started its child");
+        DemoMicroscope.stopTree(shell);
+        child.onExit().get(5, java.util.concurrent.TimeUnit.SECONDS);
+        assertFalse(child.isAlive(), "the child must not outlive the launcher");
+        shell.onExit().get(5, java.util.concurrent.TimeUnit.SECONDS);
+    }
 }

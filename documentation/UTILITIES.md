@@ -116,13 +116,14 @@ that program with no hardware. Always enabled, even with no configuration.
 **Does:** extracts the demo configuration
 (`<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`) if it is missing; asks to
 point the server host at this computer (**Use localhost**) if it names another machine, and
-Cancel aborts; uses a server already listening on the configured port, or starts
+Cancel aborts; uses a demo server already listening on the configured port (one whose
+camera is `DCam`; a server with any other camera is refused with an error), or starts
 `microscope-command-server --demo` (the *Server launcher* preference first, then the PATH);
 switches to the demo configuration through Switch Microscope, or just reconnects if the demo
 is already active; sets the Live Viewer's remembered exposure to the demo's 10 ms; opens the
 Live Viewer. On success a notification reads *Started the demo server and connected.* or
-*Connected to the server already running on port 5000.*; the second means QPSC reused
-whatever was listening.
+*Connected to the server already running on port 5000.*; the second means QPSC reused a
+demo server that was already running.
 
 **Simulated:** the camera and stage only, a virtual H&E slide on an XYZ stage with a focal
 surface (10x, 0.65 um/px, 512 x 512 px, a 333 um field, a 40 x 20 mm slide, 8-bit RGB). The
@@ -135,7 +136,8 @@ ordinary QPSC settings apply.
 `C:\Users\<you>\venv_qpsc\Scripts\microscope-command-server.exe`) in the *Server launcher*
 preference (**Edit > Preferences > QuPath SCope > Server Launcher**, editable there too).
 
-**Leaving:** a server QPSC started stops when QuPath exits; return to a real microscope with
+**Leaving:** a server QPSC started stops when QuPath exits, along with anything its launcher
+started, so a server run through `start_server.bat` stops too. Return to a real microscope with
 Switch Microscope. See [Try It Without a Microscope](INSTALLATION.md#try-it-without-a-microscope-optional)
 and [Troubleshooting: Demo microscope](TROUBLESHOOTING.md#demo-microscope).
 

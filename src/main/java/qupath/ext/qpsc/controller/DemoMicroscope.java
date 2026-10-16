@@ -71,6 +71,9 @@ public final class DemoMicroscope {
     /** The console script the Python package installs; resolved through the PATH. */
     public static final String SERVER_COMMAND = "microscope-command-server";
 
+    /** Camera device name of the demo core, and of Micro-Manager's own Demo configuration. */
+    static final String DEMO_CAMERA = "DCam";
+
     /** The server flag that selects the simulated microscope. */
     public static final String DEMO_FLAG = "--demo";
 
@@ -129,6 +132,10 @@ public final class DemoMicroscope {
                             return;
                         }
                         if (!outcome.ok()) {
+                            if (outcome.alreadyRunning()) {
+                                fail(outcome.detail());
+                                return;
+                            }
                             inProgress.set(false);
                             explainLaunchFailure(outcome, port);
                             return;
@@ -198,6 +205,24 @@ public final class DemoMicroscope {
      */
     static ServerOutcome ensureServer(String host, int port) {
         if (portOpen(host, port, 1000)) {
+            // Something is already on the port. Adopt it only if it is a simulated microscope:
+            // the demo core's camera is DCam, as is Micro-Manager's own Demo configuration. A
+            // real microscope's server would otherwise be sent config_Demo.yml and drive real
+            // hardware with the demo's stage limits and Z values.
+            String camera = probeCameraName(host, port, 3000);
+            if (!DEMO_CAMERA.equals(camera)) {
+                return new ServerOutcome(
+                        false,
+                        true,
+                        null,
+                        (camera == null
+                                        ? "Something is listening on port " + port
+                                                + " but did not answer as a microscope server."
+                                        : "A microscope server is already running on port " + port
+                                                + " with a real camera (" + camera + "), not the demo.")
+                                + " QPSC will not send it the demo configuration. The demo server also needs this port,"
+                                + " so stop that server first, then choose Connect to a Demo Microscope again.");
+            }
             return new ServerOutcome(true, true, null, "already listening");
         }
         List<String> failures = new ArrayList<>();
@@ -211,6 +236,14 @@ public final class DemoMicroscope {
                 failures.add(launcher + ": " + e.getMessage());
                 logger.info("Demo microscope: {} did not start ({})", launcher, e.getMessage());
                 continue;
+            }
+            // Nothing will ever type into it. Closing its input ends a batch file's "pause" at
+            // once, so a failed preflight exits and its message reaches the dialog instead of
+            // the launcher sitting silent until the timeout.
+            try {
+                process.getOutputStream().close();
+            } catch (IOException e) {
+                logger.debug("Demo microscope: could not close the launcher's input: {}", e.getMessage());
             }
             Deque<String> recent = pumpOutput(process);
             long deadline = System.currentTimeMillis() + SERVER_START_TIMEOUT_MS;
@@ -228,9 +261,10 @@ public final class DemoMicroscope {
                 sleepQuietly(250);
             }
             if (process.isAlive()) {
-                process.destroy();
+                stopTree(process);
                 failures.add(launcher + ": still no server on port " + port + " after " + SERVER_START_TIMEOUT_MS / 1000
-                        + " s");
+                        + " s"
+                        + (recent.isEmpty() ? " and no output." : ". Its last output:\n" + String.join("\n", recent)));
             }
         }
         return new ServerOutcome(false, false, null, String.join("\n\n", failures));
@@ -351,13 +385,54 @@ public final class DemoMicroscope {
         return recent;
     }
 
+    /**
+     * Stops a launched process and everything it started. {@link Process#destroy()} alone
+     * reaches only the direct child: with start_server.bat that is cmd.exe, and the Python
+     * server it started would outlive QuPath and keep the port.
+     */
+    static void stopTree(Process process) {
+        process.toHandle().descendants().forEach(ProcessHandle::destroy);
+        process.destroy();
+    }
+
+    /**
+     * Asks the server on {@code host:port} for its camera's device name without configuring
+     * it: {@code GETCAM} answers before {@code CONFIG}, and only {@code CONFIG} can take over
+     * an existing client's session. Returns null when nothing answers like the server.
+     */
+    static String probeCameraName(String host, int port, int timeoutMs) {
+        try (Socket socket = new Socket()) {
+            socket.connect(new InetSocketAddress(host, port), timeoutMs);
+            socket.setSoTimeout(timeoutMs);
+            var out = socket.getOutputStream();
+            out.write("getcam__".getBytes(StandardCharsets.US_ASCII));
+            out.flush();
+            byte[] reply = socket.getInputStream().readNBytes(32);
+            try {
+                out.write("quitclnt".getBytes(StandardCharsets.US_ASCII));
+                out.flush();
+            } catch (IOException ignored) {
+                // The answer is what matters; a failed goodbye just closes the socket.
+            }
+            if (reply.length != 32) {
+                return null;
+            }
+            String name =
+                    new String(reply, StandardCharsets.UTF_8).replace("\0", "").trim();
+            return name.isEmpty() || name.startsWith("ERROR") ? null : name;
+        } catch (IOException e) {
+            logger.info("Demo microscope: no camera answer from {}:{} ({})", host, port, e.getMessage());
+            return null;
+        }
+    }
+
     private static void installShutdownHook() {
         Runtime.getRuntime()
                 .addShutdownHook(new Thread(
                         () -> {
                             Process p = launched;
                             if (p != null && p.isAlive()) {
-                                p.destroy();
+                                stopTree(p);
                             }
                         },
                         "qpsc-demo-server-stop"));
