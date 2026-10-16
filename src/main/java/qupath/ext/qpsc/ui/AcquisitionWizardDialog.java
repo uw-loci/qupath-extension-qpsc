@@ -1482,7 +1482,7 @@ public class AcquisitionWizardDialog {
     }
 
     private void onBoundedAcquisition() {
-        if (!confirmCalibrationStatus()) return;
+        if (!confirmCalibrationStatus(false)) return;
         syncWizardSelectionToPreferences();
         try {
             QPScopeController.getInstance().startWorkflow("boundedAcquisition");
@@ -1492,7 +1492,7 @@ public class AcquisitionWizardDialog {
     }
 
     private void onExistingImageAcquisition() {
-        if (!confirmCalibrationStatus()) return;
+        if (!confirmCalibrationStatus(true)) return;
         syncWizardSelectionToPreferences();
         try {
             QPScopeController.getInstance().startWorkflow("existingImage");
@@ -1505,7 +1505,7 @@ public class AcquisitionWizardDialog {
      * Checks current calibration status and warns the user before acquisition
      * if any steps are not READY. Returns true to proceed, false to cancel.
      */
-    private boolean confirmCalibrationStatus() {
+    private boolean confirmCalibrationStatus(boolean needsAlignment) {
         String modality = modalityCombo.getValue();
         String objective = objectiveCombo.getValue();
         String detector = detectorCombo.getValue();
@@ -1543,22 +1543,17 @@ public class AcquisitionWizardDialog {
             }
         }
 
-        // Check white balance
-        StepStatus wbStatus = CalibrationChecker.checkWhiteBalance(modality, objective, detector);
-        if (wbStatus.status() == Status.WARNING || wbStatus.status() == Status.NOT_READY) {
-            warnings.add("White Balance: " + wbStatus.message());
-        }
+        // White balance and backgrounds are NOT checked here. They depend on the white
+        // balance mode, which the acquisition dialog chooses next, and a roll-up of every
+        // mode warned operators about modes they were not using. The acquisition checks the
+        // chosen mode once it is known (BackgroundIlluminationCheck.checkChosenWbModeAndWarn).
 
-        // Check background correction
-        StepStatus bgStatus = CalibrationChecker.checkBackgroundCorrection(modality, objective, detector);
-        if (bgStatus.status() == Status.WARNING || bgStatus.status() == Status.NOT_READY) {
-            warnings.add("Backgrounds: " + bgStatus.message());
-        }
-
-        // Check alignment
-        StepStatus alignStatus = CalibrationChecker.checkAlignment();
-        if (alignStatus.status() == Status.NOT_READY) {
-            warnings.add("Alignment: " + alignStatus.message());
+        // Alignment matters only when acquiring from an existing image.
+        if (needsAlignment) {
+            StepStatus alignStatus = CalibrationChecker.checkAlignment();
+            if (alignStatus.status() == Status.NOT_READY) {
+                warnings.add("Alignment: " + alignStatus.message());
+            }
         }
 
         if (warnings.isEmpty()) {
@@ -1579,17 +1574,17 @@ public class AcquisitionWizardDialog {
 
         // Other issues get a warning with proceed/cancel
         StringBuilder msg = new StringBuilder();
-        msg.append("The following calibration steps have warnings:\n\n");
+        msg.append("The following steps are not ready:\n\n");
         for (String w : warnings) {
             msg.append("  - ").append(w).append("\n");
         }
-        msg.append("\nAcquiring with stale or missing calibration may produce ");
-        msg.append("incorrect flat-field correction or color balance.\n\n");
+        msg.append("\nAcquiring from an existing image uses the alignment between that image ");
+        msg.append("and the stage.\n\n");
         msg.append("Proceed anyway?");
 
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
-        alert.setTitle("Calibration Warnings");
-        alert.setHeaderText("Some calibration steps are not ready");
+        alert.setTitle("Alignment Warning");
+        alert.setHeaderText("Microscope alignment is not ready");
         alert.setContentText(msg.toString());
         alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.CANCEL);
 

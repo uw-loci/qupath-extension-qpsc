@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Calibration warnings name only what the acquisition uses**
+- The Acquisition Wizard no longer warns about white balance or backgrounds when an acquisition starts. That check ran before the white balance mode was chosen and rolled up every mode, so an operator acquiring with per-angle white balance was warned that simple white balance was not calibrated. Once the acquisition dialog fixes the mode, both Bounded and Existing Image acquisitions now check that mode alone, its white balance calibration and its backgrounds, and ask before acquiring if it is not ready. In an armed automatic batch the problem is logged and the run continues.
+- The launch warning about a missing microscope alignment now appears only for Existing Image Acquisition; Bounded Acquisition does not use an alignment.
+
 **Cancel autofocus validation in the Acquisition Wizard; larger text in the tile dialog**
 - **Validate AF** in the Acquisition Wizard shows a **Cancel** button while it runs. Cancel stops the test between Z steps, in either phase, and Z returns to where the test started. Needs microscope_command_server and microscope_control from the same date. The autofocus status now sits on its own line, so it is no longer cut off while the test runs.
 - The **Alignment - Select tile** dialog uses larger text: 16 px, with the double-click instruction at 17 px bold.

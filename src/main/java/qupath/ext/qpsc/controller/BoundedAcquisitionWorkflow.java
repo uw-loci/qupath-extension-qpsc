@@ -336,6 +336,13 @@ public class BoundedAcquisitionWorkflow {
                                     tempTileDir);
                         }
 
+                        // The chosen white-balance mode's own calibration, now that it is known.
+                        if (!BackgroundIlluminationCheck.checkChosenWbModeAndWarn(
+                                result.modality(), result.objective(), result.detector(), result.wbMode())) {
+                            logger.warn("Acquisition cancelled by user after the white balance calibration warning");
+                            return;
+                        }
+
                         // Warn if the flat-field background was collected at a different lamp
                         // level than the profile about to be used (silent flat-field artifacts).
                         // Only relevant when correction will actually run.

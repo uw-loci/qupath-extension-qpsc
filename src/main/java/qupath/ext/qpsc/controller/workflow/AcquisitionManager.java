@@ -532,6 +532,12 @@ public class AcquisitionManager {
             String modality = state.sample.modality();
             String objective = state.sample.objective();
             String detector = state.sample.detector();
+            // The chosen white-balance mode's own calibration, now that it is known. The
+            // wizard no longer warns about modes this acquisition does not use.
+            if (!BackgroundIlluminationCheck.checkChosenWbModeAndWarn(modality, objective, detector, state.wbMode)) {
+                logger.warn("Acquisition cancelled by user after the white balance calibration warning");
+                return null;
+            }
             // Only relevant when flat-field correction will actually run for this
             // modality/detector; otherwise there is no reference to be stale against.
             if (!AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(cfg, modality, detector)) {

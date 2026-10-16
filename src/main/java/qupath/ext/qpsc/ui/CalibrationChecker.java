@@ -345,6 +345,46 @@ public class CalibrationChecker {
     }
 
     /**
+     * Calibration problems that matter for the white-balance mode the acquisition will use,
+     * and only that mode: its white-balance calibration and its backgrounds.
+     *
+     * <p>The wizard used to warn before the mode was chosen, rolling up every mode, so an
+     * operator acquiring with per-angle white balance was told simple white balance was not
+     * calibrated. Call this once the acquisition dialog has fixed the mode.
+     *
+     * @param wbProtocolName the chosen mode's protocol name ({@code "per_angle"}, {@code "simple"}, ...)
+     * @return one line per problem, empty when the chosen mode is ready or needs nothing
+     */
+    public static java.util.List<String> problemsForChosenWbMode(
+            String modality, String objective, String detector, String wbProtocolName) {
+        java.util.List<String> problems = new java.util.ArrayList<>();
+        if (wbProtocolName == null) {
+            return problems;
+        }
+        qupath.ext.qpsc.modality.WbMode chosen;
+        try {
+            chosen = qupath.ext.qpsc.modality.WbMode.fromProtocolName(wbProtocolName);
+        } catch (RuntimeException e) {
+            return problems;
+        }
+        if (chosen == null) {
+            return problems;
+        }
+        String label = chosen.getDisplayName();
+        for (ModeStatus mode : checkWhiteBalanceByMode(modality, objective, detector)) {
+            if (label.equals(mode.label()) && mode.status() != Status.READY) {
+                problems.add("White balance (" + label + "): " + mode.message());
+            }
+        }
+        for (ModeStatus mode : checkBackgroundsByMode(modality, objective, detector)) {
+            if (label.equals(mode.label()) && mode.status() != Status.READY) {
+                problems.add("Backgrounds (" + label + "): " + mode.message());
+            }
+        }
+        return problems;
+    }
+
+    /**
      * Per-white-balance-mode background status, one entry per mode that applies.
      *
      * <p>The breakdown behind {@link #checkBackgroundCorrection}: same data, not rolled up, so

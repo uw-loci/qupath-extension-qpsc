@@ -177,7 +177,10 @@ public final class BackgroundIlluminationCheck {
                 + "Recommended: re-run Background Collection at the current settings before "
                 + "acquiring. Proceed anyway?");
 
-        return showWarningDialog(String.format(sb.toString()));
+        return showWarningDialog(
+                "Background / Acquisition Settings Mismatch",
+                "Flat-field background does not match the acquisition settings",
+                String.format(sb.toString()));
     }
 
     /**
@@ -221,15 +224,51 @@ public final class BackgroundIlluminationCheck {
         return sb.toString();
     }
 
-    private static boolean showWarningDialog(String body) {
+    /**
+     * Warns about calibration problems of the white-balance mode the acquisition will use,
+     * and nothing else (see {@link qupath.ext.qpsc.ui.CalibrationChecker#problemsForChosenWbMode}).
+     * During an armed automatic batch it logs and proceeds, since nobody is there to answer.
+     *
+     * @return true to proceed, false when the operator cancelled
+     */
+    public static boolean checkChosenWbModeAndWarn(String modality, String objective, String detector, String wbMode) {
+        List<String> problems;
+        try {
+            problems = qupath.ext.qpsc.ui.CalibrationChecker.problemsForChosenWbMode(
+                    modality, objective, detector, wbMode);
+        } catch (Exception e) {
+            logger.warn("Chosen white-balance mode check skipped: {}", e.getMessage());
+            return true;
+        }
+        if (problems.isEmpty()) {
+            logger.info("White balance mode '{}' is calibrated for {}/{}/{}", wbMode, modality, objective, detector);
+            return true;
+        }
+        logger.warn("White balance mode '{}' calibration problems: {}", wbMode, problems);
+        if (qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()) {
+            logger.warn("Automatic batch: acquiring despite the calibration problems above");
+            return true;
+        }
+        StringBuilder body =
+                new StringBuilder("This acquisition uses this white balance mode, and it is not ready:\n\n");
+        for (String p : problems) {
+            body.append("  - ").append(p).append("\n");
+        }
+        body.append("\nAcquiring now may give wrong color balance or flat-field correction. Run the calibration"
+                + " from the Acquisition Wizard first, or proceed anyway?");
+        return showWarningDialog(
+                "White Balance Calibration", "The chosen white balance mode is not calibrated", body.toString());
+    }
+
+    private static boolean showWarningDialog(String title, String header, String body) {
         if (Platform.isFxApplicationThread()) {
-            return showWarningDialogFx(body);
+            return showWarningDialogFx(title, header, body);
         }
         AtomicBoolean proceed = new AtomicBoolean(false);
         CountDownLatch latch = new CountDownLatch(1);
         Platform.runLater(() -> {
             try {
-                proceed.set(showWarningDialogFx(body));
+                proceed.set(showWarningDialogFx(title, header, body));
             } finally {
                 latch.countDown();
             }
@@ -243,10 +282,10 @@ public final class BackgroundIlluminationCheck {
         return proceed.get();
     }
 
-    private static boolean showWarningDialogFx(String body) {
+    private static boolean showWarningDialogFx(String title, String header, String body) {
         Alert alert = new Alert(Alert.AlertType.WARNING);
-        alert.setTitle("Background / Acquisition Settings Mismatch");
-        alert.setHeaderText("Flat-field background does not match the acquisition settings");
+        alert.setTitle(title);
+        alert.setHeaderText(header);
 
         Label bodyLabel = new Label(body);
         bodyLabel.setWrapText(true);

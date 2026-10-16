@@ -73,6 +73,8 @@ Two large buttons to launch the main acquisition workflows. Each shows an icon o
 | Bounded Acquisition | Server connection (green) | Define a rectangular acquisition region using stage coordinates. Does not require an open image. |
 | Existing Image Acquisition | Server connection (green) + open image in QuPath | Acquire annotated regions from an already-open image. Also requires microscope alignment. |
 
+**Warnings at launch.** Starting Existing Image Acquisition without a saved microscope alignment asks whether to proceed. White balance and backgrounds are not checked at launch: they depend on the white balance mode, which you choose in the next dialog. Once the mode is chosen, the acquisition checks that mode alone, its white balance calibration and its backgrounds, and asks before acquiring if it is not ready. A mode you are not using never triggers a warning. In an automatic multi-slide batch the problem is logged and the acquisition goes ahead.
+
 ## Workflow
 
 1. Open the wizard from the menu.
