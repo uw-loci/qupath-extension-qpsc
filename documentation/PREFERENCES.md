@@ -1110,7 +1110,7 @@ Controls how stitched channels are grouped into files during multi-channel acqui
 - **Split files** use the channel id: one per-channel stitched pyramid, imported under its own entry
 
 **Project import behavior:**
-- When "Single combined file" is used with no split channels, only the merged file is imported; per-channel intermediates stay on disk as recovery artifacts.
+- When "Single combined file" is used with no split channels, only the merged file is imported. After a successful merge, the per-channel files it consumed (and their `.stitch-info.txt` records) are deleted, since the merged file holds every channel. A failed merge keeps them as recovery artifacts.
 - When "Separate file per channel" is used, or when channels are split individually, all stitched files are imported as separate entries.
 
 ---

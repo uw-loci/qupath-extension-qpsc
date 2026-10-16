@@ -282,7 +282,7 @@ For example: `PollenIF_fl_001.ome.tif` for a widefield fluorescence acquisition 
 
 Split (per-channel) files keep the name of their own per-channel stitched pyramid (which encodes the channel id) and are imported as separate project entries.
 
-When the "Single combined file" default is used with no channels split, only the merged multichannel file is added to the QuPath project; the per-channel intermediate OME-TIFFs are written with `skipProjectImport: true` so they stay on disk as recovery artifacts but never clutter the project tree (you will not see single-channel entries flash into existence during acquisition). Channels you split out -- and every channel under "Separate file per channel" -- are instead imported as their own entries.
+When the "Single combined file" default is used with no channels split, only the merged multichannel file is added to the QuPath project; the per-channel intermediate OME-TIFFs are written with `skipProjectImport: true` so they never clutter the project tree (you will not see single-channel entries flash into existence during acquisition). Once the merge succeeds, those per-channel files are deleted, because the merged file holds every channel; if the merge fails, they stay on disk as recovery artifacts. Channels you split out -- and every channel under "Separate file per channel" -- are instead imported as their own entries.
 
 ### BF+IF on Single-Camera Scopes
 
