@@ -17,6 +17,11 @@ class LaunchWarningRelevanceTest {
 
     private static final Path MAIN = Path.of("src/main/java/qupath/ext/qpsc");
 
+    /** Source text with LF line endings: a Windows checkout has CRLF. */
+    private static String read(Path file) throws IOException {
+        return Files.readString(file).replace("\r\n", "\n");
+    }
+
     private static String method(String src, String signature) {
         int at = src.indexOf(signature);
         assertTrue(at >= 0, "find " + signature);
@@ -26,7 +31,7 @@ class LaunchWarningRelevanceTest {
 
     @Test
     void theWizardDoesNotWarnAboutWhiteBalanceModesBeforeOneIsChosen() throws IOException {
-        String wizard = Files.readString(MAIN.resolve("ui/AcquisitionWizardDialog.java"));
+        String wizard = read(MAIN.resolve("ui/AcquisitionWizardDialog.java"));
         String body = method(wizard, "private boolean confirmCalibrationStatus(boolean needsAlignment)");
         assertFalse(body.contains("CalibrationChecker.checkWhiteBalance("), "no white balance roll-up at launch");
         assertFalse(body.contains("CalibrationChecker.checkBackgroundCorrection("), "no background roll-up at launch");
@@ -38,17 +43,17 @@ class LaunchWarningRelevanceTest {
 
     @Test
     void bothAcquisitionPathsCheckTheChosenModeOnceItIsKnown() throws IOException {
-        String manager = Files.readString(MAIN.resolve("controller/workflow/AcquisitionManager.java"));
+        String manager = read(MAIN.resolve("controller/workflow/AcquisitionManager.java"));
         assertTrue(manager.contains(
                 "BackgroundIlluminationCheck.checkChosenWbModeAndWarn(modality, objective, detector, state.wbMode)"));
-        String bounded = Files.readString(MAIN.resolve("controller/BoundedAcquisitionWorkflow.java"));
+        String bounded = read(MAIN.resolve("controller/BoundedAcquisitionWorkflow.java"));
         assertTrue(bounded.contains("BackgroundIlluminationCheck.checkChosenWbModeAndWarn("));
         assertTrue(bounded.contains("result.wbMode())"));
     }
 
     @Test
     void theChosenModeCheckLooksAtThatModeAlone() throws IOException {
-        String checker = Files.readString(MAIN.resolve("ui/CalibrationChecker.java"));
+        String checker = read(MAIN.resolve("ui/CalibrationChecker.java"));
         String body = method(checker, "public static java.util.List<String> problemsForChosenWbMode(");
         assertTrue(body.contains("label.equals(mode.label())"), "filters the per-mode breakdown to the chosen mode");
     }
