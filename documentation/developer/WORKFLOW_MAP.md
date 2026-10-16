@@ -1187,6 +1187,7 @@ writes:
 key_invariants:
   - "Run on a clear, specimen-free field: the calibration measures how dark extinction can be made, so anything birefringent in the field degrades the result."
   - "Reports an extinction ratio as its quality figure; 100+ is good."
+  - "The server's `assessment` of `unreliable` overrides the ratio band: the headline, the dialog's Apply confirmation and the log warning follow it, whatever the ratio. The client does not re-derive reliability; it reads `reliability_issues` from the server result."
   - "Modality NAME vs TYPE: dispatch keys off the NAME (`lcpolscope` / `lcps` prefixes in DS41); the YAML `type:` is `polarized`, deliberately shared with PPM so LC-PolScope inherits the right sample-physics defaults. Writing `type: lcpolscope` in a YAML yields a modality that resolves to nothing."
 ```
 
