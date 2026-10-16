@@ -16,6 +16,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.SetupScope;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
@@ -123,8 +124,7 @@ public final class MicroscopeSwitcher {
             return;
         }
         if (newPath == null || newPath.isBlank() || !Files.isRegularFile(Path.of(newPath))) {
-            logger.error("Microscope switch refused: the config file does not exist: {}", newPath);
-            Dialogs.showErrorMessage("Switch Microscope", "The config file does not exist:\n" + newPath);
+            UserErrors.show(logger, "Switch Microscope", "The config file does not exist:\n" + newPath);
             return;
         }
         if (!inProgress.compareAndSet(false, true)) {
@@ -228,7 +228,7 @@ public final class MicroscopeSwitcher {
                             } else {
                                 Throwable cause = err.getCause() != null ? err.getCause() : err;
                                 logger.error("Microscope switch failed", cause);
-                                Dialogs.showErrorMessage("Switch Microscope", cause.getMessage());
+                                UserErrors.show(logger, "Switch Microscope", cause.getMessage());
                             }
                         } finally {
                             inProgress.set(false);
@@ -269,8 +269,7 @@ public final class MicroscopeSwitcher {
 
     private static void refuse(String why) {
         inProgress.set(false);
-        logger.error("Microscope switch refused: {}", why);
-        Dialogs.showErrorMessage("Switch Microscope", why);
+        UserErrors.show(logger, "Switch Microscope", why);
     }
 
     private static boolean confirmed(String oldPath, String newPath, boolean live, boolean map, int others) {

@@ -605,6 +605,7 @@ public class AutofocusBenchmarkDialog {
                             alert.setHeaderText("Could not parse benchmark parameters");
                             alert.setContentText("Please check your input values and try again.");
                             DialogOwner.own(alert);
+                            UserErrors.logAlert(logger, alert);
                             alert.showAndWait();
                             return null;
                         }

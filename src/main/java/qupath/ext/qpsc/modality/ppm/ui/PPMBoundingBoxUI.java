@@ -27,6 +27,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -310,6 +311,7 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
             err.setTitle("MicroManager MDA Export");
             err.setHeaderText("Failed to build export context");
             err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+            UserErrors.logAlert(logger, err);
             UIFunctions.showAlertOverParent(err, win);
             return;
         }

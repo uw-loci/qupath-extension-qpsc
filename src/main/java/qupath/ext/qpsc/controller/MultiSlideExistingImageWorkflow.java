@@ -54,6 +54,7 @@ import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.SectionBuilder;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -210,8 +211,10 @@ public final class MultiSlideExistingImageWorkflow {
         }
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage(
-                    "Multi-Slide workflow", "Open a QuPath project containing the macro images for each slide first.");
+            UserErrors.show(
+                    logger,
+                    "Multi-Slide workflow",
+                    "Open a QuPath project containing the macro images for each slide first.");
             return;
         }
 
@@ -1172,7 +1175,7 @@ public final class MultiSlideExistingImageWorkflow {
         } catch (Exception ex) {
             logger.error(
                     "MS workflow: failed to open entry {}", s.assignment.entry().getImageName(), ex);
-            Dialogs.showErrorMessage("Open failed", ex.getMessage());
+            UserErrors.show(logger, "Open failed", ex.getMessage());
             return false;
         }
     }
@@ -1429,7 +1432,8 @@ public final class MultiSlideExistingImageWorkflow {
                     + "field looks the same. Check the live image first: if it is in focus and on tissue, the "
                     + "stage is not where it reports, and the slides need setting up again.";
         }
-        Platform.runLater(() -> Dialogs.showErrorMessage(
+        Platform.runLater(() -> UserErrors.show(
+                logger,
                 "Alignment could not be confirmed",
                 "The run has been stopped before acquiring on an alignment that does not hold.\n\n"
                         + reason
@@ -1451,7 +1455,8 @@ public final class MultiSlideExistingImageWorkflow {
             return;
         }
         frameSuspectWarned = true;
-        Platform.runLater(() -> Dialogs.showErrorMessage(
+        Platform.runLater(() -> UserErrors.show(
+                logger,
                 "Stage position is not trustworthy",
                 "The run has been stopped because the stage is not where its coordinates say it is.\n\n"
                         + reason

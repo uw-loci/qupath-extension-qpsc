@@ -32,6 +32,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -87,7 +88,7 @@ public class MakePortableWorkflow {
     public static void run(QuPathGUI gui) {
         Project<BufferedImage> project = gui.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage("Make Project Portable - Error", "No project is open. Open a project first.");
+            UserErrors.show(logger, "Make Project Portable - Error", "No project is open. Open a project first.");
             return;
         }
 

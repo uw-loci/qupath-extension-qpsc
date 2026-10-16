@@ -30,6 +30,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -2379,6 +2380,7 @@ public class StageMapWindow {
                 alert.setTitle(title);
                 alert.setHeaderText(null);
                 alert.setContentText(message);
+                UserErrors.logAlert(logger, alert);
                 UIFunctions.showAlertOverParent(alert, stage);
             } finally {
                 dialogShowing = false;

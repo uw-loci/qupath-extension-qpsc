@@ -34,6 +34,7 @@ import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.TileFolderInspector;
@@ -276,7 +277,7 @@ public class MicroManagerStitchWorkflow {
             try {
                 pixelSize = Double.parseDouble(pxField.getText().trim());
             } catch (NumberFormatException ex) {
-                Dialogs.showErrorMessage("Invalid Pixel Size", "Please enter a valid number for pixel size.");
+                UserErrors.show(logger, "Invalid Pixel Size", "Please enter a valid number for pixel size.");
                 return;
             }
             String compression = compCombo.getValue().name();
@@ -370,7 +371,7 @@ public class MicroManagerStitchWorkflow {
         if (!outDir.exists() && !outDir.mkdirs()) {
             String msg = "Failed to create output directory: " + outFolder;
             logger.error(msg);
-            Platform.runLater(() -> Dialogs.showErrorMessage("Directory Error", msg));
+            Platform.runLater(() -> UserErrors.show(logger, "Directory Error", msg));
             return;
         }
 
@@ -418,7 +419,7 @@ public class MicroManagerStitchWorkflow {
             deleteStitchOutputs(outDir, stitcherStem);
             logger.error("Stitch failed for {}: {}", label, ex.getMessage(), ex);
             Platform.runLater(
-                    () -> Dialogs.showErrorMessage("Stitching Failed", "Stitch failed (see log): " + ex.getMessage()));
+                    () -> UserErrors.show(logger, "Stitching Failed", "Stitch failed (see log): " + ex.getMessage()));
             NotificationService.getInstance()
                     .notify(
                             "MicroManager Stitch Failed",

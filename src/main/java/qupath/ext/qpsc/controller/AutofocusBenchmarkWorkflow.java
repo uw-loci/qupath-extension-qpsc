@@ -28,7 +28,7 @@ import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.fx.dialogs.Dialogs;
+import qupath.ext.qpsc.ui.UserErrors;
 
 /**
  * Workflow for running autofocus parameter benchmarks.
@@ -121,6 +121,7 @@ public class AutofocusBenchmarkWorkflow {
                                 alert.setHeaderText("Output directory does not exist");
                                 alert.setContentText("Please create the directory:\n" + params.outputPath());
                                 DialogOwner.own(alert);
+                                UserErrors.logAlert(logger, alert);
                                 alert.showAndWait();
                             });
                             closeClient(client);
@@ -192,7 +193,7 @@ public class AutofocusBenchmarkWorkflow {
                     .exceptionally(ex -> {
                         logger.error("Error in benchmark workflow", ex);
                         Platform.runLater(() -> {
-                            Dialogs.showErrorMessage("Benchmark Error", "Error during benchmark: " + ex.getMessage());
+                            UserErrors.show(logger, "Benchmark Error", "Error during benchmark: " + ex.getMessage());
                         });
                         closeClient(client);
                         return null;
@@ -382,6 +383,7 @@ public class AutofocusBenchmarkWorkflow {
                                 }
 
                                 DialogOwner.own(alert);
+                                UserErrors.logAlert(logger, alert);
                                 alert.showAndWait();
                             });
 

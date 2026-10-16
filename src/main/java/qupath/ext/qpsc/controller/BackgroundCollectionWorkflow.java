@@ -26,6 +26,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BackgroundCollectionController;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -89,7 +90,8 @@ public class BackgroundCollectionWorkflow {
                                 .exceptionally(ex -> {
                                     logger.error("Background acquisition failed", ex);
                                     Platform.runLater(() -> {
-                                        Dialogs.showErrorMessage(
+                                        UserErrors.show(
+                                                logger,
                                                 "Background Acquisition Error",
                                                 "Failed to execute background acquisition: " + ex.getMessage());
                                     });
@@ -101,7 +103,8 @@ public class BackgroundCollectionWorkflow {
                 })
                 .exceptionally(ex -> {
                     logger.error("Error in background collection dialog", ex);
-                    Platform.runLater(() -> Dialogs.showErrorMessage(
+                    Platform.runLater(() -> UserErrors.show(
+                            logger,
                             "Background Collection Error",
                             "Failed to show background collection dialog: " + ex.getMessage()));
                     return null;
@@ -394,8 +397,10 @@ public class BackgroundCollectionWorkflow {
         } catch (Exception e) {
             logger.error("Background acquisition failed", e);
             Platform.runLater(() -> {
-                Dialogs.showErrorMessage(
-                        "Background Acquisition Failed", "Failed to acquire background images: " + e.getMessage());
+                UserErrors.show(
+                        logger,
+                        "Background Acquisition Failed",
+                        "Failed to acquire background images: " + e.getMessage());
             });
         } finally {
             // Restore live viewer state after background acquisition completes
@@ -483,8 +488,10 @@ public class BackgroundCollectionWorkflow {
             qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
         } catch (Exception e) {
             logger.error("Channel background acquisition failed", e);
-            Platform.runLater(() -> Dialogs.showErrorMessage(
-                    "Background Acquisition Failed", "Failed to acquire per-channel backgrounds: " + e.getMessage()));
+            Platform.runLater(() -> UserErrors.show(
+                    logger,
+                    "Background Acquisition Failed",
+                    "Failed to acquire per-channel backgrounds: " + e.getMessage()));
         }
     }
 

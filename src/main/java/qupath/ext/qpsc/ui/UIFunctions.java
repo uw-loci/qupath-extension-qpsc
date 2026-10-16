@@ -728,6 +728,7 @@ public class UIFunctions {
                 err.setTitle("Autofocus Configuration");
                 err.setHeaderText("Could not open the editor");
                 err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+                UserErrors.logAlert(logger, err);
                 showAlertOverParent(err, alert.getDialogPane().getScene().getWindow());
             }
         });

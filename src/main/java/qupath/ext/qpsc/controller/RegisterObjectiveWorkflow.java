@@ -12,6 +12,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveConfigWriter;
 import qupath.fx.dialogs.Dialogs;
@@ -41,13 +42,14 @@ public final class RegisterObjectiveWorkflow {
     public static void run(qupath.lib.gui.QuPathGUI qupath) {
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
         if (mgr == null) {
-            Dialogs.showErrorMessage(
-                    TITLE, "Microscope configuration is not loaded. Check the config file in Preferences.");
+            UserErrors.show(
+                    logger, TITLE, "Microscope configuration is not loaded. Check the config file in Preferences.");
             return;
         }
         MicroscopeController mc = MicroscopeController.getInstance();
         if (!mc.isConnected()) {
-            Dialogs.showErrorMessage(
+            UserErrors.show(
+                    logger,
                     TITLE,
                     "Not connected to the microscope server.\n\n"
                             + "This utility reads the current pixel size from MicroManager, so a live "
@@ -61,11 +63,12 @@ public final class RegisterObjectiveWorkflow {
             mmPixelSize = mc.getSocketClient().getMicroscopePixelSize();
         } catch (Exception e) {
             logger.warn("Failed to read MM pixel size", e);
-            Dialogs.showErrorMessage(TITLE, "Could not read the pixel size from MicroManager: " + e.getMessage());
+            UserErrors.show(logger, TITLE, "Could not read the pixel size from MicroManager: " + e.getMessage());
             return;
         }
         if (mmPixelSize <= 0) {
-            Dialogs.showErrorMessage(
+            UserErrors.show(
+                    logger,
                     TITLE,
                     "MicroManager returned a pixel size of " + mmPixelSize + " um/px.\n\n"
                             + "Set up MicroManager's pixel-size calibration for this objective first, "
@@ -96,7 +99,7 @@ public final class RegisterObjectiveWorkflow {
 
         String configPathStr = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPathStr == null || configPathStr.isBlank()) {
-            Dialogs.showErrorMessage(TITLE, "No microscope config file is set in Preferences.");
+            UserErrors.show(logger, TITLE, "No microscope config file is set in Preferences.");
             return;
         }
         Path configPath = Path.of(configPathStr);
@@ -272,7 +275,7 @@ public final class RegisterObjectiveWorkflow {
                 .append("  3. Background collection for this objective's magnification.\n");
 
         if (report.hasErrors()) {
-            Dialogs.showErrorMessage(TITLE, sb.toString());
+            UserErrors.show(logger, TITLE, sb.toString());
         } else if (report.anyChange()) {
             Dialogs.showMessageDialog(TITLE, sb.toString());
         } else {

@@ -23,13 +23,13 @@ import javafx.scene.control.TextArea;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.AffineTransformManager.SavedAlignment;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.NgffSceneBuilder;
 import qupath.ext.qpsc.utilities.VersionInfo;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.servers.ImageServer;
@@ -75,8 +75,8 @@ public class ExportSpatialSceneWorkflow {
     public static void run(QuPathGUI qupath) {
         Project<BufferedImage> project = qupath.getProject();
         if (project == null) {
-            Dialogs.showErrorMessage(
-                    "Export Spatial Relationships - Error", "No project is open. Open a project first.");
+            UserErrors.show(
+                    logger, "Export Spatial Relationships - Error", "No project is open. Open a project first.");
             return;
         }
         Thread worker = new Thread(
@@ -86,8 +86,8 @@ public class ExportSpatialSceneWorkflow {
                         Platform.runLater(() -> showResult(result));
                     } catch (Exception e) {
                         logger.error("NGFF scene export failed", e);
-                        Platform.runLater(() -> Dialogs.showErrorMessage(
-                                "Export Spatial Relationships - Error", "Export failed: " + e.getMessage()));
+                        Platform.runLater(() -> UserErrors.show(
+                                logger, "Export Spatial Relationships - Error", "Export failed: " + e.getMessage()));
                     }
                 },
                 "qpsc-ngff-scene-export");

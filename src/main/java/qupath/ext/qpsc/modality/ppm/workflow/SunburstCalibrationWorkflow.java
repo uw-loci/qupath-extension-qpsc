@@ -23,7 +23,7 @@ import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.SunburstCalibrationDialog;
 import qupath.ext.qpsc.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
 import qupath.ext.qpsc.ui.ThresholdPreviewDialog;
-import qupath.fx.dialogs.Dialogs;
+import qupath.ext.qpsc.ui.UserErrors;
 
 /**
  * SunburstCalibrationWorkflow - Create hue-to-angle calibration from a PPM reference slide.
@@ -72,15 +72,16 @@ public class SunburstCalibrationWorkflow {
                         })
                         .exceptionally(ex -> {
                             logger.error("Error in sunburst calibration dialog", ex);
-                            Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Calibration Error", "Failed to show calibration dialog: " + ex.getMessage()));
+                            Platform.runLater(() -> UserErrors.show(
+                                    logger,
+                                    "Calibration Error",
+                                    "Failed to show calibration dialog: " + ex.getMessage()));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start sunburst calibration workflow", e);
-                Dialogs.showErrorMessage(
-                        "Calibration Error", "Failed to start sunburst calibration: " + e.getMessage());
+                UserErrors.show(logger, "Calibration Error", "Failed to start sunburst calibration: " + e.getMessage());
             }
         });
     }
@@ -120,8 +121,8 @@ public class SunburstCalibrationWorkflow {
                     logger.error("Sunburst calibration failed", ex);
                     Platform.runLater(() -> {
                         progressDialog.close();
-                        Dialogs.showErrorMessage(
-                                "PPM Calibration Error", "Failed to execute calibration: " + ex.getMessage());
+                        UserErrors.show(
+                                logger, "PPM Calibration Error", "Failed to execute calibration: " + ex.getMessage());
                     });
                     return null;
                 });
@@ -285,7 +286,8 @@ public class SunburstCalibrationWorkflow {
                                         logger.error("Threshold-tuned calibration failed", ex);
                                         Platform.runLater(() -> {
                                             progressDialog.close();
-                                            Dialogs.showErrorMessage(
+                                            UserErrors.show(
+                                                    logger,
                                                     "PPM Calibration Error",
                                                     "Failed to re-run calibration: " + ex.getMessage());
                                         });
@@ -468,8 +470,8 @@ public class SunburstCalibrationWorkflow {
                         logger.error("Center retry calibration failed unexpectedly", ex);
                         Platform.runLater(() -> {
                             progressDialog.close();
-                            Dialogs.showErrorMessage(
-                                    "PPM Calibration Error", "Failed to retry calibration: " + ex.getMessage());
+                            UserErrors.show(
+                                    logger, "PPM Calibration Error", "Failed to retry calibration: " + ex.getMessage());
                         });
                         return null;
                     });

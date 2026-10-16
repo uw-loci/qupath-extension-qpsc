@@ -17,7 +17,7 @@ import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.model.StitchingMetadata;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
-import qupath.fx.dialogs.Dialogs;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
@@ -792,7 +792,8 @@ public class TileProcessingUtilities {
                     // anyone looks at the screen.
                     File failed = new File(lastProcessedPath);
                     logger.error("Failed to import stitched image {}", failed.getAbsolutePath(), e);
-                    Dialogs.showErrorMessage(
+                    UserErrors.show(
+                            logger,
                             res.getString("stitching.error.title"),
                             "Stitching finished, but the image could not be added to the project.\n\n"
                                     + "File (intact, on disk):\n" + failed.getAbsolutePath() + "\n\n"

@@ -16,7 +16,7 @@ import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.fx.dialogs.Dialogs;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.gui.tools.GuiTools;
@@ -1506,7 +1506,8 @@ public class QPProjectFunctions {
         try {
             Files.createDirectories(slideImagesDir);
         } catch (IOException e) {
-            Dialogs.showErrorNotification(
+            UserErrors.notify(
+                    logger,
                     "Error creating directories",
                     "Could not create project folders under:\n  " + projectsFolderPath + "\nCause: " + e.getMessage());
             return null;
@@ -1524,7 +1525,8 @@ public class QPProjectFunctions {
             } else {
                 if (qpprojFiles.length > 1) {
                     // Warn if multiple projects found; we'll load the first
-                    Dialogs.showErrorNotification(
+                    UserErrors.notify(
+                            logger,
                             "Warning: Multiple project files",
                             "Found " + qpprojFiles.length + " .qpproj files in:\n  " + sampleDir
                                     + "\nLoading the first: " + qpprojFiles[0].getName());
@@ -1534,7 +1536,8 @@ public class QPProjectFunctions {
                 project = ProjectIO.loadProject(qpprojFiles[0], BufferedImage.class);
             }
         } catch (IOException e) {
-            Dialogs.showErrorNotification(
+            UserErrors.notify(
+                    logger,
                     "Error opening project",
                     "Failed to create or load project in:\n  " + sampleDir + "\nCause: " + e.getMessage());
             return null;

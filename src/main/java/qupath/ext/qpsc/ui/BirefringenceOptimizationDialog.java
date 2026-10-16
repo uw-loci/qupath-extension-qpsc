@@ -449,8 +449,8 @@ public class BirefringenceOptimizationDialog {
                 File outputDir = new File(output);
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please select a valid output folder for test results.");
+                    UserErrors.show(
+                            logger, "Invalid Output Folder", "Please select a valid output folder for test results.");
                     event.consume();
                     return;
                 }
@@ -460,21 +460,20 @@ public class BirefringenceOptimizationDialog {
                 double step = stepSpinner.getValue();
 
                 if (min >= max) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Angle Range", "Maximum angle must be greater than minimum angle.");
+                    UserErrors.show(logger, "Invalid Angle Range", "Maximum angle must be greater than minimum angle.");
                     event.consume();
                     return;
                 }
 
                 if (step <= 0 || step > 1.0) {
-                    Dialogs.showErrorMessage("Invalid Step Size", "Step size must be between 0.01 and 1.0 degrees.");
+                    UserErrors.show(logger, "Invalid Step Size", "Step size must be between 0.01 and 1.0 degrees.");
                     event.consume();
                     return;
                 }
 
                 if (exposureModeGroup.getSelectedToggle() == fixedMode) {
                     if (fixedExposureSpinner.getValue() <= 0) {
-                        Dialogs.showErrorMessage("Invalid Exposure", "Fixed exposure must be greater than 0 ms.");
+                        UserErrors.show(logger, "Invalid Exposure", "Fixed exposure must be greater than 0 ms.");
                         event.consume();
                         return;
                     }

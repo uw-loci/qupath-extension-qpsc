@@ -15,7 +15,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -410,19 +409,20 @@ public class SunburstCalibrationDialog {
                 String output = outputField.getText().trim();
 
                 if (output.isEmpty()) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please specify an output folder for calibration files.");
+                    UserErrors.show(
+                            logger, "Invalid Output Folder", "Please specify an output folder for calibration files.");
                     return;
                 }
 
                 if (spokesSpinner.getValue() < 4) {
-                    Dialogs.showErrorMessage("Invalid Spoke Count", "Number of spokes must be at least 4.");
+                    UserErrors.show(logger, "Invalid Spoke Count", "Number of spokes must be at least 4.");
                     return;
                 }
 
                 String name = nameField.getText().trim();
                 if (!name.isEmpty() && !name.matches("[a-zA-Z0-9_\\-]+")) {
-                    Dialogs.showErrorMessage(
+                    UserErrors.show(
+                            logger,
                             "Invalid Calibration Name",
                             "Calibration name can only contain letters, numbers, underscores, and hyphens.");
                     return;

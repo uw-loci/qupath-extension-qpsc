@@ -33,6 +33,7 @@ import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.StitchingBlockingDialog;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -67,7 +68,8 @@ public class StitchingRecoveryWorkflow {
         Project<BufferedImage> project = gui.getProject();
 
         if (project == null) {
-            Dialogs.showErrorMessage(
+            UserErrors.show(
+                    logger,
                     "No Project Open",
                     "Please open or create a QuPath project first.\n"
                             + "The stitched images will be added to the current project.");
@@ -261,7 +263,7 @@ public class StitchingRecoveryWorkflow {
                 try {
                     pixelSize = Double.parseDouble(pixelField.getText().trim());
                 } catch (NumberFormatException e) {
-                    Dialogs.showErrorMessage("Invalid Pixel Size", "Please enter a valid number for pixel size.");
+                    UserErrors.show(logger, "Invalid Pixel Size", "Please enter a valid number for pixel size.");
                     return;
                 }
                 // Remember for next time
@@ -434,7 +436,7 @@ public class StitchingRecoveryWorkflow {
         if (!outputDir.exists() && !outputDir.mkdirs()) {
             logger.error("Failed to create output directory: {}", outputFolder);
             Platform.runLater(() ->
-                    Dialogs.showErrorMessage("Directory Error", "Failed to create output directory: " + outputFolder));
+                    UserErrors.show(logger, "Directory Error", "Failed to create output directory: " + outputFolder));
             return;
         }
 
@@ -464,7 +466,8 @@ public class StitchingRecoveryWorkflow {
                 angleDirs.add(tileFolderFile);
             } else {
                 logger.error("No TileConfiguration.txt files found in {} or its subdirectories", tileFolder);
-                Platform.runLater(() -> Dialogs.showErrorMessage(
+                Platform.runLater(() -> UserErrors.show(
+                        logger,
                         "No Tiles Found",
                         "No TileConfiguration.txt files found in the selected folder or its subdirectories."));
                 return;
@@ -725,7 +728,8 @@ public class StitchingRecoveryWorkflow {
                                         + "Failed angles could not be stitched (check the log for details).",
                                 finalSuccess, finalFailure));
             } else {
-                Dialogs.showErrorMessage(
+                UserErrors.show(
+                        logger,
                         "Stitching Recovery Failed",
                         "No angles were successfully stitched, even after retries and the "
                                 + "ZARR fallback. Check the log for stitching errors.");

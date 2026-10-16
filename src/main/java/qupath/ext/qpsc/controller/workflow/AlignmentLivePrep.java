@@ -8,6 +8,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 
 /**
@@ -213,7 +214,8 @@ public final class AlignmentLivePrep {
                         }
                         return;
                     }
-                    qupath.fx.dialogs.Dialogs.showErrorMessage(
+                    UserErrors.show(
+                            logger,
                             "Cannot align unattended",
                             "The microscope could not be put into a state alignment can use:\n\n"
                                     + result.summary()

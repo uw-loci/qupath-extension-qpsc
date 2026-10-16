@@ -17,11 +17,11 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -53,7 +53,7 @@ public class RapidScanWorkflow {
     public static void show(QuPathGUI qupath) {
         MicroscopeController mc = MicroscopeController.getInstance();
         if (mc == null || !mc.isConnected()) {
-            Dialogs.showErrorMessage("Rapid Scan - Error", "Not connected to microscope server.");
+            UserErrors.show(logger, "Rapid Scan - Error", "Not connected to microscope server.");
             return;
         }
 
@@ -63,18 +63,18 @@ public class RapidScanWorkflow {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             mgr = MicroscopeConfigManager.getInstance(configPath);
         } catch (Exception e) {
-            Dialogs.showErrorMessage("Rapid Scan - Error", "Cannot load microscope config: " + e.getMessage());
+            UserErrors.show(logger, "Rapid Scan - Error", "Cannot load microscope config: " + e.getMessage());
             return;
         }
 
         Set<String> objectives = mgr.getAvailableObjectives();
         if (objectives.isEmpty()) {
-            Dialogs.showErrorMessage("Rapid Scan - Error", "No objectives found in microscope configuration.");
+            UserErrors.show(logger, "Rapid Scan - Error", "No objectives found in microscope configuration.");
             return;
         }
         Set<String> detectors = mgr.getHardwareDetectors();
         if (detectors.isEmpty()) {
-            Dialogs.showErrorMessage("Rapid Scan - Error", "No detectors found in microscope configuration.");
+            UserErrors.show(logger, "Rapid Scan - Error", "No detectors found in microscope configuration.");
             return;
         }
 
@@ -166,7 +166,7 @@ public class RapidScanWorkflow {
                 centerXField.setText(String.format("%.1f", pos[0]));
                 centerYField.setText(String.format("%.1f", pos[1]));
             } catch (Exception ex) {
-                Dialogs.showErrorMessage("Rapid Scan - Error", "Failed to read stage position: " + ex.getMessage());
+                UserErrors.show(logger, "Rapid Scan - Error", "Failed to read stage position: " + ex.getMessage());
             }
         });
 

@@ -23,6 +23,7 @@ import javafx.beans.property.SimpleBooleanProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.ui.UserErrors;
 
 /**
  * Socket-based client for communicating with the Python microscope control server.
@@ -4098,7 +4099,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     java.awt.Toolkit.getDefaultToolkit().beep();
                 } catch (Exception ignored) {
                 }
-                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                UserErrors.show(
+                        logger,
                         "Microscope Connection Unstable",
                         "There have been " + errorCount + " consecutive communication errors "
                                 + "with the microscope server.\n\n"
@@ -4261,6 +4263,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             alert.getButtonTypes().setAll(retry, dismiss);
             try {
                 qupath.ext.qpsc.ui.DialogOwner.own(alert);
+                UserErrors.logAlert(logger, alert);
                 alert.showAndWait().ifPresent(bt -> {
                     if (bt == retry) {
                         userTriggeredReconnect();

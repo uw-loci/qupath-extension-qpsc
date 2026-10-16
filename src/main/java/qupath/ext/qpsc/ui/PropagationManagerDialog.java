@@ -47,7 +47,6 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -91,7 +90,7 @@ public final class PropagationManagerDialog {
             return;
         }
         if (qupath == null || qupath.getProject() == null) {
-            Dialogs.showErrorMessage("Propagation Manager - Error", "No project is open.");
+            UserErrors.show(logger, "Propagation Manager - Error", "No project is open.");
             return;
         }
         new PropagationManagerDialog().build(qupath, defaultDirection);

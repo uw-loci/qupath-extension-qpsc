@@ -57,7 +57,8 @@ public final class LightPathSetupDialog {
     private static void build() {
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
         if (mgr == null || mgr.getConfigPath() == null) {
-            Dialogs.showErrorMessage(
+            UserErrors.show(
+                    logger,
                     "No Microscope Config",
                     "No writable microscope configuration is loaded, so the light-path orientation "
                             + "cannot be saved. Set the microscope config file in Preferences first.");

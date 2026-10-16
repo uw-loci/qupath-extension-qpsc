@@ -453,6 +453,7 @@ public final class StageDirectionCalibrationDialog {
                     Alert.AlertType.ERROR,
                     "Could not save calibration to preferences:\n" + ex.getMessage(),
                     ButtonType.OK);
+            UserErrors.logAlert(logger, alert);
             UIFunctions.showAlertOverParent(alert, stage);
         }
         restoreStagePositionAsync(() -> {

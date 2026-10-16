@@ -64,8 +64,8 @@ public class SinglePointAcquisitionController {
                 mc.userTriggeredConnect();
             } catch (java.io.IOException e) {
                 logger.error("Failed to connect to microscope server: {}", e.getMessage());
-                Dialogs.showErrorMessage(
-                        "Single-Point Acquisition", "Not connected to microscope server: " + e.getMessage());
+                UserErrors.show(
+                        logger, "Single-Point Acquisition", "Not connected to microscope server: " + e.getMessage());
                 return CompletableFuture.completedFuture(null);
             }
         }
@@ -523,8 +523,8 @@ public class SinglePointAcquisitionController {
                                 "Single-Point Acquisition", "Acquisition complete. Output: " + outputFolder));
                     } catch (Exception ex) {
                         logger.error("Single-point acquisition failed: {}", ex.getMessage(), ex);
-                        Platform.runLater(() -> Dialogs.showErrorNotification(
-                                "Single-Point Acquisition", "Acquisition failed: " + ex.getMessage()));
+                        Platform.runLater(() -> UserErrors.notify(
+                                logger, "Single-Point Acquisition", "Acquisition failed: " + ex.getMessage()));
                     } finally {
                         future.complete(null);
                     }

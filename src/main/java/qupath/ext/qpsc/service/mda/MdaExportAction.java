@@ -19,6 +19,7 @@ import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -120,6 +121,7 @@ public final class MdaExportAction {
                 err.setTitle("MicroManager MDA Export");
                 err.setHeaderText("Failed to write MDA files");
                 err.setContentText(msg);
+                UserErrors.logAlert(logger, err);
                 UIFunctions.showAlertOverParent(err, parentWindow);
             });
             return null;

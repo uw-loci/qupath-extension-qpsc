@@ -336,20 +336,19 @@ public class WBComparisonDialog {
 
                 boolean anyMode = cbCameraAWB.isSelected() || cbSimple.isSelected() || cbPerAngle.isSelected();
                 if (!anyMode) {
-                    qupath.fx.dialogs.Dialogs.showErrorMessage(
-                            "WB Comparison", "Please select at least one white balance mode.");
+                    UserErrors.show(logger, "WB Comparison", "Please select at least one white balance mode.");
                     return null;
                 }
 
                 String sampleName = sampleNameField.getText().trim();
                 if (sampleName.isEmpty()) {
-                    qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison", "Please enter a sample name.");
+                    UserErrors.show(logger, "WB Comparison", "Please enter a sample name.");
                     return null;
                 }
 
                 String outputFolder = outputFolderField.getText().trim();
                 if (outputFolder.isEmpty()) {
-                    qupath.fx.dialogs.Dialogs.showErrorMessage("WB Comparison", "Please select an output folder.");
+                    UserErrors.show(logger, "WB Comparison", "Please select an output folder.");
                     return null;
                 }
 
@@ -389,8 +388,7 @@ public class WBComparisonDialog {
                         afRange);
 
             } catch (NumberFormatException ex) {
-                qupath.fx.dialogs.Dialogs.showErrorMessage(
-                        "WB Comparison", "Invalid numeric value: " + ex.getMessage());
+                UserErrors.show(logger, "WB Comparison", "Invalid numeric value: " + ex.getMessage());
                 return null;
             }
         });
@@ -415,8 +413,7 @@ public class WBComparisonDialog {
             logger.info("Filled current stage position: ({}, {}, {})", pos[0], pos[1], z);
         } catch (Exception e) {
             logger.error("Failed to get current stage position", e);
-            qupath.fx.dialogs.Dialogs.showErrorMessage(
-                    "Stage Position", "Could not read current stage position: " + e.getMessage());
+            UserErrors.show(logger, "Stage Position", "Could not read current stage position: " + e.getMessage());
         }
     }
 

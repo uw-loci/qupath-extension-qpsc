@@ -19,9 +19,9 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.fx.dialogs.Dialogs;
 
 /**
  * Workflow for running JAI camera white balance calibration.
@@ -92,6 +92,7 @@ public class WhiteBalanceWorkflow {
                                 alert.setHeaderText("Could not create output directory");
                                 alert.setContentText("Failed to create:\n" + outputPath);
                                 DialogOwner.own(alert);
+                                UserErrors.logAlert(logger, alert);
                                 alert.showAndWait();
                             });
                             return;
@@ -178,7 +179,7 @@ public class WhiteBalanceWorkflow {
                 .exceptionally(ex -> {
                     logger.error("Error in white balance workflow", ex);
                     Platform.runLater(() -> {
-                        Dialogs.showErrorMessage("White Balance Error", "Error during calibration: " + ex.getMessage());
+                        UserErrors.show(logger, "White Balance Error", "Error during calibration: " + ex.getMessage());
                     });
                     return null;
                 });
@@ -397,7 +398,7 @@ public class WhiteBalanceWorkflow {
                         logger.error("Simple white balance failed", e);
                         Platform.runLater(() -> {
                             progressStage.close();
-                            Dialogs.showErrorMessage("White Balance Failed", "Calibration failed: " + e.getMessage());
+                            UserErrors.show(logger, "White Balance Failed", "Calibration failed: " + e.getMessage());
                         });
                         // On failure, do NOT restore live mode -- the camera may be in a bad
                         // state. User can manually re-enable live mode after investigating. But
@@ -531,8 +532,8 @@ public class WhiteBalanceWorkflow {
                         logger.error("PPM white balance failed", e);
                         Platform.runLater(() -> {
                             progressStage.close();
-                            Dialogs.showErrorMessage(
-                                    "PPM White Balance Failed", "Calibration failed: " + e.getMessage());
+                            UserErrors.show(
+                                    logger, "PPM White Balance Failed", "Calibration failed: " + e.getMessage());
                         });
                         // ALWAYS release the control lock, even on failure -- otherwise the Live
                         // Viewer stays locked and the operator is bricked out of the interface.

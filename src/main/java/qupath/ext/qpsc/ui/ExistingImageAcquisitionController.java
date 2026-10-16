@@ -1705,6 +1705,7 @@ public class ExistingImageAcquisitionController {
                 err.setTitle("MicroManager MDA Export");
                 err.setHeaderText("Failed to build export context");
                 err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+                UserErrors.logAlert(logger, err);
                 UIFunctions.showAlertOverParent(err, parentWindow);
                 return;
             }

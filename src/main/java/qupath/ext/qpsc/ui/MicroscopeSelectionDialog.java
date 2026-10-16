@@ -50,6 +50,7 @@ public class MicroscopeSelectionDialog {
                     alert.setContentText(
                             "The current microscope configuration file does not have a 'microscope: name:' entry.");
                     DialogOwner.own(alert);
+                    UserErrors.logAlert(logger, alert);
                     alert.showAndWait();
                     future.complete(null);
                     return;
@@ -108,6 +109,7 @@ public class MicroscopeSelectionDialog {
                             + "To create alignments, you need configuration files for the source microscopes.\n"
                             + "Create a config_[MicroscopeName].yml file for each microscope you want to align from.");
                     DialogOwner.own(alert);
+                    UserErrors.logAlert(logger, alert);
                     alert.showAndWait();
                     future.complete(null);
                     return;

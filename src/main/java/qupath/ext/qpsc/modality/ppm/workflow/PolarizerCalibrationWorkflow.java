@@ -22,6 +22,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -75,15 +76,17 @@ public class PolarizerCalibrationWorkflow {
                         })
                         .exceptionally(ex -> {
                             logger.error("Error in polarizer calibration dialog", ex);
-                            Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Calibration Error", "Failed to show calibration dialog: " + ex.getMessage()));
+                            Platform.runLater(() -> UserErrors.show(
+                                    logger,
+                                    "Calibration Error",
+                                    "Failed to show calibration dialog: " + ex.getMessage()));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start polarizer calibration workflow", e);
-                Dialogs.showErrorMessage(
-                        "Calibration Error", "Failed to start polarizer calibration: " + e.getMessage());
+                UserErrors.show(
+                        logger, "Calibration Error", "Failed to start polarizer calibration: " + e.getMessage());
             }
         });
     }
@@ -253,8 +256,10 @@ public class PolarizerCalibrationWorkflow {
                 File outputDir = new File(output);
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please select a valid output folder for the calibration report.");
+                    UserErrors.show(
+                            logger,
+                            "Invalid Output Folder",
+                            "Please select a valid output folder for the calibration report.");
                     event.consume();
                     return;
                 }
@@ -262,7 +267,7 @@ public class PolarizerCalibrationWorkflow {
                 double step = stepSizeSpinner.getValue();
 
                 if (step <= 0 || step > 10.0) {
-                    Dialogs.showErrorMessage("Invalid Step Size", "Step size must be between 0.5 and 10.0 degrees.");
+                    UserErrors.show(logger, "Invalid Step Size", "Step size must be between 0.5 and 10.0 degrees.");
                     event.consume();
                     return;
                 }
@@ -341,8 +346,10 @@ public class PolarizerCalibrationWorkflow {
                     logger.error("Polarizer calibration failed", ex);
                     Platform.runLater(() -> {
                         progressDialog.close();
-                        Dialogs.showErrorMessage(
-                                "Polarizer Calibration Error", "Failed to execute calibration: " + ex.getMessage());
+                        UserErrors.show(
+                                logger,
+                                "Polarizer Calibration Error",
+                                "Failed to execute calibration: " + ex.getMessage());
                     });
                     return null;
                 });
@@ -478,8 +485,8 @@ public class PolarizerCalibrationWorkflow {
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
-                Dialogs.showErrorMessage(
-                        "Calibration Failed", "Failed to complete polarizer calibration:\n" + e.getMessage());
+                UserErrors.show(
+                        logger, "Calibration Failed", "Failed to complete polarizer calibration:\n" + e.getMessage());
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
@@ -506,19 +513,19 @@ public class PolarizerCalibrationWorkflow {
 
     private static void writeOffsetToYaml(String offsetValue) {
         if (offsetValue == null) {
-            Dialogs.showErrorMessage("Write Failed", "No offset value available.");
+            UserErrors.show(logger, "Write Failed", "No offset value available.");
             return;
         }
 
         String yamlPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (yamlPath == null || yamlPath.isEmpty()) {
-            Dialogs.showErrorMessage("Write Failed", "No microscope config file set in QPSC Preferences.");
+            UserErrors.show(logger, "Write Failed", "No microscope config file set in QPSC Preferences.");
             return;
         }
 
         Path configPath = Paths.get(yamlPath);
         if (!Files.exists(configPath)) {
-            Dialogs.showErrorMessage("Write Failed", "Config file not found: " + yamlPath);
+            UserErrors.show(logger, "Write Failed", "Config file not found: " + yamlPath);
             return;
         }
 
@@ -563,7 +570,7 @@ public class PolarizerCalibrationWorkflow {
 
         } catch (IOException e) {
             logger.error("Failed to write offset to YAML", e);
-            Dialogs.showErrorMessage("Write Failed", "Could not write to config file: " + e.getMessage());
+            UserErrors.show(logger, "Write Failed", "Could not write to config file: " + e.getMessage());
         }
     }
 

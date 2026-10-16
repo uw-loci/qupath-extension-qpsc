@@ -33,6 +33,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Every error dialog is written to the QuPath log**
+- 86 of QPSC's 175 error dialogs left no trace in the log, so a bug report could not show what the operator had seen. Every error dialog and error notification now writes its title and text to the log at ERROR first, on a line starting `Error dialog`.
+
 **Demo microscope: a batch-launched server stops with QuPath, and a real server is never adopted**
 - A demo server started through `start_server.bat` kept running after QuPath quit, holding port 5000. QPSC stopped only `cmd.exe`, not the Python server it had started. QPSC now stops the launcher and everything it started, at exit and when a start times out. Verified on Windows 11 with the real batch file.
 - A failed `start_server.bat` preflight check no longer waits silently at `pause` until the 60 s timeout. QPSC closes the launcher's input, so the batch file exits at once and its message appears in the dialog. A start that does time out now also shows the program's last output.

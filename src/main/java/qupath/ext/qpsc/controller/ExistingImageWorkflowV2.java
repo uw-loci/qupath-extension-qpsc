@@ -20,6 +20,7 @@ import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.*;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.*;
 import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.fx.dialogs.Dialogs;
@@ -1284,14 +1285,14 @@ public class ExistingImageWorkflowV2 {
          */
         private boolean validatePrerequisites() {
             if (gui.getImageData() == null) {
-                Platform.runLater(() -> Dialogs.showErrorMessage(
-                        "No Image Open", "Please open an image before starting the workflow."));
+                Platform.runLater(() ->
+                        UserErrors.show(logger, "No Image Open", "Please open an image before starting the workflow."));
                 return false;
             }
 
             if (!MicroscopeController.getInstance().isConnected()) {
                 Platform.runLater(() ->
-                        Dialogs.showErrorMessage("Not Connected", "Please connect to the microscope server first."));
+                        UserErrors.show(logger, "Not Connected", "Please connect to the microscope server first."));
                 return false;
             }
 
@@ -3031,7 +3032,7 @@ public class ExistingImageWorkflowV2 {
                 logger.error("Workflow error", cause);
                 final Throwable displayCause = cause;
                 Platform.runLater(() -> {
-                    Dialogs.showErrorMessage("Workflow Error", "An error occurred: " + displayCause.getMessage());
+                    UserErrors.show(logger, "Workflow Error", "An error occurred: " + displayCause.getMessage());
                 });
 
                 String sampleName = state.sample != null ? state.sample.sampleName() : "Unknown";

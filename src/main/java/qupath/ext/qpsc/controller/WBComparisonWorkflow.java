@@ -18,6 +18,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.WBComparisonDialog;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog;
 import qupath.ext.qpsc.ui.WhiteBalanceDialog.AdvancedWBParams;
@@ -88,14 +89,14 @@ public class WBComparisonWorkflow {
                     CompletableFuture.runAsync(() -> executeWorkflow(params)).exceptionally(ex -> {
                         logger.error("WB Comparison workflow failed", ex);
                         Platform.runLater(() ->
-                                Dialogs.showErrorMessage("WB Comparison Error", "Workflow failed: " + ex.getMessage()));
+                                UserErrors.show(logger, "WB Comparison Error", "Workflow failed: " + ex.getMessage()));
                         return null;
                     });
                 })
                 .exceptionally(ex -> {
                     logger.error("Error in WB Comparison dialog", ex);
-                    Platform.runLater(() -> Dialogs.showErrorMessage(
-                            "WB Comparison Error", "Failed to show dialog: " + ex.getMessage()));
+                    Platform.runLater(() -> UserErrors.show(
+                            logger, "WB Comparison Error", "Failed to show dialog: " + ex.getMessage()));
                     return null;
                 });
     }

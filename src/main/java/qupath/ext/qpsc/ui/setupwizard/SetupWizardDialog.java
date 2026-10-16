@@ -21,6 +21,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -326,7 +327,7 @@ public class SetupWizardDialog {
             stage.close();
         } catch (Exception e) {
             logger.error("Failed to save configuration", e);
-            Dialogs.showErrorMessage("Save Failed", "Failed to write configuration files:\n" + e.getMessage());
+            UserErrors.show(logger, "Save Failed", "Failed to write configuration files:\n" + e.getMessage());
         }
     }
 }

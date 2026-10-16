@@ -28,10 +28,10 @@ import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.FocusApproachValidationStore;
 import qupath.ext.qpsc.utilities.FocusProfileAnalysis;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -78,14 +78,14 @@ public final class FocusApproachValidationWorkflow {
     public static void run() {
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isBlank()) {
-            Dialogs.showErrorMessage("Focus Approach Validation", "No microscope configuration is selected.");
+            UserErrors.show(logger, "Focus Approach Validation", "No microscope configuration is selected.");
             return;
         }
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null || !controller.isConnected()) {
-            Dialogs.showErrorMessage(
-                    "Focus Approach Validation", "Connect to the microscope server before running this.");
+            UserErrors.show(
+                    logger, "Focus Approach Validation", "Connect to the microscope server before running this.");
             return;
         }
 
@@ -97,7 +97,8 @@ public final class FocusApproachValidationWorkflow {
         Double safeZ = mgr.getSafeZUm(qupath.ext.qpsc.preferences.PersistentPreferences.getStageMapInsert(), modality);
 
         if (safeZ == null) {
-            Dialogs.showErrorMessage(
+            UserErrors.show(
+                    logger,
                     "Focus Approach Validation",
                     "No safe Z is configured for this microscope.\n\n"
                             + "Add stage.safe_z_um to the microscope YAML (optionally per insert and modality "
@@ -108,7 +109,7 @@ public final class FocusApproachValidationWorkflow {
         }
         String safeZProblem = mgr.validateSafeZUm(null, modality);
         if (safeZProblem != null) {
-            Dialogs.showErrorMessage("Focus Approach Validation", "Safe Z is not usable: " + safeZProblem);
+            UserErrors.show(logger, "Focus Approach Validation", "Safe Z is not usable: " + safeZProblem);
             return;
         }
 
@@ -159,7 +160,8 @@ public final class FocusApproachValidationWorkflow {
         String wrongSide = mgr.validateSafeZDirection(safeZ, manualFocusZ);
         if (wrongSide != null) {
             logger.error("Focus-approach validation refused: {}", wrongSide);
-            Dialogs.showErrorMessage(
+            UserErrors.show(
+                    logger,
                     "Focus Approach Validation",
                     "Refusing to move.\n\n" + wrongSide
                             + "\n\nFix stage.safe_z_um (or the per-insert override) in the microscope YAML "
@@ -179,7 +181,7 @@ public final class FocusApproachValidationWorkflow {
         double[][] tissueProfile = captureProfile(
                 mgr, controller, configPath, modality, safeZ, manualFocusZ, "tissue", plan.saveFrames(), metricUsed);
         if (tissueProfile == null) {
-            Dialogs.showErrorMessage("Focus Approach Validation", "The over-tissue scan produced no usable profile.");
+            UserErrors.show(logger, "Focus Approach Validation", "The over-tissue scan produced no usable profile.");
             return;
         }
 
@@ -197,7 +199,7 @@ public final class FocusApproachValidationWorkflow {
         double[][] bgProfile = captureProfile(
                 mgr, controller, configPath, modality, safeZ, manualFocusZ, "blank", plan.saveFrames(), metricUsed);
         if (bgProfile == null) {
-            Dialogs.showErrorMessage("Focus Approach Validation", "The background scan produced no usable profile.");
+            UserErrors.show(logger, "Focus Approach Validation", "The background scan produced no usable profile.");
             return;
         }
 
@@ -437,7 +439,7 @@ public final class FocusApproachValidationWorkflow {
         try {
             return controller.getStagePositionZ();
         } catch (Exception e) {
-            Dialogs.showErrorMessage("Focus Approach Validation", "Could not read the stage Z: " + e.getMessage());
+            UserErrors.show(logger, "Focus Approach Validation", "Could not read the stage Z: " + e.getMessage());
             return null;
         }
     }
@@ -797,7 +799,7 @@ public final class FocusApproachValidationWorkflow {
                 FocusApproachValidationStore.save(toSave);
             } catch (Exception e) {
                 logger.error("Could not save the focus-approach validation", e);
-                Dialogs.showErrorMessage("Focus Approach Validation", "Could not save the result: " + e.getMessage());
+                UserErrors.show(logger, "Focus Approach Validation", "Could not save the result: " + e.getMessage());
             }
         });
     }

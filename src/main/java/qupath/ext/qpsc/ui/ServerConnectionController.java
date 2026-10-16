@@ -535,6 +535,7 @@ public class ServerConnectionController {
                         "Please set the microscope configuration file path in the Preferences tab below.\n\n"
                                 + "This is required for safe operation - the wrong config could damage the microscope!");
                 DialogOwner.own(alert);
+                UserErrors.logAlert(logger, alert);
                 alert.showAndWait();
 
                 logMessage("ERROR: Microscope config file not set!");

@@ -370,8 +370,9 @@ public class ParfocalityCalibrationController {
                 }
                 refreshZ.run();
             } catch (IOException ex) {
-                DialogOwner.own(new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage()))
-                        .showAndWait();
+                Alert failure = new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage());
+                UserErrors.logAlert(logger, failure);
+                DialogOwner.own(failure).showAndWait();
             }
         });
 
@@ -404,8 +405,9 @@ public class ParfocalityCalibrationController {
                         .showAndWait();
             } catch (IOException ex) {
                 logger.error("Failed to save parfocality sidecar", ex);
-                DialogOwner.own(new Alert(Alert.AlertType.ERROR, "Failed to save: " + ex.getMessage()))
-                        .showAndWait();
+                Alert failure = new Alert(Alert.AlertType.ERROR, "Failed to save: " + ex.getMessage());
+                UserErrors.logAlert(logger, failure);
+                DialogOwner.own(failure).showAndWait();
             }
         });
 
@@ -432,8 +434,9 @@ public class ParfocalityCalibrationController {
             currentZLabel.setText(String.format("Current stage Z: %.2f um", z));
             table.refresh();
         } catch (IOException ex) {
-            DialogOwner.own(new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage()))
-                    .showAndWait();
+            Alert failure = new Alert(Alert.AlertType.ERROR, "Failed to read Z: " + ex.getMessage());
+            UserErrors.logAlert(logger, failure);
+            DialogOwner.own(failure).showAndWait();
         }
     }
 }

@@ -12,6 +12,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
@@ -146,8 +147,10 @@ public class TestAutofocusWorkflow {
                             MicroscopeController.getInstance().userTriggeredConnect();
                         } catch (IOException e) {
                             logger.error("Failed to connect to microscope server", e);
-                            Dialogs.showErrorMessage(
-                                    "Connection Failed", "Could not connect to microscope server: " + e.getMessage());
+                            UserErrors.show(
+                                    logger,
+                                    "Connection Failed",
+                                    "Could not connect to microscope server: " + e.getMessage());
                             return;
                         }
                     } else {
@@ -159,15 +162,15 @@ public class TestAutofocusWorkflow {
                 // Get configuration
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
                 if (configPath == null || configPath.isEmpty()) {
-                    Dialogs.showErrorMessage(
-                            "Configuration Error", "No microscope configuration file set in preferences.");
+                    UserErrors.show(
+                            logger, "Configuration Error", "No microscope configuration file set in preferences.");
                     return;
                 }
 
                 File configFile = new File(configPath);
                 if (!configFile.exists()) {
-                    Dialogs.showErrorMessage(
-                            "Configuration Error", "Microscope configuration file not found: " + configPath);
+                    UserErrors.show(
+                            logger, "Configuration Error", "Microscope configuration file not found: " + configPath);
                     return;
                 }
 
@@ -183,7 +186,8 @@ public class TestAutofocusWorkflow {
                     objective = getCurrentObjective(configManager);
 
                     if (objective == null) {
-                        Dialogs.showErrorMessage(
+                        UserErrors.show(
+                                logger,
                                 "Configuration Error",
                                 "Could not determine current objective from configuration.\n"
                                         + "Please check microscope/objective_in_use setting.");
@@ -225,15 +229,17 @@ public class TestAutofocusWorkflow {
                         .exceptionally(ex -> {
                             logger.error("Autofocus test failed", ex);
                             Platform.runLater(() -> {
-                                Dialogs.showErrorMessage(
-                                        "Autofocus Test Error", "Failed to execute autofocus test: " + ex.getMessage());
+                                UserErrors.show(
+                                        logger,
+                                        "Autofocus Test Error",
+                                        "Failed to execute autofocus test: " + ex.getMessage());
                             });
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start autofocus test workflow", e);
-                Dialogs.showErrorMessage("Autofocus Test Error", "Failed to start autofocus test: " + e.getMessage());
+                UserErrors.show(logger, "Autofocus Test Error", "Failed to start autofocus test: " + e.getMessage());
             }
         });
     }
@@ -291,8 +297,8 @@ public class TestAutofocusWorkflow {
 
         } catch (Exception e) {
             logger.error("Autofocus test failed", e);
-            Platform.runLater(() -> Dialogs.showErrorMessage(
-                    "Autofocus Test Failed", "Failed to execute autofocus test: " + e.getMessage()));
+            Platform.runLater(() -> UserErrors.show(
+                    logger, "Autofocus Test Failed", "Failed to execute autofocus test: " + e.getMessage()));
         }
     }
 
@@ -577,12 +583,13 @@ public class TestAutofocusWorkflow {
     private static void openInDesktop(File target, String label) {
         try {
             if (!target.exists()) {
-                Dialogs.showErrorMessage(
-                        "Not Found", "The autofocus " + label + " was not found:\n" + target.getAbsolutePath());
+                UserErrors.show(
+                        logger, "Not Found", "The autofocus " + label + " was not found:\n" + target.getAbsolutePath());
                 return;
             }
             if (!Desktop.isDesktopSupported() || !Desktop.getDesktop().isSupported(Desktop.Action.OPEN)) {
-                Dialogs.showErrorMessage(
+                UserErrors.show(
+                        logger,
                         "Unsupported",
                         "Opening the " + label + " is not supported on this system.\n" + target.getAbsolutePath());
                 return;
@@ -591,7 +598,7 @@ public class TestAutofocusWorkflow {
             logger.info("Opened autofocus {}: {}", label, target.getAbsolutePath());
         } catch (IOException e) {
             logger.error("Failed to open autofocus {}", label, e);
-            Dialogs.showErrorMessage("Error", "Could not open the " + label + ": " + e.getMessage());
+            UserErrors.show(logger, "Error", "Could not open the " + label + ": " + e.getMessage());
         }
     }
 

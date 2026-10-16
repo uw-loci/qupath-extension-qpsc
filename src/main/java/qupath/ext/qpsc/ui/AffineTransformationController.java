@@ -14,7 +14,6 @@ import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
-import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.scripting.QP;
@@ -373,7 +372,7 @@ public class AffineTransformationController {
 
             } catch (Exception e) {
                 logger.error("Affine transformation setup failed", e);
-                Dialogs.showErrorNotification("Affine Transform Error", e.getMessage());
+                UserErrors.notify(logger, "Affine Transform Error", e.getMessage());
                 future.complete(null);
             }
         });

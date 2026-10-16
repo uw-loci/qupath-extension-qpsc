@@ -94,14 +94,12 @@ class DemoMicroscopeTest {
         assertTrue(prefs.contains(".name(\"Server Launcher\")"), "pane item named Server Launcher");
 
         // Project rule: an error dialog with no ERROR log cannot be found from a bug report.
+        // UserErrors logs before it shows; the launch-failure dialog is a custom Alert and logs itself.
         String demo = Files.readString(MAIN.resolve("controller/DemoMicroscope.java"));
-        int connectLog = demo.indexOf("logger.error(\"Demo microscope: could not connect to the demo server\"");
         int connectDialog = demo.indexOf("\"Could not connect to the demo server: \"");
-        assertTrue(connectLog > 0 && connectLog < connectDialog, "connect failure logged at ERROR before its dialog");
+        assertTrue(demo.lastIndexOf("UserErrors.show(", connectDialog) > 0, "connect failure goes through UserErrors");
         int failDef = demo.indexOf("private static void fail(String message) {");
-        assertTrue(
-                demo.indexOf("logger.error(\"Demo microscope: {}\", message);", failDef) > failDef,
-                "fail() logs at ERROR");
+        assertTrue(demo.indexOf("UserErrors.show(logger, \"Demo microscope\", message)", failDef) > failDef);
         int launchDef = demo.indexOf("private static void explainLaunchFailure(");
         int launchLog = demo.indexOf("logger.error(", launchDef);
         int launchAlert = demo.indexOf("new Alert(Alert.AlertType.WARNING)", launchDef);
@@ -110,15 +108,9 @@ class DemoMicroscopeTest {
 
         String switcher = Files.readString(MAIN.resolve("controller/MicroscopeSwitcher.java"));
         int missing = switcher.indexOf("The config file does not exist:");
-        assertTrue(
-                switcher.lastIndexOf(
-                                "logger.error(\"Microscope switch refused: the config file does not exist", missing)
-                        > 0,
-                "missing-file refusal logged at ERROR");
+        assertTrue(switcher.lastIndexOf("UserErrors.show(", missing) > 0, "missing-file refusal is logged");
         int refuseDef = switcher.indexOf("private static void refuse(String why) {");
-        assertTrue(
-                switcher.indexOf("logger.error(\"Microscope switch refused: {}\", why);", refuseDef) > refuseDef,
-                "refuse() logs at ERROR");
+        assertTrue(switcher.indexOf("UserErrors.show(logger, \"Switch Microscope\", why)", refuseDef) > refuseDef);
     }
 
     @Test

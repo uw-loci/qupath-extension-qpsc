@@ -477,6 +477,7 @@ public class WhiteBalanceDialog {
                                 + "Calibration is written into the detector-specific YAML section, "
                                 + "so picking the wrong one leaves the active detector with stale values.");
                         DialogOwner.own(alert);
+                        UserErrors.logAlert(logger, alert);
                         alert.showAndWait();
                         return null;
                     }

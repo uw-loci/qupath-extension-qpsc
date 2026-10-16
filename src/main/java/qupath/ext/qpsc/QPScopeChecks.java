@@ -13,6 +13,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.fx.dialogs.Dialogs;
@@ -101,8 +102,8 @@ public class QPScopeChecks {
             return true;
         } catch (Exception e) {
             logger.error("Error during configuration validation", e);
-            Dialogs.showErrorNotification(
-                    "Configuration Validation Error", "Failed to validate configuration: " + e.getMessage());
+            UserErrors.notify(
+                    logger, "Configuration Validation Error", "Failed to validate configuration: " + e.getMessage());
             return false;
         }
     }

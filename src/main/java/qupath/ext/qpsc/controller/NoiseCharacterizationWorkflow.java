@@ -19,6 +19,7 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.NoiseCharacterizationDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -79,14 +80,16 @@ public class NoiseCharacterizationWorkflow {
                         })
                         .exceptionally(ex -> {
                             logger.error("Error in noise characterization dialog", ex);
-                            Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Noise Characterization Error", "Failed to show dialog: " + ex.getMessage()));
+                            Platform.runLater(() -> UserErrors.show(
+                                    logger,
+                                    "Noise Characterization Error",
+                                    "Failed to show dialog: " + ex.getMessage()));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start noise characterization workflow", e);
-                Dialogs.showErrorMessage("Noise Characterization Error", "Failed to start workflow: " + e.getMessage());
+                UserErrors.show(logger, "Noise Characterization Error", "Failed to start workflow: " + e.getMessage());
             }
         });
     }
@@ -183,7 +186,7 @@ public class NoiseCharacterizationWorkflow {
                     logger.error("Noise characterization failed", ex);
                     Platform.runLater(() -> {
                         progressStage.close();
-                        Dialogs.showErrorMessage("Noise Characterization Error", "Failed: " + ex.getMessage());
+                        UserErrors.show(logger, "Noise Characterization Error", "Failed: " + ex.getMessage());
                     });
                     return null;
                 });
@@ -297,7 +300,8 @@ public class NoiseCharacterizationWorkflow {
             logger.error("Noise characterization failed", e);
             Platform.runLater(() -> {
                 progressStage.close();
-                Dialogs.showErrorMessage(
+                UserErrors.show(
+                        logger,
                         "Noise Characterization Failed",
                         "Failed to complete noise characterization:\n" + e.getMessage());
             });

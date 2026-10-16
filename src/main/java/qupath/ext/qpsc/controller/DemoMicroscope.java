@@ -29,6 +29,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.BundledScopeInstaller;
@@ -183,8 +184,10 @@ public final class DemoMicroscope {
                         } else {
                             Throwable cause = err.getCause() != null ? err.getCause() : err;
                             logger.error("Demo microscope: could not connect to the demo server", cause);
-                            Dialogs.showErrorMessage(
-                                    "Demo microscope", "Could not connect to the demo server: " + cause.getMessage());
+                            UserErrors.show(
+                                    logger,
+                                    "Demo microscope",
+                                    "Could not connect to the demo server: " + cause.getMessage());
                         }
                     }));
             return;
@@ -450,8 +453,7 @@ public final class DemoMicroscope {
 
     private static void fail(String message) {
         inProgress.set(false);
-        logger.error("Demo microscope: {}", message);
-        Dialogs.showErrorMessage("Demo microscope", message);
+        UserErrors.show(logger, "Demo microscope", message);
     }
 
     private static boolean confirmLocalHost(String host) {

@@ -34,9 +34,9 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.fx.dialogs.Dialogs;
 
 /**
  * Calibrates the LC-PolScope liquid crystals from QuPath.
@@ -343,7 +343,8 @@ public class LCCalibrationWorkflow {
                 // useless when the likely cause is the path being wrong or on a disconnected
                 // drive, which is exactly the case on a rig with a cloud-synced profile.
                 logger.error("Could not reveal the microscope configuration file {}", file.getAbsolutePath());
-                Dialogs.showErrorMessage(
+                UserErrors.show(
+                        logger,
                         "LC-PolScope Calibration",
                         "Could not reveal the microscope configuration file:\n\n" + file.getAbsolutePath()
                                 + "\n\nCheck that the path in the QPSC preferences still exists.");
@@ -405,7 +406,7 @@ public class LCCalibrationWorkflow {
                 outputField.getText() == null ? "" : outputField.getText().trim();
         if (folder.isEmpty()) {
             logger.error("LC-PolScope calibration not started: no output folder given");
-            Dialogs.showErrorMessage("LC-PolScope Calibration", "An output folder is required.");
+            UserErrors.show(logger, "LC-PolScope Calibration", "An output folder is required.");
             return Optional.empty();
         }
         Double black = null;
@@ -416,7 +417,7 @@ public class LCCalibrationWorkflow {
                 black = Double.parseDouble(blackText);
             } catch (NumberFormatException e) {
                 logger.error("LC-PolScope calibration not started: black level '{}' is not a number", blackText);
-                Dialogs.showErrorMessage("LC-PolScope Calibration", "Black level must be a number, or blank.");
+                UserErrors.show(logger, "LC-PolScope Calibration", "Black level must be a number, or blank.");
                 return Optional.empty();
             }
         }
@@ -428,13 +429,13 @@ public class LCCalibrationWorkflow {
                 exposure = Double.parseDouble(exposureText);
             } catch (NumberFormatException e) {
                 logger.error("LC-PolScope calibration not started: exposure '{}' is not a number", exposureText);
-                Dialogs.showErrorMessage(
-                        "LC-PolScope Calibration", "Exposure must be a number of milliseconds, or blank.");
+                UserErrors.show(
+                        logger, "LC-PolScope Calibration", "Exposure must be a number of milliseconds, or blank.");
                 return Optional.empty();
             }
             if (!(exposure > 0)) {
                 logger.error("LC-PolScope calibration not started: exposure {} ms is not positive", exposure);
-                Dialogs.showErrorMessage("LC-PolScope Calibration", "Exposure must be greater than 0 ms.");
+                UserErrors.show(logger, "LC-PolScope Calibration", "Exposure must be greater than 0 ms.");
                 return Optional.empty();
             }
         }
@@ -465,7 +466,7 @@ public class LCCalibrationWorkflow {
             logger.error("LC-PolScope calibration failed", ex);
             Platform.runLater(() -> {
                 progress.close();
-                Dialogs.showErrorMessage("LC-PolScope Calibration", "Calibration failed: " + ex.getMessage());
+                UserErrors.show(logger, "LC-PolScope Calibration", "Calibration failed: " + ex.getMessage());
             });
             return null;
         });
@@ -501,7 +502,7 @@ public class LCCalibrationWorkflow {
             logger.error("LC-PolScope calibration error", e);
             Platform.runLater(() -> {
                 progress.close();
-                Dialogs.showErrorMessage("LC-PolScope Calibration", e.getMessage());
+                UserErrors.show(logger, "LC-PolScope Calibration", e.getMessage());
             });
         }
     }
@@ -517,7 +518,7 @@ public class LCCalibrationWorkflow {
             // The server logs this in its own log; log it here too so it reaches the QuPath
             // log and a bug report, not only the dialog.
             logger.error("LC-PolScope calibration failed on the microscope server: {}", error);
-            Dialogs.showErrorMessage("LC-PolScope Calibration", error);
+            UserErrors.show(logger, "LC-PolScope Calibration", error);
             return;
         }
 
@@ -638,8 +639,10 @@ public class LCCalibrationWorkflow {
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isBlank()) {
             logger.error("Cannot apply the LC palette: no microscope configuration file is set");
-            Dialogs.showErrorMessage(
-                    "LC-PolScope Calibration", "No microscope configuration file is set in the QPSC preferences.");
+            UserErrors.show(
+                    logger,
+                    "LC-PolScope Calibration",
+                    "No microscope configuration file is set in the QPSC preferences.");
             return;
         }
         List<String> summary;
@@ -647,7 +650,8 @@ public class LCCalibrationWorkflow {
             summary = applyPaletteToConfig(Path.of(configPath), result);
         } catch (IOException | IllegalStateException e) {
             logger.error("Applying the LC palette to {} failed", configPath, e);
-            Dialogs.showErrorMessage(
+            UserErrors.show(
+                    logger,
                     "LC-PolScope Calibration",
                     "Could not write the palette to the microscope YAML:\n\n" + e.getMessage());
             return;

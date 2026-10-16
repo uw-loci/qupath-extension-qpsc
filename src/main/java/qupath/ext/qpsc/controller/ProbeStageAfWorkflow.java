@@ -33,6 +33,7 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.ProbeStageAfResult;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -70,6 +71,7 @@ public class ProbeStageAfWorkflow {
                 a.setContentText("Set the microscope config file in Preferences before running "
                         + "Re-probe Stage AF, or run the Setup Wizard first.");
                 DialogOwner.own(a);
+                UserErrors.logAlert(logger, a);
                 a.showAndWait();
             });
             return;
@@ -120,6 +122,7 @@ public class ProbeStageAfWorkflow {
                                     + (finalError == null ? "no result" : finalError)
                                     + "\n\nCheck the server is running and reachable.");
                             DialogOwner.own(a);
+                            UserErrors.logAlert(logger, a);
                             a.showAndWait();
                             return;
                         }
@@ -199,6 +202,7 @@ public class ProbeStageAfWorkflow {
                     a.setHeaderText("Invalid slow speed (um/s)");
                     a.setContentText("Must be numeric or blank.");
                     DialogOwner.own(a);
+                    UserErrors.logAlert(logger, a);
                     a.showAndWait();
                     return;
                 }
@@ -225,6 +229,7 @@ public class ProbeStageAfWorkflow {
                 err.setHeaderText("Failed to save YAML");
                 err.setContentText(ex.getMessage());
                 DialogOwner.own(err);
+                UserErrors.logAlert(logger, err);
                 err.showAndWait();
             }
         });

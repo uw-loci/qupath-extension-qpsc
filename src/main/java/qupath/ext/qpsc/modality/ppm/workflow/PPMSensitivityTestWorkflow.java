@@ -18,9 +18,9 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.fx.dialogs.Dialogs;
 
 /**
  * PPMSensitivityTestWorkflow - Systematic testing of PPM rotation sensitivity
@@ -75,14 +75,14 @@ public class PPMSensitivityTestWorkflow {
                         })
                         .exceptionally(ex -> {
                             logger.error("Error in PPM sensitivity test dialog", ex);
-                            Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Test Error", "Failed to show test dialog: " + ex.getMessage()));
+                            Platform.runLater(() -> UserErrors.show(
+                                    logger, "Test Error", "Failed to show test dialog: " + ex.getMessage()));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start PPM sensitivity test workflow", e);
-                Dialogs.showErrorMessage("Test Error", "Failed to start PPM sensitivity test: " + e.getMessage());
+                UserErrors.show(logger, "Test Error", "Failed to start PPM sensitivity test: " + e.getMessage());
             }
         });
     }
@@ -369,8 +369,10 @@ public class PPMSensitivityTestWorkflow {
                 File outputDir = new File(output);
 
                 if (output.isEmpty() || !outputDir.exists() || !outputDir.isDirectory()) {
-                    Dialogs.showErrorMessage(
-                            "Invalid Output Folder", "Please select a valid output folder for the test results.");
+                    UserErrors.show(
+                            logger,
+                            "Invalid Output Folder",
+                            "Please select a valid output folder for the test results.");
                     event.consume();
                     return;
                 }
@@ -436,8 +438,8 @@ public class PPMSensitivityTestWorkflow {
                     logger.error("PPM sensitivity test failed", ex);
                     Platform.runLater(() -> {
                         progressDialog.close();
-                        Dialogs.showErrorMessage(
-                                "PPM Sensitivity Test Error", "Failed to execute test: " + ex.getMessage());
+                        UserErrors.show(
+                                logger, "PPM Sensitivity Test Error", "Failed to execute test: " + ex.getMessage());
                     });
                     return null;
                 });
@@ -531,7 +533,7 @@ public class PPMSensitivityTestWorkflow {
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
                 progressDialog.close();
-                Dialogs.showErrorMessage("Test Failed", "Failed to complete PPM sensitivity test:\n" + e.getMessage());
+                UserErrors.show(logger, "Test Failed", "Failed to complete PPM sensitivity test:\n" + e.getMessage());
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection

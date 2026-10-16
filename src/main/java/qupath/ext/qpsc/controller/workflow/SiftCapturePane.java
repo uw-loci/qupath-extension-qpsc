@@ -14,6 +14,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 
@@ -411,8 +412,8 @@ class SiftCapturePane extends VBox {
                                 });
                             } catch (Exception ex) {
                                 logger.error("SiftCapturePane failed to read stage position for capture", ex);
-                                Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showErrorMessage(
-                                        "Capture Error", "Could not read stage position: " + ex.getMessage()));
+                                Platform.runLater(() -> UserErrors.show(
+                                        logger, "Capture Error", "Could not read stage position: " + ex.getMessage()));
                             }
                         },
                         "SiftCapturePane-Capture")

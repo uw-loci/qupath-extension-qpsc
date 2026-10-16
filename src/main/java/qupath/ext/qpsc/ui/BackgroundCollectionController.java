@@ -1675,7 +1675,7 @@ public class BackgroundCollectionController {
                     // The exposure is passed via the exposures string to the server
                     finalExposures.add(new AngleExposure(0, exposure));
                 } catch (NumberFormatException e) {
-                    Dialogs.showErrorMessage("Invalid Exposure", "Please enter a valid numeric exposure value.");
+                    UserErrors.show(logger, "Invalid Exposure", "Please enter a valid numeric exposure value.");
                     return null;
                 }
             } else if (exposureFields.isEmpty() && !currentAngleExposures.isEmpty()) {
@@ -1704,8 +1704,10 @@ public class BackgroundCollectionController {
 
                         finalExposures.add(new AngleExposure(angle, exposure));
                     } catch (NumberFormatException e) {
-                        Dialogs.showErrorMessage(
-                                "Invalid Exposure", "Please enter valid numeric values for all exposure times.");
+                        UserErrors.show(
+                                logger,
+                                "Invalid Exposure",
+                                "Please enter valid numeric values for all exposure times.");
                         return null;
                     }
                 }
@@ -1730,7 +1732,8 @@ public class BackgroundCollectionController {
 
             String detector = detectorComboBox != null ? detectorComboBox.getValue() : null;
             if (detector == null || detector.isEmpty()) {
-                Dialogs.showErrorMessage(
+                UserErrors.show(
+                        logger,
                         "Background Collection: missing detector",
                         "Pick a detector before acquiring backgrounds. Backgrounds are stored "
                                 + "and looked up under <output>/<detector>/<modality>/<objective>/<wbMode>/, "
@@ -1755,7 +1758,8 @@ public class BackgroundCollectionController {
                         // Adaptive only; no profile binding. Hardware was set via LV.
                         effectiveProfileKey = null;
                         if (effectiveTarget <= 0) {
-                            Dialogs.showErrorMessage(
+                            UserErrors.show(
+                                    logger,
                                     "Target intensity required",
                                     "Target-intensity mode requires a positive target "
                                             + "value. Either enter one or switch to "
@@ -1767,7 +1771,8 @@ public class BackgroundCollectionController {
                         // Profile drives lamp + exposure; no adaptive adjustment.
                         effectiveTarget = 0;
                         if (effectiveProfileKey == null || effectiveProfileKey.isBlank()) {
-                            Dialogs.showErrorMessage(
+                            UserErrors.show(
+                                    logger,
                                     "Profile required",
                                     "Profile mode requires an acquisition profile. "
                                             + "Pick one in the Acquisition Profile dropdown.");
@@ -1776,7 +1781,8 @@ public class BackgroundCollectionController {
                     }
                     case PersistentPreferences.BG_EXPOSURE_MODE_OVERRIDE -> {
                         if (effectiveProfileKey == null || effectiveProfileKey.isBlank() || effectiveTarget <= 0) {
-                            Dialogs.showErrorMessage(
+                            UserErrors.show(
+                                    logger,
                                     "Override mode requires both",
                                     "Override mode needs both an acquisition profile "
                                             + "and a positive target intensity. Either "
@@ -1804,7 +1810,7 @@ public class BackgroundCollectionController {
 
         } catch (Exception e) {
             logger.error("Error creating result", e);
-            Dialogs.showErrorMessage("Error", "Failed to create background collection parameters: " + e.getMessage());
+            UserErrors.show(logger, "Error", "Failed to create background collection parameters: " + e.getMessage());
             return null;
         }
     }

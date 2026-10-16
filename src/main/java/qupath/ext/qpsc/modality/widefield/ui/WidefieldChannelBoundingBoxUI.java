@@ -46,6 +46,7 @@ import qupath.ext.qpsc.service.mda.MdaExportContext;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -845,6 +846,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             err.setTitle("MicroManager MDA Export");
             err.setHeaderText("Failed to build export context");
             err.setContentText(ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage());
+            UserErrors.logAlert(logger, err);
             UIFunctions.showAlertOverParent(err, win);
             return;
         }

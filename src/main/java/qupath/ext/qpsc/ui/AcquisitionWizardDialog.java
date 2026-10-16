@@ -993,23 +993,20 @@ public class AcquisitionWizardDialog {
     private void runAutofocusValidation(Button button, Label warningLabel, javafx.animation.Timeline blinkTimeline) {
         try {
             if (!MicroscopeController.getInstance().isConnected()) {
-                qupath.fx.dialogs.Dialogs.showErrorMessage(
-                        "Connection Required", "Connect to the microscope server first.");
+                UserErrors.show(logger, "Connection Required", "Connect to the microscope server first.");
                 return;
             }
 
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath == null) {
-                qupath.fx.dialogs.Dialogs.showErrorMessage(
-                        "Configuration Error", "No microscope configuration file set.");
+                UserErrors.show(logger, "Configuration Error", "No microscope configuration file set.");
                 return;
             }
 
             // Get current objective from wizard selection
             String objective = getSelectedObjective();
             if (objective == null || objective.isEmpty()) {
-                qupath.fx.dialogs.Dialogs.showErrorMessage(
-                        "Selection Required", "Select an objective in the wizard first.");
+                UserErrors.show(logger, "Selection Required", "Select an objective in the wizard first.");
                 return;
             }
 
@@ -1043,7 +1040,8 @@ public class AcquisitionWizardDialog {
                                 warningLabel.setManaged(false);
                                 button.setDisable(false);
                                 button.setText("Validate AF");
-                                qupath.fx.dialogs.Dialogs.showErrorMessage(
+                                UserErrors.show(
+                                        logger,
                                         "Autofocus Validation Failed",
                                         "Error: " + ex.getMessage()
                                                 + "\n\nMake sure you are focused on tissue before testing.");
@@ -1063,7 +1061,7 @@ public class AcquisitionWizardDialog {
                         return null;
                     });
         } catch (Exception ex) {
-            qupath.fx.dialogs.Dialogs.showErrorMessage("Error", "Failed to start validation: " + ex.getMessage());
+            UserErrors.show(logger, "Error", "Failed to start validation: " + ex.getMessage());
         }
     }
 
@@ -1504,6 +1502,7 @@ public class AcquisitionWizardDialog {
             alert.setHeaderText("Microscope server is not connected");
             alert.setContentText(connStatus.message());
             // Wizard is always-on-top; helper parents + raises the alert.
+            UserErrors.logAlert(logger, alert);
             UIFunctions.showAlertOverParent(alert, wizardStage);
             return false;
         }

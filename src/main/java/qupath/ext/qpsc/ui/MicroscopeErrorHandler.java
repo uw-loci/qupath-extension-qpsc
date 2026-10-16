@@ -66,6 +66,7 @@ public class MicroscopeErrorHandler {
 
             alert.getDialogPane().setExpandableContent(expContent);
             DialogOwner.own(alert);
+            UserErrors.logAlert(logger, alert);
             alert.showAndWait();
         });
     }

@@ -28,6 +28,7 @@ import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
 import qupath.ext.qpsc.utilities.AutofocusYamlUpdater;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -663,7 +664,7 @@ public class AutofocusEditorWorkflow {
     private static void runStreamingAfTest(Button button) {
         String yamlPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (yamlPath == null || yamlPath.isEmpty()) {
-            Dialogs.showErrorMessage("Test Streaming AF", "No microscope config yaml set in preferences.");
+            UserErrors.show(logger, "Test Streaming AF", "No microscope config yaml set in preferences.");
             return;
         }
         button.setDisable(true);
@@ -704,7 +705,7 @@ public class AutofocusEditorWorkflow {
                     } catch (Exception ex) {
                         logger.error("Test Streaming AF failed", ex);
                         Platform.runLater(
-                                () -> Dialogs.showErrorMessage("Test Streaming AF", "Scan failed: " + ex.getMessage()));
+                                () -> UserErrors.show(logger, "Test Streaming AF", "Scan failed: " + ex.getMessage()));
                     } finally {
                         Platform.runLater(() -> {
                             button.setDisable(false);
@@ -1025,8 +1026,7 @@ public class AutofocusEditorWorkflow {
                 showAutofocusEditorDialog();
             } catch (Exception e) {
                 logger.error("Error in autofocus editor workflow", e);
-                Dialogs.showErrorMessage(
-                        "Autofocus Editor Error", "Failed to open autofocus editor: " + e.getMessage());
+                UserErrors.show(logger, "Autofocus Editor Error", "Failed to open autofocus editor: " + e.getMessage());
             }
         });
     }
@@ -1038,13 +1038,13 @@ public class AutofocusEditorWorkflow {
         // Get microscope config path from preferences
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isEmpty()) {
-            Dialogs.showErrorMessage("Configuration Error", "No microscope configuration file set in preferences.");
+            UserErrors.show(logger, "Configuration Error", "No microscope configuration file set in preferences.");
             return;
         }
 
         File configFile = new File(configPath);
         if (!configFile.exists()) {
-            Dialogs.showErrorMessage("Configuration Error", "Microscope configuration file not found: " + configPath);
+            UserErrors.show(logger, "Configuration Error", "Microscope configuration file not found: " + configPath);
             return;
         }
 
@@ -1074,7 +1074,7 @@ public class AutofocusEditorWorkflow {
         List<String> objectives = loadObjectivesFromConfig(configManager);
 
         if (objectives.isEmpty()) {
-            Dialogs.showErrorMessage("Configuration Error", "No objectives found in microscope configuration.");
+            UserErrors.show(logger, "Configuration Error", "No objectives found in microscope configuration.");
             return;
         }
 
@@ -1736,10 +1736,10 @@ public class AutofocusEditorWorkflow {
                 logger.info("Autofocus settings saved to: {}", autofocusFile.getAbsolutePath());
 
             } catch (NumberFormatException ex) {
-                Dialogs.showErrorMessage("Input Error", "Please enter valid numeric values.");
+                UserErrors.show(logger, "Input Error", "Please enter valid numeric values.");
             } catch (IOException ex) {
                 logger.error("Failed to save autofocus settings", ex);
-                Dialogs.showErrorMessage("Save Error", "Failed to save settings: " + ex.getMessage());
+                UserErrors.show(logger, "Save Error", "Failed to save settings: " + ex.getMessage());
             }
         });
 
@@ -1783,13 +1783,13 @@ public class AutofocusEditorWorkflow {
                 });
 
             } catch (NumberFormatException ex) {
-                Dialogs.showErrorMessage("Input Error", "Please enter valid numeric values before testing.");
+                UserErrors.show(logger, "Input Error", "Please enter valid numeric values before testing.");
             } catch (IOException ex) {
                 logger.error("Failed to save autofocus settings before test", ex);
-                Dialogs.showErrorMessage("Save Error", "Failed to save settings before test: " + ex.getMessage());
+                UserErrors.show(logger, "Save Error", "Failed to save settings before test: " + ex.getMessage());
             } catch (Exception ex) {
                 logger.error("Failed to start standard autofocus test", ex);
-                Dialogs.showErrorMessage("Test Error", "Failed to start standard autofocus test: " + ex.getMessage());
+                UserErrors.show(logger, "Test Error", "Failed to start standard autofocus test: " + ex.getMessage());
             }
         });
 
@@ -1833,13 +1833,13 @@ public class AutofocusEditorWorkflow {
                 });
 
             } catch (NumberFormatException ex) {
-                Dialogs.showErrorMessage("Input Error", "Please enter valid numeric values before testing.");
+                UserErrors.show(logger, "Input Error", "Please enter valid numeric values before testing.");
             } catch (IOException ex) {
                 logger.error("Failed to save autofocus settings before test", ex);
-                Dialogs.showErrorMessage("Save Error", "Failed to save settings before test: " + ex.getMessage());
+                UserErrors.show(logger, "Save Error", "Failed to save settings before test: " + ex.getMessage());
             } catch (Exception ex) {
                 logger.error("Failed to start sweep autofocus test", ex);
-                Dialogs.showErrorMessage("Test Error", "Failed to start sweep autofocus test: " + ex.getMessage());
+                UserErrors.show(logger, "Test Error", "Failed to start sweep autofocus test: " + ex.getMessage());
             }
         });
 
@@ -1890,8 +1890,8 @@ public class AutofocusEditorWorkflow {
                     MicroscopeController mc = MicroscopeController.getInstance();
                     try {
                         if (!mc.isConnected()) {
-                            Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Connection Required", "Please connect to the microscope server first."));
+                            Platform.runLater(() -> UserErrors.show(
+                                    logger, "Connection Required", "Please connect to the microscope server first."));
                             return;
                         }
 
@@ -1910,7 +1910,8 @@ public class AutofocusEditorWorkflow {
                         Platform.runLater(() -> {
                             statusLabel.setText("Validation failed: " + ex.getMessage());
                             statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
-                            Dialogs.showErrorMessage(
+                            UserErrors.show(
+                                    logger,
                                     "Autofocus Validation Failed",
                                     "Error: " + ex.getMessage()
                                             + "\n\nMake sure you are focused on tissue before running the test.");
@@ -1919,7 +1920,7 @@ public class AutofocusEditorWorkflow {
                 });
 
             } catch (Exception ex) {
-                Dialogs.showErrorMessage("Error", "Failed to start validation: " + ex.getMessage());
+                UserErrors.show(logger, "Error", "Failed to start validation: " + ex.getMessage());
             }
         });
 
@@ -3013,6 +3014,7 @@ public class AutofocusEditorWorkflow {
                 Alert err = new Alert(Alert.AlertType.ERROR, "Failed to migrate: " + ex.getMessage());
                 err.setTitle("Migration Failed");
                 err.setHeaderText(null);
+                UserErrors.logAlert(logger, err);
                 UIFunctions.showAlertOverParent(err, owner);
             }
         } else if (choice.isPresent() && choice.get() == dontAsk) {

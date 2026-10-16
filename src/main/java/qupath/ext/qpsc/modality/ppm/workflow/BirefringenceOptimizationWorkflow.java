@@ -22,6 +22,7 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BirefringenceOptimizationDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -83,15 +84,17 @@ public class BirefringenceOptimizationWorkflow {
                         })
                         .exceptionally(ex -> {
                             logger.error("Error in birefringence optimization dialog", ex);
-                            Platform.runLater(() -> Dialogs.showErrorMessage(
-                                    "Optimization Error", "Failed to show optimization dialog: " + ex.getMessage()));
+                            Platform.runLater(() -> UserErrors.show(
+                                    logger,
+                                    "Optimization Error",
+                                    "Failed to show optimization dialog: " + ex.getMessage()));
                             return null;
                         });
 
             } catch (Exception e) {
                 logger.error("Failed to start birefringence optimization workflow", e);
-                Dialogs.showErrorMessage(
-                        "Optimization Error", "Failed to start birefringence optimization: " + e.getMessage());
+                UserErrors.show(
+                        logger, "Optimization Error", "Failed to start birefringence optimization: " + e.getMessage());
             }
         });
     }
@@ -155,7 +158,8 @@ public class BirefringenceOptimizationWorkflow {
                     logger.error("Birefringence optimization failed", ex);
                     Platform.runLater(() -> {
                         progressStage.close();
-                        Dialogs.showErrorMessage(
+                        UserErrors.show(
+                                logger,
                                 "Birefringence Optimization Error",
                                 "Failed to execute optimization: " + ex.getMessage());
                     });
@@ -364,8 +368,10 @@ public class BirefringenceOptimizationWorkflow {
             // Close progress dialog and show error (on FX thread)
             Platform.runLater(() -> {
                 progressStage.close();
-                Dialogs.showErrorMessage(
-                        "Optimization Failed", "Failed to complete birefringence optimization:\n" + e.getMessage());
+                UserErrors.show(
+                        logger,
+                        "Optimization Failed",
+                        "Failed to complete birefringence optimization:\n" + e.getMessage());
             });
         }
         // Note: Don't disconnect - we're using the shared MicroscopeController connection
