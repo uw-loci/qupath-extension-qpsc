@@ -164,6 +164,28 @@ public class AcquisitionConfigurationBuilder {
         if (bgEnabled && bgBaseFolder != null) {
             bgFolder = BackgroundSettingsReader.resolveBackgroundFolder(
                     bgBaseFolder, baseModality, objective, detector, wbMode);
+            // Channel backgrounds are collected one level deeper, in a folder per acquisition
+            // profile (<base>/<detector>/<family>/<mag>/<profile>/<channel>.tif), and the server
+            // looks for <channel>.tif directly in the folder it is sent. Sending the folder above
+            // it meant channel backgrounds were collected and never found -- fluorescence and
+            // LC-PolScope alike. Use the profile folder whenever it exists.
+            if (channelExposures != null && !channelExposures.isEmpty()) {
+                String profileKey = configManager.resolveProfileKey(baseModality, objective);
+                String channelFolder = profileKey == null
+                        ? null
+                        : BackgroundSettingsReader.resolveChannelBackgroundFolder(
+                                bgBaseFolder, baseModality, objective, detector, profileKey);
+                if (channelFolder != null && new java.io.File(channelFolder).isDirectory()) {
+                    bgFolder = channelFolder;
+                } else {
+                    logger.warn(
+                            "No channel background folder for profile '{}' at {}; the acquisition will look in {}"
+                                    + " and run uncorrected if the channels are not there",
+                            profileKey,
+                            channelFolder,
+                            bgFolder);
+                }
+            }
             logger.info("Resolved background folder path: {}", bgFolder);
         }
 

@@ -295,6 +295,14 @@ Calibrate the two variable retarders of the universal compensator by finding the
   be in the counts of the camera's **current** pixel format: a black level above the darkest
   state measured is reported as a warning and makes the ratio unmeasurable
 
+**Background correction**, after calibrating and applying: move to a specimen-free area,
+defocus 10-20 um, and run Background Collection for the LC-PolScope profile. Each state is
+averaged over 10 frames (`reconstruction.background_frames`) and the set is recorded against the
+calibration it was taken with. The acquisition applies it per tile inside the reconstruction, the
+way OpenPolScope does, and **refuses a background from a different calibration**: the run then
+reconstructs uncorrected and the server log says why. Collect a new background after every
+calibration.
+
 **Access:** Extensions > QP Scope > [Modality Name] > Calibrate Liquid Crystals... (only visible when using an LC-PolScope microscope)
 
 ---
