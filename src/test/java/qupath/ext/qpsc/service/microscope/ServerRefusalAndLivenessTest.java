@@ -115,7 +115,9 @@ class ServerRefusalAndLivenessTest {
     @Test
     void theAlignmentGateAsksBeforeItMovesTheStage() throws Exception {
         // STRMAFZ moved Z 30 um under a parked acquisition thread on 2026-10-12.
-        String body = method(WORKFLOW, "case NONE:");
+        // The NONE branch hands the idle wait and the check to a background thread together.
+        assertThat(method(WORKFLOW, "case NONE:")).contains("checkAlignmentOffFxThread(state)");
+        String body = method(WORKFLOW, "private CompletableFuture<WorkflowState> checkAlignmentOffFxThread(");
         int ask = body.indexOf("awaitServerIdle(AcquisitionManager.SERVER_IDLE_WAIT_MS)");
         int gate = body.indexOf("verifyAlignmentBeforeUnattendedAcquire(state)");
         assertThat(ask).isGreaterThan(0);

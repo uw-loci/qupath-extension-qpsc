@@ -1394,6 +1394,15 @@ stops, the stage is not where it reports.
 `warn` measures and reports but acquires anyway. Use it for the first few runs on a rig if
 you would rather see the numbers before letting the check stop anything.
 
+**It sets up the camera before the first snap.** The check starts the Live Viewer stream and
+puts the camera into the same alignment state the refinement dialogs use. On PPM that is
+the uncrossed angle with its white-balanced exposures and gains. Without this step the
+check matched against whatever angle and exposure the previous step had left. A
+near-extinction angle leaves too little in the frame to match, so every point came back
+unconfirmed. If the camera cannot be set up, `halt` stops the batch and says why, and
+`warn` acquires without checking. The log line with the check result names the camera
+state the snaps used.
+
 **It refocuses before matching, and the acquisition inherits that focus.** The stored focus
 Z is measured during setup and would otherwise be used up to thirty hours later; drift over
 that interval leaves the field blurred, and a blurred field yields few features -- which

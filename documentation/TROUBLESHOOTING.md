@@ -540,6 +540,12 @@ are suspect.
   field). Check the live image first: if it is in focus and on tissue, the stage
   is not where it reports. If it is blank or defocused, check the stage and
   objective. Either way, set the slides up again.
+- **"The alignment check could not set up the camera: ..."** — Nothing was
+  snapped. Before its snaps the check starts the Live Viewer and applies the
+  modality's alignment state (on PPM, the uncrossed angle and its exposures and
+  gains). The message gives the reason. Fix that first (Live Viewer or
+  Micro-Manager connection, the modality's hardware), then run again. In `warn`
+  mode the slide is acquired without a check and the log says so.
 
 **How to see the numbers before the check stops a run:**
 

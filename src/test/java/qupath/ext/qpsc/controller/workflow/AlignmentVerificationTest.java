@@ -278,4 +278,38 @@ class AlignmentVerificationTest {
         // No override, so the server reads sweep_range_um from autofocus_<scope>.yml.
         assertThat(body).contains("streamingFocus(configPath, null, modality, Double.NaN)");
     }
+
+    // ----------------------------------------------------------------------
+    // the unattended check sets up the camera, off the FX thread
+    // ----------------------------------------------------------------------
+
+    /**
+     * The unattended check (ACQUIRE_ONLY, no refinement) snapped SIFT with whatever camera state
+     * the last step left, and failed every point on MetroHealth_FNA_PDAC_4 (2026-10-13). It must
+     * apply the modality's alignment state first, and it must run off the FX thread: the Live
+     * Viewer start it needs is queued on that thread, and the 2026-10-12 log shows the check
+     * holding it for 30 s per slide.
+     */
+    @Test
+    void theUnattendedCheckSetsUpTheCameraBeforeMatchingAndRunsOffTheFxThread() throws Exception {
+        String src = Files.readString(Path.of("src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java"));
+        int check = src.indexOf("private CancellationException verifyAlignmentBeforeUnattendedAcquire(");
+        assertThat(check).isPositive();
+        String body = src.substring(check, src.indexOf("private double[] resolveFovUm(", check));
+        int prep = body.indexOf("AlignmentLivePrep.prepare(");
+        int verify = body.indexOf("AlignmentVerification.verify(");
+        assertThat(prep).as("the camera is set up in the check").isPositive();
+        assertThat(prep).as("before the first snap").isLessThan(verify);
+        assertThat(body).contains("AlignmentVerificationGate.record(");
+
+        int none = src.indexOf("case NONE:");
+        String noneBranch = src.substring(none, src.indexOf("case SINGLE_TILE:", none));
+        assertThat(noneBranch).contains("checkAlignmentOffFxThread(state)");
+        assertThat(noneBranch).doesNotContain("verifyAlignmentBeforeUnattendedAcquire(state)");
+
+        int offFx = src.indexOf("private CompletableFuture<WorkflowState> checkAlignmentOffFxThread(");
+        String worker = src.substring(offFx, src.indexOf("private double[] resolveFovUm(", offFx));
+        assertThat(worker)
+                .contains("new Thread(", "verifyAlignmentBeforeUnattendedAcquire(state)", "Platform.runLater(");
+    }
 }

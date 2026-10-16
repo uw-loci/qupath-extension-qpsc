@@ -2298,6 +2298,38 @@ public class ExistingImageWorkflowV2 {
                 return null;
             }
 
+            String slide = state.sample != null ? state.sample.sampleName() : "this slide";
+
+            // Put the camera into the modality's alignment state before any snap. SIFT matches
+            // the live frame against the overview, and without this the three snaps use whatever
+            // the last step left behind -- on PPM often a near-extinction angle or an exposure
+            // from another objective, which fails every point as "insufficient features". The
+            // refinement dialogs have always done this; this path never did (2026-10-13,
+            // MetroHealth_FNA_PDAC_4). Nobody is watching an unattended acquire, so a state we
+            // cannot set stops the slide unless the operator chose 'warn'.
+            AlignmentLivePrep.Result prep = AlignmentLivePrep.prepare(
+                    state.sample != null ? state.sample.modality() : null,
+                    state.sample != null ? state.sample.objective() : null,
+                    state.sample != null ? state.sample.detector() : null);
+            String cameraState = prep.stateApplied().orElse("the current camera state");
+            if (!prep.ok()) {
+                if ("warn".equalsIgnoreCase(checkMode)) {
+                    logger.warn(
+                            "Alignment check for {} skipped: the camera could not be set up for it, and the"
+                                    + " mode is 'warn', so acquiring anyway: {}",
+                            slide,
+                            prep.summary());
+                    return null;
+                }
+                String why = "The alignment check could not set up the camera: " + prep.summary();
+                logger.error("Alignment check for {} not run: {}", slide, why);
+                AlignmentVerificationGate.record(
+                        slide,
+                        new AlignmentVerification.Verdict(
+                                AlignmentVerification.Status.INCONCLUSIVE, Double.NaN, 0, 0.0, 0, why, null));
+                return new CancellationException("Alignment could not be confirmed for " + slide);
+            }
+
             AlignmentVerification.Verdict verdict = AlignmentVerification.verify(
                     QuPathGUI.getInstance(),
                     state.annotations.get(0),
@@ -2321,23 +2353,74 @@ public class ExistingImageWorkflowV2 {
                 state.seedZ = verdict.focusedZUm();
             }
 
-            String slide = state.sample != null ? state.sample.sampleName() : "this slide";
             if (!verdict.shouldStop()) {
-                logger.info("Alignment check for {}: {}", slide, verdict.message());
+                logger.info("Alignment check for {} (camera at {}): {}", slide, cameraState, verdict.message());
                 return null;
             }
 
             if ("warn".equalsIgnoreCase(checkMode)) {
                 logger.warn(
-                        "Alignment check for {} FAILED but the mode is 'warn', so acquiring anyway: {}",
+                        "Alignment check for {} (camera at {}) FAILED but the mode is 'warn', so acquiring anyway: {}",
                         slide,
+                        cameraState,
                         verdict.message());
                 return null;
             }
 
-            logger.error("Alignment check for {} FAILED: {}", slide, verdict.message());
+            logger.error("Alignment check for {} (camera at {}) FAILED: {}", slide, cameraState, verdict.message());
             AlignmentVerificationGate.record(slide, verdict);
             return new CancellationException("Alignment could not be confirmed for " + slide);
+        }
+
+        /**
+         * Runs the server-idle wait and {@link #verifyAlignmentBeforeUnattendedAcquire} on a
+         * background thread, then completes on the FX thread so the rest of the chain runs where
+         * it always has.
+         *
+         * <p>The check waits on the server, moves the stage, refocuses and waits for the Live
+         * Viewer to stream. It used to run on the FX thread, which froze QuPath for about 30 s per
+         * slide (2026-10-12 logs) and made it impossible to start the live stream the check needs:
+         * {@code LiveViewerWindow.ensureStreaming} queues its work on the very thread that was
+         * blocked.
+         */
+        private CompletableFuture<WorkflowState> checkAlignmentOffFxThread(WorkflowState state) {
+            CompletableFuture<WorkflowState> result = new CompletableFuture<>();
+            Thread worker = new Thread(
+                    () -> {
+                        Throwable failure = null;
+                        try {
+                            // The check moves the stage and refocuses. If the server still owns
+                            // the stage for a previous acquisition -- one the client gave up on
+                            // but the server has not -- this would drive Z out from under it
+                            // (2026-10-12).
+                            if (!MicroscopeController.getInstance()
+                                    .awaitServerIdle(AcquisitionManager.SERVER_IDLE_WAIT_MS)) {
+                                failure = new WorkflowBlockedException(
+                                        "The microscope server is still running a previous acquisition; "
+                                                + "cancel it or restart the command server before acquiring");
+                            } else {
+                                failure = verifyAlignmentBeforeUnattendedAcquire(state);
+                            }
+                        } catch (IOException e) {
+                            failure = new WorkflowBlockedException(
+                                    "Could not ask the server whether it is idle: " + e.getMessage());
+                        } catch (RuntimeException e) {
+                            logger.error("Alignment check failed unexpectedly", e);
+                            failure = e;
+                        }
+                        Throwable outcome = failure;
+                        Platform.runLater(() -> {
+                            if (outcome == null) {
+                                result.complete(state);
+                            } else {
+                                result.completeExceptionally(outcome);
+                            }
+                        });
+                    },
+                    "Alignment-Check");
+            worker.setDaemon(true);
+            worker.start();
+            return result;
         }
 
         /** Camera field of view (um) for the modality/objective/detector in use, or null. */
@@ -2379,24 +2462,7 @@ public class ExistingImageWorkflowV2 {
                     // four-slide batch. Confirm it against the sample first; see
                     // AlignmentVerification for why no cheaper check can see this.
                     if (mode == Mode.ACQUIRE_ONLY) {
-                        // The check moves the stage and refocuses. If the server still owns the
-                        // stage for a previous acquisition -- one the client gave up on but the
-                        // server has not -- this would drive Z out from under it (2026-10-12).
-                        try {
-                            if (!MicroscopeController.getInstance()
-                                    .awaitServerIdle(AcquisitionManager.SERVER_IDLE_WAIT_MS)) {
-                                return CompletableFuture.failedFuture(new WorkflowBlockedException(
-                                        "The microscope server is still running a previous acquisition; "
-                                                + "cancel it or restart the command server before acquiring"));
-                            }
-                        } catch (IOException e) {
-                            return CompletableFuture.failedFuture(new WorkflowBlockedException(
-                                    "Could not ask the server whether it is idle: " + e.getMessage()));
-                        }
-                        CancellationException refused = verifyAlignmentBeforeUnattendedAcquire(state);
-                        if (refused != null) {
-                            return CompletableFuture.failedFuture(refused);
-                        }
+                        return checkAlignmentOffFxThread(state);
                     }
                     return CompletableFuture.completedFuture(state);
 
