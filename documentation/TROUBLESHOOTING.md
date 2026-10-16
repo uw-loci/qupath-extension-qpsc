@@ -2121,20 +2121,30 @@ objectives:
 
 ### Autofocus Config (autofocus_PPM.yml)
 
-**Per-objective settings:**
+**Per-objective settings** (the PPM 20x row as of 2026-09-12):
 ```yaml
 - objective: LOCI_OBJECTIVE_OLYMPUS_20X_POL_001
-  n_steps: 20                          # Number of Z-steps in search
-  search_range_um: 30.0                # Total Z search range
-  n_tiles: 2                           # Autofocus every N tiles
-  texture_threshold: 0.005             # Tissue detection sensitivity
-  tissue_area_threshold: 0.2           # Minimum tissue coverage
+  n_steps: 100                         # Number of Z-steps in the full search
+  search_range_um: 100.0               # Total Z search range
+  n_tiles: 1                           # AF grid spacing, in fields
+  score_metric: brenner_gradient       # The focus metric
+  channel_reduction: green             # Score the green channel only
+  sweep_range_um: 30.0                 # Z range of the narrow sweep
+  sweep_n_steps: 30
 ```
 
+**Tissue detection is set per modality, not here.** PPM binds the `stained_colour` strategy,
+which judges tissue by stain color. Its `validity_params` (`min_chroma`,
+`chroma_area_threshold`) decide whether a field is focused or skipped. The
+`texture_threshold` and `tissue_area_threshold` on the objective row do not apply to PPM. See
+[What decides what on PPM](AUTOFOCUS.md#what-decides-what-on-ppm).
+
 **Common mistakes:**
-- n_tiles too low (autofocus too often, slow)
+- n_tiles too high (focus is measured too far apart and drifts between points), or too low
+  (autofocus runs too often and the scan is slow)
 - search_range_um too small (doesn't find focus)
-- texture_threshold too high (skips tissue positions)
+- Tuning `texture_threshold` on the objective row to stop PPM skipping tissue. Change
+  `min_chroma` or `chroma_area_threshold` in the `stained_colour` strategy instead.
 
 ### Validation Checklist
 

@@ -92,7 +92,7 @@ The full registry lives in `microscope_configurations/focus_metrics_manifest.yml
 | `normalized_variance` | ~5ms | High-mag brightfield with non-uniform illumination | **BF/PPM only, 20x+** -- the var/mean ratio is illumination-dominated at low mag (the OWS3 BF 10x failure mode from 2026-05-01) and unstable on FL where both var and mean are noise-dominated |
 | `vollath_f5` | ~5ms | Fluorescence and other shot-noise-dominated samples; periodic structure | streaming-only path |
 | `sobel` | ~5ms | High-contrast edge-rich tissue | standard / strategy paths only |
-| `p98_p2` | ~3ms | Fallback metric (auto-computed alongside the primary in standard AF); also the **PPM 20x acquisition-AF primary** -- gradient metrics read flat on the bright PPM 20x background, so the P98-P2 spread is what brackets focus | **modality-agnostic as a peak finder, NOT as a "higher = sharper" comparator** -- focus pulls p2 down on BF and pulls p98 up on FL, so the curve peaks in both cases but the sign and magnitude meanings flip |
+| `p98_p2` | ~3ms | Fallback metric (auto-computed alongside the primary in standard AF); was the PPM 20x primary until 2026-08-28, when `brenner_gradient` replaced it; PPM 20x now scores `brenner_gradient` on the green channel only (see [Channel reduction](#channel-reduction)) | **modality-agnostic as a peak finder, NOT as a "higher = sharper" comparator** -- focus pulls p2 down on BF and pulls p98 up on FL, so the curve peaks in both cases but the sign and magnitude meanings flip |
 | `robust_sharpness_metric` | ~20ms | dense_texture strategy with bright-particle noise | strategy path only |
 | `hybrid_sharpness_metric` | ~8ms | dense_texture strategy on BF/PPM tissue | **BF/PPM only** -- the mid-gray soft mask weights mid-gray pixels highest, which actively suppresses fluorescence (sharper FL field -> lower score) |
 
@@ -100,7 +100,7 @@ The full registry lives in `microscope_configurations/focus_metrics_manifest.yml
 
 **Acquisition-sweep metric wiring (2026-07-16):** the acquisition (standard-sweep) autofocus resolves the YAML `score_metric` **name** to a profile function through a fixed map in the command server; that map was missing a `p98_p2` entry, so `autofocus_PPM.yml`'s `score_metric: p98_p2` for the 20x objective silently degraded to `laplacian_variance` (a gradient metric that reads flat on the bright PPM 20x background). The flat metric never bracketed focus, driving the edge-retry sweep into a multi-minute runaway (three progressively wider sweeps) that produced zero tiles and tripped the acquisition client's ~300 s no-progress watchdog -- surfacing as a multi-slide acquisition "hang." Fixed by adding a real `autofocus_profile_p98_p2` (P98-P2 percentile spread) and mapping `"p98_p2"` to it, plus a wall-clock cap on the sweep's edge-retry so a flat metric can no longer run away past the watchdog. The streaming/drift-check path already honored `p98_p2` by name; only the acquisition sweep was affected. See `claude-reports/2026-07-16_multislide-acquire-af-deadlock.md`.
 
-**Channel reduction is uniform across modalities.** All metrics see a 2D grayscale array produced by an equal-weighted color mean across channels (alpha dropped). RGB BF (JAI 3-CCD BGRA) is averaged across B/G/R; mono BF (Hamamatsu) and fluorescence are pass-through. The earlier BT.601 luminance reduction over-weighted G and let cover-slip features in R win on PPM eosin (z=83 instead of z=92); the equal-mean form was confirmed on the standard-AF path and applied to streaming AF on 2026-05-04 (commit `4f35859`).
+**Channel reduction is uniform across modalities by default.** An objective can opt into the green channel instead; see [Channel reduction](#channel-reduction). Otherwise all metrics see a 2D grayscale array produced by an equal-weighted color mean across channels (alpha dropped). RGB BF (JAI 3-CCD BGRA) is averaged across B/G/R; mono BF (Hamamatsu) and fluorescence are pass-through. The earlier BT.601 luminance reduction over-weighted G and let cover-slip features in R win on PPM eosin (z=83 instead of z=92); the equal-mean form was confirmed on the standard-AF path and applied to streaming AF on 2026-05-04 (commit `4f35859`).
 
 ### Peak Validation
 
@@ -676,53 +676,51 @@ The new YAML schema is opt-in via a top-level `schema_version` field in `autofoc
 ```yaml
 schema_version: 2
 
-# Legacy per-objective hardware rows still live here as before:
-objectives:
-  LOCI_OBJECTIVE_OLYMPUS_10X_001:
-    search_range_um: 100
-    n_steps: 25
-    score_metric: normalized_variance
-    # ... existing parameters ...
+# Per-objective hardware rows: Z geometry, AF spacing, and the focus metric.
+autofocus_settings:
+- objective: LOCI_OBJECTIVE_OLYMPUS_20X_POL_001
+  n_steps: 100
+  search_range_um: 100.0
+  n_tiles: 1
+  score_metric: brenner_gradient     # the metric every focus search on this objective uses
+  channel_reduction: green           # optional; see "Channel reduction" below
+  sweep_range_um: 30.0
+  sweep_n_steps: 30
+  # ... further per-objective parameters ...
 
-# New: named strategies library
+# Named strategies: how to decide whether a field is worth focusing on.
 strategies:
   dense_texture:
-    validity: { kind: texture_area, texture_threshold: 0.012, tissue_area_threshold: 0.15 }
-    score:    { kind: laplacian_variance }
-    failure_mode: DEFER
-  sparse_signal:
-    validity: { kind: bright_spot_count, min_spots: 3, k_mad: 4.0 }
-    brightness_check: dynamic_range   # NOT median floor -- do not saturate dark bg
-    score:
-      kind: laplacian_variance_on_spots
-      fallback: brenner_gradient
-    failure_mode: PROCEED
-  dark_field:
-    validity: { kind: fov_gradient_energy, min_energy: 0.01 }
-    score: { kind: brenner_gradient }
-    failure_mode: PROCEED
+    score_metric: laplacian_variance
+    validity_check: texture_and_area
+    validity_params: { texture_threshold: 0.01, tissue_area_threshold: 0.2 }
+    on_failure: defer
+  stained_colour:
+    score_metric: laplacian_variance
+    validity_check: chroma_deviation
+    validity_params: { min_chroma: 28.0, chroma_area_threshold: 0.15, saturation_ceiling: 250.0 }
+    on_failure: defer
   manual_only:
-    validity: { kind: always_invalid }
-    failure_mode: MANUAL_DIALOG
+    score_metric: none
+    validity_check: always_false
+    validity_params: {}
+    on_failure: manual
 
-# New: per-modality bindings
+# Per-modality bindings: which strategy each modality uses.
 modalities:
-  bf:          { strategy: dense_texture }
-  ppm:         { strategy: dense_texture, mask_range: [0.10, 0.90] }
-  fl:          { strategy: sparse_signal }
-  fluorescence: { strategy: sparse_signal }
-  bf_if:       { strategy: dense_texture }
-  lsm:         { strategy: dark_field }
-  shg:         { strategy: dark_field }
-  '2p':        { strategy: dark_field }
-  confocal:    { strategy: dark_field }
+  ppm:         { strategy: stained_colour }
+  brightfield: { strategy: stained_colour }
 ```
 
-### The Five Shipped Strategies
+The excerpt follows `autofocus_PPM.yml` as of 2026-09-12. A binding can also carry
+`overrides: { validity_params: {...} }` to adjust one modality without a new strategy.
+
+### The Shipped Strategies
 
 | Strategy | Validity Gate | Score Metric | Failure Mode | Target Modalities |
 |----------|---------------|--------------|--------------|-------------------|
 | `dense_texture` | Texture threshold + tissue area fraction | `laplacian_variance` | `DEFER` (skip tile, try next) | H&E, IHC, PPM, confluent IF, BF channel of BF+IF |
+| `stained_colour` | Stain color: the fraction of pixels whose chroma, max(R,G,B) - min(R,G,B), is at least `min_chroma` (default 28 counts) must reach `chroma_area_threshold` (default 0.15). Color survives defocus, so a blurred tissue field still passes and neutral glass does not. Needs a color camera; a monochrome frame always fails. | `dense_texture`'s scoring (it has no class of its own; the YAML's `validity_check: chroma_deviation` replaces the texture test) | `DEFER` | H&E, IHC and PPM on a color camera. The PPM binding since 2026-08-28. |
 | `sparse_signal` | Bright-spot count using `bg_median + k*MAD` threshold (no area requirement) | `laplacian_variance` on the spot ROIs, fallback `brenner_gradient` | `PROCEED` (run AF anyway on whatever signal is present) | Sparse fluorescence (beads, pollen, scattered cells, FISH spots) |
 | `dense_fluorescence` | Whole-FOV gradient energy above a floor (`total_gradient_energy`) | `vollath_f5` -- autocorrelation form rejects shot noise | `PROCEED` | Confluent fluorescent signal (whole-cell IF, dense membrane stains, packed nuclei). Closes the gap where picking `dense_texture` for an FL binding inherited `laplacian_variance` and its sparse-FL weakness. Added 2026-05-08 (commits `c67bd14`, `bd535e9`, `447d4dd`). |
 | `dark_field` | Whole-FOV gradient energy above a minimum | `brenner_gradient` | `PROCEED` | SHG, LSM, 2P, confocal, dark-field contrast |
@@ -768,7 +766,8 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `search_range_um` | Total Z search range in micrometers | 12-50 |
 | `n_tiles` | Spatial grid spacing for AF positions (every ~N tiles in each axis) | 3-7 |
 | `score_metric` | Focus quality algorithm | `normalized_variance` |
-| `texture_threshold` | Min texture for tissue detection | 0.005-0.030 |
+| `channel_reduction` | How a color frame becomes the grey image the metric scores. Omit it for the equal-weighted mean of R, G and B. `green` scores the green channel alone. Not shown in the editor; edit the YAML. See [Channel reduction](#channel-reduction). | omitted, or `green` |
+| `texture_threshold` | Min texture for tissue detection. A modality bound to a strategy with its own `validity_params` (PPM is) uses those instead; see [What decides what on PPM](#what-decides-what-on-ppm). | 0.005-0.030 |
 | `tissue_area_threshold` | Min tissue coverage fraction | 0.05-0.30 |
 | `sweep_range_um` | Z range for sweep autofocus | 6-10 |
 | `sweep_n_steps` | Steps in sweep autofocus | 4-8 (per 10 um), scale up ~1 per um for wider ranges |
@@ -776,6 +775,40 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `gap_index_multiplier` | Force AF after this x `n_tiles` without AF (safety net) | 2-5 (default 3) |
 | `gap_spatial_multiplier` | Force AF when nearest AF exceeds this x grid spacing (fragment safety net) | 1.5-3.0 (default 2.0) |
 | `slow_speed_um_per_s` | Streaming-AF scan speed for THIS objective, overriding the scope-wide `stage.streaming_af.slow_speed_um_per_s`. Sets sampling density: frames arrive at the camera's rate, so um-per-sample is speed divided by frame rate. Aim for roughly ten samples across the focus peak's full width at half maximum, which is objective-dependent -- a 40x peak is a few um across where a 10x peak is tens. Leave unset to inherit the scope-wide value. | 2-20 |
+
+### Channel reduction
+
+Every focus metric scores a single grey image. By default a color frame becomes one by
+averaging R, G and B with equal weights, which is also what standard autofocus has always done.
+Setting `channel_reduction: green` on an objective scores the green channel alone.
+
+Green helps when achromatic debris shares the field with stained tissue. A dust speck or a dark
+fibre has the same contrast in all three channels, while tissue's contrast sits in the channels
+its stain absorbs. Averaging keeps all of the debris signal and dilutes the tissue's, so the
+debris can win. On four PPM 20x traverses measured on 2026-09-04, the equal-weighted mean put
+focus on a fibre 113 um from the tissue on one field. Green found the tissue there and was as
+good or better on the other three. The measurements are in the `microscope_imageprocessing`
+source, in `focus/metrics.py`.
+
+It is opt-in per objective, because changing the default would change focus on every scope at
+once. PPM sets it on the 20x objective only.
+
+### What decides what on PPM
+
+Three separate settings in `autofocus_PPM.yml` control PPM autofocus, and they live in
+different places:
+
+| Question | Where it is set | PPM value (2026-09-12) |
+|---|---|---|
+| Is there tissue in this field worth focusing on? | The `ppm` modality binding and its strategy's `validity_params` | `stained_colour`: at least 15% of pixels with chroma of 28 counts or more |
+| Which metric scores sharpness? | `score_metric` on the objective's row | 10x and 20x `brenner_gradient`, 40x `tenengrad` |
+| Which grey image is scored? | `channel_reduction` on the objective's row | 20x `green`; 10x and 40x the equal-weighted mean |
+
+The flat `texture_threshold` and `tissue_area_threshold` on each objective row do not decide
+tissue for PPM, because the binding's check replaces them. The `score_metric` written inside a
+strategy is not the metric autofocus uses either: the objective row's `score_metric` is.
+Read the file on the rig for current values. The values in the table are from the
+2026-09-12 commit of `autofocus_PPM.yml`.
 
 ### How AF Position Selection Works
 

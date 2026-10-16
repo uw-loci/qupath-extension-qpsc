@@ -175,9 +175,16 @@ per-acquisition via the autofocus dropdown in the acquisition wizard.
    (`dense_texture`, `sparse_signal`, `dark_field`, `manual_only`) are sufficient.
    Expand a strategy card to view or tweak its validity parameters.
 4. **Tab 3 (Modality Bindings):** Verify each modality on your scope maps to the
-   correct strategy. Adjust overrides as needed (e.g., PPM gets a wider
-   `tissue_mask_range` because polarized images have wider intensity distributions).
+   correct strategy. On a color camera, PPM and brightfield H&E bind `stained_colour`,
+   which judges tissue by stain color and still works on a blurred field. A modality bound
+   to `dense_texture` can widen `tissue_mask_range` in its overrides when its images have a
+   wide intensity distribution. See
+   [What decides what on PPM](../AUTOFOCUS.md#what-decides-what-on-ppm).
 5. Click **Write to File** to save settings, or **OK** to save and close.
+
+The editor does not show `channel_reduction`, which PPM 20x sets to `green`. Saving keeps it,
+because the editor updates the file in place rather than rewriting it. To change it, edit
+`autofocus_<scope>.yml`. See [Channel reduction](../AUTOFOCUS.md#channel-reduction).
 
 ## Output
 
