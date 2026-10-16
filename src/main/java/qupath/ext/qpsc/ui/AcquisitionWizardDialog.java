@@ -925,8 +925,10 @@ public class AcquisitionWizardDialog {
     // Autofocus override
     // ======================================================================
 
-    private HBox createAutofocusOverrideSection() {
-        HBox section = new HBox(8);
+    private VBox createAutofocusOverrideSection() {
+        // Status on its own line, buttons and the warning below it: on one line the status
+        // was cut to "Autofocus: enabled (set in ..." once Cancel and the warning appeared.
+        VBox section = new VBox(6);
         section.setPadding(new Insets(4, 16, 4, 16));
         section.setAlignment(Pos.CENTER_LEFT);
 
@@ -975,15 +977,26 @@ public class AcquisitionWizardDialog {
                         e2 -> afWarningLabel.setVisible(!afWarningLabel.isVisible())));
         blinkTimeline.setCycleCount(javafx.animation.Animation.INDEFINITE);
 
+        // Shown only while a validation runs: sends ABORTAF, which stops the test between Z
+        // steps; the server returns Z to where the test started.
+        Button cancelAfButton = new Button("Cancel");
+        cancelAfButton.setStyle("-fx-font-size: 11px;");
+        cancelAfButton.setTooltip(new Tooltip("Stop the autofocus validation. Z returns to where it started."));
+        cancelAfButton.setVisible(false);
+        cancelAfButton.setManaged(false);
+        cancelAfButton.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        cancelAfButton.setOnAction(e -> cancelAutofocusValidation(cancelAfButton));
+
         validateAfButton.setOnAction(e -> {
             afWarningLabel.setText("Do not interact with the microscope stage position");
             afWarningLabel.setVisible(true);
             afWarningLabel.setManaged(true);
             blinkTimeline.play();
-            runAutofocusValidation(validateAfButton, afWarningLabel, blinkTimeline);
+            runAutofocusValidation(validateAfButton, cancelAfButton, afWarningLabel, blinkTimeline);
         });
 
         javafx.scene.layout.HBox afButtonRow = buttonWithWarningRow(validateAfButton, afWarningLabel);
+        afButtonRow.getChildren().add(1, cancelAfButton);
 
         section.getChildren().addAll(autofocusStatusLabel, afButtonRow);
         return section;
@@ -1007,15 +1020,22 @@ public class AcquisitionWizardDialog {
         return row;
     }
 
-    private void runAutofocusValidation(Button button, Label warningLabel, javafx.animation.Timeline blinkTimeline) {
+    private void runAutofocusValidation(
+            Button button, Button cancelButton, Label warningLabel, javafx.animation.Timeline blinkTimeline) {
         try {
             if (!MicroscopeController.getInstance().isConnected()) {
+                blinkTimeline.stop();
+                warningLabel.setVisible(false);
+                warningLabel.setManaged(false);
                 UserErrors.show(logger, "Connection Required", "Connect to the microscope server first.");
                 return;
             }
 
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath == null) {
+                blinkTimeline.stop();
+                warningLabel.setVisible(false);
+                warningLabel.setManaged(false);
                 UserErrors.show(logger, "Configuration Error", "No microscope configuration file set.");
                 return;
             }
@@ -1023,6 +1043,9 @@ public class AcquisitionWizardDialog {
             // Get current objective from wizard selection
             String objective = getSelectedObjective();
             if (objective == null || objective.isEmpty()) {
+                blinkTimeline.stop();
+                warningLabel.setVisible(false);
+                warningLabel.setManaged(false);
                 UserErrors.show(logger, "Selection Required", "Select an objective in the wizard first.");
                 return;
             }
@@ -1032,6 +1055,21 @@ public class AcquisitionWizardDialog {
 
             button.setDisable(true);
             button.setText("Testing...");
+            cancelButton.setText("Cancel");
+            cancelButton.setDisable(false);
+            cancelButton.setVisible(true);
+            cancelButton.setManaged(true);
+
+            // Puts the row back the way it was; runs on the FX thread whatever the outcome.
+            Runnable endValidation = () -> {
+                blinkTimeline.stop();
+                warningLabel.setVisible(false);
+                warningLabel.setManaged(false);
+                cancelButton.setVisible(false);
+                cancelButton.setManaged(false);
+                button.setDisable(false);
+                button.setText("Validate AF");
+            };
 
             java.util.concurrent.CompletableFuture.runAsync(() -> {
                         // Stop live viewing -- AF validation moves Z and snaps images
@@ -1042,21 +1080,20 @@ public class AcquisitionWizardDialog {
                             var result = socketClient.testAutofocusValidation(configPath, testOutputPath, objective);
 
                             javafx.application.Platform.runLater(() -> {
-                                blinkTimeline.stop();
-                                warningLabel.setVisible(false);
-                                warningLabel.setManaged(false);
-                                button.setDisable(false);
-                                button.setText("Validate AF");
-                                qupath.ext.qpsc.controller.AutofocusEditorWorkflow.showValidationResultStatic(result);
+                                endValidation.run();
+                                if ("true".equals(result.get("cancelled"))) {
+                                    logger.info("Autofocus validation cancelled: {}", result.get("message"));
+                                    qupath.fx.dialogs.Dialogs.showInfoNotification(
+                                            "Autofocus Validation", "Cancelled. Z is back where the test started.");
+                                } else {
+                                    qupath.ext.qpsc.controller.AutofocusEditorWorkflow.showValidationResultStatic(
+                                            result);
+                                }
                             });
                         } catch (Exception ex) {
                             logger.error("Autofocus validation failed", ex);
                             javafx.application.Platform.runLater(() -> {
-                                blinkTimeline.stop();
-                                warningLabel.setVisible(false);
-                                warningLabel.setManaged(false);
-                                button.setDisable(false);
-                                button.setText("Validate AF");
+                                endValidation.run();
                                 UserErrors.show(
                                         logger,
                                         "Autofocus Validation Failed",
@@ -1068,18 +1105,32 @@ public class AcquisitionWizardDialog {
                         }
                     })
                     .exceptionally(ex -> {
-                        javafx.application.Platform.runLater(() -> {
-                            blinkTimeline.stop();
-                            warningLabel.setVisible(false);
-                            warningLabel.setManaged(false);
-                            button.setDisable(false);
-                            button.setText("Validate AF");
-                        });
+                        javafx.application.Platform.runLater(endValidation);
                         return null;
                     });
         } catch (Exception ex) {
             UserErrors.show(logger, "Error", "Failed to start validation: " + ex.getMessage());
         }
+    }
+
+    /**
+     * Asks the server to stop the running validation. ABORTAF goes out on the auxiliary
+     * socket because the test holds the primary one until it returns.
+     */
+    private void cancelAutofocusValidation(Button cancelButton) {
+        cancelButton.setDisable(true);
+        cancelButton.setText("Cancelling...");
+        java.util.concurrent.CompletableFuture.runAsync(() -> {
+            try {
+                MicroscopeController.getInstance().getSocketClient().abortStreamingFocus();
+            } catch (Exception ex) {
+                javafx.application.Platform.runLater(() -> {
+                    cancelButton.setDisable(false);
+                    cancelButton.setText("Cancel");
+                    UserErrors.show(logger, "Autofocus Validation", "Could not send the cancel: " + ex.getMessage());
+                });
+            }
+        });
     }
 
     private void updateAutofocusStatusLabel() {

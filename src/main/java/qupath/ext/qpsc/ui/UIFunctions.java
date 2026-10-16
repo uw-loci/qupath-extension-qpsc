@@ -843,19 +843,21 @@ public class UIFunctions {
             // In a multi-slide batch, dock beside the progress panel (no-op for single-slide runs).
             stage.setOnShown(e -> DialogPlacement.dockBesideBatchAnchor(stage));
 
-            VBox layout = new VBox(10);
+            VBox layout = new VBox(12);
             layout.setPadding(new Insets(20));
+            // Read at arm's length from the microscope: every label and button inherits this.
+            layout.setStyle("-fx-font-size: 16px;");
 
             Label instructionLabel = new Label(message);
             instructionLabel.setWrapText(true);
-            instructionLabel.setPrefWidth(400);
+            instructionLabel.setPrefWidth(520);
 
             // Tiles sit inside their annotation, so a single click selects the annotation;
             // QuPath selects the object inside it on a double-click.
             Label howLabel = new Label(TILE_SELECTION_HOW);
             howLabel.setWrapText(true);
-            howLabel.setPrefWidth(400);
-            howLabel.setStyle("-fx-font-weight: bold");
+            howLabel.setPrefWidth(520);
+            howLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 17px;");
 
             Label statusLabel = new Label(NO_TILE_SELECTED);
             statusLabel.setStyle("-fx-font-weight: bold");

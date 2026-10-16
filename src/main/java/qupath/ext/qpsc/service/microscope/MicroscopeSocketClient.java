@@ -3005,6 +3005,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
 
                     Map<String, String> result = new java.util.HashMap<>();
+                    if (finalResponse.startsWith("CANCELLED:")) {
+                        // The operator cancelled (ABORTAF). Not an error: the server put Z
+                        // back where it started. Flag it so the caller skips the result dialog.
+                        result.put("cancelled", "true");
+                        result.put(
+                                "message",
+                                finalResponse.substring("CANCELLED:".length()).trim());
+                        lastActivityTime.set(System.currentTimeMillis());
+                        return result;
+                    }
                     if (finalResponse.startsWith("SUCCESS:")) {
                         String json = finalResponse.substring(8);
                         // Simple JSON parsing -- extract key-value pairs

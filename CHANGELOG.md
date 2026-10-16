@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Cancel autofocus validation in the Acquisition Wizard; larger text in the tile dialog**
+- **Validate AF** in the Acquisition Wizard shows a **Cancel** button while it runs. Cancel stops the test between Z steps, in either phase, and Z returns to where the test started. Needs microscope_command_server and microscope_control from the same date. The autofocus status now sits on its own line, so it is no longer cut off while the test runs.
+- The **Alignment - Select tile** dialog uses larger text: 16 px, with the double-click instruction at 17 px bold.
+
 **Acquisition wizard icons, tile dialog wording, and a second focus curve on Navigate**
 - The Acquisition Wizard's two large buttons show what they acquire: a tiled rectangle for **Bounded Acquisition** and annotated tissue for **Existing Image Acquisition**. Their longer descriptions moved to tooltips.
 - The tile-selection dialog is titled **Alignment - Select tile** and says to double-click a tile in the image, since a single click selects the annotation around it.
