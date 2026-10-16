@@ -1495,6 +1495,7 @@ public class StitchingHelper {
                                     // to import the merged file as the single canonical entry.
                                     importMergedImageOnly(
                                             mergedPath, metadata, gui, project, handler, pipelinedBatchAcquire);
+                                    deleteMergedIntermediates(mergedPath, mergeImages);
                                 } else {
                                     // Merge failed. Because skipProjectImport=true kept the
                                     // per-channel pyramids out of the project, the user would
@@ -1526,6 +1527,35 @@ public class StitchingHelper {
                                     annotationName);
                         }
 
+                        // Outputs the acquisition computed from the channels and wrote to folders of
+                        // their own (LC-PolScope retardance/ and orientation/). They are the result
+                        // of such a run, not an extra; until 2026-10-16 the channel path never looked
+                        // for them, so the first LC-PolScope stitch produced only the raw states.
+                        List<String> derivedImages = new ArrayList<>();
+                        processPostProcessingDirectories(
+                                handler,
+                                tileBaseDir,
+                                annotationName,
+                                projectsFolder,
+                                sampleName,
+                                modeWithIndex,
+                                compression,
+                                pixelSize,
+                                stitchingConfig.downsampleFactor(),
+                                gui,
+                                project,
+                                stitchParams,
+                                blockingDialog,
+                                operationId,
+                                derivedImages);
+                        if (!handler.getPostProcessingDirectorySuffixes().isEmpty()) {
+                            logger.info(
+                                    "Derived outputs for {}: {} stitched ({})",
+                                    annotationName,
+                                    derivedImages.size(),
+                                    derivedImages);
+                        }
+
                         if (blockingDialog != null) {
                             blockingDialog.completeOperation(operationId);
                         }
@@ -1549,6 +1579,72 @@ public class StitchingHelper {
                     }
                 },
                 executor);
+    }
+
+    /**
+     * Removes the per-channel pyramids a successful merge consumed, and nothing else.
+     *
+     * <p>The merged file holds every channel, so the per-channel files beside it are duplicates
+     * that also look like separate images in the folder. Only the exact paths passed to
+     * {@code ChannelMerger.merge} are touched -- never a directory scan, after the 2026-09-27
+     * cleanup that emptied a sample's SlideImages folder -- and only once the merged output exists
+     * and is not empty. Channels the user chose to split out are not in {@code consumed} and are
+     * kept. Each file's {@code .stitch-info.txt} goes with it; the merged image has its own record.
+     * A file that cannot be deleted is logged and left, never a reason to fail the stitch.
+     */
+    static void deleteMergedIntermediates(String mergedPath, List<String> consumed) {
+        File merged = mergedPath == null ? null : new File(mergedPath);
+        boolean mergedPresent =
+                merged != null && merged.exists() && (merged.isDirectory() ? hasContent(merged) : merged.length() > 0);
+        if (!mergedPresent) {
+            logger.warn("Not removing per-channel files: the merged output {} is missing or empty", mergedPath);
+            return;
+        }
+        for (String path : consumed) {
+            if (path == null) {
+                continue;
+            }
+            File f = new File(path);
+            if (!f.exists() || f.getAbsoluteFile().equals(merged.getAbsoluteFile())) {
+                continue;
+            }
+            boolean removed = f.isDirectory() ? deleteTree(f.toPath()) : f.delete();
+            if (removed) {
+                logger.info("Removed per-channel intermediate merged into {}: {}", merged.getName(), f.getName());
+                String name = f.getName();
+                String stem = name.endsWith(".ome.tif")
+                        ? name.substring(0, name.length() - ".ome.tif".length())
+                        : name.endsWith(".ome.zarr") ? name.substring(0, name.length() - ".ome.zarr".length()) : null;
+                if (stem != null) {
+                    File record = new File(f.getParentFile(), stem + ".stitch-info.txt");
+                    if (record.isFile() && !record.delete()) {
+                        logger.warn("Could not remove the stitch record {}", record);
+                    }
+                }
+            } else {
+                logger.warn(
+                        "Could not remove per-channel intermediate {}; it is a duplicate of a channel in {}",
+                        f,
+                        merged);
+            }
+        }
+    }
+
+    private static boolean hasContent(File dir) {
+        String[] names = dir.list();
+        return names != null && names.length > 0;
+    }
+
+    /** Deletes a directory tree, children first; false if anything could not be removed. */
+    private static boolean deleteTree(Path root) {
+        File[] children = root.toFile().listFiles();
+        boolean ok = true;
+        if (children != null) {
+            for (File child : children) {
+                ok &= child.isDirectory() ? deleteTree(child.toPath()) : child.delete();
+            }
+        }
+        return root.toFile().delete() && ok;
     }
 
     // -- Default fluorescence channel colors (packed ARGB) --

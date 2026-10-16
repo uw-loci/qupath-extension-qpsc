@@ -229,4 +229,35 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         // inversion depends on.
         return "off";
     }
+
+    /**
+     * The microscope server reconstructs every tile as it is acquired and writes the results
+     * beside the state folders, in {@code retardance/} and {@code orientation/}, each with its
+     * own {@code TileConfiguration.txt}. Those are the results of this method; the five states
+     * are its raw data. Declared here so stitching picks them up as outputs of their own.
+     */
+    @Override
+    public List<String> getPostProcessingDirectorySuffixes() {
+        return List.of("retardance", "orientation");
+    }
+
+    /**
+     * Stable channel names for the reconstructed outputs, so display settings carry across
+     * images. Values are stored as counts: retardance in nanometres x 100, orientation in
+     * degrees x 100 over [0, 180).
+     */
+    @Override
+    public String getChannelNameForOutput(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        String lower = fileName.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("_retardance")) {
+            return "Retardance (nm x100)";
+        }
+        if (lower.contains("_orientation")) {
+            return "Orientation (deg x100)";
+        }
+        return null;
+    }
 }
