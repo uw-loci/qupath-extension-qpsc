@@ -41,10 +41,12 @@ public final class FocusTraceModel {
 
     private static final class Sample {
         final double metric;
+        final double background;
         final long timestampMs;
 
-        Sample(double metric, long timestampMs) {
+        Sample(double metric, double background, long timestampMs) {
             this.metric = metric;
+            this.background = background;
             this.timestampMs = timestampMs;
         }
     }
@@ -53,8 +55,16 @@ public final class FocusTraceModel {
     private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
     private double runningMin = Double.POSITIVE_INFINITY;
     private double runningMax = Double.NEGATIVE_INFINITY;
+    private double backgroundMin = Double.POSITIVE_INFINITY;
+    private double backgroundMax = Double.NEGATIVE_INFINITY;
 
-    public synchronized void addSample(double z, double metric) {
+    /**
+     * Adds a sample.
+     *
+     * @param metric the plotted focus metric
+     * @param background a second metric drawn faded behind it (P98 - P2), or NaN for none
+     */
+    public synchronized void addSample(double z, double metric, double background) {
         if (Double.isNaN(z) || Double.isNaN(metric)) return;
         long now = System.currentTimeMillis();
 
@@ -68,7 +78,7 @@ public final class FocusTraceModel {
 
         // Bin Z so very-close samples coalesce (replaces value, refreshes ts).
         double binnedZ = Math.round(z / Z_BIN_UM) * Z_BIN_UM;
-        samples.put(binnedZ, new Sample(metric, now));
+        samples.put(binnedZ, new Sample(metric, background, now));
 
         // Cap at MAX_SAMPLES, evicting by oldest timestamp first.
         while (samples.size() > MAX_SAMPLES) {
@@ -91,16 +101,28 @@ public final class FocusTraceModel {
         samples.clear();
         runningMin = Double.POSITIVE_INFINITY;
         runningMax = Double.NEGATIVE_INFINITY;
+        backgroundMin = Double.POSITIVE_INFINITY;
+        backgroundMax = Double.NEGATIVE_INFINITY;
         notifyListeners();
     }
 
-    /** Snapshot of samples ordered by Z (ascending). Each entry is {z, metric}. */
+    /** Snapshot of samples ordered by Z (ascending). Each entry is {z, metric, background}. */
     public synchronized List<double[]> snapshot() {
         List<double[]> out = new ArrayList<>(samples.size());
         for (Map.Entry<Double, Sample> e : samples.entrySet()) {
-            out.add(new double[] {e.getKey(), e.getValue().metric});
+            out.add(new double[] {e.getKey(), e.getValue().metric, e.getValue().background});
         }
         return out;
+    }
+
+    /** Smallest background metric among the samples, or +infinity when there is none. */
+    public synchronized double getBackgroundMin() {
+        return backgroundMin;
+    }
+
+    /** Largest background metric among the samples, or -infinity when there is none. */
+    public synchronized double getBackgroundMax() {
+        return backgroundMax;
     }
 
     public synchronized double getRunningMin() {
@@ -124,19 +146,22 @@ public final class FocusTraceModel {
     }
 
     private void recomputeMinMax() {
-        if (samples.isEmpty()) {
-            runningMin = Double.POSITIVE_INFINITY;
-            runningMax = Double.NEGATIVE_INFINITY;
-            return;
-        }
         double mn = Double.POSITIVE_INFINITY;
         double mx = Double.NEGATIVE_INFINITY;
+        double bn = Double.POSITIVE_INFINITY;
+        double bx = Double.NEGATIVE_INFINITY;
         for (Sample s : samples.values()) {
             if (s.metric < mn) mn = s.metric;
             if (s.metric > mx) mx = s.metric;
+            if (!Double.isNaN(s.background)) {
+                if (s.background < bn) bn = s.background;
+                if (s.background > bx) bx = s.background;
+            }
         }
         runningMin = mn;
         runningMax = mx;
+        backgroundMin = bn;
+        backgroundMax = bx;
     }
 
     private void notifyListeners() {

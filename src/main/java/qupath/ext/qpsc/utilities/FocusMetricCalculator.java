@@ -54,4 +54,49 @@ public final class FocusMetricCalculator {
         }
         return count == 0L ? 0.0 : (double) sumSq / (double) count;
     }
+
+    /**
+     * P98 - P2: the spread between the 98th and 2nd percentile pixel values, on the same
+     * channel and row sampling as {@link #brennerGradient}. It needs no edges, so it still
+     * brackets focus on bright, low-texture fields where a gradient metric reads flat (PPM
+     * 20x); the server uses it as the autofocus fallback. Returns 0 for null/empty frames.
+     */
+    public static double p98MinusP2(FrameData frame) {
+        if (frame == null || frame.rawPixels() == null) return 0.0;
+        int w = frame.width();
+        int h = frame.height();
+        int ch = frame.channels();
+        int bpp = frame.bytesPerPixel();
+        if (w < 1 || h < 1 || ch < 1 || bpp < 1) return 0.0;
+
+        int stride = ch * bpp;
+        int rowBytes = w * stride;
+        int rowStep = Math.max(1, h / 256);
+        int[] histogram = new int[Math.max(256, frame.maxValue() + 1)];
+        long count = 0L;
+        for (int y = 0; y < h; y += rowStep) {
+            int rowBase = y * rowBytes;
+            for (int x = 0; x < w; x++) {
+                int v = frame.readPixelValue(rowBase + x * stride);
+                if (v >= 0 && v < histogram.length) {
+                    histogram[v]++;
+                    count++;
+                }
+            }
+        }
+        if (count == 0L) return 0.0;
+        return percentile(histogram, count, 0.98) - percentile(histogram, count, 0.02);
+    }
+
+    private static int percentile(int[] histogram, long count, double fraction) {
+        long target = (long) Math.ceil(fraction * count);
+        long seen = 0L;
+        for (int v = 0; v < histogram.length; v++) {
+            seen += histogram[v];
+            if (seen >= target) {
+                return v;
+            }
+        }
+        return histogram.length - 1;
+    }
 }

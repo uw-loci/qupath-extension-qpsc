@@ -66,7 +66,7 @@ A small row below the checklist for ad-hoc autofocus control before starting an 
 
 ### 4. Start Acquisition
 
-Two large buttons to launch the main acquisition workflows:
+Two large buttons to launch the main acquisition workflows. Each shows an icon of what it acquires: a dashed rectangle cut into tiles for Bounded Acquisition, and tissue with an annotation drawn on it for Existing Image Acquisition. Hover over a button for its description.
 
 | Button | Requirements | Description |
 |--------|-------------|-------------|

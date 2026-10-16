@@ -2005,15 +2005,17 @@ public class LiveViewerWindow {
                 }
             });
 
-            // Focus-metric trace: compute per-frame Brenner gradient, pair with
-            // the current polled Z, and push to the ZBarPanel's trace model.
+            // Focus-metric trace: compute per-frame Brenner gradient, and P98 - P2 for the
+            // faded background curve, pair with the current polled Z, and push to the
+            // ZBarPanel's trace model.
             // Cleared on > 1 um XY moves by StageControlPanel.onPositionChanged.
             histExec.submit(() -> {
                 try {
                     if (stageControlPanel == null || stageControlPanel.getZBarPanel() == null) return;
                     double metric = qupath.ext.qpsc.utilities.FocusMetricCalculator.brennerGradient(frame);
+                    double spread = qupath.ext.qpsc.utilities.FocusMetricCalculator.p98MinusP2(frame);
                     double z = MicroscopeController.getInstance().getStageZFast();
-                    stageControlPanel.getZBarPanel().getFocusTrace().addSample(z, metric);
+                    stageControlPanel.getZBarPanel().getFocusTrace().addSample(z, metric, spread);
                 } catch (Exception e) {
                     logger.debug("Focus-metric update failed: {}", e.getMessage());
                 }

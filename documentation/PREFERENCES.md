@@ -1010,7 +1010,7 @@ acquisition:
 **Tiles are picked for you** in the automatic modes — the first landmark of each slide,
 the single-tile refinement pick, and every multi-tile reference point. Only interior tiles
 qualify (full ring of 8 neighbours, centre inside the annotation), ranked by texture and
-spread apart. The "Select Tile" dialog does not appear at all. This is what removes the
+spread apart. The "Alignment - Select tile" dialog does not appear at all. This is what removes the
 stop: that dialog's Confirm button is created disabled and only enables on a viewer
 selection, so a countdown could never have driven it. Multi-tile refinement also drives its
 own **Select tile** and **Solve & Save**.

@@ -11,12 +11,12 @@ import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
 import javafx.scene.Cursor;
+import javafx.scene.Node;
 import javafx.scene.Scene;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
 import javafx.scene.paint.Color;
 import javafx.scene.shape.Circle;
-import javafx.scene.shape.Polygon;
 import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.SVGPath;
 import javafx.scene.text.Text;
@@ -1106,26 +1106,31 @@ public class AcquisitionWizardDialog {
         section.setAlignment(Pos.CENTER);
 
         boundedButton = createAcquireButton(
-                "Bounded\nAcquisition",
-                "Define a rectangular region\nusing stage coordinates",
-                this::onBoundedAcquisition);
+                AcquireIcons.boundingBox(), "Bounded\nAcquisition", BOUNDED_DESCRIPTION, this::onBoundedAcquisition);
 
         existingImageButton = createAcquireButton(
+                AcquireIcons.tissue(),
                 "Existing Image\nAcquisition",
-                "Acquire annotated regions\nfrom an open image",
+                EXISTING_IMAGE_DESCRIPTION,
                 this::onExistingImageAcquisition);
 
         section.getChildren().addAll(boundedButton, existingImageButton);
         return section;
     }
 
-    private Button createAcquireButton(String title, String description, Runnable action) {
-        VBox content = new VBox(4);
+    private static final String BOUNDED_DESCRIPTION =
+            "Acquire a rectangular region of the stage, given by its stage coordinates.";
+    private static final String EXISTING_IMAGE_DESCRIPTION =
+            "Acquire the annotated tissue regions of the image open in QuPath.";
+
+    /**
+     * A large acquire button: an icon of what it acquires, a short title, and the longer
+     * description as its tooltip.
+     */
+    private Button createAcquireButton(Node icon, String title, String description, Runnable action) {
+        VBox content = new VBox(6);
         content.setAlignment(Pos.CENTER);
         content.setPadding(new Insets(4));
-
-        Polygon triangle = new Polygon(0, 0, 0, 16, 14, 8);
-        triangle.setFill(Color.WHITE);
 
         Label titleLabel = new Label(title);
         titleLabel.setStyle(
@@ -1134,13 +1139,7 @@ public class AcquisitionWizardDialog {
         titleLabel.setWrapText(true);
         titleLabel.setMaxWidth(Double.MAX_VALUE);
 
-        Label descLabel = new Label(description);
-        descLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: #ccd9ee; -fx-text-alignment: center;");
-        descLabel.setAlignment(Pos.CENTER);
-        descLabel.setWrapText(true);
-        descLabel.setMaxWidth(Double.MAX_VALUE);
-
-        content.getChildren().addAll(triangle, titleLabel, descLabel);
+        content.getChildren().addAll(icon, titleLabel);
         content.setMaxWidth(Double.MAX_VALUE);
 
         Button btn = new Button();
@@ -1158,6 +1157,8 @@ public class AcquisitionWizardDialog {
                 + "-fx-cursor: hand; -fx-padding: 4;"));
 
         btn.setOnAction(e -> action.run());
+        btn.setTooltip(new Tooltip(description));
+        btn.setAccessibleText(title.replace('\n', ' ') + ". " + description);
 
         return btn;
     }
@@ -1181,9 +1182,10 @@ public class AcquisitionWizardDialog {
 
         // Update the existing image button tooltip to explain why it's disabled
         if (!hasImage && connected) {
-            existingImageButton.setTooltip(new Tooltip("Open an image in QuPath first"));
+            existingImageButton.setTooltip(
+                    new Tooltip(EXISTING_IMAGE_DESCRIPTION + "\nOpen an image in QuPath first."));
         } else {
-            existingImageButton.setTooltip(null);
+            existingImageButton.setTooltip(new Tooltip(EXISTING_IMAGE_DESCRIPTION));
         }
     }
 

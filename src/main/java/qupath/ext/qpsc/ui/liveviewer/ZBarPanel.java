@@ -433,6 +433,14 @@ public class ZBarPanel extends HBox {
             this.canvas.setOnMousePressed(this::onPressed);
             this.canvas.setOnMouseDragged(this::onDragged);
             this.canvas.setOnMouseReleased(this::onReleased);
+            javafx.scene.control.Tooltip.install(
+                    this.canvas,
+                    new javafx.scene.control.Tooltip("Drag or click to move Z.\n"
+                            + "Focus trace beside the bar, from live frames:\n"
+                            + "  orange: Brenner gradient (edge sharpness)\n"
+                            + "  faded blue: P98 - P2 intensity spread, which still peaks on bright,\n"
+                            + "  low-texture fields where the orange curve is flat.\n"
+                            + "Each curve is scaled to its own range."));
         }
 
         double trackLeft() {
@@ -500,8 +508,39 @@ public class ZBarPanel extends HBox {
         void drawFocusTrace(GraphicsContext g, double tx) {
             if (focusTrace.isEmpty()) return;
             List<double[]> samples = focusTrace.snapshot();
-            double mMin = focusTrace.getRunningMin();
-            double mMax = focusTrace.getRunningMax();
+            // P98 - P2 first, faded, on its own scale: it still peaks at focus on bright,
+            // low-texture fields where the Brenner curve on top reads flat.
+            drawTraceCurve(
+                    g,
+                    tx,
+                    samples,
+                    2,
+                    focusTrace.getBackgroundMin(),
+                    focusTrace.getBackgroundMax(),
+                    Color.rgb(170, 200, 255, 0.10),
+                    Color.rgb(170, 200, 255, 0.40));
+            drawTraceCurve(
+                    g,
+                    tx,
+                    samples,
+                    1,
+                    focusTrace.getRunningMin(),
+                    focusTrace.getRunningMax(),
+                    Color.rgb(255, 140, 0, 0.20),
+                    Color.rgb(255, 130, 0, 0.65));
+        }
+
+        /** One sideways curve: column {@code col} of the samples, normalized to [min, max]. */
+        private void drawTraceCurve(
+                GraphicsContext g,
+                double tx,
+                List<double[]> samples,
+                int col,
+                double mMin,
+                double mMax,
+                Color fill,
+                Color stroke) {
+            if (!Double.isFinite(mMin) || !Double.isFinite(mMax)) return;
             double mSpan = mMax - mMin;
             if (mSpan <= 0) return;
             double traceMaxWidth = tx - 2; // reserve 2 px gutter on the far left
@@ -510,15 +549,15 @@ public class ZBarPanel extends HBox {
             int n = 0;
             for (double[] s : samples) {
                 double zS = s[0];
-                if (zS < zMin || zS > zMax) continue;
-                double norm = (s[1] - mMin) / mSpan;
+                if (zS < zMin || zS > zMax || s.length <= col || Double.isNaN(s[col])) continue;
+                double norm = (s[col] - mMin) / mSpan;
                 xs[n] = tx - norm * traceMaxWidth;
                 ys[n] = yForZ(zS);
                 n++;
             }
             if (n < 1) return;
-            g.setFill(Color.rgb(255, 140, 0, 0.20));
-            g.setStroke(Color.rgb(255, 130, 0, 0.65));
+            g.setFill(fill);
+            g.setStroke(stroke);
             g.setLineWidth(1.0);
             double[] polyX = new double[n + 2];
             double[] polyY = new double[n + 2];

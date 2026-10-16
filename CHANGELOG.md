@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Acquisition wizard icons, tile dialog wording, and a second focus curve on Navigate**
+- The Acquisition Wizard's two large buttons show what they acquire: a tiled rectangle for **Bounded Acquisition** and annotated tissue for **Existing Image Acquisition**. Their longer descriptions moved to tooltips.
+- The tile-selection dialog is titled **Alignment - Select tile** and says to double-click a tile in the image, since a single click selects the annotation around it.
+- The Z focus trace on the Live Viewer's Navigate tab adds a faded P98 - P2 curve behind the Brenner curve, each on its own scale. P98 - P2 still finds focus on bright, low-texture fields where Brenner reads flat.
+
 **Every error dialog is written to the QuPath log**
 - 86 of QPSC's 175 error dialogs left no trace in the log, so a bug report could not show what the operator had seen. Every error dialog and error notification now writes its title and text to the log at ERROR first, on a line starting `Error dialog`.
 

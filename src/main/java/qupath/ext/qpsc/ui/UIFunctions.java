@@ -807,6 +807,14 @@ public class UIFunctions {
         }
     }
 
+    /** Window title of the tile-selection dialog; every caller uses it for alignment. */
+    static final String TILE_SELECTION_TITLE = "Alignment - Select tile";
+
+    static final String TILE_SELECTION_HOW =
+            "Double-click a tile in the image to select it, then click Confirm Selection.";
+
+    static final String NO_TILE_SELECTED = "No tile selected";
+
     /**
      * Prompts the user to select exactly one tile (detection object) in QuPath.
      * Shows a non-modal dialog that allows the user to interact with QuPath while open.
@@ -822,7 +830,7 @@ public class UIFunctions {
             Stage stage = new Stage();
             QpscWindows.track(stage);
             stage.initModality(Modality.NONE);
-            stage.setTitle("Select Tile");
+            stage.setTitle(TILE_SELECTION_TITLE);
             // Dropped setAlwaysOnTop(true): floating over the multi-slide panel
             // occluded its Abort All. Own the QuPath main window instead so this
             // co-floats with the panel rather than covering it.
@@ -842,7 +850,14 @@ public class UIFunctions {
             instructionLabel.setWrapText(true);
             instructionLabel.setPrefWidth(400);
 
-            Label statusLabel = new Label("No tile selected");
+            // Tiles sit inside their annotation, so a single click selects the annotation;
+            // QuPath selects the object inside it on a double-click.
+            Label howLabel = new Label(TILE_SELECTION_HOW);
+            howLabel.setWrapText(true);
+            howLabel.setPrefWidth(400);
+            howLabel.setStyle("-fx-font-weight: bold");
+
+            Label statusLabel = new Label(NO_TILE_SELECTED);
             statusLabel.setStyle("-fx-font-weight: bold");
 
             Button confirmButton = new Button("Confirm Selection");
@@ -853,7 +868,7 @@ public class UIFunctions {
             HBox buttonBox = new HBox(10, confirmButton, cancelButton);
             buttonBox.setAlignment(javafx.geometry.Pos.CENTER);
 
-            layout.getChildren().addAll(instructionLabel, statusLabel, buttonBox);
+            layout.getChildren().addAll(instructionLabel, howLabel, statusLabel, buttonBox);
 
             // Check selection periodically
             Timeline selectionChecker = new Timeline(new KeyFrame(Duration.millis(500), e -> {
@@ -878,7 +893,7 @@ public class UIFunctions {
                     statusLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                     confirmButton.setDisable(false);
                 } else if (tiles.isEmpty()) {
-                    statusLabel.setText("No tile selected");
+                    statusLabel.setText(NO_TILE_SELECTED);
                     statusLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.NORMAL + ";");
                     confirmButton.setDisable(true);
                 } else {

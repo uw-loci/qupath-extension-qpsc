@@ -232,7 +232,7 @@ green box is what the whole alignment is anchored on, so auto-confirming a detec
 detector itself is unsure of is exactly the silent-wrong-result these gates exist to
 prevent.
 
-**Every tile is picked for you.** In an automatic mode no "Select Tile" dialog appears at
+**Every tile is picked for you.** In an automatic mode no "Alignment - Select tile" dialog appears at
 all -- not for the first landmark of a slide, not for single-tile refinement, and not for
 each multi-tile reference point. Tiles are chosen the way an operator would: only tiles
 whose full ring of 8 neighbours is present and whose centre is inside the annotation are
