@@ -983,11 +983,28 @@ public class AcquisitionWizardDialog {
             runAutofocusValidation(validateAfButton, afWarningLabel, blinkTimeline);
         });
 
-        javafx.scene.layout.HBox afButtonRow = new javafx.scene.layout.HBox(10, validateAfButton, afWarningLabel);
-        afButtonRow.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        javafx.scene.layout.HBox afButtonRow = buttonWithWarningRow(validateAfButton, afWarningLabel);
 
         section.getChildren().addAll(autofocusStatusLabel, afButtonRow);
         return section;
+    }
+
+    /**
+     * A button with a warning beside it. The warning takes the rest of the row and wraps, and
+     * the button keeps its full width; otherwise a narrow wizard clipped the autofocus
+     * warning to "Do not interact with the..." with no way to read the rest.
+     */
+    static javafx.scene.layout.HBox buttonWithWarningRow(Button button, Label warning) {
+        warning.setWrapText(true);
+        warning.setMinWidth(0);
+        warning.setMaxWidth(Double.MAX_VALUE);
+        // Without this a wrapped label still shrinks to one ellipsized line when its parent is short.
+        warning.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        button.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
+        javafx.scene.layout.HBox row = new javafx.scene.layout.HBox(10, button, warning);
+        javafx.scene.layout.HBox.setHgrow(warning, javafx.scene.layout.Priority.ALWAYS);
+        row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        return row;
     }
 
     private void runAutofocusValidation(Button button, Label warningLabel, javafx.animation.Timeline blinkTimeline) {
