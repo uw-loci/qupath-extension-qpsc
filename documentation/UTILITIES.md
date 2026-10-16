@@ -254,6 +254,18 @@ Calibrate the two variable retarders of the universal compensator by finding the
 - **LC control mode must be `MM-Retardance`.** `MM-Voltage` is refused by the microscope server because no retardance/voltage curve is wired up yet; the dialog marks it NOT SUPPORTED when the YAML asks for it
 - Produces a human-readable assessment (Good / Acceptable / Poor) based on extinction ratio
 - Supports single-pass or iterative search (iterative refines at ~3x the exposures)
+- Output folder, prefilled with `calibrations/lcpolscope` inside the open project (the server
+  creates it), or the projects folder preference when no project is open. The first rig runs
+  defaulted to the projects folder, one level above the project
+- The camera's settings are checked before the first frame. Auto gain or auto exposure is
+  **refused**: the camera steers every state to its own brightness target and the search settles
+  wherever that is (on the LC-PolScope, five states at the same 173 counts with `Gain Auto:
+  Continuous`). A gamma curve or an 8-bit pixel format is warned about and marks the result
+  **unreliable**. Set `Gain Auto` and `Exposure Auto` to Off, `Gamma Enabled` to 0 and a 12- or
+  16-bit pixel format in Micro-Manager's Device Property Browser, then re-measure the black level
+- The headline is **unreliable**, whatever the extinction ratio, when the frames cannot support it:
+  a clipped state, a swing contrast under 1 percent of range, a black level above the darkest
+  state, gamma, 8-bit. Apply asks for confirmation first. The ratio's own band is still shown
 - Exposure in milliseconds, prefilled with the acquisition's exposure for the LC-PolScope
   states (the first channel under `modalities.lcpolscope.channels`). The server sets it on the
   camera for the calibration and restores the previous value afterwards. Leave it blank to

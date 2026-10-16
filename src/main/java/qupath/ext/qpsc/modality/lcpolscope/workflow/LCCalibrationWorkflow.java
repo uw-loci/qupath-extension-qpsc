@@ -37,6 +37,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.lib.gui.QuPathGUI;
 
 /**
  * Calibrates the LC-PolScope liquid crystals from QuPath.
@@ -126,6 +127,26 @@ public class LCCalibrationWorkflow {
                 + "  wavelength  " + (wavelength == null ? "NOT SET" : String.valueOf(wavelength)) + " nm\n"
                 + "  scheme      " + (scheme == null ? "NOT SET" : String.valueOf(scheme)) + "\n"
                 + "  LC control  " + modeText;
+    }
+
+    /**
+     * Where the calibration files go by default: {@code calibrations/lcpolscope} inside the open
+     * project, or the projects folder preference when no project is open.
+     *
+     * <p>The first rig runs defaulted to the projects folder, which is one level ABOVE the
+     * project, so the files landed beside the projects rather than in the one they belonged to.
+     * A calibration is a record of the instrument on the day, and the project is where the data
+     * from that day is; when there is a project it goes in there. The server creates the folder.
+     */
+    private static String defaultOutputFolder() {
+        QuPathGUI gui = QuPathGUI.getInstance();
+        if (gui != null && gui.getProject() != null && gui.getProject().getPath() != null) {
+            Path projectDir = gui.getProject().getPath().getParent();
+            if (projectDir != null) {
+                return projectDir.resolve("calibrations").resolve("lcpolscope").toString();
+            }
+        }
+        return QPPreferenceDialog.getProjectsFolderProperty();
     }
 
     /**
@@ -351,7 +372,7 @@ public class LCCalibrationWorkflow {
             }
         });
 
-        TextField outputField = new TextField(QPPreferenceDialog.getProjectsFolderProperty());
+        TextField outputField = new TextField(defaultOutputFolder());
         outputField.setPrefColumnCount(32);
 
         ChoiceBox<String> strategyBox = new ChoiceBox<>();
@@ -526,15 +547,26 @@ public class LCCalibrationWorkflow {
                 result.has("extinction_ratio") ? result.get("extinction_ratio").getAsDouble() : Double.NaN;
         String assessment = result.has("assessment") ? result.get("assessment").getAsString() : "unknown";
 
+        // The server marks a result "unreliable" when the frames cannot support the ratio: a
+        // clipped state, a black level in the wrong units, a contrast resolved from noise, a camera
+        // that is not linear. The 2026-10-16 rig run read "Good, ready to use" at ER 133.8 with
+        // State1 at 99.9% saturation; the ratio's band is not the headline in that case.
+        boolean unreliable = "unreliable".equals(assessment);
+        List<String> issues = new ArrayList<>();
+        if (result.has("reliability_issues") && result.get("reliability_issues").isJsonArray()) {
+            result.getAsJsonArray("reliability_issues").forEach(e -> issues.add(e.getAsString()));
+        }
+
         // A poor calibration is shown as a warning, not an error: it is recorded
         // and inspectable, and the operator decides whether to accept it.
-        Alert.AlertType type = ratio >= ER_ACCEPTABLE ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
+        Alert.AlertType type =
+                ratio >= ER_ACCEPTABLE && !unreliable ? Alert.AlertType.INFORMATION : Alert.AlertType.WARNING;
         Alert dialog = new Alert(type);
         dialog.setTitle("LC Calibration Complete");
         dialog.setHeaderText(String.format("Extinction ratio %.1f (%s)", ratio, assessment));
 
         List<String> lines = new ArrayList<>();
-        lines.add(bandExplanation(ratio));
+        lines.add(unreliable ? unreliableExplanation(issues) : bandExplanation(ratio));
         lines.add("");
         lines.add("Palette (LC-A, LC-B in waves):");
         if (result.has("palette_waves")) {
@@ -592,6 +624,9 @@ public class LCCalibrationWorkflow {
         // calibration can be compared with the next one, or attached to a bug report, without
         // anyone having transcribed it.
         logger.info("LC-PolScope calibration result:\n{}", String.join("\n", lines));
+        if (unreliable) {
+            logger.warn("LC-PolScope calibration is unreliable: {}", String.join("; ", issues));
+        }
         if (!(ratio >= ER_ACCEPTABLE)) {
             logger.warn(
                     "LC-PolScope calibration extinction ratio {} is below {} ({})", ratio, ER_ACCEPTABLE, assessment);
@@ -617,11 +652,17 @@ public class LCCalibrationWorkflow {
         if (dialog.showAndWait().orElse(close) != apply) {
             return;
         }
-        if (!(ratio >= ER_ACCEPTABLE)) {
+        if (unreliable || !(ratio >= ER_ACCEPTABLE)) {
             Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
-            confirm.setTitle("Apply a poor calibration?");
-            confirm.setHeaderText(String.format("Extinction ratio %.1f is below %.0f", ratio, ER_ACCEPTABLE));
-            confirm.setContentText("Reconstruction from this palette will be noisy. Apply it anyway?");
+            confirm.setTitle(unreliable ? "Apply an unreliable calibration?" : "Apply a poor calibration?");
+            confirm.setHeaderText(
+                    unreliable
+                            ? "The frames do not support this palette: " + String.join("; ", issues)
+                            : String.format("Extinction ratio %.1f is below %.0f", ratio, ER_ACCEPTABLE));
+            confirm.setContentText(
+                    unreliable
+                            ? "The warnings on the result say what to change. Apply it anyway?"
+                            : "Reconstruction from this palette will be noisy. Apply it anyway?");
             DialogOwner.own(confirm);
             if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
                 return;
@@ -805,6 +846,13 @@ public class LCCalibrationWorkflow {
             if (!present.contains(s)) missing.add(s);
         }
         return missing;
+    }
+
+    /** The headline when the server could not trust its own frames, whatever the ratio says. */
+    private static String unreliableExplanation(List<String> issues) {
+        return "Unreliable. The extinction ratio is computed, but the frames do not support it:\n"
+                + (issues.isEmpty() ? "    see the warnings below." : "    " + String.join("; ", issues) + ".")
+                + "\nFix what the warnings name and calibrate again before applying this palette.";
     }
 
     private static String bandExplanation(double ratio) {
