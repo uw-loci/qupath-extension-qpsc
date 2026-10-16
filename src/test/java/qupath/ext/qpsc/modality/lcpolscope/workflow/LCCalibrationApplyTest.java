@@ -61,6 +61,32 @@ class LCCalibrationApplyTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void writesTheMeasuredAdapterWavelengthAheadOfTheRetardances(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("config_LCPolScope.yml");
+        Files.writeString(f, ConfigYamlEditorChannelTest.CONFIG);
+        // Measured at 546 (the adapter's value that afternoon), reconstructed at 549: the
+        // palette must be replayed at 546, the wavelength it was found at.
+        String reply = REPLY.replace(
+                "\"lc_device\": \"MeadowlarkLC\",",
+                "\"lc_device\": \"MeadowlarkLC\", \"lc_wavelength_property\": \"Wavelength\","
+                        + " \"lc_adapter_wavelength_nm\": 546.0,");
+        List<String> summary = LCCalibrationWorkflow.applyPaletteToConfig(
+                f, JsonParser.parseString(reply).getAsJsonObject());
+
+        for (String state : List.of("State0", "State1")) {
+            List<Map<String, Object>> props = (List<Map<String, Object>>)
+                    ConfigYamlEditorChannelTest.channel(f, state).get("device_properties");
+            assertEquals(3, props.size(), state);
+            assertEquals("Wavelength", props.get(0).get("property"), state + ": wavelength before the crystals");
+            assertEquals("MeadowlarkLC", props.get(0).get("device"));
+            assertEquals(546.0, ((Number) props.get(0).get("value")).doubleValue(), 1e-12);
+            assertEquals("Retardance LC-A [in waves]", props.get(1).get("property"));
+        }
+        assertTrue(summary.stream().anyMatch(l -> l.contains("546 nm")), String.join("\n", summary));
+    }
+
+    @Test
     void refusesWhenAPaletteStateHasNoChannelAndWritesNothing(@TempDir Path dir) throws Exception {
         Path f = dir.resolve("config_LCPolScope.yml");
         Files.writeString(f, ConfigYamlEditorChannelTest.CONFIG);

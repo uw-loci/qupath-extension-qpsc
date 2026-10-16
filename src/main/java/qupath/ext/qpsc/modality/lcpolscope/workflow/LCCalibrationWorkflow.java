@@ -770,6 +770,19 @@ public class LCCalibrationWorkflow {
                 : "unmeasured";
         String metadataPath =
                 result.has("metadata_path") ? result.get("metadata_path").getAsString() : null;
+        // The adapter wavelength the palette was MEASURED at. The adapter converts each
+        // retardance from waves to volts at its own Wavelength property, which Micro-Manager
+        // restarts and OpenPolScope both reset, so it is written ahead of the retardances in every
+        // state. It is the calibration's value, not the reconstruction's: a palette found at 546
+        // must be replayed at 546, or every state lands 0.55 percent off what was measured.
+        String wavelengthProperty = result.has("lc_wavelength_property")
+                        && !result.get("lc_wavelength_property").isJsonNull()
+                ? result.get("lc_wavelength_property").getAsString()
+                : null;
+        Double adapterWavelength = result.has("lc_adapter_wavelength_nm")
+                        && !result.get("lc_adapter_wavelength_nm").isJsonNull()
+                ? result.get("lc_adapter_wavelength_nm").getAsDouble()
+                : null;
 
         List<String> states = new ArrayList<>(palette.keySet());
         List<String> missing = missingChannels(configPath, states);
@@ -781,14 +794,18 @@ public class LCCalibrationWorkflow {
         List<String> summary = new ArrayList<>();
         List<String> comment = List.of(
                 "LC calibration " + calibratedAt + ", extinction ratio " + extinction + ".",
-                "Retardance in WAVES; the " + device + " adapter converts to volts. Written by QPSC.");
+                "Retardance in WAVES; the " + device + " adapter converts to volts at its Wavelength,",
+                "which is set first so the palette replays as measured. Written by QPSC.");
         for (String state : states) {
             JsonArray pair = palette.getAsJsonArray(state);
             double lcaWaves = pair.get(0).getAsDouble();
             double lcbWaves = pair.get(1).getAsDouble();
-            List<Map<String, Object>> items = List.of(
-                    propertyWrite(device, propertyNames.get("LCA"), lcaWaves),
-                    propertyWrite(device, propertyNames.get("LCB"), lcbWaves));
+            List<Map<String, Object>> items = new ArrayList<>();
+            if (wavelengthProperty != null && adapterWavelength != null) {
+                items.add(propertyWrite(device, wavelengthProperty, adapterWavelength));
+            }
+            items.add(propertyWrite(device, propertyNames.get("LCA"), lcaWaves));
+            items.add(propertyWrite(device, propertyNames.get("LCB"), lcbWaves));
             ConfigYamlEditor.replaceChannelListField(
                     configPath, MODALITY_KEY, state, "device_properties", items, comment);
             ConfigYamlEditor.replaceChannelListField(configPath, MODALITY_KEY, state, "mm_setup_presets", null, null);
@@ -809,6 +826,13 @@ public class LCCalibrationWorkflow {
                     RECONSTRUCTION_BLOCK,
                     "lc_calibration_file",
                     "'" + metadataPath.replace("'", "''") + "'");
+        }
+        if (wavelengthProperty != null && adapterWavelength != null) {
+            summary.add(String.format(
+                    "Each state first sets %s '%s' to %s nm, the wavelength the palette was measured at.",
+                    device, wavelengthProperty, formatCounts(adapterWavelength)));
+        } else {
+            summary.add("The calibration did not report the adapter's wavelength; it is not written.");
         }
         summary.add("Micro-Manager Channel presets are no longer applied by these states.");
         summary.add("Written to " + configPath);
