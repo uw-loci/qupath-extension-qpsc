@@ -20,6 +20,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
 import javafx.scene.control.ChoiceBox;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
@@ -591,6 +592,16 @@ public class LCCalibrationWorkflow {
                             ? result.get("black_level_source").getAsString()
                             : "?"));
         }
+        if (result.has("black_level_estimate")
+                && result.get("black_level_estimate").isJsonObject()) {
+            JsonObject est = result.getAsJsonObject("black_level_estimate");
+            if (hasNumber(est, "black_level") && hasNumber(est, "r_squared")) {
+                lines.add(String.format(
+                        "Black level measured from an exposure series at extinction: %.1f counts (R^2 %s)",
+                        est.get("black_level").getAsDouble(),
+                        est.get("r_squared").getAsString()));
+            }
+        }
         if (result.has("exposures") && result.has("elapsed_s")) {
             lines.add(String.format(
                     "%d exposures in %.1f s",
@@ -693,16 +704,19 @@ public class LCCalibrationWorkflow {
         // The exposure the acquisition will use, decided before anything is written: the
         // palette does not depend on it, but the calibration measured the range that works at
         // this illumination, so this is the moment to act on it.
-        Optional<Double> exposure = chooseExposure(result);
-        if (exposure == null) {
-            logger.info("LC palette not applied: the exposure step was cancelled");
+        ApplySettings settings = chooseApplySettings(result);
+        if (settings == null) {
+            logger.info("LC palette not applied: the Apply settings step was cancelled");
             return;
         }
         List<String> summary;
         try {
             summary = applyPaletteToConfig(Path.of(configPath), result);
-            if (exposure.isPresent()) {
-                summary.add(applyExposureToStates(Path.of(configPath), result, exposure.get()));
+            if (settings.exposureMs() != null) {
+                summary.add(applyExposureToStates(Path.of(configPath), result, settings.exposureMs()));
+            }
+            if (settings.blackLevel() != null) {
+                summary.add(applyBlackLevel(Path.of(configPath), settings.blackLevel()));
             }
         } catch (IOException | IllegalStateException e) {
             logger.error("Applying the LC palette to {} failed", configPath, e);
@@ -775,13 +789,17 @@ public class LCCalibrationWorkflow {
         }
     }
 
+    /** What Apply writes besides the palette: each null when it is left as it is. */
+    record ApplySettings(Double exposureMs, Double blackLevel) {}
+
     /**
-     * The exposure to write to every state, suggested from the calibration's usable range.
+     * The exposure for every state (suggested from the calibration's usable range) and the black
+     * level (measured by the calibration's exposure series), each offered only when the calibration
+     * measured something to go on and each a tick box.
      *
-     * @return {@code Optional.of(ms)} to write, {@code Optional.empty()} to keep the current
-     *     exposure, or {@code null} if the operator cancelled the Apply
+     * @return what to write, or {@code null} if the operator cancelled the Apply
      */
-    private static Optional<Double> chooseExposure(JsonObject result) {
+    private static ApplySettings chooseApplySettings(JsonObject result) {
         JsonObject signal =
                 result.has("signal") && result.get("signal").isJsonObject() ? result.getAsJsonObject("signal") : null;
         Double current = signal != null && hasNumber(signal, "acquisition_exposure_ms")
@@ -798,50 +816,112 @@ public class LCCalibrationWorkflow {
                 high = range.get(1).getAsDouble();
             }
         }
-        Double suggested = suggestExposure(current, low, high);
-        if (suggested == null || current == null) {
-            return Optional.empty(); // nothing measured to suggest from; keep what the YAML has
+        Double suggested = current == null ? null : suggestExposure(current, low, high);
+        Double measuredBlack = measuredBlackLevelToOffer(result);
+        if (suggested == null && measuredBlack == null) {
+            return new ApplySettings(null, null); // nothing measured to suggest from
         }
 
         Dialog<ButtonType> dialog = new Dialog<>();
-        dialog.setTitle("Exposure for the LC-PolScope states");
-        dialog.setHeaderText(String.format(
-                "Usable at this illumination: %s to %s ms. Now: %s ms.",
-                formatCounts(round1(low)), formatCounts(round1(high)), formatCounts(current)));
-        Spinner<Double> spinner = new Spinner<>(0.1, 60000.0, suggested, 1.0);
-        spinner.setEditable(true);
-        spinner.setPrefWidth(110);
-        Label note = new Label("One exposure for all five states. The low end keeps the swing contrast above 1% of\n"
-                + "the camera's range; the high end keeps the brightest state below 90%. Changing it later\n"
-                + "means collecting the background again.");
-        note.setStyle("-fx-font-size: 11px;");
-        HBox row = new HBox(8, new Label("Exposure, all states (ms):"), spinner);
-        row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
-        dialog.getDialogPane().setContent(new VBox(10, row, note));
-        ButtonType set = new ButtonType("Apply with this exposure", ButtonBar.ButtonData.OK_DONE);
-        ButtonType keep = new ButtonType("Apply, keep " + formatCounts(current) + " ms", ButtonBar.ButtonData.OTHER);
-        dialog.getDialogPane().getButtonTypes().setAll(set, keep, ButtonType.CANCEL);
+        dialog.setTitle("Apply the LC-PolScope calibration");
+        dialog.setHeaderText("Also write these, measured by this calibration?");
+        VBox content = new VBox(10);
+
+        CheckBox setExposure = null;
+        Spinner<Double> spinner = null;
+        if (suggested != null) {
+            setExposure = new CheckBox("Exposure, all states (ms):");
+            setExposure.setSelected(true);
+            spinner = new Spinner<>(0.1, 60000.0, suggested, 1.0);
+            spinner.setEditable(true);
+            spinner.setPrefWidth(110);
+            spinner.disableProperty().bind(setExposure.selectedProperty().not());
+            HBox row = new HBox(8, setExposure, spinner);
+            row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+            Label note = new Label(String.format(
+                    "Now %s ms; usable at this illumination %s to %s ms. The low end keeps the swing contrast\n"
+                            + "above 1%% of the camera's range, the high end the brightest state below 90%%.",
+                    formatCounts(current), formatCounts(round1(low)), formatCounts(round1(high))));
+            note.setStyle("-fx-font-size: 11px;");
+            content.getChildren().addAll(row, note);
+        }
+        CheckBox setBlack = null;
+        if (measuredBlack != null) {
+            JsonObject est = result.getAsJsonObject("black_level_estimate");
+            String inUse =
+                    result.has("black_level") && !result.get("black_level").isJsonNull()
+                            ? formatCounts(result.get("black_level").getAsDouble())
+                            : "none";
+            setBlack = new CheckBox("Black level " + formatCounts(measuredBlack) + " counts (now " + inUse + ")");
+            setBlack.setSelected(true);
+            Label note = new Label(String.format(
+                    "Measured from an exposure series at extinction: the intercept of counts against exposure\n"
+                            + "(R^2 %s). It is the camera's offset in its current pixel format.",
+                    est.get("r_squared").getAsString()));
+            note.setStyle("-fx-font-size: 11px;");
+            content.getChildren().addAll(setBlack, note);
+        }
+        Label later = new Label("Changing either later means collecting the background again.");
+        later.setStyle("-fx-font-size: 11px;");
+        content.getChildren().add(later);
+        dialog.getDialogPane().setContent(content);
+        ButtonType apply = new ButtonType("Apply", ButtonBar.ButtonData.OK_DONE);
+        dialog.getDialogPane().getButtonTypes().setAll(apply, ButtonType.CANCEL);
         DialogOwner.own(dialog);
-        ButtonType choice = dialog.showAndWait().orElse(ButtonType.CANCEL);
-        if (choice == set) {
+        if (dialog.showAndWait().orElse(ButtonType.CANCEL) != apply) {
+            return null;
+        }
+        Double exposure = null;
+        if (setExposure != null && setExposure.isSelected()) {
             // Take what is typed in the field, not only what the arrows last committed.
-            Double value = spinner.getValue();
+            exposure = spinner.getValue();
             try {
                 Double typed = spinner.getValueFactory()
                         .getConverter()
                         .fromString(spinner.getEditor().getText());
                 if (typed != null && typed > 0) {
-                    value = typed;
+                    exposure = typed;
                 }
             } catch (RuntimeException e) {
                 logger.debug("Exposure field text not a number; using the spinner value: {}", e.getMessage());
             }
-            return Optional.of(value);
         }
-        if (choice == keep) {
-            return Optional.empty();
+        Double black = setBlack != null && setBlack.isSelected() ? measuredBlack : null;
+        return new ApplySettings(exposure, black);
+    }
+
+    /**
+     * The black level measured by the calibration's exposure series, rounded to a count, when it
+     * is worth offering: the fit was a straight line (R^2 at least 0.999, so the camera is linear)
+     * and it differs from the one in use by more than a count. {@code null} otherwise.
+     */
+    static Double measuredBlackLevelToOffer(JsonObject result) {
+        if (!result.has("black_level_estimate")
+                || !result.get("black_level_estimate").isJsonObject()) {
+            return null;
         }
-        return null;
+        JsonObject est = result.getAsJsonObject("black_level_estimate");
+        if (!hasNumber(est, "black_level") || !hasNumber(est, "r_squared")) {
+            return null;
+        }
+        if (est.get("r_squared").getAsDouble() < 0.999) {
+            return null; // not linear: the server warns, and there is nothing trustworthy to write
+        }
+        double measured = Math.max(0.0, Math.rint(est.get("black_level").getAsDouble()));
+        Double inUse = result.has("black_level") && result.get("black_level").isJsonPrimitive()
+                ? result.get("black_level").getAsDouble()
+                : null;
+        if (inUse != null && Math.abs(inUse - measured) < 1.0) {
+            return null;
+        }
+        return measured;
+    }
+
+    /** Writes reconstruction.black_level; returns the summary line. */
+    static String applyBlackLevel(Path configPath, double blackLevel) throws IOException {
+        ConfigYamlEditor.setNestedChildScalar(
+                configPath, RECONSTRUCTION_BLOCK, "black_level", formatCounts(blackLevel));
+        return "Black level " + formatCounts(blackLevel) + " counts written to reconstruction.black_level.";
     }
 
     /**

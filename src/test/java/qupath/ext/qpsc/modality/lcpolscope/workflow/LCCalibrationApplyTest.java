@@ -114,6 +114,43 @@ class LCCalibrationApplyTest {
     }
 
     @Test
+    void theMeasuredBlackLevelIsOfferedOnlyWhenItIsTrustworthyAndDifferent() {
+        java.util.function.Function<String, com.google.gson.JsonObject> r =
+                json -> JsonParser.parseString(json).getAsJsonObject();
+        // 103 typed in (the Hamamatsu's); the Oryx measures 4.6 -> offer 5.
+        assertEquals(
+                5.0,
+                LCCalibrationWorkflow.measuredBlackLevelToOffer(
+                        r.apply(
+                                "{\"black_level\": 103, \"black_level_estimate\": {\"black_level\": 4.6, \"r_squared\": 0.99995}}")));
+        // Already right: nothing to offer.
+        assertNull(LCCalibrationWorkflow.measuredBlackLevelToOffer(r.apply(
+                "{\"black_level\": 103, \"black_level_estimate\": {\"black_level\": 103.3, \"r_squared\": 0.9999}}")));
+        // Not a straight line (gamma, auto gain): nothing trustworthy to write.
+        assertNull(LCCalibrationWorkflow.measuredBlackLevelToOffer(r.apply(
+                "{\"black_level\": 103, \"black_level_estimate\": {\"black_level\": 4.6, \"r_squared\": 0.98}}")));
+        // A negative intercept (noise on a near-zero offset) is offered as 0, never below.
+        assertEquals(
+                0.0,
+                LCCalibrationWorkflow.measuredBlackLevelToOffer(
+                        r.apply(
+                                "{\"black_level\": 103, \"black_level_estimate\": {\"black_level\": -1.2, \"r_squared\": 0.9999}}")));
+        assertNull(LCCalibrationWorkflow.measuredBlackLevelToOffer(r.apply("{\"black_level\": 103}")));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theMeasuredBlackLevelIsWrittenToTheReconstruction(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("config_LCPolScope.yml");
+        Files.writeString(f, ConfigYamlEditorChannelTest.CONFIG);
+        String line = LCCalibrationWorkflow.applyBlackLevel(f, 5.0);
+        assertTrue(line.contains("Black level 5 counts"), line);
+        Map<String, Object> recon = ConfigYamlEditorChannelTest.reconstruction(f);
+        assertEquals(5.0, ((Number) recon.get("black_level")).doubleValue(), 1e-9);
+        assertTrue(Files.readString(f).contains("# file header must survive"));
+    }
+
+    @Test
     void refusesWhenAPaletteStateHasNoChannelAndWritesNothing(@TempDir Path dir) throws Exception {
         Path f = dir.resolve("config_LCPolScope.yml");
         Files.writeString(f, ConfigYamlEditorChannelTest.CONFIG);
