@@ -69,6 +69,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [PPM Sensitivity Test](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-sensitivity-test.md) | Test rotation stage precision | Scope > PPM > PPM Rotation Sensitivity Test... |
 | [PPM Birefringence Optimization](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-birefringence-optimization.md) | Find optimal polarizer angle for maximum contrast | Scope > PPM > PPM Birefringence Optimization... |
 | **LC-PolScope Modality Submenu** (conditional -- only with LC-PolScope modality) | | |
+| LC-PolScope Setup | Get the LC-PolScope ready in order: camera settings, calibration, background, with a live status of what is still missing | Scope > LC-PolScope > LC-PolScope Setup... |
 | LC-PolScope Calibration | Calibrate the universal compensator: find the extinction point and swing states | Scope > LC-PolScope > Calibrate Liquid Crystals... |
 | **PPM Analysis Extension** (separate extension) | | |
 | [PPM Hue Range Filter](https://github.com/uw-loci/qupath-extension-ppm/blob/master/documentation/ppm-hue-range-filter.md) | Interactive HSV filtering for PPM images | Extensions > PPM Analysis > PPM Hue Range Filter... |
@@ -236,6 +237,14 @@ PPM computations use the [ppm_library](https://github.com/uw-loci/ppm_library) P
 ## LC-PolScope Tools
 
 LC-PolScope functionality includes a liquid-crystal calibration workflow:
+
+### LC-PolScope Setup
+
+**Extensions > QP Scope > LC-PolScope > LC-PolScope Setup...** opens one window with the steps in the order they have to happen, under the same **Ready to acquire?** status the acquisition panel shows:
+
+1. **Camera**: in Micro-Manager's Device Property Browser, Gain Auto and Exposure Auto Off, gamma off, a 12- or 16-bit pixel format. The window is not modal, and the status rechecks whenever you return to it.
+2. **Calibrate** on a clear, specimen-free field. This measures the black level, and Apply writes the palette and offers the measured black level and an exposure from the usable range.
+3. **Background**, after every calibration: specimen-free, defocused 10-20 um, for each LC-PolScope profile you acquire with.
 
 ### LC-PolScope Calibration
 

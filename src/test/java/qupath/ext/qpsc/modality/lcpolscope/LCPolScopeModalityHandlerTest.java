@@ -155,15 +155,19 @@ class LCPolScopeModalityHandlerTest {
 
     @Test
     @DisplayName("contributes a calibration menu item, which SetupScope gates on the config")
-    void contributesCalibrationMenuItem() {
+    void contributesSetupAndCalibrationMenuItems() {
         // Placement decision: calibration drives hardware and needs a live connection, so
         // it belongs in qpsc rather than an analysis extension -- the same division that
         // keeps PPM's polarizer and reference-slide calibrations here. SetupScope hides the
         // whole submenu on a microscope whose config does not declare this modality, so no
         // gating logic is needed in the handler itself.
         var contributions = new LCPolScopeModalityHandler().getMenuContributions();
-        assertEquals(1, contributions.size());
-        var item = contributions.get(0);
+        assertEquals(2, contributions.size());
+        // The guided setup comes first: camera, calibration, background, in that order.
+        assertEquals("lcSetup", contributions.get(0).id());
+        assertTrue(contributions.get(0).label().contains("Setup"));
+        assertNotNull(contributions.get(0).action());
+        var item = contributions.get(1);
         assertEquals("lcCalibration", item.id());
         assertTrue(item.label().contains("Calibrate"), item.label());
         assertNotNull(item.action());

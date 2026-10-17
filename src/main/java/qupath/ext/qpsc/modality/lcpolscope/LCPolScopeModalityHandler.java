@@ -188,15 +188,23 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
      */
     @Override
     public List<ModalityMenuItem> getMenuContributions() {
-        return List.of(new ModalityMenuItem(
-                "lcCalibration",
-                "Calibrate Liquid Crystals...",
-                "Find the extinction point and the swing states, and write the palette the "
-                        + "acquisition will use. Run on a clear, specimen-free field: the calibration "
-                        + "measures how dark extinction can be made, so anything birefringent in the "
-                        + "field makes the result worse. Reports an extinction ratio as its quality "
-                        + "figure -- 100 or above is good; this instrument has reached 267.",
-                () -> qupath.ext.qpsc.modality.lcpolscope.workflow.LCCalibrationWorkflow.run()));
+        return List.of(
+                new ModalityMenuItem(
+                        "lcSetup",
+                        "LC-PolScope Setup...",
+                        "Get the LC-PolScope ready in order: camera settings, calibration (which measures the "
+                                + "black level and sets the exposure), then the background. Shows what is still "
+                                + "missing and rechecks as you go.",
+                        qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeSetupWindow::show),
+                new ModalityMenuItem(
+                        "lcCalibration",
+                        "Calibrate Liquid Crystals...",
+                        "Find the extinction point and the swing states, and write the palette the "
+                                + "acquisition will use. Run on a clear, specimen-free field: the calibration "
+                                + "measures how dark extinction can be made, so anything birefringent in the "
+                                + "field makes the result worse. Reports an extinction ratio as its quality "
+                                + "figure -- 100 or above is good; this instrument has reached 267.",
+                        () -> qupath.ext.qpsc.modality.lcpolscope.workflow.LCCalibrationWorkflow.run()));
     }
 
     @Override

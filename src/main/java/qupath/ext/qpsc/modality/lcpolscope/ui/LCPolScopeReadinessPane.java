@@ -43,7 +43,8 @@ public final class LCPolScopeReadinessPane extends VBox {
         refresh();
     }
 
-    private void refresh() {
+    /** Runs the configuration and live checks again. */
+    public void refresh() {
         List<Check> config = LCPolScopeReadiness.configChecks(configManager(), LocalDateTime.now());
         show(config, List.of(new Check(Level.INFO, "Checking the camera...")));
         CompletableFuture.supplyAsync(() -> {

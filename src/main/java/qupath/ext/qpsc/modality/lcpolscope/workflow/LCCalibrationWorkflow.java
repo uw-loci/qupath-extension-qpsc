@@ -772,7 +772,7 @@ public class LCCalibrationWorkflow {
      * background must be specimen-free and slightly defocused, as OpenPolScope takes it, so the
      * operator is told to move first.
      */
-    private static void startBackgroundCollection() {
+    public static void startBackgroundCollection() {
         Alert prepare = new Alert(Alert.AlertType.CONFIRMATION);
         prepare.setTitle("LC-PolScope background");
         prepare.setHeaderText("Move to a specimen-free area, then defocus 10-20 um");
