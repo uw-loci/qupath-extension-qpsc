@@ -140,11 +140,9 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         if (!ui.hasChannels()) {
             return Optional.empty();
         }
-        ui.addModalityNotice(
-                "Equal exposure across all states is required",
-                "The reconstruction treats the five states as samples of one radiometric scale. "
-                        + "A per-state exposure difference biases retardance and orientation with no "
-                        + "visible symptom -- the images still look correct. Leave the exposures equal.");
+        // All five states, one exposure: the picker no longer offers per-state exposures,
+        // include boxes or split, so the notice that used to ask for equal exposures is gone.
+        ui.useEqualExposureStates("LC-PolScope states");
         ui.addModalityNotice(
                 "Orientation is axial: stitching and downsampling need care",
                 "This run also produces a slow-axis orientation map, where 0 and 180 degrees mean the "

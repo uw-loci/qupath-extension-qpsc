@@ -108,6 +108,13 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
     private final VBox root;
     private final CheckBox masterOverride;
+    // Kept so equal-exposure mode can retitle the panel and hide columns.
+    private Label titleLabel;
+    private GridPane channelGrid;
+    private HBox presetBarNode;
+    // Equal-exposure mode (LC-PolScope): every state is acquired, at ONE exposure from
+    // sharedExposure. Null in the ordinary channel picker.
+    private Spinner<Double> sharedExposure;
     private final LinkedHashMap<String, CheckBox> channelCheckboxes = new LinkedHashMap<>();
     private final LinkedHashMap<String, Spinner<Double>> channelExposures = new LinkedHashMap<>();
     // Seeded only for channels whose library entry declares an intensity_property.
@@ -145,12 +152,31 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private Supplier<MdaExportContext> mdaContextSupplier;
 
     public WidefieldChannelBoundingBoxUI() {
+        this(null, null);
+    }
+
+    /**
+     * Builds the picker over a given channel library instead of the active microscope's. For
+     * tests: the public constructor reads the microscope config from a persistent preference,
+     * which a test must not write.
+     *
+     * @param injectedLibrary the channels to show, or null to load the active config's
+     * @param injectedModality the modality they belong to (for the focus default), or null
+     */
+    WidefieldChannelBoundingBoxUI(List<Channel> injectedLibrary, String injectedModality) {
         root = new VBox(5);
 
         Label title = new Label("Fluorescence Channels");
         title.setStyle("-fx-font-weight: bold;");
+        titleLabel = title;
 
-        List<Channel> library = loadChannelLibrary();
+        List<Channel> library;
+        if (injectedLibrary != null) {
+            library = injectedLibrary;
+            loadedModality = injectedModality;
+        } else {
+            library = loadChannelLibrary();
+        }
         if (library.isEmpty()) {
             Label empty = new Label("No fluorescence channels configured for this microscope.\n"
                     + "Contact facility staff to add a 'channels' list under\n"
@@ -177,6 +203,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(5);
+        channelGrid = grid;
 
         // Columns: checkbox | name (grow) | exposure | intensity | focus radio
         ColumnConstraints col0 = new ColumnConstraints();
@@ -447,6 +474,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
         Node focusChannelBar = buildFocusChannelBar();
         HBox presetBar = buildPresetBar();
+        presetBarNode = presetBar;
         HBox testBar = buildTestBar();
         HBox mdaBar = buildMdaBar();
         statusLabel = new Label();
@@ -465,6 +493,81 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                         mdaBar,
                         statusLabel,
                         hint);
+    }
+
+    /**
+     * Turns the picker into one for states that must all be acquired at one exposure
+     * (LC-PolScope): every state is always included, a single exposure applies to all of them,
+     * and the per-channel Use, Exposure, Intensity and Split columns and the preset bar are
+     * hidden. Focus and Align stay, because which state to focus and register on is a real
+     * choice (never the extinction state).
+     *
+     * <p>Exists because the ordinary picker let each LC state take its own exposure, and an
+     * unequal set rescales one row of the reconstruction's instrument matrix and biases every
+     * retardance and orientation with nothing to see in the images. The exposure starts from the
+     * YAML each time rather than from a saved preference, so the configuration -- which the
+     * calibration's Apply and the background collection both read -- stays the source of truth.
+     *
+     * @param title the panel title, e.g. "LC-PolScope states"
+     */
+    public void useEqualExposureStates(String title) {
+        if (channelGrid == null || channelDefs.isEmpty()) {
+            return;
+        }
+        titleLabel.setText(title);
+        if (masterOverride != null) {
+            masterOverride.setVisible(false);
+            masterOverride.setManaged(false);
+        }
+        if (presetBarNode != null) {
+            presetBarNode.setVisible(false);
+            presetBarNode.setManaged(false);
+        }
+        double yamlExposure = channelDefs.values().stream()
+                .mapToDouble(Channel::defaultExposureMs)
+                .max()
+                .orElse(50.0);
+        for (Node node : channelGrid.getChildren()) {
+            Integer column = GridPane.getColumnIndex(node);
+            int col = column == null ? 0 : column;
+            if (col == 0 || col == 2 || col == 3 || col == 5) {
+                node.setVisible(false);
+                node.setManaged(false);
+            }
+        }
+        for (CheckBox cb : channelCheckboxes.values()) {
+            cb.disableProperty().unbind();
+            cb.setSelected(true);
+        }
+        for (javafx.scene.control.RadioButton radio : channelFocusRadios.values()) {
+            radio.disableProperty().unbind();
+            radio.setDisable(false);
+        }
+        for (CheckBox align : channelAlignCheckboxes.values()) {
+            align.disableProperty().unbind();
+            align.setDisable(false);
+        }
+
+        sharedExposure = new Spinner<>();
+        sharedExposure.setValueFactory(
+                new SpinnerValueFactory.DoubleSpinnerValueFactory(0.1, 60000.0, yamlExposure, 1.0));
+        sharedExposure.setEditable(true);
+        sharedExposure.setPrefWidth(110);
+        sharedExposure.setTooltip(new Tooltip("One exposure for all states. From the microscope YAML: "
+                + formatMs(yamlExposure) + " ms. The calibration result gives the usable range at the current "
+                + "illumination; a background collected at a different exposure is still used but warned about."));
+        commitOnFocusLost(sharedExposure);
+        Label caption = new Label("Exposure, all states (ms):");
+        Label yamlNote = new Label("YAML: " + formatMs(yamlExposure) + " ms");
+        yamlNote.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 10.5px;");
+        HBox exposureRow = new HBox(8, caption, sharedExposure, yamlNote);
+        exposureRow.setAlignment(Pos.CENTER_LEFT);
+        int gridIndex = root.getChildren().indexOf(channelGrid);
+        root.getChildren().add(Math.max(0, gridIndex), exposureRow);
+    }
+
+    private static String formatMs(double ms) {
+        return ms == Math.rint(ms) ? String.valueOf((long) ms) : String.valueOf(ms);
     }
 
     /**
@@ -1199,6 +1302,15 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      */
     @Override
     public Map<String, Double> getAngleOverrides() {
+        // Equal-exposure mode: every state, at the one shared exposure.
+        if (sharedExposure != null) {
+            Double shared = sharedExposure.getValue();
+            Map<String, Double> all = new LinkedHashMap<>();
+            for (String id : channelCheckboxes.keySet()) {
+                all.put(id, shared);
+            }
+            return all;
+        }
         // No library or master override disabled -> defer to defaults.
         if (masterOverride == null || !masterOverride.isSelected()) {
             return null;
@@ -1251,7 +1363,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      */
     @Override
     public java.util.Set<String> getSplitChannelIds() {
-        if (masterOverride == null || !masterOverride.isSelected()) {
+        if (sharedExposure != null || masterOverride == null || !masterOverride.isSelected()) {
             return java.util.Set.of();
         }
         java.util.Set<String> split = new java.util.LinkedHashSet<>();
@@ -1273,7 +1385,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      */
     @Override
     public java.util.List<String> getAlignmentChannelIds() {
-        if (masterOverride == null || !masterOverride.isSelected()) {
+        if (sharedExposure == null && (masterOverride == null || !masterOverride.isSelected())) {
             return java.util.List.of();
         }
         java.util.List<String> align = new java.util.ArrayList<>();
@@ -1296,7 +1408,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      */
     @Override
     public Map<String, Double> getChannelIntensityOverrides() {
-        if (masterOverride == null || !masterOverride.isSelected()) {
+        if (sharedExposure != null || masterOverride == null || !masterOverride.isSelected()) {
             return Map.of();
         }
         LinkedHashMap<String, Double> result = new LinkedHashMap<>();
