@@ -18,14 +18,18 @@ import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
+import javafx.scene.control.ButtonBar;
 import javafx.scene.control.ButtonType;
 import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.Dialog;
 import javafx.scene.control.Label;
 import javafx.scene.control.ProgressIndicator;
+import javafx.scene.control.Spinner;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.TextField;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -686,9 +690,20 @@ public class LCCalibrationWorkflow {
                     "No microscope configuration file is set in the QPSC preferences.");
             return;
         }
+        // The exposure the acquisition will use, decided before anything is written: the
+        // palette does not depend on it, but the calibration measured the range that works at
+        // this illumination, so this is the moment to act on it.
+        Optional<Double> exposure = chooseExposure(result);
+        if (exposure == null) {
+            logger.info("LC palette not applied: the exposure step was cancelled");
+            return;
+        }
         List<String> summary;
         try {
             summary = applyPaletteToConfig(Path.of(configPath), result);
+            if (exposure.isPresent()) {
+                summary.add(applyExposureToStates(Path.of(configPath), result, exposure.get()));
+            }
         } catch (IOException | IllegalStateException e) {
             logger.error("Applying the LC palette to {} failed", configPath, e);
             UserErrors.show(
@@ -720,14 +735,143 @@ public class LCCalibrationWorkflow {
             summary.add("The server did not reload the configuration: " + e.getMessage());
             summary.add("Reconnect, or restart the server, before acquiring.");
         }
+        summary.add("");
+        summary.add("A background collected for the previous calibration no longer applies; the acquisition");
+        summary.add("refuses it and reconstructs uncorrected. Collect a new one before acquiring.");
         logger.info("LC palette applied to {}:\n{}", configPath, String.join("\n", summary));
         Alert done = new Alert(Alert.AlertType.INFORMATION);
         done.setTitle("LC palette applied");
         done.setHeaderText("Acquisition now uses this calibration");
         done.getDialogPane().setContent(copyableBody(String.join("\n", summary), Math.min(summary.size() + 1, 24)));
         done.setResizable(true);
+        ButtonType collect = new ButtonType("Collect background now...", ButtonBar.ButtonData.OK_DONE);
+        ButtonType later = new ButtonType("Later", ButtonBar.ButtonData.CANCEL_CLOSE);
+        done.getButtonTypes().setAll(collect, later);
         DialogOwner.own(done);
-        done.showAndWait();
+        if (done.showAndWait().orElse(later) == collect) {
+            startBackgroundCollection();
+        }
+    }
+
+    /**
+     * Straight from Apply into background collection, which a new palette makes necessary. The
+     * background must be specimen-free and slightly defocused, as OpenPolScope takes it, so the
+     * operator is told to move first.
+     */
+    private static void startBackgroundCollection() {
+        Alert prepare = new Alert(Alert.AlertType.CONFIRMATION);
+        prepare.setTitle("LC-PolScope background");
+        prepare.setHeaderText("Move to a specimen-free area, then defocus 10-20 um");
+        prepare.getDialogPane()
+                .setContent(copyableBody(
+                        "The background is the five states on an empty field, taken slightly out of focus so\n"
+                                + "dust does not imprint on every tile. Choose the LC-PolScope profile in the\n"
+                                + "Background Collection dialog that opens next. Each state is averaged over 10 frames\n"
+                                + "and recorded against this calibration.",
+                        5));
+        DialogOwner.own(prepare);
+        if (prepare.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
+            qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.run();
+        }
+    }
+
+    /**
+     * The exposure to write to every state, suggested from the calibration's usable range.
+     *
+     * @return {@code Optional.of(ms)} to write, {@code Optional.empty()} to keep the current
+     *     exposure, or {@code null} if the operator cancelled the Apply
+     */
+    private static Optional<Double> chooseExposure(JsonObject result) {
+        JsonObject signal =
+                result.has("signal") && result.get("signal").isJsonObject() ? result.getAsJsonObject("signal") : null;
+        Double current = signal != null && hasNumber(signal, "acquisition_exposure_ms")
+                ? signal.get("acquisition_exposure_ms").getAsDouble()
+                : null;
+        Double low = null;
+        Double high = null;
+        if (signal != null
+                && signal.has("usable_exposure_ms")
+                && signal.get("usable_exposure_ms").isJsonArray()) {
+            JsonArray range = signal.getAsJsonArray("usable_exposure_ms");
+            if (range.size() == 2 && !range.get(0).isJsonNull() && !range.get(1).isJsonNull()) {
+                low = range.get(0).getAsDouble();
+                high = range.get(1).getAsDouble();
+            }
+        }
+        Double suggested = suggestExposure(current, low, high);
+        if (suggested == null || current == null) {
+            return Optional.empty(); // nothing measured to suggest from; keep what the YAML has
+        }
+
+        Dialog<ButtonType> dialog = new Dialog<>();
+        dialog.setTitle("Exposure for the LC-PolScope states");
+        dialog.setHeaderText(String.format(
+                "Usable at this illumination: %s to %s ms. Now: %s ms.",
+                formatCounts(round1(low)), formatCounts(round1(high)), formatCounts(current)));
+        Spinner<Double> spinner = new Spinner<>(0.1, 60000.0, suggested, 1.0);
+        spinner.setEditable(true);
+        spinner.setPrefWidth(110);
+        Label note = new Label("One exposure for all five states. The low end keeps the swing contrast above 1% of\n"
+                + "the camera's range; the high end keeps the brightest state below 90%. Changing it later\n"
+                + "means collecting the background again.");
+        note.setStyle("-fx-font-size: 11px;");
+        HBox row = new HBox(8, new Label("Exposure, all states (ms):"), spinner);
+        row.setAlignment(javafx.geometry.Pos.CENTER_LEFT);
+        dialog.getDialogPane().setContent(new VBox(10, row, note));
+        ButtonType set = new ButtonType("Apply with this exposure", ButtonBar.ButtonData.OK_DONE);
+        ButtonType keep = new ButtonType("Apply, keep " + formatCounts(current) + " ms", ButtonBar.ButtonData.OTHER);
+        dialog.getDialogPane().getButtonTypes().setAll(set, keep, ButtonType.CANCEL);
+        DialogOwner.own(dialog);
+        ButtonType choice = dialog.showAndWait().orElse(ButtonType.CANCEL);
+        if (choice == set) {
+            // Take what is typed in the field, not only what the arrows last committed.
+            Double value = spinner.getValue();
+            try {
+                Double typed = spinner.getValueFactory()
+                        .getConverter()
+                        .fromString(spinner.getEditor().getText());
+                if (typed != null && typed > 0) {
+                    value = typed;
+                }
+            } catch (RuntimeException e) {
+                logger.debug("Exposure field text not a number; using the spinner value: {}", e.getMessage());
+            }
+            return Optional.of(value);
+        }
+        if (choice == keep) {
+            return Optional.empty();
+        }
+        return null;
+    }
+
+    /**
+     * The exposure to offer: the current one if it is inside the usable range, otherwise the
+     * nearer usable end pulled 10% inside it. {@code null} when there is no range to go on, or the
+     * range is empty (no exposure keeps the contrast up without clipping at this illumination).
+     */
+    static Double suggestExposure(Double current, Double low, Double high) {
+        if (low == null || high == null || !(high > low) || !(low > 0)) {
+            return null;
+        }
+        if (current != null && current >= low && current <= high) {
+            return current;
+        }
+        double target = (current != null && current > high) ? high * 0.9 : low * 1.1;
+        return round1(Math.min(Math.max(target, low), high));
+    }
+
+    private static double round1(double v) {
+        return Math.round(v * 10.0) / 10.0;
+    }
+
+    /** Writes one exposure to every palette state's channel; returns the summary line. */
+    static String applyExposureToStates(Path configPath, JsonObject result, double exposureMs) throws IOException {
+        JsonObject palette = result.getAsJsonObject("palette_waves");
+        for (String state : palette.keySet()) {
+            qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelExposureMs(
+                    configPath, MODALITY_KEY, state, exposureMs);
+        }
+        return String.format("Exposure %s ms written to all %d states.", formatCounts(exposureMs), palette.size());
     }
 
     /**

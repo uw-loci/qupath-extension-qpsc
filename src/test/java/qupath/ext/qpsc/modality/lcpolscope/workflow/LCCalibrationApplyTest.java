@@ -87,6 +87,33 @@ class LCCalibrationApplyTest {
     }
 
     @Test
+    void theSuggestedExposureStaysInsideTheUsableRange() {
+        // Inside the range: keep what the operator has.
+        assertEquals(50.0, LCCalibrationWorkflow.suggestExposure(50.0, 6.3, 60.0));
+        // Too bright (the 2026-10-16 Oryx run clipped at 50 ms, usable 1.6-45): pull 10% inside.
+        assertEquals(40.5, LCCalibrationWorkflow.suggestExposure(50.0, 1.6, 45.0));
+        // Too dim: 10% above the low end.
+        assertEquals(22.0, LCCalibrationWorkflow.suggestExposure(5.0, 20.0, 300.0));
+        // No range, or an empty one: nothing to suggest.
+        assertNull(LCCalibrationWorkflow.suggestExposure(50.0, null, null));
+        assertNull(LCCalibrationWorkflow.suggestExposure(50.0, 80.0, 40.0));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void theChosenExposureIsWrittenToEveryState(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("config_LCPolScope.yml");
+        Files.writeString(f, ConfigYamlEditorChannelTest.CONFIG);
+        String line = LCCalibrationWorkflow.applyExposureToStates(
+                f, JsonParser.parseString(REPLY).getAsJsonObject(), 40.5);
+        assertTrue(line.contains("40.5 ms") && line.contains("2 states"), line);
+        for (String state : List.of("State0", "State1")) {
+            Map<String, Object> ch = ConfigYamlEditorChannelTest.channel(f, state);
+            assertEquals(40.5, ((Number) ch.get("exposure_ms")).doubleValue(), 1e-9, state);
+        }
+    }
+
+    @Test
     void refusesWhenAPaletteStateHasNoChannelAndWritesNothing(@TempDir Path dir) throws Exception {
         Path f = dir.resolve("config_LCPolScope.yml");
         Files.writeString(f, ConfigYamlEditorChannelTest.CONFIG);
