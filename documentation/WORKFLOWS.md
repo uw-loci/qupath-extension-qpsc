@@ -247,6 +247,8 @@ Customized behavior (master checkbox ON): the per-row controls are enabled. Only
 
 If the master checkbox is on and you uncheck every channel row, the workflow refuses to start the acquisition with a clear error -- zero-channel acquisitions are blocked rather than silently falling back to the full library.
 
+**LC-PolScope exception:** the panel is titled **LC-PolScope states** and does not offer the per-state controls above. Every state is always acquired, at one **Exposure, all states (ms)** value that starts from the longest exposure in the microscope YAML. Intensity, Split, the preset bar and the master checkbox are hidden; the Focus and Align columns remain. The default focus state is never the extinction state (see [AUTOFOCUS.md](AUTOFOCUS.md#focus-channel-interaction)). The microscope server also refuses an LC-PolScope run that leaves out a state or uses unequal exposures, before any stage motion.
+
 ### What Lands on Disk
 
 Each channel gets its own per-tile directory, mirroring the PPM per-angle layout:
