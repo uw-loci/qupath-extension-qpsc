@@ -10,6 +10,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import qupath.ext.qpsc.modality.lcpolscope.workflow.LCCalibrationWorkflow;
+import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -64,7 +65,10 @@ public final class LCPolScopeSetupWindow {
         ScrollPane scroll = new ScrollPane(root);
         scroll.setFitToWidth(true);
 
+        // Closed with every other QPSC window when the microscope is switched: its status
+        // describes the configuration that was active when it opened.
         Stage stage = new Stage();
+        QpscWindows.track(stage);
         stage.setTitle("LC-PolScope Setup");
         stage.setScene(new Scene(scroll, 640, 560));
         QuPathGUI gui = QuPathGUI.getInstance();

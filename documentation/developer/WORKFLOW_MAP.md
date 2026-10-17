@@ -1178,7 +1178,7 @@ file: src/main/java/qupath/ext/qpsc/modality/lcpolscope/workflow/LCCalibrationWo
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu contribution: LCPolScopeModalityHandler.getMenuContributions() -> 'Calibrate Liquid Crystals...' (appears only on a scope whose config declares the lcpolscope modality)"
+  - "Menu contribution: LCPolScopeModalityHandler.getMenuContributions() -> 'Calibrate Liquid Crystals...' (appears only on a scope whose config declares the lcpolscope modality). The 'LC-PolScope Setup...' item (LCPolScopeSetupWindow.show()) sits beside it and calls this workflow's run() for step 2 and startBackgroundCollection() for step 3."
 reads:
   - DS17 (live camera / LC device)
   - DS19 (modality config)
@@ -1725,7 +1725,7 @@ invariants:
   - "Prefix matching is startsWith. Longer prefixes should register before shorter ones to avoid unintended matches."
   - "Returns NoOpModalityHandler for unknown -- never null."
   - "PPMModalityHandler.getMenuContributions() provides dynamic menu items (polarizerCalibration, ppmSensitivityTest, birefringenceOptimization, sunburstCalibration) -- not in QPScopeController.startWorkflow switch."
-  - "LCPolScopeModalityHandler.getMenuContributions() likewise provides 'Calibrate Liquid Crystals...' (W36) -- also outside the startWorkflow switch, so it appears only on a scope whose config declares the modality."
+  - "LCPolScopeModalityHandler.getMenuContributions() likewise provides 'LC-PolScope Setup...' (a window, LCPolScopeSetupWindow) and 'Calibrate Liquid Crystals...' (W36) -- also outside the startWorkflow switch, so it appears only on a scope whose config declares the modality."
   - "A handler's registered PREFIX is the modality NAME, not its YAML `type:`. LC-PolScope registers `lcpolscope`/`lcps` but its type is `polarized` (shared with PPM). Do not conflate them."
 related_surfaces:
   - DS42 (ModalityState active modality)

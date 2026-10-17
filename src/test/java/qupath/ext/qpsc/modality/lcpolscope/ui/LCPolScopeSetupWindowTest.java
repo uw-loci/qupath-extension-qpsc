@@ -23,6 +23,9 @@ class LCPolScopeSetupWindowTest {
 
     @BeforeAll
     static void startToolkit() {
+        // This test opens and closes a real window. With implicit exit on, closing the last
+        // window shuts the JavaFX platform down and every FX test after it in this JVM times out.
+        Platform.setImplicitExit(false);
         try {
             CountDownLatch started = new CountDownLatch(1);
             Platform.startup(started::countDown);
