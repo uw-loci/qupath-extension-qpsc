@@ -696,6 +696,12 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
 
 **Why this matters:** The previous version allowed a "Continue anyway?" but this produced gap-mosaics (empty space between tiles at 10x spacing while acquiring at 20x FoV) or silent calibration mismatch (White Balance and Background Collection write files under the wrong magnification key). The 5% threshold is tight enough to catch any user-induced mismatch (like a turret change) but wide enough to absorb calibration drift. A mismatch always cancels now; fixing it and restarting is the safe path.
 
+#### Q: A "Pixel size has drifted" notification appeared, but the acquisition went ahead
+
+**A:** The config pixel size for the objective and MicroManager's reported pixel size differ by 0.5% to 5%. That is too small to be the wrong objective, so the acquisition continues. Tile registration absorbs the difference, and the stitch still lines up. The QuPath log has a WARNING with both values. The notification appears once per session for each objective, detector and MicroManager value.
+
+**To fix (optional):** If the difference persists, re-measure the pixel size for that objective and update `pixel_size_xy_um` in the microscope config. Differences above 5% still cancel the workflow; see the mismatch question above.
+
 #### Q: Acquisition starts but no images appear
 
 **A:** Check Python server console for errors. Common causes:

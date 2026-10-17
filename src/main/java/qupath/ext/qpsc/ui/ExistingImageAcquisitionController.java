@@ -307,6 +307,7 @@ public class ExistingImageAcquisitionController {
         private TitledPane alignmentPane;
         private TitledPane refinementPane;
         private TitledPane advancedPane;
+        private TitledPane autofocusPane;
 
         // Debounce timer
         private final PauseTransition previewDebounce = new PauseTransition(Duration.millis(PREVIEW_DEBOUNCE_MS));
@@ -539,6 +540,7 @@ public class ExistingImageAcquisitionController {
                     hardwarePane,
                     alignmentPane,
                     refinementPane,
+                    autofocusPane,
                     advancedPane,
                     zStackPane,
                     createPreviewSection());
@@ -1057,7 +1059,13 @@ public class ExistingImageAcquisitionController {
             modalityPane = new TitledPane("Modality Options", modalityContent);
             modalityPane.setExpanded(false);
 
-            content.getChildren().addAll(afGrid, new Separator(), modalityPane);
+            // Autofocus applies to every modality, so it has its own section; under
+            // "modality-specific" it read as a PPM concern on a fluorescence run.
+            autofocusPane = new TitledPane("AUTOFOCUS", afGrid);
+            autofocusPane.setExpanded(false); // Collapsed by default, as it was inside the modality pane
+            autofocusPane.setStyle("-fx-font-weight: bold;");
+
+            content.getChildren().add(modalityPane);
 
             advancedPane = new TitledPane("MODALITY-SPECIFIC OPTIONS", content);
             advancedPane.setExpanded(false);

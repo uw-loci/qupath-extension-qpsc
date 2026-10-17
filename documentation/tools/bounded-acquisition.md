@@ -34,6 +34,8 @@ at a time; choosing the menu item again brings the existing window to the front.
 | Sample Name | TextField | Yes | Name for this acquisition (e.g., "MySample01"). Validated for cross-platform compatibility; invalid characters and Windows reserved names (CON, NUL, etc.) are blocked. |
 | Projects Folder | Directory Picker | Yes* | Root folder for projects. Only required if no project is currently open. |
 
+The dialog follows QuPath's open project while it is up. If you open or close a project after the dialog appears, the Project & Sample rows update to match, and Start Acquisition writes to the project open at that moment.
+
 ### Hardware Configuration
 
 | Option | Type | Default | Description |
@@ -47,6 +49,8 @@ at a time; choosing the menu item again brings the existing window to the front.
 Only valid hardware combinations are shown via cascading selection.
 
 A pixel-size warning appears at the top of the dialog if the active objective's microscope-config pixel size disagrees with what MicroManager reports for the currently-mounted optics. Acquiring under a mismatch produces tiles with wrong physical dimensions; resolve via the Setup Wizard or by re-running objective-calibration before continuing.
+
+When the acquisition starts, QPSC compares the two pixel sizes again. More than 5% apart means the wrong objective is in the light path, and the acquisition is cancelled. From 0.5% to 5% apart is treated as calibration drift: the acquisition goes ahead, the QuPath log gets a WARNING with both values, and a notification shows them once per session. Tile registration absorbs a drift that size, so the stitch still lines up, but the config value is worth re-measuring and updating (`pixel_size_xy_um` for the objective).
 
 ### Acquisition Region
 
@@ -141,10 +145,13 @@ The Acquisition Preview folds the timepoint count into **Total Images** and the 
 
 If a timepoint takes longer than the requested interval, the remaining timepoints start late. The first time this happens the server reports a one-time "falling behind" warning: QPSC shows a modal dialog over the progress monitor and -- if push notifications are configured -- sends an alert. The acquisition continues to completion; the warning is informational. The warning channel is best-effort and auto-disables against older servers that do not support it.
 
-### Advanced Options (Collapsed by Default)
+### Autofocus (Collapsed by Default)
+
+Its own section between Acquisition Region and Modality-Specific Options, because every modality autofocuses.
 
 | Option | Type | Description |
 |--------|------|-------------|
+| Autofocus | ComboBox | Autofocus strategy for this acquisition. **Default (from config)** uses the modality's binding in `autofocus_<scope>.yml`; the other choices (Dense, Sparse, Dark-field, Manual only) override it for this run only. |
 | Sample is already in focus (skip initial focus search) | CheckBox | When checked, skips only the pre-acquisition autofocus search (the up-front stage movement to the first diagonal AF position, followed by a sweep to find focus). The initial search can take a minute or more and may land on the wrong optical plane. Per-tile autofocus and drift correction remain **unaffected** and continue to run normally. Tick this when you have just focused the field manually and want to preserve that Z position. This is narrower than the global "disable all autofocus" preference, which would kill both the initial search and per-tile corrections. |
 | Benchmark AF methods (sweep vs streaming, per tile) | CheckBox | **Diagnostic mode.** When enabled, every tile runs both the sweep autofocus and the streaming autofocus, times each method, and applies **neither result** -- the stage stays at the pre-AF Z position. The server writes per-tile timing measurements to `af_benchmark.csv` in the acquisition output folder. The acquired images will drift out of focus since no autofocus correction is applied; use a small test grid (e.g., 3×3 tiles) and treat the images as throwaway. The CSV is the deliverable. This mode is off by default and does not persist across dialog opens. |
 

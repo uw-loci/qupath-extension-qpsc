@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Autofocus gets its own section; Bounded Acquisition follows the open project; pixel-size drift is reported**
+- In both acquisition dialogs the autofocus controls moved out of MODALITY-SPECIFIC OPTIONS into their own **AUTOFOCUS** section, collapsed by default. Every modality autofocuses, so under "modality-specific" they read as a PPM concern on a fluorescence run.
+- The Bounded Acquisition dialog's PROJECT & SAMPLE rows now follow QuPath's open project while the dialog is up, and Start Acquisition uses the project open at that moment. Previously opening or closing a project after the dialog appeared could send the acquisition to a folder the dialog never showed.
+- When the config and MicroManager pixel sizes differ by 0.5% to 5%, the acquisition goes ahead with a WARNING in the log and a once-per-session notification showing both values. Previously anything under 5% passed silently, and tile registration absorbed the drift. More than 5% still cancels, because that means the wrong objective.
+
 **Calibration warnings name only what the acquisition uses**
 - The Acquisition Wizard no longer warns about white balance or backgrounds when an acquisition starts. That check ran before the white balance mode was chosen and rolled up every mode, so an operator acquiring with per-angle white balance was warned that simple white balance was not calibrated. Once the acquisition dialog fixes the mode, both Bounded and Existing Image acquisitions now check that mode alone, its white balance calibration and its backgrounds, and ask before acquiring if it is not ready. In an armed automatic batch the problem is logged and the run continues.
 - The launch warning about a missing microscope alignment now appears only for Existing Image Acquisition; Bounded Acquisition does not use an alignment.

@@ -127,7 +127,7 @@ When using a brightfield modality, a live readout appears showing the resolved a
 
 When using a PPM modality, the hardware configuration pane includes angle selection checkboxes and a **live readout** showing the resolved acquisition values — the exposure (in milliseconds) that will be used for each selected angle. These values update live as you change the objective, detector, white-balance mode, or angle selections, so you can verify what the acquisition will actually use before starting.
 
-**MODALITY-SPECIFIC OPTIONS and Z-STACK OPTIONS** are collapsed in the figure above. Expanded, they carry the autofocus profile, the modality's own controls (here the PPM polarization angles with their auto-derived per-angle exposures), and the full Z-stack configuration:
+**AUTOFOCUS**, **MODALITY-SPECIFIC OPTIONS** and **Z-STACK OPTIONS** are collapsed by default. AUTOFOCUS holds the autofocus profile, which applies to every modality. MODALITY-SPECIFIC OPTIONS holds the modality's own controls (here the PPM polarization angles with their auto-derived per-angle exposures). The figure below predates the separate AUTOFOCUS section and still shows the profile selector inside MODALITY-SPECIFIC OPTIONS:
 
 ![The MODALITY-SPECIFIC OPTIONS pane showing the autofocus profile selector and the PPM angle checkboxes with per-angle exposures, above the Z-STACK OPTIONS pane showing Z range, Z step, projection, stitched output and loop order](../images/Docs_ExistingImage_Modality_Zstack.png)
 

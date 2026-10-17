@@ -185,9 +185,12 @@ public class UnifiedAcquisitionController {
     private static class UnifiedDialogBuilder {
         private final ResourceBundle res;
         private final MicroscopeConfigManager configManager;
-        private final boolean hasOpenProject;
-        private final String existingProjectName;
-        private final File existingProjectFolder;
+        // Project state is read from QuPath, not fixed at construction: the dialog is non-modal, so a
+        // project can be opened or closed while it is up (see readProjectState).
+        private boolean hasOpenProject;
+        private String existingProjectName;
+        private File existingProjectFolder;
+        private VBox projectRowsBox;
 
         // UI Components - Project Section
         private TextField sampleNameField;
@@ -262,6 +265,7 @@ public class UnifiedAcquisitionController {
         private TitledPane hardwarePane;
         private TitledPane regionPane;
         private TitledPane advancedPane;
+        private TitledPane autofocusPane;
 
         // Debounce timer for preview updates
         private final PauseTransition previewDebounce = new PauseTransition(Duration.millis(PREVIEW_DEBOUNCE_MS));
@@ -275,19 +279,41 @@ public class UnifiedAcquisitionController {
             this.configManager =
                     MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
-            // Check if a project is already open
-            QuPathGUI gui = QuPathGUI.getInstance();
-            this.hasOpenProject = (gui != null && gui.getProject() != null);
+            readProjectState();
+        }
 
-            if (hasOpenProject) {
-                File projectFile = gui.getProject().getPath().toFile();
-                this.existingProjectFolder = projectFile.getParentFile();
-                this.existingProjectName = existingProjectFolder.getName();
-                logger.info("Found open project: {} in {}", existingProjectName, existingProjectFolder.getParent());
-            } else {
-                this.existingProjectFolder = null;
-                this.existingProjectName = null;
+        /**
+         * Reads which project QuPath has open now. Called at construction, whenever the open
+         * project changes while the dialog is up, and again when the result is built, so Start
+         * Acquisition never acts on a project state the dialog showed earlier but that no longer
+         * holds. Returns true when the state changed.
+         */
+        private boolean readProjectState() {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            var project = gui != null ? gui.getProject() : null;
+            File folder = null;
+            if (project != null && project.getPath() != null) {
+                folder = project.getPath().toFile().getParentFile();
             }
+            boolean open = folder != null;
+            boolean changed = open != hasOpenProject || !java.util.Objects.equals(folder, existingProjectFolder);
+            hasOpenProject = open;
+            existingProjectFolder = folder;
+            existingProjectName = folder != null ? folder.getName() : null;
+            if (changed && open) {
+                logger.info("Open project: {} in {}", existingProjectName, existingProjectFolder.getParent());
+            } else if (changed) {
+                logger.info("No project open; a new project will be created in the projects folder");
+            }
+            return changed;
+        }
+
+        /** The folder the acquisition writes its project into: the open project's, else the typed one. */
+        private File effectiveProjectsFolder() {
+            if (hasOpenProject && existingProjectFolder != null) {
+                return existingProjectFolder.getParentFile();
+            }
+            return new File(folderField.getText().trim());
         }
 
         private boolean isDark() {
@@ -319,12 +345,9 @@ public class UnifiedAcquisitionController {
             // centre of the Live Viewer field of view, which modality locked out.
             // showAndWait() still holds the workflow until they answer.
             //
-            // KNOWN GAP, accepted deliberately: createProjectSection() reads hasOpenProject
-            // when the dialog is BUILT and changes its own layout from it, so opening or
-            // closing a project while this is up leaves the layout describing a project state
-            // that no longer holds, and Start Acquisition can write to the wrong place.
-            // Modality had been masking that. The real fix is to read project state at submit
-            // rather than at construction; tracked in claude-reports/TODO_LIST.md.
+            // Being non-modal, a project can be opened or closed while the dialog is up: the
+            // PROJECT & SAMPLE rows follow QuPath's open project (listener below), and the
+            // result re-reads it, so Start Acquisition writes where the dialog says it will.
             dialog.initModality(Modality.NONE);
             dialog.setTitle("Bounded Acquisition");
             dialog.setHeaderText("Configure and start a new bounded acquisition.\n"
@@ -363,6 +386,7 @@ public class UnifiedAcquisitionController {
                     projectPane,
                     hardwarePane,
                     regionPane,
+                    autofocusPane,
                     advancedPane,
                     zStackPane,
                     timeLapsePane,
@@ -397,10 +421,24 @@ public class UnifiedAcquisitionController {
             // try/finally around the show, and setOnHidden is a single property, so a second
             // one added elsewhere would silently replace the first and leak the reference.
             activeDialog = dialog;
+            // Follow QuPath's open project while the dialog is up.
+            QuPathGUI projectGui = QuPathGUI.getInstance();
+            javafx.beans.value.ChangeListener<Object> projectListener = (obs, was, now) -> {
+                if (readProjectState()) {
+                    rebuildProjectRows();
+                    validateAll();
+                }
+            };
+            if (projectGui != null) {
+                projectGui.projectProperty().addListener(projectListener);
+            }
             try {
                 DialogOwner.own(dialog);
                 return dialog.showAndWait();
             } finally {
+                if (projectGui != null) {
+                    projectGui.projectProperty().removeListener(projectListener);
+                }
                 activeDialog = null;
                 // Always clear the stage-map preview once the dialog is dismissed --
                 // acquisition progress (if started) is shown by the acquisition overlay instead.
@@ -449,12 +487,28 @@ public class UnifiedAcquisitionController {
             grid.add(sampleNameErrorLabel, 1, row);
             row++;
 
-            if (!hasOpenProject) {
-                // Projects folder
-                folderField = new TextField();
-                folderField.setPrefWidth(250);
-                folderField.setText(QPPreferenceDialog.getProjectsFolderProperty());
+            // The projects-folder field is built once so what the operator typed survives a
+            // project being opened and closed; the rows around it follow the project state.
+            folderField = new TextField();
+            folderField.setPrefWidth(250);
+            folderField.setText(QPPreferenceDialog.getProjectsFolderProperty());
+            projectRowsBox = new VBox(8);
+            grid.add(projectRowsBox, 0, row, 2, 1);
+            rebuildProjectRows();
 
+            projectPane = new TitledPane("PROJECT & SAMPLE", grid);
+            projectPane.setExpanded(true);
+            projectPane.setStyle("-fx-font-weight: bold;");
+        }
+
+        /** The project rows of PROJECT & SAMPLE, for the project state last read. */
+        private void rebuildProjectRows() {
+            projectRowsBox.getChildren().clear();
+            GridPane rows = new GridPane();
+            rows.setHgap(10);
+            rows.setVgap(8);
+            int row = 0;
+            if (!hasOpenProject) {
                 Button browseBtn = new Button("Browse...");
                 browseBtn.setOnAction(e -> {
                     Window win = dialog.getDialogPane().getScene().getWindow();
@@ -475,37 +529,31 @@ public class UnifiedAcquisitionController {
                 HBox folderBox = new HBox(5, folderField, browseBtn);
                 HBox.setHgrow(folderField, Priority.ALWAYS);
 
-                grid.add(new Label("Projects Folder:"), 0, row);
-                grid.add(folderBox, 1, row);
+                rows.add(new Label("Projects Folder:"), 0, row);
+                rows.add(folderBox, 1, row);
                 row++;
 
                 Label infoLabel = new Label("A new project will be created for this sample.");
                 infoLabel.setStyle("-fx-font-style: italic; " + subtleTextStyle());
-                grid.add(infoLabel, 0, row, 2, 1);
+                rows.add(infoLabel, 0, row, 2, 1);
             } else {
-                folderField = new TextField(existingProjectFolder.getParent());
-                folderField.setVisible(false);
-
                 Label projectLabel = new Label(existingProjectName);
                 projectLabel.setStyle("-fx-font-weight: bold;");
-                grid.add(new Label("Project:"), 0, row);
-                grid.add(projectLabel, 1, row);
+                rows.add(new Label("Project:"), 0, row);
+                rows.add(projectLabel, 1, row);
                 row++;
 
                 Label locationLabel = new Label(existingProjectFolder.getParent());
                 locationLabel.setStyle(subtleTextStyle());
-                grid.add(new Label("Location:"), 0, row);
-                grid.add(locationLabel, 1, row);
+                rows.add(new Label("Location:"), 0, row);
+                rows.add(locationLabel, 1, row);
                 row++;
 
                 Label infoLabel = new Label("Sample will be added to the existing project.");
                 infoLabel.setStyle("-fx-font-style: italic; -fx-font-size: 11px;");
-                grid.add(infoLabel, 0, row, 2, 1);
+                rows.add(infoLabel, 0, row, 2, 1);
             }
-
-            projectPane = new TitledPane("PROJECT & SAMPLE", grid);
-            projectPane.setExpanded(true);
-            projectPane.setStyle("-fx-font-weight: bold;");
+            projectRowsBox.getChildren().add(rows);
         }
 
         /**
@@ -1089,7 +1137,13 @@ public class UnifiedAcquisitionController {
             placeholder.setStyle("-fx-font-style: italic; -fx-opacity: 0.65;");
             modalityContentBox.getChildren().add(placeholder);
 
-            advancedContent.getChildren().addAll(afGrid, new Separator(), modalityContentBox);
+            // Autofocus applies to every modality, so it has its own section; under
+            // "modality-specific" it read as a PPM concern on a fluorescence run.
+            autofocusPane = new TitledPane("AUTOFOCUS", afGrid);
+            autofocusPane.setExpanded(false); // Collapsed by default, as it was inside the modality pane
+            autofocusPane.setStyle("-fx-font-weight: bold;");
+
+            advancedContent.getChildren().add(modalityContentBox);
 
             advancedPane = new TitledPane("MODALITY-SPECIFIC OPTIONS", advancedContent);
             advancedPane.setExpanded(false); // Collapsed by default
@@ -1639,6 +1693,7 @@ public class UnifiedAcquisitionController {
                 // mirror that here so MDA files land inside the open project,
                 // not in a sibling folder named after whatever stale value
                 // PersistentPreferences.getLastSampleName() returned.
+                readProjectState();
                 String sampleName;
                 if (hasOpenProject && existingProjectName != null) {
                     sampleName = existingProjectName;
@@ -1650,10 +1705,10 @@ public class UnifiedAcquisitionController {
                     return MdaExportContext.notReady("Enter a sample name before exporting MDA.");
                 }
                 String folderText = folderField != null ? folderField.getText().trim() : "";
-                if (folderText.isEmpty()) {
+                if (!hasOpenProject && folderText.isEmpty()) {
                     return MdaExportContext.notReady("Enter a projects folder before exporting MDA.");
                 }
-                File projectsFolder = new File(folderText);
+                File projectsFolder = effectiveProjectsFolder();
 
                 String modality = modalityBox != null ? modalityBox.getValue() : null;
                 String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
@@ -2337,8 +2392,9 @@ public class UnifiedAcquisitionController {
 
         private UnifiedAcquisitionResult createResult() {
             try {
+                readProjectState();
                 String sampleName = sampleNameField.getText().trim();
-                File projectsFolder = new File(folderField.getText().trim());
+                File projectsFolder = effectiveProjectsFolder();
                 String modality = modalityBox.getValue();
                 String objective = extractIdFromDisplayString(objectiveBox.getValue());
                 String detector = extractIdFromDisplayString(detectorBox.getValue());

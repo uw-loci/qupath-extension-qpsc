@@ -86,14 +86,20 @@ auto-registration. Only `StitchingHelper`'s auto-register writes `"sub"`.
 
 1. If MM is unreachable or returns 0.0, the call is a no-op (returns `true`).
 2. Compares `configPx` (from YAML for the wizard's chosen objective+detector)
-   to MM's live pixel size. If `|config - live| / config <= 0.05` (5%), passes.
+   to MM's live pixel size via `PixelSizeAgreement.of`:
+   - under 0.5%: `AGREES`, passes silently.
+   - 0.5% to 5%: `DRIFTED`, passes. Logs a WARNING every time and shows a
+     once-per-session notification (keyed by objective, detector and MM value).
+     Never blocks: tile registration absorbs the difference.
+   - over 5%: `MISMATCHED`, goes to step 3.
 3. On mismatch: looks up the **closest configured objective** for MM's pixel
    size and shows a warning dialog with all four facts (wizard objective +
    expected pixel size, MM-reported pixel size, inferred MM objective, diff
    percent), explanation of consequences, and a single OK button. Returns
    `false`. The caller must abort the workflow.
 
-The 5% threshold is set in `QPScopeChecks.PIXEL_SIZE_MISMATCH_THRESHOLD`.
+The 5% cancel threshold is `QPScopeChecks.PIXEL_SIZE_MISMATCH_THRESHOLD`; the
+0.5% drift threshold is `QPScopeChecks.PIXEL_SIZE_DRIFT_THRESHOLD`.
 Adjacent magnifications on a typical microscope differ by 2x, so 5% is wide
 enough to absorb cal-pixel-size drift but narrow enough to catch any
 mismatch a user could plausibly cause by changing one but not the other.

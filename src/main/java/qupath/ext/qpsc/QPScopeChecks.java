@@ -123,6 +123,59 @@ public class QPScopeChecks {
     /** Maximum allowed fractional difference between wizard and MM pixel size before workflow cancels. */
     private static final double PIXEL_SIZE_MISMATCH_THRESHOLD = 0.05;
 
+    /**
+     * Fractional difference from which a pixel size counts as drifted, below the mismatch that
+     * cancels. 5% catches a wrong objective (a 20x/40x mixup is 100% off); a 0.5-5% difference
+     * is calibration drift, which tile registration would otherwise absorb in silence.
+     */
+    static final double PIXEL_SIZE_DRIFT_THRESHOLD = 0.005;
+
+    /** Drift already reported this session, so the wizard and each workflow gate say it once. */
+    private static final Set<String> reportedDrift = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+    /** How a config pixel size compares with MicroManager's. Pure, for tests. */
+    enum PixelSizeAgreement {
+        AGREES,
+        DRIFTED,
+        MISMATCHED;
+
+        static PixelSizeAgreement of(double configPixelSize, double mmPixelSize) {
+            double ratio = Math.abs(configPixelSize - mmPixelSize) / configPixelSize;
+            if (ratio > PIXEL_SIZE_MISMATCH_THRESHOLD) {
+                return MISMATCHED;
+            }
+            return ratio >= PIXEL_SIZE_DRIFT_THRESHOLD ? DRIFTED : AGREES;
+        }
+    }
+
+    /**
+     * Reports a drifted pixel size: a WARNING in the log every time, and a notification the
+     * first time this objective/detector/reading is seen in the session. Never blocks.
+     */
+    private static void reportPixelSizeDrift(
+            String objective, String detector, double configPixelSize, double mmPixelSize, double ratio) {
+        logger.warn(
+                "Pixel size drift: config {} um/px for {} / {}, MicroManager reports {} um/px ({} percent). "
+                        + "Tile registration will absorb this as a stitch correction; consider re-measuring "
+                        + "the pixel size and updating the config.",
+                String.format("%.4f", configPixelSize),
+                objective,
+                detector,
+                String.format("%.4f", mmPixelSize),
+                String.format("%.2f", ratio * 100));
+        String key = objective + "|" + detector + "|" + String.format("%.4f", mmPixelSize);
+        if (!reportedDrift.add(key)) {
+            return;
+        }
+        String message = String.format(
+                "Config %.4f um/px, MicroManager %.4f um/px (%.1f%% apart) for %s.%n"
+                        + "Acquiring anyway; tile registration absorbs the difference. If the calibration "
+                        + "has drifted, re-measure the pixel size and update this objective's "
+                        + "pixel_size_xy_um in the microscope config.",
+                configPixelSize, mmPixelSize, ratio * 100, objective);
+        Platform.runLater(() -> Dialogs.showWarningNotification("Pixel size has drifted", message));
+    }
+
     /** Maximum allowed fractional difference between live frame dims and configured sensor dims. */
     private static final double CAMERA_ROI_MISMATCH_THRESHOLD = 0.05;
 
@@ -302,7 +355,12 @@ public class QPScopeChecks {
                 mmPixelSize,
                 String.format("%.1f", ratio * 100));
 
-        if (ratio <= PIXEL_SIZE_MISMATCH_THRESHOLD) {
+        PixelSizeAgreement agreement = PixelSizeAgreement.of(configPixelSize, mmPixelSize);
+        if (agreement == PixelSizeAgreement.AGREES) {
+            return true;
+        }
+        if (agreement == PixelSizeAgreement.DRIFTED) {
+            reportPixelSizeDrift(objective, detector, configPixelSize, mmPixelSize, ratio);
             return true;
         }
 
