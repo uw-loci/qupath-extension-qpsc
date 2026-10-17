@@ -401,6 +401,22 @@ public interface ModalityHandler {
     }
 
     /**
+     * The display range to open a stitched single-channel output at, as {@code {min, max}} in the
+     * file's own pixel values, or {@code null} to leave QuPath's automatic contrast. Applied once
+     * at import and stored with the project entry, so the user can still change it.
+     *
+     * <p>For outputs whose values have a physical meaning, where an automatic stretch to the
+     * image's own percentiles makes two images of different samples look alike -- e.g.
+     * LC-PolScope retardance, stored as nanometres x 100.
+     *
+     * @param fileName the imported file name
+     * @return {@code {min, max}}, or {@code null} for no override
+     */
+    default double[] getDisplayRangeForOutput(String fileName) {
+        return null;
+    }
+
+    /**
      * Returns the default number of angles for time/storage estimates in the UI.
      *
      * <p>Used by the acquisition preview to estimate total images, time, and storage

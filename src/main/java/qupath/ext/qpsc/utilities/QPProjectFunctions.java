@@ -1293,6 +1293,45 @@ public class QPProjectFunctions {
     }
 
     /**
+     * If the active {@code ModalityHandler} gives this output a display range (e.g. LC-PolScope
+     * retardance, so maps of different samples are shown on one scale), store it in the image's
+     * display settings so the entry opens at it. Single-channel images only; any failure leaves
+     * QuPath's automatic contrast, since a display range is never a reason to fail an import.
+     */
+    static void applyDisplayRangeOverride(
+            ImageData<BufferedImage> imageData,
+            File imageFile,
+            qupath.ext.qpsc.modality.ModalityHandler modalityHandler) {
+        if (imageData == null || imageFile == null || modalityHandler == null) {
+            return;
+        }
+        double[] range;
+        try {
+            range = modalityHandler.getDisplayRangeForOutput(imageFile.getName());
+        } catch (Exception e) {
+            logger.warn("Display range lookup threw for {}: {}", imageFile.getName(), e.getMessage());
+            return;
+        }
+        if (range == null || range.length != 2 || !(range[1] > range[0])) {
+            return;
+        }
+        if (imageData.getServer() == null || imageData.getServer().nChannels() != 1) {
+            return;
+        }
+        try {
+            qupath.lib.display.ImageDisplay display = qupath.lib.display.ImageDisplay.create(imageData);
+            if (display.availableChannels().isEmpty()) {
+                return;
+            }
+            display.setMinMaxDisplay(display.availableChannels().get(0), (float) range[0], (float) range[1]);
+            display.saveChannelColorProperties();
+            logger.info("Display range of {} set to {} - {}", imageFile.getName(), range[0], range[1]);
+        } catch (Exception e) {
+            logger.warn("Could not set the display range of {}: {}", imageFile.getName(), e.getMessage());
+        }
+    }
+
+    /**
      * If the active {@code ModalityHandler} maps this filename to a stable
      * channel display name (e.g. ".biref" -> "PPM Subtracted"), apply it to the
      * imported image's server metadata. Only single-channel servers are renamed;
@@ -1418,6 +1457,7 @@ public class QPProjectFunctions {
             // Persists across project re-opens because saveImageData stores the
             // server metadata snapshot in the entry's .qpdata.
             applyChannelNameOverride(imageData, imageFile, modalityHandler);
+            applyDisplayRangeOverride(imageData, imageFile, modalityHandler);
 
             // Set a user-friendly name for the image in the project
             entry.setImageName(imageFile.getName());
@@ -1478,6 +1518,7 @@ public class QPProjectFunctions {
 
         // Apply modality-driven channel name override on the flipped path too.
         applyChannelNameOverride(imageData, imageFile, modalityHandler);
+        applyDisplayRangeOverride(imageData, imageFile, modalityHandler);
 
         entry.setImageName(imageFile.getName());
 

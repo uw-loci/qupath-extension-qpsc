@@ -76,9 +76,26 @@ class MergedIntermediatesCleanupTest {
     @Test
     void lcPolScopeDeclaresItsReconstructedOutputs() {
         LCPolScopeModalityHandler handler = new LCPolScopeModalityHandler();
-        assertEquals(List.of("retardance", "orientation"), handler.getPostProcessingDirectorySuffixes());
+        assertEquals(
+                List.of("retardance", "orientation", "orientation_color"),
+                handler.getPostProcessingDirectorySuffixes());
         assertEquals("Retardance (nm x100)", handler.getChannelNameForOutput("S_lcps_20x_r1_1_retardance.ome.tif"));
         assertEquals("Orientation (deg x100)", handler.getChannelNameForOutput("S_lcps_20x_r1_1_orientation.ome.tif"));
         assertNull(handler.getChannelNameForOutput("S_lcps_20x_r1_1_State0.ome.tif"));
+        assertNull(
+                handler.getChannelNameForOutput("S_lcps_20x_r1_1_orientation_color.ome.tif"),
+                "the RGB colour image is not renamed as if it were the orientation channel");
+    }
+
+    @Test
+    void lcPolScopeResultsOpenOnAFixedScale() {
+        LCPolScopeModalityHandler handler = new LCPolScopeModalityHandler();
+        // No config loaded in this test: the default 20 nm ceiling, stored as counts x 100.
+        assertArrayEquals(
+                new double[] {0, 2000}, handler.getDisplayRangeForOutput("S_lcps_20x_r1_1_retardance.ome.tif"));
+        assertArrayEquals(
+                new double[] {0, 18000}, handler.getDisplayRangeForOutput("S_lcps_20x_r1_1_orientation.ome.tif"));
+        assertNull(handler.getDisplayRangeForOutput("S_lcps_20x_r1_1_orientation_color.ome.tif"));
+        assertNull(handler.getDisplayRangeForOutput("S_lcps_20x_r1_1.ome.tif"), "raw states keep auto contrast");
     }
 }

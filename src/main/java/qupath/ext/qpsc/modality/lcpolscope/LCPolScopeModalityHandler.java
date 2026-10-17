@@ -236,7 +236,50 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
      */
     @Override
     public List<String> getPostProcessingDirectorySuffixes() {
-        return List.of("retardance", "orientation");
+        // orientation_color: the display-only RGB image, hue = orientation (cyclic over 0..180
+        // deg), brightness = retardance up to the display ceiling. QuPath cannot put a cyclic
+        // colour map on an image channel, so the server renders it.
+        return List.of("retardance", "orientation", "orientation_color");
+    }
+
+    /**
+     * Retardance opens at 0 to the display ceiling ({@code
+     * reconstruction.display_retardance_ceiling_nm}, default 20 nm, OpenPolScope's on this
+     * instrument), stored as counts at 100 per nm -- so two samples' maps are on one scale instead
+     * of each stretched to its own percentiles. Orientation opens at its full 0..180 deg range.
+     */
+    @Override
+    public double[] getDisplayRangeForOutput(String fileName) {
+        if (fileName == null) {
+            return null;
+        }
+        String lower = fileName.toLowerCase(java.util.Locale.ROOT);
+        if (lower.contains("_orientation_color")) {
+            return null; // RGB; no single-channel range
+        }
+        if (lower.contains("_retardance")) {
+            return new double[] {0.0, displayCeilingNm() * 100.0};
+        }
+        if (lower.contains("_orientation")) {
+            return new double[] {0.0, 18000.0};
+        }
+        return null;
+    }
+
+    private static double displayCeilingNm() {
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                Double ceiling =
+                        mgr.getDouble("modalities", "lcpolscope", "reconstruction", "display_retardance_ceiling_nm");
+                if (ceiling != null && ceiling > 0) {
+                    return ceiling;
+                }
+            }
+        } catch (RuntimeException e) {
+            logger.debug("Could not read the retardance display ceiling: {}", e.getMessage());
+        }
+        return 20.0;
     }
 
     /**
@@ -253,7 +296,7 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         if (lower.contains("_retardance")) {
             return "Retardance (nm x100)";
         }
-        if (lower.contains("_orientation")) {
+        if (lower.contains("_orientation") && !lower.contains("_orientation_color")) {
             return "Orientation (deg x100)";
         }
         return null;
