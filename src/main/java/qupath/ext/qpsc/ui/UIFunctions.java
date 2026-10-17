@@ -339,7 +339,6 @@ public class UIFunctions {
      * Shows an error dialog on the JavaFX thread with proper text wrapping.
      */
     public static void notifyUserOfError(String message, String context) {
-        logger.error("Error during {}: {}", context, message);
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error");
@@ -359,6 +358,7 @@ public class UIFunctions {
                 contentLabel.setMaxWidth(550);
             }
 
+            UserErrors.logAlert(logger, alert);
             DialogOwner.own(alert);
             alert.showAndWait();
         });
