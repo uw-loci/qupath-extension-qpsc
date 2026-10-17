@@ -295,6 +295,8 @@ Calibrate the two variable retarders of the universal compensator by finding the
   be in the counts of the camera's **current** pixel format: a black level above the darkest
   state measured is reported as a warning and makes the ratio unmeasurable
 
+**Before acquiring**, the LC-PolScope acquisition panel opens with a **Ready to acquire?** box: calibration applied and its age and extinction ratio, black level set, a background for each LC-PolScope profile that matches the current calibration, the live camera settings (auto gain or exposure must be off; gamma and 8-bit are flagged), and the LC adapter wavelength. Lines marked **Fix** produce wrong or uncorrected results if left; **Check** lines are worth a look. **Recheck** after changing something in Micro-Manager.
+
 **Background correction**, after calibrating and applying: move to a specimen-free area,
 defocus 10-20 um, and run Background Collection for the LC-PolScope profile. Each state is
 averaged over 10 frames (`reconstruction.background_frames`) and the set is recorded against the

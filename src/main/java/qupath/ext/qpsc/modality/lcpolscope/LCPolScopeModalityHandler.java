@@ -143,6 +143,9 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         // All five states, one exposure: the picker no longer offers per-state exposures,
         // include boxes or split, so the notice that used to ask for equal exposures is gone.
         ui.useEqualExposureStates("LC-PolScope states");
+        // Calibration, background, camera and adapter status before the stage moves; each used
+        // to appear only as a log line at the first tile.
+        ui.addModalityPanel(new qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadinessPane());
         ui.addModalityNotice(
                 "Orientation is axial: stitching and downsampling need care",
                 "This run also produces a slow-axis orientation map, where 0 and 180 degrees mean the "

@@ -242,6 +242,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         /** LC-PolScope liquid-crystal calibration. */
         LCCALIB("lccalib_"),
+        /**
+         * LC-PolScope readiness: camera settings and their problems, and the LC adapter's
+         * wavelength against the reconstruction's. No payload; reply is a 4-byte big-endian
+         * length + UTF-8 JSON. Read-only. Older servers do not know it and send nothing.
+         */
+        LCREADY("lcready_"),
         /** Simple white balance calibration at single exposure */
         WBSIMPLE("wbsimple"),
         /** PPM white balance calibration at 4 angles */
@@ -1002,6 +1008,55 @@ public class MicroscopeSocketClient implements AutoCloseable {
             } catch (IOException e) {
                 handleIOException(e);
                 throw e;
+            }
+        }
+    }
+
+    /**
+     * Asks the server whether the LC-PolScope is ready to acquire: the camera as it is set, what is
+     * wrong with it (auto gain, gamma, 8-bit), and the LC adapter's wavelength against the
+     * reconstruction's. Read-only.
+     *
+     * <p>Sets its own 6 s read timeout inside the socket lock and restores it, so a server older
+     * than the command -- which sends nothing -- costs six seconds, not the socket's long default
+     * with every other command waiting on the lock.
+     *
+     * @return the report, or empty when the server did not answer in time or sent nothing
+     * @throws IOException if the socket fails
+     */
+    public Optional<com.google.gson.JsonObject> getLcPolScopeReadiness() throws IOException {
+        synchronized (socketLock) {
+            ensureConnected();
+            int original = socket.getSoTimeout();
+            try {
+                socket.setSoTimeout(6000);
+                output.write(Command.LCREADY.getValue());
+                output.flush();
+                lastActivityTime.set(System.currentTimeMillis());
+                byte[] lengthBytes = new byte[4];
+                input.readFully(lengthBytes);
+                int length =
+                        ByteBuffer.wrap(lengthBytes).order(ByteOrder.BIG_ENDIAN).getInt();
+                if (length <= 0 || length > 1_000_000) {
+                    return Optional.empty();
+                }
+                byte[] body = new byte[length];
+                input.readFully(body);
+                lastActivityTime.set(System.currentTimeMillis());
+                return Optional.of(com.google.gson.JsonParser.parseString(new String(body, StandardCharsets.UTF_8))
+                        .getAsJsonObject());
+            } catch (java.net.SocketTimeoutException e) {
+                logger.warn("LCREADY: no reply within 6 s; the microscope server may predate this command");
+                return Optional.empty();
+            } catch (IOException e) {
+                handleIOException(e);
+                throw e;
+            } finally {
+                try {
+                    socket.setSoTimeout(original);
+                } catch (java.net.SocketException e) {
+                    logger.debug("Could not restore the socket timeout: {}", e.getMessage());
+                }
             }
         }
     }

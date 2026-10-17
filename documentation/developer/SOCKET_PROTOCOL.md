@@ -621,12 +621,17 @@ See `handlers/streaming_focus.py` for the implementation.
 | GETPXSZ | `getpxsz_` | none | 4 bytes: pixel size as a big-endian 32-bit float (0 before CONFIG or on error) |
 | GETFOV | `getfov__` | none | 8 bytes: FOV X,Y as big-endian 32-bit floats (-1,-1 before CONFIG or on error) |
 | GETLOG | `getlog__` | none | 4-byte big-endian length + UTF-8 bytes (or 0 for no active log) |
+| LCREADY | `lcready_` | none | 4-byte big-endian length + UTF-8 JSON: the camera summary, `camera_fatal` / `camera_advisory` problems, `adapter_wavelength_nm`, `reconstruction_wavelength_nm` |
 
 #### GETLOG
 
 Fetches the tail of the Python server's current session log (for bug reports). The server replies with a 4-byte big-endian length followed by that many UTF-8 bytes (already head+tail trimmed server-side, keeping the version banner for provenance plus recent lines where errors typically appear). A length of 0 indicates the server has no active session log.
 
 **Timeout handling:** Pre-GETLOG servers ignore this command and send no reply. Callers MUST apply their own timeout (typically 6 seconds) or the read would block until the socket's default read timeout. This allows forward compatibility when deploying a newer QuPath alongside an older server deployment.
+
+#### LCREADY
+
+LC-PolScope readiness for the acquisition panel's "Ready to acquire?" box. Read-only. The camera as it is set (device, exposure, bit depth, significant bits, pixel type, binning, gain), the problems that make its counts non-linear or non-comparable (auto gain or exposure: `camera_fatal`; gamma, 8-bit: `camera_advisory`), and the Meadowlark adapter's wavelength against `reconstruction.wavelength_nm`. The client sets its own 6 s read timeout inside the socket lock, because an older server ignores the command and sends nothing.
 
 ## Acquisition Lifecycle
 

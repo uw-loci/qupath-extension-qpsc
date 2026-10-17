@@ -592,6 +592,14 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         root.getChildren().add(0, notice);
     }
 
+    /**
+     * Adds a modality-specific panel (e.g. the LC-PolScope readiness summary) to the top of this
+     * dialog, above any notices, so it is the first thing read.
+     */
+    public void addModalityPanel(Node panel) {
+        root.getChildren().add(0, panel);
+    }
+
     private static Label boldLabel(String text) {
         Label l = new Label(text);
         l.setStyle("-fx-font-weight: bold;");
