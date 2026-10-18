@@ -33,6 +33,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+**Autofocus recovers from a starting Z far from focus**
+- A wrong starting Z (slide 4 of the 2026-10-04 batch: -285.8 um, tissue at -330 to -394 um) no longer holds a whole slide out of focus. Every standard autofocus may now widen its search, a flat primary metric follows the p98_p2 trend toward focus, and a skipped autofocus falls back to the last accepted focus instead of the starting Z without being recorded as a measurement. Needs microscope_command_server and microscope_control from 2026-10-17. See [AUTOFOCUS.md](documentation/AUTOFOCUS.md).
+- QPSC's runaway guard on each annotation's final Z adopts a value once two annotations in a row disagree with the last good Z on the same side and agree with each other, instead of holding the stale value for the rest of the run.
+- Tile measurements record a skipped autofocus as `af_type` 3 (captured at a fallback Z), where it used to read 0 (no autofocus).
+
 **Autofocus gets its own section; Bounded Acquisition follows the open project; pixel-size drift is reported**
 - In both acquisition dialogs the autofocus controls moved out of MODALITY-SPECIFIC OPTIONS into their own **AUTOFOCUS** section, collapsed by default. Every modality autofocuses, so under "modality-specific" they read as a PPM concern on a fluorescence run.
 - The Bounded Acquisition dialog's PROJECT & SAMPLE rows now follow QuPath's open project while the dialog is up, and Start Acquisition uses the project open at that moment. Previously opening or closing a project after the dialog appeared could send the acquisition to a folder the dialog never showed.

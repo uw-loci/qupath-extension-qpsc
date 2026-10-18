@@ -141,6 +141,9 @@ public class AcquisitionManager {
 
     private Double lastAcquisitionZ = null;
 
+    /** The last final Z the runaway guard rejected, kept until an annotation is accepted. */
+    private Double lastRejectedZ = null;
+
     /** How long to wait for the server to finish its previous acquisition before sending ours. */
     public static final long SERVER_IDLE_WAIT_MS = 30_000;
 
@@ -163,7 +166,43 @@ public class AcquisitionManager {
      *  claude-reports/2026-06-02_autofocus-focus-runaway.md (PPM 40x walked
      *  Z=7 -> 34 -> 104 um, never recovering). Defense-in-depth behind the
      *  Python-side drift-check and standard-AF edge-retry guards. */
-    private static final double MAX_FOCUS_STEP_UM = 25.0;
+    static final double MAX_FOCUS_STEP_UM = 25.0;
+
+    /** What the runaway guard does with one annotation's final Z. */
+    enum FinalZVerdict {
+        /** Within the step cap of the last good Z: carry it forward. */
+        ACCEPT,
+        /** Too far from the last good Z: hold the last good Z. */
+        REJECT,
+        /**
+         * Too far from the last good Z, but the previous annotation was rejected on the same
+         * side and agrees with this one to within the cap. Two independent measurements that
+         * agree with each other and not with the anchor say the anchor is wrong: adopt this
+         * one. A runaway walks further away each time (Z=7 -> 34 -> 104 on 2026-05-31), so it
+         * never agrees with its predecessor; slide 4 of 2026-10-04 did (-330.2 then -313.0,
+         * both deep of a stale -285.8 seed).
+         */
+        ADOPT_AGREED
+    }
+
+    /**
+     * Decides whether a final Z is carried forward. Pure, for tests.
+     *
+     * @param lastGoodZ    the Z currently carried forward, or null when there is none
+     * @param lastRejected the previous annotation's rejected final Z, or null
+     * @param finalZ       this annotation's final Z
+     */
+    static FinalZVerdict judgeFinalZ(Double lastGoodZ, Double lastRejected, double finalZ) {
+        if (lastGoodZ == null || Math.abs(finalZ - lastGoodZ) <= MAX_FOCUS_STEP_UM) {
+            return FinalZVerdict.ACCEPT;
+        }
+        if (lastRejected != null
+                && Math.signum(lastRejected - lastGoodZ) == Math.signum(finalZ - lastGoodZ)
+                && Math.abs(finalZ - lastRejected) <= MAX_FOCUS_STEP_UM) {
+            return FinalZVerdict.ADOPT_AGREED;
+        }
+        return FinalZVerdict.REJECT;
+    }
 
     /**
      * Macro-image reads to spend choosing focus-survey tiles.
@@ -610,6 +649,7 @@ public class AcquisitionManager {
         // downstream still bound how far a bad seed can push the search, so a stale
         // seed degrades gracefully to normal AF rather than driving a runaway.
         lastAcquisitionZ = state.seedZ;
+        lastRejectedZ = null;
         lastAnnotationFailure = null;
         if (state.seedZ != null) {
             logger.info(
@@ -750,9 +790,22 @@ public class AcquisitionManager {
                                     // the real plane; on a rejected runaway we fall back to the last
                                     // good plane (same value the next AF hint uses). Null -> leave 0.
                                     Double zForMda = null;
-                                    if (finalZ != null
-                                            && lastAcquisitionZ != null
-                                            && Math.abs(finalZ - lastAcquisitionZ) > MAX_FOCUS_STEP_UM) {
+                                    FinalZVerdict verdict = finalZ == null
+                                            ? null
+                                            : judgeFinalZ(lastAcquisitionZ, lastRejectedZ, finalZ);
+                                    if (verdict == FinalZVerdict.ADOPT_AGREED) {
+                                        logger.warn(
+                                                "Final Z={} um for {} is {} um from the last good Z={} um, but the "
+                                                        + "previous annotation's rejected Z={} um agrees with it -- the "
+                                                        + "last good Z is the stale value; adopting {} um",
+                                                String.format("%.2f", finalZ),
+                                                annotation.getName(),
+                                                String.format("%.1f", Math.abs(finalZ - lastAcquisitionZ)),
+                                                String.format("%.2f", lastAcquisitionZ),
+                                                String.format("%.2f", lastRejectedZ),
+                                                String.format("%.2f", finalZ));
+                                    }
+                                    if (verdict == FinalZVerdict.REJECT) {
                                         // Runaway-autofocus containment: a single-step focal-plane
                                         // jump this large is not physical tilt -- it is a corrupted
                                         // AF result (contrast-inverted metric walking the stage off
@@ -774,9 +827,13 @@ public class AcquisitionManager {
                                         // AF result untrusted; the last good plane is the best
                                         // focal-plane estimate we have for the exported positions.
                                         zForMda = lastAcquisitionZ;
+                                        // Remembered so a second, agreeing rejection can overrule
+                                        // a stale anchor (judgeFinalZ).
+                                        lastRejectedZ = finalZ;
                                     } else if (finalZ != null) {
                                         // Persist across annotation resets for Z-hint fallback
                                         lastAcquisitionZ = finalZ;
+                                        lastRejectedZ = null;
                                         zForMda = finalZ;
 
                                         if (state.transform != null) {
@@ -2515,13 +2572,16 @@ public class AcquisitionManager {
         Boolean afPerformed = (Boolean) entry.get("af_performed");
         detection.getMeasurements().put("af_performed", (afPerformed != null && afPerformed) ? 1.0 : 0.0);
 
-        // Encode af_type as numeric: 0=none, 1=sweep, 2=standard
+        // Encode af_type as numeric: 0=none, 1=sweep, 2=standard, 3=standard AF that failed
+        // and was skipped (the tile was captured at a fallback Z, not a measured focus)
         String afType = (String) entry.get("af_type");
         double afTypeVal = 0.0;
         if ("sweep".equals(afType)) {
             afTypeVal = 1.0;
         } else if ("standard".equals(afType)) {
             afTypeVal = 2.0;
+        } else if ("standard_skipped".equals(afType)) {
+            afTypeVal = 3.0;
         }
         detection.getMeasurements().put("af_type", afTypeVal);
 

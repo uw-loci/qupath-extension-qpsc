@@ -113,6 +113,15 @@ If validation fails on both the primary and fallback metrics, autofocus reports 
 
 **Unbracketed edge-peak refusal (2026-06-02):** When the edge-retry budget is exhausted (or stage Z limits leave no room) and the peak is *still* at the window edge with a one-sided, never-bracketed trend, the metric never found focus in any window searched -- committing that boundary Z is how a contrast-inverted / saturated metric walks the stage off the sample. Standard AF now refuses the unbracketed boundary peak: it falls back to `p98_p2` (which must itself bracket -- a fallback that is also an edge guess is rejected) and otherwise defers to manual focus, targeting the original hint Z rather than the unverified boundary. See `claude-reports/2026-06-02_autofocus-focus-runaway.md`.
 
+**Starting far from focus (2026-10-17):** a run whose starting Z is wrong by more than half the search window used to stay wrong. On slide 4 of the 2026-10-04 batch the setup pass left a starting Z of -285.8 um while the tissue was at -330 to -394 um. About a third of the tiles were captured out of focus, and 6.9 of 20.7 hours went into failed searches. Four changes let a run recover:
+
+- Every standard autofocus may widen its window (`edge_retries` in `autofocus_<scope>.yml`), not only the first one of an acquisition.
+- When the primary metric reads flat, which is what a window far from focus looks like, the search follows a one-sided `p98_p2` trend from the same frames. A peak is still accepted only once a metric brackets it, so following a trend cannot commit an unverified edge. The log now says why a `p98_p2` peak was refused ("its peak is at the low-Z edge ... never bracketed") instead of "also invalid: Valid focus peak detected".
+- A skipped autofocus falls back to the last focus accepted in this acquisition, not the request's starting Z, and its fallback Z is not recorded in the autofocus map, so neighboring tiles do not inherit it. In QuPath's tile measurements it reads `af_type` 3.
+- The runaway guard on each annotation's final Z (25 um step cap) still holds a single large jump, but when two annotations in a row are rejected on the same side and agree with each other to within the cap, the second is adopted: the anchor was the stale value. A real runaway walks further each time, so it never agrees with its predecessor.
+
+When tiles slow down while autofocus keeps being skipped, the progress sanity check now says the starting Z is the likely cause rather than suggesting a different strategy. See `claude-reports/2026-10-06_slide4-autofocus-stale-seed-z.md`.
+
 ### Saturation and autofocus
 
 Saturation is the *root* cause behind the contrast-inverted focus curves the guards above defend against: when a channel clips at 255, in-focus highlights flatten (low gradient) while defocus spreads them back below clipping (higher gradient), so the focus metric inverts and ramps toward defocus. Autofocus cannot recover real focus from a clipped frame, so the system does two things (2026-06-07):
