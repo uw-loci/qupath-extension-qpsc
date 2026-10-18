@@ -10,21 +10,21 @@ This file tracks the relationship between documentation screenshots and the Java
 
 | Screenshot | Java Source File(s) | Last Verified | Status |
 |------------|-------------------|---------------|--------|
-| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-09-19 | OK -- re-captured (unannotated); shows the hardware-status dots and the per-mode white-balance / background lines |
+| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-10-17 | OK -- re-captured on the demo microscope (Windows, Modena Light): icon acquire buttons and the Validate AF row. Demo checklist states (no JAI, so no per-mode WB dots); the PPM multi-dot states are described in the text, not shown |
 | `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-05-27 | OK |
 | `Docs_AnnotationAcquisition.png` | `ui/AnnotationAcquisitionDialog.java` | 2026-08-22 | OK -- re-captured (unannotated). Mapped to the actual class selection dialog rather than the broad ExistingImageAcquisitionController; the multi-tile refinement radio lives in the consolidated dialog, not here, so this no longer false-flags |
 | `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | 2026-05-27 | OK |
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
 | `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | OK |
-| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-09-19 | OK -- re-captured (unannotated); includes the "Sample is already in focus" checkbox. NOTE: autofocus moved out of MODALITY-SPECIFIC OPTIONS into its own AUTOFOCUS pane on 2026-10-16; this figure predates that and needs re-capturing (MANUAL_TEST_QUEUE) |
+| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-10-17 | OK -- re-captured on the demo microscope (Windows, Modena Light) with the AUTOFOCUS pane expanded and MODALITY-SPECIFIC OPTIONS collapsed; brightfield, so no PPM angle content |
 | `Docs_BoundedAcquisition_TileGrid.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
 | `Docs_CameraControl.png` | `ui/CameraControlController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings_Alerts.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
 | `Docs_CrossInstrumentWorkflow.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
-| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-08-22 | OK -- re-captured (unannotated). Modality / Z-stack panes are collapsed here; see `Docs_ExistingImage_Modality_Zstack.png` for those expanded |
+| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-10-17 | OK -- re-captured on the demo microscope (Windows, Modena Light); the demo image's auto-registered alignment, collapsed AUTOFOCUS / MODALITY-SPECIFIC / Z-STACK headers; see `Docs_ExistingImage_Modality_Zstack.png` for those expanded |
 | `Docs_ExistingImage_FluorescenceProject.png` | Lab-meeting slide deck (QuPath project view; not a single UI class) | 2026-06-01 | OK |
-| `Docs_ExistingImage_Modality_Zstack.png` | `ui/ExistingImageAcquisitionController.java`, `modality/ppm/ui/PPMBoundingBoxUI.java` | 2026-09-19 | STALE -- re-captured 2026-09-19 with MODALITY-SPECIFIC + Z-STACK panes expanded (PPM angles, projection, loop order); the autofocus profile shown inside MODALITY-SPECIFIC moved to its own AUTOFOCUS pane on 2026-10-16, re-capture queued (MANUAL_TEST_QUEUE) |
+| `Docs_ExistingImage_Modality_Zstack.png` | `ui/ExistingImageAcquisitionController.java` | 2026-10-17 | OK -- re-captured on the demo microscope: AUTOFOCUS, MODALITY-SPECIFIC (brightfield exposure) and Z-STACK panes expanded, cropped from a JavaFX render of the dialog content. A PPM version would show the angle checkboxes instead |
 | `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | 2026-08-22 | OK -- re-captured (unannotated; the numbered callouts from the 2026-05-27 figure are gone) |
 | `Docs_LiveViewer_Navigate.png` | `ui/liveviewer/StageControlPanel.java` (Navigate tab only) | 2026-09-19 | OK -- re-captured. The class also builds the Camera tab, so camera-only edits flag this figure spuriously; the Navigate tab has the joystick, Coarse/Fine Z bars, Move to Position and Calibrate Directions, and no camera controls |
 | `Docs_LiveViewer_SavedPoints.png` | `ui/liveviewer/StageControlPanel.java` (Saved Points tab only) | 2026-07-22 | CHECK -- shares a source class with the Navigate and Camera tabs, so it flags on camera edits that cannot affect it; verify before re-capturing |

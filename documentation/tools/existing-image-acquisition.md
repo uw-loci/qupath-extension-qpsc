@@ -127,9 +127,9 @@ When using a brightfield modality, a live readout appears showing the resolved a
 
 When using a PPM modality, the hardware configuration pane includes angle selection checkboxes and a **live readout** showing the resolved acquisition values — the exposure (in milliseconds) that will be used for each selected angle. These values update live as you change the objective, detector, white-balance mode, or angle selections, so you can verify what the acquisition will actually use before starting.
 
-**AUTOFOCUS**, **MODALITY-SPECIFIC OPTIONS** and **Z-STACK OPTIONS** are collapsed by default. AUTOFOCUS holds the autofocus profile, which applies to every modality. MODALITY-SPECIFIC OPTIONS holds the modality's own controls (here the PPM polarization angles with their auto-derived per-angle exposures). The figure below predates the separate AUTOFOCUS section and still shows the profile selector inside MODALITY-SPECIFIC OPTIONS:
+**AUTOFOCUS**, **MODALITY-SPECIFIC OPTIONS** and **Z-STACK OPTIONS** are collapsed by default. AUTOFOCUS holds the autofocus profile, which applies to every modality. MODALITY-SPECIFIC OPTIONS holds the modality's own controls. The figure, taken on the demo microscope, shows brightfield, which has a single exposure and an override. With PPM the same pane shows the polarization angle checkboxes and their per-angle exposures, and Z-STACK OPTIONS adds a loop-order choice, since there are angles to order:
 
-![The MODALITY-SPECIFIC OPTIONS pane showing the autofocus profile selector and the PPM angle checkboxes with per-angle exposures, above the Z-STACK OPTIONS pane showing Z range, Z step, projection, stitched output and loop order](../images/Docs_ExistingImage_Modality_Zstack.png)
+![The AUTOFOCUS pane with the autofocus profile selector, the MODALITY-SPECIFIC OPTIONS pane with the brightfield exposure readout and override, and the Z-STACK OPTIONS pane with Z range, Z step, projection and stitched output](../images/Docs_ExistingImage_Modality_Zstack.png)
 
 ### Acquisition & Stitching Options
 
