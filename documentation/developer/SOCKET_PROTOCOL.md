@@ -622,6 +622,7 @@ See `handlers/streaming_focus.py` for the implementation.
 | GETFOV | `getfov__` | none | 8 bytes: FOV X,Y as big-endian 32-bit floats (-1,-1 before CONFIG or on error) |
 | GETLOG | `getlog__` | none | 4-byte big-endian length + UTF-8 bytes (or 0 for no active log) |
 | LCREADY | `lcready_` | none | 4-byte big-endian length + UTF-8 JSON: the camera summary, `camera_fatal` / `camera_advisory` problems, `adapter_wavelength_nm`, `reconstruction_wavelength_nm` |
+| LCSIGNAL | `lcsignal` | 32-byte profile name (null-padded UTF-8) + 8-byte double `exposure_ms` + 8-byte double target fraction (big-endian) | 4-byte big-endian length + UTF-8 JSON: `states[]` (id, mean, p999, max, saturated_fraction, extinction), `full_scale`, `brightest_state`, `brightest_fraction`, `clipped`, `suggested_exposure_ms`, camera problems; or `error` |
 
 #### GETLOG
 
@@ -632,6 +633,10 @@ Fetches the tail of the Python server's current session log (for bug reports). T
 #### LCREADY
 
 LC-PolScope readiness for the acquisition panel's "Ready to acquire?" box. Read-only. The camera as it is set (device, exposure, bit depth, significant bits, pixel type, binning, gain), the problems that make its counts non-linear or non-comparable (auto gain or exposure: `camera_fatal`; gamma, 8-bit: `camera_advisory`), and the Meadowlark adapter's wavelength against `reconstruction.wavelength_nm`. The client sets its own 6 s read timeout inside the socket lock, because an older server ignores the command and sends nothing.
+
+#### LCSIGNAL
+
+LC-PolScope state signal for the Live Viewer Camera tab. Applies every state of the profile's channel library in turn (presets and device properties, as APPLYCH does), sets the ONE exposure under test after each (a channel's own `exposure_ms` is overridden), snaps, and reports each state's mean, 99.9th percentile, maximum and clipped fraction against the camera's full scale (from its significant bits, so Mono12p in a 16-bit buffer is 4095). `suggested_exposure_ms` puts the brightest swing state's 99.9th percentile at the target fraction (default 0.75) above `reconstruction.black_level`, assuming a linear camera; it is null when the field is clipped or dark. The last state measured is left applied: the client re-applies the state it was showing. The client stops live mode around it and allows 60 s.
 
 ## Acquisition Lifecycle
 

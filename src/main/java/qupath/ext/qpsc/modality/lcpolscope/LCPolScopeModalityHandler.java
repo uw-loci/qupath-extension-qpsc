@@ -10,6 +10,7 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
@@ -60,6 +61,11 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
      * reference and never the state to set exposure from.
      */
     public static final String EXTINCTION_CHANNEL_ID = "State0";
+
+    /** True when {@code modality} routes through this handler (prefix {@code lcpolscope} or {@code lcps}). */
+    public static boolean isLcPolScope(String modality) {
+        return ModalityRegistry.getHandler(modality) instanceof LCPolScopeModalityHandler;
+    }
 
     @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(

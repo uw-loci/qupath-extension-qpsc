@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **LC-PolScope Camera tab.** The Live Viewer's Camera tab has its own LC-PolScope layout: one exposure for all five states, a selector to view any state live, **Measure all states** (each state at that exposure against the camera's range, with a suggested exposure for a target brightness), **Use suggested**, and **Save to Profile**, which writes the one exposure to all five states. Needs microscope_command_server 35bb265 (LCSIGNAL).
+- **LC-PolScope backgrounds are always used when collected.** An LC-PolScope acquisition sends its background whenever a background folder is configured, independent of the "Use background correction" checkbox (flat-field only; now hidden for LC-PolScope) and the YAML `enabled` flag. The server still refuses one from another calibration. Background Collection shows the five states at their one exposure and hides Target Intensity for this modality, since the background must be taken at the acquisition exposure.
 - **LC-PolScope: optional per-tile estimated background.** For a background that differs from tile to tile: `reconstruction.estimated_background.enabled: true` in the microscope YAML makes the server fit and remove a smooth residual from each tile after the measured background. A tile that is mostly specimen is left uncorrected, because the fit cannot tell smooth specimen retardance from residual. Off by default. Needs the matching microscope_command_server and polscope_library. See [CHANNELS.md](documentation/CHANNELS.md).
 
 ## [0.11.0] - 2026-10-18

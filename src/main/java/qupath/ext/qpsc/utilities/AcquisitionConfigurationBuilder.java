@@ -10,6 +10,7 @@ import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -65,6 +66,9 @@ public class AcquisitionConfigurationBuilder {
             } else if (!bgEnabled && monoPref && bgBaseFolder != null) {
                 bgEnabled = true;
             }
+        }
+        if (LCPolScopeModalityHandler.isLcPolScope(baseModality)) {
+            bgEnabled = bgBaseFolder != null;
         }
         return bgEnabled;
     }
@@ -156,6 +160,18 @@ public class AcquisitionConfigurationBuilder {
                 if (bgMethod == null) {
                     bgMethod = "divide";
                 }
+            }
+        }
+        // LC-PolScope: the background is part of the reconstruction, not a flat-field divide, so
+        // neither the "Use background correction" checkbox (which is about flat-field) nor the
+        // YAML enabled flag gates it. Whenever a background folder is configured it is sent; the
+        // server checks it against the current LC calibration and refuses a mismatched one, and
+        // reconstructs uncorrected (with a warning) when no background is there.
+        if (LCPolScopeModalityHandler.isLcPolScope(baseModality)) {
+            bgEnabled = bgBaseFolder != null;
+            if (!bgEnabled) {
+                logger.warn("LC-PolScope: no background folder configured; tiles reconstruct uncorrected."
+                        + " Collect a background (LC-PolScope Setup, step 3).");
             }
         }
 

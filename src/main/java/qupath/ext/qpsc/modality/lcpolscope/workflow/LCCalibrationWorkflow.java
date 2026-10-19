@@ -947,10 +947,8 @@ public class LCCalibrationWorkflow {
     /** Writes one exposure to every palette state's channel; returns the summary line. */
     static String applyExposureToStates(Path configPath, JsonObject result, double exposureMs) throws IOException {
         JsonObject palette = result.getAsJsonObject("palette_waves");
-        for (String state : palette.keySet()) {
-            qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelExposureMs(
-                    configPath, MODALITY_KEY, state, exposureMs);
-        }
+        qupath.ext.qpsc.modality.lcpolscope.ui.LCStateSignal.writeExposureToStates(
+                configPath, MODALITY_KEY, palette.keySet(), exposureMs);
         return String.format("Exposure %s ms written to all %d states.", formatCounts(exposureMs), palette.size());
     }
 

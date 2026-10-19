@@ -27,6 +27,7 @@ import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.model.SampleSetupResult;
@@ -1978,8 +1979,11 @@ public class UnifiedAcquisitionController {
                 wbModeLabel.setManaged(showWb);
             }
             if (monoBgCorrectionCheck != null) {
-                monoBgCorrectionCheck.setVisible(!isJAI);
-                monoBgCorrectionCheck.setManaged(!isJAI);
+                // LC-PolScope applies its background inside the reconstruction whenever one is
+                // collected, so this flat-field toggle does not apply to it.
+                boolean showMonoBg = !isJAI && !LCPolScopeModalityHandler.isLcPolScope(modality);
+                monoBgCorrectionCheck.setVisible(showMonoBg);
+                monoBgCorrectionCheck.setManaged(showMonoBg);
             }
 
             // Reset WB default from handler when modality changes

@@ -25,6 +25,7 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.ppm.RotationManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -197,6 +198,7 @@ public class BackgroundCollectionController {
                         updateObjectiveSelection(newVal);
                         updateProfileAndLampRow();
                         updateExposureModeSelectorVisibility();
+                        updateTargetIntensityVisibility();
                         // Only update exposure controls if both modality and objective are selected
                         if (objectiveComboBox.getValue() != null) {
                             updateExposureControlsWithBackground(newVal, objectiveComboBox.getValue());
@@ -1219,6 +1221,10 @@ public class BackgroundCollectionController {
             if (channels.isEmpty()) {
                 return false;
             }
+            if (isLcPolScopeSelected()) {
+                renderLcPolScopeStateTable(mgr, channels);
+                return true;
+            }
             GridPane grid = new GridPane();
             grid.setHgap(12);
             grid.setVgap(4);
@@ -1252,6 +1258,54 @@ public class BackgroundCollectionController {
             logger.debug("Could not render channel table: {}", e.getMessage());
             return false;
         }
+    }
+
+    /**
+     * LC-PolScope: the five states, all at the one acquisition exposure, with no intensity or
+     * in-use columns (every state is always collected, under one lamp setting). The background is
+     * compared with the acquisition by the server through {@code background_provenance.json}, so
+     * the note says what makes it go stale.
+     */
+    private void renderLcPolScopeStateTable(
+            MicroscopeConfigManager mgr, List<qupath.ext.qpsc.modality.Channel> channels) {
+        GridPane grid = new GridPane();
+        grid.setHgap(12);
+        grid.setVgap(4);
+        Label h0 = new Label("State");
+        Label h1 = new Label("Exposure (ms)");
+        h0.setStyle("-fx-font-weight: bold;");
+        h1.setStyle("-fx-font-weight: bold;");
+        grid.add(h0, 0, 0);
+        grid.add(h1, 1, 0);
+        int row = 1;
+        java.util.Set<String> exposures = new java.util.LinkedHashSet<>();
+        for (qupath.ext.qpsc.modality.Channel ch : channels) {
+            String exp = String.format("%.1f", ch.defaultExposureMs());
+            exposures.add(exp);
+            grid.add(new Label(ch.displayName()), 0, row);
+            grid.add(new Label(exp), 1, row);
+            row++;
+        }
+        exposureControlsPane.getChildren().add(grid);
+        Object frames = null;
+        Map<String, Object> recon = mgr.getSection("modalities", modalityComboBox.getValue(), "reconstruction");
+        if (recon != null) {
+            frames = recon.get("background_frames");
+        }
+        String frameText = frames instanceof Number n ? String.valueOf(n.intValue()) : "10";
+        if (exposures.size() > 1) {
+            showBackgroundValidationMessage(
+                    "The states have different exposures (" + String.join(", ", exposures) + " ms). LC-PolScope "
+                            + "needs one exposure for all states; set it with Apply after calibrating, or in the "
+                            + "Live Viewer Camera tab, before collecting. The server will refuse this.",
+                    "-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
+            return;
+        }
+        showBackgroundValidationMessage(
+                "LC-PolScope: all five states at " + exposures.iterator().next() + " ms (the acquisition exposure), "
+                        + frameText + " frames averaged per state. Use a clear, specimen-free area, defocused "
+                        + "10-20 um. Collect again after every calibration or exposure change.",
+                "-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
     }
 
     /**
@@ -1530,9 +1584,17 @@ public class BackgroundCollectionController {
      */
     private void updateTargetIntensityVisibility() {
         boolean isRgb = isRgbCamera();
-        // Hide for RGB cameras (WB calibration determines background exposure)
-        targetIntensityRow.setVisible(!isRgb);
-        targetIntensityRow.setManaged(!isRgb);
+        // Hide for RGB cameras (WB calibration determines background exposure), and for
+        // LC-PolScope, whose background must be taken at the acquisition exposure: the server
+        // collects every state at the profile exposure and never adapts it.
+        boolean show = !isRgb && !isLcPolScopeSelected();
+        targetIntensityRow.setVisible(show);
+        targetIntensityRow.setManaged(show);
+    }
+
+    private boolean isLcPolScopeSelected() {
+        String modality = modalityComboBox != null ? modalityComboBox.getValue() : null;
+        return modality != null && LCPolScopeModalityHandler.isLcPolScope(modality);
     }
 
     /**
@@ -1721,7 +1783,8 @@ public class BackgroundCollectionController {
 
             // Parse target intensity (0 = use server default)
             double targetIntensity = 0;
-            String targetStr = targetIntensityField.getText().trim();
+            String targetStr =
+                    isLcPolScopeSelected() ? "" : targetIntensityField.getText().trim();
             if (!targetStr.isEmpty()) {
                 try {
                     targetIntensity = Double.parseDouble(targetStr);
