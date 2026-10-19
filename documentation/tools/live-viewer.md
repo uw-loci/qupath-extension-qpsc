@@ -132,7 +132,7 @@ The histogram shows a 256-bin luminance distribution updated in real time, drawn
 
 The **Hist: Right** toggle button on the toolbar moves the Histogram & Contrast + Noise Stats group between two layouts:
 
-- **Off (default)** -- docked *below* the image as a horizontal strip.
+- **Off (default)** -- docked *below* the image as a horizontal strip. The strip spans only the image column; the Navigate / Saved Points / Camera tabs run down beside it to the status bar.
 - **On** -- docked at the *far-right edge* of the window as a vertical column. The stage-control panel stays next to the image (controls adjacent to the image, histogram on the outside), the histogram reorients vertically and fills the full height of the image area, and the sliders run vertically while the labels and buttons stay horizontal for readability.
 
 The choice persists via the [Live Viewer: Dock Histogram Right](../PREFERENCES.md#live-viewer-dock-histogram-right) preference. Useful on wide monitors where vertical space below the image is at a premium.

@@ -111,6 +111,13 @@ public class LiveViewerWindow {
     private javafx.scene.layout.VBox histoNoiseGroup;
     private javafx.scene.layout.HBox rightArea;
     private javafx.scene.layout.VBox bottomPane;
+    /**
+     * The image and, in the bottom dock, the histogram under it. The bottom dock used to be
+     * the window's full-width bottom region, which cut the tab column short; the histogram
+     * needs height less than the movement controls do (2026-10-19).
+     */
+    private javafx.scene.layout.VBox imageColumn;
+
     private ToggleButton histogramDockToggle;
     private StageControlPanel stageControlPanel;
     private ToggleButton stageControlToggle;
@@ -1250,9 +1257,11 @@ public class LiveViewerWindow {
         histoNoiseGroup = new VBox(8, histogramPane, noiseStatsPanel);
         VBox.setVgrow(histogramPane, Priority.ALWAYS);
 
-        // Bottom pane (status bar always lives here; the histo/noise group is
-        // added/removed by the dock toggle).
-        bottomPane = new VBox(histoNoiseGroup, statusBar);
+        // Bottom pane: the status bar only, full width. The histo/noise group docks under the
+        // image (imageColumn) or in the right column, so the tabs keep the full height.
+        bottomPane = new VBox(statusBar);
+        imageColumn = new VBox(scrollPane);
+        VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
         // Right column: an HBox so the histo/noise group can sit as its own
         // column at the FAR RIGHT of the stage control (controls stay next to
@@ -1263,7 +1272,7 @@ public class LiveViewerWindow {
         BorderPane root = new BorderPane();
         root.setTop(toolbar);
         root.setRight(rightArea); // stage control (+ histo/noise when docked right)
-        root.setCenter(scrollPane); // Live image in center
+        root.setCenter(imageColumn); // Live image (and the bottom-docked histogram) in center
         root.setBottom(bottomPane);
 
         // Apply the persisted dock state (default: bottom).
@@ -1383,11 +1392,11 @@ public class LiveViewerWindow {
      * control). Default is the bottom dock. FX thread only.
      */
     private void setHistogramDockedRight(boolean right) {
-        if (histoNoiseGroup == null || rightArea == null || bottomPane == null) {
+        if (histoNoiseGroup == null || rightArea == null || imageColumn == null) {
             return;
         }
         if (right) {
-            bottomPane.getChildren().remove(histoNoiseGroup);
+            imageColumn.getChildren().remove(histoNoiseGroup);
             if (!rightArea.getChildren().contains(histoNoiseGroup)) {
                 // Append so the histo/noise group sits at the FAR RIGHT edge,
                 // leaving the stage-control panel next to the image (the user
@@ -1405,8 +1414,8 @@ public class LiveViewerWindow {
             histogramView.setVertical(true);
         } else {
             rightArea.getChildren().remove(histoNoiseGroup);
-            if (!bottomPane.getChildren().contains(histoNoiseGroup)) {
-                bottomPane.getChildren().add(0, histoNoiseGroup); // above the status bar
+            if (!imageColumn.getChildren().contains(histoNoiseGroup)) {
+                imageColumn.getChildren().add(histoNoiseGroup); // under the image, left of the tabs
             }
             histoNoiseGroup.setMinWidth(0);
             histoNoiseGroup.setPrefWidth(Region.USE_COMPUTED_SIZE);

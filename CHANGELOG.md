@@ -17,6 +17,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Live Viewer's bottom-docked histogram stops at the tabs.** It used to span the full window width, which cut the Navigate / Saved Points / Camera tabs short. It now sits under the image only, and the tabs run down to the status bar, which gives the movement controls and Z bars the extra height.
 - **Connect to a Demo Microscope moved to Utilities > Microscope Configuration**, beside Switch Microscope. It was a top-level item. It is still always enabled, including with no configuration.
 
 ### Fixed
