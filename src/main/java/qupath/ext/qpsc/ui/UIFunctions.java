@@ -815,6 +815,33 @@ public class UIFunctions {
 
     static final String NO_TILE_SELECTED = "No tile selected";
 
+    /** Narrowest and widest the tile dialog's text may be, px. */
+    static final double TILE_TEXT_MIN_WIDTH = 520;
+
+    static final double TILE_TEXT_MAX_WIDTH = 820;
+
+    /**
+     * Width for the tile dialog's text: its longest line at the dialog's fonts (16 px, and
+     * 17 px bold for the how-to line), so a line wraps only when it is longer than the cap.
+     */
+    static double tileDialogTextWidth(String message, String howTo) {
+        double longest = 0;
+        javafx.scene.text.Font body = javafx.scene.text.Font.font(16);
+        javafx.scene.text.Font bold = javafx.scene.text.Font.font(null, javafx.scene.text.FontWeight.BOLD, 17);
+        for (String line : (message == null ? "" : message).split("\n")) {
+            longest = Math.max(longest, textWidth(line, body));
+        }
+        longest = Math.max(longest, textWidth(howTo == null ? "" : howTo, bold));
+        // A little slack: a Label wraps slightly before the measured width.
+        return Math.max(TILE_TEXT_MIN_WIDTH, Math.min(TILE_TEXT_MAX_WIDTH, Math.ceil(longest) + 12));
+    }
+
+    private static double textWidth(String text, javafx.scene.text.Font font) {
+        javafx.scene.text.Text t = new javafx.scene.text.Text(text);
+        t.setFont(font);
+        return t.getLayoutBounds().getWidth();
+    }
+
     /**
      * Prompts the user to select exactly one tile (detection object) in QuPath.
      * Shows a non-modal dialog that allows the user to interact with QuPath while open.
@@ -848,15 +875,21 @@ public class UIFunctions {
             // Read at arm's length from the microscope: every label and button inherits this.
             layout.setStyle("-fx-font-size: 16px;");
 
+            // The messages carry their own line breaks. Wrapping each line again at a fixed
+            // 520 px left one or two words alone on a line at 16 px ("the" on its own,
+            // 2026-10-19), so the width follows the longest line, within limits.
+            double textWidth = tileDialogTextWidth(message, TILE_SELECTION_HOW);
             Label instructionLabel = new Label(message);
             instructionLabel.setWrapText(true);
-            instructionLabel.setPrefWidth(520);
+            instructionLabel.setPrefWidth(textWidth);
+            instructionLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
             // Tiles sit inside their annotation, so a single click selects the annotation;
             // QuPath selects the object inside it on a double-click.
             Label howLabel = new Label(TILE_SELECTION_HOW);
             howLabel.setWrapText(true);
-            howLabel.setPrefWidth(520);
+            howLabel.setPrefWidth(textWidth);
+            howLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
             howLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 17px;");
 
             Label statusLabel = new Label(NO_TILE_SELECTED);
