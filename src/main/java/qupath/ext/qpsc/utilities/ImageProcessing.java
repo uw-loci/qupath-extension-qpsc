@@ -69,13 +69,21 @@ public class ImageProcessing {
             }
 
             // Build the detection script
+            // The script returns what the classifier produced and whether the inversion worked.
+            // 2026-10-19: on two Liver slides this step reported "no whitespace" although the
+            // same classifier marks their padding when run by hand, and the session log had
+            // nothing to say which half failed -- QuPath's own warnings go to its main log.
             String script = String.format(
                     "resetSelection()\n"
                             + "createAnnotationsFromPixelClassifier(\"%s\", 1000000.0, 0, \"SELECT_NEW\")\n"
+                            + "def cal = getCurrentServer().getPixelCalibration()\n"
+                            + "def created = getSelectedObjects().collect{ (it.getPathClass() == null ? 'none' : it.getPathClass().toString())"
+                            + " + ' ' + String.format('%%.2f', it.getROI().getScaledArea(cal.getPixelWidthMicrons(), cal.getPixelHeightMicrons()) / 1e6) + ' mm2' }\n"
                             + "whitespace = getAnnotationObjects().findAll{it.getPathClass().toString().contains(\"Other\")}\n"
-                            + "makeInverseAnnotation()\n"
+                            + "def inverted = makeInverseAnnotation()\n"
                             + "removeObjects(whitespace, true)\n"
-                            + "getSelectedObjects().each{it.setPathClass(getPathClass(\"Bounds\"))}\n",
+                            + "getSelectedObjects().each{it.setPathClass(getPathClass(\"Bounds\"))}\n"
+                            + "return 'classifier regions: ' + created.size() + ' ' + created + '; inverse created: ' + inverted\n",
                     classifierPath.toString().replace("\\", "\\\\"));
 
             logger.debug("Running white background detection script");
@@ -83,7 +91,13 @@ public class ImageProcessing {
             var hierarchy = gui.getViewer().getHierarchy();
 
             // Run the script
-            gui.runScript(null, script);
+            Object summary = gui.runScript(null, script);
+            logger.info(
+                    "Data bounds classifier on '{}' ({}x{}): {}",
+                    gui.getImageData().getServer().getMetadata().getName(),
+                    gui.getImageData().getServer().getWidth(),
+                    gui.getImageData().getServer().getHeight(),
+                    summary);
 
             // Get image dimensions for fallback
             int imageWidth = gui.getImageData().getServer().getWidth();
@@ -100,8 +114,10 @@ public class ImageProcessing {
 
             if (boundsAnnotation == null) {
                 // No whitespace detected - the entire image is data with no padding
-                logger.warn("No Bounds annotation created by white background detection - no whitespace detected");
-                logger.info("Image appears to have no edge padding - using full image bounds");
+                logger.warn(
+                        "No Bounds annotation from the data bounds classifier ({}); using the full image. "
+                                + "If this scan has padding, the alignment will be off by its width.",
+                        summary);
                 dataBounds = new Rectangle(0, 0, imageWidth, imageHeight);
                 logger.info("Using full image as data bounds: width={}, height={}", imageWidth, imageHeight);
             } else {
