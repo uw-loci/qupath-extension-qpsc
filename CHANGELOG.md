@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **LC-PolScope: optional per-tile estimated background.** For a background that differs from tile to tile: `reconstruction.estimated_background.enabled: true` in the microscope YAML makes the server fit and remove a smooth residual from each tile after the measured background. A tile that is mostly specimen is left uncorrected, because the fit cannot tell smooth specimen retardance from residual. Off by default. Needs the matching microscope_command_server and polscope_library. See [CHANNELS.md](documentation/CHANNELS.md).
+
 ## [0.11.0] - 2026-10-18
 
 ### Added

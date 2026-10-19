@@ -222,4 +222,30 @@ public class ConfigYamlEditorChannelTest {
                 ConfigYamlEditor.setNestedChildScalar(f, new String[] {"modalities", "nope", "x"}, "a", "b");
         assertFalse(missing.changed);
     }
+    /**
+     * The real configs end the reconstruction block with a nested
+     * {@code estimated_background} mapping. A field the calibration's Apply adds must land back at
+     * the reconstruction level, not inside that mapping, and the mapping must survive intact.
+     */
+    @Test
+    void nestedScalarAddedAfterANestedMappingStaysAtTheBlockLevel(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("c.yml");
+        Files.writeString(
+                f,
+                CONFIG.replace(
+                        "      state_order: [State0, State1, State2, State4, State3]\n",
+                        "      state_order: [State0, State1, State2, State4, State3]\n"
+                                + "      estimated_background:\n"
+                                + "        enabled: false\n"
+                                + "        order: 2\n"));
+        String[] block = {"modalities", "lcpolscope", "reconstruction"};
+
+        assertTrue(ConfigYamlEditor.setNestedChildScalar(f, block, "lc_extinction_ratio", "267.3").changed);
+
+        Map<String, Object> recon = reconstruction(f);
+        assertEquals(267.3, ((Number) recon.get("lc_extinction_ratio")).doubleValue(), 1e-9);
+        @SuppressWarnings("unchecked")
+        Map<String, Object> estimated = (Map<String, Object>) recon.get("estimated_background");
+        assertEquals(Map.of("enabled", false, "order", 2), estimated);
+    }
 }
