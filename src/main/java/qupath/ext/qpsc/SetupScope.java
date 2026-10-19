@@ -338,6 +338,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         });
 
         // === DEMO MICROSCOPE (always available, like Micro-Manager's demo configuration) ===
+        // Lives in Utilities > Microscope Configuration beside Switch Microscope (moved off the
+        // top level 2026-10-19, at the user's request).
         MenuItem demoOption = new MenuItem(res.getString("menu.connectDemoMicroscope"));
         setMenuItemTooltip(
                 demoOption,
@@ -809,6 +811,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         setupWizardOption,
                         serverConnectionOption,
                         switchMicroscopeOption,
+                        demoOption,
                         new SeparatorMenuItem(),
                         registerObjectiveOption,
                         lightPathOption,
@@ -850,7 +853,6 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // visible (a multi-slide holder is configured); it stays hidden on single-slide scopes.
         extensionMenu.getItems().add(wizardOption);
         extensionMenu.getItems().add(multiSlideOption);
-        extensionMenu.getItems().add(demoOption);
         extensionMenu.getItems().add(new SeparatorMenuItem());
 
         // 1. Acquisition controls -- the five items an operator uses during a session,

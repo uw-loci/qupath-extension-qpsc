@@ -135,7 +135,7 @@ running**. See the [Installation Guide](documentation/INSTALLATION.md) for the f
 >
 > **No microscope yet?** Do Steps 1, 3 and 4 of the [Installation Guide](documentation/INSTALLATION.md)
 > (QuPath, the Python packages, the QPSC and tiles-to-pyramid JARs), then choose
-> **Extensions > QP Scope > Connect to a Demo Microscope...** QPSC starts the microscope server in demo
+> **Extensions > QP Scope > Utilities > Microscope Configuration > Connect to a Demo Microscope...** QPSC starts the microscope server in demo
 > mode (a simulated slide on an XYZ stage, no Micro-Manager needed) and opens the Live Viewer. Click
 > **Live: OFF** to see the simulated slide. See
 > [Try It Without a Microscope](documentation/INSTALLATION.md#try-it-without-a-microscope-optional).

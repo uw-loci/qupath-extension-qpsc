@@ -230,7 +230,7 @@ bug for a report.
 find the server program the first time.** Expect the dialog *QPSC could not start the
 microscope command server*. Step 2 below says what to do.
 
-1. Choose **Extensions -> QP Scope -> Connect to a Demo Microscope...**. Starting the server
+1. Choose **Extensions -> QP Scope -> Utilities -> Microscope Configuration -> Connect to a Demo Microscope...**. Starting the server
    takes a few seconds (QPSC waits up to a minute). When it is up, a notification reads
    *Started the demo server and connected.* and the Live Viewer opens.
 2. If the dialog *QPSC could not start the microscope command server* appears instead, click

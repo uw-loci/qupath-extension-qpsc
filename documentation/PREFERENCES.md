@@ -340,7 +340,7 @@ disabled. Point this preference at a real `config_<scope>.yml` (or run the Setup
 Wizard) to enable acquisition. The placeholder is created once and never
 overwritten.
 
-**Demo microscope:** **Extensions > QP Scope > Connect to a Demo Microscope...**
+**Demo microscope:** **Extensions > QP Scope > Utilities > Microscope Configuration > Connect to a Demo Microscope...**
 extracts a second bundled config, `<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`
 (marked `microscope.demo: true`), and switches this preference to it; on Windows the value
 becomes `C:\Users\<you>\QuPath\v0.7\qpsc-demo-microscope\config_Demo.yml`. Unlike the

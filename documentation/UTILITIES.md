@@ -30,7 +30,6 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | **Top-Level Menu** | | |
 | [Acquisition Wizard](tools/acquisition-wizard.md) | Guided setup for new acquisitions | Extensions > QP Scope > Acquisition Wizard... |
 | [Multi-Slide Acquisition](tools/multi-slide-acquisition.md) | Batch-acquire several slides in one holder (setup pass + walk-away acquire); appears when config has a multi-slide holder | Extensions > QP Scope > Multi-Slide Acquisition... |
-| [Connect to a Demo Microscope](#connect-to-a-demo-microscope) | Try QPSC with no hardware: start the microscope server in demo mode, switch to the bundled demo config, connect, open the Live Viewer | Extensions > QP Scope > Connect to a Demo Microscope... |
 | [Report a Bug...](#report-a-bug) | Submit a bug report directly to the issue tracker | Extensions > QP Scope > Report a Bug... |
 | **Acquisition controls** | | |
 | [Bounded Acquisition](tools/bounded-acquisition.md) | Direct bounding-box acquisition from stage coordinates | Extensions > QP Scope > Acquisition controls > Bounded Acquisition |
@@ -60,6 +59,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Setup Wizard](tools/setup-wizard.md) | Create microscope config files (first-time setup) | Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... |
 | [Communication Settings](tools/server-connection.md) | Configure server connection and notification alerts | Extensions > QP Scope > Utilities > Microscope Configuration > Communication Settings... |
 | Switch Microscope | Apply the Microscope Config File preference without restarting: reconnect the server, rebuild the menu, reopen the Live Viewer and Stage Map, close other QP Scope windows (refused during an acquisition; invalid files roll back) | Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope... |
+| [Connect to a Demo Microscope](#connect-to-a-demo-microscope) | Try QPSC with no hardware: start the microscope server in demo mode, switch to the bundled demo config, connect, open the Live Viewer | Extensions > QP Scope > Utilities > Microscope Configuration > Connect to a Demo Microscope... |
 | Register Current Objective | Add the objective in the light path to the config (reads MM pixel size) | Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... |
 | Light Path Orientation | Set the microscope's fixed orientation: scope type (upright/inverted) and optical flip (drives the Stage Map Camera View) | Extensions > QP Scope > Utilities > Microscope Configuration > Light Path Orientation... |
 | [Parfocality Calibration](tools/parfocality-calibration.md) | Capture per-profile Z offsets so the stage refocuses when switching modality | Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality... |
@@ -110,7 +110,8 @@ Adds the objective currently in the light path to the microscope configuration w
 ### Connect to a Demo Microscope
 
 QPSC driving a simulated microscope, the way Micro-Manager's demo configuration lets you try
-that program with no hardware. Always enabled, even with no configuration.
+that program with no hardware. Always enabled, even with no configuration. Find it under
+**Extensions > QP Scope > Utilities > Microscope Configuration**.
 
 **Needs:** QuPath, the Python packages and the two JARs. No Micro-Manager, no configuration.
 

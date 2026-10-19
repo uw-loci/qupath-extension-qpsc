@@ -71,16 +71,21 @@ class DemoMicroscopeTest {
     }
 
     @Test
-    void theMenuOffersTheDemoNextToTheWizard() throws IOException {
+    void theMenuOffersTheDemoUnderMicroscopeConfiguration() throws IOException {
         String setup = Files.readString(MAIN.resolve("SetupScope.java"));
         String strings = Files.readString(Path.of("src/main/resources/qupath/ext/qpsc/ui/strings.properties"));
         assertTrue(strings.contains("menu.connectDemoMicroscope = Connect to a Demo Microscope..."));
         int define = setup.indexOf("res.getString(\"menu.connectDemoMicroscope\")");
         int action = setup.indexOf("DemoMicroscope.connect()");
-        int placed = setup.indexOf("extensionMenu.getItems().add(demoOption);");
+        int configMenu = setup.indexOf("Menu microscopeConfigMenu = new Menu(\"Microscope Configuration\")");
+        int placed = setup.indexOf("demoOption,", configMenu);
+        int menuEnd = setup.indexOf("parfocalityCalibrationOption);", configMenu);
         assertTrue(
-                define > 0 && action > define && placed > action,
-                "demo item defined, wired, and added to the top level");
+                define > 0 && action > define && configMenu > action && placed > configMenu && placed < menuEnd,
+                "demo item defined, wired, and added to Utilities > Microscope Configuration");
+        assertFalse(
+                setup.contains("extensionMenu.getItems().add(demoOption);"),
+                "the demo item is no longer on the top level");
         // Never gated on the config: the whole point is that it works before any scope is set up.
         String defn = setup.substring(define, action);
         assertFalse(defn.contains("setDisable("), "the demo item must stay enabled with an invalid or offline config");
