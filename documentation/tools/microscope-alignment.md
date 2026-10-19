@@ -79,7 +79,7 @@ The alignment workflow needs at least one annotation (ROI) on the active entry. 
 **Typical approaches:**
 - **Draw manually**: Use QuPath's annotation tools (Brush, Freehand, or Wand) to outline tissue regions
 - **Run tissue detection**: Use QuPath's image analysis → Cell detection & classification → Positive pixel classifier (or Haralick features) to auto-segment tissue
-- **Use existing annotations**: If tissue is already annotated on this entry, the workflow proceeds without prompting
+- **Use existing annotations**: If any annotation is already on this entry, the workflow proceeds without prompting
 
 On multi-slide acquisitions where a fresh rotated/flipped entry is opened, this entry carries no annotations by default, so the prompt will appear. This replaces the previous behavior of failing hard if no annotations existed.
 
