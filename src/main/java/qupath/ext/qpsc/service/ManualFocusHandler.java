@@ -9,6 +9,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.utilities.StageFrameWatchdog;
 
 /**
  * Shared handler for the manual focus dialog pattern used during acquisition monitoring.
@@ -112,6 +113,9 @@ public final class ManualFocusHandler {
                 // user to focus by hand, so Z has to be reachable for "Use current focus" to
                 // mean anything.
                 qupath.ext.qpsc.controller.MicroscopeController.getInstance().setManualFocusPending(true);
+                // The operator may also move XY to find tissue, which the frame watchdog
+                // would otherwise read as the stage frame moving.
+                StageFrameWatchdog.getInstance().pauseForOperator();
 
                 Platform.runLater(() -> {
                     try {
@@ -145,6 +149,7 @@ public final class ManualFocusHandler {
                             logger.error("Failed to send manual focus response", e);
                         }
                     } finally {
+                        StageFrameWatchdog.getInstance().resumeAfterOperator();
                         if (timingCallback != null) {
                             timingCallback.resumeTiming();
                         }

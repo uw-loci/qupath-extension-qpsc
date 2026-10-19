@@ -234,4 +234,45 @@ class StageFrameWatchdogTest {
         }
         assertThat(watchdog.suspectReason()).isNull();
     }
+
+    @Test
+    void theOperatorFindingTissueDuringManualFocusIsNotReported() {
+        // 2026-10-19: the manual focus dialog lets the operator move XY with the joystick.
+        watchdog.arm(MIN_X, MIN_Y, MAX_X, MAX_Y, "33775_25384", null);
+        watchdog.pauseForOperator();
+        for (int i = 0; i < 10; i++) {
+            report(MAX_X + 3400, MIN_Y - 1000);
+        }
+        assertThat(watchdog.suspectReason()).isNull();
+    }
+
+    @Test
+    void resumingGivesTheMoveBackAGracePeriodThenWatchesAgain() {
+        watchdog.arm(MIN_X, MIN_Y, MAX_X, MAX_Y, "33775_25384", null);
+        watchdog.pauseForOperator();
+        report(MAX_X + 3400, MIN_Y - 1000);
+
+        watchdog.setGraceMillisForTesting(60_000);
+        watchdog.resumeAfterOperator();
+        for (int i = 0; i < 5; i++) {
+            report(MAX_X + 3400 - i * 600, MIN_Y - 1000);
+        }
+        assertThat(watchdog.suspectReason()).isNull();
+
+        watchdog.setGraceMillisForTesting(0);
+        report(0, 0);
+        report(0, 0);
+        report(0, 0);
+        assertThat(watchdog.suspectReason()).isNotNull();
+    }
+
+    @Test
+    void pausingWhileDisarmedDoesNothing() {
+        watchdog.pauseForOperator();
+        watchdog.arm(MIN_X, MIN_Y, MAX_X, MAX_Y, "33775_25384", null);
+        report(0, 0);
+        report(0, 0);
+        report(0, 0);
+        assertThat(watchdog.suspectReason()).isNotNull();
+    }
 }

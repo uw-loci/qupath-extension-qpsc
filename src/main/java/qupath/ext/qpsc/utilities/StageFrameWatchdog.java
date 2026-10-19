@@ -101,6 +101,7 @@ public final class StageFrameWatchdog {
     private final PropertyChangeListener listener = evt -> {};
 
     private volatile boolean armed = false;
+    private volatile boolean pausedForOperator = false;
     private volatile double minX, maxX, minY, maxY;
     private volatile String label = "";
     private volatile long armedAtMs = 0;
@@ -159,6 +160,7 @@ public final class StageFrameWatchdog {
         this.label = regionLabel == null ? "" : regionLabel;
         this.onSuspect = onSuspect;
         this.consecutiveViolations = 0;
+        this.pausedForOperator = false;
         this.armedAtMs = System.currentTimeMillis();
         if (!armed) {
             armed = true;
@@ -187,6 +189,7 @@ public final class StageFrameWatchdog {
             return;
         }
         armed = false;
+        pausedForOperator = false;
         consecutiveViolations = 0;
         onSuspect = null;
         if (sampler != null) {
@@ -195,6 +198,38 @@ public final class StageFrameWatchdog {
         }
         StagePositionManager.getInstance().removePropertyChangeListener(listener);
         logger.debug("Stage frame watchdog disarmed");
+    }
+
+    /**
+     * Stops judging positions while a dialog hands the stage to the operator.
+     *
+     * <p>The manual focus dialog invites the operator to find tissue with the joystick, which can
+     * take the stage well outside the region; that is not the frame moving. The command server
+     * pauses its own check for the same window. Does nothing when disarmed.
+     */
+    public void pauseForOperator() {
+        if (!armed || pausedForOperator) {
+            return;
+        }
+        pausedForOperator = true;
+        consecutiveViolations = 0;
+        logger.info("Stage frame watchdog paused while the operator has the stage ({})", label);
+    }
+
+    /**
+     * Resumes judging positions after {@link #pauseForOperator()}, with a fresh grace period.
+     *
+     * <p>The server moves the stage back to the tile once the dialog closes, and the readings on
+     * the way are legitimately outside the region, exactly as on arming.
+     */
+    public void resumeAfterOperator() {
+        if (!pausedForOperator) {
+            return;
+        }
+        pausedForOperator = false;
+        consecutiveViolations = 0;
+        armedAtMs = System.currentTimeMillis();
+        logger.info("Stage frame watchdog resumed for {}", label);
     }
 
     /**
@@ -232,7 +267,7 @@ public final class StageFrameWatchdog {
      * on its scheduler.
      */
     void sample() {
-        if (!armed) {
+        if (!armed || pausedForOperator) {
             return;
         }
         StagePositionManager positions = StagePositionManager.getInstance();
