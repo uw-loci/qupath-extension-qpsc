@@ -94,6 +94,10 @@ For fluorescence profiles (e.g., DAPI, FITC, TRITC), the collection uses a per-c
 
 The **unused-channel rule** applies: a channel is collected only if it has a positive illumination intensity. Channels with 0 intensity are skipped, and no background is required for them at acquisition time. This means the number of backgrounds collected depends on how many channels in the profile have non-zero intensity.
 
+### LC-PolScope
+
+For the LC-PolScope modality the dialog shows the five states at their one acquisition exposure (the Exposure column is the same for every state; there is no Intensity column). **Target Intensity is hidden**, because the background must be taken at the acquisition exposure and is never adapted. The background is used for every LC-PolScope acquisition whenever its folder is configured, regardless of the "Use background correction" checkbox. Collect it again after every calibration or exposure change. See the **Backgrounds** item under the LC-PolScope section of [CHANNELS.md](../CHANNELS.md) for the full rules.
+
 ## Workflow
 
 1. Position the microscope at a clean, blank area with no tissue or debris
