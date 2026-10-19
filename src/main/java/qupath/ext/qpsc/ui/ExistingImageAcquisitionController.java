@@ -1916,7 +1916,7 @@ public class ExistingImageAcquisitionController {
 
         private void updateModalityUI(String modality) {
             ModalityHandler handler = ModalityRegistry.getHandler(modality);
-            Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI();
+            Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI(modality);
 
             // Clear existing content
             modalityContent.getChildren().clear();

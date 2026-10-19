@@ -152,7 +152,17 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private Supplier<MdaExportContext> mdaContextSupplier;
 
     public WidefieldChannelBoundingBoxUI() {
-        this(null, null);
+        this((String) null);
+    }
+
+    /**
+     * The picker over one modality's channel library.
+     *
+     * @param modality the modality key in the YAML (matched ignoring case); null takes the
+     *     first modality that declares channels, which is only right on a config with one
+     */
+    public WidefieldChannelBoundingBoxUI(String modality) {
+        this(null, null, modality);
     }
 
     /**
@@ -164,6 +174,10 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      * @param injectedModality the modality they belong to (for the focus default), or null
      */
     WidefieldChannelBoundingBoxUI(List<Channel> injectedLibrary, String injectedModality) {
+        this(injectedLibrary, injectedModality, null);
+    }
+
+    private WidefieldChannelBoundingBoxUI(List<Channel> injectedLibrary, String injectedModality, String modality) {
         root = new VBox(5);
 
         Label title = new Label("Fluorescence Channels");
@@ -175,7 +189,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             library = injectedLibrary;
             loadedModality = injectedModality;
         } else {
-            library = loadChannelLibrary();
+            library = loadChannelLibrary(modality);
         }
         if (library.isEmpty()) {
             Label empty = new Label("No fluorescence channels configured for this microscope.\n"
@@ -363,7 +377,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                             .selectedProperty()
                             .not()
                             .or(cb.selectedProperty().not()));
-            if (savedFocusChannel != null && savedFocusChannel.equals(id)) {
+            if (savedFocusChannel != null && savedFocusChannel.equals(id) && isFocusCandidate(id)) {
                 focusRadio.setSelected(true);
             }
             focusRadio.selectedProperty().addListener((obs, oldVal, newVal) -> {
@@ -1256,7 +1270,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         });
     }
 
-    private List<Channel> loadChannelLibrary() {
+    private List<Channel> loadChannelLibrary(String modality) {
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isBlank()) {
             return List.of();
@@ -1265,26 +1279,55 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         if (mgr == null) {
             mgr = MicroscopeConfigManager.getInstance(configPath);
         }
-
-        Map<String, Object> modalities = mgr.getSection("modalities");
-        if (modalities == null) {
+        Map.Entry<String, List<Channel>> found = libraryFor(mgr, modality);
+        if (found == null) {
             return List.of();
         }
-        // Accept ANY modality with a non-empty channels list. This keeps the UI
-        // fully generic -- widefield IF, BF+IF, multispectral, or any future
-        // channel-based modality is picked up without touching this class.
+        loadedModality = found.getKey();
+        logger.debug("Loaded {} channels from modalities.{}", found.getValue().size(), found.getKey());
+        return found.getValue();
+    }
+
+    /** Whether this modality's handler accepts {@code channelId} as a focus channel. */
+    private boolean isFocusCandidate(String channelId) {
+        if (loadedModality == null) {
+            return true;
+        }
+        try {
+            return ModalityRegistry.getHandler(loadedModality).isFocusChannelCandidate(channelId);
+        } catch (Exception e) {
+            logger.debug("Focus-candidate check failed for '{}': {}", loadedModality, e.getMessage());
+            return true;
+        }
+    }
+
+    /**
+     * The channel library to show: {@code modality}'s own (matched ignoring case), or, with no
+     * modality named, the first modality that declares channels. A named modality never
+     * falls back to another's library -- that is how lcpolscope and BF_IF came to show the
+     * fluorescence channels on a config that lists Fluorescence first.
+     *
+     * @return the modality key and its channels, or null when there are none
+     */
+    static Map.Entry<String, List<Channel>> libraryFor(MicroscopeConfigManager mgr, String modality) {
+        Map<String, Object> modalities = mgr.getSection("modalities");
+        if (modalities == null) {
+            return null;
+        }
         for (Map.Entry<String, Object> entry : modalities.entrySet()) {
             if (!(entry.getValue() instanceof Map<?, ?>)) {
                 continue;
             }
+            boolean named = modality != null && !modality.isBlank();
+            if (named && !entry.getKey().equalsIgnoreCase(modality)) {
+                continue;
+            }
             List<Channel> channels = mgr.getModalityChannels(entry.getKey());
-            if (!channels.isEmpty()) {
-                logger.debug("Loaded {} channels from modalities.{}", channels.size(), entry.getKey());
-                loadedModality = entry.getKey();
-                return channels;
+            if (named || !channels.isEmpty()) {
+                return channels.isEmpty() ? null : Map.entry(entry.getKey(), channels);
             }
         }
-        return List.of();
+        return null;
     }
 
     @Override

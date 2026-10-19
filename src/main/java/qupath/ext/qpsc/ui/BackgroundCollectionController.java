@@ -524,6 +524,7 @@ public class BackgroundCollectionController {
         profileRow.setVisible(false);
         profileRow.setManaged(false);
         profileComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
+            selectProfileDetector(newVal);
             refreshLampLabel();
             // A channel-based profile drives a per-channel table in the exposure
             // pane, so refresh it when the profile changes.
@@ -1655,6 +1656,30 @@ public class BackgroundCollectionController {
             refreshLampLabel();
         } catch (Exception e) {
             logger.debug("Could not update profile/lamp row: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * Selects the detector a profile names. On a scope with one camera per modality (the
+     * demo's colour camera for brightfield, its mono camera for fluorescence and
+     * LC-PolScope) the last-used detector is often the other modality's, and a background
+     * filed under the wrong detector is one the acquisition never finds.
+     */
+    private void selectProfileDetector(String profileKey) {
+        if (profileKey == null || detectorComboBox == null) {
+            return;
+        }
+        try {
+            MicroscopeConfigManager mgr =
+                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+            String detector = mgr.getString("acquisition_profiles", profileKey, "detector");
+            if (detector != null
+                    && detectorComboBox.getItems().contains(detector)
+                    && !detector.equals(detectorComboBox.getValue())) {
+                detectorComboBox.setValue(detector);
+            }
+        } catch (Exception e) {
+            logger.debug("Could not select the detector of profile {}: {}", profileKey, e.getMessage());
         }
     }
 

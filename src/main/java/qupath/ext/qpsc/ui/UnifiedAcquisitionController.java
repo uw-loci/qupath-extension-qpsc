@@ -493,6 +493,10 @@ public class UnifiedAcquisitionController {
             folderField = new TextField();
             folderField.setPrefWidth(250);
             folderField.setText(QPPreferenceDialog.getProjectsFolderProperty());
+            folderField.textProperty().addListener((obs, oldVal, newVal) -> {
+                validateProjectsFolder();
+                updateErrorSummary();
+            });
             projectRowsBox = new VBox(8);
             grid.add(projectRowsBox, 0, row, 2, 1);
             rebuildProjectRows();
@@ -1638,7 +1642,7 @@ public class UnifiedAcquisitionController {
 
         private void updateModalityUI(String modality) {
             ModalityHandler handler = ModalityRegistry.getHandler(modality);
-            Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI();
+            Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI(modality);
 
             // Clear and update only the modality content box, preserving white balance section
             modalityContentBox.getChildren().clear();
@@ -2340,6 +2344,22 @@ public class UnifiedAcquisitionController {
             updateErrorSummary();
         }
 
+        /**
+         * A new project needs a folder to go in. Left empty, the project was created relative
+         * to QuPath's working directory and the run stopped there with nothing on screen.
+         */
+        private void validateProjectsFolder() {
+            boolean needsFolder = !hasOpenProject;
+            String text = folderField != null ? folderField.getText().trim() : "";
+            if (needsFolder && text.isEmpty()) {
+                validationErrors.put("projectsFolder", "Choose a projects folder for the new project");
+            } else if (needsFolder && !new File(text).isAbsolute()) {
+                validationErrors.put("projectsFolder", "The projects folder must be a full path");
+            } else {
+                validationErrors.remove("projectsFolder");
+            }
+        }
+
         private void validateAll() {
             // Validate sample name
             String sampleName = sampleNameField.getText().trim();
@@ -2349,6 +2369,8 @@ public class UnifiedAcquisitionController {
             } else {
                 validationErrors.remove("sampleName");
             }
+
+            validateProjectsFolder();
 
             // Validate hardware
             if (modalityBox.getValue() == null) {

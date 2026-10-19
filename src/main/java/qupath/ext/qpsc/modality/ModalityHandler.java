@@ -133,6 +133,21 @@ public interface ModalityHandler {
     }
 
     /**
+     * {@link #createBoundingBoxUI()} for a named modality. One handler serves every modality
+     * name its prefix matches, and a channel-based UI must show the channels of the modality
+     * the user picked, not those of whichever channel library comes first in the YAML (a
+     * config with Fluorescence ahead of BF_IF or lcpolscope showed the fluorescence channels
+     * for both). Handlers whose UI does not depend on the modality's own config need not
+     * override this.
+     *
+     * @param modalityName the modality key selected in the dialog, as in the YAML
+     * @return the UI, or empty
+     */
+    default Optional<BoundingBoxUI> createBoundingBoxUI(String modalityName) {
+        return createBoundingBoxUI();
+    }
+
+    /**
      * Applies user-provided parameter overrides to the default acquisition angles for this modality.
      *
      * <p>This method provides the mechanism for incorporating user customizations from the
@@ -593,6 +608,19 @@ public interface ModalityHandler {
             return null;
         }
         return channels.get(0).id();
+    }
+
+    /**
+     * Whether a channel can serve as the autofocus channel at all. The picker remembers the
+     * last focus channel, including one it chose itself, so a channel that can never be
+     * focused on (LC-PolScope's near-black extinction state) must be refused here or a
+     * remembered choice keeps it selected after the default moved on.
+     *
+     * @param channelId a channel of this modality
+     * @return false if focusing on it cannot work
+     */
+    default boolean isFocusChannelCandidate(String channelId) {
+        return true;
     }
 
     /**

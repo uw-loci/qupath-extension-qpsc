@@ -2283,6 +2283,16 @@ public class StitchingHelper {
             return;
         }
 
+        // The channel path stitches its per-channel pyramids with skipProjectImport, so that
+        // only the merged file becomes an entry, and hands the same parameters on to here.
+        // The derived outputs are results in their own right and must be imported: with the
+        // flag inherited, an LC-PolScope run added its five-state merge to the project and
+        // left retardance and orientation on disk only (seen on the demo, 2026-10-19).
+        if (stitchParams != null && stitchParams.containsKey("skipProjectImport")) {
+            stitchParams = new java.util.HashMap<>(stitchParams);
+            stitchParams.remove("skipProjectImport");
+        }
+
         // Post-processing outputs (.biref / .sum) are computed from the angles and share their
         // grid, but they stitch here, separately from the angle loop. If registration corrected the
         // angles and these were left at nominal, they would be the one output misregistered against

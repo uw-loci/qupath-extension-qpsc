@@ -102,8 +102,12 @@ public class BoundedAcquisitionWorkflow {
                     result.x2(),
                     result.y2());
 
-            // Read persistent prefs
-            String prefProjectsFolder = QPPreferenceDialog.getProjectsFolderProperty();
+            // The folder the dialog shows (prefilled from the preference, editable there);
+            // the preference alone ignored whatever the operator typed.
+            String prefProjectsFolder = result.projectsFolder() != null
+                            && !result.projectsFolder().getPath().isBlank()
+                    ? result.projectsFolder().getAbsolutePath()
+                    : QPPreferenceDialog.getProjectsFolderProperty();
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
             // Stage polarity is read via the composite StagePolarity enum
             // so it matches what the rest of the refactored pipeline sees.

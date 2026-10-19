@@ -58,7 +58,12 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
 
     @Override
     public Optional<BoundingBoxUI> createBoundingBoxUI() {
-        WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI();
+        return createBoundingBoxUI(null);
+    }
+
+    @Override
+    public Optional<BoundingBoxUI> createBoundingBoxUI(String modalityName) {
+        WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI(modalityName);
         // Only return the UI if a channel library is actually configured;
         // otherwise fall through to the angle-based default (null UI, single snap).
         return ui.hasChannels() ? Optional.of(ui) : Optional.empty();
