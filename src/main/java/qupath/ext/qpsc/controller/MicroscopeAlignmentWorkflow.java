@@ -899,14 +899,10 @@ public class MicroscopeAlignmentWorkflow {
             if (!tilesCreated) {
                 logger.warn("Alignment aborted: no alignment tiles were created.");
                 removeAlignmentTiles(gui);
-                List<String> collectionClasses = PersistentPreferences.getSelectedAnnotationClasses();
-                String classHint = (collectionClasses != null && !collectionClasses.isEmpty())
-                        ? collectionClasses.toString()
-                        : VALID_ANNOTATION_CLASSES.toString();
                 UIFunctions.notifyUserOfError(
-                        "No annotations are available to tile for alignment.\n\n"
-                                + "Draw a Tissue annotation (or classify an existing annotation as one of "
-                                + classHint + "), then re-run Microscope Alignment.",
+                        "Microscope Alignment needs at least one annotation to place reference tiles in.\n\n"
+                                + "Draw an annotation around some tissue (any class, or none), then re-run "
+                                + "Microscope Alignment.",
                         "Alignment: no annotations");
                 return;
             }
@@ -1010,9 +1006,10 @@ public class MicroscopeAlignmentWorkflow {
      */
     /**
      * @return {@code true} when alignment tiles were created for at least one
-     *         matching annotation; {@code false} when no annotation matched the
-     *         configured collection / tissue / valid classes, or tile creation
-     *         was cancelled/failed. On {@code false} the caller must abort rather
+     *         annotation; {@code false} when the image has no area annotation at
+     *         all, or tile creation was cancelled/failed. Annotations of the
+     *         configured collection classes are preferred, then Tissue, then the
+     *         other valid classes, then any area annotation. On {@code false} the caller must abort rather
      *         than advance to tile selection with an empty grid.
      */
     private static boolean createAlignmentTiles(
@@ -1101,12 +1098,7 @@ public class MicroscopeAlignmentWorkflow {
                     stageInvertedY);
         }
 
-        // Otherwise fall back to any valid (Tissue / Scanned Area /
-        // Bounding Box) annotation class. We deliberately do NOT fall back
-        // to "all annotations regardless of class" -- silently tiling
-        // unrelated overlapping annotations produces a noisy, ambiguous
-        // tile grid for the alignment step and was the source of multiple
-        // confusing alignment runs.
+        // Then any valid (Tissue / Scanned Area / Bounding Box) annotation class.
         var annotations = allAnnotations.stream()
                 .filter(a -> a.getClassification() != null && VALID_ANNOTATION_CLASSES.contains(a.getClassification()))
                 .toList();
@@ -1116,6 +1108,22 @@ public class MicroscopeAlignmentWorkflow {
                     gui, annotations, sampleSetup, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
         }
 
+        // Finally, any area annotation, classified or not. Microscope Alignment only needs
+        // somewhere to put reference tiles; requiring a particular class stopped it on slides
+        // whose annotations were unclassified or used other names ("Error during Alignment:
+        // no annotations", 2026-10-19). The class-based passes above still win when they
+        // match, so a slide with a Tissue annotation tiles only that, as before.
+        var anyArea = allAnnotations.stream()
+                .filter(a -> a.getROI() != null && a.getROI().isArea())
+                .toList();
+        if (!anyArea.isEmpty()) {
+            logger.info(
+                    "No annotation of a preferred class; tiling all {} area annotation(s) for alignment",
+                    anyArea.size());
+            return createTilesForAnnotations(
+                    gui, anyArea, sampleSetup, tempTileDirectory, modeWithIndex, stageInvertedX, stageInvertedY);
+        }
+
         // No matching annotation of any accepted class. Return false so the caller
         // aborts cleanly and shows a single, actionable message. Deliberately do
         // NOT notify here: this method used to raise an APPLICATION_MODAL error
@@ -1123,8 +1131,7 @@ public class MicroscopeAlignmentWorkflow {
         // tile-selection stage, so it sank behind that stage while the caller
         // pressed on with an empty tile grid. Messaging now lives at the call
         // site, before any tile-selection window exists.
-        logger.warn(
-                "No annotations match collection classes or {}; alignment tiles not created", VALID_ANNOTATION_CLASSES);
+        logger.warn("The image has no area annotations; alignment tiles not created");
         return false;
     }
 

@@ -69,7 +69,7 @@ The alignment workflow automatically loads the flipped version of the macro imag
 
 ### Step 1B: Tissue Annotations (Automatic Requirement)
 
-The alignment workflow requires tissue annotations (ROIs) to exist on the active entry. These define the tissue area from which calibration tiles will be automatically selected.
+The alignment workflow needs at least one annotation (ROI) on the active entry. It defines the tissue area from which calibration tiles are selected. **Any class works, including no class.** When several kinds are present, the workflow tiles the first group that exists: annotations of your configured collection classes, then **Tissue**, then **Scanned Area** / **Bounding Box**, then every area annotation.
 
 **If no annotations are present when you start manual alignment:**
 - A dialog appears prompting you to draw tissue ROIs or run tissue detection in QuPath
