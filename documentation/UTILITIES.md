@@ -332,7 +332,9 @@ averaged over 10 frames (`reconstruction.background_frames`) and the set is reco
 calibration it was taken with. The acquisition applies it per tile inside the reconstruction, the
 way OpenPolScope does, and **refuses a background from a different calibration**: the run then
 reconstructs uncorrected and the server log says why. Collect a new background after every
-calibration.
+calibration. The **Ready to acquire?** box also warns when the background's swing states differ
+by more than 10% above black: on a clear field they agree within a few percent, so a larger
+spread usually means the background was taken on specimen. Collect it again on an empty area.
 
 **Access:** Extensions > QP Scope > [Modality Name] > Calibrate Liquid Crystals... (only visible when using an LC-PolScope microscope)
 

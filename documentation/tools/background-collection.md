@@ -23,7 +23,7 @@ Acquire flat-field correction images for improved image quality. Background imag
 |--------|------|---------|-------------|
 | Modality | ComboBox | From config | Select imaging modality (e.g., ppm_20x) |
 | Objective | ComboBox | From config | Select objective lens. **Objective changes sync across all open dialogs** (Acquisition Wizard, Live Viewer Camera Control, Existing-Image Acquisition, etc.), so selecting a new objective here updates all other open dialogs' selectors automatically. |
-| Detector | ComboBox | From config | Select camera/detector |
+| Detector | ComboBox | From profile | Select camera/detector. Choosing an acquisition profile selects the detector that profile names, so on a scope with a camera per modality the background is filed under the right camera. |
 | Acquisition Profile | ComboBox | Auto-resolved | (Optional) Acquisition profile whose illumination intensity the server applies during collection. Shown when the modality declares one or more acquisition profiles. The lamp intensity for the selected profile is displayed below. |
 | Lamp Intensity | Label | From profile | (Read-only) Illumination intensity applied during collection, sourced from the selected acquisition profile. Visible only when the modality has adjustable illumination. Scopes without a lamp (e.g., PPM) do not show this field. |
 | Output Folder | Directory Picker | - | Where to save background images |

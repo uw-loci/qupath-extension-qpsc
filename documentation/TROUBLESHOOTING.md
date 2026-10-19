@@ -151,7 +151,7 @@ details.
 
 **A:** Something already listens on the server port, and it is not the demo. QPSC asks it for
 its camera before sending anything else. A server reporting a camera other than the demo's
-`DCam` is driving real hardware, so QPSC refuses rather than send it the demo configuration
+`DCam` or `DMonoCam` (the demo's two cameras) is driving real hardware, so QPSC refuses rather than send it the demo configuration
 and its stage limits. The message names the camera, for example
 *A microscope server is already running on port 5000 with a real camera (JAICamera), not the
 demo.* If nothing answers like a microscope server, the message says *Something is listening
@@ -207,7 +207,9 @@ the offer QPSC makes, or choose **Extensions > QP Scope > Utilities > Microscope
 Configuration > Switch Microscope...**. If the demo changed the server host to `localhost`,
 set **Host** back under **Communication Settings...**. The demo also set the Live Viewer's
 remembered exposure to its 10 ms; if your first live frame on the real scope is dark, set
-**Exposure (ms)** again on the Camera tab. A demo server that QPSC started stops when
+**Exposure (ms)** again on the Camera tab. It also set the stage direction and camera
+orientation preferences to the demo's (not inverted); switching to your microscope puts your
+own values back. A demo server that QPSC started stops when
 QuPath exits; one you started yourself keeps running until you close its window, and while
 it runs nothing else can use the server port (5000 by default), so your real server will
 not start on this computer.

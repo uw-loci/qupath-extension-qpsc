@@ -289,7 +289,7 @@ run through `cmd.exe /c`). Empty means "whatever `microscope-command-server` is 
 PATH"; a virtual environment's programs are found only while it is activated, see
 [Troubleshooting: Demo microscope](TROUBLESHOOTING.md#demo-microscope). A server already
 listening is used instead of starting one, provided it is the demo server (its camera is
-`DCam`); a server with a real camera is refused, see
+`DCam` or `DMonoCam`); a server with a real camera is refused, see
 [Troubleshooting](TROUBLESHOOTING.md#q-connect-to-a-demo-microscope-says-a-microscope-server-is-already-running-with-a-real-camera).
 
 **Changing it:** edit or clear the **Server Launcher** entry under **Edit > Preferences >
@@ -346,7 +346,9 @@ extracts a second bundled config, `<QuPath user directory>/qpsc-demo-microscope/
 becomes `C:\Users\<you>\QuPath\v0.7\qpsc-demo-microscope\config_Demo.yml`. Unlike the
 placeholder it is a complete, acquisition-capable configuration, driven by the microscope
 server started with `--demo`. The connect also sets the Live Viewer's remembered exposure
-to the demo's 10 ms. Switch back with **Extensions > QP Scope > Utilities > Microscope
+to the demo's 10 ms. It also sets the **Inverted X stage** and **Inverted Y stage**
+preferences to OFF and the **Camera orientation** preference to NORMAL (the demo's values),
+saving your values; switching to another microscope puts them back. Switch back with **Extensions > QP Scope > Utilities > Microscope
 Configuration > Switch Microscope...**, or change this preference and accept the offer.
 
 **CRITICAL WARNING:**
@@ -406,7 +408,7 @@ This error no longer occurs.
 | Requires Restart | No |
 
 **Description:**
-Root folder where slide projects and acquisition data are stored. New projects are created as subdirectories within this folder.
+Root folder where slide projects and acquisition data are stored. New projects are created as subdirectories within this folder. When no project is open, the acquisition dialogs require a folder (a full path) before they will start, and Bounded Acquisition uses the folder shown in its dialog.
 
 **Structure:**
 ```
