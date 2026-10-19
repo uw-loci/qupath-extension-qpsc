@@ -127,6 +127,13 @@ public class StageMapWindow {
 
     private BufferedImage currentMacroImage = null;
     private AffineTransform currentMacroTransform = null;
+    /**
+     * Stage um that refinements have moved this slide since its alignment was made, or null.
+     * The overlay is placed from the scanner preset, which knows nothing of this slide; this is
+     * what lines it up with where the slide was measured to be.
+     */
+    private double[] currentMacroSlideShiftUm = null;
+
     private String currentMacroSampleName = null;
     private String currentMacroScannerName = null;
     // Anchor metadata from the active preset (NaN for legacy presets, in which
@@ -211,6 +218,18 @@ public class StageMapWindow {
      * <p>Only the placement changes; the macro rasters are reused, so this is cheap enough to
      * call on every alignment.
      */
+    /**
+     * Re-reads the macro overlay for the open image and redraws it. Call after a refinement
+     * saves a new slide alignment, so the overlay follows the slide to its measured position.
+     */
+    public static void refreshMacroOverlay() {
+        Platform.runLater(() -> {
+            if (instance != null) {
+                instance.checkMacroOverlayAvailability();
+            }
+        });
+    }
+
     public static void refreshSlotMacroPlacement() {
         Platform.runLater(() -> {
             if (instance != null) {
@@ -2440,6 +2459,7 @@ public class StageMapWindow {
         Platform.runLater(() -> {
             logger.info("Checking macro overlay availability...");
             currentMacroImage = null;
+            currentMacroSlideShiftUm = null;
             currentMacroTransform = null;
             currentMacroSampleName = null;
             currentMacroScannerName = null;
@@ -2533,6 +2553,13 @@ public class StageMapWindow {
             }
 
             logger.info("Macro overlay: resolved sample name '{}', loading data...", sampleName);
+            currentMacroSlideShiftUm = AffineTransformManager.loadMacroOverlayShift(project, sampleName);
+            if (currentMacroSlideShiftUm != null) {
+                logger.info(
+                        "Macro overlay: shifting by ({}, {}) um, where refinement measured this slide",
+                        String.format("%.1f", currentMacroSlideShiftUm[0]),
+                        String.format("%.1f", currentMacroSlideShiftUm[1]));
+            }
 
             // Re-resolve activePreset from disk: AffineTransformManager is not a
             // singleton, so the saved-transforms file can change underneath us
@@ -2933,9 +2960,23 @@ public class StageMapWindow {
                 ? currentMacroPresetPixelSizeUm
                 : pixelSizeUm;
 
+        // Where refinement measured this slide, on both placement paths: the anchor's stage
+        // point, and the preset transform for the legacy 4-corner placement.
+        AffineTransform macroTransform = currentMacroTransform;
+        double anchorStageX = currentMacroAnchorStageX;
+        double anchorStageY = currentMacroAnchorStageY;
+        if (currentMacroSlideShiftUm != null) {
+            double dx = currentMacroSlideShiftUm[0];
+            double dy = currentMacroSlideShiftUm[1];
+            macroTransform = AffineTransform.getTranslateInstance(dx, dy);
+            macroTransform.concatenate(currentMacroTransform);
+            anchorStageX += dx;
+            anchorStageY += dy;
+        }
+
         canvas.setMacroOverlay(
                 currentMacroImage,
-                currentMacroTransform,
+                macroTransform,
                 axInvX,
                 axInvY,
                 effectivePixelSizeUm,
@@ -2943,8 +2984,8 @@ public class StageMapWindow {
                 yOffsetUm,
                 currentMacroAnchorMacroX,
                 currentMacroAnchorMacroY,
-                currentMacroAnchorStageX,
-                currentMacroAnchorStageY);
+                anchorStageX,
+                anchorStageY);
     }
 
     /**

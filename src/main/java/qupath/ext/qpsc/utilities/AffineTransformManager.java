@@ -4,6 +4,7 @@ import com.google.gson.Gson;
 import com.google.gson.GsonBuilder;
 import com.google.gson.reflect.TypeToken;
 import java.awt.geom.AffineTransform;
+import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
@@ -1483,6 +1484,88 @@ public class AffineTransformManager {
             logger.debug("Could not read focus surface for '{}': {}", sampleName, e.getMessage());
             return null;
         }
+    }
+
+    /** Alignment-JSON key: how far refinements have moved this slide, stage um. */
+    static final String MACRO_OVERLAY_SHIFT_KEY = "macroOverlayShiftUm";
+
+    /**
+     * How far refinements have moved this slide's alignment since it was made, in stage um,
+     * or null when none has.
+     *
+     * <p>The Stage Map draws the macro overlay from the scanner preset, which places every slide
+     * where the preset expects it. A refinement measures where THIS slide really is, so the
+     * overlay is shifted by the same amount. 2026-10-19: a single-tile refinement moved a slide's
+     * alignment 2.5 mm and the overlay stayed put. A fresh alignment (every other save site)
+     * rewrites the file without this key, so the shift starts again from zero.
+     */
+    public static double[] loadMacroOverlayShift(Project<BufferedImage> project, String sampleName) {
+        Map<String, Object> data = readAlignmentJson(resolveAlignmentFile(project, sampleName));
+        return data == null ? null : parseShift(data.get(MACRO_OVERLAY_SHIFT_KEY));
+    }
+
+    /**
+     * Records the overlay shift after a refinement. Writes onto the existing alignment record,
+     * so call it after the refined alignment is saved.
+     *
+     * @return true when it was written
+     */
+    public static boolean saveMacroOverlayShift(Project<BufferedImage> project, String sampleName, double[] shift) {
+        File file = resolveAlignmentFile(project, sampleName);
+        Map<String, Object> data = readAlignmentJson(file);
+        if (data == null || shift == null || shift.length != 2) {
+            return false;
+        }
+        data.put(MACRO_OVERLAY_SHIFT_KEY, List.of(shift[0], shift[1]));
+        try {
+            String json = new GsonBuilder().setPrettyPrinting().create().toJson(data);
+            Files.write(file.toPath(), json.getBytes(StandardCharsets.UTF_8));
+            logger.info(
+                    "Saved Stage Map overlay shift for '{}': ({}, {}) um",
+                    sampleName,
+                    String.format("%.1f", shift[0]),
+                    String.format("%.1f", shift[1]));
+            return true;
+        } catch (Exception e) {
+            logger.warn("Could not save the Stage Map overlay shift for '{}': {}", sampleName, e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Where a refinement moved the slide: the stage shift of the image centre between the
+     * transform before and after, added to the shift already recorded.
+     *
+     * <p>The centre because (W/2, H/2) is the same pixel whichever way the entry is flipped, so a
+     * flip difference between the two transforms' frames cannot corrupt it. Both transforms must
+     * map the same image's full-resolution pixels.
+     *
+     * @param previous the shift recorded so far, or null
+     */
+    public static double[] accumulateOverlayShift(
+            double[] previous, AffineTransform before, AffineTransform after, int imageWidth, int imageHeight) {
+        double[] total = previous != null && previous.length == 2 ? previous.clone() : new double[] {0, 0};
+        if (before == null || after == null || imageWidth <= 0 || imageHeight <= 0) {
+            return total;
+        }
+        Point2D centre = new Point2D.Double(imageWidth / 2.0, imageHeight / 2.0);
+        Point2D was = before.transform(centre, null);
+        Point2D now = after.transform(centre, null);
+        total[0] += now.getX() - was.getX();
+        total[1] += now.getY() - was.getY();
+        return total;
+    }
+
+    static double[] parseShift(Object value) {
+        if (value instanceof List<?> list
+                && list.size() == 2
+                && list.get(0) instanceof Number x
+                && list.get(1) instanceof Number y
+                && Double.isFinite(x.doubleValue())
+                && Double.isFinite(y.doubleValue())) {
+            return new double[] {x.doubleValue(), y.doubleValue()};
+        }
+        return null;
     }
 
     private static double asDouble(Object value, double fallback) {

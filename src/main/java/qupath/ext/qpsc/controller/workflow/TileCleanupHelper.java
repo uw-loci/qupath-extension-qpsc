@@ -1,6 +1,10 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.io.File;
+import java.util.ArrayList;
+import java.util.Collection;
+import java.util.List;
+import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -92,5 +96,50 @@ public class TileCleanupHelper {
         } else {
             logger.info("Keeping temporary tiles at: {}", tempTileDir);
         }
+    }
+
+    /**
+     * Cleans up after a cancelled or failed run without touching regions that finished.
+     *
+     * <p>A run's tile directory holds one folder per region. A region the server reported
+     * COMPLETED has its stitch queued or running, and its tiles are finished data, so a cancel
+     * later in the run must not delete them. 2026-10-19: cancelling region 2 force-deleted the
+     * whole run folder while region 1 was stitching, and region 1's 7, -7 and birefringence
+     * images were lost. Finished regions are now left in place; only the folders of regions
+     * that never completed are removed. With no finished region the whole folder goes, as
+     * before.
+     *
+     * @param tempTileDir     the run's tile directory (one sub-folder per region)
+     * @param regionNames     every region of the run, by annotation name
+     * @param acquiredRegions the regions the server reported COMPLETED
+     */
+    public static void cleanupAfterFailedRun(
+            String tempTileDir, Collection<String> regionNames, Set<String> acquiredRegions) {
+        if (acquiredRegions.isEmpty()) {
+            performCleanup(tempTileDir, true);
+            return;
+        }
+        for (String region : acquiredRegions) {
+            logger.info("Keeping tiles of finished region {} (stitched or stitching)", region);
+        }
+        for (String dir : incompleteRegionDirs(tempTileDir, regionNames, acquiredRegions)) {
+            performCleanup(dir, true);
+        }
+    }
+
+    /** The folders of the regions that did not finish, which exist on disk. */
+    static List<String> incompleteRegionDirs(
+            String tempTileDir, Collection<String> regionNames, Set<String> acquiredRegions) {
+        List<String> dirs = new ArrayList<>();
+        for (String region : regionNames) {
+            if (region == null || region.isBlank() || acquiredRegions.contains(region)) {
+                continue;
+            }
+            File dir = new File(tempTileDir, region);
+            if (dir.isDirectory()) {
+                dirs.add(dir.getPath());
+            }
+        }
+        return dirs;
     }
 }

@@ -1658,6 +1658,8 @@ public class AcquisitionManager {
             switch (finalState) {
                 case COMPLETED:
                     logger.info("Acquisition completed successfully for {}", annotation.getName());
+                    // Finished data from here on: a cancel later in the run must not delete it.
+                    state.regionsAcquired.add(annotation.getName());
 
                     // Count EVERY completed acquisition, not just the saturating ones -- this is
                     // the denominator the batch summary reports against.

@@ -1387,7 +1387,7 @@ are skipped as unused.
 
 **A:** **After stitching completes - YES**
 - QuPath automatically deletes temp tiles after successful stitching (or zips them if you selected that preference)
-- **On acquisition/stitching failure, tiles are always deleted** regardless of your tile-handling preference (see PREFERENCES > Tile Handling Method). This prevents incomplete/corrupt tile sets from accumulating. Tile recovery is only possible if you selected "Zip" in preferences -- the zip archive will be created even on error
+- **On acquisition/stitching failure, the tiles of unfinished regions are always deleted** regardless of your tile-handling preference (see PREFERENCES > Tile Handling Method). This prevents incomplete/corrupt tile sets from accumulating. Regions that finished earlier in the same run keep their tiles. Tile recovery is only possible if you selected "Zip" in preferences -- the zip archive will be created even on error
 - You can manually delete TempTiles folder after confirming stitched images are correct
 - To keep tiles for re-stitching on a successful run, set your preference to "None" (keep tiles) or "Zip" (compress them)
 

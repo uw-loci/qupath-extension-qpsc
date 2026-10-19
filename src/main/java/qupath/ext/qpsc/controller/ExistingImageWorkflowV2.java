@@ -21,6 +21,7 @@ import qupath.ext.qpsc.ui.*;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.*;
 import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.fx.dialogs.Dialogs;
@@ -2690,12 +2691,13 @@ public class ExistingImageWorkflowV2 {
                                     "Refinement not accepted (skip / cancel / X-close); preserving prior alignment");
                             return state;
                         }
+                        AffineTransform beforeRefinement = state.transform;
                         if (result.transform != null) {
                             state.transform = result.transform;
                             MicroscopeController.getInstance().setCurrentTransform(result.transform);
                             logger.info("Updated transform with refined alignment");
                         }
-                        saveRefinedAlignment(state);
+                        saveRefinedAlignment(state, beforeRefinement);
                         return state;
                     })
                     .whenComplete((s, ex) -> {
@@ -2731,7 +2733,7 @@ public class ExistingImageWorkflowV2 {
          * corrupts every future macro-entry run. Found during the 2026-05-13 review as
          * direct fallout from the 2603535 routing fix.
          */
-        private void saveRefinedAlignment(WorkflowState state) {
+        private void saveRefinedAlignment(WorkflowState state, AffineTransform beforeRefinement) {
             if (isSubAcquisition()) {
                 logger.debug("saveRefinedAlignment: open entry is a sub-acquisition; "
                         + "offset-based transform is deterministic and not persisted.");
@@ -2792,6 +2794,8 @@ public class ExistingImageWorkflowV2 {
                 } catch (Exception e) {
                     logger.debug("Could not read stage Z to persist a focus seed: {}", e.getMessage());
                 }
+                // Read before the save, which rewrites the record without it.
+                double[] overlayShift = AffineTransformManager.loadMacroOverlayShift(project, lookupKey);
                 AffineTransformManager.saveSlideAlignment(
                         project,
                         lookupKey,
@@ -2804,6 +2808,15 @@ public class ExistingImageWorkflowV2 {
                         state.objective,
                         state.detector,
                         refinedFocusZ);
+                // Move the Stage Map's macro overlay by as much as this refinement moved the
+                // slide. Both transforms consume the open entry's full-resolution pixels.
+                var server = gui.getImageData() != null ? gui.getImageData().getServer() : null;
+                if (server != null) {
+                    overlayShift = AffineTransformManager.accumulateOverlayShift(
+                            overlayShift, beforeRefinement, state.transform, server.getWidth(), server.getHeight());
+                    AffineTransformManager.saveMacroOverlayShift(project, lookupKey, overlayShift);
+                    StageMapWindow.refreshMacroOverlay();
+                }
                 logger.info(
                         "Saved refined alignment for image: {} (lookupKey={}, flipMacroX={}, flipMacroY={}, objective={}, detector={}, focusZ={})",
                         imageName,
@@ -3051,12 +3064,18 @@ public class ExistingImageWorkflowV2 {
             // leave them on disk even when the user's preference is "Keep" (Keep is for
             // diagnostics on success; on error the tiles are usually incomplete /
             // corrupt). cleanupTilesAfterStitching honours the preference and runs only
-            // on the success branch; this is the error-path equivalent.
+            // on the success branch; this is the error-path equivalent. Regions that
+            // finished earlier in the run are kept: their tiles are complete and may be
+            // stitching right now.
             try {
                 if (state != null && state.projectInfo != null) {
                     String tempTileDir = state.projectInfo.getTempTileDirectory();
                     if (tempTileDir != null && !tempTileDir.isBlank()) {
-                        TileCleanupHelper.performCleanup(tempTileDir, true);
+                        List<String> regionNames = new ArrayList<>();
+                        for (PathObject annotation : state.annotations) {
+                            regionNames.add(annotation.getName());
+                        }
+                        TileCleanupHelper.cleanupAfterFailedRun(tempTileDir, regionNames, state.regionsAcquired);
                     }
                 }
             } catch (Exception cleanupEx) {
@@ -3234,6 +3253,11 @@ public class ExistingImageWorkflowV2 {
         public ProjectHelper.ProjectInfo projectInfo;
         public List<PathObject> annotations = new ArrayList<>();
         public List<CompletableFuture<Void>> stitchingFutures = new ArrayList<>();
+        /**
+         * Regions (annotation names) the server reported COMPLETED in this run. The error path
+         * keeps their tiles: they are finished data and may still be stitching.
+         */
+        public final Set<String> regionsAcquired = ConcurrentHashMap.newKeySet();
 
         /**
          * Per-workflow annotation-preservation service (review finding M12).
