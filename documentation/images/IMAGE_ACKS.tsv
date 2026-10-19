@@ -7,3 +7,4 @@ Docs_AnnotationAcquisition.png	c72f2ccb5e998cc15d7d136da657ac47fa780bee	2026-06-
 Docs_LiveViewer_SavedPoints.png	211eeb27683f7bfa7091eaf5a556d5dd11c456ee	2026-07-22	False positive: shares StageControlPanel.java with Navigate; no visible change (user-confirmed 2026-07-22)
 Docs_StageMap.png	9131cf99574d836c97a17648b911313d2c918c2a	2026-09-19	Only the Show Acquisitions status-label text changed (9131cf99); the single-slide figure does not show that label
 Docs_BackgroundCollection.png	ad410e7812b2dedd09f170935967528620f65d30	2026-10-19	2026-10-19 change adds an LC-PolScope-only state table and hides Target Intensity for LC-PolScope; the figure shows another modality and is unchanged
+Docs_BoundedAcquisition.png	14950e04f9d2d73b46aa4b8fb498f94afe3e69b7	2026-10-19	adds a small tile-count label beside the region size; the figure is otherwise current
