@@ -191,7 +191,7 @@ Rotation / transpose cases (supported by Live Viewer controls but **not** by the
 
 **How to Configure:**
 
-**Easy path:** Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the image panned, and solves for the `Camera orientation` that matches under your current `Inverted X/Y stage` polarity. It writes only `Camera orientation` -- polarity is treated as a hardware-wiring fact (see the [Inverted X/Y stage](#inverted-x-stage) sections above) and must be verified separately by direct stage observation. If the tool reports "no camera orientation matches," that is a signal your polarity may be wrong; verify via the MicroManager-script check before retrying. Manual override is available for users who need to edit both at once.
+**Easy path:** Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the tissue in the image moved across the screen (the opposite of the view's pan), and solves for the `Camera orientation` that matches under your current `Inverted X/Y stage` polarity. It writes only `Camera orientation` -- polarity is treated as a hardware-wiring fact (see the [Inverted X/Y stage](#inverted-x-stage) sections above) and must be verified separately by direct stage observation. If the tool reports "no camera orientation matches," that is a signal your polarity may be wrong; verify via the MicroManager-script check before retrying. Manual override is available for users who need to edit both at once.
 
 **Manual procedure (fallback):**
 

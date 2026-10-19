@@ -283,19 +283,22 @@ For these paths, picking a polarity that is *mathematically equivalent through `
 ### How it works
 
 1. Captures the current stage `(x, y)` so it can restore it on close.
-2. Issues `MicroscopeController.moveStageXY(curX + step, curY)` (the same code path the arrow buttons use), then asks the user which of Left / Right / Up / Down the image appeared to pan in.
+2. Issues `MicroscopeController.moveStageXY(curX + step, curY)` (the same code path the arrow buttons use), then asks the user which of Left / Right / Up / Down the tissue in the image appeared to move in (the opposite of the view's pan).
 3. Repeats for `+Y`.
 4. Calls `backSolve(xObserved, yObserved, currentPolarity)` -- walks the 8 `CameraOrientation` values and returns the unique one whose composite with the user's current `StagePolarity` reproduces both observations.
 5. Writes the result via `QPPreferenceDialog.setStageInvertedX/Y` (unchanged from current values) and `setCameraOrientationProperty(orientation)`.
 
-### Predicting image pan
+### Predicting tissue motion
 
-The back-solve predicts each candidate orientation's image-pan with the inverse of `StageImageTransform.screenPanDeltaToMmDelta`:
+The back-solve predicts each candidate orientation's tissue motion (`predictedContentMotion`) as the negation of its view pan:
 
 ```
 sampleDelta = stagePolarity.mmToSampleDelta(mmDx, mmDy)
 screenPan   = cameraOrientation.sampleToDisplay(sampleDelta)
+tissueMotion = -screenPan
 ```
+
+The answer is compared with `tissueMotion`, not with `screenPan`. Comparing with the pan solved every truthful answer 180 degrees off (fixed 2026-10-19; regression test `StageDirectionBackSolveTest`).
 
 ### Failure modes
 

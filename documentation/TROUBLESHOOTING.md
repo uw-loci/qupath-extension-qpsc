@@ -421,7 +421,7 @@ Observe which direction the physical stage actually moves. If it moves in the la
 1. **Stage polarity** (Inverted X / Y stage) — hardware wiring
 2. **Camera orientation** — how the camera mounts / optical path flips the image
 
-**Quick fix (try first):** Open the Live Viewer → Navigate tab → click **Calibrate Directions...** (also available as an optional step in the Setup Wizard). The dialog jogs the stage in +X then +Y, asks which direction the image panned, and writes the correct `Camera orientation` for you under your current polarity. Polarity itself is treated as a hardware-wiring fact and is NOT changed by the tool — if the dialog reports "no camera orientation matches," that is a signal that your polarity may be wrong; verify polarity by direct stage observation (MicroManager-script procedure above) before retrying.
+**Quick fix (try first):** Open the Live Viewer → Navigate tab → click **Calibrate Directions...** (also available as an optional step in the Setup Wizard). The dialog jogs the stage in +X then +Y, asks which direction the tissue in the image moved across the screen (the opposite of the view's pan), and writes the correct `Camera orientation` for you under your current polarity. Polarity itself is treated as a hardware-wiring fact and is NOT changed by the tool — if the dialog reports "no camera orientation matches," that is a signal that your polarity may be wrong; verify polarity by direct stage observation (MicroManager-script procedure above) before retrying.
 
 **Manual diagnosis procedure (when the tool isn't applicable, e.g. server not connected):**
 

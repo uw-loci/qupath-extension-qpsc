@@ -35,8 +35,8 @@ import qupath.ext.qpsc.utilities.StagePolarity;
 /**
  * Interactive "jog and confirm" calibration for camera orientation.
  *
- * <p>Physically moves the stage by a small XY delta, asks the user which way the image
- * appeared to pan, and solves for the {@link CameraOrientation} that reproduces the
+ * <p>Physically moves the stage by a small XY delta, asks the user which way the tissue in
+ * the image moved (the opposite of the view's pan), and solves for the {@link CameraOrientation} that reproduces the
  * observation under the user's <em>current</em> {@link StagePolarity}. Polarity is treated
  * as a hardware-wiring fact set once during stage configuration and is not changed by this
  * tool -- the codebase deliberately keeps polarity (read directly by tile traversal in
@@ -196,7 +196,7 @@ public final class StageDirectionCalibrationDialog {
     private void showIntroPhase(CompletableFuture<CalibrationResult> future) {
         phaseHeader.setText("Camera orientation calibration");
         phaseInstructions.setText("This will move the stage by a small step in +X and then +Y. After each move, "
-                + "watch the Live Viewer and report which way the image appeared to move. "
+                + "watch the Live Viewer and report which way the tissue in the image moved. "
                 + "The dialog solves for your camera orientation (optical flip/rotation) "
                 + "under your current stage polarity setting -- it does NOT change polarity, "
                 + "because polarity is a hardware-wiring fact read by tile traversal and "
@@ -303,10 +303,10 @@ public final class StageDirectionCalibrationDialog {
     private void showAnswerPhase(CompletableFuture<CalibrationResult> future, boolean xPhase) {
         String axisName = xPhase ? "+X" : "+Y";
         int stepNum = xPhase ? 1 : 2;
-        phaseHeader.setText("Step " + stepNum + " of 2: which way did the image move?");
+        phaseHeader.setText("Step " + stepNum + " of 2: which way did the tissue move?");
         phaseInstructions.setText(String.format(
-                "Look at the Live Viewer. After the %s move, the image content appeared to "
-                        + "pan in which direction?",
+                "Look at the Live Viewer. After the %s move, which way did the tissue in the image "
+                        + "move across the screen?",
                 axisName));
 
         ToggleGroup group = new ToggleGroup();
@@ -556,8 +556,8 @@ public final class StageDirectionCalibrationDialog {
             return null;
         }
         for (CameraOrientation co : ORIENTATION_PREFERENCE) {
-            double[] xPredicted = predictedImagePan(polarity, co, 1, 0);
-            double[] yPredicted = predictedImagePan(polarity, co, 0, 1);
+            double[] xPredicted = predictedContentMotion(polarity, co, 1, 0);
+            double[] yPredicted = predictedContentMotion(polarity, co, 0, 1);
             if (matches(xPredicted, xObserved) && matches(yPredicted, yObserved)) {
                 return new CalibrationResult(polarity, co);
             }
@@ -573,6 +573,18 @@ public final class StageDirectionCalibrationDialog {
     private static double[] predictedImagePan(StagePolarity sp, CameraOrientation co, double mmDx, double mmDy) {
         double[] sample = sp.mmToSampleDelta(mmDx, mmDy);
         return co.sampleToDisplay(sample[0], sample[1]);
+    }
+
+    /**
+     * Which way the tissue moves across the screen for an mm-command delta: opposite to the
+     * view's pan. The question asks about the tissue, which is what a person watching reports;
+     * comparing the answer with the PAN direction instead solved every truthful answer 180
+     * degrees off, so double-click-to-center then went the wrong way on both axes (LC-PolScope,
+     * 2026-10-19). On a standard stage +X pans the view right and the tissue slides left.
+     */
+    private static double[] predictedContentMotion(StagePolarity sp, CameraOrientation co, double mmDx, double mmDy) {
+        double[] pan = predictedImagePan(sp, co, mmDx, mmDy);
+        return new double[] {-pan[0] + 0.0, -pan[1] + 0.0};
     }
 
     private static boolean matches(double[] vec, Direction dir) {
