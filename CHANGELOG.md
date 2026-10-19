@@ -13,6 +13,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **LC-PolScope backgrounds are always used when collected.** An LC-PolScope acquisition sends its background whenever a background folder is configured, independent of the "Use background correction" checkbox (flat-field only; now hidden for LC-PolScope) and the YAML `enabled` flag. The server still refuses one from another calibration. Background Collection shows the five states at their one exposure and hides Target Intensity for this modality, since the background must be taken at the acquisition exposure.
 - **LC-PolScope: optional per-tile estimated background.** For a background that differs from tile to tile: `reconstruction.estimated_background.enabled: true` in the microscope YAML makes the server fit and remove a smooth residual from each tile after the measured background. A tile that is mostly specimen is left uncorrected, because the fit cannot tell smooth specimen retardance from residual. Off by default. Needs the matching microscope_command_server and polscope_library. See [CHANNELS.md](documentation/CHANNELS.md).
 
+### Fixed
+
+- **Moving the stage during manual focus no longer stops the run as a stage frame fault.** The manual focus dialog lets you move XY to find tissue, but the stage frame checks stayed on. Moving the stage by hand (the joystick, or Micro-Manager's own controls) then made the server stop the run with "Stage coordinate frame is no longer trustworthy ... with nothing commanded in between". Both the server's check and QPSC's watchdog now pause while a dialog waits on you. The server also re-measures from where the stage stands when a run starts, so a manual move between runs no longer trips it either. A controller restart is still caught. Needs microscope_command_server 87a1d97 and microscope_control 0d0ed10.
+
 ## [0.11.0] - 2026-10-18
 
 ### Added
