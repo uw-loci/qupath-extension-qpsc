@@ -230,6 +230,20 @@ Shows the current hardware and provides modality-dependent camera controls.
 | Brightfield WB | Button | Applies the single white balance preset (no rotation). |
 | Save to Profile | Button | A caption under the button states what it does in one line ("makes these the system default"), since the distinction from a preset is not obvious. Writes the live lamp intensity to `acquisition_profiles.<profile>.illumination_intensity` in the microscope YAML and persists the live exposure as the Camera default. A confirmation dialog shows **all** the values being saved (intensity + exposure) before writing. Background Collection and tiled Acquisition pull the lamp intensity from the YAML profile, so save here to make a Camera-tab tune-up drive BG and acquisition. Brightfield has no profile-level exposure field -- exposure is carried as the persisted Camera default, not under `acquisition_profiles`. |
 
+**LC-PolScope modality content:**
+
+The five states share one exposure and one lamp, so this tab has one exposure field for all of them rather than per-state controls. Details and the rules behind them are in [CHANNELS.md](../CHANNELS.md) (LC-PolScope section).
+
+| Option | Type | Description |
+|--------|------|-------------|
+| Profile | Dropdown | Pick the LC-PolScope acquisition profile, as for Brightfield. |
+| Exposure, all states (ms) | Text field | The one exposure for all five states. Commits on **Enter or focus-loss** and applies it live to the camera. It starts from the longest exposure configured for the states. A warning appears if the configured states disagree. |
+| View state | Radio buttons | Show any one state live at the shared exposure. Focus and judge brightness on a swing state; State0 (ext.) is near black by design. |
+| Target, % of full scale | Text field | Where the brightest swing state's 99.9th percentile should land when suggesting an exposure. Default 75; must be under 100. |
+| Measure all states | Button | Applies each state at the current exposure, snaps it, and shows a table of mean, 99.9th percentile and percent of full scale per state, with a verdict. Clipped states are flagged. Live mode is paused during the measurement (up to 60 s). |
+| Use suggested | Button | Enabled after a measurement that yields a suggestion. Puts the suggested exposure in the field and applies it live. Measure again to check. |
+| Save to Profile | Button | Writes the exposure to every state under `modalities.<name>.channels`, for every objective, after a confirmation. Backgrounds collected at another exposure are flagged at acquisition, so collect again afterwards. |
+
 **Fluorescence / widefield IF modality content (per-channel preview):**
 
 When a fluorescence-style modality has a channel library declared in YAML (`modalities.<name>.channels`), the panel renders one row per channel:
