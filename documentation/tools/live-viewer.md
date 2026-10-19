@@ -28,7 +28,7 @@ The window title dynamically displays the current imaging modality and expected 
 | Display Scale | ComboBox | Select display magnification level |
 | Show Tiles | CheckBox | During acquisition, display the most recently acquired tile instead of the live feed. Updates approximately every 8 seconds as new tiles are captured. Useful for monitoring focus drift without waiting for stitching to complete. Works with multi-angle acquisitions (PPM). |
 
-Double-click on the camera image to center the stage at that position.
+Double-click on the camera image to center the stage at that position. Like the other movement controls, this needs Live to be ON: with Live OFF the double-click does not move the stage, and the status line reads "Movement disabled - Live View is Off". It is also ignored while a calibration or other operation has locked the viewer (the status line briefly shows "LOCKED: ...").
 
 A **green border** is drawn around the image whenever Live is ON, as an at-a-glance indicator that the feed is streaming (it clears when Live is OFF).
 

@@ -2226,6 +2226,18 @@ public class LiveViewerWindow {
      * @param event The mouse event from the double-click
      */
     private void handleDoubleClickToCenter(javafx.scene.input.MouseEvent event) {
+        // The same two gates as every other movement control. The arrows, joystick, Z bars
+        // and Go to Centroid are bound to Live being on, and a lock disables the stage panel;
+        // this handler sits on the image instead, so it checked neither and moved the stage
+        // with Live off (and during a locked calibration) -- reported 2026-10-19.
+        if (lockManager != null && lockManager.isLocked()) {
+            updateStatus("LOCKED: " + lockManager.getLockHolder());
+            return;
+        }
+        if (!liveActive) {
+            updateStatus("Movement disabled - Live View is Off");
+            return;
+        }
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null || !controller.isConnected()) {
             updateStatus("Cannot move: not connected");
