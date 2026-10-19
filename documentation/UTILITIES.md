@@ -115,20 +115,39 @@ that program with no hardware. Always enabled, even with no configuration.
 **Needs:** QuPath, the Python packages and the two JARs. No Micro-Manager, no configuration.
 
 **Does:** extracts the demo configuration
-(`<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`) if it is missing; asks to
+(`<QuPath user directory>/qpsc-demo-microscope/config_Demo.yml`) if it is missing, or
+replaces it when this QPSC ships a newer demo bundle (the old files move to a
+`previous-<date>` folder beside it, and the demo is reloaded); asks to
 point the server host at this computer (**Use localhost**) if it names another machine, and
 Cancel aborts; uses a demo server already listening on the configured port (one whose
-camera is `DCam`; a server with any other camera is refused with an error), or starts
+camera is `DCam` or `DMonoCam`; a server with any other camera is refused with an error), or starts
 `microscope-command-server --demo` (the *Server launcher* preference first, then the PATH);
 switches to the demo configuration through Switch Microscope, or just reconnects if the demo
-is already active; sets the Live Viewer's remembered exposure to the demo's 10 ms; opens the
-Live Viewer. On success a notification reads *Started the demo server and connected.* or
+is already active; sets the Live Viewer's remembered exposure to the demo's 10 ms; applies
+the profile of the modality the Live Viewer remembers, so the simulated camera and lights
+match what it shows; sets the stage direction and camera orientation preferences to the
+demo's (its stage is not inverted), keeping your microscope's values and putting them back
+when you switch to another microscope; opens the Live Viewer. On success a notification reads *Started the demo server and connected.* or
 *Connected to the server already running on port 5000.*; the second means QPSC reused a
 demo server that was already running.
 
-**Simulated:** the camera and stage only, a virtual H&E slide on an XYZ stage with a focal
-surface (10x, 0.65 um/px, 512 x 512 px, a 333 um field, a 40 x 20 mm slide, 8-bit RGB). The
-Live Viewer, Stage Map, autofocus, acquisition and stitching run the real server's code. No
+**Simulated:** a virtual H&E slide on an XYZ stage with a focal surface (a 40 x 20 mm
+slide, 10x), seen three ways. Pick the modality in the Live Viewer's Camera tab; the
+profile switches camera the way a two-camera scope does.
+
+| Modality (profile) | Camera | What it shows |
+|---|---|---|
+| Brightfield (`Brightfield_10x`) | colour `DCam`, 512 x 512 px at 0.65 um/px, 8-bit RGB | the H&E slide |
+| Fluorescence (`Fluorescence_10x`) | mono `DMonoCam`, 640 x 512 px at 0.586 um/px, 12-bit | four channels from a four-line LED: DAPI (nuclei), FITC (weak autofluorescence), TRITC (eosin), Cy5 (sparse puncta in part of the tissue) |
+| lcpolscope (`lcpolscope_10x`) | the same mono camera | five LC-PolScope states through a simulated Meadowlark compensator; the stroma is birefringent (3 to 18 nm, slow axis wandering over a few hundred um), nuclei and glass are not |
+
+The LC-PolScope optics are imperfect in the ways a real instrument is, so its tools have
+something to do: the shipped palette is the demo compensator's calibrated one, which
+**Calibrate Liquid Crystals** finds again; the optics add a field-fixed residual retardance
+of about 0.6 to 2.7 nm, so tiles reconstructed without a background disagree at their seams
+and a background collected on bare glass (x = 22 mm is off the slide) removes it. The Live
+Viewer, Stage Map, autofocus, acquisition, reconstruction and stitching run the real
+server's code. No
 command-line flag or YAML key changes the slide, the stage speeds or the seed; only the
 ordinary QPSC settings apply.
 

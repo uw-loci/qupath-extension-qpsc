@@ -5,7 +5,8 @@
 # objective. Both QPSC and the command server merge the id_* sections of
 # this file into the config, so the entries live here rather than inline.
 # Device names are the server's --demo simulation's; DCam and DStage also
-# match Micro-Manager's Demo adapter, XYStage is the simulation's own label.
+# match Micro-Manager's Demo adapter, XYStage and DMonoCam are the
+# simulation's own labels.
 # NA and working distance below are metadata only; the simulation's depth
 # response comes from its blur-per-micrometer constant, not from NA.
 
@@ -29,6 +30,21 @@ id_detector:
     flip_x: false
     flip_y: false
     description: Simulated colour camera looking at a virtual H&E slide.
+  DEMO_MONO_CAMERA:
+    name: Demo Mono Camera
+    manufacturer: Demo
+    camera_type: generic
+    device: DMonoCam
+    width_px: 640
+    height_px: 512
+    sensor_pixel_width_um: 5.86
+    sensor_pixel_height_um: 5.86
+    flip_x: false
+    flip_y: false
+    description: >-
+      Simulated 12-bit monochrome camera (5.86 um pixels, 0.586 um/px at
+      10x, offset 100 counts) on the epi
+      fluorescence port and behind the simulated LC-PolScope compensator.
 
 id_objective_lens:
   DEMO_OBJECTIVE_10X:

@@ -1,10 +1,17 @@
 # Imaging profiles for the demo microscope (config_Demo.yml).
 #
-# The simulated camera renders bare glass near-white (about 243 of 255,
-# just under clipping) with a 10 ms exposure and lamp intensity 25, so that
-# is the reference exposure. Background correction is off: the virtual
-# slide has no vignette to divide out, so a collected background would be
-# flat and correcting with it would only add noise.
+# Brightfield: the simulated colour camera renders bare glass near-white
+# (about 243 of 255, just under clipping) with a 10 ms exposure and lamp
+# intensity 25, so that is the reference exposure. Background correction is
+# off: the virtual slide has no vignette to divide out, so a collected
+# background would be flat and correcting with it would only add noise.
+#
+# Fluorescence and lcpolscope take their exposures from the channel library
+# in config_Demo.yml; the entries here only record the camera. LC-PolScope
+# is different: its optics carry a field-fixed residual retardance, so a
+# background collected on bare glass (Collect background now..., or
+# Background Collection) does change the result. The first collection
+# writes its folder below; until then tiles are reconstructed uncorrected.
 
 imaging_profiles:
   Brightfield:
@@ -12,9 +19,31 @@ imaging_profiles:
       DEMO_CAMERA:
         exposures_ms:
           default: 10.0
+  Fluorescence:
+    DEMO_OBJECTIVE_10X:
+      DEMO_MONO_CAMERA:
+        white_balance:
+          enabled: false            # monochrome camera
+        exposures_ms:
+          single: 100
+        gains:
+          single: 1.0
+  lcpolscope:
+    DEMO_OBJECTIVE_10X:
+      DEMO_MONO_CAMERA:
+        white_balance:
+          enabled: false
+        exposures_ms:
+          single: 50
+        gains:
+          single: 1.0
 
 background_correction:
   brightfield:
     enabled: false
     method: divide
     base_folder: ''
+  lcpolscope:
+    enabled: false
+    method: none
+    base_folder: null

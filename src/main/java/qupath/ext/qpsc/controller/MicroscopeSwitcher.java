@@ -209,6 +209,11 @@ public final class MicroscopeSwitcher {
                     })
                     .whenComplete((v, err) -> Platform.runLater(() -> {
                         try {
+                            // Leaving the demo puts back the stage and camera orientation it
+                            // replaced (FX thread: they are bound preferences).
+                            if (err == null && DemoOrientation.restoreIfLeaving(newPath)) {
+                                LightPathModel.logCurrent("Orientation stack restored after the demo");
+                            }
                             // 7. Rebuild what the UI shows, against whichever config is now active.
                             SetupScope.reloadForNewConfig();
                             if (err == null) {
@@ -248,12 +253,26 @@ public final class MicroscopeSwitcher {
      */
     private static boolean loadAndValidate(String path) {
         try {
-            MicroscopeConfigManager.getInstance(path);
+            loadConfig(path);
         } catch (RuntimeException e) {
             logger.error("Could not load {}: {}", path, e.getMessage());
             return false;
         }
         return qupath.ext.qpsc.QPScopeChecks.validateMicroscopeConfig();
+    }
+
+    /**
+     * Loads {@code path} into the config manager. {@code getInstance} reloads only when the
+     * path changes, so a switch to the active path (the demo after its bundle was replaced, or
+     * a config edited on disk) re-reads it explicitly.
+     */
+    private static void loadConfig(String path) {
+        MicroscopeConfigManager current = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (current != null && path.equals(current.getConfigPath())) {
+            current.reload(path);
+        } else {
+            MicroscopeConfigManager.getInstance(path);
+        }
     }
 
     private static void reconnectIf(boolean wasConnected, MicroscopeController controller) {

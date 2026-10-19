@@ -9,22 +9,39 @@
 #
 # The server then answers every command from an in-memory microscope: a
 # virtual H&E slide on an XYZ stage, with a focal surface so autofocus has
-# something real to find. Device labels follow Micro-Manager's Demo adapter
-# where it has an obvious counterpart (DCam, DStage); XYStage and DLamp are
-# the simulation's own labels. Running this file against a real Micro-Manager
-# Demo configuration has not been tried.
+# something real to find. Three modalities look at the same slide:
+#
+#   Brightfield   colour camera DCam on the transmitted lamp DLamp
+#   Fluorescence  12-bit mono camera DMonoCam, four-line epi LED DLED
+#                 (DAPI, FITC, TRITC, Cy5 stand-ins: nuclei, weak
+#                 autofluorescence, eosin, sparse puncta)
+#   lcpolscope    the same mono camera behind a simulated Meadowlark
+#                 liquid-crystal compensator (MeadowlarkLC): five states,
+#                 reconstructed to retardance and orientation
+#
+# Switching profile switches camera, the way a two-camera scope does. Device
+# labels follow Micro-Manager's Demo adapter where it has an obvious
+# counterpart (DCam, DStage) and the Meadowlark adapter for MeadowlarkLC and
+# its properties; XYStage, DLamp, DMonoCam and DLED are the simulation's own
+# labels. Running this file against a real Micro-Manager Demo configuration
+# has not been tried.
 #
 # The 'demo: true' flag is what marks this as the demo scope. Acquisition
 # is fully enabled (unlike the Offline / Analysis placeholder); tiles land
 # wherever the acquisition dialog sends them, as on a real scope.
 #
-# Edits survive QPSC updates: the bundle is written only when missing.
-# Delete the qpsc-demo-microscope folder to get a fresh copy.
+# Edits survive QPSC updates, with one exception: when a QPSC update ships a
+# newer bundle (bundle_version below), the old files are moved to a
+# previous-<date> folder beside this one and the new bundle is written.
+# Delete the qpsc-demo-microscope folder to get a fresh copy at any time.
 
 microscope:
   name: Demo
-  type: Brightfield
+  type: Multimodal
   demo: true
+  # Raised whenever the bundle changes in a way an old copy cannot follow
+  # (new modalities, devices, cameras). Leave it alone.
+  bundle_version: 2
   detector_in_use: null
   objective_in_use: null
   modality: null
@@ -44,13 +61,277 @@ modalities:
       method: divide
       base_folder: ''
 
+  # Widefield fluorescence on the mono camera. Each channel switches the
+  # transmitted lamp off and one LED line on; exposures and intensities put
+  # the brightest structures at 50-65% of the 12-bit range at 10x.
+  Fluorescence:
+    type: widefield
+    illumination:
+      device: DLED
+      type: device_property
+      state_property: State
+      intensity_property: State
+      max_intensity: 1.0
+      label: Demo epi LED
+    background_correction:
+      enabled: false
+      method: divide
+      base_folder: ''
+    channels:
+    - id: DAPI
+      display_name: DAPI (385 nm)
+      exposure_ms: 100
+      intensity_property:
+        device: DLED
+        property: Intensity-385nm
+      device_properties:
+      - device: DLamp
+        property: State
+        value: 0
+      - device: DLED
+        property: State
+        value: 1
+      - device: DLED
+        property: Enable-385nm
+        value: 'On'
+      - device: DLED
+        property: Enable-475nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-550nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-621nm
+        value: 'Off'
+      - device: DLED
+        property: Intensity-385nm
+        value: 25
+    - id: FITC
+      display_name: FITC (475 nm)
+      exposure_ms: 200
+      intensity_property:
+        device: DLED
+        property: Intensity-475nm
+      device_properties:
+      - device: DLamp
+        property: State
+        value: 0
+      - device: DLED
+        property: State
+        value: 1
+      - device: DLED
+        property: Enable-385nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-475nm
+        value: 'On'
+      - device: DLED
+        property: Enable-550nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-621nm
+        value: 'Off'
+      - device: DLED
+        property: Intensity-475nm
+        value: 50
+    - id: TRITC
+      display_name: TRITC (550 nm)
+      exposure_ms: 80
+      intensity_property:
+        device: DLED
+        property: Intensity-550nm
+      device_properties:
+      - device: DLamp
+        property: State
+        value: 0
+      - device: DLED
+        property: State
+        value: 1
+      - device: DLED
+        property: Enable-385nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-475nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-550nm
+        value: 'On'
+      - device: DLED
+        property: Enable-621nm
+        value: 'Off'
+      - device: DLED
+        property: Intensity-550nm
+        value: 30
+    - id: Cy5
+      display_name: Cy5 (621 nm)
+      exposure_ms: 100
+      intensity_property:
+        device: DLED
+        property: Intensity-621nm
+      device_properties:
+      - device: DLamp
+        property: State
+        value: 0
+      - device: DLED
+        property: State
+        value: 1
+      - device: DLED
+        property: Enable-385nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-475nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-550nm
+        value: 'Off'
+      - device: DLED
+        property: Enable-621nm
+        value: 'On'
+      - device: DLED
+        property: Intensity-621nm
+        value: 25
+
+  # LC-PolScope on the mono camera. The five states below are the demo
+  # compensator's calibrated palette: extinction (State0) and a 0.03-wave
+  # swing on each crystal. Calibrate Liquid Crystals finds them again, and
+  # Apply rewrites them. Each state also turns the transmitted lamp on at
+  # full intensity, since a fluorescence channel may have left it off.
+  # The crystals' entries come first: the server reads the LC adapter's
+  # wavelength from the first device a state names.
+  lcpolscope:
+    type: polarized
+    reconstruction:
+      wavelength_nm: 549
+      swing_waves: 0.03
+      condenser_na: 0.5
+      objective_medium_ri: 1.0
+      lc_control_mode: MM-Retardance
+      scheme: 5-State
+      state_order: [State0, State1, State2, State3, State4]
+      method: openpolscope
+      black_level: 100          # the demo mono camera's offset
+      display_retardance_ceiling_nm: 20
+      estimated_background:
+        enabled: false
+        order: 2
+        block_size: 32
+        max_block_retardance_nm: 5
+        min_background_fraction: 0.25
+    background_correction:
+      enabled: false
+      method: divide
+      base_folder: ''
+    channels:
+    - id: State0
+      display_name: State0 (extinction)
+      exposure_ms: 50
+      device_properties:
+      - device: MeadowlarkLC
+        property: Retardance LC-A [in waves]
+        value: 0.2475
+      - device: MeadowlarkLC
+        property: Retardance LC-B [in waves]
+        value: 0.5137
+      - device: DLED
+        property: State
+        value: 0
+      - device: DLamp
+        property: State
+        value: 1
+      - device: DLamp
+        property: Intensity
+        value: 100
+      settle_ms: 20
+    - id: State1
+      display_name: State1
+      exposure_ms: 50
+      device_properties:
+      - device: MeadowlarkLC
+        property: Retardance LC-A [in waves]
+        value: 0.2175
+      - device: MeadowlarkLC
+        property: Retardance LC-B [in waves]
+        value: 0.5137
+      - device: DLED
+        property: State
+        value: 0
+      - device: DLamp
+        property: State
+        value: 1
+      - device: DLamp
+        property: Intensity
+        value: 100
+      settle_ms: 20
+    - id: State2
+      display_name: State2
+      exposure_ms: 50
+      device_properties:
+      - device: MeadowlarkLC
+        property: Retardance LC-A [in waves]
+        value: 0.2475
+      - device: MeadowlarkLC
+        property: Retardance LC-B [in waves]
+        value: 0.5437
+      - device: DLED
+        property: State
+        value: 0
+      - device: DLamp
+        property: State
+        value: 1
+      - device: DLamp
+        property: Intensity
+        value: 100
+      settle_ms: 20
+    - id: State3
+      display_name: State3
+      exposure_ms: 50
+      device_properties:
+      - device: MeadowlarkLC
+        property: Retardance LC-A [in waves]
+        value: 0.2775
+      - device: MeadowlarkLC
+        property: Retardance LC-B [in waves]
+        value: 0.5137
+      - device: DLED
+        property: State
+        value: 0
+      - device: DLamp
+        property: State
+        value: 1
+      - device: DLamp
+        property: Intensity
+        value: 100
+      settle_ms: 20
+    - id: State4
+      display_name: State4
+      exposure_ms: 50
+      device_properties:
+      - device: MeadowlarkLC
+        property: Retardance LC-A [in waves]
+        value: 0.2475
+      - device: MeadowlarkLC
+        property: Retardance LC-B [in waves]
+        value: 0.4837
+      - device: DLED
+        property: State
+        value: 0
+      - device: DLamp
+        property: State
+        value: 1
+      - device: DLamp
+        property: Intensity
+        value: 100
+      settle_ms: 20
+
 hardware:
   objectives:
     - id: DEMO_OBJECTIVE_10X
       pixel_size_xy_um:
         DEMO_CAMERA: 0.65
+        DEMO_MONO_CAMERA: 0.586
   detectors:
     - DEMO_CAMERA
+    - DEMO_MONO_CAMERA
 
 # The detector, objective and stage are defined in the sibling
 # resources/resources_LOCI.yml that ships with this bundle. The command
@@ -62,10 +343,14 @@ stage:
   z_stage: DStage
   # In the simulation the focal surface sits between about -22 and +20 um of Z = 0
   # and the slide is "below" the objective: more negative Z is further away,
-  # so retracting is the negative direction and the safe height is -400 um.
+  # so retracting is the negative direction. The server retracts to safe_z_um
+  # after every acquisition, and the next one's first autofocus searches
+  # +/-30 um around wherever Z is, so the safe height is kept just clear of the
+  # focal surface (-25 um) rather than a real objective's few hundred um: from
+  # -400 the second acquisition of a session fell to manual focus every time.
   focus:
     retract_sign: negative
-  safe_z_um: -400.0
+  safe_z_um: -25.0
   limits:
     x_um:
       low: -25000.0
@@ -97,3 +382,13 @@ acquisition_profiles:
     modality: Brightfield
     detector: DEMO_CAMERA
     illumination_intensity: 25
+  Fluorescence_10x:
+    modality: Fluorescence
+    detector: DEMO_MONO_CAMERA
+    illumination_intensity: 1.0
+    channels: [DAPI, FITC, TRITC, Cy5]
+  lcpolscope_10x:
+    modality: lcpolscope
+    detector: DEMO_MONO_CAMERA
+    objective: DEMO_OBJECTIVE_10X
+    channels: [State0, State1, State2, State3, State4]

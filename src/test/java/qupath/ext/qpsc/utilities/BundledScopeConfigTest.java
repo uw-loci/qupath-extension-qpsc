@@ -105,6 +105,111 @@ class BundledScopeConfigTest {
     }
 
     @Test
+    @SuppressWarnings("unchecked")
+    void demoOffersBrightfieldFluorescenceAndLcPolScopeOnTwoCameras() throws IOException {
+        MicroscopeConfigManager mgr = extractAndLoad(Bundle.DEMO);
+        assertTrue(mgr.getAvailableModalities().containsAll(List.of("Brightfield", "Fluorescence", "lcpolscope")));
+        Map<String, Object> mono =
+                (Map<String, Object>) mgr.getMergedDetectorSection().get("DEMO_MONO_CAMERA");
+        assertNotNull(mono, "the mono camera arrives through the bundle's resources file");
+        assertEquals("DMonoCam", mono.get("device"));
+        assertEquals("DEMO_MONO_CAMERA", mgr.getString("acquisition_profiles", "Fluorescence_10x", "detector"));
+        assertEquals("DEMO_MONO_CAMERA", mgr.getString("acquisition_profiles", "lcpolscope_10x", "detector"));
+        assertEquals("DEMO_CAMERA", mgr.getString("acquisition_profiles", "Brightfield_10x", "detector"));
+        assertTrue(
+                qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler.isLcPolScope("lcpolscope"),
+                "the demo's lcpolscope modality must reach the LC-PolScope handler");
+    }
+
+    /**
+     * The shipped LC palette has the structure a calibration produces (polscope_library's
+     * compensator model): the swing states repeat the extinction LC-A on three states and the
+     * extinction LC-B on three, and each swing is the configured swing.
+     */
+    @Test
+    @SuppressWarnings("unchecked")
+    void demoLcPaletteLooksLikeACalibration() throws IOException {
+        MicroscopeConfigManager mgr = extractAndLoad(Bundle.DEMO);
+        List<Map<String, Object>> states = (List<Map<String, Object>>)
+                mgr.getSection("modalities", "lcpolscope").get("channels");
+        assertEquals(5, states.size());
+        double[][] ab = new double[5][2];
+        for (int i = 0; i < 5; i++) {
+            for (Map<String, Object> p :
+                    (List<Map<String, Object>>) states.get(i).get("device_properties")) {
+                if ("MeadowlarkLC".equals(p.get("device"))) {
+                    int k = String.valueOf(p.get("property")).contains("LC-A") ? 0 : 1;
+                    ab[i][k] = ((Number) p.get("value")).doubleValue();
+                }
+            }
+        }
+        double swing = ((Number) mgr.getSection("modalities", "lcpolscope", "reconstruction")
+                        .get("swing_waves"))
+                .doubleValue();
+        int sameA = 0;
+        int sameB = 0;
+        for (int i = 1; i < 5; i++) {
+            if (ab[i][0] == ab[0][0]) {
+                sameA++;
+                assertEquals(swing, Math.abs(ab[i][1] - ab[0][1]), 1e-9, "State" + i + " swings LC-B");
+            }
+            if (ab[i][1] == ab[0][1]) {
+                sameB++;
+                assertEquals(swing, Math.abs(ab[i][0] - ab[0][0]), 1e-9, "State" + i + " swings LC-A");
+            }
+        }
+        assertEquals(2, sameA, "two swing states keep the extinction LC-A");
+        assertEquals(2, sameB, "two swing states keep the extinction LC-B");
+    }
+
+    @Test
+    void bundleVersionDefaultsToOne() {
+        assertEquals(1, BundledScopeInstaller.bundleVersion("microscope:\n  name: Demo\n"));
+        assertEquals(1, BundledScopeInstaller.bundleVersion(null));
+        assertEquals(7, BundledScopeInstaller.bundleVersion("microscope:\n  bundle_version: 7  # note\n"));
+    }
+
+    @Test
+    void aCurrentDemoBundleKeepsItsEdits() throws IOException {
+        Path config = BundledScopeInstaller.installIn(Bundle.DEMO, tempDir).config();
+        Files.writeString(config, Files.readString(config) + "\n# edited\n");
+        BundledScopeInstaller.Installation again = BundledScopeInstaller.installIn(Bundle.DEMO, tempDir);
+        assertNull(again.setAside(), "nothing to replace");
+        assertEquals(config, again.config());
+        Path againPath = again.config();
+        assertTrue(Files.readString(againPath).contains("# edited"), "a current bundle is never overwritten");
+        try (var listing = Files.list(config.getParent())) {
+            assertTrue(listing.noneMatch(p -> p.getFileName().toString().startsWith("previous-")));
+        }
+    }
+
+    @Test
+    void anOutdatedDemoBundleIsSetAsideAndReplaced() throws IOException {
+        Path dir = tempDir.resolve(Bundle.DEMO.dirName());
+        Files.createDirectories(dir.resolve("resources"));
+        // A version-1 bundle: no bundle_version key, one modality.
+        Files.writeString(dir.resolve(Bundle.DEMO.configFileName()), "microscope:\n  name: Demo\n  demo: true\n");
+        Files.writeString(dir.resolve("imageprocessing_Demo.yml"), "imaging_profiles: {}\n");
+        Files.writeString(
+                dir.resolve("resources").resolve(BundledScopeInstaller.RESOURCES_FILENAME), "id_detector: {}\n");
+        Files.writeString(dir.resolve("notes.txt"), "mine");
+
+        BundledScopeInstaller.Installation installed = BundledScopeInstaller.installIn(Bundle.DEMO, tempDir);
+        Path config = installed.config();
+        assertNotNull(installed.setAside(), "the caller is told to reload");
+
+        assertTrue(BundledScopeInstaller.bundleVersion(Files.readString(config)) >= 2, "the new bundle is written");
+        assertTrue(Files.readString(config).contains("lcpolscope"));
+        Path previous = installed.setAside();
+        assertTrue(previous.getFileName().toString().startsWith("previous-"));
+        assertTrue(
+                Files.readString(previous.resolve(Bundle.DEMO.configFileName())).contains("name: Demo"));
+        assertTrue(Files.exists(previous.resolve("imageprocessing_Demo.yml")));
+        assertTrue(Files.exists(previous.resolve("resources").resolve(BundledScopeInstaller.RESOURCES_FILENAME)));
+        assertEquals("mine", Files.readString(dir.resolve("notes.txt")), "other files stay where they are");
+    }
+
+    @Test
     void bundlePathsAreRecognisedOnlyAtTheirOwnLocation() {
         assertTrue(BundledScopeInstaller.isBundleConfigPath(
                 Bundle.OFFLINE, "/x/qpsc-offline-microscope/config_Offline.yml"));

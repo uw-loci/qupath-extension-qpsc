@@ -44,6 +44,22 @@ strategies:
       median_floor: 15.0
     on_failure: defer
 
+  sparse_signal:
+    description: >
+      Scattered fluorescent objects on a dark field (the demo's DAPI
+      nuclei, Cy5 puncta). No area gate; validity is a count of bright
+      local maxima above an adaptive background.
+    score_metric: laplacian_variance
+    validity_check: bright_spot_count
+    validity_params:
+      spot_sigma_above_bg: 4.0
+      spot_min_separation_px: 8
+      min_spots: 2
+      min_peak_intensity: 20.0
+      bright_pixel_floor: 50.0
+      saturation_threshold: 0.03
+    on_failure: proceed
+
   manual_only:
     description: >
       Always fails validity so the manual-focus dialog appears. Bind a
@@ -59,3 +75,14 @@ modalities:
     strategy: dense_texture
   bf:
     strategy: dense_texture
+  fluorescence:
+    strategy: sparse_signal
+  lcpolscope:
+    strategy: dense_texture
+    overrides:
+      validity_params:
+        # Polarized light spreads intensity wider than brightfield and a
+        # polarization image is mostly dark, as on the real LC-PolScope.
+        tissue_mask_range: [0.05, 0.95]
+        texture_threshold: 0.005
+        tissue_area_threshold: 0.1

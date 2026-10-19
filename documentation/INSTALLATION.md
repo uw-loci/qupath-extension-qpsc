@@ -256,10 +256,14 @@ microscope command server*. Step 2 below says what to do.
    70 s later `DemoSample01_0.0_001.ome.tif` (3737 x 3737 px at 0.65 um/px) appears in the
    project.
 
-Only the camera and stage are simulated. The connection, autofocus, tiled acquisition and
-stitching run the same code as a real microscope. The demo is a 10x objective (0.65 um/px)
-on a 512 x 512 camera, a 333 x 333 um field of view, looking at a 40 x 20 mm slide centered
-on the stage origin; beyond it the camera sees bare glass. The slide pattern is fixed, so the
+Only the hardware is simulated. The connection, autofocus, tiled acquisition and
+stitching run the same code as a real microscope. The demo is a 10x objective looking at a
+40 x 20 mm slide centered on the stage origin; beyond it the camera sees bare glass.
+Brightfield uses a 512 x 512 colour camera (0.65 um/px, a 333 x 333 um field). The
+**Modality** list on the Live Viewer's **Camera** tab also offers **Fluorescence** (four
+channels, DAPI to Cy5) and **lcpolscope** (five LC-PolScope states, with retardance and
+orientation reconstructed from them) on a 640 x 512 monochrome camera (0.586 um/px); see
+[Connect to a Demo Microscope](UTILITIES.md#connect-to-a-demo-microscope). The slide pattern is fixed, so the
 same stage position always shows the same tissue, and each frame adds simulated read noise.
 What the simulation leaves out is listed in the
 [server README](https://github.com/uw-loci/microscope_command_server#demo-mode---demo).
@@ -280,7 +284,8 @@ microscope-command-server --demo
 **Where things go.** The demo configuration is extracted once to
 `<QuPath user directory>/qpsc-demo-microscope/` (`config_Demo.yml` with its autofocus,
 imageprocessing and resources files) and selected as the Microscope Config File. Your edits
-to those files survive updates; delete the folder for a fresh copy. Acquired tiles and the
+to those files survive updates, unless an update ships a newer demo: then the old files move
+to a `previous-<date>` folder beside the new ones. Delete the folder for a fresh copy. Acquired tiles and the
 stitched image go into the project, as on a real scope. A server QPSC started is stopped when
 QuPath exits. To return to a real microscope, set **Edit -> Preferences -> QuPath SCope ->
 Microscope Config File** to your own `config_<scope>.yml` and accept the Switch Microscope

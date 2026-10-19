@@ -17,6 +17,7 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
@@ -75,6 +76,12 @@ public final class DemoMicroscope {
     /** Camera device name of the demo core, and of Micro-Manager's own Demo configuration. */
     static final String DEMO_CAMERA = "DCam";
 
+    /**
+     * Every camera the demo core has: {@link #DEMO_CAMERA} and the monochrome camera its
+     * Fluorescence and LC-PolScope profiles switch to. A demo server left on either is the demo.
+     */
+    static final Set<String> DEMO_CAMERAS = Set.of(DEMO_CAMERA, "DMonoCam");
+
     /** The server flag that selects the simulated microscope. */
     public static final String DEMO_FLAG = "--demo";
 
@@ -105,8 +112,12 @@ public final class DemoMicroscope {
         }
         try {
             Path config;
+            Path setAside;
             try {
-                config = BundledScopeInstaller.ensureInstalled(BundledScopeInstaller.Bundle.DEMO);
+                BundledScopeInstaller.Installation installed =
+                        BundledScopeInstaller.install(BundledScopeInstaller.Bundle.DEMO);
+                config = installed.config();
+                setAside = installed.setAside();
             } catch (IOException e) {
                 fail("Could not write the demo microscope config: " + e.getMessage());
                 return;
@@ -123,6 +134,7 @@ public final class DemoMicroscope {
                 host = "localhost";
             }
             final String finalHost = host;
+            final Path finalSetAside = setAside;
 
             CompletableFuture.supplyAsync(() -> ensureServer(finalHost, port))
                     .whenComplete((outcome, err) -> Platform.runLater(() -> {
@@ -142,7 +154,7 @@ public final class DemoMicroscope {
                             return;
                         }
                         inProgress.set(false);
-                        activate(config, outcome, port);
+                        activate(config, finalSetAside, outcome, port);
                     }));
         } catch (RuntimeException e) {
             inProgress.set(false);
@@ -150,8 +162,15 @@ public final class DemoMicroscope {
         }
     }
 
-    /** Switch to the demo config (or reconnect if it is already active) and open the viewer. */
-    private static void activate(Path config, ServerOutcome outcome, int port) {
+    /**
+     * Switch to the demo config (or reconnect if it is already active and unchanged) and open
+     * the viewer. {@code setAside} is where the installer moved an outdated demo bundle, or
+     * null; a replaced bundle is reloaded through the switch even when its path is active,
+     * because the loaded copy is the old one.
+     */
+    private static void activate(Path config, Path setAside, ServerOutcome outcome, int port) {
+        // Before anything reads the orientation (the switch logs it, the viewer uses it).
+        String orientationNote = DemoOrientation.adopt();
         if (outcome.alreadyRunning()) {
             logger.info("Demo microscope: using the server already listening on port {}", port);
         } else {
@@ -159,6 +178,9 @@ public final class DemoMicroscope {
         }
         Runnable onConnected = () -> {
             adoptProfileExposure();
+            // The Live Viewer reopens on the remembered modality; put the simulated hardware
+            // there too (camera, lamp, LED), or e.g. LC-PolScope states land on the colour camera.
+            qupath.ext.qpsc.service.ModalityActuator.getInstance().reapplyCurrent();
             LiveViewerWindow.show();
             Dialogs.showInfoNotification(
                     "Demo microscope",
@@ -166,11 +188,16 @@ public final class DemoMicroscope {
                                     ? "Connected to the server already running on port " + port + "."
                                     : "Started the demo server and connected.")
                             + "\nThe Live Viewer shows a simulated slide; open the Stage Map to drive it, "
-                            + "or use Bounded Acquisition to acquire and stitch tiles.");
+                            + "or use Bounded Acquisition to acquire and stitch tiles."
+                            + (setAside == null
+                                    ? ""
+                                    : "\nThe demo was updated (it now offers Brightfield, Fluorescence and "
+                                            + "LC-PolScope); your previous demo files are in " + setAside + ".")
+                            + (orientationNote == null ? "" : "\n" + orientationNote));
         };
 
         MicroscopeController controller = MicroscopeController.getInstance();
-        if (samePath(MicroscopeSwitcher.activePath(), config.toString())) {
+        if (setAside == null && samePath(MicroscopeSwitcher.activePath(), config.toString())) {
             CompletableFuture.runAsync(() -> {
                         try {
                             controller.userTriggeredConnect();
@@ -193,10 +220,13 @@ public final class DemoMicroscope {
             return;
         }
         // Ask first only when the switch disturbs something: a live connection or open windows.
-        boolean disruptive = controller.getSocketClient().isConnected()
-                || LiveViewerWindow.isVisible()
-                || StageMapWindow.isVisible()
-                || !QpscWindows.showing().isEmpty();
+        // Reloading the active demo after its bundle was replaced needs no question: it is the
+        // same microscope, and the operator just asked for it.
+        boolean disruptive = !samePath(MicroscopeSwitcher.activePath(), config.toString())
+                && (controller.getSocketClient().isConnected()
+                        || LiveViewerWindow.isVisible()
+                        || StageMapWindow.isVisible()
+                        || !QpscWindows.showing().isEmpty());
         MicroscopeSwitcher.switchTo(config.toString(), disruptive, true, onConnected);
     }
 
@@ -209,11 +239,12 @@ public final class DemoMicroscope {
     static ServerOutcome ensureServer(String host, int port) {
         if (portOpen(host, port, 1000)) {
             // Something is already on the port. Adopt it only if it is a simulated microscope:
-            // the demo core's camera is DCam, as is Micro-Manager's own Demo configuration. A
+            // the demo core's cameras are DCam (as in Micro-Manager's own Demo configuration)
+            // and DMonoCam, whichever the last profile switched to. A
             // real microscope's server would otherwise be sent config_Demo.yml and drive real
             // hardware with the demo's stage limits and Z values.
             String camera = probeCameraName(host, port, 3000);
-            if (!DEMO_CAMERA.equals(camera)) {
+            if (camera == null || !DEMO_CAMERAS.contains(camera)) {
                 return new ServerOutcome(
                         false,
                         true,

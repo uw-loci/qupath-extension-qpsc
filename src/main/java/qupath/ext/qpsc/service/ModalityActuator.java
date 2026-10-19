@@ -133,6 +133,17 @@ public final class ModalityActuator {
         }
     }
 
+    /**
+     * Applies the profile of the modality {@link ModalityState} already holds, as if it had
+     * just been selected. A restored modality never fires a change, so after a fresh connect
+     * the hardware can be in another modality (another camera, light path or lamp) than the
+     * one the Live Viewer shows. Not called on connect for real microscopes, because a
+     * profile can move Z ({@code mode_positions}); the demo microscope calls it.
+     */
+    public void reapplyCurrent() {
+        onModalityChanged(ModalityState.getInstance().getModality());
+    }
+
     private void onModalityChanged(String newModality) {
         if (newModality == null || newModality.isBlank()) {
             return;

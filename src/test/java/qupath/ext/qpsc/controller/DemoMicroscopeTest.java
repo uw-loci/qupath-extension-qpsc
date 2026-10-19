@@ -201,6 +201,15 @@ class DemoMicroscopeTest {
     }
 
     @Test
+    void aDemoServerLeftOnItsMonoCameraIsStillTheDemo() throws Exception {
+        try (ServerSocket listener = new ServerSocket(0)) {
+            fakeServer(listener, "DMonoCam", new StringBuilder());
+            DemoMicroscope.ServerOutcome outcome = DemoMicroscope.ensureServer("localhost", listener.getLocalPort());
+            assertTrue(outcome.ok(), outcome.detail());
+        }
+    }
+
+    @Test
     void stoppingALaunchedServerStopsWhatItStarted() throws Exception {
         org.junit.jupiter.api.Assumptions.assumeTrue(Files.isExecutable(Path.of("/bin/sh")), "needs /bin/sh");
         // The start_server.bat shape: a shell that starts the real server and waits on it.
