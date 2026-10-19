@@ -270,13 +270,14 @@ Skipped with a written reason instead of guessed: rotated working entries (base 
 
 ### Polarity is NOT solved for -- this is deliberate
 
-`StagePolarity` and `CameraOrientation` are intentionally separate in this codebase (see "Flip vs Inversion" above). Six call sites read `getStagePolarityProperty()` directly without composing with `CameraOrientation`:
+`StagePolarity` and `CameraOrientation` are intentionally separate in this codebase (see "Flip vs Inversion" above). These call sites read `getStagePolarityProperty()` directly without composing with `CameraOrientation`:
 
 - `utilities/TilingUtilities.java` (tile grid traversal direction)
 - `controller/BoundedAcquisitionWorkflow.java`
-- `controller/MicroscopeAlignmentWorkflow.java` (two call sites)
-- `controller/workflow/ManualAlignmentPath.java`
+- `controller/MicroscopeAlignmentWorkflow.java` (alignment-tile creation)
 - `ui/stagemap/StageInsertRegistry.java`
+
+The alignment's initial pixel -> stage scaling (`TransformationFunctions.setupAffineTransformation`, used by Microscope Alignment and the Existing Image manual alignment) is **not** on this list: it maps a Camera View image, which matches the Live Viewer, so it uses `StageImageTransform` like click-to-center. With a NORMAL camera orientation the two give the same scaling. Until 2026-10-19 it read polarity alone, which sent the second alignment tile the wrong way in Y on a scope whose calibration put a Y flip in the camera orientation; because per-tile refinement re-solves only the translation, the saved alignment kept that mirrored Y.
 
 For these paths, picking a polarity that is *mathematically equivalent through `StageImageTransform`* but doesn't match the actual hardware wiring silently shifts tile positions and alignment math. So the calibration tool treats polarity as a **hardware-wiring fact** set once during stage configuration (verified by direct stage observation, e.g. the MicroManager-script check in `PREFERENCES.md`) and only solves for `CameraOrientation`. The Manual override panel still exposes both for power users.
 

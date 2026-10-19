@@ -347,8 +347,7 @@ public class ManualAlignmentPath {
      * {@code TransformationFunctions.setupAffineTransformation} so it composes with
      * how the final alignment interprets pixel -> stage.
      */
-    private AffineTransform buildSlotCenterEstimate(
-            double fullResPixelSize, boolean stageInvertedX, boolean stageInvertedY) {
+    private AffineTransform buildSlotCenterEstimate(double fullResPixelSize) {
         double[] slotCenter = state.slotCenterStageXY;
         if (slotCenter == null || slotCenter.length < 2) {
             return null;
@@ -361,7 +360,7 @@ public class ManualAlignmentPath {
             }
             double[] centerPx = {server.getWidth() / 2.0, server.getHeight() / 2.0};
             AffineTransform scaling = qupath.ext.qpsc.utilities.TransformationFunctions.setupAffineTransformation(
-                    fullResPixelSize, stageInvertedX, stageInvertedY);
+                    fullResPixelSize, qupath.ext.qpsc.utilities.StageImageTransform.current());
             AffineTransform estimate = qupath.ext.qpsc.utilities.TransformationFunctions.addTranslationToScaledAffine(
                     scaling, centerPx, slotCenter);
             logger.info(
@@ -380,13 +379,6 @@ public class ManualAlignmentPath {
     }
 
     private CompletableFuture<WorkflowState> buildTilesAndShowAlignmentUI() {
-        // Get stage inversion settings from preferences for the alignment UI.
-        // The UI uses these to interpret the operator's click direction; the
-        // transform class is the canonical reader so all call sites agree.
-        qupath.ext.qpsc.utilities.StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
-        boolean stageInvertedX = stagePolarity.invertX;
-        boolean stageInvertedY = stagePolarity.invertY;
-
         // The manual alignment maps FULL-RES image pixels -> stage, so the scaling
         // transform must use the open image's full-res pixel size -- NOT the macro
         // pixel size (state.pixelSize, ~81 um/px). Passing the macro size produced a
@@ -404,7 +396,7 @@ public class ManualAlignmentPath {
         // where the tissue smear is within it, so the estimate can be ~tens of mm
         // from the tissue. After the operator drives to the real tissue for point 1,
         // the transform re-anchors there and points 2-3 refine it.
-        AffineTransform slotEstimate = buildSlotCenterEstimate(fullResPixelSize, stageInvertedX, stageInvertedY);
+        AffineTransform slotEstimate = buildSlotCenterEstimate(fullResPixelSize);
 
         // Build tiles and run the 3-point landmark picker to establish the transform
         // from scratch. Multi-slide force-fresh runs this too (the slide's true
@@ -423,7 +415,7 @@ public class ManualAlignmentPath {
         // slot-center estimate is present); enables force-Camera-View / zoom / autofocus-on-jump.
         boolean slotJumpAssist = slotEstimate != null;
         return AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                        fullResPixelSize, stageInvertedX, stageInvertedY, slotEstimate, slotJumpAssist)
+                        fullResPixelSize, slotEstimate, slotJumpAssist)
                 .thenApply(transform -> {
                     if (transform == null) {
                         throw new CancellationException("Manual alignment cancelled by user");

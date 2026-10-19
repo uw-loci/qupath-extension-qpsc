@@ -267,13 +267,13 @@ public class MicroscopeAlignmentWorkflow {
         double sx = transform.getScaleX();
         double sy = transform.getScaleY();
 
-        // Scale sign check. The expected sign depends on stage-axis inversion: when the stage X
-        // axis is inverted, a positive pixel-X step maps to a negative stage-X command, so a
-        // negative scale is correct. We flag a sign as suspicious only if it disagrees with the
-        // configured stage polarity.
-        qupath.ext.qpsc.utilities.StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
-        boolean expectNegX = stagePolarity != null && stagePolarity.invertX;
-        boolean expectNegY = stagePolarity != null && stagePolarity.invertY;
+        // Scale sign check. The expected signs are those of the initial scaling, which follows
+        // the Live Viewer's stage polarity AND camera orientation; flag a sign only if it
+        // disagrees with that.
+        AffineTransform expected = TransformationFunctions.setupAffineTransformation(
+                1.0, qupath.ext.qpsc.utilities.StageImageTransform.current());
+        boolean expectNegX = expected.getScaleX() < 0;
+        boolean expectNegY = expected.getScaleY() < 0;
         boolean sxNeg = (sx < 0) != expectNegX;
         boolean syNeg = (sy < 0) != expectNegY;
 
@@ -965,7 +965,7 @@ public class MicroscopeAlignmentWorkflow {
 
             // Setup manual transform - this returns a full-res->stage transform
             AffineTransformationController.setupAffineTransformationAndValidationGUI(
-                            mainPixelSize, stageInvertedX, stageInvertedY, existingTransformEstimate)
+                            mainPixelSize, existingTransformEstimate)
                     .thenCompose(fullResToStageTransform -> {
                         if (fullResToStageTransform == null) {
                             logger.info("Transform setup cancelled");

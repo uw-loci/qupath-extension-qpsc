@@ -1161,21 +1161,25 @@ public class TransformationFunctions {
     }
 
     /**
-     * Initializes a scaling transform from pixel size and stage inversion preferences.
-     * When an axis is inverted, the scale factor is negated so that the transform
-     * maps QuPath pixel coordinates to the correct stage direction.
+     * Initial full-res-pixel -> stage transform (no translation) for an image shown in the Live
+     * Viewer's orientation ("(Camera View)").
+     *
+     * <p>Moving from one point of such an image to another is exactly a double-click-to-center
+     * in the Live Viewer, so this uses the same mapping, {@link StageImageTransform}: camera
+     * orientation AND stage polarity. Polarity alone ignored the camera orientation that
+     * Calibrate Directions records; on the LC-PolScope (calibrated with a Y flip in the camera
+     * orientation) the second alignment tile was predicted in the wrong Y direction, and the
+     * per-tile refinement, which re-solves only the translation, would have kept the mirrored Y
+     * (2026-10-19). On a NORMAL camera orientation this equals the old polarity-only scaling.
      *
      * @param pixelSizeSourceImage pixel size of the source image in microns
-     * @param stageInvertedX whether the stage X axis is inverted
-     * @param stageInvertedY whether the stage Y axis is inverted
+     * @param transform the scope's stage/camera transform, normally {@link StageImageTransform#current()}
      */
     public static AffineTransform setupAffineTransformation(
-            double pixelSizeSourceImage, boolean stageInvertedX, boolean stageInvertedY) {
-
-        double sx = stageInvertedX ? -pixelSizeSourceImage : pixelSizeSourceImage;
-        double sy = stageInvertedY ? -pixelSizeSourceImage : pixelSizeSourceImage;
-        AffineTransform at = new AffineTransform();
-        at.scale(sx, sy);
-        return at;
+            double pixelSizeSourceImage, StageImageTransform transform) {
+        double[] perPixelX = transform.screenPanDeltaToMmDelta(pixelSizeSourceImage, 0);
+        double[] perPixelY = transform.screenPanDeltaToMmDelta(0, pixelSizeSourceImage);
+        // AffineTransform(m00, m10, m01, m11, m02, m12): columns are the images of the pixel axes.
+        return new AffineTransform(perPixelX[0], perPixelX[1], perPixelY[0], perPixelY[1], 0, 0);
     }
 }

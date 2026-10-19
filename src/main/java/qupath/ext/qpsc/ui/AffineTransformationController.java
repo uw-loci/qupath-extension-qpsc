@@ -13,6 +13,7 @@ import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
+import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -115,35 +116,18 @@ public class AffineTransformationController {
     }
 
     /**
-     * Launches the full affine alignment GUI flow with manual stage navigation.
-     *
-     * @param macroPixelSizeMicrons Pixel size of macro image in microns
-     * @param stageInvertedX        Whether the stage X axis is inverted
-     * @param stageInvertedY        Whether the stage Y axis is inverted
-     * @return CompletableFuture with the user's validated affine transform, or null if cancelled.
-     */
-    public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
-            double macroPixelSizeMicrons, boolean stageInvertedX, boolean stageInvertedY) {
-        return setupAffineTransformationAndValidationGUI(
-                macroPixelSizeMicrons, stageInvertedX, stageInvertedY, null, false);
-    }
-
-    /**
      * Backward-compatible overload without the multi-slide slot-jump assist (Camera View / zoom /
      * autofocus-on-jump). Equivalent to passing {@code slotJumpAssist = false}.
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
-            double macroPixelSizeMicrons,
-            boolean stageInvertedX,
-            boolean stageInvertedY,
-            AffineTransform existingTransformEstimate) {
-        return setupAffineTransformationAndValidationGUI(
-                macroPixelSizeMicrons, stageInvertedX, stageInvertedY, existingTransformEstimate, false);
+            double macroPixelSizeMicrons, AffineTransform existingTransformEstimate) {
+        return setupAffineTransformationAndValidationGUI(macroPixelSizeMicrons, existingTransformEstimate, false);
     }
 
     /**
      * Launches the full affine alignment GUI flow:
-     *  - Computes an initial scaling transform based on pixel size and flip
+     *  - Computes an initial scaling transform from the pixel size and the Live Viewer's
+     *    stage/camera transform ({@link StageImageTransform#current()})
      *  - Guides the user to align the microscope stage to selected tiles
      *  - Refines the affine transform using measured stage coordinates
      *  - Returns the final AffineTransform (or null if cancelled)
@@ -153,8 +137,6 @@ public class AffineTransformationController {
      * the user must manually navigate the stage.
      *
      * @param macroPixelSizeMicrons    Pixel size of macro image in microns
-     * @param stageInvertedX           Whether the stage X axis is inverted
-     * @param stageInvertedY           Whether the stage Y axis is inverted
      * @param existingTransformEstimate Optional existing fullRes-to-stage transform for auto-move (may be null)
      * @param slotJumpAssist           When true (multi-slide slot jump), applies the Section-D
      *                                 assists: force Camera View + zoom-to-tissue at alignment start
@@ -163,11 +145,7 @@ public class AffineTransformationController {
      * @return CompletableFuture with the user's validated affine transform, or null if cancelled.
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
-            double macroPixelSizeMicrons,
-            boolean stageInvertedX,
-            boolean stageInvertedY,
-            AffineTransform existingTransformEstimate,
-            boolean slotJumpAssist) {
+            double macroPixelSizeMicrons, AffineTransform existingTransformEstimate, boolean slotJumpAssist) {
 
         boolean hasEstimate = existingTransformEstimate != null;
         CompletableFuture<AffineTransform> future = new CompletableFuture<>();
@@ -177,18 +155,18 @@ public class AffineTransformationController {
                 // Clear alignment points from any previous session
                 alignmentPoints.clear();
 
+                StageImageTransform stageImage = StageImageTransform.current();
                 logger.info(
-                        "Starting affine transformation setup (pixelSize: {}, stageInvertedX: {}, stageInvertedY: {}, hasEstimate: {})",
+                        "Starting affine transformation setup (pixelSize: {}, {}, hasEstimate: {})",
                         macroPixelSizeMicrons,
-                        stageInvertedX,
-                        stageInvertedY,
+                        stageImage,
                         hasEstimate);
 
                 QuPathGUI gui = QuPathGUI.getInstance();
 
                 // 1. Create initial scaling transform
-                AffineTransform scalingTransform = TransformationFunctions.setupAffineTransformation(
-                        macroPixelSizeMicrons, stageInvertedX, stageInvertedY);
+                AffineTransform scalingTransform =
+                        TransformationFunctions.setupAffineTransformation(macroPixelSizeMicrons, stageImage);
                 logger.info("Initial scaling transform: {}", scalingTransform);
 
                 // Multi-slide alignment-step start (slotJumpAssist == a slide-carrier slot jump):
