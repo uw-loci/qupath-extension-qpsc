@@ -356,8 +356,11 @@ public class SingleTileRefinement {
                                     // embedded capture pane uses). Kept on a pre-dialog thread so a
                                     // successful auto-accept completes WITHOUT building the refinement
                                     // dialog -- no dialog flash.
-                                    SiftCapturePane.AutoAlignOutcome outcome =
-                                            SiftCapturePane.attemptAutoAccept(gui, selectedTile, confidenceThreshold);
+                                    SiftCapturePane.AutoAlignOutcome outcome = SiftCapturePane.attemptAutoAccept(
+                                            gui,
+                                            selectedTile,
+                                            confidenceThreshold,
+                                            qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm());
                                     double[] result = outcome.siftResult();
                                     if (result != null && result.length >= 4) {
                                         double confidence = result[3]; // 4th element = confidence

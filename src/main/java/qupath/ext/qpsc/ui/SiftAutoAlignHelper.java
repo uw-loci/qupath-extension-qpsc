@@ -67,6 +67,8 @@ public final class SiftAutoAlignHelper {
      *
      * @param gui  QuPath GUI (for accessing the image server and project entry)
      * @param tile the tile to match against
+     * @param searchMarginUm how far around the tile to search, normally the Search margin
+     *     preference; a "Search wider" retry passes more
      * @return {@code [offsetX, offsetY, inliers, confidence]} on success;
      *     {@code null} if matching failed. The returned offset is the raw
      *     server offset (WSI-entry frame), unchanged, for display; the stage
@@ -75,8 +77,32 @@ public final class SiftAutoAlignHelper {
      *     pixel calibration, etc.). Match failures (insufficient features)
      *     return null rather than throwing.
      */
-    public static double[] autoAlign(QuPathGUI gui, PathObject tile) throws Exception {
-        return match(gui, tile, true);
+    public static double[] autoAlign(QuPathGUI gui, PathObject tile, double searchMarginUm) throws Exception {
+        return match(gui, tile, true, searchMarginUm);
+    }
+
+    /**
+     * The widest search a "Search wider" retry offers. QPSC writes the search region at 1 um/px,
+     * so a 3 mm margin is a 6.4 mm square, about 41 megapixels; 6 mm would be about 150.
+     */
+    public static final double MAX_SEARCH_MARGIN_UM = 3000;
+
+    /**
+     * The margin for a "Search wider" retry after {@code currentUm} found nothing:
+     * {@link #MAX_SEARCH_MARGIN_UM}, or {@code currentUm} when it is already that wide.
+     *
+     * <p>2026-10-19: a slide's alignment was 2.5 mm out, the default 1 mm search failed five
+     * times with "insufficient features", and each refinement went on with the wrong alignment.
+     */
+    public static double widerSearchMarginUm(double currentUm) {
+        return currentUm >= MAX_SEARCH_MARGIN_UM ? currentUm : MAX_SEARCH_MARGIN_UM;
+    }
+
+    /** True when SIFT ran and found no match, as opposed to failing to run at all. */
+    public static boolean isNoMatchFailure(Throwable error) {
+        String message = error == null ? null : error.getMessage();
+        return message != null
+                && (message.contains("SIFT matching failed") || message.contains("insufficient features"));
     }
 
     /**
@@ -104,15 +130,16 @@ public final class SiftAutoAlignHelper {
      * @throws Exception on a low-level error (server I/O, missing pixel calibration)
      */
     public static double[] measureOffsetWithoutMoving(QuPathGUI gui, PathObject tile) throws Exception {
-        return match(gui, tile, false);
+        return match(gui, tile, false, PersistentPreferences.getSiftSearchMarginUm());
     }
 
     /**
      * The shared body: capture, match, and move only when asked.
      *
      * @param moveStage true to apply the matched offset, false to measure only
+     * @param marginUm how far around the tile to search, stage um
      */
-    private static double[] match(QuPathGUI gui, PathObject tile, boolean moveStage) throws Exception {
+    private static double[] match(QuPathGUI gui, PathObject tile, boolean moveStage, double marginUm) throws Exception {
 
         var imageData = gui.getImageData();
         if (imageData == null) throw new IllegalStateException("No image data available");
@@ -138,7 +165,6 @@ public final class SiftAutoAlignHelper {
                     + "for this objective and retry.");
         }
 
-        double marginUm = PersistentPreferences.getSiftSearchMarginUm();
         double marginPx = marginUm / wsiPixelSize;
 
         double tileX = tile.getROI().getBoundsX();
@@ -623,7 +649,8 @@ public final class SiftAutoAlignHelper {
             new Thread(
                             () -> {
                                 try {
-                                    double[] result = autoAlign(gui, targetTile);
+                                    double[] result =
+                                            autoAlign(gui, targetTile, PersistentPreferences.getSiftSearchMarginUm());
                                     Platform.runLater(() -> {
                                         autoAlignButton.setDisable(false);
                                         if (result != null && result.length >= 2) {
@@ -690,7 +717,7 @@ public final class SiftAutoAlignHelper {
         new Thread(
                         () -> {
                             try {
-                                future.complete(autoAlign(gui, tile));
+                                future.complete(autoAlign(gui, tile, PersistentPreferences.getSiftSearchMarginUm()));
                             } catch (Exception e) {
                                 future.completeExceptionally(e);
                             }

@@ -67,6 +67,13 @@ class SiftCapturePane extends VBox {
     private final Button siftButton;
     private final Button captureButton;
     private final Button skipButton;
+    private final Button widerButton;
+
+    /**
+     * How far around the tile SIFT searches. Starts at the Search margin preference; "Search
+     * wider" raises it for this point only, so the preference stays what the operator set.
+     */
+    private double searchMarginUm = qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm();
 
     /** Points the operator at the next action within the pane: SIFT first, then capture. */
     private final qupath.ext.qpsc.ui.AttentionPulse pulse = new qupath.ext.qpsc.ui.AttentionPulse();
@@ -156,7 +163,22 @@ class SiftCapturePane extends VBox {
             }
         });
 
-        HBox siftRow = new HBox(8, siftButton, settingsButton);
+        // Shown only after SIFT ran and matched nothing: the commonest cause is an alignment off
+        // by more than the search margin, and the old message ("nudge manually") let the run go
+        // on with that alignment.
+        widerButton = new Button("Search wider");
+        widerButton.setStyle("-fx-font-weight: bold;");
+        widerButton.setVisible(false);
+        widerButton.setManaged(false);
+        widerButton.setOnAction(e -> {
+            searchMarginUm = SiftAutoAlignHelper.widerSearchMarginUm(searchMarginUm);
+            logger.info("SiftCapturePane: searching wider, margin {} um", Math.round(searchMarginUm));
+            SiftAutoAlignHelper.previewSearchRangeMargin(searchMarginUm);
+            hideWiderSearch();
+            runSift(false, confidenceThreshold);
+        });
+
+        HBox siftRow = new HBox(8, siftButton, widerButton, settingsButton);
         siftRow.setAlignment(Pos.CENTER_LEFT);
 
         HBox actionRow = new HBox(10, captureButton, skipButton);
@@ -226,14 +248,17 @@ class SiftCapturePane extends VBox {
                                 // threshold yields the raw SIFT result for the label without reading
                                 // (or accepting) a stage position -- exactly the previous
                                 // "accept = autoAccept && ..." semantics.
-                                AutoAlignOutcome outcome =
-                                        attemptAutoAccept(gui, tile, autoAccept ? threshold : Double.POSITIVE_INFINITY);
+                                AutoAlignOutcome outcome = attemptAutoAccept(
+                                        gui, tile, autoAccept ? threshold : Double.POSITIVE_INFINITY, searchMarginUm);
                                 double[] result = outcome.siftResult();
                                 double[] measured = outcome.measuredStageXY();
                                 Platform.runLater(() -> {
                                     renderSiftResult(result);
                                     siftButton.setDisable(false);
                                     boolean validMatch = result != null && result.length >= 2;
+                                    if (!validMatch) {
+                                        offerWiderSearch();
+                                    }
                                     if (gateCaptureOnSift && validMatch) {
                                         captureButton.setDisable(false);
                                     }
@@ -290,8 +315,12 @@ class SiftCapturePane extends VBox {
                                 logger.warn("SiftCapturePane SIFT failed: {}", ex.getMessage());
                                 Platform.runLater(() -> {
                                     siftResultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
-                                    siftResultLabel.setText(
-                                            "SIFT failed: " + ex.getMessage() + " -- nudge manually, then Capture.");
+                                    if (SiftAutoAlignHelper.isNoMatchFailure(ex)) {
+                                        offerWiderSearch();
+                                    } else {
+                                        siftResultLabel.setText("SIFT failed: " + ex.getMessage()
+                                                + " -- nudge manually, then Capture.");
+                                    }
                                     siftButton.setDisable(false);
                                     pulse.highlight(siftButton, "#E65100");
                                     if (qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()) {
@@ -326,6 +355,36 @@ class SiftCapturePane extends VBox {
     }
 
     /**
+     * Says what a SIFT miss most likely means and offers a wider search, while one is left.
+     * Call on the FX thread.
+     */
+    private void offerWiderSearch() {
+        double wider = SiftAutoAlignHelper.widerSearchMarginUm(searchMarginUm);
+        String searched = String.format("%.1f mm", searchMarginUm / 1000.0);
+        siftResultLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
+        if (wider > searchMarginUm) {
+            siftResultLabel.setText("SIFT found no match within " + searched + " of where the alignment puts this "
+                    + "tile. If the Live Viewer does not show this tile's tissue, the slide's alignment is "
+                    + "probably off by more than that: Search wider, or move the stage onto the tile and "
+                    + "Capture.");
+            widerButton.setText(String.format("Search wider (%.0f mm)", wider / 1000.0));
+            widerButton.setVisible(true);
+            widerButton.setManaged(true);
+            pulse.highlight(widerButton, "#E65100");
+        } else {
+            siftResultLabel.setText("SIFT found no match even within " + searched + " of where the alignment puts "
+                    + "this tile. The slide may have moved since it was aligned: move the stage onto the tile "
+                    + "and Capture, or skip this point and re-align the slide.");
+            hideWiderSearch();
+        }
+    }
+
+    private void hideWiderSearch() {
+        widerButton.setVisible(false);
+        widerButton.setManaged(false);
+    }
+
+    /**
      * Shared trust-SIFT core: runs {@link SiftAutoAlignHelper#autoAlign}, applies the confidence
      * gate ({@code result[3] >= threshold}), and -- only when the gate passes -- reads the resulting
      * stage position. This is the single home for the run + threshold + measure logic that this
@@ -334,6 +393,7 @@ class SiftCapturePane extends VBox {
      *
      * @param gui QuPath GUI (for the WSI server / SIFT)
      * @param tile the target reference tile
+     * @param searchMarginUm how far around the tile SIFT searches, stage um
      * @param threshold minimum SIFT confidence (0.0-1.0) to accept; pass an unreachable value (e.g.
      *     {@link Double#POSITIVE_INFINITY}) to run SIFT for its raw result without accepting or
      *     reading a stage position
@@ -342,8 +402,9 @@ class SiftCapturePane extends VBox {
      * @throws Exception if the SIFT match or stage read fails (propagated for the caller to handle,
      *     exactly as the inline versions did inside their {@code catch (Exception)} blocks)
      */
-    static AutoAlignOutcome attemptAutoAccept(QuPathGUI gui, PathObject tile, double threshold) throws Exception {
-        double[] result = SiftAutoAlignHelper.autoAlign(gui, tile);
+    static AutoAlignOutcome attemptAutoAccept(QuPathGUI gui, PathObject tile, double threshold, double searchMarginUm)
+            throws Exception {
+        double[] result = SiftAutoAlignHelper.autoAlign(gui, tile, searchMarginUm);
         boolean validMatch = result != null && result.length >= 2;
         if (validMatch) {
             // SIFT has just moved the stage in XY, and the field it lands on is often slightly

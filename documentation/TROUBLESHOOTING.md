@@ -531,6 +531,8 @@ If matching still fails on a tile that visually overlaps the camera's live view:
 
 Drive the stage roughly close (a few hundred microns is enough) using the joystick, Live Viewer click-to-center, or the initial transform estimate before clicking SIFT. If you genuinely need a wider capture range, raise the search margin -- but matching cost grows with margin squared, so 300-400 um is a reasonable upper bound.
 
+When SIFT finds no match in the refinement pane, it says how far it searched and shows a **Search wider (3 mm)** button. That reruns SIFT once for this point with a 3 mm margin, without changing your preference. Use it when the Live Viewer does not show the tile's tissue: the slide's alignment is probably off by more than the margin. On 2026-10-19 a slide's alignment was 2.5 mm out, and five 1 mm searches failed before one matched. The wider search takes several seconds, because QPSC reads a region of about 6.4 mm square at 1 um per pixel. If even the 3 mm search finds nothing, move the stage onto the tile and **Capture position**, or skip the point and re-align the slide.
+
 #### Q: Multi-slide batch stopped with "Alignment could not be confirmed"
 
 **A:** Before each slide in an unattended multi-slide acquire pass, the system
