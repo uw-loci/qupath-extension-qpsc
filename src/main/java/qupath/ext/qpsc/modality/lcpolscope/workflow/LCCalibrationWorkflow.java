@@ -507,7 +507,11 @@ public class LCCalibrationWorkflow {
             }
             MicroscopeSocketClient client = controller.getSocketClient();
 
-            String json = client.runLcCalibration(
+            // Live streaming stops for the run: the calibration snaps hundreds of frames,
+            // and the Live Viewer's no-frames watchdog would otherwise restart streaming
+            // between them.
+            String[] reply = new String[1];
+            controller.withLiveModeHandling(() -> reply[0] = client.runLcCalibration(
                     QPPreferenceDialog.getMicroscopeConfigFileProperty(),
                     params.outputFolder(),
                     "lcpolscope",
@@ -517,7 +521,8 @@ public class LCCalibrationWorkflow {
                     params.blackLevel(),
                     params.exposureMs(),
                     params.strategy(),
-                    message -> Platform.runLater(() -> status.setText(message)));
+                    message -> Platform.runLater(() -> status.setText(message))));
+            String json = reply[0];
 
             JsonObject result = JsonParser.parseString(json).getAsJsonObject();
             Platform.runLater(() -> {
@@ -956,8 +961,10 @@ public class LCCalibrationWorkflow {
      * Write a calibration's palette into the microscope YAML so acquisition reproduces it.
      *
      * <p>For every state in {@code palette_waves}, the channel of the same id under
-     * {@code modalities.lcpolscope.channels} gets its {@code device_properties} replaced with the
-     * two retardance writes (in waves; the Meadowlark adapter converts to volts) and loses its
+     * {@code modalities.lcpolscope.channels} gets its {@code device_properties} for the LC device
+     * replaced with the two retardance writes (in waves; the Meadowlark adapter converts to volts);
+     * entries for other devices, such as a lamp the state switches on, are kept after them. It
+     * loses its
      * {@code mm_setup_presets}, which hold the previous calibration as volts and would otherwise
      * be applied first on every state. Then {@code reconstruction.state_order} is reset to the
      * palette's own order, because polscope_library names its states so that State0..State4 is
@@ -1013,6 +1020,8 @@ public class LCCalibrationWorkflow {
                     + ".channels: " + missing + ". Nothing was written.");
         }
 
+        Map<String, List<Map<String, Object>>> otherDevices = otherDeviceProperties(configPath, states, device);
+
         List<String> summary = new ArrayList<>();
         List<String> comment = List.of(
                 "LC calibration " + calibratedAt + ", extinction ratio " + extinction + ".",
@@ -1028,6 +1037,7 @@ public class LCCalibrationWorkflow {
             }
             items.add(propertyWrite(device, propertyNames.get("LCA"), lcaWaves));
             items.add(propertyWrite(device, propertyNames.get("LCB"), lcbWaves));
+            items.addAll(otherDevices.getOrDefault(state, List.of()));
             ConfigYamlEditor.replaceChannelListField(
                     configPath, MODALITY_KEY, state, "device_properties", items, comment);
             ConfigYamlEditor.replaceChannelListField(configPath, MODALITY_KEY, state, "mm_setup_presets", null, null);
@@ -1067,6 +1077,46 @@ public class LCCalibrationWorkflow {
         m.put("property", property);
         m.put("value", valueWaves);
         return m;
+    }
+
+    /**
+     * Each state's {@code device_properties} entries for devices other than the LC, in order.
+     * A state may switch a lamp on or a light path over as well as set the crystals; the
+     * calibration knows only the crystals, so Apply keeps the rest.
+     */
+    @SuppressWarnings("unchecked")
+    static Map<String, List<Map<String, Object>>> otherDeviceProperties(
+            Path configPath, List<String> states, String lcDevice) throws IOException {
+        Map<String, Object> root;
+        try (var in = Files.newInputStream(configPath)) {
+            root = new org.yaml.snakeyaml.Yaml().load(in);
+        }
+        Map<String, List<Map<String, Object>>> out = new LinkedHashMap<>();
+        Object modalities = root == null ? null : root.get("modalities");
+        if (!(modalities instanceof Map<?, ?> mods)
+                || !(mods.get(MODALITY_KEY) instanceof Map<?, ?> mod)
+                || !(mod.get("channels") instanceof List<?> channels)) {
+            return out;
+        }
+        for (Object c : channels) {
+            if (!(c instanceof Map<?, ?> cm)
+                    || cm.get("id") == null
+                    || !states.contains(cm.get("id").toString())) {
+                continue;
+            }
+            List<Map<String, Object>> kept = new ArrayList<>();
+            if (cm.get("device_properties") instanceof List<?> props) {
+                for (Object p : props) {
+                    if (p instanceof Map<?, ?> pm
+                            && pm.get("device") != null
+                            && !lcDevice.equals(pm.get("device").toString())) {
+                        kept.add(new LinkedHashMap<>((Map<String, Object>) pm));
+                    }
+                }
+            }
+            out.put(cm.get("id").toString(), kept);
+        }
+        return out;
     }
 
     /** States in the palette that have no channel of the same id in the YAML. */

@@ -8,6 +8,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
@@ -97,6 +98,12 @@ public final class LCPolScopeReadiness {
         return checks;
     }
 
+    /**
+     * Same limit as the server's {@code LC_BACKGROUND_MAX_SWING_SPREAD}: the swing states'
+     * background means, above black, may differ by this fraction of their mean on a clear field.
+     */
+    static final double MAX_BACKGROUND_SWING_SPREAD = 0.10;
+
     static Check backgroundCheck(String profile, String base, String objective, String detector, String calibratedAt) {
         if (base == null || base.isBlank()) {
             return new Check(Level.WARN, profile + ": no background collected yet; it reconstructs uncorrected.");
@@ -121,6 +128,18 @@ public final class LCPolScopeReadiness {
                         Level.FAIL,
                         profile + ": the background is from a different calibration and will be refused. "
                                 + "Collect it again.");
+            }
+            Double spread = numberOf(json, "swing_state_spread");
+            if (spread != null && spread > MAX_BACKGROUND_SWING_SPREAD) {
+                return new Check(
+                        Level.WARN,
+                        String.format(
+                                Locale.ROOT,
+                                "%s: the background's swing states differ by %.0f%%; on a clear field they agree to "
+                                        + "a few percent, so it was probably taken on specimen. Collect it again on an "
+                                        + "empty area.",
+                                profile,
+                                spread * 100));
             }
             return new Check(Level.OK, profile + ": background " + collected.replace('T', ' ') + ", this calibration");
         } catch (Exception e) {

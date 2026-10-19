@@ -172,4 +172,32 @@ class LCCalibrationApplyTest {
                 () -> LCCalibrationWorkflow.applyPaletteToConfig(
                         f, JsonParser.parseString("{\"success\": true}").getAsJsonObject()));
     }
+
+    /** A state that also switches a lamp keeps doing so after Apply (the demo microscope's do). */
+    @Test
+    @SuppressWarnings("unchecked")
+    void entriesForOtherDevicesSurviveApply(@TempDir Path dir) throws Exception {
+        Path f = dir.resolve("config_LCPolScope.yml");
+        Files.writeString(f, ConfigYamlEditorChannelTest.CONFIG);
+        String withLamp = Files.readString(f)
+                .replaceFirst(
+                        "(?m)^(\\s*)- device: MeadowlarkLC\\n",
+                        "$1- device: DLamp\n$1  property: State\n$1  value: 1\n$1- device: DLED\n"
+                                + "$1  property: Enable-385nm\n$1  value: 'Off'\n$1- device: MeadowlarkLC\n");
+        assertNotEquals(Files.readString(f), withLamp, "the fixture gained a lamp entry");
+        Files.writeString(f, withLamp);
+
+        LCCalibrationWorkflow.applyPaletteToConfig(
+                f, JsonParser.parseString(REPLY).getAsJsonObject());
+
+        List<Map<String, Object>> props = (List<Map<String, Object>>)
+                ConfigYamlEditorChannelTest.channel(f, "State0").get("device_properties");
+        assertEquals(
+                List.of("MeadowlarkLC", "MeadowlarkLC", "DLamp", "DLED"),
+                props.stream().map(p -> p.get("device")).toList(),
+                "the crystals first, then everything else as it was");
+        assertEquals(1, props.get(2).get("value"));
+        assertEquals("Off", props.get(3).get("value"), "a YAML 1.1 boolean-looking string stays a string");
+        assertEquals(0.2520, ((Number) props.get(0).get("value")).doubleValue(), 1e-12);
+    }
 }

@@ -8165,30 +8165,38 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     logger.warn("Unexpected initial response to LCCALIB: {}", response);
                 }
 
+                // The acknowledgement can arrive in the same read as the first progress
+                // message (or more); the buffer keeps whatever followed STARTED.
+                ProgressReplyBuffer replies = new ProgressReplyBuffer();
+                int ack = response.indexOf("STARTED:");
+                int afterAck = response.indexOf("PROGRESS:", Math.max(ack, 0));
+                if (afterAck < 0) {
+                    afterAck = Math.max(response.indexOf("SUCCESS:"), response.indexOf("FAILED:"));
+                }
+                if (afterAck > 0) {
+                    replies.append(response.substring(afterAck));
+                }
                 while (true) {
+                    String json = replies.success();
+                    if (json != null) {
+                        return json;
+                    }
+                    String failure = replies.failure();
+                    if (failure != null) {
+                        throw new IOException("Calibration failed: " + failure);
+                    }
+                    // PROGRESS:current:total:message -- only the message is useful here,
+                    // since the state count is not known ahead.
+                    String progressMessage = replies.latestProgressMessage();
+                    if (progressMessage != null && statusCallback != null) {
+                        statusCallback.accept(progressMessage);
+                    }
                     bytesRead = input.read(buffer);
                     if (bytesRead <= 0) {
                         throw new IOException("Connection closed during calibration");
                     }
-                    response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                    replies.append(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
                     lastActivityTime.set(System.currentTimeMillis());
-
-                    if (response.startsWith("PROGRESS:")) {
-                        // PROGRESS:current:total:message -- only the message is
-                        // useful here, since the state count is not known ahead.
-                        String[] parts = response.substring(9).split(":", 3);
-                        if (statusCallback != null && parts.length >= 3) {
-                            statusCallback.accept(parts[2].trim());
-                        }
-                        continue;
-                    }
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Calibration failed: " + response.substring(7));
-                    }
-                    if (response.startsWith("SUCCESS:")) {
-                        return response.substring(8).trim();
-                    }
-                    logger.warn("Unexpected response during calibration: {}", response);
                 }
             } catch (IOException e) {
                 logger.error("Error during LC-PolScope calibration", e);

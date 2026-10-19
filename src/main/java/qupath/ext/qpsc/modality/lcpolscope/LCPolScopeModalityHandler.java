@@ -139,10 +139,20 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     }
 
     @Override
+    public boolean isFocusChannelCandidate(String channelId) {
+        return !EXTINCTION_CHANNEL_ID.equalsIgnoreCase(channelId);
+    }
+
+    @Override
     public Optional<BoundingBoxUI> createBoundingBoxUI() {
+        return createBoundingBoxUI(null);
+    }
+
+    @Override
+    public Optional<BoundingBoxUI> createBoundingBoxUI(String modalityName) {
         // Reuse the generic channel picker rather than forking a near-identical dialog --
         // the LC states are channels as far as the UI is concerned.
-        WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI();
+        WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI(modalityName);
         if (!ui.hasChannels()) {
             return Optional.empty();
         }

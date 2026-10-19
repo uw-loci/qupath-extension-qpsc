@@ -105,6 +105,24 @@ class LCPolScopeReadinessTest {
     }
 
     @Test
+    void aBackgroundTakenOnSpecimenIsAWarning() throws Exception {
+        Path base = Files.createDirectories(dir.resolve("bg"));
+        String folder = BackgroundSettingsReader.resolveChannelBackgroundFolder(
+                base.toString(), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
+        Files.createDirectories(Path.of(folder));
+        Files.writeString(
+                Path.of(folder, "background_provenance.json"),
+                "{\"lc_calibrated_at\": \"" + CALIBRATED + "\", \"collected_at\": \"2026-10-16T15:30:00\","
+                        + " \"swing_state_spread\": 0.42}");
+        MicroscopeConfigManager mgr =
+                config("      lc_calibrated_at: '" + CALIBRATED + "'\n      black_level: 103", base.toString());
+        List<Check> checks = LCPolScopeReadiness.configChecks(mgr, LocalDateTime.parse("2026-10-17T09:00:00"));
+        Check bg = find(checks, "lcpolscope_20x: the background's swing states differ by 42%");
+        assertNotNull(bg);
+        assertEquals(Level.WARN, bg.level());
+    }
+
+    @Test
     void aBackgroundFromAnotherCalibrationIsAFailAndAnOldCalibrationAWarning() throws Exception {
         Path base = Files.createDirectories(dir.resolve("bg"));
         String folder = BackgroundSettingsReader.resolveChannelBackgroundFolder(

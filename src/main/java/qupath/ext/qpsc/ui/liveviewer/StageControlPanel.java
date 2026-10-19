@@ -2010,7 +2010,10 @@ public class StageControlPanel extends VBox {
         }
         cameraModContent.getChildren().addAll(new Separator(), viewLabel, stateRow);
 
-        Node illumControl = buildIlluminationControl();
+        // Only a lamp this modality declares. The server reports whichever source is
+        // active, and an LC-PolScope modality without one (the real rig has nothing
+        // controllable) would otherwise show the previous profile's, e.g. the epi LED.
+        Node illumControl = readModalityMaxIntensity(modality) != null ? buildIlluminationControl() : null;
         if (illumControl != null) {
             cameraModContent.getChildren().addAll(new Separator(), illumControl);
         }

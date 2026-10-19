@@ -102,6 +102,19 @@ class LCPolScopeModalityHandlerTest {
     }
 
     @Test
+    @DisplayName("A remembered extinction state is not restored as the focus channel")
+    void extinctionIsNeverAFocusCandidate() {
+        // The picker remembers the last focus channel, including one it picked itself
+        // before this handler had a default; on the demo that left State0 selected and the
+        // first tile was focused on read noise.
+        var h = qupath.ext.qpsc.modality.ModalityRegistry.getHandler("lcpolscope_10x");
+        assertFalse(h.isFocusChannelCandidate("State0"));
+        assertTrue(h.isFocusChannelCandidate("State1"));
+        assertTrue(qupath.ext.qpsc.modality.ModalityRegistry.getHandler("Fluorescence")
+                .isFocusChannelCandidate("DAPI"));
+    }
+
+    @Test
     @DisplayName("The default focus channel is reachable through the registry, as the picker reaches it")
     void focusDefaultResolvesThroughRegistry() {
         // This is the path the channel picker actually takes: it knows only the modality
