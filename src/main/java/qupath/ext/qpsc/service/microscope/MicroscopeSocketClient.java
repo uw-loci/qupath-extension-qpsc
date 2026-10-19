@@ -249,6 +249,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
          */
         LCREADY("lcready_"),
         LCSIGNAL("lcsignal"),
+        /** Read or apply one Micro-Manager ConfigGroup preset (length-prefixed JSON both ways). */
+        MMPRESET("mmpreset"),
         /** Simple white balance calibration at single exposure */
         WBSIMPLE("wbsimple"),
         /** PPM white balance calibration at 4 angles */
@@ -908,6 +910,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     String verJson = new String(verJsonBytes, StandardCharsets.UTF_8);
 
                     logger.info("Server config loaded successfully");
+                    // Bring a hand-turned nosepiece's Micro-Manager label in line with the
+                    // objective selected in QPSC (opt-in per objective; never moves a turret).
+                    // It talks to the server itself, so it runs after this lock is released.
+                    qupath.ext.qpsc.service.ObjectivePresetActuator.onServerConfigured();
                     logger.info("=== Python Server Versions ===");
                     logger.info("  {}", verJson);
                     logger.info("==============================");
@@ -1055,6 +1061,29 @@ public class MicroscopeSocketClient implements AutoCloseable {
         payload.putDouble(exposureMs);
         payload.putDouble(targetFraction);
         return requestJsonReport(Command.LCSIGNAL, payload.array(), 60_000);
+    }
+
+    /**
+     * Reads ({@code apply == false}) or applies one Micro-Manager ConfigGroup preset. The reply
+     * carries {@code current}, {@code group_exists}, {@code preset_exists}, the group's
+     * {@code presets} (or all {@code groups} when the group is missing), and for an apply
+     * {@code applied}, {@code previous} and {@code pixel_size_um}; a refusal (an acquisition
+     * running, an unknown name) is an {@code error} field. Allows 30 s: the preset may turn a
+     * motorized turret.
+     *
+     * @return the reply, or empty when the server did not answer (one older than the command)
+     */
+    public Optional<com.google.gson.JsonObject> mmPreset(boolean apply, String group, String preset)
+            throws IOException {
+        com.google.gson.JsonObject request = new com.google.gson.JsonObject();
+        request.addProperty("action", apply ? "set" : "get");
+        request.addProperty("group", group);
+        request.addProperty("preset", preset);
+        byte[] body = request.toString().getBytes(StandardCharsets.UTF_8);
+        ByteBuffer payload = ByteBuffer.allocate(4 + body.length).order(ByteOrder.BIG_ENDIAN);
+        payload.putInt(body.length);
+        payload.put(body);
+        return requestJsonReport(Command.MMPRESET, payload.array(), 30_000);
     }
 
     /**

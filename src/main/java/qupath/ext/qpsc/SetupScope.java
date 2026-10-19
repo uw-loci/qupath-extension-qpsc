@@ -28,6 +28,7 @@ import qupath.ext.qpsc.controller.RegisterObjectiveWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.ObjectivePresetActuator;
 import qupath.ext.qpsc.service.SessionLogBuffer;
 import qupath.ext.qpsc.ui.BugReportDialog;
 import qupath.ext.qpsc.ui.LightPathSetupDialog;
@@ -124,6 +125,10 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // 1) Register all our persistent preferences
         QPPreferenceDialog.installPreferences(qupath);
+
+        // Keep Micro-Manager's objective preset in step with the objective chosen in QPSC
+        // (only objectives that declare mm_preset in the microscope YAML).
+        ObjectivePresetActuator.ensureRegistered();
 
         // Log the current stage / camera transform so any later "arrows move
         // the wrong way" report can be correlated with what the user had

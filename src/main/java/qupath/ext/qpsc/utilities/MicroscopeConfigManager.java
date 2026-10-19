@@ -3528,6 +3528,49 @@ public class MicroscopeConfigManager {
      *
      * @return Set of objective IDs available on this microscope
      */
+    /**
+     * The Micro-Manager preset that selects an objective, from the optional
+     * {@code hardware.objectives[].mm_preset: {group, preset, motorized}} entry.
+     *
+     * @param group the Micro-Manager ConfigGroup, exactly as named in that lab's configuration
+     * @param preset the preset within it
+     * @param motorized true when applying the preset moves hardware (a motorized turret), which
+     *     QPSC confirms first; false for a labelling device that moves nothing. An entry that
+     *     does not say is treated as motorized.
+     */
+    public record ObjectiveMmPreset(String group, String preset, boolean motorized) {}
+
+    /**
+     * The objective's {@code mm_preset} entry, or null when it has none (the default: QPSC
+     * then never touches Micro-Manager's objective selection). Group and preset names are not
+     * standard across labs, so nothing is assumed when the entry is missing or incomplete.
+     */
+    public ObjectiveMmPreset getObjectiveMmPreset(String objectiveId) {
+        if (objectiveId == null) {
+            return null;
+        }
+        for (Map<String, Object> objective : getHardwareObjectives()) {
+            if (!objectiveId.equals(objective.get("id"))) {
+                continue;
+            }
+            if (!(objective.get("mm_preset") instanceof Map<?, ?> entry)) {
+                return null;
+            }
+            Object group = entry.get("group");
+            Object preset = entry.get("preset");
+            if (group == null
+                    || preset == null
+                    || group.toString().isBlank()
+                    || preset.toString().isBlank()) {
+                logger.warn("Objective {}: mm_preset needs both group and preset; ignoring it", objectiveId);
+                return null;
+            }
+            boolean motorized = !(entry.get("motorized") instanceof Boolean b) || b;
+            return new ObjectiveMmPreset(group.toString(), preset.toString(), motorized);
+        }
+        return null;
+    }
+
     public Set<String> getAvailableObjectives() {
         logger.debug("Finding available objectives");
 

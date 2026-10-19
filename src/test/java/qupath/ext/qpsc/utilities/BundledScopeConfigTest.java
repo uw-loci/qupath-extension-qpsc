@@ -163,6 +163,37 @@ class BundledScopeConfigTest {
     }
 
     @Test
+    void anObjectiveWithoutMmPresetIsLeftAlone() throws IOException {
+        MicroscopeConfigManager mgr = extractAndLoad(Bundle.DEMO);
+        assertNull(mgr.getObjectiveMmPreset("DEMO_OBJECTIVE_10X"), "opt-in: no entry, no preset");
+        assertNull(mgr.getObjectiveMmPreset(null));
+    }
+
+    @Test
+    void mmPresetIsReadAndAMissingMotorizedKeyMeansAsk() throws IOException {
+        Path cfg = tempDir.resolve("config_T.yml");
+        Files.writeString(cfg, """
+                microscope: {name: T}
+                hardware:
+                  objectives:
+                  - id: LABEL
+                    mm_preset: {group: Objective Lens, preset: 20x, motorized: false}
+                  - id: TURRET
+                    mm_preset: {group: Objective, preset: 20X}
+                  - id: BROKEN
+                    mm_preset: {group: Objective}
+                """);
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(cfg.toString());
+        mgr.reload(cfg.toString());
+        var label = mgr.getObjectiveMmPreset("LABEL");
+        assertEquals("Objective Lens", label.group());
+        assertEquals("20x", label.preset());
+        assertFalse(label.motorized());
+        assertTrue(mgr.getObjectiveMmPreset("TURRET").motorized(), "unstated means motorized: ask first");
+        assertNull(mgr.getObjectiveMmPreset("BROKEN"), "incomplete entries are ignored");
+    }
+
+    @Test
     void bundleVersionDefaultsToOne() {
         assertEquals(1, BundledScopeInstaller.bundleVersion("microscope:\n  name: Demo\n"));
         assertEquals(1, BundledScopeInstaller.bundleVersion(null));

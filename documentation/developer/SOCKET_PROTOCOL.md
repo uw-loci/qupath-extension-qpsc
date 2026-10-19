@@ -626,6 +626,7 @@ See `handlers/streaming_focus.py` for the implementation.
 | GETLOG | `getlog__` | none | 4-byte big-endian length + UTF-8 bytes (or 0 for no active log) |
 | LCREADY | `lcready_` | none | 4-byte big-endian length + UTF-8 JSON: the camera summary, `camera_fatal` / `camera_advisory` problems, `adapter_wavelength_nm`, `reconstruction_wavelength_nm` |
 | LCSIGNAL | `lcsignal` | 32-byte profile name (null-padded UTF-8) + 8-byte double `exposure_ms` + 8-byte double target fraction (big-endian) | 4-byte big-endian length + UTF-8 JSON: `states[]` (id, mean, p999, max, saturated_fraction, extinction), `full_scale`, `brightest_state`, `brightest_fraction`, `clipped`, `suggested_exposure_ms`, camera problems; or `error` |
+| MMPRESET | `mmpreset` | 4-byte big-endian length + UTF-8 JSON `{"action": "get" or "set", "group", "preset"}` | 4-byte big-endian length + UTF-8 JSON: `current`, `group_exists`, `preset_exists`, `presets` (or `groups` when the group is missing); for a set also `applied`, `previous`, `pixel_size_um`; a refusal is `error` |
 
 #### GETLOG
 
@@ -640,6 +641,10 @@ LC-PolScope readiness for the acquisition panel's "Ready to acquire?" box. Read-
 #### LCSIGNAL
 
 LC-PolScope state signal for the Live Viewer Camera tab. Applies every state of the profile's channel library in turn (presets and device properties, as APPLYCH does), sets the ONE exposure under test after each (a channel's own `exposure_ms` is overridden), snaps, and reports each state's mean, 99.9th percentile, maximum and clipped fraction against the camera's full scale (from its significant bits, so Mono12p in a 16-bit buffer is 4095). `suggested_exposure_ms` puts the brightest swing state's 99.9th percentile at the target fraction (default 0.75) above `reconstruction.black_level`, assuming a linear camera; it is null when the field is clipped or dark. The last state measured is left applied: the client re-applies the state it was showing. The client stops live mode around it and allows 60 s.
+
+#### MMPRESET
+
+Reads or applies one Micro-Manager ConfigGroup preset. QPSC's `ObjectivePresetActuator` uses it to select the objective's preset in Micro-Manager when an objective is chosen, for objectives that declare `mm_preset: {group, preset, motorized}` in the microscope YAML (names are whatever that lab's Micro-Manager config uses, so nothing happens without the entry). A labelling device (`motorized: false`) is applied silently on selection and after every CONFIG; a motorized turret (or `motorized` absent) only after the operator confirms in `ObjectivePresetConfirmDialog`, and never on connect. The server refuses a set while an acquisition thread runs or before CONFIG; a set to the current preset changes nothing. The client allows 30 s, since a turret may be turning.
 
 ## Acquisition Lifecycle
 

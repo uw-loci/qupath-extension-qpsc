@@ -706,6 +706,25 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
 
 **To fix (optional):** If the difference persists, re-measure the pixel size for that objective and update `pixel_size_xy_um` in the microscope config. Differences above 5% still cancel the workflow; see the mismatch question above.
 
+#### Q: I chose an objective in QPSC, but Micro-Manager still reports the old objective (pixel size 0, SIFT refuses)
+
+**A:** On a scope whose nosepiece is turned by hand, Micro-Manager picks its pixel size from the preset for the objective it believes is mounted. Choosing an objective in QPSC does not turn the nosepiece, so Micro-Manager can stay on another label and report pixel size 0.
+
+QPSC can select the Micro-Manager preset for you, but only for objectives that declare it in the microscope YAML (group and preset names differ between labs, so nothing is assumed):
+
+```yaml
+hardware:
+  objectives:
+  - id: LOCI_OBJECTIVE_OLYMPUS_20X_POL_001
+    mm_preset: {group: Objective Lens, preset: 20x, motorized: false}
+```
+
+- `motorized: false` (a labelling device that moves nothing): QPSC applies the preset silently when you choose the objective, and again when it connects.
+- `motorized: true`, or the key left out (a motorized turret): QPSC asks first in a dialog whose default answer is **Don't move**. It never moves a turret on connect or during an acquisition.
+- If the group or preset name does not exist, QPSC shows a warning listing the groups or presets that do exist. Correct `mm_preset` in the YAML and choose the objective again.
+
+Objectives without `mm_preset` are left alone, so for those, set the objective in Micro-Manager by hand. The server must be the version that supports `MMPRESET`.
+
 #### Q: Acquisition starts but no images appear
 
 **A:** Check Python server console for errors. Common causes:
