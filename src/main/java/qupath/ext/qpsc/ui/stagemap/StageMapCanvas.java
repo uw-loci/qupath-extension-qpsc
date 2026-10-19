@@ -1863,6 +1863,10 @@ public class StageMapCanvas extends StackPane {
         boolean effY = applied && flipY;
         this.setScaleX(effX ? -1 : 1);
         this.setScaleY(effY ? -1 : 1);
+        // The message is text, not map: undo the canvas mirror on it so it reads the same in
+        // every orientation (it was mirrored and unreadable in Camera View, 2026-10-19).
+        noAlignmentLabel.setScaleX(effX ? -1 : 1);
+        noAlignmentLabel.setScaleY(effY ? -1 : 1);
         logger.info("Stage Map flips applied: {} (flipX={}, flipY={})", applied, effX, effY);
     }
 
