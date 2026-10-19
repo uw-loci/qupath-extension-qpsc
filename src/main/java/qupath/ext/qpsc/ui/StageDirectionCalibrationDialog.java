@@ -174,9 +174,14 @@ public final class StageDirectionCalibrationDialog {
 
         stage.setOnCloseRequest(e -> closeWithCancel(future));
         stage.setScene(new Scene(root));
+        // Not resizable on purpose: every phase sizes itself (below), and the Dialog Manager
+        // restores a remembered size for RESIZABLE windows only. One title spans phases of
+        // different heights, so a remembered size from one phase clipped the next (2026-10-19).
+        // Position is still remembered.
+        stage.setResizable(false);
 
         // Fill the first phase BEFORE showing, and resize whenever a phase swaps its content
-        // or text. The window used to be shown empty and non-resizable, so it was sized for
+        // or text. The window used to be shown empty, before its content existed, so it was sized for
         // nothing (500x126): the instructions sat on one truncated line and the buttons were
         // below the window, with no way to reach them (reported 2026-10-19).
         showIntroPhase(future);

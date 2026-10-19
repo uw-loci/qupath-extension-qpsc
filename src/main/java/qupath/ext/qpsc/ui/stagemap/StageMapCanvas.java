@@ -90,6 +90,14 @@ public class StageMapCanvas extends StackPane {
 
     // ========== Shape Overlay Layer ==========
     private Pane overlayPane;
+
+    /**
+     * Shown over the map when the open slide has a macro image but no alignment resolves for the
+     * selected source. Without it the map is simply empty and nothing says an alignment is what
+     * is missing (2026-10-19).
+     */
+    private final javafx.scene.control.Label noAlignmentLabel = buildNoAlignmentLabel();
+
     private Circle crosshairCircle;
     private Line crosshairLineH1, crosshairLineH2, crosshairLineV1, crosshairLineV2;
     private Rectangle fovRect;
@@ -376,7 +384,7 @@ public class StageMapCanvas extends StackPane {
                         targetLineV);
 
         // Stack layers
-        getChildren().addAll(backgroundView, overlayPane);
+        getChildren().addAll(backgroundView, overlayPane, noAlignmentLabel);
 
         // Clip canvas so overlay shapes (crosshair, target lines) don't render
         // outside the canvas bounds into adjacent UI elements
@@ -1861,6 +1869,36 @@ public class StageMapCanvas extends StackPane {
     /** Returns whether flips are currently applied. */
     public boolean isFlipsApplied() {
         return flipsApplied;
+    }
+
+    /**
+     * Shows or hides the "No alignment found" message over the map.
+     *
+     * @param show true when a macro image exists but no alignment resolves for the source
+     */
+    public void setNoAlignmentMessageVisible(boolean show) {
+        noAlignmentLabel.setVisible(show);
+    }
+
+    /** Visible for testing. */
+    boolean isNoAlignmentMessageVisible() {
+        return noAlignmentLabel.isVisible();
+    }
+
+    private static javafx.scene.control.Label buildNoAlignmentLabel() {
+        javafx.scene.control.Label label =
+                new javafx.scene.control.Label("No alignment found for selected source microscope or scanner\n\n"
+                        + "Run Utilities > Microscope Alignment for the scanner this slide came from, "
+                        + "or choose that scanner in Source.");
+        label.setWrapText(true);
+        label.setTextAlignment(TextAlignment.CENTER);
+        label.setMaxWidth(460);
+        label.setMouseTransparent(true);
+        label.setStyle("-fx-font-size: 18px; -fx-font-weight: bold; -fx-text-fill: white; "
+                + "-fx-background-color: rgba(0,0,0,0.72); -fx-background-radius: 6; -fx-padding: 14 18 14 18;");
+        StackPane.setAlignment(label, javafx.geometry.Pos.CENTER);
+        label.setVisible(false);
+        return label;
     }
 
     public void clearMacroOverlay() {

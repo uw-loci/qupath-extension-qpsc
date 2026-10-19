@@ -2460,6 +2460,7 @@ public class StageMapWindow {
             logger.info("Checking macro overlay availability...");
             currentMacroImage = null;
             currentMacroSlideShiftUm = null;
+            if (canvas != null) canvas.setNoAlignmentMessageVisible(false);
             currentMacroTransform = null;
             currentMacroSampleName = null;
             currentMacroScannerName = null;
@@ -2549,6 +2550,7 @@ public class StageMapWindow {
                 macroOverlayCheckbox.setSelected(false);
                 if (canvas != null) canvas.clearMacroOverlay();
                 logger.info("Macro overlay: no sample name resolved for current image - checkbox disabled");
+                showNoAlignmentMessageIfMacro(gui);
                 return;
             }
 
@@ -2677,8 +2679,35 @@ public class StageMapWindow {
                     logger.info(
                             "Macro overlay: macro image found but NO preset transform available - checkbox disabled");
                 }
+                if (overlayTransform == null) {
+                    showNoAlignmentMessageIfMacro(gui);
+                }
             }
         });
+    }
+
+    /**
+     * Shows the "No alignment found" message when the open slide has a macro image. A slide
+     * without one has nothing to align, so the map stays quiet for it.
+     */
+    private void showNoAlignmentMessageIfMacro(QuPathGUI gui) {
+        if (canvas == null || gui == null || gui.getImageData() == null) {
+            return;
+        }
+        boolean hasMacro;
+        try {
+            hasMacro = MacroImageUtility.retrieveMacroImage(gui) != null;
+        } catch (Exception e) {
+            logger.debug("Macro overlay: could not check for a macro image: {}", e.getMessage());
+            hasMacro = false;
+        }
+        canvas.setNoAlignmentMessageVisible(hasMacro);
+        if (hasMacro) {
+            logger.info(
+                    "Macro overlay: the slide has a macro image but no alignment for source '{}' - "
+                            + "showing the No alignment found message",
+                    sourceComboBox != null ? sourceComboBox.getValue() : null);
+        }
     }
 
     /**

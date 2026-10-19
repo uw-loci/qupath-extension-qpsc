@@ -81,6 +81,7 @@ No persistent output. The Stage Map provides a real-time visual display showing:
 
 - If slide positions do not match the physical layout, verify the correct insert configuration is selected
 - **No presets in dropdown?** Run [Microscope Alignment](microscope-alignment.md) through the Existing Image workflow to create a scanner-to-stage transform preset
+- **"No alignment found for selected source microscope or scanner" over the map?** The open slide has a macro image, but no alignment exists between the scanner in **Source** and this microscope, so there is nothing to place the macro with. Run **Utilities > Microscope Alignment** for the scanner the slide came from, or choose that scanner in **Source**. The active microscope is always listed in Source (for images acquired on it), but a macro image always comes from a scanner, so that choice cannot place one.
 - **Macro overlay not appearing?** Ensure a preset is selected AND the current image has an embedded macro (SVS files typically do)
 - **Macro overlay checkbox disabled?** This is expected when using multi-slot slide holders (e.g., quad_v with four slots). The single-macro overlay is designed for one slide and would incorrectly span all slots on a multi-slot holder. Per-slot macro display is handled separately; to view the macro for a specific slot, use the standalone [Microscope Alignment](microscope-alignment.md) tool.
 - The macro overlay helps confirm that your overview image is correctly positioned relative to the stage
