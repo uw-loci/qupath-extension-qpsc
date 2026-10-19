@@ -701,7 +701,12 @@ public final class ImageFlipHelper {
                 }
                 gui.getViewer().imageDataProperty().removeListener(listenerRef.get());
                 logger.info("Switched open entry to '{}' (ImageData installed)", targetName);
-                future.complete(true);
+                // Complete on a later pulse. The viewer fires this while openImageEntry is still
+                // running and before gui.getImageData() reports the new entry, so a continuation
+                // run here saw the PREVIOUS entry: the orientation dialog's OK returned to the
+                // original scan, the flip step saw Camera View still open and skipped, and Select
+                // Tile came up on the original (2026-10-19).
+                Platform.runLater(() -> future.complete(true));
             };
             listenerRef.set(listener);
             try {
