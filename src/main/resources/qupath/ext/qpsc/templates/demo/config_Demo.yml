@@ -46,6 +46,8 @@ microscope:
   objective_in_use: null
   modality: null
 
+# Background folders live in imageprocessing_Demo.yml (background_correction),
+# the only place they are read from; Background Collection writes them there.
 modalities:
   Brightfield:
     type: brightfield
@@ -56,10 +58,6 @@ modalities:
       intensity_property: Intensity
       max_intensity: 100.0
       label: Demo lamp
-    background_correction:
-      enabled: false
-      method: divide
-      base_folder: ''
 
   # Widefield fluorescence on the mono camera. Each channel switches the
   # transmitted lamp off and one LED line on; exposures and intensities put
@@ -73,10 +71,6 @@ modalities:
       intensity_property: State
       max_intensity: 1.0
       label: Demo epi LED
-    background_correction:
-      enabled: false
-      method: divide
-      base_folder: ''
     channels:
     - id: DAPI
       display_name: DAPI (385 nm)
@@ -217,10 +211,6 @@ modalities:
         block_size: 32
         max_block_retardance_nm: 5
         min_background_fraction: 0.25
-    background_correction:
-      enabled: false
-      method: divide
-      base_folder: ''
     channels:
     - id: State0
       display_name: State0 (extinction)
