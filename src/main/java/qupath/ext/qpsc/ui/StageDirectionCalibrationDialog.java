@@ -18,6 +18,7 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.TextArea;
 import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
@@ -150,6 +151,8 @@ public final class StageDirectionCalibrationDialog {
         phaseInstructions = new Label();
         phaseInstructions.setWrapText(true);
         phaseInstructions.setMaxWidth(460);
+        // A wrapped Label otherwise collapses to one ellipsized line inside a VBox.
+        phaseInstructions.setMinHeight(Region.USE_PREF_SIZE);
 
         phaseContent = new VBox(10);
 
@@ -171,10 +174,16 @@ public final class StageDirectionCalibrationDialog {
 
         stage.setOnCloseRequest(e -> closeWithCancel(future));
         stage.setScene(new Scene(root));
-        stage.setResizable(false);
-        stage.show();
 
+        // Fill the first phase BEFORE showing, and resize whenever a phase swaps its content
+        // or text. The window used to be shown empty and non-resizable, so it was sized for
+        // nothing (500x126): the instructions sat on one truncated line and the buttons were
+        // below the window, with no way to reach them (reported 2026-10-19).
         showIntroPhase(future);
+        phaseContent.getChildren().addListener((javafx.collections.ListChangeListener<javafx.scene.Node>)
+                c -> Platform.runLater(stage::sizeToScene));
+        phaseInstructions.textProperty().addListener((obs, was, now) -> Platform.runLater(stage::sizeToScene));
+        stage.show();
     }
 
     // ----- Phase: intro -----
@@ -202,6 +211,8 @@ public final class StageDirectionCalibrationDialog {
                 "Assumed stage polarity: %s (unchanged by this calibration)",
                 QPPreferenceDialog.getStagePolarityProperty()));
         polarityLabel.setStyle("-fx-font-style: italic;");
+        polarityLabel.setWrapText(true);
+        polarityLabel.setMinHeight(Region.USE_PREF_SIZE);
 
         Label currentLabel = new Label("Current transform:");
         TextArea currentDesc = new TextArea(StageImageTransform.current().describe());
@@ -369,6 +380,7 @@ public final class StageDirectionCalibrationDialog {
                 "Observed: +X -> %s, +Y -> %s%n" + "Polarity (unchanged): %s%n" + "Camera orientation: %s",
                 xObserved, yObserved, solved.polarity(), solved.orientation()));
         observedLabel.setWrapText(true);
+        observedLabel.setMinHeight(Region.USE_PREF_SIZE);
 
         phaseContent.getChildren().setAll(observedLabel, previewDesc);
 
