@@ -752,7 +752,7 @@ public class MicroscopeAlignmentWorkflow {
                         return;
                     }
                     logger.info("Orientation dialog toggle: flipX={}, flipY={}", newFlipX, newFlipY);
-                    ImageFlipHelper.validateAndFlipIfNeeded(gui, projectForFlip, sampleNameForFlip, newFlipX, newFlipY)
+                    showOrientation(gui, projectForFlip, sampleNameForFlip, newFlipX, newFlipY)
                             .thenAccept(
                                     ok -> logger.info("validateAndFlipIfNeeded({}, {}) -> {}", newFlipX, newFlipY, ok))
                             .exceptionally(ex -> {
@@ -772,8 +772,7 @@ public class MicroscopeAlignmentWorkflow {
                     }
                     logger.info("Orientation captured: flipX={}, flipY={}", finalFlip.flipX(), finalFlip.flipY());
                     // Ensure the right entry is open one more time (idempotent if already correct)
-                    ImageFlipHelper.validateAndFlipIfNeeded(
-                                    gui, projectForFlip, sampleNameForFlip, finalFlip.flipX(), finalFlip.flipY())
+                    showOrientation(gui, projectForFlip, sampleNameForFlip, finalFlip.flipX(), finalFlip.flipY())
                             .whenComplete((ok, ex) -> Platform.runLater(() -> continueAlignmentAfterFlip(
                                     gui,
                                     sampleSetup,
@@ -791,6 +790,33 @@ public class MicroscopeAlignmentWorkflow {
                 UIFunctions.notifyUserOfError("Alignment error: " + e.getMessage(), "Alignment Error");
             }
         });
+    }
+
+    /**
+     * Shows the entry whose flip, relative to the ORIGINAL scan, is {@code (flipX, flipY)}.
+     *
+     * <p>{@link ImageFlipHelper#validateAndFlipIfNeeded} does nothing when a camera-view entry is
+     * already open, and nothing for {@code (false, false)}, so with "(Camera View)" open the
+     * orientation dialog could neither switch flips nor return to the original: the answer it
+     * recorded could differ from the image on screen (2026-10-19). Return to the original first,
+     * then apply the flip from there.
+     */
+    private static CompletableFuture<Boolean> showOrientation(
+            QuPathGUI gui, Project<BufferedImage> project, String sampleName, boolean flipX, boolean flipY) {
+        ProjectImageEntry<BufferedImage> open =
+                gui.getImageData() != null ? project.getEntry(gui.getImageData()) : null;
+        CompletableFuture<Boolean> atOriginal = CompletableFuture.completedFuture(true);
+        if (open != null && ImageMetadataManager.isCameraView(open)) {
+            String baseName = ImageMetadataManager.getBaseImage(open);
+            ProjectImageEntry<BufferedImage> original =
+                    baseName != null ? ImageMetadataManager.findSiblingWithFlip(project, baseName, false, false) : null;
+            if (original != null && original != open) {
+                logger.info("Orientation: returning to the original scan '{}' first", original.getImageName());
+                atOriginal = ImageFlipHelper.openEntryAndAwaitInstall(gui, original);
+            }
+        }
+        return atOriginal.thenCompose(
+                ignored -> ImageFlipHelper.validateAndFlipIfNeeded(gui, project, sampleName, flipX, flipY));
     }
 
     /**

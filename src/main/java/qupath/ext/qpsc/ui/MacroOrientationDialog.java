@@ -72,7 +72,8 @@ public final class MacroOrientationDialog {
                         + "If QuPath shows the feature mirrored relative to the Live View, "
                         + "tick the matching axis. The image will switch to its flipped variant "
                         + "immediately so you can verify the orientation. Click OK when the "
-                        + "QuPath view matches the Live View.");
+                        + "QuPath view matches the Live View. The boxes are relative to the "
+                        + "original scan, and the image shown always matches them.");
                 instructions.setWrapText(true);
                 instructions.setMaxWidth(440);
 
@@ -120,6 +121,12 @@ public final class MacroOrientationDialog {
                 stage.setScene(new Scene(root));
                 stage.setResizable(false);
                 stage.show();
+                // Show the image the boxes describe from the start. The boxes are flips relative
+                // to the ORIGINAL scan, seeded from the saved preset, and the image only switched
+                // on a toggle -- so with a (Camera View) entry already open and the boxes
+                // unticked, the view matched the Live View, OK recorded "no flip", and the
+                // workflow then switched to the unflipped original (2026-10-19).
+                fireToggle.run();
             } catch (Exception e) {
                 logger.error("Macro orientation dialog failed", e);
                 future.completeExceptionally(e);
