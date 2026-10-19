@@ -211,6 +211,13 @@ public class UnifiedAcquisitionController {
         private TextField endXField;
         private TextField endYField;
         private Label calculatedBoundsLabel;
+        /**
+         * The tile count beside the size inputs, one per mode pane (a node has one parent). Both
+         * show what the preview's Tile Grid line shows, so the count is visible while typing.
+         */
+        private final Label startSizeTileCountLabel = tileCountLabel();
+
+        private final Label twoCornersTileCountLabel = tileCountLabel();
         private RadioButton startSizeMode;
         private RadioButton twoCornersMode;
         private GridPane startSizePane;
@@ -883,6 +890,7 @@ public class UnifiedAcquisitionController {
             startSizePane.add(widthField, 1, row);
             startSizePane.add(new Label("Height (um):"), 2, row);
             startSizePane.add(heightField, 3, row);
+            startSizePane.add(startSizeTileCountLabel, 4, row);
 
             // === Two Corners Mode Pane ===
             twoCornersPane = new GridPane();
@@ -948,6 +956,10 @@ public class UnifiedAcquisitionController {
             twoCornersPane.add(new Label("Y (um):"), 2, row);
             twoCornersPane.add(endYField, 3, row);
             twoCornersPane.add(getCorner2Btn, 4, row);
+            row++;
+            // Its own line under the corner fields: a sixth column squeezed the count and the
+            // two Get Stage Position buttons at the dialog's default width.
+            twoCornersPane.add(twoCornersTileCountLabel, 1, row, 3, 1);
 
             // Sync corner1 fields with startX/Y fields for consistency
             corner1XField.textProperty().bindBidirectional(startXField.textProperty());
@@ -2156,6 +2168,7 @@ public class UnifiedAcquisitionController {
                 int tilesX = (int) Math.ceil(paddedWidth / stepX);
                 int tilesY = (int) Math.ceil(paddedHeight / stepY);
                 int totalTiles = tilesX * tilesY;
+                setTileCount(String.format("%d tiles (%d x %d)", totalTiles, tilesX, tilesY));
 
                 // Get angle count from modality handler for preview estimation
                 int angleCount = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(modality)
@@ -2248,7 +2261,21 @@ public class UnifiedAcquisitionController {
             }
         }
 
+        private static Label tileCountLabel() {
+            Label label = new Label("-- tiles");
+            label.setStyle("-fx-font-weight: bold;");
+            label.setTooltip(new Tooltip("Tiles this region will acquire at the selected objective and detector, "
+                    + "including the half-field margin on each side and the tile overlap."));
+            return label;
+        }
+
+        private void setTileCount(String text) {
+            startSizeTileCountLabel.setText(text);
+            twoCornersTileCountLabel.setText(text);
+        }
+
         private void showPreviewPlaceholder(String message) {
+            setTileCount("-- tiles");
             previewRegionLabel.setText("Region: --");
             previewFOVLabel.setText("Field of View: --");
             previewTileGridLabel.setText("Tile Grid: --");

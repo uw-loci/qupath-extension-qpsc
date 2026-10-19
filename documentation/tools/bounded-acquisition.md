@@ -67,14 +67,16 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 | Width (um) | Text | Total width of the acquisition region in micrometers |
 | Height (um) | Text | Total height of the acquisition region in micrometers |
 | Use Current Position as Center | Button | Set center coordinates from the current stage position (Live Viewer field of view center) |
+| Tile count | Display | Shown beside **Height (um)**: how many tiles the region will take at the selected objective and detector, e.g. `20 tiles (10 x 2)`. It includes the half-field margin on each side and the tile overlap, and matches **Tile Grid** in the Acquisition Preview. |
 
 **Two Corners Mode:**
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Corner 1 X/Y | Spinner | First corner coordinates |
-| Corner 2 X/Y | Spinner | Opposite corner coordinates |
+| Corner 1 X/Y | Text | First corner coordinates (um) |
+| Corner 2 X/Y | Text | Opposite corner coordinates (um) |
 | Get Stage Position | Button | Populate each corner from current stage position |
+| Tile count | Display | Shown under the Corner 2 inputs; the same count as in Center Point + Size mode. |
 
 ### Modality-Specific Options (Collapsed by Default)
 
