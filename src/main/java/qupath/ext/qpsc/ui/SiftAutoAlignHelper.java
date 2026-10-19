@@ -159,10 +159,15 @@ public final class SiftAutoAlignHelper {
             // ratio 0 -- collapsing it to 1x1 px, which yields zero SIFT
             // keypoints and a misleading "insufficient features" failure. Fail
             // fast with an actionable message instead.
-            throw new IllegalStateException("Micro-Manager reports no pixel-size calibration (0 um/px) for the active "
-                    + "objective/detector, so SIFT cannot scale the camera image against the WSI. "
-                    + "Set the pixel-size calibration in Micro-Manager (or use Register Objective) "
-                    + "for this objective and retry.");
+            // Two causes, and the old message named only the first. A preset can exist and still
+            // not apply: Micro-Manager returns 0 when no pixel-size preset MATCHES the current
+            // hardware state (2026-10-19, LC-PolScope: "20x 0.4 ORYX" = 0.1725 defined, 0 read).
+            throw new IllegalStateException("The microscope server reported a pixel size of 0 um/px, so SIFT cannot "
+                    + "scale the camera image against the slide. Either no Micro-Manager pixel-size preset "
+                    + "matches the current hardware state (a preset can exist and still not apply: check that "
+                    + "its defining properties, such as the active camera or objective, match what is set now), "
+                    + "or this connection has not been configured yet (the server log then says "
+                    + "\"GETPXSZ: Blocked - server not configured\").");
         }
 
         double marginPx = marginUm / wsiPixelSize;
@@ -585,6 +590,8 @@ public final class SiftAutoAlignHelper {
                 + "misalign or fail. This is NOT checked automatically.");
         warn.setWrapText(true);
         warn.setMaxWidth(Double.MAX_VALUE);
+        // A wrapped Label in a VBox otherwise collapses to one ellipsized line.
+        warn.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
         warn.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + "; -fx-background-color: "
                 + "ladder(-fx-background, #3A2A15 49%, #fff3e0 50%)" + "; "
                 + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-padding: 6;");

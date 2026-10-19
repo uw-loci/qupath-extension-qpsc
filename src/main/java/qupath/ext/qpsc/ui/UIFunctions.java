@@ -559,6 +559,7 @@ public class UIFunctions {
                     new Label(instructionText != null ? instructionText : "Compare with the uManager live view.");
             instructionLabel.setWrapText(true);
             instructionLabel.setMaxWidth(440);
+            instructionLabel.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
             HBox buttonBox = new HBox(10);
             buttonBox.setAlignment(Pos.CENTER);
@@ -590,7 +591,11 @@ public class UIFunctions {
             if (siftTargetTile != null && gui != null) {
                 Label siftStatus = new Label();
                 siftStatus.setWrapText(true);
+                siftStatus.setMaxWidth(440);
+                siftStatus.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
                 siftStatus.setStyle("-fx-font-size: 10px;");
+                // A SIFT error is several lines long; grow the window to show all of it.
+                siftStatus.textProperty().addListener((obs, was, now) -> Platform.runLater(stage::sizeToScene));
                 HBox siftRow = qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildSiftButtonRow(
                         gui, siftTargetTile, stage, siftStatus);
                 layout.getChildren()
@@ -609,7 +614,10 @@ public class UIFunctions {
                 layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
             }
 
-            Scene scene = new Scene(layout, siftTargetTile != null ? 460 : 350, siftTargetTile != null ? 320 : 150);
+            // Sized to its content: the old fixed 460x320 cut the focus warning, the
+            // instructions and a SIFT error to one ellipsized line each (2026-10-19).
+            layout.setPrefWidth(siftTargetTile != null ? 480 : 380);
+            Scene scene = new Scene(layout);
             stage.setScene(scene);
 
             stage.setOnCloseRequest(e -> {

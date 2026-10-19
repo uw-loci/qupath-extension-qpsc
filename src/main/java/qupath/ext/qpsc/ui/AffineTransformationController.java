@@ -285,11 +285,13 @@ public class AffineTransformationController {
                             //    clicks Confirm to commit the (post-SIFT) stage position.
                             String confirmInstruction = hasEstimate
                                     ? "The stage was moved using the initial scaling estimate -- it may be off"
-                                            + " by tens of microns. Use the joystick or Auto-Align (SIFT) to refine,"
-                                            + " then click Confirm."
-                                    : "Drive the stage so the live view matches the selected tile, then click"
-                                            + " Confirm. Auto-Align (SIFT) can refine the last few microns once you"
-                                            + " are roughly on the tile.";
+                                            + " by tens of microns. Click Auto-Align (SIFT) to snap to the tile (or"
+                                            + " nudge it with the joystick), then click Current Position is Accurate."
+                                    : String.format(
+                                            "Move the stage roughly onto the selected tile (within about %.0f um),"
+                                                    + " then click Auto-Align (SIFT) to snap to it. Click Current"
+                                                    + " Position is Accurate once the live view matches the tile.",
+                                            qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm());
                             return afGate.thenCompose(ignored -> UIFunctions.stageAlignmentConfirmAsync(
                                             gui, refTile, "Reference tile alignment", confirmInstruction)
                                     .thenCompose(aligned -> {
