@@ -126,8 +126,7 @@ public class HistogramView extends VBox {
         // persistent autoScale flag. The "Always Auto-Scale" checkbox
         // owns the persistent flag.
         autoScaleBtn.setOnAction(e -> {
-            contrastSettings.applyAutoScale(
-                    currentHistogram, new FrameData(0, 0, 1, currentMaxValue > 255 ? 2 : 1, new byte[0], 0));
+            contrastSettings.applyAutoScale(currentHistogram, currentMaxValue);
             updateSlidersFromSettings();
             drawHistogram();
         });
@@ -135,8 +134,7 @@ public class HistogramView extends VBox {
         alwaysAutoScale.selectedProperty().addListener((obs, oldVal, newVal) -> {
             contrastSettings.setAutoScale(newVal);
             if (newVal) {
-                contrastSettings.applyAutoScale(
-                        currentHistogram, new FrameData(0, 0, 1, currentMaxValue > 255 ? 2 : 1, new byte[0], 0));
+                contrastSettings.applyAutoScale(currentHistogram, currentMaxValue);
                 updateSlidersFromSettings();
                 drawHistogram();
             }
@@ -253,7 +251,15 @@ public class HistogramView extends VBox {
         }
         lastHistogramUpdateMs = now;
 
-        currentMaxValue = frame.maxValue();
+        // The camera's range, not the buffer's: 4095 for a 12-bit camera in 16-bit frames.
+        int previousMax = currentMaxValue;
+        currentMaxValue = CameraBitDepth.maxValue(frame);
+        if (currentMaxValue != previousMax && contrastSettings.getDisplayMax() > currentMaxValue) {
+            // A range set against the 16-bit container (Full Range on the first frame)
+            // would leave the image dark once the real depth is known.
+            contrastSettings.setDisplayMax(currentMaxValue);
+            contrastSettings.setDisplayMin(Math.min(contrastSettings.getDisplayMin(), currentMaxValue - 1));
+        }
 
         int[] histogram = new int[256];
         int bpp = frame.bytesPerPixel();
@@ -276,7 +282,7 @@ public class HistogramView extends VBox {
                 }
                 sumR += val;
                 if (val >= currentMaxValue) satR++;
-                int bin = val * 255 / currentMaxValue;
+                int bin = (int) ((long) val * 255 / currentMaxValue);
                 bin = Math.min(bin, 255);
                 histogram[bin]++;
             }
@@ -336,7 +342,7 @@ public class HistogramView extends VBox {
 
         // Auto-scale only if "Always Auto-Scale" is on.
         if (contrastSettings.isAutoScale()) {
-            contrastSettings.applyAutoScale(histogram, frame);
+            contrastSettings.applyAutoScale(histogram, currentMaxValue);
         }
 
         // Update sliders to reflect current settings
@@ -370,7 +376,7 @@ public class HistogramView extends VBox {
         gc.setFill(Color.BLACK);
         gc.fillRect(0, 0, canvasWidth, h);
 
-        double maxLog = maxLogCount();
+        double peak = peakCount();
 
         int rangeMin = contrastSettings.getDisplayMin() * 255 / Math.max(1, currentMaxValue);
         int rangeMax = contrastSettings.getDisplayMax() * 255 / Math.max(1, currentMaxValue);
@@ -384,7 +390,7 @@ public class HistogramView extends VBox {
         gc.setFill(Color.LIGHTGRAY);
         for (int i = 0; i < 256; i++) {
             if (currentHistogram[i] > 0) {
-                double barHeight = (Math.log1p(currentHistogram[i]) / maxLog) * (h - 2);
+                double barHeight = Math.min(1.0, currentHistogram[i] / peak) * (h - 2);
                 gc.fillRect(i * barWidth, h - barHeight, Math.max(barWidth, 1), barHeight);
             }
         }
@@ -404,7 +410,7 @@ public class HistogramView extends VBox {
         gc.setFill(Color.BLACK);
         gc.fillRect(0, 0, w, h);
 
-        double maxLog = maxLogCount();
+        double peak = peakCount();
 
         int rangeMin = contrastSettings.getDisplayMin() * 255 / Math.max(1, currentMaxValue);
         int rangeMax = contrastSettings.getDisplayMax() * 255 / Math.max(1, currentMaxValue);
@@ -422,7 +428,7 @@ public class HistogramView extends VBox {
         gc.setFill(Color.LIGHTGRAY);
         for (int i = 0; i < 256; i++) {
             if (currentHistogram[i] > 0) {
-                double barLen = (Math.log1p(currentHistogram[i]) / maxLog) * (w - 2);
+                double barLen = Math.min(1.0, currentHistogram[i] / peak) * (w - 2);
                 double y = h - (i + 1) * barHeight;
                 gc.fillRect(0, y, barLen, Math.max(barHeight, 1));
             }
@@ -435,14 +441,27 @@ public class HistogramView extends VBox {
         gc.strokeLine(0, yRangeTop, w, yRangeTop);
     }
 
-    private double maxLogCount() {
-        double maxLog = 0;
-        for (int count : currentHistogram) {
-            if (count > 0) {
-                double logVal = Math.log1p(count);
-                if (logVal > maxLog) maxLog = logVal;
+    /**
+     * The count a full-height bar stands for. Counts are drawn linearly, as Micro-Manager
+     * draws them: a log scale flattened every peak into a plateau. The end bins are left out
+     * of the scale because a dark corner or a clipped highlight piles thousands of pixels into
+     * bin 0 or 255, which would shrink the rest of the curve to nothing; such a bin is drawn
+     * full height instead.
+     */
+    private double peakCount() {
+        return peakCount(currentHistogram);
+    }
+
+    static double peakCount(int[] histogram) {
+        int peak = 0;
+        for (int i = 1; i < histogram.length - 1; i++) {
+            peak = Math.max(peak, histogram[i]);
+        }
+        if (peak == 0) {
+            for (int count : histogram) {
+                peak = Math.max(peak, count);
             }
         }
-        return maxLog == 0 ? 1 : maxLog;
+        return Math.max(1, peak);
     }
 }

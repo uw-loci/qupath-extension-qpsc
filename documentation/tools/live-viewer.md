@@ -122,11 +122,11 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design st
 | Option | Type | Description |
 |--------|------|-------------|
 | Min/Max Sliders | Slider | Contrast adjustment range. Dragging either slider also clears the persistent Always Auto-Scale flag (and unchecks the box) so the manual range is honored. |
-| Full Range | Button | Reset Min/Max to the full sensor range and clear the persistent Always Auto-Scale flag. |
+| Full Range | Button | Reset Min/Max to the camera's full range (2^bits - 1, e.g. 0-4095 for a 12-bit camera delivering 16-bit frames) and clear the persistent Always Auto-Scale flag. |
 | Auto Scale | Button | One-shot rescale of the contrast range to the current frame. Does NOT flip the persistent Always Auto-Scale flag -- use it when you want a single rescale without committing to per-frame auto-scale. |
 | Always Auto-Scale | CheckBox | When checked, every live frame and acquired tile is auto-scaled (drives the persistent `autoScale` flag). When unchecked, your manual Min/Max sliders are preserved. Replaces the previous always-on per-tile rescale, which was breaking non-fluorescence acquisitions whose contrast was already correctly set. |
 
-The histogram shows a 256-bin luminance distribution updated in real time. Per-channel (R/G/B) saturation percentages are displayed below the histogram and turn red when any channel exceeds 1% saturation.
+The histogram shows a 256-bin luminance distribution updated in real time, drawn on a linear count scale. Its range is the camera's bit depth, not the 16-bit buffer's: a 12-bit camera delivering 16-bit frames spans 0-4095, and the frame info line reads "12-bit in 16". Per-channel (R/G/B) saturation percentages are displayed below the histogram, counted at the camera's maximum value, and turn red when any channel exceeds 1% saturation.
 
 #### Docking the histogram on the right
 

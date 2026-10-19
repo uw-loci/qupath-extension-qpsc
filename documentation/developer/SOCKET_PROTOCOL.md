@@ -257,7 +257,8 @@ omits it and the client tolerates its absence (lamp checks are then skipped).
     "available_binnings": [int, ...],
     "current_binning": int,
     "exposure_range_ms": [float, float],
-    "gain_range": [float, float] | null
+    "gain_range": [float, float] | null,
+    "significant_bits": int | null
   },
   "illumination": [
     {"label": str, "device": str, "power_range": [float, float],
@@ -275,6 +276,8 @@ omits it and the client tolerates its absence (lamp checks are then skipped).
 ```
 
 `value_type` tells the client which input widget to render: `"binary"` → checkbox (only valid powers are 0 and `power_range[1]`); `"continuous"` → spinner / text field; `"discrete"` → reserved for a future enumerated-set source (radio buttons). Empty payload returns the current state via the server's tracked `_active_profile`; non-empty payload describes what the profile would render after Apply (no actual hardware change).
+
+`camera.significant_bits` is the number of data-carrying bits per pixel (12 for a 12-bit camera delivering 16-bit buffers, so the Live Viewer's range is 0-4095); `null` when the server does not know. The Java side is `CameraBitDepth` in `ui/liveviewer/`.
 
 ### Illumination & Profile
 

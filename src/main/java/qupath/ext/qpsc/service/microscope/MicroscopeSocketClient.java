@@ -6864,6 +6864,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
             @com.google.gson.annotations.SerializedName("gain_range")
             public double[] gainRange; // null when camera has no gain control
+
+            /** Bits of each pixel carrying data (12 for a 12-bit camera in 16-bit buffers); null if unknown. */
+            @com.google.gson.annotations.SerializedName("significant_bits")
+            public Integer significantBits;
         }
 
         public static final class Illumination {

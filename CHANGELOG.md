@@ -16,6 +16,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The Live Viewer histogram shows a 12-bit camera's real curve.** Frames from a 12-bit camera (the LC-PolScope Oryx) arrive in 16-bit buffers, and the histogram, sliders, Full Range and Auto Scale all spanned 0-65535, so the whole image sat in the first sixteenth of the axis. The counts were also drawn on a log scale that flattened every peak. The range now comes from the camera's bit depth (the server reports it; needs the matching microscope_command_server), the counts are drawn linearly as in Micro-Manager, "Sat" counts pixels at the camera's own maximum (it could never flag a clipped 12-bit frame), and the status bar says "12-bit in 16".
 - **The LC-PolScope calibration result is no longer lost.** QPSC read the server's reply one network read at a time, as if each read were one message. When the last progress message and the start of the result arrived together, the result was discarded and the progress dialog waited until its 10-minute timeout. Found on the demo microscope, where it happened every time.
 - **The LC-PolScope calibration pauses the Live Viewer.** The viewer's "no frames" watchdog restarted streaming in the middle of the calibration's exposures.
 - **Apply to acquisition keeps a state's other settings.** Applying an LC calibration replaced each state's whole `device_properties` list with the two crystal settings. Entries for other devices (a lamp the state turns on, for example) are now kept after them.

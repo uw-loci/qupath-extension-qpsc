@@ -1987,7 +1987,11 @@ public class LiveViewerWindow {
             }
 
             // Build frame info string
-            String bitDepth = frame.bytesPerPixel() == 2 ? "16-bit" : "8-bit";
+            // The camera's depth when it is less than the frame's ("12-bit in 16" for the Oryx).
+            int cameraMax = CameraBitDepth.maxValue(frame);
+            String bitDepth = frame.bytesPerPixel() != 2
+                    ? "8-bit"
+                    : cameraMax < 65535 ? (32 - Integer.numberOfLeadingZeros(cameraMax)) + "-bit in 16" : "16-bit";
             String colorMode = frame.isRGB() ? "RGB" : "Grayscale";
             lastFrameInfo = String.format(
                     "FPS: %.1f | %dx%d | %s %s", currentFps, frame.width(), frame.height(), colorMode, bitDepth);

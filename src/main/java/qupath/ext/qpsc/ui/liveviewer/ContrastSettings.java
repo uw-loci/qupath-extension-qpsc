@@ -42,17 +42,17 @@ public class ContrastSettings {
      */
     public void applyFullRange(FrameData frame) {
         displayMin.set(0);
-        displayMax.set(frame.maxValue());
+        displayMax.set(CameraBitDepth.maxValue(frame));
         autoScale.set(false);
     }
 
     /**
      * Computes 0.1%/99.9% percentile from the histogram and applies as min/max.
      *
-     * @param histogram 256-bin histogram array
-     * @param frame     Current frame (for maxValue mapping)
+     * @param histogram 256-bin histogram array spanning 0..maxVal
+     * @param maxVal    the value the top of the histogram stands for (the camera's range)
      */
-    public void applyAutoScale(int[] histogram, FrameData frame) {
+    public void applyAutoScale(int[] histogram, int maxVal) {
         int totalPixels = 0;
         for (int count : histogram) {
             totalPixels += count;
@@ -88,7 +88,6 @@ public class ContrastSettings {
         // Map 256-bin indices back to actual pixel value range.
         // Use lower edge of lowBin and upper edge of highBin to avoid
         // truncation when 16-bit data spans a narrow intensity range.
-        int maxVal = frame.maxValue();
         int newMin = (int) ((long) lowBin * maxVal / 255);
         int newMax = (int) ((long) (highBin + 1) * maxVal / 255);
         newMax = Math.min(newMax, maxVal);
