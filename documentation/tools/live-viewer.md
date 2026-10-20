@@ -179,6 +179,7 @@ This safety gate ensures you can see the stage move before issuing commands.
 | — Mark Z Button | Button | Record the current polled Z position as a new tic on both bars. Stays enabled when Live View is off. Useful for tracking Z positions during manual focus tuning. |
 | — Max Z Focus Button | Button | Move Z to the position of the highest focus-metric sample in the current trace. Greyed out when no trace samples are present or when stage movement is disabled. Useful for quickly returning to the best-focus Z after exploring other positions. |
 | — Z Step Control | TextField | Step size in micrometers used by every mousewheel scroll-as-focus-knob target: the Z position field, the Move Z button, the step field itself, and now the coarse and fine bars. |
+| — Go to Z / Move Z | TextField + Button | Under the step field. Type an absolute Z (um) and press Enter or **Move Z** to move there. Scrolling over either one steps Z by the step size. |
 | Polarizer Controls | Spinner | Rotation angle control (PPM modality only) |
 | **Calibrate Directions...** | Button | Opens an interactive dialog that jogs the stage in +X and +Y, asks which way the tissue in the image appeared to move across the screen (the opposite of the view's pan), and solves for the camera orientation (optical flip/rotation) under your current stage polarity setting. Non-blocking: saves your original position and restores it when closing. The same calibration dialog is available in the Setup Wizard as an optional step. Note: stage polarity is treated as a hardware-wiring fact and is not changed by this tool — use the MicroManager-script procedure in [PREFERENCES.md](../PREFERENCES.md#inverted-x-stage) to verify polarity if needed. See that same section for the coordinate frame details. |
 
@@ -186,7 +187,7 @@ This safety gate ensures you can see the stage move before issuing commands.
 
 | Option | Type | Description |
 |--------|------|-------------|
-| X / Y / Z / R Fields | TextField | Enter absolute coordinates (um) or rotation angle to move to |
+| X / Y / R Fields | TextField | Enter absolute coordinates (um) or rotation angle to move to. Z has its own field in the Z Focus section. |
 | Move Buttons | Button | Move the stage to the entered coordinate for that axis |
 | Go to Centroid | Button | Move the stage to the centroid of the current QuPath annotation. Enabled when (1) the open image has alignment data (sub-image offset metadata, bounding-box stage bounds, or derived alignment) AND (2) a PathObject with a non-null ROI is selected. If no selection exists or the selection has no ROI, the button is greyed out. The status text indicates which alignment type is available. |
 

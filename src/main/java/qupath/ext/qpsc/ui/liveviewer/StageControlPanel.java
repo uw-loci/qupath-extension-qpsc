@@ -468,7 +468,7 @@ public class StageControlPanel extends VBox {
         moveXYBtn.setStyle("-fx-font-size: 10px;");
         xyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
-        Label zLabel = new Label("Z:");
+        Label zLabel = new Label("Go to Z (um):");
         zLabel.setStyle("-fx-font-size: 10px;");
         zField.setPrefWidth(70);
         Tooltip zFieldTooltip =
@@ -701,11 +701,6 @@ public class StageControlPanel extends VBox {
         HBox moveXyRow = new HBox(4, xLabel, xField, yLabel, yField, moveXYBtn);
         moveXyRow.setAlignment(Pos.CENTER_LEFT);
 
-        // Step controls live with the ZBarPanel's right-side button column now;
-        // the move-to-position Z row stays compact with just the typed-target trio.
-        HBox moveZRow = new HBox(4, zLabel, zField, moveZBtn);
-        moveZRow.setAlignment(Pos.CENTER_LEFT);
-
         HBox moveRRow = new HBox(4, rLabel, rField, moveRBtn);
         moveRRow.setAlignment(Pos.CENTER_LEFT);
 
@@ -768,6 +763,15 @@ public class StageControlPanel extends VBox {
         stepBlock.setAlignment(Pos.CENTER_LEFT);
         zBarPanel.getControlsColumn().getChildren().add(stepBlock);
 
+        // The typed Z target and Move Z sit with the other Z controls too, under the step
+        // field, rather than in Move to Position with X/Y (requested 2026-10-19). Stacked
+        // for the same narrow-column reason as the step block.
+        moveZBtn.setMaxWidth(Double.MAX_VALUE);
+        VBox moveZBlock = new VBox(2, zLabel, zField, moveZBtn);
+        moveZBlock.setAlignment(Pos.CENTER_LEFT);
+        moveZBlock.setPadding(new Insets(6, 0, 0, 0));
+        zBarPanel.getControlsColumn().getChildren().add(moveZBlock);
+
         // Seed the Z bar (and Z field) with the last-known stage Z so the
         // current-Z thumb is shown -- and the fine bar centers on it -- the FIRST
         // time Navigate is opened. The position poller only fires PROP_POS_Z on a
@@ -811,12 +815,11 @@ public class StageControlPanel extends VBox {
                         new Separator(),
                         zBarLabel,
                         zBarPanel,
+                        zStatus,
                         new Separator(),
                         moveToLabel,
                         moveXyRow,
                         xyStatus,
-                        moveZRow,
-                        zStatus,
                         moveRRow,
                         rStatus,
                         new Separator(),
