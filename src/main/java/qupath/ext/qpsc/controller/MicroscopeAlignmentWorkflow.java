@@ -746,20 +746,24 @@ public class MicroscopeAlignmentWorkflow {
                         .map(arr -> new MacroOrientationDialog.MacroFlip(arr[0], arr[1]))
                         .orElse(combinedConfig.macroFlip());
 
-                java.util.function.BiConsumer<Boolean, Boolean> onToggle = (newFlipX, newFlipY) -> {
-                    if (projectForFlip == null) {
-                        logger.warn("No project available to switch flipped entry on toggle");
-                        return;
-                    }
-                    logger.info("Orientation dialog toggle: flipX={}, flipY={}", newFlipX, newFlipY);
-                    showOrientation(gui, projectForFlip, sampleNameForFlip, newFlipX, newFlipY)
-                            .thenAccept(
-                                    ok -> logger.info("validateAndFlipIfNeeded({}, {}) -> {}", newFlipX, newFlipY, ok))
-                            .exceptionally(ex -> {
-                                logger.error("Failed to switch flipped entry on toggle: {}", ex.getMessage());
-                                return null;
-                            });
-                };
+                java.util.function.BiFunction<Boolean, Boolean, CompletableFuture<?>> onToggle =
+                        (newFlipX, newFlipY) -> {
+                            if (projectForFlip == null) {
+                                logger.warn("No project available to switch flipped entry on toggle");
+                                return CompletableFuture.completedFuture(null);
+                            }
+                            logger.info("Orientation dialog toggle: flipX={}, flipY={}", newFlipX, newFlipY);
+                            return showOrientation(gui, projectForFlip, sampleNameForFlip, newFlipX, newFlipY)
+                                    .whenComplete((ok, ex) -> {
+                                        if (ex != null) {
+                                            logger.error(
+                                                    "Failed to switch flipped entry on toggle: {}", ex.getMessage());
+                                        } else {
+                                            logger.info(
+                                                    "validateAndFlipIfNeeded({}, {}) -> {}", newFlipX, newFlipY, ok);
+                                        }
+                                    });
+                        };
 
                 MacroOrientationDialog.show(gui.getStage(), seedFlip, onToggle).thenAccept(finalFlip -> {
                     if (finalFlip == null) {
@@ -810,6 +814,14 @@ public class MicroscopeAlignmentWorkflow {
             String baseName = ImageMetadataManager.getBaseImage(open);
             ProjectImageEntry<BufferedImage> original =
                     baseName != null ? ImageMetadataManager.findSiblingWithFlip(project, baseName, false, false) : null;
+            // Already showing the right Camera View: nothing to do. Without this, OK went back
+            // to the original and flipped again, a needless second load (2026-10-19).
+            if (original != null
+                    && ImageFlipHelper.builtParity(open)
+                            .equals(ImageFlipHelper.cameraViewBake(original, flipX, flipY))) {
+                logger.info("Orientation: '{}' already shows flip ({}, {})", open.getImageName(), flipX, flipY);
+                return CompletableFuture.completedFuture(true);
+            }
             if (original != null && original != open) {
                 logger.info("Orientation: returning to the original scan '{}' first", original.getImageName());
                 atOriginal = ImageFlipHelper.openEntryAndAwaitInstall(gui, original);

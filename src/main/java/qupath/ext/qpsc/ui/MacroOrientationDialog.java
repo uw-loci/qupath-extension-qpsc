@@ -1,7 +1,7 @@
 package qupath.ext.qpsc.ui;
 
 import java.util.concurrent.CompletableFuture;
-import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -9,6 +9,7 @@ import javafx.scene.Scene;
 import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressIndicator;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
@@ -46,12 +47,14 @@ public final class MacroOrientationDialog {
      *
      * @param owner          the window the dialog should float over (typically the QuPath stage); may be null
      * @param seedFlip       initial flip values (from a prior preset for this pair, or null)
-     * @param onToggle       callback invoked synchronously on each checkbox change with the new (flipX, flipY).
-     *                       Implementations should switch the active image entry to match.
+     * @param onToggle       callback invoked on each checkbox change with the new (flipX, flipY).
+     *                       Implementations switch the active image entry to match and return a
+     *                       future that completes when the new image is showing; until then the
+     *                       dialog shows a wait message and locks its boxes and OK.
      * @return future yielding {@link MacroFlip} or {@code null} on cancel
      */
     public static CompletableFuture<MacroFlip> show(
-            Window owner, MacroFlip seedFlip, BiConsumer<Boolean, Boolean> onToggle) {
+            Window owner, MacroFlip seedFlip, BiFunction<Boolean, Boolean, CompletableFuture<?>> onToggle) {
         CompletableFuture<MacroFlip> future = new CompletableFuture<>();
         Platform.runLater(() -> {
             try {
@@ -84,17 +87,61 @@ public final class MacroOrientationDialog {
                     flipYBox.setSelected(seedFlip.flipY());
                 }
 
+                Button okButton = new Button("OK");
+
+                // Switching images loads a whole scan, which can take several seconds with no
+                // other sign of life (2026-10-19): say so, and lock the controls so a second
+                // click cannot start another switch while the first is still loading.
+                ProgressIndicator spinner = new ProgressIndicator();
+                spinner.setPrefSize(18, 18);
+                Label waitLabel = new Label();
+                waitLabel.setWrapText(true);
+                waitLabel.setMaxWidth(400);
+                HBox waitRow = new HBox(8, spinner, waitLabel);
+                waitRow.setAlignment(Pos.CENTER_LEFT);
+                waitRow.setVisible(false);
+                waitRow.setManaged(false);
+
                 Runnable fireToggle = () -> {
+                    boolean flipX = flipXBox.isSelected();
+                    boolean flipY = flipYBox.isSelected();
+                    waitLabel.setText(
+                            (flipX || flipY ? "Switching to the flipped image" : "Switching to the original scan")
+                                    + ", please wait. A large scan can take several seconds to load.");
+                    spinner.setVisible(true);
+                    waitRow.setVisible(true);
+                    waitRow.setManaged(true);
+                    flipXBox.setDisable(true);
+                    flipYBox.setDisable(true);
+                    okButton.setDisable(true);
+                    stage.sizeToScene();
+                    CompletableFuture<?> switching;
                     try {
-                        onToggle.accept(flipXBox.isSelected(), flipYBox.isSelected());
+                        switching = onToggle.apply(flipX, flipY);
                     } catch (Exception e) {
-                        logger.error("Error switching image entry on flip toggle", e);
+                        switching = CompletableFuture.failedFuture(e);
                     }
+                    if (switching == null) {
+                        switching = CompletableFuture.completedFuture(null);
+                    }
+                    switching.whenComplete((ok, ex) -> Platform.runLater(() -> {
+                        flipXBox.setDisable(false);
+                        flipYBox.setDisable(false);
+                        okButton.setDisable(false);
+                        if (ex != null) {
+                            logger.error("Error switching image entry on flip toggle", ex);
+                            spinner.setVisible(false);
+                            waitLabel.setText("Could not switch the image: " + ex.getMessage());
+                        } else {
+                            waitRow.setVisible(false);
+                            waitRow.setManaged(false);
+                        }
+                        stage.sizeToScene();
+                    }));
                 };
                 flipXBox.selectedProperty().addListener((obs, was, now) -> fireToggle.run());
                 flipYBox.selectedProperty().addListener((obs, was, now) -> fireToggle.run());
 
-                Button okButton = new Button("OK");
                 Button cancelButton = new Button("Cancel");
                 okButton.setDefaultButton(true);
                 cancelButton.setCancelButton(true);
@@ -115,7 +162,7 @@ public final class MacroOrientationDialog {
                 HBox buttons = new HBox(8, okButton, cancelButton);
                 buttons.setAlignment(Pos.CENTER_RIGHT);
 
-                VBox root = new VBox(10, header, instructions, flipXBox, flipYBox, buttons);
+                VBox root = new VBox(10, header, instructions, flipXBox, flipYBox, waitRow, buttons);
                 root.setPadding(new Insets(14));
 
                 stage.setScene(new Scene(root));

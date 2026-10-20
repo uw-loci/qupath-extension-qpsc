@@ -212,7 +212,7 @@ public final class ImageFlipHelper {
         // (label-left / as scanned) is identity, B (label-right) is a 180. This is the
         // only new term vs the historical companion; from here flipX/flipY == companionBake.
         String insertion = ImageMetadataManager.getSlideInsertion(openEntry);
-        Parity bake = LightPath.forActiveScope().companionBake(insertion, new Parity(flipX, flipY));
+        Parity bake = cameraViewBake(openEntry, flipX, flipY);
         if (bake.flipX() != flipX || bake.flipY() != flipY) {
             logger.info(
                     "validateAndFlipIfNeeded: placement '{}' composed onto raw->camera ({},{}) -> bake ({},{})",
@@ -236,6 +236,37 @@ public final class ImageFlipHelper {
 
         // Look for an existing flipped sibling of this base entry.
         ProjectImageEntry<BufferedImage> sibling = findFlippedSibling(project, openEntry, flipX, flipY);
+        if (sibling != null
+                && !new Parity(flipX, flipY).equals(builtParity(sibling))
+                && isReferencedAsParent(project, sibling)) {
+            // Acquisitions made from this companion point at its ID; replacing it would orphan
+            // them. Keep it (its pixels stay as built) and say so.
+            logger.warn(
+                    "validateAndFlipIfNeeded: companion '{}' is built with {} but {} is needed, and other "
+                            + "entries were acquired from it, so it is kept as is",
+                    sibling.getImageName(),
+                    builtParity(sibling),
+                    new Parity(flipX, flipY));
+        } else if (sibling != null && !new Parity(flipX, flipY).equals(builtParity(sibling))) {
+            // There is one companion per base, and its pixels are flipped once, when it is
+            // built. Reusing it for a different flip only re-stamped its metadata, so ticking Y
+            // and then X as well left a Y-only image labelled X+Y (2026-10-19). The companion is
+            // a viewing copy (annotations are mirrored from the base), so replace it.
+            logger.info(
+                    "validateAndFlipIfNeeded: companion '{}' is built with {} but {} is needed; rebuilding it",
+                    sibling.getImageName(),
+                    builtParity(sibling),
+                    new Parity(flipX, flipY));
+            try {
+                project.removeImage(sibling, true);
+                project.syncChanges();
+            } catch (Exception e) {
+                logger.error("validateAndFlipIfNeeded: could not remove the stale companion", e);
+                future.completeExceptionally(e);
+                return future;
+            }
+            sibling = null;
+        }
         if (sibling != null) {
             logger.info(
                     "validateAndFlipIfNeeded: flipped sibling already exists ({}); switching open entry",
@@ -245,6 +276,7 @@ public final class ImageFlipHelper {
             // accumulate duplicates -- the open entry is still the base here.
             mirrorAnnotationsToSibling(gui, sibling, flipX, flipY);
             stampCameraViewMetadata(openEntry, sibling, flipX, flipY);
+            syncStamp(project);
             switchOpenEntry(gui, sibling, future);
             return future;
         }
@@ -267,12 +299,73 @@ public final class ImageFlipHelper {
             // live hierarchy. createFlippedDuplicate no longer transfers annotations.
             mirrorAnnotationsToSibling(gui, created, flipX, flipY);
             stampCameraViewMetadata(openEntry, created, flipX, flipY);
+            syncStamp(project);
             switchOpenEntry(gui, created, future);
         } catch (Exception e) {
             logger.error("validateAndFlipIfNeeded: failed to create flipped duplicate", e);
             future.completeExceptionally(e);
         }
         return future;
+    }
+
+    /**
+     * The parity the "(Camera View)" companion of {@code baseEntry} is baked with for the
+     * raw-scanner -> camera flip {@code (flipX, flipY)}: that flip composed with the slide's
+     * per-slide placement.
+     */
+    public static Parity cameraViewBake(ProjectImageEntry<BufferedImage> baseEntry, boolean flipX, boolean flipY) {
+        String insertion = ImageMetadataManager.getSlideInsertion(baseEntry);
+        return LightPath.forActiveScope().companionBake(insertion, new Parity(flipX, flipY));
+    }
+
+    /**
+     * Save the camera-view stamp now. The companion entry itself is already in the project
+     * file; if QuPath then closed without saving, the stamp was lost, the next run could not
+     * recognize the companion, and it built another one (2026-10-19).
+     */
+    private static void syncStamp(Project<BufferedImage> project) {
+        try {
+            project.syncChanges();
+        } catch (Exception e) {
+            logger.warn("validateAndFlipIfNeeded: could not save the camera-view stamp: {}", e.getMessage());
+        }
+    }
+
+    /** True when another entry records {@code entry} as its parent ({@code original_image_id}). */
+    private static boolean isReferencedAsParent(
+            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> entry) {
+        String id = entry.getID();
+        for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+            if (e != entry && id.equals(ImageMetadataManager.getOriginalImageId(e))) return true;
+        }
+        return false;
+    }
+
+    /**
+     * The flip actually built into a companion's pixels, read from its server builder (the
+     * outermost affine transform), falling back to the stamped {@code bakedParity} when the
+     * builder does not expose an axis-aligned transform. The metadata alone is not trusted:
+     * before 2026-10-19 a reused companion was re-stamped without being rebuilt.
+     */
+    public static Parity builtParity(ProjectImageEntry<BufferedImage> companion) {
+        try {
+            var json = qupath.lib.io.GsonTools.getInstance()
+                    .toJsonTree(companion.getServerBuilder())
+                    .getAsJsonObject();
+            if (json.has("transform")) {
+                var t = json.getAsJsonObject("transform");
+                double m00 = t.get("m00").getAsDouble();
+                double m11 = t.get("m11").getAsDouble();
+                double m01 = t.get("m01").getAsDouble();
+                double m10 = t.get("m10").getAsDouble();
+                if (Math.abs(m01) < 1e-9 && Math.abs(m10) < 1e-9) {
+                    return new Parity(m00 < 0, m11 < 0);
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("builtParity: could not read the server builder of '{}'", companion.getImageName(), e);
+        }
+        return Parity.of(ImageMetadataManager.bakedParity(companion));
     }
 
     /**
