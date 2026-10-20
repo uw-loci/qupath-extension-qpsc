@@ -160,6 +160,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
             new java.util.concurrent.atomic.AtomicBoolean(false);
 
     private volatile long lastUnresponsiveModalNanos = 0L;
+
+    /**
+     * Set when the user dismisses the unresponsive modal: no further re-shows until the latch
+     * is cleared by a reconnect. The 30 s debounce alone brought the modal back every 30 s for
+     * as long as anything polled the stage, so after an operator shut the server down for the
+     * night it could not be got rid of (2026-10-19).
+     */
+    private volatile boolean unresponsiveModalDismissed = false;
+
     private static final long MODAL_REDISPLAY_DEBOUNCE_NANOS = 30L * 1_000_000_000L; // 30s
 
     // Configuration
@@ -4376,6 +4385,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *                so the user knows it is the same condition still active.
      */
     private void showServerUnresponsiveModal(String lastFailureMessage, boolean reshown) {
+        // Say what is actually wrong now. At latch time the server accepted connections but did
+        // not answer; by a re-show it may be gone altogether (Micro-Manager and the server shut
+        // down for the night), and "accepting TCP connections" was then plainly wrong.
+        boolean listening = isServerPortOpen();
         javafx.application.Platform.runLater(() -> {
             try {
                 java.awt.Toolkit.getDefaultToolkit().beep();
@@ -4384,18 +4397,27 @@ public class MicroscopeSocketClient implements AutoCloseable {
             javafx.scene.control.Alert alert =
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
             alert.setTitle("Microscope Server Unresponsive");
-            alert.setHeaderText(reshown ? "Server still unresponsive." : "Microscope server is not responding.");
-            alert.setContentText("The microscope server is accepting TCP connections but not responding to "
-                    + "CONFIG commands. This is usually a stuck server connection thread "
-                    + "(e.g. after a streaming AF abort left an operation mid-flight) and "
-                    + "less often a true MicroManager crash. Live view from an existing "
-                    + "connection may still work, but new operations will hang.\n\n"
-                    + "To recover (try in order):\n"
-                    + "  1. Restart the Python microscope server (often sufficient).\n"
-                    + "  2. If that doesn't help, also restart MicroManager.\n"
-                    + "  3. Click Retry below once at least the Python server is back up.\n\n"
+            String where = host + ":" + port;
+            String cause = listening
+                    ? "The microscope server at " + where + " accepts connections but does not answer "
+                            + "commands. Usually Micro-Manager was closed or crashed under it, or a server "
+                            + "thread is stuck (for example after an aborted autofocus). New operations will "
+                            + "hang until it is restarted.\n\n"
+                            + "To recover:\n"
+                            + "  1. Restart the Python microscope server (often enough).\n"
+                            + "  2. If that does not help, restart Micro-Manager too, then the server.\n"
+                            + "  3. Click Retry."
+                    : "Nothing is running at " + where + ": the microscope server has stopped. "
+                            + "That is expected if the microscope was shut down.\n\n"
+                            + "To reconnect later, start Micro-Manager and the Python server, then click "
+                            + "Retry here or Connect Now in Utilities > Microscope Configuration > "
+                            + "Communication Settings.";
+            alert.setHeaderText(
+                    listening ? "The microscope server is not responding." : "The microscope server has stopped.");
+            alert.setContentText(cause + "\n\n"
                     + (lastFailureMessage != null ? "Last error: " + lastFailureMessage + "\n\n" : "")
-                    + "Automatic reconnection has been suspended to prevent log spam.");
+                    + "QuPath has stopped trying to reconnect on its own. Dismiss hides this message until "
+                    + "you reconnect.");
             javafx.scene.control.ButtonType retry =
                     new javafx.scene.control.ButtonType("Retry", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
             javafx.scene.control.ButtonType dismiss = new javafx.scene.control.ButtonType(
@@ -4404,15 +4426,27 @@ public class MicroscopeSocketClient implements AutoCloseable {
             try {
                 qupath.ext.qpsc.ui.DialogOwner.own(alert);
                 UserErrors.logAlert(logger, alert);
-                alert.showAndWait().ifPresent(bt -> {
-                    if (bt == retry) {
-                        userTriggeredReconnect();
-                    }
-                });
+                var choice = alert.showAndWait();
+                if (choice.isPresent() && choice.get() == retry) {
+                    userTriggeredReconnect();
+                } else {
+                    unresponsiveModalDismissed = true;
+                    logger.info("Server-unresponsive message dismissed; not shown again until a reconnect");
+                }
             } finally {
                 modalShowing.set(false);
             }
         });
+    }
+
+    /** True when something accepts a TCP connection on the server's port (500 ms timeout). */
+    private boolean isServerPortOpen() {
+        try (java.net.Socket probe = new java.net.Socket()) {
+            probe.connect(new java.net.InetSocketAddress(host, port), 500);
+            return true;
+        } catch (IOException e) {
+            return false;
+        }
     }
 
     /**
@@ -4422,6 +4456,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * the user. Safe to call from any thread.
      */
     private void maybeReshowUnresponsiveModal() {
+        if (unresponsiveModalDismissed) {
+            return;
+        }
         long now = System.nanoTime();
         if (now - lastUnresponsiveModalNanos < MODAL_REDISPLAY_DEBOUNCE_NANOS) {
             return;
@@ -4447,6 +4484,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         logger.info("User triggered reconnect; clearing serverUnresponsiveSuspended flag");
         serverUnresponsiveSuspended = false;
+        unresponsiveModalDismissed = false;
         mainReconnectBackoffMs = reconnectDelayMs;
         // Clear modal-debounce state so a fresh latch event after recovery
         // is not silenced by the stale 30s window.
@@ -4472,6 +4510,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (serverUnresponsiveSuspended) {
             logger.info("Clearing serverUnresponsiveSuspended flag (caller will reconnect explicitly)");
             serverUnresponsiveSuspended = false;
+            unresponsiveModalDismissed = false;
             mainReconnectBackoffMs = reconnectDelayMs;
             // Clear modal-debounce state so a fresh latch event after this
             // recovery is not silenced by the stale 30s window.

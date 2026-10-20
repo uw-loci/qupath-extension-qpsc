@@ -1813,6 +1813,8 @@ and pick it (or `manual_only`) as the modality's default. The GUI dropdown for s
    - Verify Live Viewer shows frames again
    - Click **Retry** on the dialog
 
+**Shutting down for the night?** If Micro-Manager and the server were closed on purpose, the dialog's heading reads "The microscope server has stopped." instead (it checks whether anything is still listening on the server's port). Click **Dismiss**: QuPath stops trying to reconnect, and the message does not come back until you reconnect, either with **Retry** or with **Connect Now** in *Utilities > Microscope Configuration > Communication Settings*.
+
 ### Configuration Errors
 
 #### "Pixel size must be set for annotation-based workflows"

@@ -25,6 +25,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Dismiss on "Microscope Server Unresponsive" now sticks.** Any background poll brought the dialog back 30 seconds after Dismiss, so after the microscope was shut down for the night it could not be got rid of. It now stays away until you reconnect. The dialog also checks whether anything is still listening: when the server is gone, it says the server has stopped instead of claiming it accepts connections.
 - **Microscope Alignment checks for the Data Bounds Classifier before it starts.** The alignment cannot be saved without it, but it was read only at the save, so a missing file (for example `WhiteBackground.json` not copied to a new computer) threw away all the tile work with "Error during Save Error". The workflow now stops before its first dialog and says which file is missing and where to set it. If the save still fails, the message says the alignment was not saved and why.
 - **Data bounds detection removes everything it draws.** Only the "Other" regions and the Bounds annotation were removed, so any other class the classifier produced stayed on the image after alignment.
 - **Error dialogs no longer read "Error during ... Error".** The heading is the dialog's own label ("Stitching Error", "No Image") instead of being prefixed with "Error during".
