@@ -524,6 +524,7 @@ reads:
   - DS9 (open entry: SOURCE_MICROSCOPE, macro pixel size)
   - DS25 (stagePolarity, cameraOrientation)
   - DS17
+  - DS46 (data bounds classifier .json -- checked up front in run(), before the first dialog; required)
 writes:
   - DS4 (savePreset on success -- new TransformPreset stored in alignment YAML)
   - DS5 (saveGeneralTransform writes per-slide alignment JSON; line ~1503, commit 5bf0f7bf -- reads open-entry flips for save)
@@ -533,6 +534,7 @@ key_invariants:
   - "savePreset stores flipMacroX/Y, sourceScanner, greenBoxParams, optional 3D Z scale/offset."
   - "saveGeneralTransform reads ImageMetadataManager.isFlippedX/Y(openEntry) for flipMacroX/Y on the per-slide JSON (matches load-side bake-delta logic, 2026-05-19 fix)."
   - "Refinement-tile cleanup happens explicitly on accept and reject (Phase 11)."
+  - "run() refuses to start when DS46 is unset or names a missing file (ImageProcessing.dataBoundsClassifierProblem); the save-time check in saveGeneralTransform still guards the same case."
 common_failures:
   - "Pre-fix per-slide JSONs (no flipFrameVerified field) -> Continue/Cancel advisory."
 related_design_reports:
@@ -1869,6 +1871,7 @@ location: "QPPreferenceDialog.getDataBoundsClassifierProperty() -- user-chosen p
 fields: "QuPath pixel classifier JSON"
 read_by:
   - "W1d ExistingAlignmentPath (used to detect signal-bearing region inside the macro)"
+  - "W3 MicroscopeAlignmentWorkflow (required; gated up front in run())"
 invariants:
   - "Different sample classes need different classifiers. Update the preference whenever you swap sample classes."
 ```

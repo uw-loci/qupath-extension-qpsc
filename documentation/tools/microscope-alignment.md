@@ -19,6 +19,7 @@ The figure below shows the end-to-end purpose of alignment: a whole-slide overvi
 - Microscope server connected
 - Stage can move to known positions
 - Image must have visible features suitable for point matching
+- A Data Bounds Classifier set in Preferences, pointing at an existing file ([details](../PREFERENCES.md#data-bounds-classifier)). The workflow checks this before its first dialog and does not start without it.
 
 ## Options
 

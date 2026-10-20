@@ -72,6 +72,19 @@ public class MicroscopeAlignmentWorkflow {
             return;
         }
 
+        // The alignment cannot be saved without the data-bounds classifier (the macro -> stage
+        // transform is anchored on the scanned data region). Check it before the first step
+        // instead of failing at the save, after all the tile work.
+        String classifierProblem =
+                ImageProcessing.dataBoundsClassifierProblem(QPPreferenceDialog.getDataBoundsClassifierProperty());
+        if (classifierProblem != null) {
+            Platform.runLater(() -> UIFunctions.notifyUserOfError(
+                    classifierProblem
+                            + "\n\nMicroscope Alignment needs it to save the alignment, so it has not started.",
+                    "Data Bounds Classifier missing"));
+            return;
+        }
+
         // First, show microscope selection dialog
         MicroscopeSelectionDialog.showDialog()
                 .thenAccept(microscopeSelection -> {
@@ -1302,12 +1315,12 @@ public class MicroscopeAlignmentWorkflow {
                 }
 
                 if (dataBounds == null) {
-                    throw new IllegalStateException("Cannot create transform without data bounds. "
-                            + "Set 'Data Bounds Classifier' in QPSC preferences -- a pixel "
-                            + "classifier (.json) that separates the acquired data region "
-                            + "from background/padding (white pyramid padding for Ocus40, "
-                            + "dark background for fluorescence, etc.). "
-                            + "Saving with full-image bounds is unsafe -- it can drive the stage to the label.");
+                    String problem = ImageProcessing.dataBoundsClassifierProblem(classifierPath);
+                    throw new IllegalStateException(
+                            problem != null
+                                    ? problem
+                                    : "The Data Bounds Classifier found no scanned-data region in this image. "
+                                            + "Check that it is the right classifier for this scanner.");
                 }
             }
 
@@ -1649,7 +1662,8 @@ public class MicroscopeAlignmentWorkflow {
         } catch (Exception e) {
             logger.error("Failed to save transform", e);
             Platform.runLater(() -> {
-                UIFunctions.notifyUserOfError("Failed to save transform: " + e.getMessage(), "Save Error");
+                UIFunctions.notifyUserOfError(
+                        "The alignment was not saved.\n\n" + e.getMessage(), "Alignment not saved");
             });
         }
     }

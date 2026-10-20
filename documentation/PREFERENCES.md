@@ -447,7 +447,7 @@ Optional Groovy script for automatic tissue detection before imaging. If specifi
 **Description:**
 A QuPath pixel classifier (`.json`) that segments the full-resolution acquired-slide image into "background/padding" vs "data" regions. The Microscope Alignment workflow uses this to compute the **bounding box of the actual data area** on the SVS/OME-TIFF; that box is paired with the green-box center detected on the macro image to build a safe macro-to-stage transform.
 
-**Why this matters:** without an accurate data bounding box, the alignment math falls back to "use the entire image" -- which on a typical SVS includes the slide label and would let the stage drive into the label area. The workflow therefore refuses to save a transform when this preference is unset.
+**Why this matters:** without an accurate data bounding box, the alignment math falls back to "use the entire image" -- which on a typical SVS includes the slide label and would let the stage drive into the label area. The workflow therefore refuses to save a transform when this preference is unset. It checks up front: if the preference is unset, or names a file that does not exist, Microscope Alignment stops before its first dialog and says which file is missing and where to set it.
 
 **Choosing a classifier per scanner / modality:** different sample classes have different "background" appearances. One classifier per sample class is fine; swap the preference when you switch sample classes. Examples:
 

@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Microscope Alignment checks for the Data Bounds Classifier before it starts.** The alignment cannot be saved without it, but it was read only at the save, so a missing file (for example `WhiteBackground.json` not copied to a new computer) threw away all the tile work with "Error during Save Error". The workflow now stops before its first dialog and says which file is missing and where to set it. If the save still fails, the message says the alignment was not saved and why.
+- **Data bounds detection removes everything it draws.** Only the "Other" regions and the Bounds annotation were removed, so any other class the classifier produced stayed on the image after alignment.
+- **Error dialogs no longer read "Error during ... Error".** The heading is the dialog's own label ("Stitching Error", "No Image") instead of being prefixed with "Error during".
 - **The Image orientation dialog says when it is switching images.** Ticking a box loads a different version of the scan, which can take several seconds with no other sign of activity. The dialog now shows "Switching to the flipped image, please wait" with a spinner, and locks the boxes and OK until the new image is showing.
 - **OK in the Image orientation dialog no longer flips the image back and forth.** It reloaded the original scan and then flipped it again even when the image already matched the boxes.
 - **Changing the flip in the Image orientation dialog changes the image.** The Camera View copy kept the pixels of the first flip it was built with. Ticking Y and then X as well showed a Y-only image labelled X+Y. The copy is now rebuilt when the flip changes, unless acquisitions were made from it. Its Camera View tag is also saved right away, so a QuPath crash no longer leaves an unrecognized copy that the next run duplicates.

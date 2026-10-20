@@ -54,9 +54,41 @@ public class ImageProcessing {
      *         Returns full image bounds when no background was detected.
      *         Returns null only if the classifier file is missing or an exception occurred.
      */
+    /**
+     * Why the "Data Bounds Classifier" preference cannot be used, or {@code null} when it names
+     * an existing file. Microscope Alignment cannot save without it, so it checks this before
+     * its first step rather than failing after all the tile work (2026-10-19).
+     */
+    private static void removeAddedAnnotations(
+            qupath.lib.objects.hierarchy.PathObjectHierarchy hierarchy,
+            java.util.Set<qupath.lib.objects.PathObject> before) {
+        var added = hierarchy.getAnnotationObjects().stream()
+                .filter(a -> !before.contains(a))
+                .toList();
+        if (!added.isEmpty()) {
+            hierarchy.removeObjects(added, true);
+            logger.info("Removed {} annotation(s) left by data bounds detection", added.size());
+        }
+    }
+
+    public static String dataBoundsClassifierProblem(String classifierPathStr) {
+        String where = "Set it in Edit > Preferences > QuPath SCope > Data Bounds Classifier: a pixel classifier "
+                + "(.json) that separates the scanned data from the padding around it (for example "
+                + "WhiteBackground.json for brightfield scans).";
+        if (classifierPathStr == null || classifierPathStr.isBlank()) {
+            return "No Data Bounds Classifier is set.\n\n" + where;
+        }
+        if (!Files.isRegularFile(Paths.get(classifierPathStr))) {
+            return "The Data Bounds Classifier file was not found:\n" + classifierPathStr + "\n\n"
+                    + "Copy the classifier to that location, or point the preference at where it is. " + where;
+        }
+        return null;
+    }
+
     public static Rectangle detectImageDataBounds(QuPathGUI gui, String classifierPathStr) {
         logger.info("Detecting image data bounds via pixel classifier: {}", classifierPathStr);
 
+        java.util.Set<qupath.lib.objects.PathObject> before = null;
         try {
             if (classifierPathStr == null || classifierPathStr.isBlank()) {
                 logger.error("Data bounds classifier path is null or blank");
@@ -89,6 +121,10 @@ public class ImageProcessing {
             logger.debug("Running white background detection script");
 
             var hierarchy = gui.getViewer().getHierarchy();
+            // Everything the script adds is scaffolding: remember what was there before so all
+            // of it can be removed afterwards. Removing only the "Other" class and the Bounds
+            // annotation left any other class the classifier produced on the image (2026-10-19).
+            before = new java.util.HashSet<>(hierarchy.getAnnotationObjects());
 
             // Run the script
             Object summary = gui.runScript(null, script);
@@ -152,12 +188,6 @@ public class ImageProcessing {
                         topPadding,
                         rightPadding,
                         bottomPadding);
-
-                // Remove the Bounds annotation to clean up
-                hierarchy.removeObject(boundsAnnotation, true);
-                QP.resetSelection();
-                // Fire update to refresh the viewer
-                hierarchy.fireHierarchyChangedEvent(gui.getViewer());
             }
 
             return dataBounds;
@@ -165,6 +195,11 @@ public class ImageProcessing {
         } catch (Exception e) {
             logger.error("Error detecting Ocus40 data bounds", e);
             return null;
+        } finally {
+            if (before != null) {
+                removeAddedAnnotations(gui.getViewer().getHierarchy(), before);
+                QP.resetSelection();
+            }
         }
     }
 }

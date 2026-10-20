@@ -337,12 +337,16 @@ public class UIFunctions {
     }
     /**
      * Shows an error dialog on the JavaFX thread with proper text wrapping.
+     *
+     * @param heading shown as the dialog's heading, as given. Callers pass a label such as
+     *     "Stitching Error" or "No Image"; prefixing "Error during " produced headings like
+     *     "Error during Save Error" (2026-10-19).
      */
-    public static void notifyUserOfError(String message, String context) {
+    public static void notifyUserOfError(String message, String heading) {
         Platform.runLater(() -> {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error");
-            alert.setHeaderText("Error during " + context);
+            alert.setHeaderText(heading);
             alert.setContentText(message);
             alert.initModality(Modality.APPLICATION_MODAL);
 
