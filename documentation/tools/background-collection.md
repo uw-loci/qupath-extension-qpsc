@@ -13,6 +13,7 @@ Acquire flat-field correction images for improved image quality. Background imag
 
 - Microscope positioned at a clean, blank area (empty slide or uniform background)
 - Connected to microscope server
+- A [background profile](background-profiles.md) for the setup on the stage (create one with **Manage...** in this dialog, or in Utilities > Image Quality > Background Profiles...)
 - For JAI cameras: Run White Balance Calibration first
 
 ## Options
@@ -26,7 +27,8 @@ Acquire flat-field correction images for improved image quality. Background imag
 | Detector | ComboBox | From profile | Select camera/detector. Choosing an acquisition profile selects the detector that profile names, so on a scope with a camera per modality the background is filed under the right camera. |
 | Acquisition Profile | ComboBox | Auto-resolved | (Optional) Acquisition profile whose illumination intensity the server applies during collection. Shown when the modality declares one or more acquisition profiles. The lamp intensity for the selected profile is displayed below. |
 | Lamp Intensity | Label | From profile | (Read-only) Illumination intensity applied during collection, sourced from the selected acquisition profile. Visible only when the modality has adjustable illumination. Scopes without a lamp (e.g., PPM) do not show this field. |
-| Output Folder | Directory Picker | - | Where to save background images |
+| Background folder | Directory Picker | From config | The background base folder (`background_correction.base_folder` in the imageprocessing YAML). Profiles live under `<folder>/profiles/`. |
+| Background profile | ComboBox + Manage... | The active profile | **Required.** The [background profile](background-profiles.md) this set is for: the slide carrier or insert, slide source, orientation and mounting medium on the stage now. The combo is the QuPath-wide active profile, so choosing here changes it for the acquisition dialogs too. **Manage...** creates one. Without a profile, Start refuses. |
 | Use Per-Channel WB | CheckBox | OFF | Use per-channel white balance calibration (JAI cameras) |
 | White Balance Mode | ComboBox | From profile | The WB regime backgrounds will be collected for (Off / Camera AWB / Simple / Per-angle PPM). Drives which set of `background_*.tif` files is written so the right backgrounds are picked up at acquisition time. |
 
@@ -103,7 +105,7 @@ For the LC-PolScope modality the dialog shows the five states at their one acqui
 1. Position the microscope at a clean, blank area with no tissue or debris
 2. Open Collect Background Images from the menu
 3. Select the modality, objective, and detector matching your acquisition setup
-4. Choose the output folder for background images
+4. Check the background folder, and choose the **background profile** for the carrier, slides and medium on the stage (create one with **Manage...** if this setup has none yet)
 5. (Optional) Select an acquisition profile if the modality has multiple profiles
 6. For monochrome BF / PPM, pick an **Exposure mode** (see above). For fluorescence, verify the per-channel table; for RGB BF / PPM, the WB-mode setting drives behavior.
 7. If the chosen exposure mode requires it, fill in starting exposure and/or target intensity
@@ -133,9 +135,9 @@ For each in-use channel in the selected profile:
 
 ### Folder structure
 
-Backgrounds are filed under `<base>/<detector>/<modality>/<mag>/`. The white-balance mode determines whether a further subfolder is added:
+Backgrounds are filed by background profile, then hardware: `<base>/profiles/<profile id>/<detector>/<modality>/<mag>/`. Folders directly under `<base>` (the layout from before profiles) are not read; the Background Profiles dialog can move them into a profile. Below the profile folder, the white-balance mode determines whether a further subfolder is added:
 
-- **Monochrome / no white balance (`off`)** -- saved to the **flat** `<base>/<detector>/<modality>/<mag>/` folder (e.g. `.../HAMAMATSU_DCAM_01/Brightfield/10x/background.tif`). There is **no** `off` subfolder.
+- **Monochrome / no white balance (`off`)** -- saved to the **flat** `.../<detector>/<modality>/<mag>/` folder (e.g. `.../profiles/carrier4/HAMAMATSU_DCAM_01/Brightfield/10x/background.tif`). There is **no** `off` subfolder.
 - **Colour WB modes (`simple`, `per_angle`, `camera_awb`)** -- saved under a `<wbMode>/` subfolder so the modes coexist.
 
 Collection and acquisition resolve this path through the same helper, so a freshly collected background lands exactly where acquisition reads it. (A prior bug filed monochrome backgrounds in a stray `off/` subfolder while acquisition kept reading the flat path and silently reused a stale background -- fixed; re-collect once to overwrite any stale flat-folder file.)
@@ -146,6 +148,7 @@ Collection and acquisition resolve this path through the same helper, so a fresh
 - Each image includes metadata recording exposure, gain, and angle settings
 - Images are named with the modality, objective, detector, and angle information
 - Settings saved to `background_settings.yml` with all angle-exposure pairs
+- A `context` block in that file records the setup: the background profile, the Stage Map insert and the open image's slide placement at collection, the stage position, and `collected_at` (which the stale check uses instead of the file date)
 
 ### Channel-Based Modalities
 
@@ -158,6 +161,7 @@ Collection and acquisition resolve this path through the same helper, so a fresh
 
 - **Background exposures MUST match acquisition exposures** for proper flat-field correction
 - Backgrounds are specific to each objective/detector/modality combination -- collect separately for each
+- Backgrounds are also specific to the sample setup: collect a set into a separate [background profile](background-profiles.md) for each carrier, slide source or medium, and make that profile active before acquiring. Acquiring with the wrong profile active gives a warning when the profile declares a different insert or slide placement
 - Recollect backgrounds after changing illumination settings or replacing the lamp
 - **Lamp intensity tracking** (v2.0): The server records the lamp intensity used during background collection. The Acquisition Wizard will warn if that intensity no longer matches the active profile's setting; re-collect backgrounds to clear the warning
 - JAI cameras automatically load per-channel white balance calibration when available (independent of per-channel background collection for fluorescence)

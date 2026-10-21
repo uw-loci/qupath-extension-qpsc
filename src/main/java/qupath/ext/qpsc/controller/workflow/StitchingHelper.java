@@ -1040,6 +1040,15 @@ public class StitchingHelper {
      * active config; on any failure returns {@code null} so the metadata
      * field is omitted rather than populated with a wrong value.
      */
+    /** Saves the stamps just put on an entry; a failure is logged, never thrown. */
+    private static void syncProject(Project<BufferedImage> project) {
+        try {
+            project.syncChanges();
+        } catch (Exception e) {
+            logger.warn("Could not save the project after stamping an imported image: {}", e.getMessage());
+        }
+    }
+
     private static String resolveSourceMicroscope() {
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -1390,7 +1399,13 @@ public class StitchingHelper {
                         // Channels the user split out become their own project entries.
                         if (!splitImages.isEmpty()) {
                             importPerChannelFallback(
-                                    splitImages, metadata, gui, project, handler, pipelinedBatchAcquire);
+                                    splitImages,
+                                    metadata,
+                                    tileBaseDir.toFile(),
+                                    gui,
+                                    project,
+                                    handler,
+                                    pipelinedBatchAcquire);
                         }
 
                         // Merge the remaining (non-split) per-channel pyramids into a single
@@ -1402,7 +1417,13 @@ public class StitchingHelper {
                                     "Only one channel to merge for {}; importing it directly as its own entry",
                                     annotationName);
                             importPerChannelFallback(
-                                    mergeImages, metadata, gui, project, handler, pipelinedBatchAcquire);
+                                    mergeImages,
+                                    metadata,
+                                    tileBaseDir.toFile(),
+                                    gui,
+                                    project,
+                                    handler,
+                                    pipelinedBatchAcquire);
                         } else if (mergeImages.size() >= 2) {
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -1494,7 +1515,13 @@ public class StitchingHelper {
                                     // project (skipProjectImport=true above), so we only need
                                     // to import the merged file as the single canonical entry.
                                     importMergedImageOnly(
-                                            mergedPath, metadata, gui, project, handler, pipelinedBatchAcquire);
+                                            mergedPath,
+                                            metadata,
+                                            tileBaseDir.toFile(),
+                                            gui,
+                                            project,
+                                            handler,
+                                            pipelinedBatchAcquire);
                                     deleteMergedIntermediates(mergedPath, mergeImages);
                                 } else {
                                     // Merge failed. Because skipProjectImport=true kept the
@@ -1510,7 +1537,13 @@ public class StitchingHelper {
                                             annotationName,
                                             mergeImages.size());
                                     importPerChannelFallback(
-                                            mergeImages, metadata, gui, project, handler, pipelinedBatchAcquire);
+                                            mergeImages,
+                                            metadata,
+                                            tileBaseDir.toFile(),
+                                            gui,
+                                            project,
+                                            handler,
+                                            pipelinedBatchAcquire);
                                 }
                             } catch (Exception mergeEx) {
                                 logger.error(
@@ -1519,7 +1552,13 @@ public class StitchingHelper {
                                         mergeEx.getMessage(),
                                         mergeEx);
                                 importPerChannelFallback(
-                                        mergeImages, metadata, gui, project, handler, pipelinedBatchAcquire);
+                                        mergeImages,
+                                        metadata,
+                                        tileBaseDir.toFile(),
+                                        gui,
+                                        project,
+                                        handler,
+                                        pipelinedBatchAcquire);
                             }
                         } else {
                             logger.debug(
@@ -1929,6 +1968,7 @@ public class StitchingHelper {
     private static void importPerChannelFallback(
             List<String> stitchedImages,
             StitchingMetadata metadata,
+            File tileFolder,
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler,
@@ -1981,6 +2021,8 @@ public class StitchingHelper {
                     // acquisition can be refused later (review finding H3).
                     if (imported != null) {
                         ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
+                        qupath.ext.qpsc.utilities.StitchInfoSupport.stampEntry(imported, tileFolder);
+                        syncProject(project);
                     }
                     // Every per-channel file gets its own alignment keyed by
                     // its own file name, so Move-to-centroid works on any of
@@ -2009,6 +2051,7 @@ public class StitchingHelper {
     private static void importMergedImageOnly(
             String mergedPath,
             StitchingMetadata metadata,
+            File tileFolder,
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler,
@@ -2056,6 +2099,8 @@ public class StitchingHelper {
                 // acquisition can be refused later (review finding H3).
                 if (imported != null) {
                     ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
+                    qupath.ext.qpsc.utilities.StitchInfoSupport.stampEntry(imported, tileFolder);
+                    syncProject(project);
                 }
                 logger.info("Merged multichannel file imported to project: {}", mergedFile.getName());
 

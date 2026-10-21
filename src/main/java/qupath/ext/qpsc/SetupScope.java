@@ -484,6 +484,21 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // Background profiles: one set of backgrounds per sample setup; manage and activate them.
+        MenuItem backgroundProfilesOption = new MenuItem(res.getString("menu.backgroundProfiles"));
+        backgroundProfilesOption.setDisable(!configValid);
+        setMenuItemTooltip(
+                backgroundProfilesOption,
+                "Create, activate or delete background profiles: one set of flat-field backgrounds per sample setup"
+                        + " (slide carrier, slide source, orientation, medium). Acquisitions use the active profile.");
+        backgroundProfilesOption.setOnAction(e -> {
+            try {
+                QPScopeController.getInstance().startWorkflow("backgroundProfiles");
+            } catch (IOException ex) {
+                throw new RuntimeException(ex);
+            }
+        });
+
         // Autofocus settings editor
         MenuItem autofocusEditorOption = new MenuItem(res.getString("menu.autofocusEditor"));
         autofocusEditorOption.setDisable(!configValid || offlineScope);
@@ -736,7 +751,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Image Quality: autofocus, white balance / camera calibration, background.
         Menu imageQualityMenu = new Menu("Image Quality");
-        imageQualityMenu.getItems().add(backgroundCollectionOption);
+        imageQualityMenu.getItems().addAll(backgroundCollectionOption, backgroundProfilesOption);
         // WB Comparison compares JAI-only white-balance modes (camera_awb /
         // simple / per_angle); only meaningful on a JAI 3-CCD camera. Gate it the
         // same way as the "JAI Camera" submenu below so a monochrome scope

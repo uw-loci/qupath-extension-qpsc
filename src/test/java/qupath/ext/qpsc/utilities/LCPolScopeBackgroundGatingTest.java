@@ -24,6 +24,7 @@ class LCPolScopeBackgroundGatingTest {
     Path tempDir;
 
     private boolean savedMonoPref;
+    private String savedActiveProfile;
 
     private static final String MAIN_CONFIG = """
             microscope:
@@ -51,11 +52,22 @@ class LCPolScopeBackgroundGatingTest {
     @BeforeEach
     void savePref() {
         savedMonoPref = PersistentPreferences.getUseBackgroundCorrectionMono();
+        savedActiveProfile = PersistentPreferences.getActiveBackgroundProfile();
+        PersistentPreferences.setActiveBackgroundProfile("");
     }
 
     @AfterEach
     void restorePref() {
         PersistentPreferences.setUseBackgroundCorrectionMono(savedMonoPref);
+        PersistentPreferences.setActiveBackgroundProfile(savedActiveProfile);
+    }
+
+    /** The base folder with one background profile in it, made active, as a YAML scalar. */
+    private String baseWithActiveProfile() throws IOException {
+        String base = tempDir.resolve("backgrounds").toString().replace('\\', '/');
+        BackgroundProfiles.create(base, "p", "P", null, null, null, null);
+        BackgroundProfiles.setActiveId("p");
+        return "'" + base + "'";
     }
 
     private MicroscopeConfigManager load(String baseFolder) throws IOException {
@@ -66,15 +78,14 @@ class LCPolScopeBackgroundGatingTest {
         Files.writeString(main, MAIN_CONFIG);
         Files.writeString(tempDir.resolve("imageprocessing_Test.yml"), """
                 background_correction:
+                  base_folder: %s
                   lcpolscope:
                     enabled: false
                     method: none
-                    base_folder: %s
                   brightfield:
                     enabled: false
                     method: divide
-                    base_folder: %s
-                """.formatted(baseFolder, baseFolder));
+                """.formatted(baseFolder));
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(main.toString());
         mgr.reload(main.toString());
         return mgr;
@@ -82,7 +93,7 @@ class LCPolScopeBackgroundGatingTest {
 
     @Test
     void aConfiguredFolderIsUsedEvenWithTheFlatFieldToggleOff() throws IOException {
-        MicroscopeConfigManager mgr = load("'C:/backgrounds'");
+        MicroscopeConfigManager mgr = load(baseWithActiveProfile());
         PersistentPreferences.setUseBackgroundCorrectionMono(false);
 
         assertTrue(AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(
@@ -104,8 +115,21 @@ class LCPolScopeBackgroundGatingTest {
     }
 
     @Test
+    void noActiveProfileMeansNoBackgroundEvenWithAFolder() throws IOException {
+        String base = tempDir.resolve("backgrounds").toString().replace('\\', '/');
+        BackgroundProfiles.create(base, "p", "P", null, null, null, null);
+        MicroscopeConfigManager mgr = load("'" + base + "'");
+        PersistentPreferences.setUseBackgroundCorrectionMono(true);
+
+        assertFalse(
+                AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(
+                        mgr, "lcpolscope", "DET_DUMMY"),
+                "a profile exists but none is active");
+    }
+
+    @Test
     void theFlatFieldIlluminationCheckDoesNotApplyToLcPolScope() throws IOException {
-        MicroscopeConfigManager mgr = load("'C:/backgrounds'");
+        MicroscopeConfigManager mgr = load(baseWithActiveProfile());
         // Returns true (proceed) without looking for flat-field settings; a modal dialog here
         // would describe a divide the LC-PolScope path never does.
         assertTrue(BackgroundIlluminationCheck.checkAndWarn(

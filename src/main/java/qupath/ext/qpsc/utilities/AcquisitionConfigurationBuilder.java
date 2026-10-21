@@ -58,7 +58,7 @@ public class AcquisitionConfigurationBuilder {
     public static boolean isBackgroundCorrectionEffectivelyEnabled(
             MicroscopeConfigManager configManager, String baseModality, String detector) {
         boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
-        String bgBaseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
+        String bgBaseFolder = configManager.getBackgroundProfileFolder();
         if (!configManager.isJAICamera(detector)) {
             boolean monoPref = PersistentPreferences.getUseBackgroundCorrectionMono();
             if (bgEnabled && !monoPref) {
@@ -136,10 +136,19 @@ public class AcquisitionConfigurationBuilder {
         String detector = sample.detector();
         String baseModality = sample.modality();
 
-        // Get background correction settings (checks imageprocessing config first, then main config)
+        // Background correction settings from the imageprocessing config. The folder is the
+        // active background profile's; without one there are no backgrounds, whatever the YAML
+        // flag says, and the acquisition runs uncorrected with the usual warnings.
         boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
         String bgMethod = configManager.getBackgroundCorrectionMethod(baseModality);
-        String bgBaseFolder = configManager.getBackgroundCorrectionFolder(baseModality);
+        String bgBaseFolder = configManager.getBackgroundProfileFolder();
+        String bgProfileId = bgBaseFolder == null ? null : BackgroundProfiles.activeId();
+        if (bgEnabled && bgBaseFolder == null) {
+            logger.warn(
+                    "Background correction is enabled for {} but no background profile is active (or the active"
+                            + " one is missing); acquiring without background correction",
+                    baseModality);
+        }
 
         // For monochrome (non-JAI) detectors, the user's
         // "Use background correction" checkbox in the acquisition dialog
@@ -359,6 +368,7 @@ public class AcquisitionConfigurationBuilder {
             }
 
             acquisitionBuilder.backgroundCorrection(true, bgMethod, bgFolder, disabledAngles);
+            acquisitionBuilder.backgroundProfile(bgProfileId);
         }
 
         // Z-stack configuration from persistent preferences

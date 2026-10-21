@@ -39,11 +39,12 @@ imaging_profiles:
           single: 1.0
 
 background_correction:
+  # One base folder for the scope. Background profiles (one per sample setup) live under
+  # <base_folder>/profiles/<id>/; Background Collection fills this in on its first run.
+  base_folder: ''
   brightfield:
     enabled: false
     method: divide
-    base_folder: ''
   lcpolscope:
     enabled: false
     method: none
-    base_folder: null

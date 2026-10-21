@@ -114,6 +114,13 @@ public final class StitchInfoSupport {
 
             String wbMode = whiteBalanceMode(tileFolder);
             put(entries, "white balance", wbMode != null ? whiteBalanceLabel(wbMode) : "not recorded");
+            String bgFolder = commandFlag(tileFolder, BG_FOLDER_FLAG);
+            String bgProfile = commandFlag(tileFolder, BG_PROFILE_FLAG);
+            put(
+                    entries,
+                    "background profile",
+                    bgProfile != null ? bgProfile : (bgFolder != null ? "not recorded" : "none"));
+            put(entries, "background folder", bgFolder != null ? bgFolder : "none (no background correction)");
 
             File acquisitionDir = acquisitionFolder(tileFolder);
             List<String> lines = new ArrayList<>();
@@ -167,6 +174,34 @@ public final class StitchInfoSupport {
      *     resolved to its acquisition folder); may be null
      */
     public static String whiteBalanceMode(File tileFolder) {
+        return commandFlag(tileFolder, WB_MODE_FLAG);
+    }
+
+    /**
+     * Stamps on an imported entry what the acquisition record beside its tiles says: the white
+     * balance mode and the background profile. Every import site of a stitched image calls this,
+     * so an image imported through the multichannel merge carries the same facts as one imported
+     * directly. Null or missing values remove the keys; nothing here throws.
+     */
+    public static void stampEntry(qupath.lib.projects.ProjectImageEntry<?> entry, File tileFolder) {
+        if (entry == null) {
+            return;
+        }
+        ImageMetadataManager.setWhiteBalance(entry, whiteBalanceMode(tileFolder));
+        ImageMetadataManager.setBackgroundProfile(entry, backgroundProfile(tileFolder));
+    }
+
+    /**
+     * The background profile an acquisition was corrected with: the {@code --bg-profile} value in
+     * the newest acquisition command beside its tiles, or null when the command has none (no
+     * background correction, or an acquisition from before profiles). Never throws.
+     */
+    public static String backgroundProfile(File tileFolder) {
+        return commandFlag(tileFolder, BG_PROFILE_FLAG);
+    }
+
+    /** One flag's value from the newest acquisition command beside the tiles; null when absent. */
+    private static String commandFlag(File tileFolder, java.util.regex.Pattern flag) {
         try {
             File dir = tileFolder != null ? acquisitionFolder(tileFolder) : null;
             File[] files = dir != null ? dir.listFiles(File::isFile) : null;
@@ -174,15 +209,19 @@ public final class StitchInfoSupport {
             if (newest == null) {
                 return null;
             }
-            java.util.regex.Matcher m = WB_MODE_FLAG.matcher(Files.readString(newest.toPath(), StandardCharsets.UTF_8));
+            java.util.regex.Matcher m = flag.matcher(Files.readString(newest.toPath(), StandardCharsets.UTF_8));
             return m.find() ? m.group(1) : null;
         } catch (IOException | RuntimeException e) {
-            logger.debug("White balance mode not read for {}: {}", tileFolder, e.toString());
+            logger.debug("Flag {} not read for {}: {}", flag.pattern(), tileFolder, e.toString());
             return null;
         }
     }
 
     private static final java.util.regex.Pattern WB_MODE_FLAG = java.util.regex.Pattern.compile("--wb-mode\\s+(\\S+)");
+    private static final java.util.regex.Pattern BG_PROFILE_FLAG =
+            java.util.regex.Pattern.compile("--bg-profile\\s+(\\S+)");
+    private static final java.util.regex.Pattern BG_FOLDER_FLAG =
+            java.util.regex.Pattern.compile("--bg-folder\\s+(\\S+)");
 
     /** The dialog's name for a white balance protocol name ("per_angle" -> "Per-angle (PPM)"); unknown names as given. */
     public static String whiteBalanceLabel(String protocolName) {

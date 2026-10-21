@@ -140,8 +140,8 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
         MicroscopeConfigManager cfg = MicroscopeConfigManager.getInstanceIfAvailable();
         String profile = AcquisitionReadout.resolveProfileName(cfg, ctx.modality(), ctx.objective());
         Double intensity = AcquisitionReadout.resolveIlluminationIntensity(cfg, ctx.modality(), ctx.objective());
-        AcquisitionReadout.Exposure exp =
-                AcquisitionReadout.resolveBrightfieldExposure(cfg, ctx.modality(), ctx.objective(), ctx.detector());
+        AcquisitionReadout.Exposure exp = AcquisitionReadout.resolveBrightfieldExposure(
+                cfg, ctx.modality(), ctx.objective(), ctx.detector(), ctx.wbMode());
 
         Double overrideMs = parseOverride();
         StringBuilder sb = new StringBuilder();

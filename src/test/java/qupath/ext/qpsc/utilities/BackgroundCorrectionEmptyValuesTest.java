@@ -11,9 +11,9 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * A {@code background_correction} entry whose keys are present but empty means "not configured",
  * exactly like absent keys. The LC-PolScope image-processing YAML declares {@code base_folder: null},
- * and the first tiled acquisition on that scope (2026-10-16) died in
- * {@link MicroscopeConfigManager#getBackgroundCorrectionFolder} with a NullPointerException before
- * anything reached the microscope.
+ * and the first tiled acquisition on that scope (2026-10-16) died in the base-folder lookup with a
+ * NullPointerException before anything reached the microscope. Without a base folder there is no
+ * background profile folder either.
  */
 class BackgroundCorrectionEmptyValuesTest {
 
@@ -57,27 +57,29 @@ class BackgroundCorrectionEmptyValuesTest {
     void nullValuesAreNotConfiguredRatherThanACrash() throws IOException {
         MicroscopeConfigManager mgr = load("""
                 background_correction:
+                  base_folder: null
                   lcpolscope:
                     enabled: null
                     method: null
-                    base_folder: null
                 """);
-        assertNull(mgr.getBackgroundCorrectionFolder("lcpolscope"));
+        assertNull(mgr.getBackgroundBaseFolder());
+        assertNull(mgr.getBackgroundProfileFolder());
         assertNull(mgr.getBackgroundCorrectionMethod("lcpolscope"));
         assertFalse(mgr.isBackgroundCorrectionEnabled("lcpolscope"));
-        assertNull(mgr.getBackgroundCorrectionFolder("lcpolscope_20x"), "family fallback too");
+        assertNull(mgr.getBackgroundCorrectionMethod("lcpolscope_20x"), "family fallback too");
     }
 
     @Test
     void blankStringsAreNotConfigured() throws IOException {
         MicroscopeConfigManager mgr = load("""
                 background_correction:
+                  base_folder: ''
                   lcpolscope:
                     enabled: false
                     method: ''
-                    base_folder: ''
                 """);
-        assertNull(mgr.getBackgroundCorrectionFolder("lcpolscope"));
+        assertNull(mgr.getBackgroundBaseFolder());
+        assertNull(mgr.getBackgroundProfileFolder());
         assertNull(mgr.getBackgroundCorrectionMethod("lcpolscope"));
         assertFalse(mgr.isBackgroundCorrectionEnabled("lcpolscope"));
     }
@@ -86,12 +88,12 @@ class BackgroundCorrectionEmptyValuesTest {
     void realValuesStillComeThrough() throws IOException {
         MicroscopeConfigManager mgr = load("""
                 background_correction:
+                  base_folder: 'C:/bg'
                   lcpolscope:
                     enabled: true
                     method: divide
-                    base_folder: 'C:/bg'
                 """);
-        assertEquals("C:/bg", mgr.getBackgroundCorrectionFolder("lcpolscope"));
+        assertEquals("C:/bg", mgr.getBackgroundBaseFolder());
         assertEquals("divide", mgr.getBackgroundCorrectionMethod("lcpolscope"));
         assertTrue(mgr.isBackgroundCorrectionEnabled("lcpolscope"));
     }

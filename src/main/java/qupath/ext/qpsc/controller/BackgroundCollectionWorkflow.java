@@ -27,6 +27,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.BackgroundCollectionController;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.utilities.BackgroundProfiles;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
@@ -82,6 +83,7 @@ public class BackgroundCollectionWorkflow {
                                             result.detector(),
                                             result.angleExposures(),
                                             result.outputPath(),
+                                            result.backgroundProfile(),
                                             result.wbMode(),
                                             result.targetIntensity(),
                                             result.profileKey(),
@@ -121,6 +123,7 @@ public class BackgroundCollectionWorkflow {
             String detector,
             List<AngleExposure> angleExposures,
             String outputPath,
+            String backgroundProfile,
             String wbMode,
             double targetIntensity,
             String profileKey,
@@ -131,6 +134,7 @@ public class BackgroundCollectionWorkflow {
                 detector,
                 angleExposures,
                 outputPath,
+                backgroundProfile,
                 wbMode,
                 targetIntensity,
                 profileKey,
@@ -143,7 +147,9 @@ public class BackgroundCollectionWorkflow {
      * @param modality The modality (e.g., "ppm")
      * @param objective The selected objective
      * @param angleExposures List of angle-exposure pairs
-     * @param outputPath Base output path for background images
+     * @param outputPath the background base folder; the set is written under
+     *     {@code <outputPath>/profiles/<backgroundProfile>/...}
+     * @param backgroundProfile the background profile (id) to collect into; required
      * @param wbMode White balance mode: "camera_awb", "simple", "per_angle", or "off"
      * @param targetIntensity Target median intensity for adaptive exposure (0 = use server default)
      */
@@ -153,19 +159,40 @@ public class BackgroundCollectionWorkflow {
             String detector,
             List<AngleExposure> angleExposures,
             String outputPath,
+            String backgroundProfile,
             String wbMode,
             double targetIntensity,
             String profileKey,
             String exposureMode) {
         logger.info(
                 "Executing background acquisition for modality '{}' with {} angles, "
-                        + "wbMode={}, detector={}, profile={}, exposureMode={}",
+                        + "wbMode={}, detector={}, profile={}, exposureMode={}, backgroundProfile={}",
                 modality,
                 angleExposures.size(),
                 wbMode,
                 detector,
                 profileKey,
-                exposureMode);
+                exposureMode,
+                backgroundProfile);
+
+        // Every background lives in a background profile (the sample setup it was collected
+        // for). Without one there is nowhere to file the set, so stop before touching the camera.
+        java.util.Optional<BackgroundProfiles.BackgroundProfile> targetProfile =
+                BackgroundProfiles.find(outputPath, backgroundProfile);
+        if (targetProfile.isEmpty()) {
+            String why = backgroundProfile == null || backgroundProfile.isBlank()
+                    ? "No background profile is selected."
+                    : "The background profile '" + backgroundProfile + "' does not exist under " + outputPath + ".";
+            logger.error("Background collection refused: {}", why);
+            Platform.runLater(() -> UserErrors.show(
+                    logger,
+                    "Background Collection",
+                    why + "\n\nBackgrounds are filed by background profile (the slide carrier, slide source and"
+                            + " medium they were collected for). Create or choose one in the Background Collection"
+                            + " dialog, or in Utilities > Image Quality > Background Profiles, then collect again."));
+            return;
+        }
+        final String profileFolder = targetProfile.get().folder().toString();
 
         // Block if MicroManager's pixel size disagrees with the chosen objective. The output
         // folder structure encodes the objective magnification; a mismatch would file the
@@ -263,6 +290,8 @@ public class BackgroundCollectionWorkflow {
                         objective,
                         detector,
                         outputPath,
+                        profileFolder,
+                        backgroundProfile,
                         effectiveProfileKey,
                         profileIllumination,
                         profileChannels);
@@ -282,7 +311,7 @@ public class BackgroundCollectionWorkflow {
             if (objective != null && detector != null) {
                 String effectiveWbMode = (wbMode == null || wbMode.isEmpty()) ? "off" : wbMode;
                 String resolved = BackgroundSettingsReader.resolveBackgroundFolder(
-                        outputPath, modality, objective, detector, effectiveWbMode);
+                        profileFolder, modality, objective, detector, effectiveWbMode);
                 if (resolved != null) {
                     finalOutputPath = resolved;
                 }
@@ -356,11 +385,11 @@ public class BackgroundCollectionWorkflow {
                     profileIllumination,
                     bgResult.appliedLampIntensity(),
                     bgResult.lampDeviceLabel(),
-                    exposureMode);
+                    exposureMode,
+                    backgroundProfile);
 
-            // Update the modality's background_correction config to enabled=true
-            // and base_folder set to the user's output path. This ensures the
-            // acquisition workflow will find and use the backgrounds.
+            // Record the base folder and enable the modality in the imageprocessing config, so
+            // the acquisition workflow resolves this profile's backgrounds under it.
             try {
                 updateBackgroundCorrectionConfig(configFileLocation, modality, outputPath);
             } catch (Exception cfgEx) {
@@ -385,12 +414,13 @@ public class BackgroundCollectionWorkflow {
             // Show success notification on UI thread -- report ALL the settings
             // the background was captured at (lamp + exposure + folder), not just
             // a count, so the user can confirm they match what acquisition uses.
-            final String summary = buildBackgroundSummary(
-                    modality,
-                    finalOutputPath,
-                    finalExposures,
-                    bgResult.appliedLampIntensity(),
-                    bgResult.lampDeviceLabel());
+            final String summary = "Background profile: " + backgroundProfile + "\n"
+                    + buildBackgroundSummary(
+                            modality,
+                            finalOutputPath,
+                            finalExposures,
+                            bgResult.appliedLampIntensity(),
+                            bgResult.lampDeviceLabel());
             Platform.runLater(() -> Dialogs.showInfoNotification("Background Collection Complete", summary));
             qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
 
@@ -426,6 +456,8 @@ public class BackgroundCollectionWorkflow {
             String objective,
             String detector,
             String outputPath,
+            String profileFolder,
+            String backgroundProfile,
             String profileKey,
             Double profileIllumination,
             List<Channel> profileChannels) {
@@ -443,7 +475,7 @@ public class BackgroundCollectionWorkflow {
             List<String> inUseIds = inUse.stream().map(Channel::id).toList();
 
             String channelFolder = BackgroundSettingsReader.resolveChannelBackgroundFolder(
-                    outputPath, modality, objective, detector, profileKey);
+                    profileFolder, modality, objective, detector, profileKey);
             java.io.File outDir = new java.io.File(channelFolder);
             if (!outDir.exists() && !outDir.mkdirs()) {
                 throw new IOException("Failed to create channel background directory: " + channelFolder);
@@ -468,7 +500,8 @@ public class BackgroundCollectionWorkflow {
                     profileIllumination,
                     inUse,
                     bgResult.channelExposures(),
-                    bgResult.channelIntensities());
+                    bgResult.channelIntensities(),
+                    backgroundProfile);
 
             try {
                 updateBackgroundCorrectionConfig(configFileLocation, modality, outputPath);
@@ -482,8 +515,13 @@ public class BackgroundCollectionWorkflow {
                 logger.warn("Config reload after channel background collection failed: {}", reloadEx.getMessage());
             }
 
-            final String summary = buildChannelBackgroundSummary(
-                    profileKey, channelFolder, inUse, bgResult.channelExposures(), bgResult.channelIntensities());
+            final String summary = "Background profile: " + backgroundProfile + "\n"
+                    + buildChannelBackgroundSummary(
+                            profileKey,
+                            channelFolder,
+                            inUse,
+                            bgResult.channelExposures(),
+                            bgResult.channelIntensities());
             Platform.runLater(() -> Dialogs.showInfoNotification("Background Collection Complete", summary));
             qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
         } catch (Exception e) {
@@ -508,7 +546,8 @@ public class BackgroundCollectionWorkflow {
             Double profileIlluminationIntensity,
             List<Channel> inUseChannels,
             Map<String, Double> channelExposures,
-            Map<String, Double> channelIntensities)
+            Map<String, Double> channelIntensities,
+            String backgroundProfile)
             throws IOException {
 
         java.io.File settingsFile = new java.io.File(outputPath, "background_settings.yml");
@@ -574,6 +613,8 @@ public class BackgroundCollectionWorkflow {
         lamp.put("available", false);
         yamlData.put("lamp", lamp);
 
+        yamlData.put("context", contextBlock(backgroundProfile, timestamp));
+
         List<String> notes = new ArrayList<>();
         notes.add("Per-channel background set: one <channelId>.tif per in-use channel.");
         notes.add("Channels with 0 intensity were skipped (unused-channel rule).");
@@ -603,23 +644,36 @@ public class BackgroundCollectionWorkflow {
             String wbMode,
             double targetIntensity,
             String profileKey,
-            String exposureMode) {}
+            String exposureMode,
+            String backgroundProfile) {}
 
     /**
-     * Updates the imageprocessing YAML to enable background correction for the
-     * given modality and set the base_folder path. This ensures that subsequent
-     * acquisitions will find and use the collected backgrounds.
+     * Records the background base folder and enables the modality in the imageprocessing YAML
+     * ({@code background_correction.base_folder}, {@code background_correction.<modality>.enabled}),
+     * so later acquisitions resolve the collected set under the active background profile.
      *
-     * <p>The reader (MicroscopeConfigManager.getBackgroundCorrectionFolder) looks
-     * in {@code imageprocessing_{microscope}.yml -> background_correction ->
-     * {modality} -> base_folder}, so this writer must target that same file and
-     * path structure -- NOT the modalities section of the main config.
+     * <p>The reader ({@code MicroscopeConfigManager.getBackgroundBaseFolder} and
+     * {@code getBackgroundCorrectionEntry}) looks in {@code imageprocessing_{microscope}.yml}, so this
+     * writer targets that file -- NOT the modalities section of the main config.
      *
      * @param configPath Path to the main microscope config YAML (used to derive
      *                   the imageprocessing file path)
      * @param modality The modality name (e.g., "Brightfield")
-     * @param baseFolder The base output folder for background tiles
+     * @param baseFolder The background base folder (the profiles live under it)
      */
+    /**
+     * Records the background base folder in the imageprocessing YAML without touching any
+     * modality's enabled flag (the Background Profiles dialog's "Choose..." button).
+     */
+    public static void setBackgroundBaseFolder(String configPath, String baseFolder) {
+        updateBackgroundCorrectionConfig(configPath, null, baseFolder);
+        try {
+            MicroscopeConfigManager.getInstance(configPath).reload(configPath);
+        } catch (Exception e) {
+            logger.warn("Could not reload the config after setting the background folder: {}", e.getMessage());
+        }
+    }
+
     @SuppressWarnings("unchecked")
     private static void updateBackgroundCorrectionConfig(String configPath, String modality, String baseFolder) {
         try {
@@ -662,18 +716,22 @@ public class BackgroundCollectionWorkflow {
                 imgproc.put("background_correction", bgCorrection);
             }
 
-            Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
-            if (modalityBg == null) {
-                modalityBg = new LinkedHashMap<>();
-                bgCorrection.put(modality, modalityBg);
-            }
-
             // Normalize path separators to forward slashes for cross-platform YAML
             String normalizedFolder = baseFolder.replace('\\', '/');
-            modalityBg.put("enabled", true);
-            modalityBg.put("base_folder", normalizedFolder);
-            if (!modalityBg.containsKey("method")) {
-                modalityBg.put("method", "divide");
+            bgCorrection.put("base_folder", normalizedFolder);
+
+            if (modality != null) {
+                Map<String, Object> modalityBg = (Map<String, Object>) bgCorrection.get(modality);
+                if (modalityBg == null) {
+                    modalityBg = new LinkedHashMap<>();
+                    bgCorrection.put(modality, modalityBg);
+                }
+                modalityBg.put("enabled", true);
+                if (!modalityBg.containsKey("method")) {
+                    modalityBg.put("method", "divide");
+                }
+                // The folder is scope-wide now; a per-modality copy from before profiles is not read.
+                modalityBg.remove("base_folder");
             }
 
             DumperOptions options = new DumperOptions();
@@ -685,13 +743,41 @@ public class BackgroundCollectionWorkflow {
             }
 
             logger.info(
-                    "Updated background_correction in {} for modality '{}': enabled=true, base_folder={}",
+                    "Updated background_correction in {}: base_folder={}{}",
                     imgprocFile.getName(),
-                    modality,
-                    normalizedFolder);
+                    normalizedFolder,
+                    modality == null ? "" : ", " + modality + ".enabled=true");
         } catch (Exception e) {
             logger.error("Failed to update background_correction config: {}", e.getMessage());
         }
+    }
+
+    /**
+     * The {@code context} block of a {@code background_settings.yml}: the setup the set was
+     * collected under. The profile is what the set is filed by; the insert, slide placement and
+     * stage position are recorded when known so a later reader can tell what the background was
+     * taken on. Nothing here is required by the readers.
+     */
+    private static Map<String, Object> contextBlock(String backgroundProfile, String timestamp) {
+        Map<String, Object> context = new LinkedHashMap<>();
+        context.put("profile", backgroundProfile);
+        String insert = BackgroundProfiles.currentInsert();
+        if (insert != null) {
+            context.put("insert", insert);
+        }
+        String insertion = BackgroundProfiles.currentSlideInsertion();
+        if (insertion != null) {
+            context.put("slide_insertion", insertion);
+        }
+        try {
+            double[] xy = MicroscopeController.getInstance().getStagePositionXY();
+            context.put("stage_xy_um", List.of(xy[0], xy[1]));
+            context.put("stage_z_um", MicroscopeController.getInstance().getStagePositionZ());
+        } catch (Exception e) {
+            logger.debug("Stage position not recorded with the background: {}", e.toString());
+        }
+        context.put("collected_at", timestamp);
+        return context;
     }
 
     /**
@@ -713,7 +799,8 @@ public class BackgroundCollectionWorkflow {
             Double profileIlluminationIntensity,
             Double appliedLampIntensity,
             String lampDeviceLabel,
-            String exposureMode)
+            String exposureMode,
+            String backgroundProfile)
             throws IOException {
 
         java.io.File settingsFile = new java.io.File(outputPath, "background_settings.yml");
@@ -845,6 +932,8 @@ public class BackgroundCollectionWorkflow {
 
         // The main angle_exposures list - this is what readers look for
         yamlData.put("angle_exposures", angleExposureList);
+
+        yamlData.put("context", contextBlock(backgroundProfile, timestamp));
 
         // Notes
         List<String> notes = new ArrayList<>();

@@ -10,7 +10,8 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.utilities.BackgroundExposureMatch;
+import qupath.ext.qpsc.utilities.BackgroundProfiles;
+import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.HardwareKey;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.images.ImageData;
@@ -50,14 +51,15 @@ public class BrightfieldModalityHandler implements ModalityHandler {
         // prevents --angles from being sent, while --exposures uses this value.
         //
         // Exposure source priority:
-        //   1. calibration_targets.background_exposures from the imageprocessing
-        //      YAML -- this is what the most recent background collection tuned
-        //      to hit the user's target intensity (e.g. 30000 counts). Using
-        //      this keeps acquisition consistent with the flat-field reference.
+        //   1. The background set in the active background profile for this detector,
+        //      magnification and white balance mode: its background_settings.yml records
+        //      the exposure the collection tuned to hit the target intensity. Using it
+        //      keeps acquisition consistent with the flat-field reference it will be
+        //      divided by.
         //   2. PersistentPreferences.lastUnifiedExposureMs -- a generic
         //      fallback that reflects the last value used in any unified-exposure
-        //      workflow. Only used when no matching background exposures exist.
-        double exposureMs = resolveExposureMs(modalityName, objective, detector);
+        //      workflow. Only used when background correction is off.
+        double exposureMs = resolveExposureMs(modalityName, objective, detector, wbMode);
         return CompletableFuture.completedFuture(List.of(new AngleExposure(0.0, exposureMs)));
     }
 
@@ -66,25 +68,25 @@ public class BrightfieldModalityHandler implements ModalityHandler {
      *
      * <p>Resolution policy:
      * <ol>
-     *   <li>If background correction is enabled for this modality and a
-     *       calibration row matches at any tier, return that exposure.
-     *       Tier-2 matches (objective drift) log a WARN with both objective
-     *       IDs but proceed - the on-disk background TIFF is shared across
-     *       all objectives at this magnification, so the calibrated exposure
-     *       is appropriate to reuse.</li>
-     *   <li>If background correction is enabled but no calibration row
-     *       matches, throw {@link BackgroundCalibrationMismatchException}.
-     *       Silently falling back to a stale generic preference would run
-     *       acquisition at the wrong exposure and corrupt flat-field
-     *       correction without any visible warning - the previous bug class
-     *       this method is designed to prevent.</li>
+     *   <li>If the active background profile holds a set for this detector,
+     *       magnification and white balance mode, return the exposure its
+     *       {@code background_settings.yml} records. Objectives of one
+     *       magnification share that folder, so a different objective at the
+     *       same magnification reuses it, as the background TIFF itself is.</li>
+     *   <li>If background correction is enabled but there is no such set (no
+     *       active profile, or none collected in it), throw
+     *       {@link BackgroundCalibrationMismatchException}. Silently falling
+     *       back to a stale generic preference would run acquisition at the
+     *       wrong exposure and corrupt flat-field correction without any
+     *       visible warning - the previous bug class this method is designed
+     *       to prevent.</li>
      *   <li>If background correction is disabled, return
      *       {@link PersistentPreferences#getLastUnifiedExposureMs()}. This is
      *       the legitimate no-BG path; the preference value is the user's
      *       last interactive exposure choice.</li>
      * </ol>
      */
-    private double resolveExposureMs(String modalityName, String objective, String detector) {
+    private double resolveExposureMs(String modalityName, String objective, String detector, String wbMode) {
         // Prefer the already-initialized singleton (avoids touching the
         // JavaFX-backed preference layer from headless contexts like tests).
         // The singleton is keyed by config path and is the source of truth
@@ -105,43 +107,63 @@ public class BrightfieldModalityHandler implements ModalityHandler {
         mgr.reload();
 
         boolean bgEnabled = mgr.isBackgroundCorrectionEnabled(modalityName);
-        BackgroundExposureMatch match = mgr.findBackgroundExposures(modalityName, objective, detector);
+        String profileFolder = mgr.getBackgroundProfileFolder();
+        String mode = (wbMode == null || wbMode.isBlank()) ? "off" : wbMode;
+        // The background's exposure is the reference only when the tiles will be divided by
+        // that background; with correction off the operator's last exposure is the answer.
+        BackgroundSettingsReader.BackgroundSettings bg = (!bgEnabled || profileFolder == null)
+                ? null
+                : BackgroundSettingsReader.findBackgroundSettings(
+                        profileFolder, modalityName, objective, detector, mode);
 
-        if (match != null) {
-            Double exposure = match.exposures().get(0.0);
-            if (exposure == null) {
-                exposure = match.exposures().values().iterator().next();
+        if (bg != null && bg.angleExposures != null && !bg.angleExposures.isEmpty()) {
+            Double exposure = null;
+            for (AngleExposure ae : bg.angleExposures) {
+                if (Math.abs(ae.ticks()) < 0.001) {
+                    exposure = ae.exposureMs();
+                }
             }
-
-            if (match.isObjectiveDrift()) {
+            if (exposure == null) {
+                exposure = bg.angleExposures.get(0).exposureMs();
+            }
+            if (bg.objective != null && !bg.objective.equals(objective)) {
                 logger.warn(
-                        "Brightfield BG calibration objective drift: stored objective '{}' (mag={}) but requested '{}' (mag={}). "
-                                + "Reusing calibrated exposure {} ms because both objectives share the same background TIFF on disk. "
-                                + "Re-run Background Collection if illumination geometry differs.",
-                        match.stored().objective(),
-                        match.stored().magnification(),
-                        match.requested().objective(),
-                        match.requested().magnification(),
+                        "Brightfield background was collected with objective '{}' but '{}' is in use; reusing its"
+                                + " exposure {} ms because both share the background set at this magnification."
+                                + " Re-run Background Collection if the illumination geometry differs.",
+                        bg.objective,
+                        objective,
                         exposure);
             } else {
                 logger.info(
-                        "Brightfield using background collection exposure: {} ms (tier={}, modality={}, objective={}, detector={})",
+                        "Brightfield using background collection exposure: {} ms (profile={}, modality={}, objective={},"
+                                + " detector={}, wb={})",
                         exposure,
-                        match.tier(),
+                        BackgroundProfiles.activeId(),
                         modalityName,
                         objective,
-                        detector);
+                        detector,
+                        mode);
             }
             return exposure;
         }
 
         if (bgEnabled) {
             HardwareKey requested = HardwareKey.from(modalityName, objective, detector);
-            String message = String.format(
-                    "Background correction is enabled for '%s' but no matching calibration row was found for "
-                            + "objective='%s' detector='%s'. Run Background Collection for this hardware combination, "
-                            + "or disable background correction in the imageprocessing config.",
-                    modalityName, objective, detector);
+            String profileId = BackgroundProfiles.activeId();
+            String message = profileFolder == null
+                    ? String.format(
+                            "Background correction is enabled for '%s' but no background profile is active%s. Choose one"
+                                    + " in the acquisition dialog or Utilities > Image Quality > Background Profiles, or"
+                                    + " disable background correction.",
+                            modalityName,
+                            profileId == null ? "" : " (the active profile '" + profileId + "' was not found)")
+                    : String.format(
+                            "Background correction is enabled for '%s' but the active background profile '%s' has no"
+                                    + " background for objective='%s' detector='%s' (white balance '%s'). Run Background"
+                                    + " Collection into this profile for this hardware, or disable background"
+                                    + " correction.",
+                            modalityName, profileId, objective, detector, mode);
             logger.error("Brightfield exposure resolution failed: {}", message);
             throw new BackgroundCalibrationMismatchException(message, requested);
         }

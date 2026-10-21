@@ -1,6 +1,8 @@
 package qupath.ext.qpsc.modality;
 
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.utilities.BackgroundProfiles;
+import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -59,30 +61,46 @@ public final class AcquisitionReadout {
     /**
      * Resolved brightfield exposure and where it came from -- mirrors
      * {@code BrightfieldModalityHandler.resolveExposureMs} without throwing. When
-     * background correction is on but not calibrated for this hardware, returns a
-     * warning ({@code exposureMs == null}) rather than the exception the handler
-     * raises, so the dialog can surface it early.
+     * background correction is on but the active background profile has no set for this
+     * hardware (or no profile is active), returns a warning ({@code exposureMs == null})
+     * rather than the exception the handler raises, so the dialog can surface it early.
      *
+     * @param wbMode the white balance mode the acquisition will use; null or blank means "off"
      * @return an {@link Exposure} describing the value and its source
      */
     public static Exposure resolveBrightfieldExposure(
-            MicroscopeConfigManager cfg, String modality, String objective, String detector) {
+            MicroscopeConfigManager cfg, String modality, String objective, String detector, String wbMode) {
         if (cfg == null || modality == null || objective == null || detector == null) {
             return new Exposure(null, "unavailable", false);
         }
         try {
-            var match = cfg.findBackgroundExposures(modality, objective, detector);
-            if (match != null) {
-                Double exposure = match.exposures().get(0.0);
-                if (exposure == null && !match.exposures().isEmpty()) {
-                    exposure = match.exposures().values().iterator().next();
+            String profileFolder = cfg.getBackgroundProfileFolder();
+            String mode = (wbMode == null || wbMode.isBlank()) ? "off" : wbMode;
+            var bg = (!cfg.isBackgroundCorrectionEnabled(modality) || profileFolder == null)
+                    ? null
+                    : BackgroundSettingsReader.findBackgroundSettings(
+                            profileFolder, modality, objective, detector, mode);
+            if (bg != null && bg.angleExposures != null && !bg.angleExposures.isEmpty()) {
+                Double exposure = null;
+                for (var ae : bg.angleExposures) {
+                    if (Math.abs(ae.ticks()) < 0.001) {
+                        exposure = ae.exposureMs();
+                    }
                 }
-                return new Exposure(exposure, "from Background Collection", false);
+                if (exposure == null) {
+                    exposure = bg.angleExposures.get(0).exposureMs();
+                }
+                return new Exposure(
+                        exposure, "from Background Collection (profile " + BackgroundProfiles.activeId() + ")", false);
             }
             if (cfg.isBackgroundCorrectionEnabled(modality)) {
                 // The handler throws BackgroundCalibrationMismatchException here.
                 return new Exposure(
-                        null, "Background correction ON but not calibrated -- run Background Collection", true);
+                        null,
+                        profileFolder == null
+                                ? "Background correction ON but no background profile is active -- choose one or collect a background"
+                                : "Background correction ON but the active background profile has no background for this hardware -- run Background Collection",
+                        true);
             }
             return new Exposure(
                     PersistentPreferences.getLastUnifiedExposureMs(), "last used (no background correction)", false);

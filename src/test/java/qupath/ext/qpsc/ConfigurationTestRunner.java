@@ -171,7 +171,7 @@ public class ConfigurationTestRunner {
         // Test brightfield background correction
         assertTrue(configManager.isBackgroundCorrectionEnabled("test_brightfield"));
         assertEquals("subtract", configManager.getBackgroundCorrectionMethod("test_brightfield"));
-        assertEquals("/test/backgrounds", configManager.getBackgroundCorrectionFolder("test_brightfield"));
+        assertEquals("/test/backgrounds", configManager.getBackgroundBaseFolder());
 
         // Test PPM background correction
         assertFalse(configManager.isBackgroundCorrectionEnabled("test_ppm"));

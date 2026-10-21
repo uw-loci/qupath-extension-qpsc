@@ -660,6 +660,12 @@ public class StageMapWindow {
                 canvas.setInsert(selected);
                 PersistentPreferences.setStageMapInsert(selected.getId());
                 logger.debug("Switched to insert configuration: {}", selected.getId());
+                // One background profile declares this insert and is not active: offer it.
+                qupath.ext.qpsc.ui.BackgroundProfileHint.offerForInsert(
+                        selected.getId(),
+                        insertComboBox.getScene() == null
+                                ? null
+                                : insertComboBox.getScene().getWindow());
             }
             updateMovementWarning();
             // Re-evaluate macro overlay availability: multi-slot holders disable it (the

@@ -86,6 +86,8 @@ public class AcquisitionCommandBuilder {
     private String backgroundCorrectionMethod;
     private String backgroundCorrectionFolder;
     private List<Double> backgroundCorrectionDisabledAngles = new ArrayList<>();
+    // The background profile the folder above was resolved under; recorded by the server.
+    private String backgroundProfile;
 
     // White balance mode: "camera_awb", "simple", "per_angle", "off"
     // Single source of truth -- no separate boolean fields.
@@ -400,6 +402,17 @@ public class AcquisitionCommandBuilder {
         if (enabled && !processingSteps.contains("background_correction")) {
             processingSteps.add("background_correction");
         }
+        return this;
+    }
+
+    /**
+     * Names the background profile the background folder came from. Sent as {@code --bg-profile}
+     * so the server records it with the acquisition; it changes nothing about the correction.
+     *
+     * @param profileId the profile id, or null to send nothing
+     */
+    public AcquisitionCommandBuilder backgroundProfile(String profileId) {
+        this.backgroundProfile = (profileId == null || profileId.isBlank()) ? null : profileId;
         return this;
     }
 
@@ -935,6 +948,9 @@ public class AcquisitionCommandBuilder {
             }
             if (backgroundCorrectionFolder != null) {
                 args.addAll(Arrays.asList("--bg-folder", backgroundCorrectionFolder));
+            }
+            if (backgroundProfile != null) {
+                args.addAll(Arrays.asList("--bg-profile", backgroundProfile));
             }
             // Add disabled angles if any
             if (!backgroundCorrectionDisabledAngles.isEmpty()) {

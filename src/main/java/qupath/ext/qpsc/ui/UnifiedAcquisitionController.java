@@ -240,6 +240,7 @@ public class UnifiedAcquisitionController {
         // UI Components - White Balance Section (JAI camera only)
         private VBox whiteBalanceSection;
         private ComboBox<String> wbModeComboBox;
+        private BackgroundProfileSelector backgroundProfileSelector;
         private Label wbModeLabel;
         private CheckBox monoBgCorrectionCheck;
 
@@ -686,6 +687,14 @@ public class UnifiedAcquisitionController {
             wbModeLabel.setTooltip(new Tooltip("White balance mode for acquisition"));
             grid.add(wbModeLabel, 0, row);
             grid.add(wbModeComboBox, 1, row);
+            row++;
+
+            // Background profile: which set of backgrounds this acquisition is corrected with.
+            backgroundProfileSelector = new BackgroundProfileSelector(configManager::getBackgroundBaseFolder, () -> {
+                updateWhiteBalanceVisibility();
+                refreshModalityReadout();
+            });
+            grid.add(backgroundProfileSelector, 0, row, 2, 1);
             row++;
 
             // Background correction toggle for monochrome (non-JAI) detectors.
@@ -2015,6 +2024,14 @@ public class UnifiedAcquisitionController {
                 filterWbModesByBackgroundValidity(modality, detector, isMultiAngle);
             }
 
+            if (backgroundProfileSelector != null) {
+                String objectiveDisplay = objectiveBox.getValue();
+                backgroundProfileSelector.refreshStatus(
+                        modality,
+                        objectiveDisplay != null ? extractIdFromDisplayString(objectiveDisplay) : null,
+                        detector);
+            }
+
             logger.debug("WB/BG visibility updated: JAI={}, modalityWB={}, visible={}", isJAI, modalityUsesWb, showWb);
         }
 
@@ -2036,7 +2053,7 @@ public class UnifiedAcquisitionController {
 
             if (bgEnabled) {
                 // Only show modes with valid backgrounds
-                String baseFolder = configManager.getBackgroundCorrectionFolder(modality);
+                String baseFolder = configManager.getBackgroundProfileFolder();
                 if (baseFolder != null) {
                     List<WbMode> validModes = BackgroundValidityChecker.getValidModes(
                             baseFolder, modality, objective, detector, configManager);

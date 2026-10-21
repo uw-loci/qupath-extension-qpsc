@@ -171,7 +171,7 @@ public class CalibrationChecker {
             // Reload to pick up any recent WB calibration changes
             mgr.reload(configPath);
 
-            String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
+            String bgFolder = mgr.getBackgroundProfileFolder();
             if (bgFolder == null) {
                 return new StepStatus(Status.WARNING, "No background correction folder configured for " + modality);
             }
@@ -413,7 +413,7 @@ public class CalibrationChecker {
             if (!mgr.isJAICamera(detector)) {
                 return java.util.List.of();
             }
-            String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
+            String bgFolder = mgr.getBackgroundProfileFolder();
             if (bgFolder == null) {
                 return java.util.List.of();
             }
@@ -471,7 +471,7 @@ public class CalibrationChecker {
             if (profileIntensity == null) {
                 return base;
             }
-            String bgFolder = mgr.getBackgroundCorrectionFolder(modality);
+            String bgFolder = mgr.getBackgroundProfileFolder();
             if (bgFolder == null) {
                 return base;
             }

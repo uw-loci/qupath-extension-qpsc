@@ -55,6 +55,7 @@ public class BackgroundCollectionController {
     private ComboBox<String> objectiveComboBox;
     private ComboBox<String> detectorComboBox;
     private TextField outputPathField;
+    private BackgroundProfileSelector backgroundProfileSelector;
     private ComboBox<String> wbModeComboBox;
     private VBox
             exposurePaneRoot; // exposure label + validation label + exposure controls; hidden when WB owns exposures
@@ -334,6 +335,7 @@ public class BackgroundCollectionController {
                                                 result.detector(),
                                                 result.angleExposures(),
                                                 result.outputPath(),
+                                                result.backgroundProfile(),
                                                 result.wbMode(),
                                                 result.targetIntensity(),
                                                 result.profileKey(),
@@ -493,10 +495,11 @@ public class BackgroundCollectionController {
         modalityPane.add(detectorComboBox, 1, 2);
 
         // Output path selection
-        Label outputLabel = new Label("Output folder:");
-        outputLabel.setTooltip(new Tooltip("Folder where background images are saved"));
+        Label outputLabel = new Label("Background folder:");
+        outputLabel.setTooltip(new Tooltip("The background base folder. Profiles live under <folder>/profiles/<id>/,"
+                + " and this set is saved in the selected profile."));
         outputPathField = new TextField();
-        outputPathField.setPromptText("Select folder for background images...");
+        outputPathField.setPromptText("Select the background folder...");
         outputPathField.setPrefWidth(300);
 
         Button browseButton = new Button("Browse...");
@@ -510,6 +513,19 @@ public class BackgroundCollectionController {
 
         // Set default output path
         setDefaultOutputPath();
+
+        // Background profile: the sample setup this set is collected for. Bound to the
+        // QuPath-wide active profile; the list is read from the folder above.
+        backgroundProfileSelector =
+                new BackgroundProfileSelector(() -> outputPathField.getText().trim(), () -> {
+                    String mod = modalityComboBox.getValue();
+                    String obj = objectiveComboBox.getValue();
+                    if (mod != null && obj != null) {
+                        updateExposureControlsWithBackground(mod, obj);
+                    }
+                });
+        outputPathField.textProperty().addListener((obs, was, now) -> backgroundProfileSelector.refreshProfiles());
+        modalityPane.add(backgroundProfileSelector, 0, 4, 2, 1);
 
         // Acquisition profile selector. Profiles carry the lamp intensity that
         // the server applies during background collection; hidden when the
@@ -947,7 +963,7 @@ public class BackgroundCollectionController {
             // Reload config to pick up any changes from white balance calibration
             configManager.reload(configPath);
             logger.debug("Reloaded config manager to pick up latest calibration values");
-            String baseBackgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
+            String baseBackgroundFolder = backgroundProfileSelector.selectedFolder();
 
             if (baseBackgroundFolder != null) {
                 // Detector comes from the user's dropdown selection so the
@@ -1341,7 +1357,7 @@ public class BackgroundCollectionController {
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
             // Reload to pick up wb_last_modified changes from recent WB calibration
             configManager.reload(configPath);
-            String baseBackgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
+            String baseBackgroundFolder = backgroundProfileSelector.selectedFolder();
 
             if (baseBackgroundFolder == null) {
                 return;
@@ -1483,35 +1499,26 @@ public class BackgroundCollectionController {
     }
 
     private void setDefaultOutputPath() {
-        // Priority 1: Last-used path from preferences
+        // The configured background base folder wins: profiles live under it, and the
+        // acquisition side reads from it. The last-used path is only for a scope that has
+        // not recorded a base folder yet.
+        try {
+            String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            var configManager = MicroscopeConfigManager.getInstance(configPath);
+            String bgFolder = configManager.getBackgroundBaseFolder();
+            if (bgFolder != null) {
+                outputPathField.setText(bgFolder);
+                return;
+            }
+        } catch (Exception e) {
+            logger.warn("Could not read the background base folder from the config", e);
+        }
         String lastUsed = PersistentPreferences.getLastBackgroundOutputPath();
         if (lastUsed != null && !lastUsed.isEmpty() && new java.io.File(lastUsed).exists()) {
             outputPathField.setText(lastUsed);
             return;
         }
-
-        // Priority 2: Config-derived default
-        try {
-            String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            var configManager = MicroscopeConfigManager.getInstance(configPath);
-
-            Set<String> modalities = configManager.getAvailableModalities();
-            String defaultPath = "C:/qpsc_data/background_tiles";
-
-            if (!modalities.isEmpty()) {
-                String firstModality = modalities.iterator().next();
-                String bgFolder = configManager.getBackgroundCorrectionFolder(firstModality);
-                if (bgFolder != null) {
-                    defaultPath = bgFolder;
-                }
-            }
-
-            outputPathField.setText(defaultPath);
-
-        } catch (Exception e) {
-            logger.warn("Could not determine default background path", e);
-            outputPathField.setText("C:/qpsc_data/background_tiles");
-        }
+        outputPathField.setText("C:/qpsc_data/background_tiles");
     }
 
     /** Load target intensity from detector config (background_target_intensity field). */
@@ -1734,6 +1741,15 @@ public class BackgroundCollectionController {
             if (modality == null || objective == null || outputPath.isEmpty()) {
                 return null;
             }
+            String backgroundProfile = backgroundProfileSelector.selectedId();
+            if (backgroundProfile == null) {
+                UserErrors.show(
+                        logger,
+                        "Background profile needed",
+                        "Choose the background profile this set is for (the carrier, slide source and medium on"
+                                + " the stage), or create one with Manage.... Backgrounds are always filed by profile.");
+                return null;
+            }
 
             // Drift guard: if the global objective state has moved since this dialog
             // opened (e.g. Live Viewer "Refresh from MM", another dialog's submit),
@@ -1894,7 +1910,8 @@ public class BackgroundCollectionController {
                     wbMode,
                     effectiveTarget,
                     effectiveProfileKey,
-                    exposureMode);
+                    exposureMode,
+                    backgroundProfile);
 
         } catch (Exception e) {
             logger.error("Error creating result", e);

@@ -7,10 +7,14 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.List;
+import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Check;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Level;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.utilities.BackgroundProfiles;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
@@ -59,13 +63,33 @@ class LCPolScopeReadinessTest {
         Files.writeString(dir.resolve("config_Test.yml"), main);
         String imgproc = bgBase == null
                 ? "background_correction: {}\n"
-                : "background_correction:\n  lcpolscope:\n    enabled: true\n    method: none\n    base_folder: '"
-                        + bgBase + "'\n";
+                : "background_correction:\n  base_folder: '" + bgBase.replace('\\', '/')
+                        + "'\n  lcpolscope:\n    enabled: true\n    method: none\n";
         Files.writeString(dir.resolve("imageprocessing_Test.yml"), imgproc);
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(
                 dir.resolve("config_Test.yml").toString());
         mgr.reload(dir.resolve("config_Test.yml").toString());
         return mgr;
+    }
+
+    private String savedActiveProfile;
+
+    @BeforeEach
+    void saveActiveProfile() {
+        savedActiveProfile = PersistentPreferences.getActiveBackgroundProfile();
+        PersistentPreferences.setActiveBackgroundProfile("");
+    }
+
+    @AfterEach
+    void restoreActiveProfile() {
+        PersistentPreferences.setActiveBackgroundProfile(savedActiveProfile);
+    }
+
+    /** Backgrounds live under the active background profile; make one and activate it. */
+    private static String activeProfileFolder(Path base) throws Exception {
+        var profile = BackgroundProfiles.create(base.toString(), "p", "P", null, null, null, null);
+        BackgroundProfiles.setActiveId("p");
+        return profile.folder().toString();
     }
 
     private static Check find(List<Check> checks, String contains) {
@@ -87,7 +111,7 @@ class LCPolScopeReadinessTest {
     void aCurrentCalibrationAndMatchingBackgroundAreOk() throws Exception {
         Path base = Files.createDirectories(dir.resolve("bg"));
         String folder = BackgroundSettingsReader.resolveChannelBackgroundFolder(
-                base.toString(), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
+                activeProfileFolder(base), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
         Files.createDirectories(Path.of(folder));
         Files.writeString(
                 Path.of(folder, "background_provenance.json"),
@@ -108,7 +132,7 @@ class LCPolScopeReadinessTest {
     void aBackgroundTakenOnSpecimenIsAWarning() throws Exception {
         Path base = Files.createDirectories(dir.resolve("bg"));
         String folder = BackgroundSettingsReader.resolveChannelBackgroundFolder(
-                base.toString(), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
+                activeProfileFolder(base), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
         Files.createDirectories(Path.of(folder));
         Files.writeString(
                 Path.of(folder, "background_provenance.json"),
@@ -126,7 +150,7 @@ class LCPolScopeReadinessTest {
     void aBackgroundFromAnotherCalibrationIsAFailAndAnOldCalibrationAWarning() throws Exception {
         Path base = Files.createDirectories(dir.resolve("bg"));
         String folder = BackgroundSettingsReader.resolveChannelBackgroundFolder(
-                base.toString(), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
+                activeProfileFolder(base), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
         Files.createDirectories(Path.of(folder));
         Files.writeString(
                 Path.of(folder, "background_provenance.json"), "{\"lc_calibrated_at\": \"2026-10-12T16:57:22\"}");

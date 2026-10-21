@@ -176,9 +176,9 @@ class ConfigFileWriterMergeTest {
         WizardData data = minimalData(dir);
         Files.writeString(data.getImagingConfigPath(), """
                 background_correction:
+                  base_folder: D:\\backgrounds
                   ppm:
                     enabled: true
-                    base_folder: D:\\backgrounds\\ppm
                 imaging_profiles:
                   ppm:
                     LOCI_OBJECTIVE_OLYMPUS_20X_POL_001:
@@ -200,10 +200,11 @@ class ConfigFileWriterMergeTest {
         assertThat(exposures).containsEntry("positive", 3.61);
         assertThat(exposures).as("the placeholder must not appear").doesNotContainKey("single");
 
-        Map<String, Object> bg =
-                (Map<String, Object>) ((Map<String, Object>) out.get("background_correction")).get("ppm");
+        Map<String, Object> bgSection = (Map<String, Object>) out.get("background_correction");
+        assertThat(bgSection).containsEntry("base_folder", "D:\\backgrounds");
+        Map<String, Object> bg = (Map<String, Object>) bgSection.get("ppm");
         assertThat(bg).containsEntry("enabled", true);
-        assertThat(bg).containsEntry("base_folder", "D:\\backgrounds\\ppm");
+        assertThat(bg).as("the folder is scope-wide, not per modality").doesNotContainKey("base_folder");
     }
 
     @Test

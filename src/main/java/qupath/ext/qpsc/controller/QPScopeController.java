@@ -129,6 +129,11 @@ public class QPScopeController {
                 logger.debug("Launching background collection workflow");
                 BackgroundCollectionWorkflow.run();
             }
+            case "backgroundProfiles" -> {
+                logger.debug("Opening the background profiles dialog");
+                javafx.application.Platform.runLater(
+                        () -> qupath.ext.qpsc.ui.BackgroundProfilesDialog.show(null, null, null));
+            }
             // PPM workflows (polarizerCalibration, birefringenceOptimization,
             // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
             // via PPMModalityHandler.getMenuContributions() -- no case statements needed

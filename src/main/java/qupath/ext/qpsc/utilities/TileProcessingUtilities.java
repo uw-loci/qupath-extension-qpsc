@@ -447,8 +447,7 @@ public class TileProcessingUtilities {
                             // acquisition (review finding H3).
                             if (imported != null) {
                                 ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
-                                ImageMetadataManager.setWhiteBalance(
-                                        imported, StitchInfoSupport.whiteBalanceMode(new File(tileFolder)));
+                                StitchInfoSupport.stampEntry(imported, new File(tileFolder));
                                 syncStamps(project);
                             }
 
@@ -713,8 +712,7 @@ public class TileProcessingUtilities {
                     // (review finding H3).
                     if (imported != null) {
                         ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
-                        ImageMetadataManager.setWhiteBalance(
-                                imported, StitchInfoSupport.whiteBalanceMode(new File(tileFolder)));
+                        StitchInfoSupport.stampEntry(imported, new File(tileFolder));
                         syncStamps(project);
                     }
 

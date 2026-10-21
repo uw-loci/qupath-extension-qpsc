@@ -1980,6 +1980,26 @@ public class PersistentPreferences {
     }
 
     // ================== BACKGROUND COLLECTION ==================
+    /**
+     * The active background profile (its id, a folder under {@code <base>/profiles/}). QuPath-wide,
+     * because it describes the sample setup on the stage now, not a project. Empty means none:
+     * backgrounds are then neither collected nor applied. See {@code BackgroundProfiles}.
+     */
+    private static final StringProperty activeBackgroundProfile =
+            PathPrefs.createPersistentPreference("activeBackgroundProfile", "");
+
+    public static String getActiveBackgroundProfile() {
+        return activeBackgroundProfile.get();
+    }
+
+    public static void setActiveBackgroundProfile(String profileId) {
+        activeBackgroundProfile.set(profileId != null ? profileId : "");
+    }
+
+    public static StringProperty activeBackgroundProfileProperty() {
+        return activeBackgroundProfile;
+    }
+
     private static final StringProperty lastBackgroundOutputPath =
             PathPrefs.createPersistentPreference("LastBackgroundOutputPath", "");
 

@@ -582,7 +582,7 @@ public class AcquisitionManager {
             if (!AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(cfg, modality, detector)) {
                 return angleExposures;
             }
-            String bgBaseFolder = cfg.getBackgroundCorrectionFolder(modality);
+            String bgBaseFolder = cfg.getBackgroundProfileFolder();
             boolean proceed = BackgroundIlluminationCheck.checkAndWarn(
                     cfg, modality, objective, detector, state.wbMode, bgBaseFolder, angleExposures);
             if (!proceed) {

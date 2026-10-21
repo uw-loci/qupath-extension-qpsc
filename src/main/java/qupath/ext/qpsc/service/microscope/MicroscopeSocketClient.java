@@ -7488,16 +7488,31 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * payload; this method logs a warning and returns {@code null} so
      * callers can fall back to an uncorrected snap.
      *
+     * @param backgroundFolder the background folder resolved under the active background
+     *     profile for the current hardware and white balance mode (the folder ACQUIRE would get)
+     * @param method the correction method from the imageprocessing config ("divide"; null means divide)
+     * @param modality the active modality, for the server's log only; may be null
      * @return FrameData record, or null if no frame is available or the
      *         server could not apply correction
      * @throws IOException if communication itself fails
      */
-    public qupath.ext.qpsc.ui.liveviewer.FrameData getCorrectedFrame() throws IOException {
+    public qupath.ext.qpsc.ui.liveviewer.FrameData getCorrectedFrame(
+            String backgroundFolder, String method, String modality) throws IOException {
+        if (backgroundFolder == null || backgroundFolder.isBlank()) {
+            throw new IOException("CORRECTFRAME needs the background folder to correct with");
+        }
         synchronized (auxSocketLock) {
             ensureAuxConnected();
 
             try {
+                // The folder is the leaf QPSC resolved under the active background profile, the
+                // same one an acquisition would be sent; the server never derives one itself.
+                String message = "--bg-folder " + backgroundFolder + " --bg-method "
+                        + (method == null || method.isBlank() ? "divide" : method)
+                        + (modality == null || modality.isBlank() ? "" : " --modality " + modality)
+                        + END_MARKER;
                 auxOutput.write(Command.CORRECTFRAME.getValue());
+                auxOutput.write(message.getBytes(StandardCharsets.UTF_8));
                 auxOutput.flush();
 
                 // Sniff the first byte: if it's an ASCII letter (e.g. 'F' for

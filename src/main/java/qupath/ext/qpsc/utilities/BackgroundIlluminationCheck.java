@@ -73,7 +73,8 @@ public final class BackgroundIlluminationCheck {
      * @param objective            objective id in use
      * @param detector             detector id in use
      * @param wbMode               white balance mode selected for this acquisition
-     * @param bgBaseFolder         base background-correction folder from config
+     * @param bgBaseFolder         the active background profile's folder (the folder backgrounds
+     *                             resolve under), or null when there is none
      * @param currentAngleExposures the per-angle exposures the acquisition will use
      *                             (after any operator overrides); may be null/empty
      *                             to skip the exposure comparison
@@ -143,7 +144,22 @@ public final class BackgroundIlluminationCheck {
                 && !BackgroundSettingsReader.validateAngleExposuresSubset(
                         bg, currentAngleExposures, EXPOSURE_TOLERANCE_MS);
 
-        if (!intensityMismatch && !profileChanged && !exposureMismatch) {
+        // --- Setup (background profile) ---
+        // The profile declares the insert and slide placement its backgrounds were collected
+        // for; compare with what is on the stage now. Known on both sides only.
+        List<String> setupProblems = List.of();
+        String bgProfileId = BackgroundProfiles.activeId();
+        try {
+            var profile =
+                    BackgroundProfiles.active(cfg.getBackgroundBaseFolder()).orElse(null);
+            setupProblems = BackgroundProfiles.setupProblems(
+                    profile, BackgroundProfiles.currentInsert(), BackgroundProfiles.currentSlideInsertion());
+        } catch (RuntimeException e) {
+            logger.debug("Background profile setup check skipped: {}", e.toString());
+        }
+        boolean setupMismatch = !setupProblems.isEmpty();
+
+        if (!intensityMismatch && !profileChanged && !exposureMismatch && !setupMismatch) {
             logger.info(
                     "Background matches acquisition settings (profile '{}', intensity {}, {} angle exposure(s))",
                     profileKey,
@@ -178,11 +194,20 @@ public final class BackgroundIlluminationCheck {
             sb.append(summarizeExposureDiff(bg.angleExposures, currentAngleExposures));
             sb.append(String.format("%n"));
         }
+        if (setupMismatch) {
+            logger.warn("Background profile '{}' setup MISMATCH: {}", bgProfileId, setupProblems);
+            sb.append(String.format(
+                    "The active background profile '%s' was collected for a different setup:%n", bgProfileId));
+            for (String p : setupProblems) {
+                sb.append("  - ").append(p).append(String.format("%n"));
+            }
+            sb.append(String.format("%n"));
+        }
         sb.append("Flat-field correction divides each tile by this background. When the "
-                + "illumination level or exposure differs, the correction is applied against the "
+                + "illumination level, exposure or setup differs, the correction is applied against the "
                 + "wrong reference and tiles show intensity/vignetting seams.%n%n"
-                + "Recommended: re-run Background Collection at the current settings before "
-                + "acquiring. Proceed anyway?");
+                + "Recommended: choose the background profile for this setup, or re-run Background "
+                + "Collection at the current settings, before acquiring. Proceed anyway?");
 
         return showWarningDialog(
                 "Background / Acquisition Settings Mismatch",

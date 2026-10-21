@@ -265,7 +265,7 @@ public final class SnapAction {
                 logger.warn("BG correction requested at click time but gate refused: {}", gate.reason());
                 frame = frameSupplier.get();
             } else {
-                FrameData corrected = fetchCorrectedFrame();
+                FrameData corrected = fetchCorrectedFrame(gate);
                 if (corrected != null) {
                     frame = corrected;
                     correctionApplied = true;
@@ -334,13 +334,13 @@ public final class SnapAction {
         });
     }
 
-    private FrameData fetchCorrectedFrame() {
+    private FrameData fetchCorrectedFrame(BgCorrectionGate gate) {
         try {
             MicroscopeController mc = MicroscopeController.getInstance();
             if (mc == null || mc.getSocketClient() == null) {
                 return null;
             }
-            return mc.getSocketClient().getCorrectedFrame();
+            return mc.getSocketClient().getCorrectedFrame(gate.folder(), gate.method(), gate.modality());
         } catch (IOException e) {
             logger.warn("CORRECTFRAME failed: {}", e.getMessage());
             return null;
@@ -399,7 +399,17 @@ public final class SnapAction {
      * Result of the pre-flight check that decides whether the
      * "Apply background correction" menu item is usable.
      */
-    public record BgCorrectionGate(boolean usable, String reason) {}
+    /**
+     * @param usable whether the server can be asked for a corrected frame
+     * @param reason why not, when it cannot
+     * @param folder the background folder to send (the leaf under the active background profile), when usable
+     * @param method the correction method from the imageprocessing config, when usable
+     */
+    public record BgCorrectionGate(boolean usable, String reason, String folder, String method, String modality) {
+        public BgCorrectionGate(boolean usable, String reason) {
+            this(usable, reason, null, null, null);
+        }
+    }
 
     /**
      * Mirror the gate ACQUIRE runs: read modality / objective / detector /
@@ -435,9 +445,10 @@ public final class SnapAction {
                 return new BgCorrectionGate(false, "No active detector set.");
             }
             String wbMode = resolveWbMode(cfg, modality);
-            String bgBase = cfg.getBackgroundCorrectionFolder(modality);
+            String bgBase = cfg.getBackgroundProfileFolder();
             if (bgBase == null || bgBase.isEmpty()) {
-                return new BgCorrectionGate(false, "No background folder configured for modality '" + modality + "'.");
+                return new BgCorrectionGate(
+                        false, "No background profile is active (or it has no backgrounds for '" + modality + "').");
             }
 
             BackgroundSettings bg =
@@ -463,7 +474,9 @@ public final class SnapAction {
             }
             // Exposure mismatch and WB-mode mismatch are warnings, not blockers --
             // ACQUIRE applies flat-field correction in both cases.
-            return new BgCorrectionGate(true, "");
+            String folder = new java.io.File(bg.settingsFilePath).getParent();
+            String method = cfg.getBackgroundCorrectionMethod(modality);
+            return new BgCorrectionGate(true, "", folder, method == null ? "divide" : method, modality);
         } catch (Exception e) {
             logger.debug("BG correction gate threw: {}", e.getMessage());
             return new BgCorrectionGate(false, "Could not evaluate background settings (" + e.getMessage() + ").");

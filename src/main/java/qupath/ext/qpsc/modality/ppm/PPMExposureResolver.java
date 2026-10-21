@@ -71,7 +71,7 @@ public final class PPMExposureResolver {
         try {
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
-            String backgroundFolder = configManager.getBackgroundCorrectionFolder(modality);
+            String backgroundFolder = configManager.getBackgroundProfileFolder();
             if (backgroundFolder != null) {
                 BackgroundSettingsReader.BackgroundSettings backgroundSettings =
                         BackgroundSettingsReader.findBackgroundSettings(

@@ -153,7 +153,8 @@ The ACQUIRE payload is a flag-based string:
 --exposures "(500.0,800.0,500.0,10.0)"
 --bg-correction true
 --bg-method divide
---bg-folder /path/to/backgrounds
+--bg-folder /path/to/backgrounds/profiles/carrier4/LOCI_DETECTOR_JAI_001/ppm/20x/per_angle
+--bg-profile carrier4
 --wb-mode per_angle
 --processing "(debayer,background_correction,white_balance)"
 --af-tiles 9
@@ -304,15 +305,15 @@ omits it and the client tolerates its absence (lamp checks are then skipped).
 | GETLIVE | `getlive_` | none | 1 byte: 0/1 |
 | SETLIVE | `setlive_` | 1 byte: 0/1 | 8-byte ack |
 | GETFRAME | `getframe` | none | image metadata + pixel data |
-| CORRECTFRAME | `crctfram` | none | image metadata + pixel data, or `FAILED:<reason>` |
+| CORRECTFRAME | `crctfram` | `--bg-folder <folder> [--bg-method divide] [--modality <name>] ENDOFSTR` | image metadata + pixel data, or `FAILED:<reason>` |
 | STRTSEQ | `strtseq_` | none | 8-byte ack |
 | STOPSEQ | `stopseq_` | none | 8-byte ack |
 
 #### CORRECTFRAME
 
-Same wire format as `GETFRAME` on success (20-byte big-endian header followed by raw pixel bytes); the server applies flat-field correction using the background image for the current rotation angle before sending. On any configuration failure -- no `imageprocessing_<scope>.yml` peer file, modality not enabled in `background_correction`, missing per-angle background, shape mismatch -- the server sends a textual `FAILED:<reason>` payload instead, so the Java client can fall back to an uncorrected snap with a clear status message.
+Same wire format as `GETFRAME` on success (20-byte big-endian header followed by raw pixel bytes); the server applies flat-field correction using the background image for the current rotation angle before sending. The payload names the background folder: the leaf QPSC resolved under the active background profile for the current detector, modality, magnification and white balance mode, the same folder an `ACQUIRE` would be sent (`BackgroundProfiles` / `BackgroundSettingsReader.resolveBackgroundFolder`). The server never derives a background folder itself, so a Snap is corrected with exactly the background an acquisition would use. On failure -- no `--bg-folder`, folder missing, no background for the current angle, shape mismatch -- the server sends a textual `FAILED:<reason>` payload instead, so the Java client can fall back to an uncorrected snap with a clear status message. A server from before this payload (1.4.0 and earlier) does not read it and corrects from its own YAML lookup; a client from before it sends no payload and the new server waits for one, so Snap correction needs both sides updated together.
 
-Java is expected to have already validated settings-match (modality / objective / detector / WB mode / current angle) via `BackgroundSettingsReader.findBackgroundSettings(...)` + `ModalityHandler.validateBackgroundSettings(...)` before issuing this command -- the same pre-flight `AcquisitionConfigurationBuilder` runs for ACQUIRE. The server-side check is a second line of defense for racy YAML edits during a session, not the primary gate.
+Java validates settings-match (modality / objective / detector / WB mode / current angle) via `BackgroundSettingsReader.findBackgroundSettings(...)` + `ModalityHandler.validateBackgroundSettings(...)` before issuing this command -- the same pre-flight `AcquisitionConfigurationBuilder` runs for ACQUIRE -- and takes the folder from the manifest it found.
 
 The Live Viewer's right-click "Apply background correction" menu item routes through this command; clicking Snap with the option ticked sends `CORRECTFRAME` and writes the corrected pixels to the user's chosen OME-TIFF.
 

@@ -79,6 +79,8 @@ public class ImageMetadataManager {
     // per_angle), read from its acquisition command at stitch-import time. Absent when the
     // command did not record one. Informational only; nothing gates on it.
     public static final String WHITE_BALANCE = "white_balance";
+    /** Background profile the tiles were flat-field corrected with (informational). */
+    public static final String BACKGROUND_PROFILE = "background_profile";
 
     // Camera field of view at acquisition time (microns). Needed for
     // coordinate propagation when the microscope is not connected.
@@ -1129,6 +1131,24 @@ public class ImageMetadataManager {
      * Records the white balance mode an entry was acquired with; null or empty removes the key
      * (a mode that was not recorded is not an error).
      */
+    /**
+     * Records the background profile an entry's tiles were corrected with (the {@code --bg-profile}
+     * of its acquisition); null or empty removes the key (an acquisition without one is not an error).
+     */
+    public static void setBackgroundProfile(ProjectImageEntry<?> entry, String profileId) {
+        if (entry == null) return;
+        if (profileId == null || profileId.isEmpty()) {
+            entry.getMetadata().remove(BACKGROUND_PROFILE);
+            return;
+        }
+        entry.getMetadata().put(BACKGROUND_PROFILE, profileId);
+    }
+
+    /** The background profile recorded at import, or null. */
+    public static String getBackgroundProfile(ProjectImageEntry<?> entry) {
+        return entry == null ? null : entry.getMetadata().get(BACKGROUND_PROFILE);
+    }
+
     public static void setWhiteBalance(ProjectImageEntry<?> entry, String wbMode) {
         if (entry == null) return;
         if (wbMode == null || wbMode.isEmpty()) {

@@ -66,6 +66,14 @@ public class BackgroundSettingsReader {
         public final String lampDeviceLabel;
         /** Per-channel background entries for channel-based modalities; empty for angle modalities. */
         public final List<ChannelBackground> channelBackgrounds;
+        /** ISO local date-time of the collection ({@code context.collected_at}); null for older files. */
+        public final String collectedAt;
+        /** Background profile the set was collected into ({@code context.profile}); null for older files. */
+        public final String profileId;
+        /** Stage insert selected in the Stage Map at collection ({@code context.insert}); null when unknown. */
+        public final String contextInsert;
+        /** Slide placement of the open image at collection ({@code context.slide_insertion}); null when unknown. */
+        public final String contextSlideInsertion;
 
         public BackgroundSettings(
                 String modality,
@@ -80,7 +88,11 @@ public class BackgroundSettingsReader {
                 Boolean lampAvailable,
                 Double appliedLampIntensity,
                 String lampDeviceLabel,
-                List<ChannelBackground> channelBackgrounds) {
+                List<ChannelBackground> channelBackgrounds,
+                String collectedAt,
+                String profileId,
+                String contextInsert,
+                String contextSlideInsertion) {
             this.modality = modality;
             this.objective = objective;
             this.detector = detector;
@@ -94,6 +106,10 @@ public class BackgroundSettingsReader {
             this.appliedLampIntensity = appliedLampIntensity;
             this.lampDeviceLabel = lampDeviceLabel;
             this.channelBackgrounds = channelBackgrounds != null ? channelBackgrounds : List.of();
+            this.collectedAt = collectedAt;
+            this.profileId = profileId;
+            this.contextInsert = contextInsert;
+            this.contextSlideInsertion = contextSlideInsertion;
         }
 
         @Override
@@ -129,7 +145,8 @@ public class BackgroundSettingsReader {
      * <p>There is no legacy fallback to a stale top-level file from a
      * pre-per-mode-split setup -- those are ignored by design.</p>
      *
-     * @param baseBackgroundFolder The base background correction folder from config
+     * @param baseBackgroundFolder the folder sets resolve under: the active background profile's
+     *     folder ({@code MicroscopeConfigManager.getBackgroundProfileFolder()}), never the raw base
      * @param modality The modality name (e.g., "ppm")
      * @param objective The objective ID
      * @param detector The detector ID
@@ -376,6 +393,14 @@ public class BackgroundSettingsReader {
             Double appliedLampIntensity = getDouble(lamp, "applied_intensity");
             String lampDeviceLabel = getString(lamp, "device_label");
 
+            // The setup the set was collected under (context block; absent in files from before
+            // background profiles).
+            Map<String, Object> context = getMap(yamlData, "context");
+            String collectedAt = getString(context, "collected_at");
+            String profileId = getString(context, "profile");
+            String contextInsert = getString(context, "insert");
+            String contextSlideInsertion = getString(context, "slide_insertion");
+
             // Validate essentials: a modality and exactly one populated background
             // list (angle-based OR channel-based). A file with neither is rejected.
             if (modality == null || (angleExposures.isEmpty() && channelBackgrounds.isEmpty())) {
@@ -398,7 +423,11 @@ public class BackgroundSettingsReader {
                     lampAvailable,
                     appliedLampIntensity,
                     lampDeviceLabel,
-                    channelBackgrounds);
+                    channelBackgrounds,
+                    collectedAt,
+                    profileId,
+                    contextInsert,
+                    contextSlideInsertion);
 
             logger.debug("Successfully read background settings: {}", settings);
             return settings;

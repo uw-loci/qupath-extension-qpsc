@@ -45,6 +45,7 @@ The dialog follows QuPath's open project while it is up. If you open or close a 
 | Objective | ComboBox | From config | Objective lens. List updates based on selected modality. **Objective changes sync across all open dialogs** (Acquisition Wizard, Live Viewer Camera Control, Background Collection, Existing-Image Acquisition, etc.), so selecting a new objective here updates all other open dialogs' selectors automatically. |
 | Detector | ComboBox | From config | Camera/detector. List updates based on selected objective. |
 | WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Lives under Hardware (rather than the Modality-Specific pane) because the choice is camera-specific and the underlying calibration set is loaded the moment the detector changes. |
+| Background profile | ComboBox + Manage... | Active profile | The [background profile](background-profiles.md) for the sample setup on the stage now (carrier, slide source, medium). Shows the QuPath-wide active profile and sets it for every acquisition dialog; the background status for the chosen hardware sits beside it. (none) runs without background correction. |
 
 Only valid hardware combinations are shown via cascading selection.
 
@@ -89,7 +90,7 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 
 When using a brightfield modality, an exposure panel appears showing:
 - **Live readout:** A display of the resolved acquisition values — the profile name, the exposure that will be used (with its source: Background Collection, last used, or override), and the illumination intensity. These values update live as you change the objective or detector, so you can verify what the acquisition will actually use before starting.
-- **Resolution rule:** How the exposure is determined at acquisition time (background-collection exposure when background correction is on and calibrated; otherwise the last unified exposure). A red warning appears in the readout if background correction is ON but not calibrated — in that case, acquisition will fail until Background Collection is run.
+- **Resolution rule:** How the exposure is determined at acquisition time (the exposure in the active [background profile](background-profiles.md)'s background set for the current detector, magnification and WB mode, when background correction is on; otherwise the last unified exposure). A red warning appears in the readout if background correction is ON but not calibrated — in that case, acquisition will fail until Background Collection is run.
 - **Override exposure (ms):** An optional field to pin a specific camera exposure for this run, bypassing the resolved value. Use this to correct an over-exposed ("blinding") acquisition without leaving the dialog.
 
 ⚠️ **Active warning dialog:** When acquisition starts, if the exposures differ from what the background was collected at, a confirmation dialog appears showing the mismatch. This is **non-blocking** — you can click "Proceed anyway" to continue, but flat-field correction will be applied against the wrong reference and tiles may show intensity/vignetting seams. Recommended: re-run Background Collection at the new exposure if you need proper flat-field correction.

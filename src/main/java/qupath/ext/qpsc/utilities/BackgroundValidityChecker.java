@@ -112,18 +112,19 @@ public class BackgroundValidityChecker {
             String calibTs =
                     configManager.getWbCalibrationTimestamp(mode.getProtocolName(), modality, objective, detector);
             if (calibTs != null) {
-                // Get the background file's last-modified time as a proxy for collection timestamp
-                // (background_settings.yml is written at collection time)
+                // When the set was collected: the manifest's own collected_at, or, for a set from
+                // before that was recorded, the file's last-modified time (which a copy resets).
                 if (bg.settingsFilePath != null) {
                     try {
+                        LocalDateTime bgTime = parseTimestamp(bg.collectedAt);
                         java.io.File settingsFile = new java.io.File(bg.settingsFilePath);
-                        if (settingsFile.exists()) {
+                        if (bgTime == null && settingsFile.exists()) {
                             java.time.Instant fileModified = java.nio.file.Files.getLastModifiedTime(
                                             settingsFile.toPath())
                                     .toInstant();
-                            LocalDateTime bgTime =
-                                    LocalDateTime.ofInstant(fileModified, java.time.ZoneId.systemDefault());
-
+                            bgTime = LocalDateTime.ofInstant(fileModified, java.time.ZoneId.systemDefault());
+                        }
+                        if (bgTime != null) {
                             // Parse calibration timestamp (ISO format from YAML)
                             LocalDateTime calibTime = parseTimestamp(calibTs);
                             if (calibTime != null && calibTime.isAfter(bgTime)) {

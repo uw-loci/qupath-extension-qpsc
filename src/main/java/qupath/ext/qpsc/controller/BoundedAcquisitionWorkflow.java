@@ -352,7 +352,7 @@ public class BoundedAcquisitionWorkflow {
                         // Only relevant when correction will actually run.
                         if (AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(
                                 configManager, result.modality(), result.detector())) {
-                            String bgBaseFolder = configManager.getBackgroundCorrectionFolder(result.modality());
+                            String bgBaseFolder = configManager.getBackgroundProfileFolder();
                             boolean proceed = BackgroundIlluminationCheck.checkAndWarn(
                                     configManager,
                                     result.modality(),

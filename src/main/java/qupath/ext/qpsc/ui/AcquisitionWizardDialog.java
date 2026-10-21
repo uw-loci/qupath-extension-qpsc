@@ -129,6 +129,7 @@ public class AcquisitionWizardDialog {
     private ComboBox<String> modalityCombo;
     private ComboBox<String> objectiveCombo;
     private ComboBox<String> detectorCombo;
+    private BackgroundProfileSelector backgroundProfileSelector;
 
     // Step rows (for status updates)
     private final List<StepRow> stepRows = new ArrayList<>();
@@ -564,6 +565,17 @@ public class AcquisitionWizardDialog {
         detectorCombo.setMaxWidth(Double.MAX_VALUE);
         detectorCombo.setOnAction(e -> onDetectorChanged());
         grid.add(detectorCombo, 1, 2);
+
+        // Background profile: the set the Background Correction step reports on and that
+        // Collect... fills. The step row shows the status, so the selector's own label is hidden.
+        backgroundProfileSelector = new BackgroundProfileSelector(
+                () -> {
+                    var cfg = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstanceIfAvailable();
+                    return cfg == null ? null : cfg.getBackgroundBaseFolder();
+                },
+                this::refreshCalibrationStatuses);
+        backgroundProfileSelector.setStatusVisible(false);
+        grid.add(backgroundProfileSelector, 0, 3, 2, 1);
 
         // Set column constraints
         ColumnConstraints labelCol = new ColumnConstraints();
@@ -1361,6 +1373,9 @@ public class AcquisitionWizardDialog {
     }
 
     private void refreshCalibrationStatuses() {
+        if (backgroundProfileSelector != null) {
+            backgroundProfileSelector.refreshProfiles();
+        }
         String modality = getSelectedModality();
         String objective = getSelectedObjective();
         String detector = getSelectedDetector();

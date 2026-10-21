@@ -250,7 +250,7 @@ public class ConfigurationAccessorTest {
         for (String modality : mgr.getAvailableModalities()) {
             boolean enabled = mgr.isBackgroundCorrectionEnabled(modality);
             String method = mgr.getBackgroundCorrectionMethod(modality);
-            String folder = mgr.getBackgroundCorrectionFolder(modality);
+            String folder = mgr.getBackgroundBaseFolder();
 
             logger.info("  {} - Enabled: {}, Method: {}, Folder: {}", modality, enabled, method, folder);
         }

@@ -110,6 +110,38 @@ class StitchInfoSupportTest {
     }
 
     @Test
+    void acquisitionSectionNamesTheBackgroundProfileAndFolder() throws IOException {
+        Path out = Files.createDirectories(tempDir.resolve("SlideImages"));
+
+        Path corrected = Files.createDirectories(tempDir.resolve("c/ppm_20x_1/Tissue"));
+        Files.writeString(
+                corrected.resolve("acquisition_command_20261021_090000.txt"),
+                "--bg-correction true \\\n    --bg-method divide \\\n"
+                        + "    --bg-folder D:/bg/profiles/carrier4/LOCI_DETECTOR_JAI_001/ppm/20x/per_angle \\\n"
+                        + "    --bg-profile carrier4 \\\n    --wb-mode per_angle\n");
+        Path withBg = out.resolve("withBg.ome.tif");
+        Files.writeString(withBg, "image");
+        StitchInfoSupport.appendAcquisition(withBg.toString(), null, corrected.toFile(), Map.of());
+        String text = Files.readString(StitchInfoFile.pathFor(withBg), StandardCharsets.US_ASCII);
+        assertTrue(text.contains("background profile: carrier4"), text);
+        assertTrue(
+                text.contains("background folder: D:/bg/profiles/carrier4/LOCI_DETECTOR_JAI_001/ppm/20x/per_angle"),
+                text);
+        assertEquals("carrier4", StitchInfoSupport.backgroundProfile(corrected.toFile()));
+
+        Path uncorrected = Files.createDirectories(tempDir.resolve("u/ppm_20x_1/Tissue"));
+        Files.writeString(uncorrected.resolve("acquisition_command_20261021_090000.txt"), "--wb-mode off\n");
+        Path without = out.resolve("without.ome.tif");
+        Files.writeString(without, "image");
+        StitchInfoSupport.appendAcquisition(without.toString(), null, uncorrected.toFile(), Map.of());
+        text = Files.readString(StitchInfoFile.pathFor(without), StandardCharsets.US_ASCII);
+        assertTrue(text.contains("background profile: none"), text);
+        assertTrue(text.contains("background folder: none (no background correction)"), text);
+        assertNull(StitchInfoSupport.backgroundProfile(uncorrected.toFile()));
+        assertNull(StitchInfoSupport.backgroundProfile(null));
+    }
+
+    @Test
     void isolationFoldersAreSkippedButOthersAreNot() {
         File acquisition = tempDir.resolve("bounds").toFile();
         assertEquals(acquisition, StitchInfoSupport.acquisitionFolder(new File(acquisition, "_temp_7_0_ab")));

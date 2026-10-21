@@ -349,8 +349,13 @@ public final class ConfigFileWriter {
         Map<String, Object> priorBg = asMap(priorImaging.get("background_correction"));
         Map<String, Object> priorProfiles = asMap(priorImaging.get("imaging_profiles"));
 
-        // Background correction section
+        // Background correction section: one base folder for the scope (background profiles
+        // live under it; Background Collection fills it in) and an enabled/method pair per
+        // modality.
         Map<String, Object> bgSection = new LinkedHashMap<>();
+        if (!priorBg.containsKey("base_folder")) {
+            bgSection.put("base_folder", "");
+        }
         for (Map<String, Object> mod : data.modalities) {
             String modName = (String) mod.get("name");
             if (priorBg.containsKey(modName)) {
@@ -359,7 +364,6 @@ public final class ConfigFileWriter {
             Map<String, Object> bgEntry = new LinkedHashMap<>();
             bgEntry.put("enabled", false);
             bgEntry.put("method", "divide");
-            bgEntry.put("base_folder", "");
             bgSection.put(modName, bgEntry);
         }
         if (!bgSection.isEmpty()) {

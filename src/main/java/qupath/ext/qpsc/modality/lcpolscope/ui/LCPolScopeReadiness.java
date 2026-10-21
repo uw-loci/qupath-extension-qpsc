@@ -88,7 +88,7 @@ public final class LCPolScopeReadiness {
                     "No black level set (reconstruction.black_level): the camera offset is not subtracted."));
         }
 
-        String base = mgr.getBackgroundCorrectionFolder(MODALITY);
+        String base = mgr.getBackgroundProfileFolder();
         for (String profile : mgr.getProfileKeysForModality(MODALITY)) {
             Map<String, Object> p = mgr.getSection("acquisition_profiles", profile);
             String objective = p == null ? null : stringOf(p.get("objective"));

@@ -271,17 +271,20 @@ the wrong key.
 
 ### Background Collection (`BackgroundCollectionWorkflow`)
 
-Output folder structure encodes the magnification:
-`<base>/<detector>/<modality>/<magnification>/<wbMode>/`. A mismatch silently
-files the background under the wrong magnification -- subsequent acquisitions
-that reference this folder via `--bg-folder` will then load the wrong
-correction TIFFs.
+Output folder structure encodes the background profile and the magnification:
+`<base>/profiles/<profile>/<detector>/<modality>/<magnification>/` for `off`
+(no WB subfolder), `.../<wbMode>/` for colour WB modes, `.../<acquisition profile>/`
+for channel modalities. `<base>` is the scope-wide `background_correction.base_folder`;
+the profile is the QuPath-wide `activeBackgroundProfile` preference, required
+(`BackgroundProfiles`). A mismatch silently files the background under the wrong
+magnification -- subsequent acquisitions that reference this folder via `--bg-folder`
+will then load the wrong correction TIFFs.
 
 | Step | What |
 |---|---|
-| Read | `BackgroundCollectionController` result (modality, objective, detector, angle/exposure pairs, output path, wbMode); pixel size from config |
+| Read | `BackgroundCollectionController` result (modality, objective, detector, angle/exposure pairs, base folder, background profile, wbMode); pixel size from config |
 | Compare | YAML pixel size for chosen objective vs MM live (5% threshold) |
-| Write | Background TIFFs at `<base>/<detector>/<modality>/<mag>/<wbMode>/` |
+| Write | Background TIFFs at `<base>/profiles/<profile>/<detector>/<modality>/<mag>/[<wbMode>]/`; `background_settings.yml` with a `context` block (profile, insert, slide placement, stage position, `collected_at`); `background_correction.base_folder` and `<modality>.enabled` in the imageprocessing YAML |
 | Gate | `validateObjectivePixelSize` at top of `executeBackgroundAcquisition`, before any socket call |
 
 ### Stack / Time-Lapse (`StackTimeLapseWorkflow`)

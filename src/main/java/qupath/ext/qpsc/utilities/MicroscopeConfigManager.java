@@ -1221,175 +1221,6 @@ public class MicroscopeConfigManager {
     }
 
     /**
-     * Look up the final exposures saved by the most recent background
-     * collection, against a tiered key-match policy.
-     *
-     * <p>The Python server writes these values to
-     * {@code calibration_targets.background_exposures} in the imageprocessing
-     * YAML after each successful background collection. The adaptive-exposure
-     * loop tunes exposure time to hit the user's target intensity, so the
-     * stored exposures represent the camera settings that will produce a
-     * well-exposed image under the same illumination conditions.
-     *
-     * <p>Match tiers - see {@link BackgroundExposureMatch.Tier} for full
-     * semantics:
-     * <ol>
-     *   <li>EXACT - all four axes (modality family, magnification, detector,
-     *       full objective ID) match.</li>
-     *   <li>FAMILY - magnification differs only by suffix on the modality
-     *       string; objective + detector identical.</li>
-     *   <li>MAGNIFICATION - objective IDs differ but resolve to the same
-     *       magnification; family + detector identical. The on-disk
-     *       background TIFF is shared across all objectives at this
-     *       magnification anyway, so the exposure value is appropriate to
-     *       reuse - logged at WARN for traceability.</li>
-     * </ol>
-     *
-     * <p>Detector mismatch and modality-family mismatch are always hard
-     * rejects. Cross-detector reuse is unsafe (different QE / well depth);
-     * cross-modality reuse is physically meaningless.
-     *
-     * <p>The YAML structure written by
-     * {@code save_background_exposures_to_yaml} is:
-     * <pre>
-     * calibration_targets:
-     *   background_exposures:
-     *     last_calibrated: 2026-04-09T15:30:00
-     *     modality: Brightfield
-     *     objective: LOCI_OBJECTIVE_OLYMPUS_10X_001
-     *     detector: HAMAMATSU_DCAM_01
-     *     magnification: 10x        # optional; derived from objective if absent
-     *     angles:
-     *       &lt;angle_name&gt;:
-     *         angle_degrees: 0.0
-     *         exposure_ms: 12.3
-     *         achieved_intensity: 29500
-     * </pre>
-     *
-     * @param modality  modality name to match (e.g. {@code "Brightfield"} or
-     *                  {@code "Brightfield_10x"} - both forms work)
-     * @param objective objective ID to match
-     * @param detector  detector ID to match
-     * @return a {@link BackgroundExposureMatch} carrying the exposures and the
-     *         tier at which the match succeeded, or {@code null} if no
-     *         calibration row exists OR the requested {modality family,
-     *         detector} combo cannot be reconciled with the stored row.
-     */
-    @SuppressWarnings("unchecked")
-    public BackgroundExposureMatch findBackgroundExposures(String modality, String objective, String detector) {
-        if (imageprocessingData == null) {
-            return null;
-        }
-        Object calibTargets = imageprocessingData.get("calibration_targets");
-        if (!(calibTargets instanceof Map<?, ?>)) {
-            return null;
-        }
-        Object bgExp = ((Map<String, Object>) calibTargets).get("background_exposures");
-        if (!(bgExp instanceof Map<?, ?>)) {
-            return null;
-        }
-        Map<String, Object> bg = (Map<String, Object>) bgExp;
-
-        Object storedModality = bg.get("modality");
-        Object storedObjective = bg.get("objective");
-        Object storedDetector = bg.get("detector");
-        Object storedMagnification = bg.get("magnification");
-
-        HardwareKey requested = HardwareKey.from(modality, objective, detector);
-        HardwareKey stored = HardwareKey.ofStored(
-                storedModality != null ? storedModality.toString() : null,
-                storedObjective != null ? storedObjective.toString() : null,
-                storedDetector != null ? storedDetector.toString() : null,
-                storedMagnification != null ? storedMagnification.toString() : null);
-
-        // Detector and modality family are hard axes -- never softened.
-        if (detector != null && stored.detector() != null && !detector.equals(stored.detector())) {
-            logger.debug(
-                    "Background exposures stored for detector '{}' but requested '{}' -- hard reject",
-                    stored.detector(),
-                    detector);
-            return null;
-        }
-        if (requested.modalityFamily() != null
-                && stored.modalityFamily() != null
-                && !requested.modalityFamily().equals(stored.modalityFamily())) {
-            logger.debug(
-                    "Background exposures stored for modality family '{}' but requested '{}' -- hard reject",
-                    stored.modalityFamily(),
-                    requested.modalityFamily());
-            return null;
-        }
-
-        Object anglesObj = bg.get("angles");
-        if (!(anglesObj instanceof Map<?, ?>)) {
-            return null;
-        }
-        Map<String, Object> angles = (Map<String, Object>) anglesObj;
-        if (angles.isEmpty()) {
-            return null;
-        }
-
-        Map<Double, Double> result = new LinkedHashMap<>();
-        for (Map.Entry<String, Object> entry : angles.entrySet()) {
-            if (entry.getValue() instanceof Map<?, ?> angleData) {
-                Object degObj = angleData.get("angle_degrees");
-                Object expObj = angleData.get("exposure_ms");
-                if (degObj instanceof Number deg && expObj instanceof Number exp) {
-                    result.put(deg.doubleValue(), exp.doubleValue());
-                }
-            }
-        }
-        if (result.isEmpty()) {
-            return null;
-        }
-
-        // Pick the strongest tier the data supports.
-        BackgroundExposureMatch.Tier tier;
-        if (requested.matchesExact(stored)) {
-            tier = BackgroundExposureMatch.Tier.EXACT;
-        } else if (requested.matchesFamilyObjective(stored)) {
-            tier = BackgroundExposureMatch.Tier.FAMILY;
-        } else if (requested.matchesFamilyMagnification(stored)) {
-            tier = BackgroundExposureMatch.Tier.MAGNIFICATION;
-        } else {
-            // Family + detector aligned (we already gated on those above) but
-            // neither objective ID nor magnification could be reconciled.
-            // Refuse rather than guess.
-            logger.warn(
-                    "Background exposures stored for objective '{}' (mag={}) cannot match requested '{}' (mag={}) -- "
-                            + "no shared magnification, refusing reuse",
-                    stored.objective(),
-                    stored.magnification(),
-                    requested.objective(),
-                    requested.magnification());
-            return null;
-        }
-
-        logger.debug(
-                "Loaded {} background exposure(s) from calibration_targets at tier {} for {}/{}/{}",
-                result.size(),
-                tier,
-                modality,
-                objective,
-                detector);
-        return new BackgroundExposureMatch(result, tier, requested, stored);
-    }
-
-    /**
-     * Convenience accessor returning just the angle-to-exposure map, dropping
-     * tier metadata. Treats anything from EXACT through MAGNIFICATION as a
-     * match. Prefer {@link #findBackgroundExposures} when callers need to
-     * differentiate match strength (e.g. to log objective drift).
-     *
-     * @return map of angle degrees to exposure_ms, or {@code null} if no
-     *         compatible calibration row exists.
-     */
-    public Map<Double, Double> getBackgroundExposures(String modality, String objective, String detector) {
-        BackgroundExposureMatch match = findBackgroundExposures(modality, objective, detector);
-        return match == null ? null : match.exposures();
-    }
-
-    /**
      * Get pixel size for a specific modality/objective/detector combination.
      * Pixel sizes are stored in the hardware.objectives section of the main config.
      *
@@ -2033,25 +1864,33 @@ public class MicroscopeConfigManager {
     }
 
     /**
-     * Get background correction folder for a specific modality.
-     * Reads from imageprocessing_{microscope}.yml -> background_correction -> modality -> base_folder
-     * Falls back to the family key (e.g. "ppm" for "ppm_20x") if the exact modality key is absent.
-     * Returns null if not found.
+     * The scope-wide background base folder, {@code background_correction.base_folder} in
+     * imageprocessing_{microscope}.yml. Background profiles live under it ({@code <base>/profiles/<id>}).
+     * Null when absent or blank: the LC-PolScope image-processing YAML declares it that way, and the
+     * first tiled acquisition on that scope once died on an NPE here before reaching the server.
      */
-    public String getBackgroundCorrectionFolder(String modality) {
-        logger.debug("Getting background correction folder for modality: {}", modality);
-        Map<String, Object> modalityBg = getBackgroundCorrectionEntry(modality);
-        // A key that is present but empty ("base_folder: null" or '') means "no folder", the same
-        // as an absent key. The LC-PolScope image-processing YAML declares it that way, and the
-        // first tiled acquisition on that scope died here with an NPE before reaching the server.
-        Object folderValue = modalityBg == null ? null : modalityBg.get("base_folder");
-        if (folderValue != null && !folderValue.toString().isBlank()) {
-            String folder = folderValue.toString();
-            logger.debug("Found background folder in imageprocessing config: {}", folder);
-            return folder;
+    @SuppressWarnings("unchecked")
+    public String getBackgroundBaseFolder() {
+        if (imageprocessingData == null || !(imageprocessingData.get("background_correction") instanceof Map)) {
+            return null;
         }
-        logger.warn("No background correction folder found for {}", modality);
+        Object folderValue =
+                ((Map<String, Object>) imageprocessingData.get("background_correction")).get("base_folder");
+        if (folderValue != null && !folderValue.toString().isBlank()) {
+            return folderValue.toString();
+        }
+        logger.debug("No background_correction.base_folder in the imageprocessing config");
         return null;
+    }
+
+    /**
+     * The folder backgrounds are resolved under for every modality: the active background
+     * profile's folder, {@code <base>/profiles/<active id>}. Null when no base folder is
+     * configured, no profile is active, or the active one does not exist; every caller treats
+     * that as "no backgrounds collected". See {@link BackgroundProfiles}.
+     */
+    public String getBackgroundProfileFolder() {
+        return BackgroundProfiles.activeFolder(getBackgroundBaseFolder());
     }
 
     /**

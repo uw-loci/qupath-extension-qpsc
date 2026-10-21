@@ -557,7 +557,7 @@ reads:
   - DS22 (WB mode validity via BackgroundValidityChecker)
   - DS45 (validateCameraRoi)
 writes:
-  - DS23 (background TIFFs at <base>/<detector>/<modality>/<mag>/<wbMode>/)
+  - DS23 (background TIFFs at <base>/profiles/<backgroundProfile>/<detector>/<modality>/<mag>/<wbMode>/; refuses without a background profile)
 key_invariants:
   - "Folder structure encodes magnification. Misfile silently corrupts subsequent --bg-folder lookups -- 5% gate prevents this."
   - "validateObjectivePixelSize at top of executeBackgroundAcquisition, before any socket call."
@@ -1310,24 +1310,29 @@ read_by:
 id: DS23
 category: configuration
 storage_kind: file
-location: "<base>/<detector>/<modalityFamily>/<magnification>/<wbMode>/ (angle modes)
-           OR <base>/<detector>/<modalityFamily>/<magnification>/<profileKey>/ (channel modes).
-           <base> = imageprocessing_<scope>.yml -> background_correction.<modality>.base_folder.
+location: "<base>/profiles/<backgroundProfile>/<detector>/<modalityFamily>/<magnification>/<wbMode>/ (angle modes)
+           OR <base>/profiles/<backgroundProfile>/<detector>/<modalityFamily>/<magnification>/<profileKey>/ (channel modes).
+           <base> = imageprocessing_<scope>.yml -> background_correction.base_folder (scope-wide).
+           <backgroundProfile> = DS24 pref activeBackgroundProfile, resolved by BackgroundProfiles.activeFolder;
+           none active -> no backgrounds. Folders directly under <base> (pre-profile layout) are not read.
            wbMode is 'off' -> collapses (no wbMode subdir) | 'simple' | 'per_angle' | 'camera_awb'."
 fields:
   per_angle_tif: "<folder>/<angleName>.tif per rotation angle (PPM-style)"
   per_channel_tif: "<folder>/<channelId>.tif per channel (fluorescence-style)"
-  manifest: "<folder>/background_settings.yml -- BackgroundSettings: modality, objective, detector, magnification, angle_exposures, wb_mode, profile_key, profile_illumination_intensity, lamp_available, applied_lamp_intensity, lamp_device_label, channel_backgrounds[]"
+  manifest: "<folder>/background_settings.yml -- BackgroundSettings: modality, objective, detector, magnification, angle_exposures, wb_mode, profile_key, profile_illumination_intensity, lamp_available, applied_lamp_intensity, lamp_device_label, channel_backgrounds[], context{profile, insert, slide_insertion, stage_xy_um, stage_z_um, collected_at}"
+  profile_record: "<base>/profiles/<id>/profile.yml -- BackgroundProfiles.BackgroundProfile: id, name, description, created, expects{insert, slide_insertion}, attributes{}"
 written_by:
   - "W4 BackgroundCollectionWorkflow (server-driven BGACQUIRE)"
 read_by:
-  - "Microscope server during ACQUIRE -- AcquisitionCommandBuilder passes --bg-folder when bgMethod enabled"
-  - "BackgroundSettingsReader.findBackgroundSettings / BackgroundValidityChecker / BackgroundExposureMatch (manifest only)"
+  - "Microscope server during ACQUIRE -- AcquisitionCommandBuilder passes --bg-folder and --bg-profile when bgMethod enabled"
+  - "BackgroundSettingsReader.findBackgroundSettings / BackgroundValidityChecker (manifest only); BrightfieldModalityHandler.resolveExposureMs (the exposure)"
+  - "BackgroundProfiles (profile.yml), BackgroundProfileSelector / BackgroundProfilesDialog (UI), BackgroundProfileHint (Stage Map insert change)"
+  - "BackgroundIlluminationCheck (profile expects vs Stage Map insert / entry slide placement, warn only)"
   - "DS22 (loaded form)"
 lifecycle:
   created_when: "W4 completes successfully"
   destroyed_when: "manually deleted; not auto-cleaned"
-  overwritten_when: "re-collecting BG for the same (detector, modality, magnification, wbMode/profileKey) tuple"
+  overwritten_when: "re-collecting BG for the same (backgroundProfile, detector, modality, magnification, wbMode/profileKey) tuple"
 invariants:
   - "Folder structure encodes magnification: a pixel-size mismatch between wizard objective and the magnification subfolder silently files BG for the wrong objective. W4 pre-validates via QPScopeChecks.validateObjectivePixelSize."
   - "Per-modality monochrome toggle (DS24 pref UseBackgroundCorrectionMono) controls whether mono detector channels apply BG."

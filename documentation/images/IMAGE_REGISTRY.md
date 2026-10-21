@@ -10,19 +10,19 @@ This file tracks the relationship between documentation screenshots and the Java
 
 | Screenshot | Java Source File(s) | Last Verified | Status |
 |------------|-------------------|---------------|--------|
-| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-10-17 | OK -- re-captured on the demo microscope (Windows, Modena Light): icon acquire buttons and the Validate AF row. Demo checklist states (no JAI, so no per-mode WB dots); the PPM multi-dot states are described in the text, not shown |
+| `Docs_AcquisitionWizard.png` | `ui/AcquisitionWizardDialog.java` | 2026-10-17 | CHECK -- the "Background profile" row (combo, Manage..., status; 2026-10-21) is missing from the figure; re-capture on the demo microscope with a profile active. Previously: re-captured on the demo microscope (Windows, Modena Light): icon acquire buttons and the Validate AF row. Demo checklist states (no JAI, so no per-mode WB dots); the PPM multi-dot states are described in the text, not shown |
 | `Docs_AcquisitionWorkflowProgress.png` | `ui/DualProgressDialog.java` | 2026-05-27 | OK |
 | `Docs_AnnotationAcquisition.png` | `ui/AnnotationAcquisitionDialog.java` | 2026-08-22 | OK -- re-captured (unannotated). Mapped to the actual class selection dialog rather than the broad ExistingImageAcquisitionController; the multi-tile refinement radio lives in the consolidated dialog, not here, so this no longer false-flags |
 | `Docs_AutofocusConfigurationEditor.png` | `controller/AutofocusEditorWorkflow.java` | 2026-05-27 | OK |
 | `Docs_AutofocusParameterBenchmark.png` | `ui/AutofocusBenchmarkDialog.java` | -- | CHECK |
-| `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | OK |
-| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-10-17 | OK -- re-captured on the demo microscope (Windows, Modena Light) with the AUTOFOCUS pane expanded and MODALITY-SPECIFIC OPTIONS collapsed; brightfield, so no PPM angle content |
+| `Docs_BackgroundCollection.png` | `ui/BackgroundCollectionController.java` | 2026-05-27 | CHECK -- the "Background profile" row (combo, Manage..., status; 2026-10-21) is missing from the figure; re-capture on the demo microscope with a profile active. Previously: OK |
+| `Docs_BoundedAcquisition.png` | `ui/UnifiedAcquisitionController.java` | 2026-10-17 | CHECK -- the "Background profile" row (combo, Manage..., status; 2026-10-21) is missing from the figure; re-capture on the demo microscope with a profile active. Previously: re-captured on the demo microscope (Windows, Modena Light) with the AUTOFOCUS pane expanded and MODALITY-SPECIFIC OPTIONS collapsed; brightfield, so no PPM angle content |
 | `Docs_BoundedAcquisition_TileGrid.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
 | `Docs_CameraControl.png` | `ui/CameraControlController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
 | `Docs_CommunicationSettings_Alerts.png` | `ui/ServerConnectionController.java` | 2026-05-27 | OK |
 | `Docs_CrossInstrumentWorkflow.png` | Lab-meeting slide deck (workflow figure; not a single UI class) | 2026-06-01 | OK |
-| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-10-17 | OK -- re-captured on the demo microscope (Windows, Modena Light); the demo image's auto-registered alignment, collapsed AUTOFOCUS / MODALITY-SPECIFIC / Z-STACK headers; see `Docs_ExistingImage_Modality_Zstack.png` for those expanded |
+| `Docs_ExistingImage_ConsolidatedDialog.png` | `ui/ExistingImageAcquisitionController.java` | 2026-10-17 | CHECK -- the "Background profile" row (combo, Manage..., status; 2026-10-21) is missing from the figure; re-capture on the demo microscope with a profile active. Previously: re-captured on the demo microscope (Windows, Modena Light); the demo image's auto-registered alignment, collapsed AUTOFOCUS / MODALITY-SPECIFIC / Z-STACK headers; see `Docs_ExistingImage_Modality_Zstack.png` for those expanded |
 | `Docs_ExistingImage_FluorescenceProject.png` | Lab-meeting slide deck (QuPath project view; not a single UI class) | 2026-06-01 | OK |
 | `Docs_ExistingImage_Modality_Zstack.png` | `ui/ExistingImageAcquisitionController.java` | 2026-10-17 | OK -- re-captured on the demo microscope: AUTOFOCUS, MODALITY-SPECIFIC (brightfield exposure) and Z-STACK panes expanded, cropped from a JavaFX render of the dialog content. A PPM version would show the angle checkboxes instead |
 | `Docs_LiveViewer.png` | `ui/liveviewer/LiveViewerWindow.java` | 2026-08-22 | OK -- re-captured (unannotated; the numbered callouts from the 2026-05-27 figure are gone) |

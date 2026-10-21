@@ -41,7 +41,7 @@ microscope:
   demo: true
   # Raised whenever the bundle changes in a way an old copy cannot follow
   # (new modalities, devices, cameras). Leave it alone.
-  bundle_version: 2
+  bundle_version: 3
   detector_in_use: null
   objective_in_use: null
   modality: null
