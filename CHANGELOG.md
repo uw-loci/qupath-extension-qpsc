@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-10-21
+
+Pairs with microscope_command_server 1.4.0 and microscope_control 1.2.0 (which bring microscope_imageprocessing 0.4.0 and polscope_library 0.1.0): every item below that says it needs the matching server needs that release. Stitching still needs tiles-to-pyramid 0.7.1 or later; 0.7.8 adds the black background that LC-PolScope orientation images declare.
+
 ### Added
 
 - **Stitched images record their white balance mode.** The stitch record (`<image>.stitch-info.txt`) has a `white balance:` line, and the project entry carries `white_balance` (`off`, `camera_awb`, `simple` or `per_angle`), read from the acquisition command. An acquisition with white balance off records `off`; one whose command had no mode records nothing on the entry and "not recorded" in the stitch record, without an error.
