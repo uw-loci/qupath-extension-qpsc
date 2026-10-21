@@ -75,6 +75,11 @@ public class ImageMetadataManager {
     // cross-scope-sub-image hard-cancel gate (review finding H3).
     public static final String ACQUIRED_ON_MICROSCOPE = "acquired_on_microscope";
 
+    // White balance mode the acquisition ran with (protocol name: off, camera_awb, simple,
+    // per_angle), read from its acquisition command at stitch-import time. Absent when the
+    // command did not record one. Informational only; nothing gates on it.
+    public static final String WHITE_BALANCE = "white_balance";
+
     // Camera field of view at acquisition time (microns). Needed for
     // coordinate propagation when the microscope is not connected.
     public static final String FOV_X_UM = "fov_x_um";
@@ -1120,6 +1125,19 @@ public class ImageMetadataManager {
      * cross-scope sub-image acquisition before any stage motion. A null or
      * empty {@code microscopeName} clears the field.
      */
+    /**
+     * Records the white balance mode an entry was acquired with; null or empty removes the key
+     * (a mode that was not recorded is not an error).
+     */
+    public static void setWhiteBalance(ProjectImageEntry<?> entry, String wbMode) {
+        if (entry == null) return;
+        if (wbMode == null || wbMode.isEmpty()) {
+            entry.getMetadata().remove(WHITE_BALANCE);
+            return;
+        }
+        entry.getMetadata().put(WHITE_BALANCE, wbMode);
+    }
+
     public static void setAcquiredOnMicroscope(ProjectImageEntry<?> entry, String microscopeName) {
         if (entry == null) return;
         if (microscopeName == null || microscopeName.isEmpty()) {

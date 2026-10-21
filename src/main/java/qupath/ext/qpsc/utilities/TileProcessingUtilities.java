@@ -447,6 +447,9 @@ public class TileProcessingUtilities {
                             // acquisition (review finding H3).
                             if (imported != null) {
                                 ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
+                                ImageMetadataManager.setWhiteBalance(
+                                        imported, StitchInfoSupport.whiteBalanceMode(new File(tileFolder)));
+                                syncStamps(project);
                             }
 
                             logger.info("Successfully imported {} to project", new File(pathToImport).getName());
@@ -710,6 +713,9 @@ public class TileProcessingUtilities {
                     // (review finding H3).
                     if (imported != null) {
                         ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
+                        ImageMetadataManager.setWhiteBalance(
+                                imported, StitchInfoSupport.whiteBalanceMode(new File(tileFolder)));
+                        syncStamps(project);
                     }
 
                     logger.info("Successfully added image to project");
@@ -820,6 +826,15 @@ public class TileProcessingUtilities {
      * time to stamp the entry's {@code acquired_on_microscope} so the Existing
      * Image workflow can refuse cross-scope sub-image acquisition (finding H3).
      */
+    /** Save the entry stamps (acquiring scope, white balance) set after import. */
+    private static void syncStamps(Project<BufferedImage> project) {
+        try {
+            project.syncChanges();
+        } catch (Exception e) {
+            logger.warn("Could not save the imported entry's metadata: {}", e.getMessage());
+        }
+    }
+
     private static String resolveActiveMicroscopeName() {
         try {
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();

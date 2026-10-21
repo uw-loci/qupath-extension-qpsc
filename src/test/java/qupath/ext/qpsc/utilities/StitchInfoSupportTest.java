@@ -57,6 +57,59 @@ class StitchInfoSupportTest {
     }
 
     @Test
+    void whiteBalanceModeComesFromTheNewestCommandAndIsNeverAnError() throws IOException {
+        Path acquisition = Files.createDirectories(tempDir.resolve("PPMSlide/ppm_20x_3/Tissue_1"));
+        Path isolation = Files.createDirectories(acquisition.resolve("_temp_7_0_ab"));
+        Files.writeString(
+                acquisition.resolve("acquisition_command_20261019_090000.txt"),
+                "--angles (-7,0,7,90) \\\n    --wb-mode simple \\\n",
+                StandardCharsets.UTF_8);
+        Files.writeString(
+                acquisition.resolve("acquisition_command_20261020_090000.txt"),
+                "# QuPath Acquisition Command\n--angles (-7,0,7,90) \\\n    --wb-mode per_angle \\\n    --af-tiles 4\n",
+                StandardCharsets.UTF_8);
+        assertEquals("per_angle", StitchInfoSupport.whiteBalanceMode(isolation.toFile()));
+        assertEquals("Per-angle (PPM) (per_angle)", StitchInfoSupport.whiteBalanceLabel("per_angle"));
+
+        // No white balance: "off" is an answer like any other.
+        Path off = Files.createDirectories(tempDir.resolve("off"));
+        Files.writeString(off.resolve("acquisition_command_20261020_100000.txt"), "--wb-mode off\n");
+        assertEquals("off", StitchInfoSupport.whiteBalanceMode(off.toFile()));
+        assertEquals("Off (off)", StitchInfoSupport.whiteBalanceLabel("off"));
+
+        // Not recorded at all: null, no exception.
+        Path noFlag = Files.createDirectories(tempDir.resolve("noflag"));
+        Files.writeString(noFlag.resolve("acquisition_command_20261020_100000.txt"), "--angles (0)\n");
+        assertNull(StitchInfoSupport.whiteBalanceMode(noFlag.toFile()));
+        assertNull(StitchInfoSupport.whiteBalanceMode(
+                Files.createDirectories(tempDir.resolve("empty")).toFile()));
+        assertNull(StitchInfoSupport.whiteBalanceMode(tempDir.resolve("missing").toFile()));
+        assertNull(StitchInfoSupport.whiteBalanceMode(null));
+        assertNull(StitchInfoSupport.whiteBalanceLabel(null));
+        assertEquals("future_mode", StitchInfoSupport.whiteBalanceLabel("future_mode"));
+    }
+
+    @Test
+    void acquisitionSectionNamesTheWhiteBalanceOrSaysItWasNotRecorded() throws IOException {
+        Path out = Files.createDirectories(tempDir.resolve("SlideImages"));
+
+        Path acquisition = Files.createDirectories(tempDir.resolve("a/ppm_20x_1/Tissue"));
+        Files.writeString(acquisition.resolve("acquisition_command_20261020_090000.txt"), "--wb-mode off\n");
+        Path withMode = out.resolve("withMode.ome.tif");
+        Files.writeString(withMode, "image");
+        StitchInfoSupport.appendAcquisition(withMode.toString(), null, acquisition.toFile(), Map.of());
+        assertTrue(Files.readString(StitchInfoFile.pathFor(withMode), StandardCharsets.US_ASCII)
+                .contains("white balance: Off (off)"));
+
+        Path bare = Files.createDirectories(tempDir.resolve("b/ppm_20x_1/Tissue"));
+        Path without = out.resolve("without.ome.tif");
+        Files.writeString(without, "image");
+        StitchInfoSupport.appendAcquisition(without.toString(), null, bare.toFile(), Map.of());
+        assertTrue(Files.readString(StitchInfoFile.pathFor(without), StandardCharsets.US_ASCII)
+                .contains("white balance: not recorded"));
+    }
+
+    @Test
     void isolationFoldersAreSkippedButOthersAreNot() {
         File acquisition = tempDir.resolve("bounds").toFile();
         assertEquals(acquisition, StitchInfoSupport.acquisitionFolder(new File(acquisition, "_temp_7_0_ab")));

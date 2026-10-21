@@ -112,6 +112,9 @@ public final class StitchInfoSupport {
             String version = qupath.lib.common.GeneralTools.getPackageVersion(StitchInfoSupport.class);
             put(entries, "QPSC", version != null ? version : "dev");
 
+            String wbMode = whiteBalanceMode(tileFolder);
+            put(entries, "white balance", wbMode != null ? whiteBalanceLabel(wbMode) : "not recorded");
+
             File acquisitionDir = acquisitionFolder(tileFolder);
             List<String> lines = new ArrayList<>();
             if (acquisitionDir != null) {
@@ -154,10 +157,47 @@ public final class StitchInfoSupport {
     }
 
     /**
-     * The newest acquisition command, verbatim minus its comment header: every flag the server was
-     * started with (channels, exposures, focus channel, autofocus, white balance, Z-stack...).
+     * The white balance mode an acquisition ran with: the {@code --wb-mode} value (protocol
+     * name, e.g. {@code "off"}, {@code "per_angle"}) in the newest acquisition command beside
+     * its tiles. {@code null} when there is no command file or it has no {@code --wb-mode}
+     * (an acquisition that predates the flag). Never throws; a missing or "off" white balance
+     * is a normal answer, not an error.
+     *
+     * @param tileFolder folder the tiles were stitched from (a temporary isolation folder is
+     *     resolved to its acquisition folder); may be null
      */
-    private static List<String> acquisitionCommand(File[] files) {
+    public static String whiteBalanceMode(File tileFolder) {
+        try {
+            File dir = tileFolder != null ? acquisitionFolder(tileFolder) : null;
+            File[] files = dir != null ? dir.listFiles(File::isFile) : null;
+            File newest = files != null ? newestCommandFile(files) : null;
+            if (newest == null) {
+                return null;
+            }
+            java.util.regex.Matcher m = WB_MODE_FLAG.matcher(Files.readString(newest.toPath(), StandardCharsets.UTF_8));
+            return m.find() ? m.group(1) : null;
+        } catch (IOException | RuntimeException e) {
+            logger.debug("White balance mode not read for {}: {}", tileFolder, e.toString());
+            return null;
+        }
+    }
+
+    private static final java.util.regex.Pattern WB_MODE_FLAG = java.util.regex.Pattern.compile("--wb-mode\\s+(\\S+)");
+
+    /** The dialog's name for a white balance protocol name ("per_angle" -> "Per-angle (PPM)"); unknown names as given. */
+    public static String whiteBalanceLabel(String protocolName) {
+        if (protocolName == null) {
+            return null;
+        }
+        for (qupath.ext.qpsc.modality.WbMode mode : qupath.ext.qpsc.modality.WbMode.values()) {
+            if (mode.getProtocolName().equals(protocolName)) {
+                return mode.getDisplayName() + " (" + protocolName + ")";
+            }
+        }
+        return protocolName;
+    }
+
+    private static File newestCommandFile(File[] files) {
         File newest = null;
         for (File f : files) {
             String n = f.getName();
@@ -167,6 +207,15 @@ public final class StitchInfoSupport {
                 newest = f;
             }
         }
+        return newest;
+    }
+
+    /**
+     * The newest acquisition command, verbatim minus its comment header: every flag the server was
+     * started with (channels, exposures, focus channel, autofocus, white balance, Z-stack...).
+     */
+    private static List<String> acquisitionCommand(File[] files) {
+        File newest = newestCommandFile(files);
         if (newest == null) {
             return List.of();
         }
