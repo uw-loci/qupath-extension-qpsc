@@ -271,6 +271,8 @@ The server (`apply_af_channel_state` in `acquisition/workflow.py`) applies that 
 
 The exposure is normally set well below the imaging exposure: a focus frame needs contrast, not image quality, and every focus attempt costs that exposure. Omitting either optional flag falls back to the channel's own library value. Absent `--af-channel` entirely, autofocus behaviour is exactly as before.
 
+On the LC-PolScope the option is always available, because its state picker is always customized, and it sets the focus state's exposure only: the Intensity field is hidden, since the LC states have no intensity control. Choose a swing state as the focus channel, not State0 (extinction), which is near black.
+
 `Test Focus Settings` in the dialog applies the same channel, exposure and intensity to the hardware and opens the Live Viewer, so the operator can see the frame autofocus will score.
 
 ### Channel Presets (NEW -- 2026-05-13)

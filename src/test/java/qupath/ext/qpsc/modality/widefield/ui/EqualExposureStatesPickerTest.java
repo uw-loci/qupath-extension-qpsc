@@ -153,6 +153,56 @@ class EqualExposureStatesPickerTest {
     }
 
     @Test
+    void autofocusGetsItsOwnExposureInTheStatePicker() throws Exception {
+        // The LC-PolScope Hamamatsu needs ~300 ms per state; a focus frame needs only contrast.
+        // The focus bar used to wait for the master override, which the state picker hides.
+        String key = "widefield.channel.af_channel.lcpolscope.";
+        String[] saved = new String[4];
+        String[] suffixes = {"enabled", "id", "exposure_ms", "intensity"};
+        for (int i = 0; i < 4; i++) {
+            saved[i] = qupath.ext.qpsc.preferences.PersistentPreferences.getStringPreference(key + suffixes[i], "");
+        }
+        try {
+            var focus = onFx(() -> {
+                WidefieldChannelBoundingBoxUI ui =
+                        new WidefieldChannelBoundingBoxUI(states(300, 300, 300, 300, 300), "lcpolscope");
+                ui.useEqualExposureStates("LC-PolScope states");
+                new Scene((Parent) ui.getNode());
+                List<Node> nodes = all((Parent) ui.getNode());
+                CheckBox enable = (CheckBox) nodes.stream()
+                        .filter(n -> n instanceof CheckBox cb && "Focus on a dedicated channel".equals(cb.getText()))
+                        .findFirst()
+                        .orElseThrow();
+                assertFalse(enable.isDisabled(), "usable without the hidden master override");
+                enable.setSelected(true);
+                @SuppressWarnings("unchecked")
+                Spinner<Double> exposure = (Spinner<Double>) nodes.stream()
+                        .filter(n -> n instanceof Spinner<?> sp
+                                && sp.getTooltip() != null
+                                && sp.getTooltip().getText().startsWith("Exposure used for focus frames only"))
+                        .findFirst()
+                        .orElseThrow();
+                assertFalse(exposure.isDisabled());
+                exposure.getValueFactory().setValue(30.0);
+                assertTrue(
+                        nodes.stream()
+                                .filter(n -> n instanceof Label l && "Intensity:".equals(l.getText()))
+                                .noneMatch(Node::isVisible),
+                        "the crystals have no intensity knob");
+                return ui.getDedicatedFocusChannel();
+            });
+            assertNotNull(focus);
+            assertEquals(30.0, focus.exposureMs(), 1e-9);
+            assertEquals(null, focus.intensity());
+            assertFalse("State0".equals(focus.channelId()), "not the extinction state by default");
+        } finally {
+            for (int i = 0; i < 4; i++) {
+                qupath.ext.qpsc.preferences.PersistentPreferences.setStringPreference(key + suffixes[i], saved[i]);
+            }
+        }
+    }
+
+    @Test
     void theOrdinaryPickerIsUnchanged() throws Exception {
         onFx(() -> {
             WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI(states(10, 20), "fluorescence");

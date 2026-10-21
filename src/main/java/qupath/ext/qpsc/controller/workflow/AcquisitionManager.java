@@ -1018,6 +1018,15 @@ public class AcquisitionManager {
                 // Focus channel for AF / first-collection ordering. Null means
                 // "no preference" and produces no CLI flag.
                 config.commandBuilder().focusChannel(state.focusChannelId);
+                // Dedicated focus channel at its own exposure (opt-in). A slow camera at the
+                // acquisition exposure makes every focus step that long; focus needs contrast only.
+                if (state.dedicatedFocusChannel != null) {
+                    config.commandBuilder()
+                            .dedicatedFocusChannel(
+                                    state.dedicatedFocusChannel.channelId(),
+                                    state.dedicatedFocusChannel.exposureMs(),
+                                    state.dedicatedFocusChannel.intensity());
+                }
 
                 // Autofocus strategy override (from Advanced panel dropdown).
                 // Null means "use YAML default" and produces no CLI flag.

@@ -173,7 +173,11 @@ public class ExistingImageAcquisitionController {
 
             // How the stitched output is grouped (single combined file vs one file
             // per channel). Defaults to OME_SINGLE.
-            qupath.ext.qpsc.service.OutputFormat stitchingOrganization) {}
+            qupath.ext.qpsc.service.OutputFormat stitchingOrganization,
+
+            // Autofocus on a chosen channel at its own exposure ("Focus on a dedicated
+            // channel"); null = autofocus at the focus channel's acquisition settings.
+            qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel) {}
 
     /**
      * Shows the consolidated acquisition dialog.
@@ -1590,6 +1594,11 @@ public class ExistingImageAcquisitionController {
                     cmdBuilder.channelIntensityOverrides(channelIntensityOverrides);
                 }
                 cmdBuilder.focusChannel(focusChannelId);
+                var dedicatedFocus = modalityUI != null ? modalityUI.getDedicatedFocusChannel() : null;
+                if (dedicatedFocus != null) {
+                    cmdBuilder.dedicatedFocusChannel(
+                            dedicatedFocus.channelId(), dedicatedFocus.exposureMs(), dedicatedFocus.intensity());
+                }
                 // Let the modality handler tweak the builder (e.g. disable debayer for LSM).
                 ModalityRegistry.getHandler(modality).configureCommandBuilder(cmdBuilder);
 
@@ -2671,6 +2680,8 @@ public class ExistingImageAcquisitionController {
                 Map<String, Double> angleOverrides = null;
                 Map<String, Double> channelIntensityOverrides = Map.of();
                 String focusChannelId = null;
+                qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel =
+                        null;
                 java.util.Set<String> splitChannelIds = java.util.Set.of();
                 java.util.List<String> alignmentChannelIds = java.util.List.of();
                 if (modalityUI != null) {
@@ -2678,6 +2689,7 @@ public class ExistingImageAcquisitionController {
                     Map<String, Double> intensityMap = modalityUI.getChannelIntensityOverrides();
                     channelIntensityOverrides = intensityMap == null ? Map.of() : intensityMap;
                     focusChannelId = modalityUI.getFocusChannelId();
+                    dedicatedFocusChannel = modalityUI.getDedicatedFocusChannel();
                     java.util.Set<String> split = modalityUI.getSplitChannelIds();
                     splitChannelIds = split == null ? java.util.Set.of() : split;
                     java.util.List<String> align = modalityUI.getAlignmentChannelIds();
@@ -2787,7 +2799,8 @@ public class ExistingImageAcquisitionController {
                         innerAxis,
                         splitChannelIds,
                         alignmentChannelIds,
-                        stitchingOrganization);
+                        stitchingOrganization,
+                        dedicatedFocusChannel);
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);

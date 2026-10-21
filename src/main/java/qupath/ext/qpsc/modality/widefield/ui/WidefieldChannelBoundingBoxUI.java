@@ -94,10 +94,20 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                     + "Every channel is placed using the same result.";
     // Dedicated focus channel (opt-in): autofocus runs on this channel at its own,
     // usually shorter, exposure. Persisted so the setup survives a dialog reopen.
-    private static final String PREF_KEY_AF_CHANNEL_ENABLED = PREF_KEY_PREFIX + "af_channel.enabled";
-    private static final String PREF_KEY_AF_CHANNEL_ID = PREF_KEY_PREFIX + "af_channel.id";
-    private static final String PREF_KEY_AF_CHANNEL_EXPOSURE = PREF_KEY_PREFIX + "af_channel.exposure_ms";
-    private static final String PREF_KEY_AF_CHANNEL_INTENSITY = PREF_KEY_PREFIX + "af_channel.intensity";
+    private static final String AF_ENABLED = "enabled";
+    private static final String AF_ID = "id";
+    private static final String AF_EXPOSURE = "exposure_ms";
+    private static final String AF_INTENSITY = "intensity";
+
+    /**
+     * True for the LC-PolScope state picker ({@link #useEqualExposureStates}): every state is
+     * acquired at one exposure, so the dialog is always "customized" and the focus controls must
+     * not wait for the hidden master override.
+     */
+    private final javafx.beans.property.BooleanProperty equalExposureMode =
+            new javafx.beans.property.SimpleBooleanProperty(false);
+
+    private Node afIntensityLabel;
 
     private CheckBox afChannelEnabled;
     private ComboBox<String> afChannelCombo;
@@ -578,6 +588,28 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         exposureRow.setAlignment(Pos.CENTER_LEFT);
         int gridIndex = root.getChildren().indexOf(channelGrid);
         root.getChildren().add(Math.max(0, gridIndex), exposureRow);
+
+        // Autofocus at its own exposure. A focus frame needs contrast, not image quality, and
+        // a slow camera at the acquisition exposure (300 ms on the LC-PolScope Hamamatsu) makes
+        // every focus step that long. The crystals have no intensity knob, so that field goes.
+        equalExposureMode.set(true);
+        if (afIntensityLabel != null) {
+            afIntensityLabel.setVisible(false);
+            afIntensityLabel.setManaged(false);
+        }
+        if (afChannelIntensity != null) {
+            afChannelIntensity.setVisible(false);
+            afChannelIntensity.setManaged(false);
+        }
+    }
+
+    /**
+     * A focus-channel preference key, per modality: the LC-PolScope focus exposure must not
+     * become the starting value for fluorescence autofocus, nor the other way round.
+     */
+    private String afKey(String suffix) {
+        String modality = loadedModality == null ? "" : loadedModality.toLowerCase(java.util.Locale.ROOT) + ".";
+        return PREF_KEY_PREFIX + "af_channel." + modality + suffix;
     }
 
     private static String formatMs(double ms) {
@@ -640,7 +672,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     private Node buildFocusChannelBar() {
         afChannelEnabled = new CheckBox("Focus on a dedicated channel");
         afChannelEnabled.setSelected(
-                Boolean.parseBoolean(PersistentPreferences.getStringPreference(PREF_KEY_AF_CHANNEL_ENABLED, "false")));
+                Boolean.parseBoolean(PersistentPreferences.getStringPreference(afKey(AF_ENABLED), "false")));
         afChannelEnabled.setTooltip(
                 new Tooltip("Run autofocus on one chosen channel, at its own exposure and intensity, for every "
                         + "focus attempt in this acquisition.\n\n"
@@ -648,14 +680,16 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                         + "leave applied. Pick a bright channel with good coverage and give it a short "
                         + "exposure: focus frames need contrast, not image quality.\n\n"
                         + "The focus channel does not have to be one of the acquired channels."));
-        afChannelEnabled
-                .disableProperty()
-                .bind(masterOverride.selectedProperty().not());
+        // Customizing: the master override ticked, or the LC-PolScope state picker, which is
+        // always customized and hides the override.
+        javafx.beans.binding.BooleanBinding customizing =
+                masterOverride.selectedProperty().or(equalExposureMode);
+        afChannelEnabled.disableProperty().bind(customizing.not());
 
         afChannelCombo = new ComboBox<>();
         afChannelCombo.getItems().addAll(channelDefs.keySet());
         afChannelCombo.setTooltip(new Tooltip("Channel autofocus will use."));
-        String savedId = PersistentPreferences.getStringPreference(PREF_KEY_AF_CHANNEL_ID, "");
+        String savedId = PersistentPreferences.getStringPreference(afKey(AF_ID), "");
         if (!savedId.isEmpty() && afChannelCombo.getItems().contains(savedId)) {
             afChannelCombo.setValue(savedId);
         } else if (!afChannelCombo.getItems().isEmpty()) {
@@ -668,7 +702,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
         afChannelExposure = new Spinner<>();
         afChannelExposure.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(
-                0.1, 60000.0, readSavedDouble(PREF_KEY_AF_CHANNEL_EXPOSURE, defaultFocusExposure()), 10.0));
+                0.1, 60000.0, readSavedDouble(afKey(AF_EXPOSURE), defaultFocusExposure()), 10.0));
         afChannelExposure.setEditable(true);
         afChannelExposure.setPrefWidth(110);
         afChannelExposure.setTooltip(new Tooltip("Exposure used for focus frames only, in ms."));
@@ -676,7 +710,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
 
         afChannelIntensity = new Spinner<>();
         afChannelIntensity.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(
-                0.0, 65535.0, readSavedDouble(PREF_KEY_AF_CHANNEL_INTENSITY, defaultFocusIntensity()), 1.0));
+                0.0, 65535.0, readSavedDouble(afKey(AF_INTENSITY), defaultFocusIntensity()), 1.0));
         afChannelIntensity.setEditable(true);
         afChannelIntensity.setPrefWidth(100);
         afChannelIntensity.setTooltip(
@@ -692,10 +726,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         testBtn.setOnAction(e -> onTestFocusChannel());
 
         // Everything but the checkbox is meaningless until it is ticked.
-        javafx.beans.binding.BooleanBinding off = afChannelEnabled
-                .selectedProperty()
-                .not()
-                .or(masterOverride.selectedProperty().not());
+        javafx.beans.binding.BooleanBinding off =
+                afChannelEnabled.selectedProperty().not().or(customizing.not());
         afChannelCombo.disableProperty().bind(off);
         afChannelExposure.disableProperty().bind(off);
         afChannelIntensity.disableProperty().bind(off);
@@ -705,21 +737,21 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         afChannelEnabled
                 .selectedProperty()
                 .addListener((o, was, is) ->
-                        PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_ENABLED, String.valueOf(is)));
+                        PersistentPreferences.setStringPreference(afKey(AF_ENABLED), String.valueOf(is)));
         afChannelCombo.valueProperty().addListener((o, was, is) -> {
             if (is != null) {
-                PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_ID, is);
+                PersistentPreferences.setStringPreference(afKey(AF_ID), is);
                 seedFocusSpinnersFor(is);
             }
         });
         afChannelExposure.valueProperty().addListener((o, was, is) -> {
             if (is != null) {
-                PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_EXPOSURE, String.valueOf(is));
+                PersistentPreferences.setStringPreference(afKey(AF_EXPOSURE), String.valueOf(is));
             }
         });
         afChannelIntensity.valueProperty().addListener((o, was, is) -> {
             if (is != null) {
-                PersistentPreferences.setStringPreference(PREF_KEY_AF_CHANNEL_INTENSITY, String.valueOf(is));
+                PersistentPreferences.setStringPreference(afKey(AF_INTENSITY), String.valueOf(is));
             }
         });
 
@@ -729,7 +761,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                 afChannelCombo,
                 new Label("Focus exposure (ms):"),
                 afChannelExposure,
-                new Label("Intensity:"),
+                afIntensityLabel = new Label("Intensity:"),
                 afChannelIntensity,
                 testBtn);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -852,7 +884,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
     public qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride getDedicatedFocusChannel() {
         if (afChannelEnabled == null
                 || !afChannelEnabled.isSelected()
-                || !masterOverride.isSelected()
+                || !(masterOverride.isSelected() || equalExposureMode.get())
                 || afChannelCombo == null
                 || afChannelCombo.getValue() == null) {
             return null;

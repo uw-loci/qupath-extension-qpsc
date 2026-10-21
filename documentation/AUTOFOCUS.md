@@ -660,7 +660,7 @@ Note that the standard scan centres on the **current Z**, so where it searches d
 
 ## Dedicated focus channel (multi-channel modalities)
 
-On a channel modality, autofocus runs under whichever channel the acquisition loop last applied -- the previous tile's final channel -- so the focus frame's brightness and contrast follow acquisition order rather than any deliberate choice. The **Focus on a dedicated channel** option in the bounded-acquisition dialog names the channel to focus on and gives it its own exposure and intensity, applied before every focus attempt (pre-acquisition search and per-tile AF alike).
+On a channel modality, autofocus runs under whichever channel the acquisition loop last applied -- the previous tile's final channel -- so the focus frame's brightness and contrast follow acquisition order rather than any deliberate choice. The **Focus on a dedicated channel** option in the bounded-acquisition dialog names the channel to focus on and gives it its own exposure and intensity, applied before every focus attempt (pre-acquisition search and per-tile AF alike). Existing Image acquisition offers the same option. On LC-PolScope it sets the focus state's exposure only, with no intensity (see [CHANNELS.md](CHANNELS.md#dedicated-focus-channel-optional)).
 
 Intended use: focus on a bright channel with good coverage, at a short exposure. Focus frames are scored for contrast, not archived, so imaging-quality exposure is wasted time on every attempt. The channel may be one the run does not acquire at all.
 

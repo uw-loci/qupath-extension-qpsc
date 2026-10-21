@@ -1361,6 +1361,7 @@ public class ExistingImageWorkflowV2 {
             state.channelIntensityOverrides =
                     config.channelIntensityOverrides() == null ? Map.of() : config.channelIntensityOverrides();
             state.focusChannelId = config.focusChannelId();
+            state.dedicatedFocusChannel = config.dedicatedFocusChannel();
             state.afStrategy = config.afStrategy();
             state.innerAxis = config.innerAxis();
 
@@ -3332,6 +3333,9 @@ public class ExistingImageWorkflowV2 {
         public Map<String, Double> angleOverrides;
         public Map<String, Double> channelIntensityOverrides = Map.of();
         public String focusChannelId;
+        /** Autofocus channel at its own exposure; null = the focus channel's acquisition settings. */
+        public qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel;
+
         public String afStrategy;
         public String innerAxis;
         public PathObject refinementTile;
