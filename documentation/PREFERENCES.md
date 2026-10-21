@@ -328,7 +328,8 @@ and Stage Map if they were open, and closes every other QP Scope window (camera 
 calibration and progress windows), since they describe a microscope that is no longer
 connected. It is refused while an acquisition is running, and a file that fails validation is
 rolled back -- the previous configuration and preference value are restored. Declining the
-offer leaves the preference as you set it; nothing changes until you switch or restart.
+offer puts the preference back to the config still in use, so it always names the file QPSC is
+running; to use the other file later, choose it with **Utilities > Switch Microscope**.
 
 **Offline / Analysis default:**
 If this preference is empty on launch (a fresh install), QPSC auto-installs and

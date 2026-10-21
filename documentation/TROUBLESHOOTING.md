@@ -1788,8 +1788,11 @@ and pick it (or `manual_only`) as the modality's default. The GUI dropdown for s
 **Likely causes:**
 - Microscope config preference not set in QuPath
 - Config file path is invalid or file does not exist
+- The preference names a companion file (`autofocus_*.yml` or `imageprocessing_*.yml`) instead of the microscope's `config_*.yml`
 - Server version too old (requires microscope-command-server v1.1.0+)
 - Server cannot read the configuration file
+
+QPSC shows a **Microscope config refused** notification with the file name and the server's reason. It is shown once per file and reason. QPSC keeps retrying the connection, but the retries back off instead of running every second, and stop once the config is accepted.
 
 **Solution:**
 1. Verify microscope config is set: Edit > Preferences > QPSC > Microscope Config File

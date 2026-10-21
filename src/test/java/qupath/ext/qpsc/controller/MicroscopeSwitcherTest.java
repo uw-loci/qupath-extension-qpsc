@@ -124,6 +124,30 @@ class MicroscopeSwitcherTest {
     }
 
     @Test
+    void theOfferRunsOutsideTheAnimationPulse() throws IOException {
+        // PauseTransition.onFinished runs inside a pulse, where the confirmation dialog's
+        // showAndWait throws; on the rig (2026-10-21) the offer died there on every change.
+        String s = Files.readString(SETUP);
+        assertThat(s)
+                .contains("settle.setOnFinished(e -> Platform.runLater(")
+                .doesNotContain("settle.setOnFinished(e -> MicroscopeSwitcher.offerSwitch(");
+    }
+
+    @Test
+    void aSwitchThatDoesNotHappenPutsThePreferenceBack() throws IOException {
+        // The preference is what every CONFIG sends and what controller calls load by path,
+        // so it must never be left naming a file QPSC has not switched to.
+        String s = switcher();
+        int decline = s.indexOf("declined by the operator");
+        assertThat(s.indexOf("restorePreference(oldPath);", decline)).isGreaterThan(decline);
+        int caught = s.indexOf("} catch (RuntimeException e) {");
+        assertThat(s.indexOf("restorePreference(activePath());", caught)).isGreaterThan(caught);
+        String refuse = Files.readString(SWITCHER);
+        int def = refuse.indexOf("private static void refuse(String oldPath, String why) {");
+        assertThat(refuse.substring(def, def + 200)).contains("restorePreference(oldPath);");
+    }
+
+    @Test
     void theMenuRebuildReplacesRatherThanAppends() throws IOException {
         String s = Files.readString(SETUP);
         int def = s.indexOf("private void addMenuItem(QuPathGUI qupath) {");

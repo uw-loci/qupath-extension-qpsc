@@ -18,6 +18,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Images imported through the multichannel merge carry the same record stamps as single images.** `white_balance` (added in 0.12.0) and the new `background_profile` are now set on fluorescence and LC-PolScope entries too; 0.12.0 stamped only the single-image import path.
 - **Stale means older than the calibration by its own clock.** A background set's `collected_at` is compared with the white balance calibration time; the file date is used only for sets from before it was recorded.
 
+### Fixed
+
+- **The Switch Microscope offer opens after you change the config-file preference.** The offer ran inside an animation pulse, where its confirmation dialog throws, so no offer was ever shown and the preference was left naming a file QPSC had not loaded. A switch that does not happen (declined, refused during an acquisition, or failed validation) now puts the preference back to the config still in use.
+- **A config the server refuses is reported once, with the reason.** A "Microscope config refused" notification names the file and the server's message, and points at the mistake when the preference names a companion file (`autofocus_*` or `imageprocessing_*`). The auxiliary connection (Live Viewer and stage control) no longer retries a refused config every second: the backoff resets only after the server accepts the config.
+
 ## [0.12.0] - 2026-10-21
 
 Pairs with microscope_command_server 1.4.0 and microscope_control 1.2.0 (which bring microscope_imageprocessing 0.4.0 and polscope_library 0.1.0): every item below that says it needs the matching server needs that release. Stitching still needs tiles-to-pyramid 0.7.1 or later; 0.7.8 adds the black background that LC-PolScope orientation images declare.

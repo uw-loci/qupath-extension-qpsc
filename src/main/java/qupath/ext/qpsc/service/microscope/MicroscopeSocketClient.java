@@ -75,6 +75,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
     /** Cooldown after failed aux connection to prevent reconnection floods */
     private volatile long auxReconnectCooldownUntil = 0;
+    /** The last refused config shown to the operator ("path|reason"), or null. */
+    private volatile String lastConfigRefusal;
 
     /** Backoff duration for aux reconnection (doubles on each failure, resets on success) */
     private volatile long auxReconnectBackoffMs = 1000;
@@ -684,14 +686,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 auxConnected.set(true);
 
-                // Reset backoff on successful connection
-                auxReconnectBackoffMs = AUX_RECONNECT_BACKOFF_INITIAL_MS;
-                auxReconnectCooldownUntil = 0;
-
                 logger.info("Auxiliary connection established, sending config...");
 
                 // Send config on auxiliary connection
                 sendConfigOnAuxiliary();
+
+                // Reset the backoff only once the server has ACCEPTED the config. Reset on the
+                // TCP connect, a refused CONFIG retried every second forever, because each
+                // attempt connected (resetting to 1 s) before failing (2026-10-21).
+                auxReconnectBackoffMs = AUX_RECONNECT_BACKOFF_INITIAL_MS;
+                auxReconnectCooldownUntil = 0;
 
                 logger.info("Auxiliary connection ready for Live Viewer and stage control");
 
@@ -748,6 +752,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             byte[] verJsonBytes = new byte[verJsonLength];
             auxInput.readFully(verJsonBytes);
             logger.debug("Auxiliary connection configured successfully (version payload: {} bytes)", verJsonLength);
+            lastConfigRefusal = null;
         } else if ("CFG_FAIL".equals(responseStr)) {
             // Read error message: 4-byte length + message
             byte[] lengthBytes = new byte[4];
@@ -759,10 +764,38 @@ public class MicroscopeSocketClient implements AutoCloseable {
             byte[] errorBytes = new byte[errorLength];
             auxInput.readFully(errorBytes);
             String errorMsg = new String(errorBytes, StandardCharsets.UTF_8);
+            reportConfigRefused(configPath, errorMsg);
             throw new IOException("Auxiliary config failed: " + errorMsg);
         } else {
             throw new IOException("Unexpected auxiliary config response: " + responseStr);
         }
+    }
+
+    /**
+     * Tells the operator, once, that the server refused the config file, and why.
+     *
+     * <p>A refused CONFIG is not transient: retrying sends the same file and gets the same
+     * answer, so without this the only sign was the server log filling up. Shown again only
+     * for a different file or reason; cleared when a config is accepted.
+     */
+    private void reportConfigRefused(String configPath, String serverMessage) {
+        String key = configPath + "|" + serverMessage;
+        if (key.equals(lastConfigRefusal)) {
+            return;
+        }
+        lastConfigRefusal = key;
+        String message = configRefusedMessage(configPath, serverMessage);
+        Platform.runLater(() -> UserErrors.notify(logger, "Microscope config refused", message));
+    }
+
+    /** The operator-facing text for a refused config (pure; tested). */
+    static String configRefusedMessage(String configPath, String serverMessage) {
+        String name = configPath == null ? "(none)" : new File(configPath).getName();
+        String hint = name.startsWith("autofocus_") || name.startsWith("imageprocessing_")
+                ? name + " is a companion file. The config-file preference must name the microscope's "
+                        + "config_*.yml; choose it with Utilities > Switch Microscope."
+                : "Check the config-file preference (Utilities > Switch Microscope) and the file itself.";
+        return "The microscope server refused " + name + ": " + serverMessage + "\n" + hint;
     }
 
     /**
@@ -919,6 +952,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     String verJson = new String(verJsonBytes, StandardCharsets.UTF_8);
 
                     logger.info("Server config loaded successfully");
+                    lastConfigRefusal = null;
                     // Bring a hand-turned nosepiece's Micro-Manager label in line with the
                     // objective selected in QPSC (opt-in per objective; never moves a turret).
                     // It talks to the server itself, so it runs after this lock is released.
@@ -937,6 +971,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     byte[] errorBytes = new byte[errorLength];
                     input.readFully(errorBytes);
                     String errorMsg = new String(errorBytes, StandardCharsets.UTF_8);
+                    reportConfigRefused(configPath, errorMsg);
 
                     throw new IOException("Server failed to load config: " + errorMsg);
                 } else if ("CFG_BLCK".equals(responseStr)) {

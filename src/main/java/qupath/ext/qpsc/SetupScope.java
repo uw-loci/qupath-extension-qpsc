@@ -226,7 +226,12 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // restart. Debounced, because the preferences text field fires on every keystroke and
         // this must fire once, on the path the user finished typing or picked.
         PauseTransition settle = new PauseTransition(Duration.millis(1500));
-        settle.setOnFinished(e -> MicroscopeSwitcher.offerSwitch(QPPreferenceDialog.getMicroscopeConfigFileProperty()));
+        // runLater: onFinished runs inside an animation pulse, where the confirmation dialog's
+        // showAndWait throws ("not allowed during animation or layout processing"). That threw
+        // on every preference change until 2026-10-21, so no switch was ever offered and the
+        // preference was left naming a file QPSC had not loaded.
+        settle.setOnFinished(e -> Platform.runLater(
+                () -> MicroscopeSwitcher.offerSwitch(QPPreferenceDialog.getMicroscopeConfigFileProperty())));
         QPPreferenceDialog.microscopeConfigFileProperty().addListener((obs, was, now) -> settle.playFromStart());
 
         // 4) Start project-scoped logging

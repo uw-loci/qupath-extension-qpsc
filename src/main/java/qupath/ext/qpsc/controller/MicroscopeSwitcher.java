@@ -138,14 +138,16 @@ public final class MicroscopeSwitcher {
             // 1. Never under an acquisition. The server owns the stage until its thread
             // finishes, and a CONFIG mid-acquisition is the takeover the server guards against.
             if (controller.isAcquisitionActive()) {
-                refuse("An acquisition is running in this QuPath. Wait for it to finish or cancel it first.");
+                refuse(oldPath, "An acquisition is running in this QuPath. Wait for it to finish or cancel it first.");
                 return;
             }
             if (controller.getSocketClient().isConnected()) {
                 try {
                     if (!controller.awaitServerIdle(0)) {
-                        refuse("The microscope server reports an acquisition in progress. "
-                                + "Wait for it to finish, or cancel it, before switching.");
+                        refuse(
+                                oldPath,
+                                "The microscope server reports an acquisition in progress. "
+                                        + "Wait for it to finish, or cancel it, before switching.");
                         return;
                     }
                 } catch (IOException e) {
@@ -158,8 +160,10 @@ public final class MicroscopeSwitcher {
             boolean wasMap = StageMapWindow.isVisible();
             int others = QpscWindows.showing().size();
             if (confirm && !confirmed(oldPath, newPath, wasLive, wasMap, others)) {
-                // Declined: leave the preference as the user set it; the menu offers it again.
+                // Declined: put the preference back. Left on the new file it would be what the
+                // next reconnect sends the server, and what the next stage move loads.
                 logger.info("Microscope switch to {} declined by the operator", newPath);
+                restorePreference(oldPath);
                 return;
             }
 
@@ -241,6 +245,8 @@ public final class MicroscopeSwitcher {
                     }));
         } catch (RuntimeException e) {
             inProgress.set(false);
+            // Nothing was switched, so the preference must name the config still in use.
+            restorePreference(activePath());
             throw e;
         }
     }
@@ -286,9 +292,28 @@ public final class MicroscopeSwitcher {
         }
     }
 
-    private static void refuse(String why) {
+    private static void refuse(String oldPath, String why) {
         inProgress.set(false);
+        restorePreference(oldPath);
         UserErrors.show(logger, "Switch Microscope", why);
+    }
+
+    /**
+     * Points the config-file preference back at the config in use, after a switch that did not
+     * happen. The preference must always name the config QPSC is running: every CONFIG sent to
+     * the server reads it, and so does each MicroscopeController call that loads the config
+     * manager by path, which would load the new file without the switch's validation. On
+     * 2026-10-21 a preference left on autofocus_LCPolScope_Hamamatsu.yml had the server refuse
+     * CONFIG once a second.
+     */
+    static void restorePreference(String previous) {
+        if (previous == null || previous.isBlank()) {
+            return;
+        }
+        if (!previous.equals(QPPreferenceDialog.getMicroscopeConfigFileProperty())) {
+            logger.info("Config-file preference restored to the config in use: {}", previous);
+            QPPreferenceDialog.setMicroscopeConfigFileProperty(previous);
+        }
     }
 
     private static boolean confirmed(String oldPath, String newPath, boolean live, boolean map, int others) {
