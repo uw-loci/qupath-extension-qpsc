@@ -588,11 +588,12 @@ public class BackgroundCollectionWorkflow {
             entry.put("display_name", ch.displayName());
             Double exp = channelExposures != null ? channelExposures.get(ch.id()) : null;
             entry.put("exposure_ms", exp != null ? exp : ch.defaultExposureMs());
-            Double intensity = channelIntensities != null ? channelIntensities.get(ch.id()) : null;
-            double resolvedIntensity = intensity != null
-                    ? intensity
-                    : (Double.isNaN(ch.currentIntensityValue()) ? 0.0 : ch.currentIntensityValue());
-            entry.put("intensity", resolvedIntensity);
+            Double resolvedIntensity = channelIntensity(ch, channelIntensities);
+            // A channel with no intensity control (the LC-PolScope states) records none rather
+            // than 0, which would read as a channel switched off.
+            if (resolvedIntensity != null) {
+                entry.put("intensity", resolvedIntensity);
+            }
             if (ch.intensityProperty() != null) {
                 entry.put("intensity_device", ch.intensityProperty().device());
                 entry.put("intensity_property", ch.intensityProperty().property());
@@ -1007,7 +1008,20 @@ public class BackgroundCollectionWorkflow {
      * Builds a per-channel settings summary (exposure + intensity) for the
      * fluorescence background completion notification.
      */
-    private static String buildChannelBackgroundSummary(
+    /**
+     * The intensity a channel's background was taken at: the server's reported value, else the
+     * channel's configured one, or null for a channel with no intensity control.
+     */
+    static Double channelIntensity(Channel ch, Map<String, Double> channelIntensities) {
+        Double reported = channelIntensities != null ? channelIntensities.get(ch.id()) : null;
+        if (reported != null) {
+            return reported;
+        }
+        double configured = ch.currentIntensityValue();
+        return Double.isNaN(configured) ? null : configured;
+    }
+
+    static String buildChannelBackgroundSummary(
             String profileKey,
             String folder,
             List<Channel> inUseChannels,
@@ -1021,16 +1035,15 @@ public class BackgroundCollectionWorkflow {
             for (Channel ch : inUseChannels) {
                 Double exp = channelExposures != null ? channelExposures.get(ch.id()) : null;
                 double resolvedExp = exp != null ? exp : ch.defaultExposureMs();
-                Double intensity = channelIntensities != null ? channelIntensities.get(ch.id()) : null;
-                double resolvedIntensity = intensity != null
-                        ? intensity
-                        : (Double.isNaN(ch.currentIntensityValue()) ? 0.0 : ch.currentIntensityValue());
+                Double resolvedIntensity = channelIntensity(ch, channelIntensities);
                 sb.append("\n  ")
                         .append(ch.displayName())
                         .append(": ")
                         .append(fmtNum(resolvedExp))
-                        .append(" ms, intensity ")
-                        .append(fmtNum(resolvedIntensity));
+                        .append(" ms");
+                if (resolvedIntensity != null) {
+                    sb.append(", intensity ").append(fmtNum(resolvedIntensity));
+                }
             }
         }
         if (folder != null && !folder.isBlank()) {

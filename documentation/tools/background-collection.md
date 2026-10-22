@@ -154,7 +154,7 @@ Collection and acquisition resolve this path through the same helper, so a fresh
 
 - One background image per in-use channel, named `<channelId>.tif`
 - Saved in a profile-keyed subfolder (e.g., `.../<detector>/Fluorescence/20x/Fluorescence_20x/`)
-- Each channel background records that channel's exposure and illumination intensity
+- Each channel background records that channel's exposure and, when the channel has an intensity control, its illumination intensity. A channel without one (the LC-PolScope states) records exposure only, with no `intensity` entry
 - Settings saved to `background_settings.yml` (v2.0) with per-channel metadata and lamp intensity tracking
 
 ## Tips & Troubleshooting
