@@ -147,6 +147,37 @@ class LCPolScopeReadinessTest {
     }
 
     @Test
+    void anUnevenBackgroundWithoutACalibrationIsExpected() throws Exception {
+        // 10-21 Hamamatsu: OpenPolScope's palette, no QPSC calibration, swing states 28% apart
+        // on a clear field; the run reconstructed normally. Blaming specimen sent the user
+        // looking for debris that was not there.
+        Path base = Files.createDirectories(dir.resolve("bg"));
+        String folder = BackgroundSettingsReader.resolveChannelBackgroundFolder(
+                activeProfileFolder(base), "lcpolscope", "OBJ20", "DET", "lcpolscope_20x");
+        Files.createDirectories(Path.of(folder));
+        Files.writeString(
+                Path.of(folder, "background_provenance.json"),
+                "{\"lc_calibrated_at\": null, \"collected_at\": \"2026-10-21T18:47:51\","
+                        + " \"swing_state_spread\": 0.28}");
+        MicroscopeConfigManager mgr = config("      black_level: 103", base.toString());
+        List<Check> checks = LCPolScopeReadiness.configChecks(mgr, LocalDateTime.parse("2026-10-22T09:00:00"));
+        Check bg = find(checks, "lcpolscope_20x: background 2026-10-21 18:47:51; its swing states differ by 28%");
+        assertNotNull(bg);
+        assertEquals(Level.OK, bg.level());
+        assertFalse(bg.text().contains("specimen"), bg.text());
+
+        // The same spread with a balance that changes across the field is specimen.
+        Files.writeString(
+                Path.of(folder, "background_provenance.json"),
+                "{\"lc_calibrated_at\": null, \"collected_at\": \"2026-10-21T18:47:51\","
+                        + " \"swing_state_spread\": 0.28, \"swing_field_variation\": 2.0}");
+        checks = LCPolScopeReadiness.configChecks(mgr, LocalDateTime.parse("2026-10-22T09:00:00"));
+        Check patchy = find(checks, "lcpolscope_20x: the background's swing states differ by 28%");
+        assertNotNull(patchy);
+        assertEquals(Level.WARN, patchy.level());
+    }
+
+    @Test
     void aBackgroundFromAnotherCalibrationIsAFailAndAnOldCalibrationAWarning() throws Exception {
         Path base = Files.createDirectories(dir.resolve("bg"));
         String folder = BackgroundSettingsReader.resolveChannelBackgroundFolder(

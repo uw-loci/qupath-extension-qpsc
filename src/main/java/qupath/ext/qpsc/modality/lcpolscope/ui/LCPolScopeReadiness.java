@@ -104,6 +104,12 @@ public final class LCPolScopeReadiness {
      */
     static final double MAX_BACKGROUND_SWING_SPREAD = 0.10;
 
+    /**
+     * Same limit as the server's {@code LC_BACKGROUND_MAX_FIELD_VARIATION}: above it the swing
+     * states' balance changes across the field, which a calibration cannot cause.
+     */
+    static final double MAX_BACKGROUND_FIELD_VARIATION = 0.25;
+
     static Check backgroundCheck(String profile, String base, String objective, String detector, String calibratedAt) {
         if (base == null || base.isBlank()) {
             return new Check(Level.WARN, profile + ": no background collected yet; it reconstructs uncorrected.");
@@ -130,6 +136,24 @@ public final class LCPolScopeReadiness {
                                 + "Collect it again.");
             }
             Double spread = numberOf(json, "swing_state_spread");
+            Double fieldVariation = numberOf(json, "swing_field_variation");
+            boolean patchy = fieldVariation != null && fieldVariation > MAX_BACKGROUND_FIELD_VARIATION;
+            if (spread != null && spread > MAX_BACKGROUND_SWING_SPREAD && calibratedAt == null && !patchy) {
+                // Without a QPSC calibration the states are whatever palette the YAML carries,
+                // not balanced for this light path, so their means differ whatever the field.
+                // The Stokes background correction removes a uniform imbalance like that.
+                // A balance that changes across the field still means specimen (below).
+                return new Check(
+                        Level.OK,
+                        String.format(
+                                Locale.ROOT,
+                                "%s: background %s; its swing states differ by %.0f%%, as expected without a "
+                                        + "QPSC LC calibration (the background correction removes it). Collect "
+                                        + "it again after Calibrate + Apply.",
+                                profile,
+                                collected.replace('T', ' '),
+                                spread * 100));
+            }
             if (spread != null && spread > MAX_BACKGROUND_SWING_SPREAD) {
                 return new Check(
                         Level.WARN,

@@ -334,9 +334,13 @@ averaged over 10 frames (`reconstruction.background_frames`) and the set is reco
 calibration it was taken with. The acquisition applies it per tile inside the reconstruction, the
 way OpenPolScope does, and **refuses a background from a different calibration**: the run then
 reconstructs uncorrected and the server log says why. Collect a new background after every
-calibration. The **Ready to acquire?** box also warns when the background's swing states differ
-by more than 10% above black: on a clear field they agree within a few percent, so a larger
-spread usually means the background was taken on specimen. Collect it again on an empty area.
+calibration. The **Ready to acquire?** box also checks the background's swing states, which on a
+clear field agree within a few percent once a QPSC calibration is applied. With a calibration
+applied, a spread above 10% above black usually means the background was taken on specimen, and
+the box warns; collect it again on an empty area. Without a calibration, the palette is not
+balanced for the light path, so a spread is reported as expected (the background correction
+removes it), and the box asks for a new background after Calibrate + Apply. A balance that changes
+across the field (the server's `swing_field_variation` above 0.25) still warns about specimen.
 
 **Access:** Extensions > QP Scope > [Modality Name] > Calibrate Liquid Crystals... (only visible when using an LC-PolScope microscope)
 
