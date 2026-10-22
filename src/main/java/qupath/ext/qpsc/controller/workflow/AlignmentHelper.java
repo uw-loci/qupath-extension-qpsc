@@ -31,13 +31,9 @@ import qupath.lib.projects.ProjectImageEntry;
  * <p>Slide-specific alignments allow users to skip the alignment process if they've
  * already aligned this specific slide in a previous session.
  *
- * <p>Confidence scoring is based on multiple factors:
- * <ul>
- *   <li>Alignment source (slide-specific vs general)</li>
- *   <li>Age of the alignment</li>
- *   <li>Number of control points used</li>
- *   <li>Transform residual error (if available)</li>
- * </ul>
+ * <p>A slide-specific alignment's confidence comes from its source and its age only. Saved
+ * scanner presets get no score at all: the dialogs show when they were saved
+ * ({@link #presetAgeText}), because the age is all that is known about them.
  *
  * @author Mike Nelson
  * @since 1.0
@@ -132,12 +128,27 @@ public class AlignmentHelper {
     }
 
     /**
+     * A saved preset's age is current below this many days. The Acquisition Wizard's alignment
+     * row turns amber at the same age.
+     */
+    public static final int PRESET_AGING_DAYS = 14;
+    /** A saved preset's age is old at or above this many days. */
+    public static final int PRESET_OLD_DAYS = 90;
+
+    /** How old a saved scanner-to-microscope preset is, in bands for coloring a label. */
+    public enum PresetAgeBand {
+        CURRENT,
+        AGING,
+        OLD,
+        UNKNOWN
+    }
+
+    /**
      * Age in days of a saved preset, or -1 when it carries no creation date.
      *
-     * <p>Exposed because the confidence score is almost entirely this number: a preset
-     * loses 0.003/day up to 0.3, so anything past ~100 days sits at the floor regardless
-     * of how well it works. A UI that shows the score should show the age too, or the
-     * operator reads a permanent red "LOW" as a judgement on their latest alignment.
+     * <p>The age is the only thing known about a saved preset's freshness: the preset stores no
+     * fit residuals, so there is no quality score to show. A stage re-zero invalidates a preset of
+     * any age, which the age cannot see.
      *
      * @param preset the preset to age
      * @return whole days since creation, or -1 if unknown
@@ -155,6 +166,46 @@ public class AlignmentHelper {
             return -1;
         }
     }
+
+    /**
+     * The age band for a preset age in days.
+     *
+     * @param ageDays days since the preset was saved, or negative when unknown
+     * @return CURRENT below {@link #PRESET_AGING_DAYS}, OLD at or above {@link #PRESET_OLD_DAYS},
+     *     AGING between, UNKNOWN for a negative age
+     */
+    public static PresetAgeBand ageBand(long ageDays) {
+        if (ageDays < 0) return PresetAgeBand.UNKNOWN;
+        if (ageDays < PRESET_AGING_DAYS) return PresetAgeBand.CURRENT;
+        if (ageDays < PRESET_OLD_DAYS) return PresetAgeBand.AGING;
+        return PresetAgeBand.OLD;
+    }
+
+    /**
+     * The text of the "saved transform" label in the alignment dialogs: when the preset was saved
+     * and how long ago, e.g. "Saved transform: saved 2026-10-21 (today)".
+     *
+     * @param preset the selected preset; may be null
+     * @return the label text, or an empty string for a null preset
+     */
+    public static String presetAgeText(AffineTransformManager.TransformPreset preset) {
+        if (preset == null) return "";
+        long ageDays = ageInDays(preset);
+        if (ageDays < 0) return "Saved transform: save date unknown";
+        String date = preset.getCreatedDate()
+                .toInstant()
+                .atZone(java.time.ZoneId.systemDefault())
+                .toLocalDate()
+                .toString();
+        String ago = ageDays == 0 ? "today" : (ageDays == 1 ? "1 day ago" : ageDays + " days ago");
+        return "Saved transform: saved " + date + " (" + ago + ")";
+    }
+
+    /** Tooltip for the "saved transform" label: what the age does and does not tell. */
+    public static final String PRESET_AGE_TOOLTIP = "When this scanner-to-microscope transform was saved.\n"
+            + "Green under " + PRESET_AGING_DAYS + " days, amber under " + PRESET_OLD_DAYS + " days, red after.\n"
+            + "The age is not a measure of alignment quality, and a stage re-zero invalidates\n"
+            + "a transform of any age: re-align or verify with a single tile after one.";
 
     /**
      * The most recently created preset in a list, for use as a dialog's default selection.
@@ -179,44 +230,6 @@ public class AlignmentHelper {
             }
         }
         return best != null ? best : presets.get(0);
-    }
-
-    /**
-     * Calculates confidence for a TransformPreset.
-     *
-     * @param preset The transform preset to evaluate
-     * @return Confidence score between 0.0 and 1.0
-     */
-    public static double calculateConfidence(AffineTransformManager.TransformPreset preset) {
-        if (preset == null) {
-            return 0.0;
-        }
-
-        // General transforms start with lower confidence
-        double confidence = BASE_CONFIDENCE_GENERAL;
-
-        // Apply age penalty
-        java.util.Date createdDate = preset.getCreatedDate();
-        if (createdDate != null) {
-            try {
-                java.time.LocalDate created = createdDate
-                        .toInstant()
-                        .atZone(java.time.ZoneId.systemDefault())
-                        .toLocalDate();
-                long daysOld = java.time.temporal.ChronoUnit.DAYS.between(created, java.time.LocalDate.now());
-                double agePenalty = Math.min(daysOld * CONFIDENCE_AGE_PENALTY_PER_DAY, MAX_AGE_PENALTY);
-                confidence -= agePenalty;
-            } catch (Exception e) {
-                logger.debug("Could not parse preset date: {}", createdDate);
-            }
-        }
-
-        // Boost if green box params are saved (indicates successful prior use)
-        if (preset.getGreenBoxParams() != null) {
-            confidence += 0.05;
-        }
-
-        return Math.max(0.1, Math.min(1.0, confidence));
     }
 
     /**

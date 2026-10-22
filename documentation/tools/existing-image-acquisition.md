@@ -62,15 +62,13 @@ When scanning from a sub-image that lacks a macro, the "Use Existing Alignment" 
 
 Selected transforms are validated before use. Invalid transforms show a warning and allow reselection.
 
-**Preset Selection and Confidence Display**
+**Preset Selection and Age Display**
 
 When multiple saved scanner presets are available, the dialog preselects the **newest one by creation date**. This ensures that after you save a fresh alignment, the next acquisition step uses that new preset by default rather than one saved months ago that might sort first alphabetically.
 
-The **Confidence** display (e.g., "Saved transform confidence: MEDIUM (50%) -- based on age, saved 7 days ago") measures the age of the preset, not the alignment accuracy:
-- A scanner preset starts at 65% (70% if green-box parameters were captured) and loses 0.3% per day, with the penalty capped at 30 points -- so the floor is 35% (40%), reached at ~100 days
-- The label shows the age ("saved X days ago"), because the age is what the number is made of
-- A scanner preset can never read HIGH: that band starts at 80% and the preset starts at 70%. Past ~50 days it reads LOW, and the recommendation below shifts to Single-Tile Refinement accordingly
-- The score says nothing about whether the transform still matches the current stage frame. After a stage re-zero an old preset reads exactly as it did before, and a fresh one reads high even though the frame it was built in has moved
+Below the combo, a line shows when the selected preset was saved, for example "Saved transform: saved 2026-10-21 (today)". It is green under 14 days, amber under 90 days and red after that, the same 14 days at which the Acquisition Wizard's alignment row turns amber.
+- The line reports age only. A preset stores no fit quality, so there is no score to show, and a just-saved preset reads "(today)" in green.
+- Age does not tell you whether the transform still matches the stage. After a stage re-zero, a preset of any age is wrong: re-align, or verify with Single-Tile Refinement.
 
 **Cross-Scope Alignment:** If no per-slide alignment exists for the active microscope but one was built for another microscope on the same sample, the system can compose an alignment through the shared macro frame. When successful, a modal dialog appears explaining that cross-scope alignment is approximate and asking you to confirm before proceeding. The refinement options are automatically disabled for cross-scope acquisitions (see Refinement Options below). After acquisition, run Microscope Alignment on this microscope to build a native target-scope alignment that future acquisitions can reuse without composition.
 
@@ -81,13 +79,13 @@ If alignment records from other microscopes exist but *cannot* be composed throu
 | Option | Description |
 |--------|-------------|
 | No Refinement | Use saved transform directly (fastest). Best when transform is known to be accurate. Default when a prior QPSC acquisition has auto-registered alignment on the current slide. |
-| Single-Tile Refinement | Refine alignment using one reference tile. Corrects only the offset (translation). Quick adjustment for minor drift or when a slide has been removed and re-seated since the last acquisition. The corrected alignment is saved for subsequent acquisitions. Also the default for alignments older than ~50 days (low confidence) — verifies the aged transform in 2–3 minutes before full acquisition. |
+| Single-Tile Refinement | Refine alignment using one reference tile. Corrects only the offset (translation). Quick adjustment for minor drift or when a slide has been removed and re-seated since the last acquisition. The corrected alignment is saved for subsequent acquisitions. Also the default whenever a saved scanner preset is used — verifies it on this slide in 2–3 minutes before full acquisition. |
 | Multi-Tile Refinement | Refine alignment using 2 or more reference tiles spread across the slide. Solves for a rotation + scale correction (not just offset), essential when a slide sits rotated in its holder slot. Faster than full manual alignment because it starts from your existing alignment. The dialog displays the recovered rotation and scale as diagnostics (non-zero rotation confirms slide play; scale far from 1.0 suggests a pixel-size/objective mismatch). **If the correction appears implausibly large** (rotation > 10° or scale < 0.9 / > 1.1), a red warning appears: the base alignment does not match the stage (e.g., axis swap or wrong orientation). Re-check the alignment before saving; you can still proceed if you are confident. Time: 4–6 minutes. |
 | Full Manual Alignment | Create new transform with multiple points. Use the first time or after hardware changes. Always available as an explicit choice, even for aged alignments. |
 
 **Automatic Recommendation by Alignment Age or Insert Change:** The dialog shows an automatic recommendation based on the saved alignment's last-refinement date and whether it was built for the current stage insert:
-- **"Proceed without refinement"** — Alignment recently created or refined (high confidence) AND built on the current stage insert.
-- **"Single-tile refinement"** — Alignment aged 1–~50 days (medium confidence) or older than ~50 days (low confidence). For aged alignments, the message adds: "verify the existing alignment; choose Full manual to re-align from scratch" to encourage explicit choice.
+- **"Proceed without refinement"** — The open slide already has an alignment auto-registered by a prior QPSC acquisition on this microscope.
+- **"Single-tile refinement"** — A saved scanner preset is in use. For a preset 90 days old or more, the message adds that it is that many days old and suggests Full manual to re-align from scratch.
 - **"Single-tile refinement"** — During multi-slide batch acquisition (Multi-Slide Acquisition workflow), when a saved alignment was created on a *different* stage insert than the one currently in use (e.g., an alignment from a single-slide layout but the microscope now has a multi-slide holder). The dialog explains that the previous alignment cannot be trusted because the slide's position in the holder has changed, and single-tile refinement will establish a fresh alignment for the current mount.
 - **Multi-tile refinement** is *not* auto-recommended (the recommendation logic only ever suggests No Refinement, Single-tile, or Full manual) — it is a manual choice you select when the holder design allows slides to shift or rotate in their slot (common with vertical multi-slide holders). Multi-tile refinement captures 2+ spread reference points and solves a rotation + scale correction, eliminating the "perfect at one tile, drifting elsewhere" problem that single-tile cannot fix. Much faster than full manual re-alignment because it starts from the existing alignment.
 

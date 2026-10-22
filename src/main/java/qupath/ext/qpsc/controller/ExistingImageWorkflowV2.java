@@ -1342,7 +1342,6 @@ public class ExistingImageWorkflowV2 {
             state.alignmentChoice = new AlignmentSelectionController.AlignmentChoice(
                     config.useExistingAlignment(),
                     config.selectedTransform(),
-                    config.alignmentConfidence(),
                     false // Not auto-selected since user explicitly chose
                     );
 

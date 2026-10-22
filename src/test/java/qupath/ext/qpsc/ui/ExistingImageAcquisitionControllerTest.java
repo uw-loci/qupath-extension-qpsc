@@ -65,7 +65,6 @@ class ExistingImageAcquisitionControllerTest {
                 "JAI",
                 true,
                 null,
-                0.85,
                 RefinementChoice.NONE,
                 null,
                 Map.of(),
@@ -97,7 +96,6 @@ class ExistingImageAcquisitionControllerTest {
                 "Basler",
                 false,
                 null,
-                0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
                 Map.of(),
@@ -129,7 +127,6 @@ class ExistingImageAcquisitionControllerTest {
                 "JAI",
                 true,
                 null,
-                0.92,
                 RefinementChoice.SINGLE_TILE,
                 null,
                 Map.of(),
@@ -146,7 +143,6 @@ class ExistingImageAcquisitionControllerTest {
 
         assertTrue(config.useExistingAlignment());
         assertNull(config.selectedTransform());
-        assertEquals(0.92, config.alignmentConfidence(), 0.001);
         assertEquals(RefinementChoice.SINGLE_TILE, config.refinementChoice());
     }
 
@@ -166,7 +162,6 @@ class ExistingImageAcquisitionControllerTest {
                 "JAI",
                 true,
                 null,
-                0.85,
                 RefinementChoice.NONE,
                 overrides,
                 Map.of(),
@@ -199,7 +194,6 @@ class ExistingImageAcquisitionControllerTest {
                 "JAI",
                 true,
                 null,
-                0.85,
                 RefinementChoice.NONE,
                 null,
                 Map.of(),
@@ -229,7 +223,6 @@ class ExistingImageAcquisitionControllerTest {
                 "Basler",
                 false,
                 null,
-                0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
                 Map.of(),
@@ -248,112 +241,11 @@ class ExistingImageAcquisitionControllerTest {
         assertFalse(config.useExistingAlignment());
     }
 
-    // ==================== Confidence Threshold Tests ====================
-
-    @Test
-    @DisplayName("High confidence threshold is 0.8")
-    void testHighConfidenceThreshold() {
-        // Based on the implementation constants
-        double highThreshold = 0.8;
-
-        ExistingImageAcquisitionConfig highConfig = new ExistingImageAcquisitionConfig(
-                "TestSample",
-                new File("/test"),
-                false,
-                "ppm",
-                "20x",
-                "JAI",
-                true,
-                null,
-                0.85,
-                RefinementChoice.NONE,
-                null,
-                Map.of(),
-                null,
-                null,
-                false,
-                false,
-                null,
-                null,
-                java.util.Set.of(),
-                java.util.List.of(),
-                qupath.ext.qpsc.service.OutputFormat.OME_SINGLE,
-                null);
-
-        assertTrue(highConfig.alignmentConfidence() >= highThreshold, "85% confidence should be above high threshold");
-    }
-
-    @Test
-    @DisplayName("Medium confidence is between 0.5 and 0.8")
-    void testMediumConfidenceRange() {
-        double mediumLow = 0.5;
-        double mediumHigh = 0.8;
-
-        ExistingImageAcquisitionConfig medConfig = new ExistingImageAcquisitionConfig(
-                "TestSample",
-                new File("/test"),
-                false,
-                "ppm",
-                "20x",
-                "JAI",
-                true,
-                null,
-                0.65,
-                RefinementChoice.SINGLE_TILE,
-                null,
-                Map.of(),
-                null,
-                null,
-                false,
-                false,
-                null,
-                null,
-                java.util.Set.of(),
-                java.util.List.of(),
-                qupath.ext.qpsc.service.OutputFormat.OME_SINGLE,
-                null);
-
-        double conf = medConfig.alignmentConfidence();
-        assertTrue(conf >= mediumLow && conf < mediumHigh, "65% confidence should be in medium range");
-    }
-
-    @Test
-    @DisplayName("Low confidence is below 0.5")
-    void testLowConfidenceRange() {
-        double lowThreshold = 0.5;
-
-        ExistingImageAcquisitionConfig lowConfig = new ExistingImageAcquisitionConfig(
-                "TestSample",
-                new File("/test"),
-                false,
-                "ppm",
-                "20x",
-                "JAI",
-                true,
-                null,
-                0.35,
-                RefinementChoice.FULL_MANUAL,
-                null,
-                Map.of(),
-                null,
-                null,
-                false,
-                false,
-                null,
-                null,
-                java.util.Set.of(),
-                java.util.List.of(),
-                qupath.ext.qpsc.service.OutputFormat.OME_SINGLE,
-                null);
-
-        assertTrue(lowConfig.alignmentConfidence() < lowThreshold, "35% confidence should be below low threshold");
-    }
-
     // ==================== Manual Alignment Path Tests ====================
 
     @Test
-    @DisplayName("Manual alignment path has zero confidence")
-    void testManualAlignmentHasZeroConfidence() {
+    @DisplayName("Manual alignment path carries no saved transform")
+    void testManualAlignmentHasNoTransform() {
         ExistingImageAcquisitionConfig manualConfig = new ExistingImageAcquisitionConfig(
                 "TestSample",
                 new File("/test"),
@@ -363,7 +255,6 @@ class ExistingImageAcquisitionControllerTest {
                 "JAI",
                 false, // manual alignment
                 null,
-                0.0,
                 RefinementChoice.FULL_MANUAL,
                 null,
                 Map.of(),
@@ -379,7 +270,6 @@ class ExistingImageAcquisitionControllerTest {
                 null);
 
         assertFalse(manualConfig.useExistingAlignment());
-        assertEquals(0.0, manualConfig.alignmentConfidence(), 0.001);
         assertNull(manualConfig.selectedTransform());
     }
 
@@ -397,7 +287,6 @@ class ExistingImageAcquisitionControllerTest {
                 "JAI",
                 true,
                 null,
-                0.85,
                 RefinementChoice.NONE,
                 null,
                 Map.of(),

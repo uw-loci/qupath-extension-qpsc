@@ -75,7 +75,7 @@ import qupath.lib.projects.Project;
  * <ul>
  *   <li>TitledPane sections for organized configuration</li>
  *   <li>Real-time preview updates with debouncing</li>
- *   <li>Confidence-based recommendations</li>
+ *   <li>Refinement recommendations</li>
  *   <li>Dynamic visibility based on selections</li>
  *   <li>Persistent preferences for all fields</li>
  * </ul>
@@ -91,11 +91,6 @@ public class ExistingImageAcquisitionController {
 
     private static final String ORG_PER_CHANNEL = "Separate file per channel";
     private static final String PREF_STITCH_ORGANIZATION = "qpscStitchOrganization";
-
-    /** Confidence thresholds */
-    private static final double HIGH_CONFIDENCE = 0.8;
-
-    private static final double MEDIUM_CONFIDENCE = 0.5;
 
     /**
      * Refinement choice options.
@@ -134,7 +129,6 @@ public class ExistingImageAcquisitionController {
             // Alignment
             boolean useExistingAlignment,
             AffineTransformManager.TransformPreset selectedTransform,
-            double alignmentConfidence,
 
             // Refinement
             RefinementChoice refinementChoice,
@@ -264,7 +258,7 @@ public class ExistingImageAcquisitionController {
         private RadioButton useExistingRadio;
         private RadioButton manualAlignRadio;
         private ComboBox<AffineTransformManager.TransformPreset> transformCombo;
-        private Label confidenceLabel;
+        private Label presetAgeLabel;
         private VBox transformSelectionBox;
 
         // UI Components - Refinement Section
@@ -893,21 +887,23 @@ public class ExistingImageAcquisitionController {
                         .ifPresent(transformCombo::setValue);
             } else if (!availableTransforms.isEmpty()) {
                 // Newest, not alphabetically first: the list is name-sorted, so selectFirst()
-                // preselected a months-old preset whose age-decayed confidence then read red.
+                // preselected a months-old preset whose age then read red.
                 transformCombo.setValue(AlignmentHelper.newestPreset(availableTransforms));
             }
 
-            // Confidence label
-            confidenceLabel = new Label();
-            confidenceLabel.setStyle("-fx-font-size: 11px;");
-            updateConfidenceLabel();
+            // When the selected preset was saved: a preset stores no fit quality, so its age is
+            // all there is to show.
+            presetAgeLabel = new Label();
+            presetAgeLabel.setStyle("-fx-font-size: 11px;");
+            presetAgeLabel.setTooltip(new Tooltip(AlignmentHelper.PRESET_AGE_TOOLTIP));
+            updatePresetAgeLabel();
 
             // Note: transformCombo and useExistingRadio listeners are registered in
             // setupPreviewUpdateListeners() to avoid init-order NPEs -- they reference
             // fields created in createRefinementSection() (refinementBox, noRefineRadio, etc.)
 
             Label transformLabel = new Label("Select saved transform:");
-            transformSelectionBox.getChildren().addAll(transformLabel, transformCombo, confidenceLabel);
+            transformSelectionBox.getChildren().addAll(transformLabel, transformCombo, presetAgeLabel);
 
             // Hide scanner preset combo when only slide alignment is available
             // (no scanner preset to select -- the slide-specific alignment is used directly).
@@ -1016,7 +1012,7 @@ public class ExistingImageAcquisitionController {
             refinementRecommendationLabel.setPadding(new Insets(8));
             refinementRecommendationLabel.setStyle(bannerStyle("yellow"));
 
-            // Set default based on confidence
+            // Set the default refinement
             updateRefinementRecommendation();
 
             refinementBox
@@ -2076,30 +2072,17 @@ public class ExistingImageAcquisitionController {
             return mode == WbMode.SIMPLE || mode == WbMode.PER_ANGLE;
         }
 
-        private void updateConfidenceLabel() {
+        private void updatePresetAgeLabel() {
             AffineTransformManager.TransformPreset preset = transformCombo.getValue();
-            if (preset != null) {
-                double confidence = AlignmentHelper.calculateConfidence(preset);
-                String level =
-                        confidence >= HIGH_CONFIDENCE ? "HIGH" : (confidence >= MEDIUM_CONFIDENCE ? "MEDIUM" : "LOW");
-                String color = confidence >= HIGH_CONFIDENCE
-                        ? accentColor("green")
-                        : (confidence >= MEDIUM_CONFIDENCE ? accentColor("amber") : accentColor("red"));
-                long ageDays = AlignmentHelper.ageInDays(preset);
-                // Name the subject and the driver: this scores the SAVED SCANNER TRANSFORM by
-                // age, not the alignment the operator may have just made for this slide.
-                confidenceLabel.setText(
-                        ageDays >= 0
-                                ? String.format(
-                                        "Saved transform confidence: %s (%.0f%%) -- based on age, saved %d day%s ago",
-                                        level, confidence * 100, ageDays, ageDays == 1 ? "" : "s")
-                                : String.format(
-                                        "Saved transform confidence: %s (%.0f%%) -- based on age",
-                                        level, confidence * 100));
-                confidenceLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
-            } else {
-                confidenceLabel.setText("");
-            }
+            presetAgeLabel.setText(AlignmentHelper.presetAgeText(preset));
+            String color =
+                    switch (AlignmentHelper.ageBand(AlignmentHelper.ageInDays(preset))) {
+                        case CURRENT -> accentColor("green");
+                        case AGING -> accentColor("amber");
+                        case OLD -> accentColor("red");
+                        case UNKNOWN -> ThemeColors.MUTED;
+                    };
+            presetAgeLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
         }
 
         private void updateRefinementRecommendation() {
@@ -2141,29 +2124,18 @@ public class ExistingImageAcquisitionController {
                 return;
             }
 
-            AffineTransformManager.TransformPreset preset = transformCombo.getValue();
-            double confidence = preset != null ? AlignmentHelper.calculateConfidence(preset) : 0.5;
-
-            String recommendation;
-            if (confidence >= HIGH_CONFIDENCE) {
-                recommendation = "[i] Recommendation: Proceed without refinement (high confidence)";
-                noRefineRadio.setSelected(true);
-            } else {
-                // Both medium and low confidence default to single-tile refinement.
-                // An existing scanner preset is selected here (the refinement
-                // section only shows when "Use existing alignment" is active, which
-                // requires at least one saved transform), so there is always an
-                // alignment to build on. Single-tile verifies/corrects it in 2-3 min.
-                // Defaulting LOW confidence to Full manual meant an aged-but-usable
-                // preset (age penalty alone drops confidence below 0.5 after ~50
-                // days) always auto-selected a 10-15 min re-alignment from scratch.
-                // Full manual remains available as an explicit choice.
-                singleTileRadio.setSelected(true);
-                recommendation = confidence >= MEDIUM_CONFIDENCE
-                        ? "[i] Recommendation: Single-tile refinement (medium confidence)"
-                        : "[i] Recommendation: Single-tile refinement (low confidence -- verify the existing "
-                                + "alignment; choose Full manual to re-align from scratch)";
-            }
+            // A saved scanner preset is selected here (the refinement section only shows when
+            // "Use existing alignment" is active). Nothing about a preset says it still fits this
+            // slide on this stage, so single-tile refinement verifies it in 2-3 minutes. Full
+            // manual stays an explicit choice: defaulting old presets to it meant a 10-15 minute
+            // re-alignment from scratch for presets that were still usable.
+            long ageDays = AlignmentHelper.ageInDays(transformCombo.getValue());
+            singleTileRadio.setSelected(true);
+            String recommendation = AlignmentHelper.ageBand(ageDays) == AlignmentHelper.PresetAgeBand.OLD
+                    ? "[i] Recommendation: Single-tile refinement (the saved transform is " + ageDays
+                            + " days old -- verify it; choose Full manual to re-align from scratch)"
+                    : "[i] Recommendation: Single-tile refinement (verifies the saved transform on this"
+                            + " slide in 2-3 minutes)";
 
             refinementRecommendationLabel.setText(recommendation);
         }
@@ -2203,7 +2175,7 @@ public class ExistingImageAcquisitionController {
             // These listeners are registered here (not in createAlignmentSection) because
             // they reference fields from createRefinementSection (refinementBox, radio buttons, etc.)
             transformCombo.valueProperty().addListener((obs, old, preset) -> {
-                updateConfidenceLabel();
+                updatePresetAgeLabel();
                 updateRefinementRecommendation();
                 if (preset != null) {
                     PersistentPreferences.setLastSelectedTransform(preset.getName());
@@ -2664,7 +2636,6 @@ public class ExistingImageAcquisitionController {
 
                 boolean useExisting = useExistingRadio.isSelected();
                 AffineTransformManager.TransformPreset transform = useExisting ? transformCombo.getValue() : null;
-                double confidence = transform != null ? AlignmentHelper.calculateConfidence(transform) : 0.0;
 
                 RefinementChoice refinement = RefinementChoice.NONE;
                 if (singleTileRadio.isSelected()) {
@@ -2787,7 +2758,6 @@ public class ExistingImageAcquisitionController {
                         detector,
                         useExisting,
                         transform,
-                        confidence,
                         refinement,
                         angleOverrides,
                         channelIntensityOverrides,

@@ -73,7 +73,7 @@ Current real sections, top to bottom:
 |---|----------------|-------|
 | 1 | Project & Sample | Sample Name, Project |
 | 2 | Hardware Configuration | Modality, Objective, Detector, WB Mode |
-| 3 | Alignment Configuration | Use existing / manual; saved transform; confidence |
+| 3 | Alignment Configuration | Use existing / manual; saved transform; its save date and age |
 | 4 | Refinement Options | Proceed without / Single-tile / Multi-tile / Full manual |
 | 5 | Modality-Specific Options | Autofocus + Modality Options (PPM Polarization Angles, Save as MDA) -- script mislabels this "Advanced Options" |
 | 6 | Z-Stack Options | Collapsed section -- new since the script was written |

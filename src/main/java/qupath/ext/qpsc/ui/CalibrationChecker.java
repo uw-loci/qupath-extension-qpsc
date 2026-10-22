@@ -562,9 +562,6 @@ public class CalibrationChecker {
     // Microscope alignment
     // ------------------------------------------------------------------
 
-    /** Number of days after which the alignment age turns yellow. */
-    public static final int ALIGNMENT_AGE_WARN_DAYS = 14;
-
     /**
      * Checks whether a microscope alignment transform exists and reports its
      * age in days since creation. Quality scoring was removed because the
@@ -625,7 +622,9 @@ public class CalibrationChecker {
                 message = String.format("Aligned %d days ago", days);
             }
 
-            Status level = (days >= ALIGNMENT_AGE_WARN_DAYS) ? Status.WARNING : Status.READY;
+            Status level = (days >= qupath.ext.qpsc.controller.workflow.AlignmentHelper.PRESET_AGING_DAYS)
+                    ? Status.WARNING
+                    : Status.READY;
             return new StepStatus(level, message);
 
         } catch (Exception e) {

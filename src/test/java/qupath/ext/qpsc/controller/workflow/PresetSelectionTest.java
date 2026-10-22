@@ -13,8 +13,8 @@ import qupath.ext.qpsc.utilities.AffineTransformManager.TransformPreset;
  * Which saved transform a dialog preselects, and how old it is.
  *
  * <p>The preset list is sorted by name, so the old "select the first one" preselected
- * whichever name sorted first -- on PPM a March preset, months old, whose age-decayed
- * confidence rendered as red "LOW" right after the operator made a fresh alignment.
+ * whichever name sorted first -- on PPM a March preset, months old, whose age then
+ * rendered in red right after the operator made a fresh alignment.
  */
 class PresetSelectionTest {
 
@@ -88,19 +88,30 @@ class PresetSelectionTest {
     }
 
     @Test
-    void confidenceIsAtItsFloorForAnythingPastTheAgeCap() {
-        // 0.65 base - 0.003/day capped at 0.3. So ~100 days is the floor, and a preset any
-        // older cannot read better than LOW no matter how well it works -- the reason the
-        // label must say it is measuring age.
-        double hundredDays = AlignmentHelper.calculateConfidence(preset("x", daysAgo(100)));
-        double twoYears = AlignmentHelper.calculateConfidence(preset("x", daysAgo(730)));
-        assertEquals(hundredDays, twoYears, 1e-9);
-        assertTrue(hundredDays < 0.5, "expected the floor to read as LOW, got " + hundredDays);
+    void ageBandsSplitAtFourteenAndNinetyDays() {
+        assertEquals(AlignmentHelper.PresetAgeBand.CURRENT, AlignmentHelper.ageBand(0));
+        assertEquals(AlignmentHelper.PresetAgeBand.CURRENT, AlignmentHelper.ageBand(13));
+        assertEquals(AlignmentHelper.PresetAgeBand.AGING, AlignmentHelper.ageBand(14));
+        assertEquals(AlignmentHelper.PresetAgeBand.AGING, AlignmentHelper.ageBand(89));
+        assertEquals(AlignmentHelper.PresetAgeBand.OLD, AlignmentHelper.ageBand(90));
+        assertEquals(AlignmentHelper.PresetAgeBand.UNKNOWN, AlignmentHelper.ageBand(-1));
     }
 
     @Test
-    void aFreshPresetReadsBetterThanTheFloor() {
-        assertTrue(AlignmentHelper.calculateConfidence(preset("x", daysAgo(0)))
-                > AlignmentHelper.calculateConfidence(preset("x", daysAgo(200))));
+    void aJustSavedPresetSaysTodayAndCarriesNoScore() {
+        // The bug report: a transform saved seconds ago read "MEDIUM (70%)", because the old
+        // score started saved presets at 65% + 5% and could never reach HIGH.
+        String text = AlignmentHelper.presetAgeText(preset("x", daysAgo(0)));
+        assertTrue(text.startsWith("Saved transform: saved "), text);
+        assertTrue(text.endsWith("(today)"), text);
+        assertFalse(text.contains("%"), text);
+    }
+
+    @Test
+    void ageTextNamesDaysAndHandlesMissingDates() {
+        assertTrue(AlignmentHelper.presetAgeText(preset("x", daysAgo(1))).endsWith("(1 day ago)"));
+        assertTrue(AlignmentHelper.presetAgeText(preset("x", daysAgo(45))).endsWith("(45 days ago)"));
+        assertEquals("Saved transform: save date unknown", AlignmentHelper.presetAgeText(preset("x", null)));
+        assertEquals("", AlignmentHelper.presetAgeText(null));
     }
 }

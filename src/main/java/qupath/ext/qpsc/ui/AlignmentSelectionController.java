@@ -30,7 +30,7 @@ import qupath.lib.gui.QuPathGUI;
  * <p>Smart defaults are applied based on:
  * <ul>
  *   <li>Availability of saved transforms</li>
- *   <li>Confidence score of the best available transform</li>
+ *   <li>When the selected saved transform was saved</li>
  *   <li>User's previous preferences</li>
  * </ul>
  */
@@ -42,14 +42,30 @@ public class AlignmentSelectionController {
      *
      * @param useExistingAlignment Whether user selected to use existing alignment
      * @param selectedTransform The transform preset selected (null if manual)
-     * @param confidence Confidence score of the selected alignment (0.0-1.0)
      * @param wasAutoSelected Whether the choice was auto-selected based on smart defaults
      */
     public record AlignmentChoice(
             boolean useExistingAlignment,
             AffineTransformManager.TransformPreset selectedTransform,
-            double confidence,
             boolean wasAutoSelected) {}
+
+    /**
+     * Shows when the preset was saved, colored by age (green, amber, red).
+     *
+     * @param label the label to fill
+     * @param preset the selected preset; null clears the label
+     */
+    private static void showPresetAge(Label label, AffineTransformManager.TransformPreset preset) {
+        label.setText(AlignmentHelper.presetAgeText(preset));
+        String color =
+                switch (AlignmentHelper.ageBand(AlignmentHelper.ageInDays(preset))) {
+                    case CURRENT -> "#2E7D32";
+                    case AGING -> "#F57F17";
+                    case OLD -> "#C62828";
+                    case UNKNOWN -> ThemeColors.MUTED;
+                };
+        label.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
+    }
     /**
      * Updates the transform information display based on the selected transform.
      * Extracted to a separate method to avoid code duplication between initial display
@@ -279,50 +295,17 @@ public class AlignmentSelectionController {
                             transformCombo.getValue().getNotes()));
                 }
 
-                // Confidence label - shows calculated confidence for selected transform
-                Label confidenceLabel = new Label();
-                confidenceLabel.setStyle("-fx-font-size: 11px;");
-                confidenceLabel.setDisable(!useExistingRadio.isSelected());
-
-                // Update confidence when transform changes
-                transformCombo.getSelectionModel().selectedItemProperty().addListener((obs, old, preset) -> {
-                    if (preset != null) {
-                        double conf = AlignmentHelper.calculateConfidence(preset);
-                        String level = conf >= 0.8 ? "HIGH" : (conf >= 0.5 ? "MEDIUM" : "LOW");
-                        String color = conf >= 0.8 ? "#2E7D32" : (conf >= 0.5 ? "#F57F17" : "#C62828");
-                        long ageDays = AlignmentHelper.ageInDays(preset);
-                        confidenceLabel.setText(
-                                ageDays >= 0
-                                        ? String.format(
-                                                "Saved transform confidence: %s (%.0f%%) -- based on age, saved %d day%s ago",
-                                                level, conf * 100, ageDays, ageDays == 1 ? "" : "s")
-                                        : String.format(
-                                                "Saved transform confidence: %s (%.0f%%) -- based on age",
-                                                level, conf * 100));
-                        confidenceLabel.setStyle(
-                                "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
-                    } else {
-                        confidenceLabel.setText("");
-                    }
-                });
-
-                // Trigger initial confidence update
-                if (transformCombo.getValue() != null) {
-                    double conf = AlignmentHelper.calculateConfidence(transformCombo.getValue());
-                    String level = conf >= 0.8 ? "HIGH" : (conf >= 0.5 ? "MEDIUM" : "LOW");
-                    String color = conf >= 0.8 ? "#2E7D32" : (conf >= 0.5 ? "#F57F17" : "#C62828");
-                    long ageDays = AlignmentHelper.ageInDays(transformCombo.getValue());
-                    confidenceLabel.setText(
-                            ageDays >= 0
-                                    ? String.format(
-                                            "Saved transform confidence: %s (%.0f%%) -- based on age, saved %d day%s ago",
-                                            level, conf * 100, ageDays, ageDays == 1 ? "" : "s")
-                                    : String.format(
-                                            "Saved transform confidence: %s (%.0f%%) -- based on age",
-                                            level, conf * 100));
-                    confidenceLabel.setStyle(
-                            "-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: " + color + ";");
-                }
+                // Age label: when the selected preset was saved. A preset stores no fit quality,
+                // so its age is all there is to show.
+                Label presetAgeLabel = new Label();
+                presetAgeLabel.setStyle("-fx-font-size: 11px;");
+                presetAgeLabel.setTooltip(new Tooltip(AlignmentHelper.PRESET_AGE_TOOLTIP));
+                presetAgeLabel.setDisable(!useExistingRadio.isSelected());
+                transformCombo
+                        .getSelectionModel()
+                        .selectedItemProperty()
+                        .addListener((obs, old, preset) -> showPresetAge(presetAgeLabel, preset));
+                showPresetAge(presetAgeLabel, transformCombo.getValue());
 
                 // Note: Refinement options moved to RefinementSelectionController
                 Label refinementNote = new Label("[i] Refinement options available in next step");
@@ -336,14 +319,14 @@ public class AlignmentSelectionController {
                                 new Label("Select saved transform:"),
                                 transformCombo,
                                 detailsArea,
-                                confidenceLabel,
+                                presetAgeLabel,
                                 refinementNote);
 
                 // Enable/disable based on radio selection
                 useExistingRadio.selectedProperty().addListener((obs, old, selected) -> {
                     transformCombo.setDisable(!selected);
                     detailsArea.setDisable(!selected);
-                    confidenceLabel.setDisable(!selected);
+                    presetAgeLabel.setDisable(!selected);
                     refinementNote.setDisable(!selected);
                     // Save preference when changed
                     PersistentPreferences.setUseExistingAlignment(selected);
@@ -494,16 +477,16 @@ public class AlignmentSelectionController {
                     if (buttonType == okButton) {
                         if (useExistingRadio.isSelected() && transformCombo.getValue() != null) {
                             AffineTransformManager.TransformPreset selected = transformCombo.getValue();
-                            double confidence = AlignmentHelper.calculateConfidence(selected);
                             logger.info(
-                                    "Dialog result: Use existing alignment - transform: '{}', confidence: {}, auto-selected: {}",
+                                    "Dialog result: Use existing alignment - transform: '{}', saved {} days ago,"
+                                            + " auto-selected: {}",
                                     selected.getName(),
-                                    String.format("%.2f", confidence),
+                                    AlignmentHelper.ageInDays(selected),
                                     wasAutoSelected[0]);
-                            return new AlignmentChoice(true, selected, confidence, wasAutoSelected[0]);
+                            return new AlignmentChoice(true, selected, wasAutoSelected[0]);
                         } else {
                             logger.info("Dialog result: Manual alignment selected");
-                            return new AlignmentChoice(false, null, 0.0, wasAutoSelected[0]);
+                            return new AlignmentChoice(false, null, wasAutoSelected[0]);
                         }
                     }
                     return null;
