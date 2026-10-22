@@ -160,6 +160,7 @@ public class AcquisitionCommandBuilder {
     // the birefringence is computed from high-precision inputs (null/false = the
     // legacy 8-bit path, no flag emitted).
     private Boolean ppmHighBitDepth;
+    private String displayColormap;
 
     // Preferred first AF tile index (from WSI tissue scoring)
     private Integer preferredAfTile;
@@ -650,6 +651,16 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
+     * LC-PolScope: the colour map of the display-only orientation colour image for this run
+     * ({@code uniform}, {@code ppm} or {@code hsv}), sent as {@code --display-colormap}; it
+     * overrides {@code reconstruction.display_colormap}. Null or blank sends nothing.
+     */
+    public AcquisitionCommandBuilder displayColormap(String colormap) {
+        this.displayColormap = (colormap == null || colormap.isBlank()) ? null : colormap;
+        return this;
+    }
+
+    /**
      * Sets the preferred tile index for the first autofocus position,
      * determined by scoring WSI tissue content at each tile location.
      *
@@ -1073,6 +1084,10 @@ public class AcquisitionCommandBuilder {
         // Add opt-in high-bit-depth PPM capture flag (only when explicitly enabled)
         if (Boolean.TRUE.equals(ppmHighBitDepth)) {
             args.addAll(Arrays.asList("--ppm-high-bit-depth", "true"));
+        }
+
+        if (displayColormap != null) {
+            args.addAll(Arrays.asList("--display-colormap", displayColormap));
         }
 
         // Add preferred AF tile from WSI tissue scoring

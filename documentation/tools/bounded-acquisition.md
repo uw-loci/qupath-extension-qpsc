@@ -106,6 +106,10 @@ When using a PPM modality, the acquisition dialog includes a **PPM Polarization 
 
 The angle selection and override controls are set upfront in this dialog -- there is no per-image angle popup during acquisition. This design supports unattended multi-slide workflows.
 
+**Orientation colour image (LC-PolScope only):**
+
+The LC-PolScope panel has an **Orientation colour image** dropdown that chooses the colour map of the display-only `orientation_color` image for the next runs. The choices are **As in the config** (the default; uses `reconstruction.display_colormap` from the microscope YAML), **Uniform lightness**, **PPM colours** (listed only when the config has a PPM hue calibration) and **HSV rainbow (OpenPolScope)**. The choice is remembered across QuPath sessions. It changes the tiles reconstructed from then on and never the retardance or orientation values; tiles already written keep their colours. See [CHANNELS.md](../CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization) for what each map shows.
+
 **Dedicated focus channel (optional):**
 
 Autofocus normally runs under whichever channel the previous tile happened to leave on the light path, so which channel focuses the run depends on acquisition order. Ticking **Focus on a dedicated channel** names one channel to focus on and gives it its own exposure and intensity:

@@ -161,6 +161,8 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         ui.useEqualExposureStates("LC-PolScope states");
         // Calibration, background, camera and adapter status before the stage moves; each used
         // to appear only as a log line at the first tile.
+        // Each panel goes on top, so the readiness box, added last, is read first.
+        ui.addModalityPanel(new qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane());
         ui.addModalityPanel(new qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadinessPane());
         ui.addModalityNotice(
                 "Orientation is axial: stitching and downsampling need care",
@@ -246,6 +248,8 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
         // Oryx ORX-10G-51S5M is the monochrome variant -- no Bayer mosaic.
         builder.enableDebayer(false);
+        // The orientation colour map chosen in the acquisition panel; null = the config's own.
+        builder.displayColormap(qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane.selectedColormap());
     }
 
     @Override
