@@ -125,10 +125,11 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design st
 | Full Range | Button | Reset Min/Max to the camera's full range (2^bits - 1, e.g. 0-4095 for a 12-bit camera delivering 16-bit frames) and clear the persistent Always Auto-Scale flag. |
 | Auto Scale | Button | One-shot rescale of the contrast range to the current frame. Does NOT flip the persistent Always Auto-Scale flag -- use it when you want a single rescale without committing to per-frame auto-scale. |
 | Always Auto-Scale | CheckBox | When checked, every live frame and acquired tile is auto-scaled (drives the persistent `autoScale` flag). When unchecked, your manual Min/Max sliders are preserved. Replaces the previous always-on per-tile rescale, which was breaking non-fluorescence acquisitions whose contrast was already correctly set. |
+| RGB Histogram | CheckBox | Shown only while the frames are RGB. When checked, the histogram draws the red, green and blue distributions as three overlaid colored curves on one count scale, instead of the single brightness histogram. Display only: Auto Scale, Always Auto-Scale and the Min/Max range still use brightness, and the same range applies to all three channels. |
 
 Each bit depth keeps its own Min/Max. An 8-bit frame shown between 16-bit ones, such as an 8-bit tile, starts at its own full range and leaves the range you set for the camera untouched; the camera's frames return to that range.
 
-The histogram shows a 256-bin luminance distribution updated in real time, drawn on a linear count scale. Its range is the camera's bit depth, not the 16-bit buffer's: a 12-bit camera delivering 16-bit frames spans 0-4095, and the frame info line reads "12-bit in 16". Per-channel (R/G/B) saturation percentages are displayed below the histogram, counted at the camera's maximum value, and turn red when any channel exceeds 1% saturation.
+The histogram shows a 256-bin luminance distribution (brightness = 0.299 R + 0.587 G + 0.114 B for an RGB frame) updated in real time, drawn on a linear count scale. Its range is the camera's bit depth, not the 16-bit buffer's: a 12-bit camera delivering 16-bit frames spans 0-4095, and the frame info line reads "12-bit in 16". Per-channel (R/G/B) saturation percentages are displayed below the histogram, counted at the camera's maximum value, and turn red when any channel exceeds 1% saturation.
 
 #### Docking the histogram on the right
 

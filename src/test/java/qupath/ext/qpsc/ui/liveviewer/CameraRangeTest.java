@@ -88,4 +88,24 @@ class CameraRangeTest {
         assertFalse(LiveViewerWindow.isComputedOutputDirectory("-7"));
         assertFalse(LiveViewerWindow.isComputedOutputDirectory("DAPI"));
     }
+
+    @Test
+    void rgbCurvesShareOneCountScale() {
+        int[] red = new int[256];
+        int[] green = new int[256];
+        int[] blue = new int[256];
+        red[40] = 300;
+        green[90] = 1200;
+        blue[200] = 50;
+        blue[255] = 90_000; // clipped: left out of the scale, as for the brightness histogram
+        assertEquals(1200, HistogramView.peakCount(new int[][] {red, green, blue}), 1e-9);
+    }
+
+    @Test
+    void channelValuesBinOnTheCameraScale() {
+        assertEquals(0, HistogramView.binOf(0, 255));
+        assertEquals(255, HistogramView.binOf(255, 255));
+        assertEquals(127, HistogramView.binOf(2048, 4095));
+        assertEquals(255, HistogramView.binOf(70000, 65535), "never past the last bin");
+    }
 }

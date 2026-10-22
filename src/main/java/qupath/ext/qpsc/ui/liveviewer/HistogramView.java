@@ -47,11 +47,15 @@ public class HistogramView extends VBox {
     private final Button fullRangeBtn;
     private final Button autoScaleBtn;
     private final CheckBox alwaysAutoScale;
+    private final CheckBox rgbHistogram;
     private final ContrastSettings contrastSettings;
 
     private boolean vertical = false;
 
     private int[] currentHistogram = new int[256];
+    // Per-channel histograms of the last RGB frame (red, green, blue), drawn as three curves
+    // when "RGB Histogram" is ticked. Null after a grayscale frame.
+    private int[][] currentChannelHistograms = null;
     private int currentMaxValue = 255;
 
     // True while updateSlidersFromSettings() moves the sliders. Their listeners exist for the
@@ -119,6 +123,16 @@ public class HistogramView extends VBox {
                         + "When unchecked, your manual Min/Max sliders are preserved.\n"
                         + "Auto Scale button always does a one-shot rescale."));
         alwaysAutoScale.setSelected(contrastSettings.isAutoScale());
+
+        // Shown only while the frames are RGB. Display only: auto-scale and the Min/Max range
+        // stay on brightness, which is what the image is rendered with.
+        rgbHistogram = new CheckBox("RGB Histogram");
+        rgbHistogram.setTooltip(new javafx.scene.control.Tooltip(
+                "Draw the red, green and blue histograms as three curves instead of one brightness"
+                        + " histogram.\nAuto Scale and Always Auto-Scale still use brightness."));
+        rgbHistogram.setVisible(false);
+        rgbHistogram.setManaged(false);
+        rgbHistogram.selectedProperty().addListener((obs, oldVal, newVal) -> drawHistogram());
 
         fullRangeBtn.setOnAction(e -> {
             contrastSettings.setDisplayMin(0);
@@ -204,7 +218,7 @@ public class HistogramView extends VBox {
             // Intensity runs low-at-bottom / high-at-top in vertical mode, so
             // put Max above the histogram and Min below it. A single bottom row
             // with both labels makes it impossible to tell which end is which.
-            VBox buttons = new VBox(4, fullRangeBtn, autoScaleBtn, alwaysAutoScale);
+            VBox buttons = new VBox(4, fullRangeBtn, autoScaleBtn, alwaysAutoScale, rgbHistogram);
             buttons.setPadding(new Insets(2, 0, 0, 0));
 
             getChildren().addAll(maxLabel, histArea, minLabel, meanLabel, buttons);
@@ -234,7 +248,7 @@ public class HistogramView extends VBox {
             HBox maxRow = new HBox(4, maxLabel, maxSlider);
             maxRow.setAlignment(Pos.CENTER_LEFT);
 
-            HBox buttonRow = new HBox(8, fullRangeBtn, autoScaleBtn, alwaysAutoScale);
+            HBox buttonRow = new HBox(8, fullRangeBtn, autoScaleBtn, alwaysAutoScale, rgbHistogram);
             buttonRow.setAlignment(Pos.CENTER);
             buttonRow.setPadding(new Insets(2, 0, 0, 0));
 
@@ -272,6 +286,7 @@ public class HistogramView extends VBox {
 
         long sumR = 0, sumG = 0, sumB = 0;
         long satR = 0, satG = 0, satB = 0;
+        int[][] channelHistograms = channels == 1 ? null : new int[3][256];
 
         if (channels == 1) {
             // Grayscale
@@ -311,6 +326,9 @@ public class HistogramView extends VBox {
                 if (r >= currentMaxValue) satR++;
                 if (g >= currentMaxValue) satG++;
                 if (b >= currentMaxValue) satB++;
+                channelHistograms[0][binOf(r, currentMaxValue)]++;
+                channelHistograms[1][binOf(g, currentMaxValue)]++;
+                channelHistograms[2][binOf(b, currentMaxValue)]++;
                 int luminance = (int) (0.299 * r + 0.587 * g + 0.114 * b);
                 int bin = luminance * 255 / currentMaxValue;
                 bin = Math.min(bin, 255);
@@ -319,6 +337,12 @@ public class HistogramView extends VBox {
         }
 
         currentHistogram = histogram;
+        currentChannelHistograms = channelHistograms;
+        boolean rgb = channelHistograms != null;
+        if (rgbHistogram.isVisible() != rgb) {
+            rgbHistogram.setVisible(rgb);
+            rgbHistogram.setManaged(rgb);
+        }
 
         // Update mean label with raw pixel means and saturation percentages
         if (pixelCount > 0) {
@@ -394,12 +418,36 @@ public class HistogramView extends VBox {
         gc.setFill(Color.rgb(40, 40, 80));
         gc.fillRect(rangeMin * barWidth, 0, (rangeMax - rangeMin) * barWidth, h);
 
-        // Bars (rise from the bottom)
-        gc.setFill(Color.LIGHTGRAY);
-        for (int i = 0; i < 256; i++) {
-            if (currentHistogram[i] > 0) {
-                double barHeight = Math.min(1.0, currentHistogram[i] / peak) * (h - 2);
-                gc.fillRect(i * barWidth, h - barHeight, Math.max(barWidth, 1), barHeight);
+        if (showingRgb()) {
+            // Three curves on one count scale, so their heights compare.
+            double rgbPeak = peakCount(currentChannelHistograms);
+            for (int c = 0; c < 3; c++) {
+                int[] hist = currentChannelHistograms[c];
+                double[] xs = new double[258];
+                double[] ys = new double[258];
+                for (int i = 0; i < 256; i++) {
+                    xs[i + 1] = (i + 0.5) * barWidth;
+                    ys[i + 1] = h - Math.min(1.0, hist[i] / rgbPeak) * (h - 2);
+                }
+                xs[0] = 0;
+                ys[0] = h;
+                xs[257] = canvasWidth;
+                ys[257] = h;
+                gc.setFill(CHANNEL_FILLS[c]);
+                gc.fillPolygon(xs, ys, 258);
+                gc.setStroke(CHANNEL_LINES[c]);
+                gc.setLineWidth(1);
+                gc.strokePolyline(
+                        java.util.Arrays.copyOfRange(xs, 1, 257), java.util.Arrays.copyOfRange(ys, 1, 257), 256);
+            }
+        } else {
+            // Bars (rise from the bottom)
+            gc.setFill(Color.LIGHTGRAY);
+            for (int i = 0; i < 256; i++) {
+                if (currentHistogram[i] > 0) {
+                    double barHeight = Math.min(1.0, currentHistogram[i] / peak) * (h - 2);
+                    gc.fillRect(i * barWidth, h - barHeight, Math.max(barWidth, 1), barHeight);
+                }
             }
         }
 
@@ -432,13 +480,36 @@ public class HistogramView extends VBox {
         gc.setFill(Color.rgb(40, 40, 80));
         gc.fillRect(0, yRangeTop, w, yRangeBot - yRangeTop);
 
-        // Bars (extend rightward from the left edge)
-        gc.setFill(Color.LIGHTGRAY);
-        for (int i = 0; i < 256; i++) {
-            if (currentHistogram[i] > 0) {
-                double barLen = Math.min(1.0, currentHistogram[i] / peak) * (w - 2);
-                double y = h - (i + 1) * barHeight;
-                gc.fillRect(0, y, barLen, Math.max(barHeight, 1));
+        if (showingRgb()) {
+            double rgbPeak = peakCount(currentChannelHistograms);
+            for (int c = 0; c < 3; c++) {
+                int[] hist = currentChannelHistograms[c];
+                double[] xs = new double[258];
+                double[] ys = new double[258];
+                for (int i = 0; i < 256; i++) {
+                    xs[i + 1] = Math.min(1.0, hist[i] / rgbPeak) * (w - 2);
+                    ys[i + 1] = h - (i + 0.5) * barHeight;
+                }
+                xs[0] = 0;
+                ys[0] = h;
+                xs[257] = 0;
+                ys[257] = 0;
+                gc.setFill(CHANNEL_FILLS[c]);
+                gc.fillPolygon(xs, ys, 258);
+                gc.setStroke(CHANNEL_LINES[c]);
+                gc.setLineWidth(1);
+                gc.strokePolyline(
+                        java.util.Arrays.copyOfRange(xs, 1, 257), java.util.Arrays.copyOfRange(ys, 1, 257), 256);
+            }
+        } else {
+            // Bars (extend rightward from the left edge)
+            gc.setFill(Color.LIGHTGRAY);
+            for (int i = 0; i < 256; i++) {
+                if (currentHistogram[i] > 0) {
+                    double barLen = Math.min(1.0, currentHistogram[i] / peak) * (w - 2);
+                    double y = h - (i + 1) * barHeight;
+                    gc.fillRect(0, y, barLen, Math.max(barHeight, 1));
+                }
             }
         }
 
@@ -447,6 +518,35 @@ public class HistogramView extends VBox {
         gc.setLineWidth(1);
         gc.strokeLine(0, yRangeBot, w, yRangeBot);
         gc.strokeLine(0, yRangeTop, w, yRangeTop);
+    }
+
+    private static final Color[] CHANNEL_FILLS = {
+        Color.rgb(230, 60, 60, 0.35), Color.rgb(60, 200, 60, 0.35), Color.rgb(70, 120, 255, 0.35)
+    };
+    private static final Color[] CHANNEL_LINES = {
+        Color.rgb(255, 90, 90), Color.rgb(90, 230, 90), Color.rgb(110, 160, 255)
+    };
+
+    /** True when the last frame was RGB and "RGB Histogram" is ticked. */
+    private boolean showingRgb() {
+        return rgbHistogram.isSelected() && currentChannelHistograms != null;
+    }
+
+    /** The 0..255 histogram bin of {@code value} on a scale whose top is {@code maxValue}. */
+    static int binOf(int value, int maxValue) {
+        return Math.min(255, (int) ((long) value * 255 / Math.max(1, maxValue)));
+    }
+
+    /**
+     * The count a full-height curve stands for when several histograms share one axis: the
+     * largest of their {@link #peakCount(int[])} values.
+     */
+    static double peakCount(int[][] histograms) {
+        double peak = 1;
+        for (int[] histogram : histograms) {
+            peak = Math.max(peak, peakCount(histogram));
+        }
+        return peak;
     }
 
     /**
