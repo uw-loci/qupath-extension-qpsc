@@ -25,6 +25,7 @@ import qupath.ext.qpsc.controller.MakePortableWorkflow;
 import qupath.ext.qpsc.controller.MicroscopeSwitcher;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.RegisterObjectiveWorkflow;
+import qupath.ext.qpsc.display.orientation.OrientationColorViewWindow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -696,6 +697,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // Orientation Colour View (display only; no microscope, no files written)
+        MenuItem orientationColourViewOption = new MenuItem(res.getString("menu.orientationColourView"));
+        setMenuItemTooltip(
+                orientationColourViewOption,
+                "Colour an LC-PolScope orientation image live, with its retardance image setting the "
+                        + "brightness. Change the colour map and brightness ceiling and see it at once; "
+                        + "nothing is re-stitched or saved.");
+        orientationColourViewOption.setOnAction(e -> OrientationColorViewWindow.show(qupath));
+
         // Make Project Portable (doesn't need microscope connection)
         MenuItem makePortableOption = new MenuItem("Make Project Portable...");
         setMenuItemTooltip(
@@ -824,6 +834,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         new SeparatorMenuItem(),
                         stitchingRecoveryOption,
                         stitchMicroManagerFolderOption,
+                        new SeparatorMenuItem(),
+                        orientationColourViewOption,
                         new SeparatorMenuItem(),
                         makePortableOption,
                         exportSpatialSceneOption);

@@ -54,6 +54,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... |
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... |
 | Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... |
+| [Orientation Colour View](#orientation-colour-view) | Colour an LC-PolScope orientation image live, brightness from its retardance image; nothing saved | Extensions > QP Scope > Utilities > Project Tools > Orientation Colour View... |
 | Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... |
 | [Export Spatial Relationships](#export-spatial-relationships-ome-ngff-06) | Write how the project's images relate to each other and to the stage as OME-NGFF 0.6 scene metadata | Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... |
 | **Utilities > Microscope Configuration** | | |
@@ -456,6 +457,25 @@ Standalone stitching utility for tile folders acquired with MicroManager 2.0. Un
 - **Axis inversion controls:** If the microscope's MicroManager configuration inverts an axis (X or Y), the tiles are laid out mirrored unless you negate that coordinate before stitching. Two checkboxes ("Invert X axis", "Invert Y axis") default to the current scope's stage polarity but can be overridden to match the original acquisition hardware configuration (useful when stitching data acquired on a different microscope).
 
 **Access:** Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder...
+
+---
+
+## Orientation Colour View
+
+Colours an LC-PolScope orientation image on screen, with the retardance image from the same acquisition setting the brightness. Change the colour map or the brightness ceiling and the view updates at once. Nothing is re-stitched, re-acquired or written. It reads the stitched images' tiles for what is on screen, at the current zoom level, so a whole slide costs no more than one screen.
+
+**Use:** open an LC-PolScope `..._orientation` or `..._retardance` image from the project, open the tool, and press **Show on viewer**. The other half is found by name: the two names differ only in `orientation` / `retardance`, as one acquisition writes them. While the view is on, every LC-PolScope retardance or orientation image you open is coloured; other images show nothing.
+
+| Control | What it does |
+|---|---|
+| Colour map | **Uniform lightness** (every orientation equally light at equal retardance), **PPM colours** (listed only when the microscope config has a PPM hue calibration) or **HSV rainbow (OpenPolScope)**. See [CHANNELS.md](CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization). |
+| Full brightness at | The retardance, in nm, shown at full brightness; anything above it is at full brightness. Starts at the config's `display_retardance_ceiling_nm` (20 nm when there is none). |
+| Colour only | Ignore retardance: every pixel at full brightness. Empty background then shows as noisy colour. Also the mode used when no retardance image is found. |
+| Show on viewer / Hide | Turns the view on or off. Closing the window leaves it on. |
+
+The angle registration (`display_orientation_sign`, `display_orientation_offset_deg`) is read from the microscope config and stated in the window. Settings are remembered across sessions. The view uses QuPath's overlay opacity slider, and it shares the viewer's pixel-overlay slot with a pixel classifier preview: turning one on replaces the other. It is display only. Measure on the retardance and orientation images.
+
+**Access:** Extensions > QP Scope > Utilities > Project Tools > Orientation Colour View...
 
 ---
 
