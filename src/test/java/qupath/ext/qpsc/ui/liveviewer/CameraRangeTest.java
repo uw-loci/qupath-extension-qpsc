@@ -44,4 +44,48 @@ class CameraRangeTest {
         assertEquals(800, HistogramView.peakCount(hist), 1e-9);
         assertEquals(1, HistogramView.peakCount(new int[256]), 1e-9);
     }
+
+    @Test
+    void anEightBitTileDoesNotClampTheSixteenBitRange() {
+        // LC-PolScope, Hamamatsu, 2026-10-21: the 8-bit orientation-colour tile previewed between
+        // 16-bit camera frames clamped the range to 254..255 and every camera frame went white.
+        ContrastSettings c = new ContrastSettings();
+        c.useScale(65535);
+        c.setDisplayMin(1200);
+        c.setDisplayMax(9000);
+
+        c.useScale(255);
+        assertArrayEquals(new int[] {0, 255}, c.rangeFor(255), "a new scale starts at its full range");
+        assertArrayEquals(new int[] {1200, 9000}, c.rangeFor(65535), "the 16-bit range is kept");
+
+        c.useScale(65535);
+        assertEquals(1200, c.getDisplayMin());
+        assertEquals(9000, c.getDisplayMax());
+    }
+
+    @Test
+    void autoScaleSetsTheRangeOfTheScaleItMeasured() {
+        ContrastSettings c = new ContrastSettings();
+        c.useScale(65535);
+        c.setDisplayMin(1200);
+        c.setDisplayMax(9000);
+        int[] hist = new int[256];
+        hist[100] = 1000;
+        c.applyAutoScale(hist, 255);
+        assertEquals(255, c.getScale());
+        assertArrayEquals(new int[] {1200, 9000}, c.rangeFor(65535));
+    }
+
+    @Test
+    void computedOutputFoldersAreNotPreviewedAsCameraTiles() {
+        assertTrue(LiveViewerWindow.isComputedOutputDirectory("orientation_color"));
+        assertTrue(LiveViewerWindow.isComputedOutputDirectory("retardance"));
+        assertTrue(LiveViewerWindow.isComputedOutputDirectory("orientation"));
+        assertTrue(LiveViewerWindow.isComputedOutputDirectory("7.0.biref"));
+        assertTrue(LiveViewerWindow.isComputedOutputDirectory("90.0.sum"));
+        assertFalse(LiveViewerWindow.isComputedOutputDirectory("State0"));
+        assertFalse(LiveViewerWindow.isComputedOutputDirectory("7.0"));
+        assertFalse(LiveViewerWindow.isComputedOutputDirectory("-7"));
+        assertFalse(LiveViewerWindow.isComputedOutputDirectory("DAPI"));
+    }
 }

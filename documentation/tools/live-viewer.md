@@ -26,7 +26,7 @@ The window title dynamically displays the current imaging modality and expected 
 |--------|------|-------------|
 | Fit Mode | Toggle | Scale image to fit the dialog window |
 | Display Scale | ComboBox | Select display magnification level |
-| Show Tiles | CheckBox | During acquisition, display the most recently acquired tile instead of the live feed. Updates approximately every 8 seconds as new tiles are captured. Useful for monitoring focus drift without waiting for stitching to complete. Works with multi-angle acquisitions (PPM). |
+| Show Tiles | CheckBox | During acquisition, display the most recently acquired tile instead of the live feed. Updates approximately every 8 seconds as new tiles are captured. Useful for monitoring focus drift without waiting for stitching to complete. Works with multi-angle acquisitions (PPM). Shows camera tiles only: computed outputs a modality writes beside them (PPM's `.biref`/`.sum`, LC-PolScope's `retardance`, `orientation` and `orientation_color`) are skipped. |
 
 Double-click on the camera image to center the stage at that position. Like the other movement controls, this needs Live to be ON: with Live OFF the double-click does not move the stage, and the status line reads "Movement disabled - Live View is Off". It is also ignored while a calibration or other operation has locked the viewer (the status line briefly shows "LOCKED: ...").
 
@@ -125,6 +125,8 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design st
 | Full Range | Button | Reset Min/Max to the camera's full range (2^bits - 1, e.g. 0-4095 for a 12-bit camera delivering 16-bit frames) and clear the persistent Always Auto-Scale flag. |
 | Auto Scale | Button | One-shot rescale of the contrast range to the current frame. Does NOT flip the persistent Always Auto-Scale flag -- use it when you want a single rescale without committing to per-frame auto-scale. |
 | Always Auto-Scale | CheckBox | When checked, every live frame and acquired tile is auto-scaled (drives the persistent `autoScale` flag). When unchecked, your manual Min/Max sliders are preserved. Replaces the previous always-on per-tile rescale, which was breaking non-fluorescence acquisitions whose contrast was already correctly set. |
+
+Each bit depth keeps its own Min/Max. An 8-bit frame shown between 16-bit ones, such as an 8-bit tile, starts at its own full range and leaves the range you set for the camera untouched; the camera's frames return to that range.
 
 The histogram shows a 256-bin luminance distribution updated in real time, drawn on a linear count scale. Its range is the camera's bit depth, not the 16-bit buffer's: a 12-bit camera delivering 16-bit frames spans 0-4095, and the frame info line reads "12-bit in 16". Per-channel (R/G/B) saturation percentages are displayed below the histogram, counted at the camera's maximum value, and turn red when any channel exceeds 1% saturation.
 

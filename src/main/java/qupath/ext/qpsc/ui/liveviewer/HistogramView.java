@@ -54,6 +54,11 @@ public class HistogramView extends VBox {
     private int[] currentHistogram = new int[256];
     private int currentMaxValue = 255;
 
+    // True while updateSlidersFromSettings() moves the sliders. Their listeners exist for the
+    // operator's drags; fired by a programmatic move they rounded the range to the slider's 256
+    // steps and unchecked "Always Auto-Scale" whenever the auto range moved.
+    private boolean syncingSliders = false;
+
     // Throttling: skip histogram updates if too frequent
     private long lastHistogramUpdateMs = 0;
     private static final long HISTOGRAM_THROTTLE_MS = 200;
@@ -86,6 +91,7 @@ public class HistogramView extends VBox {
 
         // --- Slider listeners ---
         minSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (syncingSliders) return;
             int min = newVal.intValue();
             int scaledMin = min * currentMaxValue / 255;
             contrastSettings.setDisplayMin(scaledMin);
@@ -95,6 +101,7 @@ public class HistogramView extends VBox {
         });
 
         maxSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
+            if (syncingSliders) return;
             int max = newVal.intValue();
             int scaledMax = max * currentMaxValue / 255;
             contrastSettings.setDisplayMax(scaledMax);
@@ -143,10 +150,10 @@ public class HistogramView extends VBox {
         // Slider drag turns off the persistent flag. Reflect that in the
         // checkbox so its state stays in sync with the underlying setting.
         minSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (alwaysAutoScale.isSelected()) alwaysAutoScale.setSelected(false);
+            if (!syncingSliders && alwaysAutoScale.isSelected()) alwaysAutoScale.setSelected(false);
         });
         maxSlider.valueProperty().addListener((obs, oldVal, newVal) -> {
-            if (alwaysAutoScale.isSelected()) alwaysAutoScale.setSelected(false);
+            if (!syncingSliders && alwaysAutoScale.isSelected()) alwaysAutoScale.setSelected(false);
         });
 
         applyLayout();
@@ -252,14 +259,10 @@ public class HistogramView extends VBox {
         lastHistogramUpdateMs = now;
 
         // The camera's range, not the buffer's: 4095 for a 12-bit camera in 16-bit frames.
-        int previousMax = currentMaxValue;
+        // Each scale keeps its own range: an 8-bit tile preview between 16-bit camera frames
+        // must not clamp the operator's 16-bit range (see ContrastSettings).
         currentMaxValue = CameraBitDepth.maxValue(frame);
-        if (currentMaxValue != previousMax && contrastSettings.getDisplayMax() > currentMaxValue) {
-            // A range set against the 16-bit container (Full Range on the first frame)
-            // would leave the image dark once the real depth is known.
-            contrastSettings.setDisplayMax(currentMaxValue);
-            contrastSettings.setDisplayMin(Math.min(contrastSettings.getDisplayMin(), currentMaxValue - 1));
-        }
+        contrastSettings.useScale(currentMaxValue);
 
         int[] histogram = new int[256];
         int bpp = frame.bytesPerPixel();
@@ -354,8 +357,13 @@ public class HistogramView extends VBox {
         if (currentMaxValue == 0) return;
         int sliderMin = contrastSettings.getDisplayMin() * 255 / currentMaxValue;
         int sliderMax = contrastSettings.getDisplayMax() * 255 / currentMaxValue;
-        minSlider.setValue(Math.max(0, Math.min(255, sliderMin)));
-        maxSlider.setValue(Math.max(0, Math.min(255, sliderMax)));
+        syncingSliders = true;
+        try {
+            minSlider.setValue(Math.max(0, Math.min(255, sliderMin)));
+            maxSlider.setValue(Math.max(0, Math.min(255, sliderMax)));
+        } finally {
+            syncingSliders = false;
+        }
         minLabel.setText("Min: " + contrastSettings.getDisplayMin());
         maxLabel.setText("Max: " + contrastSettings.getDisplayMax());
     }

@@ -868,12 +868,12 @@ public class LiveViewerWindow {
             }
 
             // Subdirectory layout: tiles in angle subdirs (90/, 7/, -7/) for PPM,
-            // or channel subdirs (DAPI/, FITC/, TRITC/) for fluorescence/BF-IF.
-            // Exclude PPM post-processing dirs like 7.0.biref/ and 7.0.sum/
-            // whose biref TIFFs are computed last (newest timestamp) but are
-            // 16-bit grayscale and render poorly with the 8-bit RGB contrast
-            // settings of the Live Viewer.
-            File[] subdirs = rootDir.listFiles(f -> f.isDirectory() && !isPostProcessingDirectory(f.getName()));
+            // channel subdirs (DAPI/, FITC/, TRITC/) for fluorescence/BF-IF, or state
+            // subdirs for LC-PolScope. Computed outputs are skipped: they are written
+            // last (newest), are not camera frames, and have their own value scales --
+            // PPM's 7.0.biref/, LC-PolScope's retardance/ and its 8-bit RGB
+            // orientation_color/, which used to replace the camera tile every time.
+            File[] subdirs = rootDir.listFiles(f -> f.isDirectory() && !isComputedOutputDirectory(f.getName()));
             if (subdirs != null) {
                 for (File subdir : subdirs) {
                     File[] tiffs =
@@ -898,27 +898,22 @@ public class LiveViewerWindow {
     }
 
     /**
-     * Returns true if the directory name looks like a PPM post-processing
-     * output (e.g. "7.0.biref", "7.0.sum"). These contain computed images
-     * that are 16-bit grayscale and render poorly in the Live Viewer.
-     * Pattern: a numeric prefix followed by a dot and a non-numeric suffix.
+     * True when the folder holds a modality's computed output rather than camera tiles: its name
+     * ends with a suffix some registered modality declares through
+     * {@link qupath.ext.qpsc.modality.ModalityHandler#getPostProcessingDirectorySuffixes()}
+     * ({@code 7.0.biref}, {@code retardance}, {@code orientation_color}, ...). Every modality is
+     * consulted because the scan does not know which one is acquiring.
      */
-    private static boolean isPostProcessingDirectory(String name) {
-        // Post-processing dirs have the form "<number>.<suffix>" where suffix
-        // is NOT purely numeric (e.g. "7.0.biref", "90.0.sum").
-        // Angle dirs like "7.0" or "-7" parse as Double; channel dirs like
-        // "DAPI" or "FITC" have no dots. Neither should be excluded.
-        int lastDot = name.lastIndexOf('.');
-        if (lastDot <= 0) return false;
-        String suffix = name.substring(lastDot + 1);
-        if (suffix.isEmpty()) return false;
-        // If the part after the last dot is non-numeric, it's a post-processing dir
-        try {
-            Double.parseDouble(suffix);
-            return false; // e.g. "7.0" -- the suffix "0" is numeric, this is an angle dir
-        } catch (NumberFormatException e) {
-            return true; // e.g. "7.0.biref" -- suffix "biref" is non-numeric
+    static boolean isComputedOutputDirectory(String name) {
+        for (var handler :
+                qupath.ext.qpsc.modality.ModalityRegistry.getAllHandlers().values()) {
+            for (String suffix : handler.getPostProcessingDirectorySuffixes()) {
+                if (!suffix.isEmpty() && name.endsWith(suffix)) {
+                    return true;
+                }
+            }
         }
+        return false;
     }
 
     /**
@@ -2155,14 +2150,13 @@ public class LiveViewerWindow {
             lastFrameWidth = dstW;
             lastFrameHeight = dstH;
             imageView.setImage(writableImage);
-
-            // Apply full range for new bit depth
-            contrastSettings.applyFullRange(frame);
         }
 
-        // Apply contrast mapping and convert to ARGB with subsampling
-        int min = contrastSettings.getDisplayMin();
-        int max = contrastSettings.getDisplayMax();
+        // The range set for this frame's scale: an 8-bit tile preview and a 16-bit camera
+        // frame each render with their own, whichever one the histogram saw last.
+        int[] displayRange = contrastSettings.rangeFor(CameraBitDepth.maxValue(frame));
+        int min = displayRange[0];
+        int max = displayRange[1];
         int range = Math.max(1, max - min);
 
         byte[] raw = frame.rawPixels();
