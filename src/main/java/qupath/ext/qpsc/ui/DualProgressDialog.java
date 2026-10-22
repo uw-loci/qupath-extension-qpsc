@@ -95,12 +95,10 @@ public class DualProgressDialog {
     // at most once per milestone.
     private int lastLoggedEstimateTiles = -1;
 
-    // Tile timing tracking for better estimation (uses recent actual timing, no hardcoded values)
-    // Dynamic timing window size based on autofocus settings (5x n_steps for that objective)
+    // Minimum per-file samples before an estimate is shown (5x the autofocus n_steps for the
+    // objective, read from acquisition metadata; capped at 5 where it is used).
     private final AtomicInteger timingWindowSize =
             new AtomicInteger(10); // Default to 10, updated from acquisition metadata
-    private final java.util.concurrent.ConcurrentLinkedDeque<Long> recentTileTimes =
-            new java.util.concurrent.ConcurrentLinkedDeque<>();
     private final AtomicLong lastTileCompletionTime = new AtomicLong(0);
     private final AtomicInteger totalTilesCompleted = new AtomicInteger(0);
 
@@ -108,8 +106,14 @@ public class DualProgressDialog {
     // Separates tile-only time from autofocus time using statistical detection
     private final AtomicInteger afNTiles = new AtomicInteger(5); // Number of AF positions per annotation
     private final AtomicInteger totalTilesPerAnnotation = new AtomicInteger(0); // Total tiles in current annotation
+    // One entry per file written: the time it took, in ms. A progress poll that covers several
+    // files adds that many equal entries, so the mean is time per file and AF tiles count at the
+    // rate they really occur. Kept for the whole run (up to MAX_FILE_TIME_SAMPLES), not a short
+    // window: a window of a few dozen polls swung the estimate between 2.5 and 10 hours as AF
+    // tiles moved in and out of it.
     private final java.util.concurrent.ConcurrentLinkedDeque<Long> allTileTimes =
             new java.util.concurrent.ConcurrentLinkedDeque<>();
+    static final int MAX_FILE_TIME_SAMPLES = 20000;
     private final AtomicBoolean firstTileProcessed = new AtomicBoolean(false);
 
     // Per-annotation tracking for tile counts in future annotations
@@ -378,34 +382,23 @@ public class DualProgressDialog {
 
         // Track tile completion timing for better estimation
         if (filesCompleted > previousProgress) {
-            // One or more tiles completed
+            // One or more files completed since the last poll
             long lastCompletion = lastTileCompletionTime.get();
             if (lastCompletion > 0) {
-                // Calculate time since last tile and add to rolling window
                 long tileTime = now - lastCompletion;
-                recentTileTimes.addLast(tileTime);
+                int files = filesCompleted - previousProgress;
 
-                // Keep only the most recent N tiles (based on dynamic timing window)
-                int windowSize = timingWindowSize.get();
-                while (recentTileTimes.size() > windowSize) {
-                    recentTileTimes.removeFirst();
-                }
-
-                // Exclude the first tile from the timing sample: it includes
-                // the one-time full-AF + hardware-settling spike that never
-                // recurs, and a mean of the remaining deltas is a better
-                // predictor of steady-state throughput.
-                if (!firstTileProcessed.get() && filesCompleted == 1) {
-                    firstTileProcessed.set(true);
-                    logger.info("First tile time (includes full AF + settling): {} ms -- excluded from mean", tileTime);
+                // Exclude the first update of the annotation: it includes the one-time
+                // full-AF + hardware-settling spike that never recurs. Whatever the
+                // first poll covers is dropped, so a first poll of several files (one
+                // multi-state position) is excluded too.
+                if (firstTileProcessed.compareAndSet(false, true)) {
+                    logger.info(
+                            "First update ({} files, includes full AF + settling): {} ms -- excluded from mean",
+                            files,
+                            tileTime);
                 } else {
-                    allTileTimes.addLast(tileTime);
-                    // Cap the history at 3x the live-window size to bound memory
-                    // while still retaining enough samples for a stable mean.
-                    int maxAllTimes = windowSize * 3;
-                    while (allTileTimes.size() > maxAllTimes) {
-                        allTileTimes.removeFirst();
-                    }
+                    addFileTimes(allTileTimes, tileTime, files, MAX_FILE_TIME_SAMPLES);
                 }
             }
             lastTileCompletionTime.set(now);
@@ -415,6 +408,35 @@ public class DualProgressDialog {
         if (filesCompleted > 0 && filesCompleted % 10 == 0) {
             logger.debug("Current annotation progress: {}/{} files", filesCompleted, currentAnnotationExpectedFiles);
         }
+    }
+
+    /**
+     * Adds the time of one progress poll as {@code files} equal per-file samples, dropping the
+     * oldest samples beyond {@code cap}.
+     */
+    static void addFileTimes(java.util.Deque<Long> samples, long elapsedMs, int files, int cap) {
+        if (files <= 0) {
+            return;
+        }
+        long perFile = elapsedMs / files;
+        for (int i = 0; i < files; i++) {
+            samples.addLast(perFile);
+        }
+        while (samples.size() > cap) {
+            samples.removeFirst();
+        }
+    }
+
+    /** Mean of the per-file samples in ms, or -1 when there are none. */
+    static double meanFileTimeMs(java.util.Collection<Long> samples) {
+        if (samples.isEmpty()) {
+            return -1;
+        }
+        long sum = 0;
+        for (long t : samples) {
+            sum += t;
+        }
+        return (double) sum / samples.size();
     }
 
     /**
@@ -709,8 +731,7 @@ public class DualProgressDialog {
         // takes 30s to click Skip on a manual focus prompt -> 30s gets
         // divided into the per-tile mean and the dialog says "5 hours
         // remaining" for a 12-tile acquisition). allTileTimes already
-        // excludes the first tile and reflects only the steady-state
-        // tile-to-tile cadence.
+        // excludes the first update and holds one time per file written.
         long elapsedMs = now - workflowStartTime.get();
         int totalCompleted = totalTilesCompleted.get();
         if (totalCompleted == 0 || elapsedMs == 0) {
@@ -720,9 +741,7 @@ public class DualProgressDialog {
 
         double avgMsPerTile;
         if (!allTileTimes.isEmpty()) {
-            long sum = 0;
-            for (Long t : allTileTimes) sum += t;
-            avgMsPerTile = (double) sum / allTileTimes.size();
+            avgMsPerTile = meanFileTimeMs(allTileTimes);
         } else {
             // Pre-first-tile fallback. Should only fire on tile 1, where
             // we don't have a sample yet but still want to show something.
@@ -760,7 +779,7 @@ public class DualProgressDialog {
         if (totalCompleted > 0 && totalCompleted % 25 == 0 && totalCompleted != lastLoggedEstimateTiles) {
             lastLoggedEstimateTiles = totalCompleted;
             logger.info(
-                    "Time estimate: {} remaining ({} positions). " + "Avg: {}ms/tile over {} tiles ({}s elapsed)",
+                    "Time estimate: {} remaining ({} positions). " + "Avg: {}ms/file over {} files ({}s elapsed)",
                     estimate,
                     positionsRemaining,
                     Math.round(avgMsPerTile),
@@ -805,11 +824,7 @@ public class DualProgressDialog {
         if (allTileTimes.size() < 5) {
             return -1;
         }
-        long sum = 0;
-        for (long t : allTileTimes) {
-            sum += t;
-        }
-        return sum / allTileTimes.size();
+        return (long) meanFileTimeMs(allTileTimes);
     }
 
     /**
@@ -829,8 +844,8 @@ public class DualProgressDialog {
         // The old wording ("Final timing for save") meant "the timing being saved to preferences"
         // and was read as "time spent saving", which points diagnosis at the wrong subsystem.
         logger.info(
-                "Mean per-tile cycle time (move + AF + expose + write): {} ms/tile "
-                        + "(mean across {} tiles, first tile excluded) -- saving to preferences",
+                "Mean per-file cycle time (move + AF + expose + write): {} ms/file "
+                        + "(mean across {} files, first update excluded) -- saving to preferences",
                 mean,
                 allTileTimes.size());
         return mean;
