@@ -93,6 +93,19 @@ public final class LightPathModel {
         return readOr(KEY_SCOPE_TYPE, SCOPE_UPRIGHT);
     }
 
+    /** What the UI calls the per-slide placement, everywhere it is shown or set. */
+    public static final String PLACEMENT_CAPTION = "Slide in holder";
+
+    /**
+     * How a slide placement reads in the UI, in every dialog, warning and log line an operator
+     * sees: {@code "Label left (as scanned)"} for {@link #INSERT_A}, {@code "Label right (rotated
+     * 180)"} for B. "Placement" alone was ambiguous next to the stage insert (the holder) and the
+     * per-slot Rotation of the multi-slide carrier.
+     */
+    public static String placementLabel(String insertion) {
+        return "B".equalsIgnoreCase(insertion) ? "Label right (rotated 180)" : "Label left (as scanned)";
+    }
+
     /** Default slide insertion from config; defaults to {@link #INSERT_A} (identity) when unset. */
     public static String slideInsertion() {
         return readOr(KEY_SLIDE_INSERTION, INSERT_A);

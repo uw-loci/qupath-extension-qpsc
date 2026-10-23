@@ -89,9 +89,9 @@ public class StageMapWindow {
     private CheckBox applyFlipsCheckbox;
 
     /** Slide-placement combo labels (map to light_path.slide_insertion A / B). */
-    private static final String SLIDE_LABEL_LEFT = "Label left (as scanned)";
+    private static final String SLIDE_LABEL_LEFT = LightPathModel.placementLabel(LightPathModel.INSERT_A);
 
-    private static final String SLIDE_LABEL_RIGHT = "Label right (180)";
+    private static final String SLIDE_LABEL_RIGHT = LightPathModel.placementLabel(LightPathModel.INSERT_B);
 
     // Orientation display factors seeded from the YAML light_path block. The Stage Map only lets the
     // operator toggle the slide-180 rotation (svSlideInsertion) -- the run-to-run variable. Stage View
@@ -885,13 +885,13 @@ public class StageMapWindow {
         svSlideInsertion = currentSlidePlacement(); // PER-SLIDE placement of the open entry
         svOpticalFlip = LightPathModel.opticalFlip(); // read-only here; feeds Camera View
 
-        Label slideLabel = new Label("Slide:");
+        Label slideLabel = new Label(LightPathModel.PLACEMENT_CAPTION + ":");
         ComboBox<String> insertCombo = new ComboBox<>();
         insertCombo.getItems().addAll(SLIDE_LABEL_LEFT, SLIDE_LABEL_RIGHT);
         insertCombo
                 .getSelectionModel()
                 .select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? SLIDE_LABEL_RIGHT : SLIDE_LABEL_LEFT);
-        insertCombo.setTooltip(new Tooltip("How THIS slide is placed in the holder: label on the left\n"
+        insertCombo.setTooltip(new Tooltip("How THIS slide sits in the holder: label on the left\n"
                 + "(as scanned) vs label on the right (rotated 180). Stored PER-SLIDE\n"
                 + "and baked into the corrected (Camera View) image so it matches the\n"
                 + "live camera. Changing it marks the corrected image + alignment stale.\n\n"

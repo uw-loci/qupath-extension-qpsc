@@ -421,8 +421,14 @@ public final class BackgroundProfiles {
     }
 
     /**
-     * The slide placement of the image open in QuPath ({@code "A"} or {@code "B"}), or null
-     * when no image is open or QuPath is not running.
+     * The slide placement recorded for the slide whose image is open in QuPath ({@code "A"} or
+     * {@code "B"}), or null when none is recorded or no image is open.
+     *
+     * <p>Only a recorded value counts. {@code ImageMetadataManager.getSlideInsertion} answers A
+     * for an entry without one, and stitched sub-images never get one, so the pre-acquisition
+     * check told the operator "Slide placement now: A" for a slide set to B (PPM, 2026-10-22).
+     * An entry without its own value takes its base image's, the entry the Stage Map's Slide
+     * control writes to.
      */
     public static String currentSlideInsertion() {
         try {
@@ -430,8 +436,54 @@ public final class BackgroundProfiles {
             if (gui == null || gui.getProject() == null || gui.getImageData() == null) {
                 return null;
             }
+            @SuppressWarnings("unchecked")
+            var project = (qupath.lib.projects.Project<java.awt.image.BufferedImage>) gui.getProject();
+            var entry = project.getEntry(gui.getImageData());
+            return entry == null ? null : recordedSlideInsertion(entry, project.getImageList());
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+
+    /**
+     * The placement recorded on {@code entry}, else on its base image among {@code entries}, else
+     * null. Package-private for tests.
+     */
+    static String recordedSlideInsertion(
+            qupath.lib.projects.ProjectImageEntry<?> entry,
+            List<? extends qupath.lib.projects.ProjectImageEntry<?>> entries) {
+        String own = blankToNull(entry.getMetadata().get(ImageMetadataManager.LP_SLIDE_INSERTION));
+        if (own != null) {
+            return own;
+        }
+        String baseImage = blankToNull(ImageMetadataManager.getBaseImage(entry));
+        if (baseImage == null || entries == null) {
+            return null;
+        }
+        for (var e : entries) {
+            if (e == entry || ImageMetadataManager.isCameraView(e)) {
+                continue;
+            }
+            String name = e.getImageName();
+            if (baseImage.equals(name) || baseImage.equals(qupath.lib.common.GeneralTools.stripExtension(name))) {
+                return blankToNull(e.getMetadata().get(ImageMetadataManager.LP_SLIDE_INSERTION));
+            }
+        }
+        return null;
+    }
+
+    /**
+     * The scanner the image open in QuPath came from ({@code source_microscope}), or null when
+     * no image is open or it does not record one.
+     */
+    public static String currentSourceScanner() {
+        try {
+            var gui = qupath.lib.gui.QuPathGUI.getInstance();
+            if (gui == null || gui.getProject() == null || gui.getImageData() == null) {
+                return null;
+            }
             var entry = gui.getProject().getEntry(gui.getImageData());
-            return entry == null ? null : ImageMetadataManager.getSlideInsertion(entry);
+            return entry == null ? null : blankToNull(ImageMetadataManager.getSourceMicroscope(entry));
         } catch (RuntimeException | LinkageError e) {
             return null;
         }
@@ -456,14 +508,10 @@ public final class BackgroundProfiles {
         String expected = profile.expectedSlideInsertion();
         String current = normalizeInsertion(currentInsertion);
         if (expected != null && current != null && !expected.equals(current)) {
-            problems.add("Slide placement now: " + insertionLabel(current) + "; the profile expects: "
-                    + insertionLabel(expected));
+            problems.add(LightPathModel.PLACEMENT_CAPTION + " now: " + LightPathModel.placementLabel(current)
+                    + "; the profile expects: " + LightPathModel.placementLabel(expected));
         }
         return problems;
-    }
-
-    private static String insertionLabel(String insertion) {
-        return "B".equals(insertion) ? "B (label right)" : "A (label left, as scanned)";
     }
 
     /** "A"/"B" in any case to "A"/"B"; anything else (including blank) to null. */

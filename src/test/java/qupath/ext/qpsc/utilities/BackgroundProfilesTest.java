@@ -169,7 +169,7 @@ class BackgroundProfilesTest {
         List<String> problems = BackgroundProfiles.setupProblems(profile, "single_h", "A");
         assertEquals(2, problems.size(), problems.toString());
         assertTrue(problems.get(0).contains("single_h") && problems.get(0).contains("quad_v"));
-        assertTrue(problems.get(1).contains("label left") && problems.get(1).contains("label right"));
+        assertTrue(problems.get(1).contains("Label left") && problems.get(1).contains("Label right"));
 
         var undeclared =
                 new BackgroundProfiles.BackgroundProfile("q", null, null, null, null, null, Map.of(), Path.of("q"));

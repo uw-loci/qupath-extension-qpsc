@@ -433,7 +433,7 @@ public final class MultiSlideAssignmentDialog {
         Label intro = new Label("Pick a carrier. For each occupied slide position, choose the project "
                 + "image that maps to it, and set its Rotation to match how the slide is physically mounted "
                 + "(open the Stage Map beside this dialog -- it previews all assigned slides live, so you can "
-                + "rotate each until it matches placement). Leave a slot empty (or check Skip) for unoccupied "
+                + "rotate each until it matches how the slide sits in the holder). Leave a slot empty (or check Skip) for unoccupied "
                 + "positions. Pass 1 of the workflow walks you through alignment and annotation per slide; "
                 + "Pass 2 acquires across all assigned slides.");
         intro.setWrapText(true);

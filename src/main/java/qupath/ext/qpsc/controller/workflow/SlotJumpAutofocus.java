@@ -327,6 +327,26 @@ public final class SlotJumpAutofocus {
                 logger.info("Slot-jump AF: validation record has no usable approach bound; using the standard scan");
                 return ApproachPlan.disabled("the validated approach distance is unusable");
             }
+            // Where the stage is NOW must agree with the record: safe Z has to be a retraction
+            // from here. On PPM (2026-10-22) the record said focus lies below safe Z 0, while the
+            // slide was in focus at +258; "retract to safe Z" then drove 258 um the other way and
+            // the scan continued 330 um further before it was cancelled, far from any focus.
+            double currentZ;
+            try {
+                currentZ = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
+                        .getStagePositionZ();
+            } catch (Exception e) {
+                logger.warn("Slot-jump AF: stage Z unreadable ({}); using the standard scan", e.getMessage());
+                return ApproachPlan.disabled("the stage Z could not be read to check the approach direction");
+            }
+            String wrongSide = approachSideProblem(currentSafeZ, bound, currentZ);
+            if (wrongSide == null) {
+                wrongSide = mgr.validateSafeZDirection(currentSafeZ, currentZ);
+            }
+            if (wrongSide != null) {
+                logger.warn("Slot-jump AF: approach-from-safe-Z refused ({}); using the standard scan", wrongSide);
+                return ApproachPlan.disabled(wrongSide);
+            }
             logger.info(
                     "Slot-jump AF: approach-from-safe-Z licensed -- safe Z {} um, bound {} um, tissue gate {}",
                     currentSafeZ,
@@ -338,6 +358,38 @@ public final class SlotJumpAutofocus {
                     "Slot-jump AF: could not resolve an approach plan ({}); using the standard scan", e.getMessage());
             return ApproachPlan.disabled("could not read the focus-approach validation");
         }
+    }
+
+    /**
+     * Why an approach from {@code safeZUm} toward {@code safeZUm + boundUm} does not fit a stage
+     * now at {@code currentZUm}, or null when it does.
+     *
+     * <p>The validated geometry puts the sample on the {@code boundUm} side of safe Z, so the
+     * stage, which sits near the last focus, must be on that side too. A current Z on the other
+     * side means the Z frame or the mounting has changed since the validation (a stage re-zero,
+     * another insert): retracting to safe Z would then move TOWARD the sample, and the scan would
+     * search where the sample is not.
+     *
+     * @param safeZUm the retraction point
+     * @param boundUm signed travel from safe Z toward the sample
+     * @param currentZUm the stage Z now
+     */
+    static String approachSideProblem(double safeZUm, double boundUm, double currentZUm) {
+        if (Double.isNaN(safeZUm) || Double.isNaN(boundUm) || Double.isNaN(currentZUm) || boundUm == 0) {
+            return null;
+        }
+        double fromSafe = currentZUm - safeZUm;
+        if (Math.abs(fromSafe) < 1.0) {
+            return null; // at safe Z: nothing to retract past
+        }
+        if (Math.signum(fromSafe) != Math.signum(boundUm)) {
+            return String.format(
+                    "the stage is at Z %.1f, on the far side of safe Z %.1f from the validated approach toward"
+                            + " %.1f; the Z frame or the mounting has changed since Focus Approach Validation."
+                            + " Re-run Focus Approach Validation",
+                    currentZUm, safeZUm, safeZUm + boundUm);
+        }
+        return null;
     }
 
     /**

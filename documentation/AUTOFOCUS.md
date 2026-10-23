@@ -493,6 +493,12 @@ imaging conditions have changed significantly), or if the validation found a pro
 a warning and falls back to the standard scan. The workflow still runs and acquires images, but
 using the slower edge-retry strategy.
 
+The approach is also refused when the stage is on the far side of safe Z from the validated approach
+(for example, the stage is at +258 while the validation says the sample lies toward -693 from safe Z 0).
+Retracting to safe Z would then move toward the sample, so the standard scan runs instead. The log names
+the stage Z and the safe Z, and asks you to re-run Focus Approach Validation. This usually means the Z
+frame or the mounting has changed since the validation (a stage re-zero, or another insert).
+
 **Validation is advisory, not a gate.** Multi-slide acquisition will proceed whether or not
 validation exists. The multi-slide assignment dialog shows the validation status so you can
 choose to re-run it if needed; nothing is blocked.

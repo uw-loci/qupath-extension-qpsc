@@ -10,7 +10,7 @@
 >   **`ImageMetadataManager.bakedParity(entry)`** -- the successor every consumer
 >   (SIFT residual, transform pixel-frame, back-prop) reads.
 > - **Slide placement (factor 1b) is now PER-SLIDE**, stored on the entry
->   (`lp_slide_insertion`, set from the Stage Map "Slide:" control) instead of the
+>   (`lp_slide_insertion`, set from the Stage Map "Slide in holder" control) instead of the
 >   global YAML, and is **baked into the corrected image** so it matches the live
 >   camera for the placement used: `companionBake = rawToCamera XOR
 >   slideRotationFlipFlags(placement)` (`LightPath.companionBake`).
@@ -115,7 +115,7 @@ light_path:
   the historical, inert behaviour. No regression until the rig is described.
 
 **Where each control lives (2026-08-09).** The Stage Map exposes **only** the slide-180 rotation
-(`slide_insertion`) -- a "Slide: Label left / Label right (180)" combo -- because that is the only thing
+(`slide_insertion`) -- a "Slide in holder: Label left (as scanned) / Label right (rotated 180)" combo -- because that is the only thing
 that changes run to run. The set-once properties **scope type** and **optical flip** are edited in
 **Utilities -> Microscope Configuration -> Light Path Orientation** (`LightPathSetupDialog`), which
 writes the same YAML block and calls `MicroscopeConfigManager.reload()` so the change takes effect

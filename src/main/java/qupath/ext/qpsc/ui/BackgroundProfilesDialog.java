@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
+import javafx.application.Platform;
 import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
@@ -39,6 +40,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.BackgroundCollectionWorkflow;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
+import qupath.ext.qpsc.utilities.BackgroundProfileDefaults;
 import qupath.ext.qpsc.utilities.BackgroundProfiles;
 import qupath.ext.qpsc.utilities.BackgroundProfiles.BackgroundProfile;
 import qupath.ext.qpsc.utilities.LightPathModel;
@@ -238,8 +240,11 @@ public final class BackgroundProfilesDialog {
             sb.append(p.description()).append('\n');
         }
         sb.append("expects insert: ").append(p.expectedInsert() == null ? "(not declared)" : p.expectedInsert());
-        sb.append("   slide placement: ")
-                .append(p.expectedSlideInsertion() == null ? "(not declared)" : p.expectedSlideInsertion())
+        sb.append("   slide in holder: ")
+                .append(
+                        p.expectedSlideInsertion() == null
+                                ? "(not declared)"
+                                : LightPathModel.placementLabel(p.expectedSlideInsertion()))
                 .append('\n');
         for (Map.Entry<String, String> a : p.attributes().entrySet()) {
             sb.append(a.getKey()).append(": ").append(a.getValue()).append('\n');
@@ -294,22 +299,31 @@ public final class BackgroundProfilesDialog {
 
     private void edit(Window owner, BackgroundProfile existing) {
         if (baseFolder == null || baseFolder.isBlank()) {
-            UserErrors.show(logger, "Background Profiles", "Choose the background folder first.");
-            return;
+            // No folder yet: ask for one here rather than send the operator back to find the button.
+            chooseBaseFolder(owner);
+            if (baseFolder == null || baseFolder.isBlank()) {
+                return;
+            }
         }
+        boolean creating = existing == null;
+        List<String> existingIds =
+                list.getItems().stream().map(BackgroundProfile::id).toList();
+
+        // What is known about the setup on the stage, for the suggested values.
+        String currentInsert = BackgroundProfiles.currentInsert();
+        String imagePlacement = BackgroundProfiles.currentSlideInsertion();
+        String placementDefault = imagePlacement != null ? imagePlacement : LightPathModel.slideInsertion();
+        BackgroundProfileDefaults.Setup setup = new BackgroundProfileDefaults.Setup(
+                currentInsert,
+                insertName(currentInsert),
+                placementDefault,
+                imagePlacement != null,
+                BackgroundProfiles.currentSourceScanner());
+
         Dialog<BackgroundProfile> dialog = new Dialog<>();
-        dialog.setTitle(existing == null ? "New Background Profile" : "Edit Background Profile");
+        dialog.setTitle(creating ? "New Background Profile" : "Edit Background Profile");
         dialog.initOwner(owner);
         dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
-
-        TextField idField = new TextField(existing == null ? "" : existing.id());
-        idField.setPromptText("letters, digits, - and _ (a folder name)");
-        idField.setDisable(existing != null);
-        TextField nameField = new TextField(existing == null ? "" : nullToEmpty(existing.name()));
-        nameField.setPromptText("e.g. 4-slide carrier, Aperio slides");
-        TextArea descriptionArea = new TextArea(existing == null ? "" : nullToEmpty(existing.description()));
-        descriptionArea.setPrefRowCount(3);
-        descriptionArea.setWrapText(true);
 
         ComboBox<String> insertBox = new ComboBox<>();
         insertBox.setEditable(true);
@@ -322,19 +336,17 @@ public final class BackgroundProfilesDialog {
         } catch (RuntimeException e) {
             logger.debug("Inserts not listed: {}", e.toString());
         }
-        insertBox.setValue(existing == null ? "" : nullToEmpty(existing.expectedInsert()));
-        insertBox.setTooltip(
-                new Tooltip(
-                        "The stage insert these backgrounds are collected with (a stage.inserts id)."
-                                + " Acquiring with another insert selected in the Stage Map gives a warning. Leave empty to not check."));
+        insertBox.setValue(creating ? nullToEmpty(currentInsert) : nullToEmpty(existing.expectedInsert()));
+        insertBox.setTooltip(new Tooltip("The stage insert these backgrounds are collected with (a stage.inserts id)."
+                + " Acquiring with another insert selected in the Stage Map gives a warning. Leave empty to not"
+                + " check. New profiles start with the Stage Map's current insert."));
 
         ComboBox<String> placementBox = new ComboBox<>();
         placementBox.getItems().addAll("", LightPathModel.INSERT_A, "B");
         placementBox.setConverter(new javafx.util.StringConverter<>() {
             @Override
             public String toString(String s) {
-                if (s == null || s.isEmpty()) return "(not checked)";
-                return "B".equals(s) ? "B (label right)" : "A (label left, as scanned)";
+                return s == null || s.isEmpty() ? "(not checked)" : LightPathModel.placementLabel(s);
             }
 
             @Override
@@ -342,42 +354,168 @@ public final class BackgroundProfilesDialog {
                 return s;
             }
         });
-        placementBox.setValue(existing == null ? "" : nullToEmpty(existing.expectedSlideInsertion()));
-        placementBox.setTooltip(new Tooltip("The slide's placement these backgrounds are collected with. Acquiring an"
-                + " image whose placement differs gives a warning."));
+        placementBox.setValue(creating ? placementDefault : nullToEmpty(existing.expectedSlideInsertion()));
+        placementBox.setTooltip(new Tooltip("How the slide sits in the holder when these backgrounds are collected:"
+                + " label on the left (as scanned) or on the right (rotated 180), as the Stage Map's Slide"
+                + " control.\nAcquiring an image placed the other way gives a warning. New profiles start with"
+                + " the open image's setting, else the scope's default."));
 
-        TextArea attributesArea = new TextArea();
+        TextField nameField = new TextField(
+                creating ? nullToEmpty(BackgroundProfileDefaults.suggestName(setup)) : nullToEmpty(existing.name()));
+        nameField.setPromptText("e.g. 4-slide carrier, Aperio slides");
+        TextField idField = new TextField(
+                creating ? BackgroundProfileDefaults.suggestId(nameField.getText(), existingIds) : existing.id());
+        idField.setPromptText("letters, digits, - and _ (the profile's folder name)");
+        idField.setDisable(!creating);
+        idField.setTooltip(new Tooltip("The profile's folder name, recorded with every acquisition. It follows the"
+                + " name until you edit it, and cannot be changed later."));
+        TextArea descriptionArea = new TextArea(
+                creating
+                        ? nullToEmpty(BackgroundProfileDefaults.suggestDescription(setup))
+                        : nullToEmpty(existing.description()));
+        descriptionArea.setPrefRowCount(3);
+        descriptionArea.setWrapText(true);
+
+        TextArea attributesArea = new TextArea(BackgroundProfileDefaults.attributesText(
+                creating ? BackgroundProfileDefaults.suggestAttributes(setup) : existing.attributes()));
         attributesArea.setPrefRowCount(4);
         attributesArea.setPromptText(
                 "one per line, key: value\ncarrier: quad_v\nslide_source: Aperio GT450\nmedium: Permount");
-        if (existing != null) {
-            StringBuilder sb = new StringBuilder();
-            existing.attributes()
-                    .forEach((k, v) -> sb.append(k).append(": ").append(v).append('\n'));
-            attributesArea.setText(sb.toString());
-        }
+
+        CheckBox makeActive = new CheckBox("Make this the active background profile");
+        makeActive.setSelected(creating || existing.id().equals(BackgroundProfiles.activeId()));
+        makeActive.setDisable(!creating && existing.id().equals(BackgroundProfiles.activeId()));
+
+        // A new profile's name and id follow the setup and each other until the operator types in them.
+        boolean[] nameTouched = {!creating};
+        boolean[] idTouched = {!creating};
+        boolean[] descriptionTouched = {!creating};
+        boolean[] programmatic = {false};
+        Runnable resuggest = () -> {
+            if (!creating) {
+                return;
+            }
+            programmatic[0] = true;
+            try {
+                String insert = editorText(insertBox);
+                String placement = placementBox.getValue();
+                BackgroundProfileDefaults.Setup now = new BackgroundProfileDefaults.Setup(
+                        insert,
+                        insertName(insert),
+                        placement == null || placement.isEmpty() ? null : placement,
+                        placement != null && placement.equals(imagePlacement),
+                        setup.sourceScanner());
+                if (!nameTouched[0]) {
+                    nameField.setText(nullToEmpty(BackgroundProfileDefaults.suggestName(now)));
+                }
+                if (!idTouched[0]) {
+                    idField.setText(BackgroundProfileDefaults.suggestId(nameField.getText(), existingIds));
+                }
+                if (!descriptionTouched[0]) {
+                    descriptionArea.setText(nullToEmpty(BackgroundProfileDefaults.suggestDescription(now)));
+                }
+            } finally {
+                programmatic[0] = false;
+            }
+        };
+        nameField.textProperty().addListener((obs, was, now) -> {
+            if (programmatic[0]) return;
+            nameTouched[0] = true;
+            if (!idTouched[0]) {
+                programmatic[0] = true;
+                idField.setText(BackgroundProfileDefaults.suggestId(now, existingIds));
+                programmatic[0] = false;
+            }
+        });
+        // Clearing the id hands it back to the name.
+        idField.textProperty().addListener((obs, was, now) -> {
+            if (programmatic[0]) return;
+            idTouched[0] = !now.isBlank();
+            if (!idTouched[0]) {
+                Platform.runLater(() -> {
+                    if (!idTouched[0] && idField.getText().isBlank()) {
+                        programmatic[0] = true;
+                        idField.setText(BackgroundProfileDefaults.suggestId(nameField.getText(), existingIds));
+                        idField.selectAll();
+                        programmatic[0] = false;
+                    }
+                });
+            }
+        });
+        descriptionArea.textProperty().addListener((obs, was, now) -> {
+            if (!programmatic[0]) descriptionTouched[0] = true;
+        });
+        insertBox.getEditor().textProperty().addListener((obs, was, now) -> resuggest.run());
+        insertBox.valueProperty().addListener((obs, was, now) -> resuggest.run());
+        placementBox.valueProperty().addListener((obs, was, now) -> resuggest.run());
+
+        // Problems are shown as the operator types; OK stays disabled while the id cannot be used.
+        Label problems = new Label();
+        problems.setWrapText(true);
+        problems.setMaxWidth(440);
+        problems.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
+        Runnable validate = () -> {
+            String idProblem = creating
+                    ? BackgroundProfileDefaults.idProblem(idField.getText().trim(), existingIds)
+                    : null;
+            List<String> warnings = new ArrayList<>();
+            String insert = editorText(insertBox);
+            if (!insert.isEmpty()
+                    && insertBox.getItems().size() > 1
+                    && !insertBox.getItems().contains(insert)) {
+                warnings.add("'" + insert + "' is not an insert in this microscope's configuration; the"
+                        + " Stage Map can never match it.");
+            }
+            warnings.addAll(BackgroundProfileDefaults.attributeWarnings(attributesArea.getText()));
+            okButton.setDisable(idProblem != null);
+            if (idProblem != null) {
+                problems.setText(idProblem + (warnings.isEmpty() ? "" : "\n" + String.join("\n", warnings)));
+                problems.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
+            } else if (!warnings.isEmpty()) {
+                problems.setText(String.join("\n", warnings));
+                problems.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
+            } else {
+                problems.setText("");
+            }
+        };
+        idField.textProperty().addListener((obs, was, now) -> validate.run());
+        insertBox.getEditor().textProperty().addListener((obs, was, now) -> validate.run());
+        insertBox.valueProperty().addListener((obs, was, now) -> validate.run());
+        attributesArea.textProperty().addListener((obs, was, now) -> validate.run());
+        validate.run();
 
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
         int row = 0;
-        grid.add(new Label("Id:"), 0, row);
-        grid.add(idField, 1, row++);
-        grid.add(new Label("Name:"), 0, row);
-        grid.add(nameField, 1, row++);
-        grid.add(new Label("Description:"), 0, row);
-        grid.add(descriptionArea, 1, row++);
+        if (creating) {
+            Label from = new Label(describeSetupSource(setup));
+            from.setWrapText(true);
+            from.setMaxWidth(440);
+            from.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 11px;");
+            grid.add(from, 0, row++, 2, 1);
+        }
         grid.add(new Label("Expected insert:"), 0, row);
         grid.add(insertBox, 1, row++);
-        grid.add(new Label("Slide placement:"), 0, row);
+        grid.add(new Label(LightPathModel.PLACEMENT_CAPTION + ":"), 0, row);
         grid.add(placementBox, 1, row++);
+        grid.add(new Label("Name:"), 0, row);
+        grid.add(nameField, 1, row++);
+        grid.add(new Label("Id:"), 0, row);
+        grid.add(idField, 1, row++);
+        grid.add(new Label("Description:"), 0, row);
+        grid.add(descriptionArea, 1, row++);
         grid.add(new Label("Attributes:"), 0, row);
         grid.add(attributesArea, 1, row++);
-        Label hint = new Label("Insert and slide placement are checked before an acquisition (a warning, never a"
-                + " block). Attributes are recorded with every acquisition and never checked.");
+        grid.add(makeActive, 1, row++);
+        Label hint = new Label("Insert and slide in holder are checked before an acquisition (a warning, never a"
+                + " block). Attributes are recorded with every acquisition and never checked; a line without a"
+                + " value is not saved.");
         hint.setWrapText(true);
         hint.setMaxWidth(440);
-        grid.add(hint, 0, row, 2, 1);
+        grid.add(hint, 0, row++, 2, 1);
+        grid.add(problems, 0, row, 2, 1);
         GridPane.setHgrow(nameField, Priority.ALWAYS);
         dialog.getDialogPane().setContent(grid);
 
@@ -385,27 +523,21 @@ public final class BackgroundProfilesDialog {
             if (bt != ButtonType.OK) {
                 return null;
             }
-            String id = idField.getText().trim();
             String name = nameField.getText().trim();
-            String insert = insertBox.getEditor().getText() == null
-                    ? ""
-                    : insertBox.getEditor().getText().trim();
-            if (insert.isEmpty() && insertBox.getValue() != null) {
-                insert = insertBox.getValue().trim();
-            }
+            String insert = editorText(insertBox);
             return new BackgroundProfile(
-                    id,
+                    idField.getText().trim(),
                     name.isEmpty() ? null : name,
                     descriptionArea.getText().isBlank()
                             ? null
                             : descriptionArea.getText().trim(),
-                    existing == null ? null : existing.createdAt(),
+                    creating ? null : existing.createdAt(),
                     insert.isEmpty() ? null : insert,
                     placementBox.getValue() == null || placementBox.getValue().isEmpty()
                             ? null
                             : placementBox.getValue(),
                     parseAttributes(attributesArea.getText()),
-                    existing == null ? Path.of("") : existing.folder());
+                    creating ? Path.of("") : existing.folder());
         });
         DialogOwner.own(dialog);
         Optional<BackgroundProfile> result = dialog.showAndWait();
@@ -414,15 +546,7 @@ public final class BackgroundProfilesDialog {
         }
         BackgroundProfile p = result.get();
         try {
-            if (existing == null) {
-                if (!BackgroundProfiles.isValidId(p.id())) {
-                    UserErrors.show(
-                            logger,
-                            "Background Profiles",
-                            "The id must be a folder name: letters, digits,"
-                                    + " '-' and '_' only, starting with a letter or digit (1 to 64 characters).");
-                    return;
-                }
+            if (creating) {
                 BackgroundProfiles.create(
                         baseFolder,
                         p.id(),
@@ -431,11 +555,11 @@ public final class BackgroundProfilesDialog {
                         p.expectedInsert(),
                         p.expectedSlideInsertion(),
                         p.attributes());
-                if (BackgroundProfiles.activeId() == null) {
-                    BackgroundProfiles.setActiveId(p.id());
-                }
             } else {
                 BackgroundProfiles.write(p);
+            }
+            if (makeActive.isSelected()) {
+                BackgroundProfiles.setActiveId(p.id());
             }
         } catch (IOException | RuntimeException e) {
             UserErrors.show(logger, "Background Profiles", "Could not save the profile: " + e.getMessage());
@@ -445,6 +569,47 @@ public final class BackgroundProfilesDialog {
                 .filter(x -> x.id().equals(p.id()))
                 .findFirst()
                 .ifPresent(x -> list.getSelectionModel().select(x));
+    }
+
+    /** One line saying where the suggested values came from, so the operator knows what to check. */
+    private static String describeSetupSource(BackgroundProfileDefaults.Setup s) {
+        List<String> parts = new ArrayList<>();
+        parts.add(
+                s.insertId() == null
+                        ? "Insert: none selected in the Stage Map."
+                        : "Insert: " + s.insertId() + ", from the Stage Map.");
+        parts.add("Slide in holder: "
+                + (s.placementFromImage() ? "from the open image." : "the scope's default (no image open)."));
+        parts.add(
+                s.sourceScanner() != null
+                        ? "Slide source: " + s.sourceScanner() + ", from the open image."
+                        : "Slide source: unknown (no image from a scanner open).");
+        return "Suggested values. Check them against what is on the stage.\n" + String.join("\n", parts);
+    }
+
+    /** The insert's display name, or null when unknown. */
+    private static String insertName(String insertId) {
+        if (insertId == null || insertId.isBlank()) {
+            return null;
+        }
+        try {
+            if (StageInsertRegistry.isInitialized()) {
+                var insert = StageInsertRegistry.getInsert(insertId);
+                return insert == null ? null : insert.getName();
+            }
+        } catch (RuntimeException e) {
+            logger.debug("Insert '{}' not resolved: {}", insertId, e.toString());
+        }
+        return null;
+    }
+
+    /** The editable combo's typed text, falling back to its value; never null. */
+    private static String editorText(ComboBox<String> box) {
+        String typed = box.getEditor().getText();
+        if (typed != null && !typed.isBlank()) {
+            return typed.trim();
+        }
+        return box.getValue() == null ? "" : box.getValue().trim();
     }
 
     private void delete(BackgroundProfile p) {

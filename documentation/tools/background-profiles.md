@@ -55,7 +55,7 @@ When you change the **Insert** in the Stage Map and exactly one profile declares
 |---|---|
 | Background folder / Choose... | Shows the base folder; Choose... writes it to the imageprocessing YAML. |
 | List | Every profile, the active one in bold. The panel below shows its id, description, expected insert and placement, attributes, creation time, how many sets it holds, and its folder. |
-| New... | Id (a folder name: letters, digits, `-`, `_`), name, description, expected insert (the Stage Map's inserts, or type one), slide placement, attributes (one `key: value` per line). The first profile created becomes active. |
+| New... | Opens with suggested values from the setup on the stage: **Expected insert** from the Stage Map, **Slide in holder** from the open image (else the scope's default), and a name, id and description built from them, plus `slide_source` when the open image records its scanner. A line at the top says where each value came from. The name, id and description follow the insert and slide-in-holder choices until you type in them; clearing the id brings the suggestion back. The id (a folder name: letters, digits, `-`, `_`) is checked as you type: a bad character or an id already in use is shown below the form and **OK** stays disabled, so nothing typed is lost. An insert not in this microscope's configuration and attribute lines that are not `key: value` are shown as warnings. **Make this the active background profile** is ticked by default. With no background folder set yet, New... asks for one first. |
 | Edit... | The same form, id fixed. |
 | Set active | Makes the selected profile the active one. |
 | Open folder | Opens the profile folder in the file browser. |
@@ -64,7 +64,7 @@ When you change the **Insert** in the Stage Map and exactly one profile declares
 
 ## What is checked, what is recorded
 
-Before an acquisition locks the stage, the usual background check (lamp level, exposure) also compares the active profile's `expects` with the current setup: the insert selected in the Stage Map and the open image's slide placement. A difference is a warning with **Proceed Anyway / Cancel**, never a block, like every other background mismatch. Nothing in `attributes` is checked.
+Before an acquisition locks the stage, the usual background check (lamp level, exposure) also compares the active profile's `expects` with the current setup: the insert selected in the Stage Map and the slide's recorded **Slide in holder** setting (the open image's, else its base image's; nothing is compared when none is recorded). A difference is a warning with **Proceed Anyway / Cancel**, never a block, like every other background mismatch. Nothing in `attributes` is checked.
 
 Recorded:
 
