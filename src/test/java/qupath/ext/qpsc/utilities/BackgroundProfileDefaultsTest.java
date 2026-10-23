@@ -54,7 +54,8 @@ class BackgroundProfileDefaultsTest {
         assertEquals("carrier_2", BackgroundProfileDefaults.suggestId("carrier", List.of("Carrier")));
         String longId = BackgroundProfileDefaults.suggestId("x".repeat(100), List.of("x".repeat(64)));
         assertTrue(BackgroundProfiles.isValidId(longId), longId);
-        assertTrue(BackgroundProfiles.isValidId(BackgroundProfileDefaults.slug("Laminaé médium")));
+        assertTrue(BackgroundProfiles.isValidId(
+                BackgroundProfileDefaults.slug("Lamina" + (char) 0xE9 + " m" + (char) 0xE9 + "dium")));
     }
 
     @Test
