@@ -474,7 +474,7 @@ public class AffineTransformManager {
      */
     public List<TransformPreset> getTransformsForMicroscope(String microscope) {
         return transforms.values().stream()
-                .filter(t -> t.getMicroscope().equals(microscope))
+                .filter(t -> microscope != null && microscope.equals(t.getMicroscope()))
                 .sorted(Comparator.comparing(TransformPreset::getName))
                 .toList();
     }
@@ -513,6 +513,37 @@ public class AffineTransformManager {
                 .max(Comparator.comparing(
                         TransformPreset::getCreatedDate, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .orElse(null);
+    }
+
+    /**
+     * The name to save a new ({@code sourceScanner}, {@code targetMicroscope}) preset under.
+     * Presets are keyed by name, so saving under a name that another pair already uses would
+     * replace that pair's preset: on 2026-10-21 an LC-PolScope Hamamatsu alignment reused the
+     * Oryx preset's name and the Oryx preset was lost. A name already held by the same pair is
+     * kept (that is a re-save); a name held by another pair gets the first free {@code _2},
+     * {@code _3}, ... suffix.
+     *
+     * @param requested the name the operator asked for
+     * @param sourceScanner the new preset's source scanner
+     * @param targetMicroscope the new preset's target microscope
+     * @return {@code requested}, or a suffixed name that does not replace another pair's preset
+     */
+    public String nameForPair(String requested, String sourceScanner, String targetMicroscope) {
+        return nameForPair(requested, sourceScanner, targetMicroscope, transforms);
+    }
+
+    static String nameForPair(
+            String requested, String sourceScanner, String targetMicroscope, Map<String, TransformPreset> existing) {
+        String name = requested;
+        for (int n = 2; ; n++) {
+            TransformPreset holder = existing.get(name);
+            if (holder == null
+                    || (Objects.equals(holder.getMicroscope(), targetMicroscope)
+                            && Objects.equals(holder.getSourceScanner(), sourceScanner))) {
+                return name;
+            }
+            name = requested + "_" + n;
+        }
     }
 
     /**

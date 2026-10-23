@@ -1487,14 +1487,25 @@ public class MicroscopeAlignmentWorkflow {
             }
 
             // Step 8: Save the transform
+            String targetMicroscope = MicroscopeConfigManager.getInstance(
+                            QPPreferenceDialog.getMicroscopeConfigFileProperty())
+                    .getString("microscope", "name");
             String transformName = config.transformName();
             if (transformName == null || transformName.isBlank()) {
                 transformName = String.format(
                         "%s_to_%s_%s",
+                        selectedScanner, targetMicroscope, new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()));
+            }
+            String pairName = transformManager.nameForPair(transformName, selectedScanner, targetMicroscope);
+            if (!pairName.equals(transformName)) {
+                logger.warn(
+                        "Preset name '{}' belongs to another scanner/microscope pair; saving the {} -> {} "
+                                + "preset as '{}' so that preset is kept",
+                        transformName,
                         selectedScanner,
-                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
-                                .getString("microscope", "name"),
-                        new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()));
+                        targetMicroscope,
+                        pairName);
+                transformName = pairName;
             }
 
             String description = String.format(
@@ -1531,8 +1542,7 @@ public class MicroscopeAlignmentWorkflow {
 
             AffineTransformManager.TransformPreset preset = new AffineTransformManager.TransformPreset(
                     transformName,
-                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
-                            .getString("microscope", "name"),
+                    targetMicroscope,
                     selectedScanner,
                     macroToStageTransform,
                     description,

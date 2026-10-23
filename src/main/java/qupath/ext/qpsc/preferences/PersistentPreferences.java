@@ -814,23 +814,12 @@ public class PersistentPreferences {
     private static final StringProperty saveTransformDefaultSaved =
             PathPrefs.createPersistentPreference("SaveTransformDefault", "true");
 
-    private static final StringProperty lastTransformNameSaved =
-            PathPrefs.createPersistentPreference("LastTransformName", "");
-
     public static boolean getSaveTransformDefault() {
         return Boolean.parseBoolean(saveTransformDefaultSaved.getValue());
     }
 
     public static void setSaveTransformDefault(final boolean save) {
         saveTransformDefaultSaved.setValue(String.valueOf(save));
-    }
-
-    public static String getLastTransformName() {
-        return lastTransformNameSaved.getValue();
-    }
-
-    public static void setLastTransformName(final String name) {
-        lastTransformNameSaved.setValue(name);
     }
 
     // ================== ALIGNMENT SELECTION ==================

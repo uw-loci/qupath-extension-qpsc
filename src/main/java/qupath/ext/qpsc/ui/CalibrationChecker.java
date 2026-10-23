@@ -585,17 +585,22 @@ public class CalibrationChecker {
                 return new StepStatus(Status.NOT_READY, "Invalid config file path");
             }
 
+            // Only this microscope's presets: the newest preset of another microscope (the other
+            // camera's config on LC-PolScope) says nothing about this one.
+            String microscope = getMicroscopeName();
             AffineTransformManager transformMgr = new AffineTransformManager(configDir);
-            Collection<AffineTransformManager.TransformPreset> allTransforms = transformMgr.getAllTransforms();
+            Collection<AffineTransformManager.TransformPreset> ownTransforms =
+                    transformMgr.getTransformsForMicroscope(microscope);
 
-            if (allTransforms.isEmpty()) {
-                return new StepStatus(Status.NOT_READY, "No alignment found - run Microscope Alignment first");
+            if (ownTransforms.isEmpty()) {
+                return new StepStatus(
+                        Status.NOT_READY, "No alignment for " + microscope + " - run Microscope Alignment first");
             }
 
             // Most recent transform wins. A transform without a createdDate
             // sorts last (treated as oldest/unknown).
             AffineTransformManager.TransformPreset newest = null;
-            for (var preset : allTransforms) {
+            for (var preset : ownTransforms) {
                 if (preset.getCreatedDate() == null) continue;
                 if (newest == null || preset.getCreatedDate().after(newest.getCreatedDate())) {
                     newest = preset;

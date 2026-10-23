@@ -947,16 +947,9 @@ public class MacroImageController {
         TextField transformName = new TextField();
         transformName.setPromptText("Transform name (e.g., 'Slide_Mount_v1')");
 
-        // Generate suggested name based on date and modality
-        String suggestedName = generateTransformName(currentMicroscope);
-
-        // Use last transform name if available, otherwise use suggestion
-        String lastUsedName = PersistentPreferences.getLastTransformName();
-        if (!lastUsedName.isEmpty()) {
-            transformName.setText(lastUsedName);
-        } else {
-            transformName.setText(suggestedName);
-        }
+        // Always a fresh name for this microscope and day. Reusing the last name typed (as this
+        // field once did) saved an LC-PolScope Hamamatsu alignment over the Oryx preset.
+        transformName.setText(generateTransformName(currentMicroscope));
 
         // Enable/disable name field based on save checkbox
         transformName.setDisable(!saveNewTransform.isSelected());
@@ -964,13 +957,6 @@ public class MacroImageController {
             transformName.setDisable(!selected);
             if (selected && transformName.getText().isEmpty()) {
                 transformName.setText(generateTransformName(currentMicroscope));
-            }
-        });
-
-        // Save name when changed
-        transformName.textProperty().addListener((obs, old, newName) -> {
-            if (!newName.isEmpty()) {
-                PersistentPreferences.setLastTransformName(newName);
             }
         });
 
