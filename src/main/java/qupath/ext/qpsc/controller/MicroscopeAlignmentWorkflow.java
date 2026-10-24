@@ -6,7 +6,6 @@ import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.List;
 import java.util.concurrent.CancellationException;
@@ -156,7 +155,7 @@ public class MicroscopeAlignmentWorkflow {
 
                                 // Now show alignment dialog with proper parameters
                                 return MacroImageController.showAlignmentDialog(
-                                                gui, transformManager, currentMicroscope)
+                                                gui, transformManager, currentMicroscope, selectedScanner)
                                         .thenApply(alignConfig -> {
                                             if (alignConfig == null) {
                                                 return null;
@@ -1492,9 +1491,11 @@ public class MicroscopeAlignmentWorkflow {
                     .getString("microscope", "name");
             String transformName = config.transformName();
             if (transformName == null || transformName.isBlank()) {
-                transformName = String.format(
-                        "%s_to_%s_%s",
-                        selectedScanner, targetMicroscope, new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date()));
+                transformName = AffineTransformManager.suggestPresetName(
+                        selectedScanner,
+                        QPPreferenceDialog.getMicroscopeConfigFileProperty(),
+                        targetMicroscope,
+                        java.time.LocalDate.now());
             }
             String pairName = transformManager.nameForPair(transformName, selectedScanner, targetMicroscope);
             if (!pairName.equals(transformName)) {

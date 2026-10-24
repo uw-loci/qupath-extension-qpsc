@@ -56,7 +56,7 @@ Mark at least 3 points. More points improve accuracy.
 
 | Field | Type | Description |
 |-------|------|-------------|
-| Transform Name | TextField | Name for this transform. Suggested as `<microscope>_Transform_<yyyyMMdd>`. If another scanner/microscope pair already has a transform with this name, the new one is saved with a `_2` (or higher) suffix so that transform is not replaced; the log says so. |
+| Transform Name | TextField | Name for this transform. Suggested as `<source scanner>_to_<config>_<yyyyMMdd>`, for example `Ocus40_to_LCPolScope_Hamamatsu_20261024`: the source is the scanner chosen at the start of the workflow, and `<config>` is the active config file's name without `config_` and `.yml`, so each camera config on a scope gets its own name. You can edit it. If another scanner/microscope pair already has a transform with this name, the new one is saved with a `_2` (or higher) suffix so that transform is not replaced; the log says so. |
 | Scanner | ComboBox | Scanner type this applies to (if applicable) |
 | Notes | TextArea | Optional notes about conditions or setup |
 

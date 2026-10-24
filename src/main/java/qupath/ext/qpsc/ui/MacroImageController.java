@@ -1,7 +1,6 @@
 package qupath.ext.qpsc.ui;
 
 import java.awt.image.BufferedImage;
-import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
@@ -16,6 +15,7 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.FlipResolver;
@@ -50,9 +50,11 @@ public class MacroImageController {
     /**
      * Shows the main alignment workflow dialog.
      * This is focused on creating/refining transforms, NOT acquisition.
+     *
+     * @param sourceScanner the scanner the macro image came from, used in the suggested name
      */
     public static CompletableFuture<AlignmentConfig> showAlignmentDialog(
-            QuPathGUI gui, AffineTransformManager transformManager, String currentMicroscope) {
+            QuPathGUI gui, AffineTransformManager transformManager, String currentMicroscope, String sourceScanner) {
 
         CompletableFuture<AlignmentConfig> future = new CompletableFuture<>();
 
@@ -76,7 +78,12 @@ public class MacroImageController {
 
             // Create styled tabs with colors to make them more noticeable
             // Tab 1: Transform Selection
-            Tab transformTab = createTransformTab(transformManager, currentMicroscope);
+            String suggestedName = AffineTransformManager.suggestPresetName(
+                    sourceScanner,
+                    QPPreferenceDialog.getMicroscopeConfigFileProperty(),
+                    currentMicroscope,
+                    java.time.LocalDate.now());
+            Tab transformTab = createTransformTab(transformManager, currentMicroscope, suggestedName);
             Label transformLabel = new Label("1. Transform");
             transformLabel.setStyle(
                     "-fx-text-fill: white; -fx-font-weight: bold; -fx-background-color: #3498db; -fx-padding: 5;");
@@ -869,7 +876,8 @@ public class MacroImageController {
     /**
      * Creates the transform selection tab.
      */
-    private static Tab createTransformTab(AffineTransformManager manager, String currentMicroscope) {
+    private static Tab createTransformTab(
+            AffineTransformManager manager, String currentMicroscope, String suggestedName) {
         Tab tab = new Tab();
 
         VBox content = new VBox(10);
@@ -947,16 +955,16 @@ public class MacroImageController {
         TextField transformName = new TextField();
         transformName.setPromptText("Transform name (e.g., 'Slide_Mount_v1')");
 
-        // Always a fresh name for this microscope and day. Reusing the last name typed (as this
+        // Always a fresh <source>_to_<config>_<date> name. Reusing the last name typed (as this
         // field once did) saved an LC-PolScope Hamamatsu alignment over the Oryx preset.
-        transformName.setText(generateTransformName(currentMicroscope));
+        transformName.setText(suggestedName);
 
         // Enable/disable name field based on save checkbox
         transformName.setDisable(!saveNewTransform.isSelected());
         saveNewTransform.selectedProperty().addListener((obs, old, selected) -> {
             transformName.setDisable(!selected);
             if (selected && transformName.getText().isEmpty()) {
-                transformName.setText(generateTransformName(currentMicroscope));
+                transformName.setText(suggestedName);
             }
         });
 
@@ -999,15 +1007,6 @@ public class MacroImageController {
 
         tab.setContent(content);
         return tab;
-    }
-
-    /**
-     * Generates a suggested transform name based on current date and microscope.
-     */
-    private static String generateTransformName(String microscope) {
-        SimpleDateFormat sdf = new SimpleDateFormat("yyyyMMdd");
-        String date = sdf.format(new Date());
-        return String.format("%s_Transform_%s", microscope, date);
     }
 
     /**

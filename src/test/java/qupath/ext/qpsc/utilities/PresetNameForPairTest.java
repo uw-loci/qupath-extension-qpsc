@@ -3,6 +3,7 @@ package qupath.ext.qpsc.utilities;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
 import java.awt.geom.AffineTransform;
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
@@ -56,5 +57,22 @@ class PresetNameForPairTest {
                 preset("Shared_2", "PPM", "ScanScope"),
                 preset("Shared_3", "OWS3", "Ocus40"));
         assertEquals("Shared_4", AffineTransformManager.nameForPair("Shared", "Aperio", "PPM", map));
+    }
+
+    @Test
+    void suggestedNameLinksSourceScannerToConfigFile() {
+        LocalDate day = LocalDate.of(2026, 10, 24);
+        assertEquals(
+                "Ocus40_to_LCPolScope_Hamamatsu_20261024",
+                AffineTransformManager.suggestPresetName(
+                        "Ocus40",
+                        "C:\\qpsc\\microscope_configurations\\config_LCPolScope_Hamamatsu.yml",
+                        "LCPolScope_Hamamatsu",
+                        day));
+        assertEquals(
+                "Ocus40_to_LCPolScope_20261024",
+                AffineTransformManager.suggestPresetName("Ocus40", "/cfg/config_LCPolScope.yml", "LCPolScope", day));
+        // No config file: the microscope name stands in.
+        assertEquals("Ocus40_to_PPM_20261024", AffineTransformManager.suggestPresetName("Ocus40", null, "PPM", day));
     }
 }

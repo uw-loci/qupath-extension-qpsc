@@ -516,6 +516,33 @@ public class AffineTransformManager {
     }
 
     /**
+     * The suggested name for a new preset, linking the two ends of the alignment:
+     * {@code <source scanner>_to_<config>_<yyyyMMdd>}, e.g.
+     * {@code Ocus40_to_LCPolScope_Hamamatsu_20261024}. {@code <config>} is the target config
+     * file's name without {@code config_} and the extension, so two configs on one scope (one
+     * per camera) get different names.
+     *
+     * @param sourceScanner the scanner the macro image came from
+     * @param configPath the target microscope's config file; null falls back to {@code targetMicroscope}
+     * @param targetMicroscope the target microscope's name
+     * @param date the alignment date
+     * @return the suggested name
+     */
+    public static String suggestPresetName(
+            String sourceScanner, String configPath, String targetMicroscope, java.time.LocalDate date) {
+        String config = targetMicroscope;
+        if (configPath != null && !configPath.isBlank()) {
+            String file = configPath.substring(Math.max(configPath.lastIndexOf('/'), configPath.lastIndexOf('\\')) + 1);
+            String stem = file.replaceFirst("(?i)\\.ya?ml$", "").replaceFirst("(?i)^config_", "");
+            if (!stem.isBlank()) {
+                config = stem;
+            }
+        }
+        String source = sourceScanner == null || sourceScanner.isBlank() ? "unknown" : sourceScanner;
+        return source + "_to_" + config + "_" + date.format(java.time.format.DateTimeFormatter.BASIC_ISO_DATE);
+    }
+
+    /**
      * The name to save a new ({@code sourceScanner}, {@code targetMicroscope}) preset under.
      * Presets are keyed by name, so saving under a name that another pair already uses would
      * replace that pair's preset: on 2026-10-21 an LC-PolScope Hamamatsu alignment reused the
