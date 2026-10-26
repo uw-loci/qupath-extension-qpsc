@@ -109,4 +109,25 @@ class LightPathModelBenchFlipTest {
         assertFlip(LightPathModel.opticalFlipFlags(LightPathModel.OPTICAL_XY), true, true, "xy");
         assertFlip(LightPathModel.opticalFlipFlags(null), false, false, "null-optical");
     }
+
+    @Test
+    void stageViewMirrorComposesWithTheSlideRotation() {
+        // none keeps the historical behaviour: the rotation alone.
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "none"), false, false, "A none");
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_B, "none"), true, true, "B none");
+        // y (the LC-PolScope, 2026-10-26): A mirrors Y, B = 180 xor Y = mirror X.
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "y"), false, true, "A y");
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_B, "y"), true, false, "B y");
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, null), false, false, "A null");
+    }
+
+    @Test
+    void placementCaptionsNameTheDrawnSide() {
+        String[] rig = LightPathModel.placementCaptions(true); // the LC-PolScope: A draws the label right
+        assertEquals("Label right (A, as placed)", rig[0]);
+        assertEquals("Label left (B, rotated 180)", rig[1]);
+        String[] upright = LightPathModel.placementCaptions(false);
+        assertEquals("Label left (A, as placed)", upright[0]);
+        assertEquals("Label right (B, rotated 180)", upright[1]);
+    }
 }

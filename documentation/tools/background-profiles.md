@@ -30,7 +30,7 @@ description: Slides scanned on the Aperio GT450, 1 mm glass, in the quad carrier
 created: 2026-10-22T09:14:00
 expects:                 # optional; checked before an acquisition, warn only
   insert: quad_v         # a stage.inserts id from the microscope YAML
-  slide_insertion: B     # A (label left, as scanned) or B (label right)
+  slide_insertion: B     # A or B: the two ways the slide drops in (a 180); the Stage Map names them by the drawn label side
 attributes:              # free text; recorded, never checked
   carrier: quad_v
   slide_source: Aperio GT450

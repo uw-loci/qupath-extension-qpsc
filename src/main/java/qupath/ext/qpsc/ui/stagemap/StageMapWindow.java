@@ -88,6 +88,8 @@ public class StageMapWindow {
     /** Apply Flips checkbox -- promoted to a field so init/source-change paths can sync its state. */
     private CheckBox applyFlipsCheckbox;
 
+    private ComboBox<String> insertCombo;
+
     /** Slide-placement combo labels (map to light_path.slide_insertion A / B). */
     private static final String SLIDE_LABEL_LEFT = LightPathModel.placementLabel(LightPathModel.INSERT_A);
 
@@ -886,19 +888,24 @@ public class StageMapWindow {
         svOpticalFlip = LightPathModel.opticalFlip(); // read-only here; feeds Camera View
 
         Label slideLabel = new Label(LightPathModel.PLACEMENT_CAPTION + ":");
-        ComboBox<String> insertCombo = new ComboBox<>();
+        insertCombo = new ComboBox<>();
+        // Captions are renamed from the picture once the macro is placed (refreshPlacementCaptions);
+        // until then the generic ones. Item 0 is always placement A, item 1 placement B.
         insertCombo.getItems().addAll(SLIDE_LABEL_LEFT, SLIDE_LABEL_RIGHT);
-        insertCombo
-                .getSelectionModel()
-                .select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? SLIDE_LABEL_RIGHT : SLIDE_LABEL_LEFT);
-        insertCombo.setTooltip(new Tooltip("How THIS slide sits in the holder: label on the left\n"
-                + "(as scanned) vs label on the right (rotated 180). Stored PER-SLIDE\n"
-                + "and baked into the corrected (Camera View) image so it matches the\n"
-                + "live camera. Changing it marks the corrected image + alignment stale.\n\n"
-                + "Scope type and optical flip live in Utilities -> Microscope\n"
-                + "Configuration -> Light Path Orientation."));
+        insertCombo.getSelectionModel().select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? 1 : 0);
+        insertCombo.setTooltip(new Tooltip("How THIS slide sits in the holder: the two ways it drops in\n"
+                + "differ by a 180 in the plane. The captions name the side the label\n"
+                + "is drawn on in Stage View, so pick the one that matches the slide.\n"
+                + "Stored PER-SLIDE and baked into the corrected (Camera View) image so\n"
+                + "it matches the live camera. Changing it marks the corrected image +\n"
+                + "alignment stale.\n\n"
+                + "Scope type, optical flip and the Stage View mirror live in Utilities ->\n"
+                + "Microscope Configuration -> Light Path Orientation."));
+        if (canvas != null) {
+            canvas.setMacroSignListener(sign -> Platform.runLater(() -> refreshPlacementCaptions(sign)));
+        }
         insertCombo.setOnAction(e -> {
-            String newInsertion = SLIDE_LABEL_RIGHT.equals(insertCombo.getValue())
+            String newInsertion = insertCombo.getSelectionModel().getSelectedIndex() == 1
                     ? LightPathModel.INSERT_B
                     : LightPathModel.INSERT_A;
             if (newInsertion.equals(svSlideInsertion)) {
@@ -1938,7 +1945,29 @@ public class StageMapWindow {
      * @return {@code {flipX, flipY}}; never null
      */
     private boolean[] stageViewFlipFlags() {
-        return LightPathModel.slideRotationFlipFlags(svSlideInsertion);
+        return LightPathModel.currentStageViewFlip(svSlideInsertion);
+    }
+
+    /**
+     * Names the two placements after where the label is drawn in Stage View, from the macro's
+     * baseline sign on the map: a scanner puts the label on the macro's left, so an odd number
+     * of X mirrors between the scan and the map (baseline, then the Stage View flip for A)
+     * draws it on the right. Keeps the current selection.
+     */
+    private void refreshPlacementCaptions(double[] sign) {
+        if (insertCombo == null || sign == null || sign.length < 1) {
+            return;
+        }
+        boolean baselineMirrorX = sign[0] < 0;
+        boolean viewMirrorX = LightPathModel.currentStageViewFlip(LightPathModel.INSERT_A)[0];
+        String[] captions = LightPathModel.placementCaptions(baselineMirrorX ^ viewMirrorX);
+        int selected = insertCombo.getSelectionModel().getSelectedIndex();
+        if (captions[0].equals(insertCombo.getItems().get(0))) {
+            return;
+        }
+        insertCombo.getItems().setAll(captions[0], captions[1]);
+        insertCombo.getSelectionModel().select(Math.max(0, selected));
+        logger.info("Slide in holder captions from the map: A = '{}', B = '{}'", captions[0], captions[1]);
     }
 
     /**

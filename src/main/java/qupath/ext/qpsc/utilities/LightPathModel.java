@@ -78,6 +78,15 @@ public final class LightPathModel {
     public static final String KEY_SCOPE_TYPE = "scope_type"; // factor 1a
     public static final String KEY_SLIDE_INSERTION = "slide_insertion"; // factor 1b
     public static final String KEY_OPTICAL_FLIP = "optical_flip"; // factor 2: camera-vs-stage optical flip
+    /**
+     * What the Stage View adds to the slide rotation so it shows the slide as the operator sees
+     * it from above: {@code none | x | y | xy}. On an inverted scope the slide is face down and
+     * the operator sees the tissue through the glass, one mirror away from the scan; whether the
+     * macro's baseline on the map already carries that mirror depends on the stage polarity and
+     * the alignment transform, so it is set per microscope by looking (the LC-PolScope needs
+     * {@code y}, 2026-10-26; OWS3 needed none, 2026-08-09).
+     */
+    public static final String KEY_STAGE_VIEW_FLIP = "stage_view_flip";
 
     public static final String SCOPE_UPRIGHT = "upright";
     public static final String SCOPE_INVERTED = "inverted";
@@ -104,6 +113,42 @@ public final class LightPathModel {
      */
     public static String placementLabel(String insertion) {
         return "B".equalsIgnoreCase(insertion) ? "Label right (rotated 180)" : "Label left (as scanned)";
+    }
+
+    /** The Stage View mirror token from config ({@link #KEY_STAGE_VIEW_FLIP}); {@code none} when unset. */
+    public static String stageViewFlip() {
+        return readOr(KEY_STAGE_VIEW_FLIP, OPTICAL_NONE);
+    }
+
+    /**
+     * The Stage View's canvas flip: the slide rotation for {@code insertion} composed with the
+     * per-microscope Stage View mirror ({@code none | x | y | xy}, see
+     * {@link #KEY_STAGE_VIEW_FLIP}). {@code none} leaves the historical behaviour, the rotation
+     * alone.
+     */
+    public static boolean[] stageViewFlipFlags(String insertion, String stageViewMirror) {
+        boolean[] rotation = slideRotationFlipFlags(insertion);
+        boolean[] mirror = opticalFlipFlags(stageViewMirror);
+        return new boolean[] {rotation[0] ^ mirror[0], rotation[1] ^ mirror[1]};
+    }
+
+    /** The Stage View's canvas flip for {@code insertion} under the active config. */
+    public static boolean[] currentStageViewFlip(String insertion) {
+        return stageViewFlipFlags(insertion, stageViewFlip());
+    }
+
+    /**
+     * The "Slide in holder" captions, in order {A, B}, named after where the label is drawn: a
+     * scanner puts the label on the left of its macro, so an odd number of X mirrors between the
+     * scan and the map puts it on the right. The words then describe the picture on this rig,
+     * whichever way its stage frame runs (on the LC-PolScope, A draws the label on the right).
+     *
+     * @param labelOnRightForA whether placement A is drawn with the label on the right
+     */
+    public static String[] placementCaptions(boolean labelOnRightForA) {
+        String a = labelOnRightForA ? "Label right" : "Label left";
+        String b = labelOnRightForA ? "Label left" : "Label right";
+        return new String[] {a + " (A, as placed)", b + " (B, rotated 180)"};
     }
 
     /** Default slide insertion from config; defaults to {@link #INSERT_A} (identity) when unset. */
@@ -225,7 +270,7 @@ public final class LightPathModel {
      * afterwards if they need the change reflected in subsequent reads.
      *
      * @param field one of {@link #KEY_SCOPE_TYPE}, {@link #KEY_SLIDE_INSERTION},
-     *              {@link #KEY_OPTICAL_FLIP}
+     *              {@link #KEY_OPTICAL_FLIP}, {@link #KEY_STAGE_VIEW_FLIP}
      * @param value the value to write
      * @return {@code true} if the file was changed
      */

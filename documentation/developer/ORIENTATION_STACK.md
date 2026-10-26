@@ -72,8 +72,9 @@ Four factors stack along the light path, plus the macro-image flip that orients 
   the display factors below. This is why the Stage-Map/SIFT display bugs never corrupted data.
 - **Stage Map Camera View** = `cameraFlipFlags()` (factor 3) XOR `opticalFlipFlags` (factor 2) --
   so the map matches the Live Viewer. **Display only.**
-- **Stage Map Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b **only**) -- the slide-180
-  rotation, and *nothing else*. It does **not** apply the scope-face flip (factor 1a). On an inverted
+- **Stage Map Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b) XOR the per-microscope
+  Stage View mirror (`light_path.stage_view_flip`, see the YAML block above). It does **not** apply
+  the scope-face flip (factor 1a) -- that is not derived from `scope_type`. On an inverted
   scope the physical inversion is already carried by the stage polarity (factor 4) and the per-slide
   alignment transform, so the Stage Map's macro overlay is already drawn in that inverted baseline
   (OWS3 2026-08-09: the macro overlay's own `sX=sY=+1` because the insert inversion `dirX=dirY=-1` and
@@ -103,20 +104,33 @@ light_path:
   scope_type: upright      # factor 1a: upright | inverted (face up | face down)
   slide_insertion: B       # factor 1b: A | B (which side the label is on; in-plane 180)
   optical_flip: xy         # factor 2:  none | x | y | xy (objective + tube-lens parity)
+  stage_view_flip: none    # mirror added to Stage View so it shows the slide as seen from above
 ```
 
 - **Camera View** = `cameraFlipFlags` (factor 3) XOR `opticalFlipFlags` (factor 2) -- matches the
   Live Viewer. The optical flip is why Camera View differs from Stage View at all.
-- **Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b **only**) -- the slide-180 rotation.
-  It does **not** apply the scope-face flip (see "How they compose": the scope inversion is already in
-  the polarity + alignment-transform baseline, so re-applying it double-counts). `A` = identity, `B` =
-  180. Unit-tested in `LightPathModelBenchFlipTest`.
+- **Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b, the slide-180 rotation) XOR the
+  per-microscope **Stage View mirror** `light_path.stage_view_flip` (`none | x | y | xy`, default
+  `none`). The scope-face flip is not derived from `scope_type`: whether the macro's baseline on the
+  map already carries the inversion depends on the stage polarity and the alignment transform (OWS3
+  2026-08-09: it did, and re-applying it double-counted; LC-PolScope 2026-10-26: it did not, and Stage
+  View showed the face-down slide face up while Camera View was right). So it is set per rig by
+  looking, like the optical flip: if Stage View shows the slide face up on an inverted scope, set
+  `y`. `LightPathModel.stageViewFlipFlags(insertion, mirror)`, unit-tested in
+  `LightPathModelBenchFlipTest`. Edited in Utilities -> Microscope Configuration -> Light Path
+  Orientation.
+- **"Slide in holder" captions** are named after the picture: the Stage Map reads the macro's
+  baseline sign (`sX`) when the overlay is placed and, with the Stage View flip for A, works out
+  which side the label (on the scan's left) is drawn on. On the LC-PolScope A draws it on the right,
+  so the options read "Label right (A, as placed)" / "Label left (B, rotated 180)"
+  (`LightPathModel.placementCaptions`). Before the macro is placed the generic captions show.
 - Defaults (`upright + A + optical none`) reduce both to identity, so Camera View == Stage View --
   the historical, inert behaviour. No regression until the rig is described.
 
 **Where each control lives (2026-08-09).** The Stage Map exposes **only** the slide-180 rotation
-(`slide_insertion`) -- a "Slide in holder: Label left (as scanned) / Label right (rotated 180)" combo -- because that is the only thing
-that changes run to run. The set-once properties **scope type** and **optical flip** are edited in
+(`slide_insertion`) -- a "Slide in holder" combo, captioned by the drawn label side once the macro is placed
+(`LightPathModel.placementCaptions`) -- because that is the only thing that changes run to run. The set-once
+properties **scope type**, **optical flip** and **Stage View mirror** are edited in
 **Utilities -> Microscope Configuration -> Light Path Orientation** (`LightPathSetupDialog`), which
 writes the same YAML block and calls `MicroscopeConfigManager.reload()` so the change takes effect
 (reopen the Stage Map / Live Viewer to see it). All three still route through
@@ -143,8 +157,8 @@ Decisions locked (2026-08-07):
    only the **slide-180 rotation** (`slide_insertion`); **scope type** and **optical flip** moved to
    **Utilities -> Microscope Configuration -> Light Path Orientation** (`LightPathSetupDialog`). Stage
    View is `slideRotationFlipFlags(insertion)` (scope-face flip dropped -- it double-counted the
-   polarity/transform baseline on inverted scopes; OWS3 2026-08-09). Camera View still adds the optical
-   flip. Superseded the earlier three-dropdown Stage Map design (and the interim by-eye
+   polarity/transform baseline on inverted scopes; OWS3 2026-08-09) XOR the per-microscope Stage View
+   mirror (2026-10-26: the LC-PolScope needs `y`). Camera View still adds the optical flip. Superseded the earlier three-dropdown Stage Map design (and the interim by-eye
    `stageViewOrientation` pref, removed).
 3. **PENDING (Phase 3)** -- a **fully editable setup-wizard page** with a live slide + FOV preview
    (mirroring the light-path simulator) that writes all orientation factors to the YAML. This is the

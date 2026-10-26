@@ -31,6 +31,8 @@ Pairs with microscope_command_server 1.5.0 (background profiles, the orientation
 
 ### Fixed
 
+- **Stage View showed a face-down slide face up on the LC-PolScope.** The Stage View applied only the slide rotation; whether the map's baseline already carries the inverted scope's mirror depends on the stage polarity, and on this rig it does not. A per-microscope `light_path.stage_view_flip` (`none | x | y | xy`, in Utilities > Microscope Configuration > Light Path Orientation as **Stage View mirror**) adds the missing mirror; both LC-PolScope configs set `y`. Other rigs keep `none`, the previous behaviour.
+- **"Slide in holder" captions named the wrong side.** A was always "Label left (as scanned)", but on the LC-PolScope A draws the label on the right. The Stage Map now names the two options after where the label is drawn once the macro is placed: "Label right (A, as placed)" / "Label left (B, rotated 180)" on that rig.
 - **Changing the microscope config file did nothing while connected.** The switch offer compared the new file with the config manager's path, and the manager had already reloaded the new file on its own (the Stage Map's position poller reads the preference within a second), so they matched and no switch, reconnect or server CONFIG happened. The server stayed on the old file while QPSC read the new one. The offer now compares with the file the extension was last built against; declining puts the manager back too.
 
 ### Changed

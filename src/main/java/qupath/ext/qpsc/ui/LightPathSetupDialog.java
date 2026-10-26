@@ -77,6 +77,11 @@ public final class LightPathSetupDialog {
         opticsCombo.getItems().addAll(OPTICS_LABELS);
         opticsCombo.getSelectionModel().select(opticsLabelForKey(optics));
         opticsCombo.setMaxWidth(Double.MAX_VALUE);
+        String stageMirror = LightPathModel.stageViewFlip();
+        ComboBox<String> stageViewCombo = new ComboBox<>();
+        stageViewCombo.getItems().addAll(OPTICS_LABELS);
+        stageViewCombo.getSelectionModel().select(opticsLabelForKey(stageMirror));
+        stageViewCombo.setMaxWidth(Double.MAX_VALUE);
 
         Label intro = new Label("Set-once orientation for microscope '" + mgr.getMicroscopeName()
                 + "'. These are fixed properties of the rig; the run-to-run slide-180 rotation stays "
@@ -98,6 +103,14 @@ public final class LightPathSetupDialog {
         opticsHelp.setMaxWidth(460);
         opticsHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
+        Label stageViewHelp = new Label("Mirror added to the Stage View so it shows the slide as you see it "
+                + "looking down at the stage: on an inverted scope the slide is face down, so the tissue is "
+                + "seen through the glass, one mirror away from the scan. Whether the map's baseline already "
+                + "has that mirror depends on the stage polarity, so set it by looking: if Stage View shows "
+                + "the slide face up (text readable) on an inverted scope, choose Y. Display only.");
+        stageViewHelp.setWrapText(true);
+        stageViewHelp.setMaxWidth(460);
+        stageViewHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(6);
@@ -105,6 +118,8 @@ public final class LightPathSetupDialog {
         grid.add(scopeHelp, 0, 1, 2, 1);
         grid.addRow(2, new Label("Optical flip:"), opticsCombo);
         grid.add(opticsHelp, 0, 3, 2, 1);
+        grid.addRow(4, new Label("Stage View mirror:"), stageViewCombo);
+        grid.add(stageViewHelp, 0, 5, 2, 1);
 
         VBox content = new VBox(12, intro, grid);
         content.setPadding(new Insets(15));
@@ -126,9 +141,11 @@ public final class LightPathSetupDialog {
                     ? LightPathModel.SCOPE_INVERTED
                     : LightPathModel.SCOPE_UPRIGHT;
             String newOptics = opticsKeyForLabel(opticsCombo.getValue());
+            String newStageView = opticsKeyForLabel(stageViewCombo.getValue());
 
             boolean changed = LightPathModel.writeFactor(LightPathModel.KEY_SCOPE_TYPE, newScope);
             changed |= LightPathModel.writeFactor(LightPathModel.KEY_OPTICAL_FLIP, newOptics);
+            changed |= LightPathModel.writeFactor(LightPathModel.KEY_STAGE_VIEW_FLIP, newStageView);
 
             // Reload so LightPathModel reads (Stage Map Camera View, wizard preview, startup dump) see
             // the new values immediately instead of the stale cached config.
@@ -138,14 +155,16 @@ public final class LightPathSetupDialog {
                 logger.warn("Config reload after light-path edit failed: {}", e.getMessage());
             }
             logger.info(
-                    "Light Path Orientation saved: scope_type={}, optical_flip={} (changed={})",
+                    "Light Path Orientation saved: scope_type={}, optical_flip={}, stage_view_flip={} (changed={})",
                     newScope,
                     newOptics,
+                    newStageView,
                     changed);
             LightPathModel.logCurrent("Orientation stack after Light Path edit");
             Dialogs.showInfoNotification(
                     "Light Path Orientation",
                     "Saved scope type = " + newScope + ", optical flip = " + newOptics
+                            + ", Stage View mirror = " + newStageView
                             + ".\nReopen the Stage Map / Live Viewer to see it applied.");
         });
     }

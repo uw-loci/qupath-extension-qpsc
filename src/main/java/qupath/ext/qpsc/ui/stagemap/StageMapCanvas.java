@@ -121,6 +121,19 @@ public class StageMapCanvas extends StackPane {
     // ========== Macro Overlay Layer ==========
     private ImageView macroOverlayView;
     private AffineTransform macroTransform;
+    /** Told the macro's baseline sign {sX, sY} whenever the overlay is placed (Stage Map captions). */
+    private java.util.function.Consumer<double[]> macroSignListener;
+
+    public void setMacroSignListener(java.util.function.Consumer<double[]> listener) {
+        this.macroSignListener = listener;
+    }
+
+    private void noteMacroSign(double sX, double sY) {
+        if (macroSignListener != null) {
+            macroSignListener.accept(new double[] {sX, sY});
+        }
+    }
+
     private int macroWidth, macroHeight;
     private boolean macroOverlayVisible = false;
 
@@ -2080,6 +2093,7 @@ public class StageMapCanvas extends StackPane {
                 macroOverlayView.setFitHeight(overlayH);
                 macroOverlayView.setScaleX(sX >= 0 ? 1.0 : -1.0);
                 macroOverlayView.setScaleY(sY >= 0 ? 1.0 : -1.0);
+                noteMacroSign(sX, sY);
                 return;
             }
         }
@@ -2163,6 +2177,7 @@ public class StageMapCanvas extends StackPane {
         macroOverlayView.setFitHeight(overlayH);
         macroOverlayView.setScaleX(sX >= 0 ? 1.0 : -1.0);
         macroOverlayView.setScaleY(sY >= 0 ? 1.0 : -1.0);
+        noteMacroSign(sX, sY);
     }
 
     // ========== Size Handling ==========
