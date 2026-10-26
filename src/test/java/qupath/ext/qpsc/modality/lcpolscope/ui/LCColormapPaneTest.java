@@ -24,6 +24,39 @@ class LCColormapPaneTest {
     }
 
     @Test
+    void theCeilingIsSentOnlyWhenItDiffersFromTheConfig() {
+        assertNull(LCColormapPane.sendableCeiling(0.0, 20.0)); // never set
+        assertNull(LCColormapPane.sendableCeiling(-5.0, 20.0));
+        assertNull(LCColormapPane.sendableCeiling(Double.NaN, 20.0));
+        assertNull(LCColormapPane.sendableCeiling(20.0, 20.0)); // the config's own value
+        assertEquals(35.0, LCColormapPane.sendableCeiling(35.0, 20.0));
+        assertEquals(5.5, LCColormapPane.sendableCeiling(5.5, 20.0));
+    }
+
+    @Test
+    void theBuilderSendsTheCeilingOnlyWhenSet() {
+        String with = AcquisitionCommandBuilder.builder()
+                .yamlPath("c.yml")
+                .projectsFolder("p")
+                .sampleLabel("s")
+                .scanType("lcpolscope_20x_1")
+                .regionName("r")
+                .displayCeilingNm(35.0)
+                .buildSocketMessage();
+        assertTrue(with.contains("--display-ceiling-nm 35.000"), with);
+        String without = AcquisitionCommandBuilder.builder()
+                .yamlPath("c.yml")
+                .projectsFolder("p")
+                .sampleLabel("s")
+                .scanType("lcpolscope_20x_1")
+                .regionName("r")
+                .displayCeilingNm(null)
+                .displayCeilingNm(0.0)
+                .buildSocketMessage();
+        assertFalse(without.contains("--display-ceiling-nm"), without);
+    }
+
+    @Test
     void theBuilderSendsTheChoiceOnlyWhenSet() {
         String with = AcquisitionCommandBuilder.builder()
                 .yamlPath("c.yml")

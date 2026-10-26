@@ -161,6 +161,7 @@ public class AcquisitionCommandBuilder {
     // legacy 8-bit path, no flag emitted).
     private Boolean ppmHighBitDepth;
     private String displayColormap;
+    private Double displayCeilingNm;
 
     // Preferred first AF tile index (from WSI tissue scoring)
     private Integer preferredAfTile;
@@ -661,6 +662,17 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
+     * LC-PolScope: the retardance shown at full brightness in the orientation colour image for
+     * this run, sent as {@code --display-ceiling-nm}; it overrides
+     * {@code reconstruction.display_retardance_ceiling_nm}. Null, or anything not above 0,
+     * sends nothing.
+     */
+    public AcquisitionCommandBuilder displayCeilingNm(Double ceilingNm) {
+        this.displayCeilingNm = (ceilingNm == null || !(ceilingNm > 0) || ceilingNm.isInfinite()) ? null : ceilingNm;
+        return this;
+    }
+
+    /**
      * Sets the preferred tile index for the first autofocus position,
      * determined by scoring WSI tissue content at each tile location.
      *
@@ -1088,6 +1100,10 @@ public class AcquisitionCommandBuilder {
 
         if (displayColormap != null) {
             args.addAll(Arrays.asList("--display-colormap", displayColormap));
+        }
+        if (displayCeilingNm != null) {
+            args.addAll(Arrays.asList(
+                    "--display-ceiling-nm", String.format(java.util.Locale.ROOT, "%.3f", displayCeilingNm)));
         }
 
         // Add preferred AF tile from WSI tissue scoring

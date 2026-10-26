@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Retardance display ceiling in the LC-PolScope panel.** **Full brightness at ... nm retardance** sits under the Orientation colour image dropdown in Bounded Acquisition and Existing Image. It is the retardance shown at full brightness in the orientation colour image and the top of the display range a stitched retardance image opens with; some mounting media and thicker sections need more than the config's 20 nm. Remembered across sessions; **Config (N nm)** returns to `reconstruction.display_retardance_ceiling_nm`. A value other than the config's is sent as `--display-ceiling-nm` (microscope server 1.5.1 or later; older servers ignore it for the colour tiles but QPSC still applies it on import). The Orientation Colour View starts from the same value.
 - **Orientation Colour View can export.** **Export colour image...** writes the coloured image, with the current map, ceiling and colour-only setting, as a pyramidal RGB OME-TIFF beside the stitched images (`<name>_orientation_colour_<map>_<ceiling>nm.ome.tif`) and adds it to the project with the settings as `orientation_colour.*` metadata. Each pyramid level is coloured from the orientation image's own level, so no angles are interpolated. Written tile by tile with a progress window; a whole slide takes minutes. See [UTILITIES.md](documentation/UTILITIES.md#orientation-colour-view).
 
 ## [0.13.0] - 2026-10-25

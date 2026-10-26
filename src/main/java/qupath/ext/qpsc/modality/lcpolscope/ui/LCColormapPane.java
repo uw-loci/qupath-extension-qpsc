@@ -2,10 +2,14 @@ package qupath.ext.qpsc.modality.lcpolscope.ui;
 
 import java.util.ArrayList;
 import java.util.List;
+import javafx.beans.property.DoubleProperty;
 import javafx.beans.property.StringProperty;
 import javafx.geometry.Pos;
+import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
@@ -14,15 +18,28 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
- * The "Orientation colour" choice in the LC-PolScope acquisition panel: which colour map the
- * server uses for the display-only orientation colour image of the next runs. Remembered across
- * sessions; "As in the config" sends nothing, so {@code reconstruction.display_colormap} applies.
- * The choice is sent as {@code --display-colormap} by the LC-PolScope handler's
- * {@code configureCommandBuilder}. Maps: claude-reports/design/2026-10-22_orientation-colormaps.md.
+ * The orientation colour image settings in the LC-PolScope acquisition panel: which colour map
+ * the server uses for the display-only orientation colour image of the next runs, and the
+ * retardance shown at full brightness (the display ceiling). Both are remembered across
+ * sessions. "As in the config" sends nothing, so {@code reconstruction.display_colormap} applies;
+ * a ceiling left at the config's value sends nothing either. The LC-PolScope handler's
+ * {@code configureCommandBuilder} sends them as {@code --display-colormap} and
+ * {@code --display-ceiling-nm}. The ceiling also sets the display range QPSC gives a stitched
+ * retardance image and the starting ceiling of the Orientation Colour View. It depends on the
+ * sample: a mounting medium or a thick section can need a higher one. Maps:
+ * claude-reports/design/2026-10-22_orientation-colormaps.md.
  */
 public final class LCColormapPane extends VBox {
 
     private static final StringProperty CHOICE = PathPrefs.createPersistentPreference("lcpolscope.displayColormap", "");
+
+    /** The chosen ceiling in nm; 0 (or anything not above 0) means the config's own value. */
+    private static final DoubleProperty CEILING =
+            PathPrefs.createPersistentPreference("lcpolscope.displayCeilingNm", 0.0);
+
+    static final double FALLBACK_CEILING_NM = 20.0;
+    static final double MIN_CEILING_NM = 0.5;
+    static final double MAX_CEILING_NM = 300.0;
 
     private record Option(String value, String label, String help) {
         @Override
@@ -82,7 +99,81 @@ public final class LCColormapPane extends VBox {
                         + "orientation values. Applies to tiles reconstructed from now on."));
         HBox row = new HBox(8, heading, combo);
         row.setAlignment(Pos.CENTER_LEFT);
-        getChildren().addAll(row, help);
+        getChildren().addAll(row, help, ceilingRow(mgr));
+    }
+
+    /** "Full brightness at [spinner] nm retardance [Config (N nm)]". */
+    private static HBox ceilingRow(MicroscopeConfigManager mgr) {
+        double configured = configuredCeilingNm(mgr);
+        Spinner<Double> spinner = new Spinner<>();
+        spinner.setValueFactory(new SpinnerValueFactory.DoubleSpinnerValueFactory(
+                MIN_CEILING_NM, MAX_CEILING_NM, effectiveCeilingNm(), 1.0));
+        spinner.setEditable(true);
+        spinner.setPrefWidth(90);
+        spinner.valueProperty().addListener((obs, old, now) -> {
+            if (now != null && now > 0) {
+                CEILING.set(now);
+            }
+        });
+        Button useConfig = new Button("Config (" + trim(configured) + " nm)");
+        useConfig.setTooltip(
+                new Tooltip("Back to reconstruction.display_retardance_ceiling_nm from the microscope YAML."));
+        useConfig.setOnAction(e -> {
+            CEILING.set(0.0);
+            spinner.getValueFactory().setValue(configured);
+        });
+        Label heading = new Label("Full brightness at:");
+        Tooltip.install(
+                heading,
+                new Tooltip("The retardance shown at full brightness in the orientation colour image, and the top "
+                        + "of the retardance image's display range. Display only. Raise it for a mounting medium "
+                        + "or a section thickness that gives more retardance than the default is made for."));
+        HBox row = new HBox(8, heading, spinner, new Label("nm retardance"), useConfig);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    /**
+     * The ceiling to send with the next acquisition as {@code --display-ceiling-nm}, or null to
+     * send nothing: when the pane was never changed from the config's value.
+     */
+    public static Double sendableCeilingNm() {
+        return sendableCeiling(CEILING.get(), configuredCeilingNm(configManager()));
+    }
+
+    /**
+     * The display ceiling in force: the pane's value when one was set, else the config's
+     * {@code display_retardance_ceiling_nm}, else 20 nm.
+     */
+    public static double effectiveCeilingNm() {
+        double saved = CEILING.get();
+        return saved > 0 && Double.isFinite(saved) ? saved : configuredCeilingNm(configManager());
+    }
+
+    /** The saved ceiling if it is a usable number that differs from the config's; else null. */
+    static Double sendableCeiling(double saved, double configured) {
+        if (!(saved > 0) || !Double.isFinite(saved)) {
+            return null;
+        }
+        return Math.abs(saved - configured) < 1e-9 ? null : saved;
+    }
+
+    private static double configuredCeilingNm(MicroscopeConfigManager mgr) {
+        try {
+            Double c = mgr == null
+                    ? null
+                    : mgr.getDouble("modalities", "lcpolscope", "reconstruction", "display_retardance_ceiling_nm");
+            if (c != null && c > 0 && Double.isFinite(c)) {
+                return c;
+            }
+        } catch (RuntimeException e) {
+            // an unreadable config falls back below
+        }
+        return FALLBACK_CEILING_NM;
+    }
+
+    private static String trim(double v) {
+        return v == Math.rint(v) ? Long.toString((long) v) : String.format(java.util.Locale.ROOT, "%.1f", v);
     }
 
     /**

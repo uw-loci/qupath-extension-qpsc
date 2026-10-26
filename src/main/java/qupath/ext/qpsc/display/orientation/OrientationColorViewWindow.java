@@ -30,6 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.display.orientation.OrientationColormap.Kind;
 import qupath.ext.qpsc.display.orientation.OrientationColormap.PpmHue;
+import qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.UserErrors;
@@ -444,8 +445,8 @@ public final class OrientationColorViewWindow {
     }
 
     private static double defaultCeiling(MicroscopeConfigManager mgr) {
-        Double c = mgr == null ? null : mgr.getDouble(recon("display_retardance_ceiling_nm"));
-        return c != null && c > 0 ? c : 20.0;
+        // The acquisition panel's ceiling when one was set, else the config's, else 20 nm.
+        return LCColormapPane.effectiveCeilingNm();
     }
 
     private static String[] append(String[] base, String key) {

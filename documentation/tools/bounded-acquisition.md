@@ -108,7 +108,9 @@ The angle selection and override controls are set upfront in this dialog -- ther
 
 **Orientation colour image (LC-PolScope only):**
 
-The LC-PolScope panel has an **Orientation colour image** dropdown that chooses the colour map of the display-only `orientation_color` image for the next runs. The choices are **As in the config** (the default; uses `reconstruction.display_colormap` from the microscope YAML), **Uniform lightness**, **PPM colours** (listed only when the config has a PPM hue calibration) and **HSV rainbow (OpenPolScope)**. The choice is remembered across QuPath sessions. It changes the tiles reconstructed from then on and never the retardance or orientation values; tiles already written keep their colours. See [CHANNELS.md](../CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization) for what each map shows.
+The LC-PolScope panel has an **Orientation colour image** dropdown that chooses the colour map of the display-only `orientation_color` image for the next runs. The choices are **As in the config** (the default; uses `reconstruction.display_colormap` from the microscope YAML), **Uniform lightness**, **PPM colours** (listed only when the config has a PPM hue calibration) and **HSV rainbow (OpenPolScope)**. The choice is remembered across QuPath sessions. It changes the tiles reconstructed from then on and never the retardance or orientation values; tiles already written keep their colours.
+
+Next to it, **Full brightness at [nm] nm retardance** sets the retardance shown at full brightness in the orientation colour image, and the top of the display range a stitched retardance image opens with. It starts at the config's `reconstruction.display_retardance_ceiling_nm` (20 nm by default), is remembered across sessions, and **Config (N nm)** returns to the config's value. Raise it for a mounting medium or a thicker section that gives more retardance than the default is made for. See [CHANNELS.md](../CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization) for what each map shows.
 
 **Dedicated focus channel (optional):**
 

@@ -178,6 +178,8 @@ ENDOFSTR
 
 `--display-colormap <uniform|ppm|hsv>` (LC-PolScope only) is the acquisition panel's **Orientation colour image** choice. It overrides `reconstruction.display_colormap` for this run and changes only the display-only `orientation_color` tiles. The flag is omitted when the panel says "As in the config", or when it says PPM and the config has no `display_hue_calibration`.
 
+`--display-ceiling-nm <nm>` (LC-PolScope only) is the panel's **Full brightness at** value: the retardance shown at full brightness in the `orientation_color` tiles. It overrides `reconstruction.display_retardance_ceiling_nm` for this run, display only. Omitted when the panel holds the config's own value. QPSC uses the same value for the display range it gives a stitched retardance image.
+
 `--af-disabled` is mutually exclusive with the `--af-tiles`/`--af-steps`/`--af-range` triplet. When the Java side's "Disable Autofocus" preference is on, the triplet is omitted and `--af-disabled` is sent in its place. The server short-circuits `_configure_autofocus` (no YAML load required, no AF positions scheduled), so no pre-acquisition AF fires, no per-tile sweep autofocus runs, and no manual-focus prompts appear.
 
 `--inner-axis` selects the inner loop of the per-tile snap nest. Allowed values: `z`, `channel`, `angle`. Omit the flag to get the per-modality default (`z` for widefield channel acquisitions, `angle` for PPM angle acquisitions, ignored for single-axis non-channel non-angle paths). The flag is additive -- callers that don't set it produce byte-identical command lines to pre-toggle builds. See `documentation/tools/z-stack-timelapse.md` for the user-facing semantics (fixed-slide-fast vs drift-tolerant for widefield; angle-switch-fast for PPM z-stacks).

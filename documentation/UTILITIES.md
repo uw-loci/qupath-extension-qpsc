@@ -469,7 +469,7 @@ Colours an LC-PolScope orientation image on screen, with the retardance image fr
 | Control | What it does |
 |---|---|
 | Colour map | **Uniform lightness** (every orientation equally light at equal retardance), **PPM colours** (listed only when the microscope config has a PPM hue calibration) or **HSV rainbow (OpenPolScope)**. See [CHANNELS.md](CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization). |
-| Full brightness at | The retardance, in nm, shown at full brightness; anything above it is at full brightness. Starts at the config's `display_retardance_ceiling_nm` (20 nm when there is none). |
+| Full brightness at | The retardance, in nm, shown at full brightness; anything above it is at full brightness. Starts at the value set in the LC-PolScope acquisition panel's **Full brightness at** field if one was set, else the config's `display_retardance_ceiling_nm` (20 nm when there is none). |
 | Colour only | Ignore retardance: every pixel at full brightness. Empty background then shows as noisy colour. Also the mode used when no retardance image is found. |
 | Show on viewer / Hide | Turns the view on or off. Closing the window leaves it on. |
 | Export colour image... | Writes the coloured image with the settings above as a pyramidal RGB OME-TIFF, `<name>_orientation_colour_<map>_<ceiling>nm.ome.tif` (or `_hueonly`), beside the stitched images, and adds it to the project. The entry carries the source image's metadata plus `orientation_colour.*` keys (map, brightness, calibration, registration, source images). The file is written tile by tile, so a whole slide takes minutes and little memory; a progress window shows it. A second export with the same settings gets a numbered name. |

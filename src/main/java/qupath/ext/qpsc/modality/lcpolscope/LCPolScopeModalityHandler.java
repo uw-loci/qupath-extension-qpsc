@@ -248,8 +248,10 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
         // Oryx ORX-10G-51S5M is the monochrome variant -- no Bayer mosaic.
         builder.enableDebayer(false);
-        // The orientation colour map chosen in the acquisition panel; null = the config's own.
+        // The orientation colour map and brightness ceiling chosen in the acquisition panel;
+        // null = the config's own.
         builder.displayColormap(qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane.selectedColormap());
+        builder.displayCeilingNm(qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane.sendableCeilingNm());
     }
 
     @Override
@@ -274,9 +276,9 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     }
 
     /**
-     * Retardance opens at 0 to the display ceiling ({@code
-     * reconstruction.display_retardance_ceiling_nm}, default 20 nm, OpenPolScope's on this
-     * instrument), stored as counts at 100 per nm -- so two samples' maps are on one scale instead
+     * Retardance opens at 0 to the display ceiling (the acquisition panel's "Full brightness
+     * at", else {@code reconstruction.display_retardance_ceiling_nm}, default 20 nm,
+     * OpenPolScope's on this instrument), stored as counts at 100 per nm -- so two samples' maps are on one scale instead
      * of each stretched to its own percentiles. Orientation opens at its full 0..180 deg range.
      */
     @Override
@@ -298,19 +300,8 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     }
 
     private static double displayCeilingNm() {
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) {
-                Double ceiling =
-                        mgr.getDouble("modalities", "lcpolscope", "reconstruction", "display_retardance_ceiling_nm");
-                if (ceiling != null && ceiling > 0) {
-                    return ceiling;
-                }
-            }
-        } catch (RuntimeException e) {
-            logger.debug("Could not read the retardance display ceiling: {}", e.getMessage());
-        }
-        return 20.0;
+        // The acquisition panel's ceiling when one was set, else the config's, else 20 nm.
+        return qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane.effectiveCeilingNm();
     }
 
     /**
