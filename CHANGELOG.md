@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **Orientation Colour View can export.** **Export colour image...** writes the coloured image, with the current map, ceiling and colour-only setting, as a pyramidal RGB OME-TIFF beside the stitched images (`<name>_orientation_colour_<map>_<ceiling>nm.ome.tif`) and adds it to the project with the settings as `orientation_colour.*` metadata. Each pyramid level is coloured from the orientation image's own level, so no angles are interpolated. Written tile by tile with a progress window; a whole slide takes minutes. See [UTILITIES.md](documentation/UTILITIES.md#orientation-colour-view).
+
 ## [0.13.0] - 2026-10-25
 
 Pairs with microscope_command_server 1.5.0 (background profiles, the orientation color map choice and the cancelled-approach stage stop need it), microscope_control 1.2.0, microscope_imageprocessing 0.4.0 and polscope_library 0.1.0. Stitching needs tiles-to-pyramid 0.7.8. The installer now also installs polscope_library, which LC-PolScope needs.

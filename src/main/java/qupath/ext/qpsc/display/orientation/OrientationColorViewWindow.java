@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.display.orientation;
 
 import java.awt.image.BufferedImage;
+import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -16,25 +17,32 @@ import javafx.scene.control.Button;
 import javafx.scene.control.CheckBox;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ProgressBar;
 import javafx.scene.control.Slider;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.display.orientation.OrientationColormap.Kind;
 import qupath.ext.qpsc.display.orientation.OrientationColormap.PpmHue;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.QpscWindows;
+import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
 import qupath.lib.gui.viewer.QuPathViewer;
 import qupath.lib.gui.viewer.overlays.PixelClassificationOverlay;
 import qupath.lib.images.ImageData;
 import qupath.lib.images.servers.ImageServer;
+import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Utilities > Project Tools > Orientation Colour View: colours an LC-PolScope orientation image
@@ -65,6 +73,7 @@ public final class OrientationColorViewWindow {
     private final Stage stage = new Stage();
     private final Label pairing = new Label();
     private final Button toggle = new Button();
+    private final Button export = new Button("Export colour image...");
     private final ComboBox<Kind> kind = new ComboBox<>();
     private final Spinner<Double> ceiling = new Spinner<>();
     private final Slider ceilingSlider = new Slider(1, 100, 20);
@@ -152,7 +161,7 @@ public final class OrientationColorViewWindow {
                 ? "Angles as measured (no registration in the config)."
                 : String.format("Angles registered from the config: angle x %+d %+.1f deg.", sign, offsetDeg);
         Label note = new Label("Display only: the retardance and orientation values are not changed and "
-                + "nothing is saved. Uses the overlay opacity slider. " + reg);
+                + "nothing is saved unless you export. Uses the overlay opacity slider. " + reg);
         note.setWrapText(true);
         note.setStyle("-fx-font-size: 11px;");
         pairing.setWrapText(true);
@@ -164,9 +173,13 @@ public final class OrientationColorViewWindow {
                 hideOverlay();
             }
         });
+        export.setOnAction(e -> exportColourImage());
+        export.setTooltip(new javafx.scene.control.Tooltip(
+                "Write the coloured image, with the settings above, as a pyramidal RGB OME-TIFF "
+                        + "beside the stitched images and add it to the project."));
         Button close = new Button("Close");
         close.setOnAction(e -> stage.hide());
-        HBox buttons = new HBox(8, toggle, close);
+        HBox buttons = new HBox(8, export, toggle, close);
         buttons.setAlignment(Pos.CENTER_RIGHT);
 
         VBox root = new VBox(10, pairing, grid, note, buttons);
@@ -263,6 +276,119 @@ public final class OrientationColorViewWindow {
 
     private void updateToggle() {
         toggle.setText(overlay == null ? "Show on viewer" : "Hide");
+    }
+
+    /**
+     * Writes the current image's colour view to a file beside the stitched images and adds it
+     * to the project. The pairing is built afresh so hiding the overlay meanwhile cannot close
+     * the partner image under the writer.
+     */
+    private void exportColourImage() {
+        String title = "Export orientation colour image";
+        QuPathViewer viewer = qupath.getViewer();
+        ImageData<BufferedImage> data = viewer == null ? null : viewer.getImageData();
+        Project<BufferedImage> project = qupath.getProject();
+        if (data == null || project == null) {
+            UserErrors.show(logger, title, "Open an LC-PolScope retardance or orientation image from a project first.");
+            return;
+        }
+        OrientationPairing.Source source;
+        try {
+            source = OrientationPairing.sourceFor(data, project).orElse(null);
+        } catch (Exception e) {
+            UserErrors.show(logger, title, e);
+            return;
+        }
+        if (source == null) {
+            UserErrors.show(
+                    logger,
+                    title,
+                    nameOf(data)
+                            + " is not an LC-PolScope orientation image, or has no orientation image to pair with.");
+            return;
+        }
+        OrientationColorRenderer.Settings settings = currentSettings();
+        ProjectImageEntry<BufferedImage> entry = project.getEntry(data);
+        String stem = OrientationColorExport.outputStem(nameOf(data), settings);
+        Path directory;
+        try {
+            directory = OrientationColorExport.outputDirectory(source.server(), project);
+        } catch (IllegalStateException e) {
+            closeQuietly(source.opened());
+            UserErrors.show(logger, title, e.getMessage());
+            return;
+        }
+
+        Stage progressStage = new Stage();
+        QpscWindows.track(progressStage);
+        progressStage.initOwner(stage);
+        progressStage.initModality(Modality.NONE);
+        progressStage.setTitle("Exporting colour image");
+        ProgressBar bar = new ProgressBar(0);
+        bar.setPrefWidth(360);
+        Label what = new Label("Writing " + stem + ".ome.tif\nA whole slide takes a few minutes.");
+        what.setWrapText(true);
+        VBox box = new VBox(8, what, bar);
+        box.setPadding(new Insets(12));
+        progressStage.setScene(new Scene(box));
+        progressStage.show();
+        export.setDisable(true);
+
+        Thread worker = new Thread(
+                () -> {
+                    Path written = null;
+                    Exception failure = null;
+                    try {
+                        written = OrientationColorExport.write(
+                                source.server(),
+                                settings,
+                                directory,
+                                stem,
+                                QPPreferenceDialog.getCompressionTypeProperty(),
+                                p -> javafx.application.Platform.runLater(() -> bar.setProgress(p)));
+                    } catch (Exception e) {
+                        failure = e;
+                    } finally {
+                        closeQuietly(source.opened());
+                    }
+                    Path file = written;
+                    Exception error = failure;
+                    javafx.application.Platform.runLater(() -> {
+                        progressStage.hide();
+                        export.setDisable(false);
+                        if (error != null) {
+                            UserErrors.show(logger, title, error);
+                            return;
+                        }
+                        try {
+                            OrientationColorExport.addToProject(project, file, entry, settings, source.description());
+                            qupath.refreshProject();
+                            Dialogs.showInfoNotification(
+                                    title, "Wrote " + file.getFileName() + " and added it to the project.");
+                        } catch (Exception e) {
+                            UserErrors.show(
+                                    logger,
+                                    title,
+                                    new java.io.IOException(
+                                            "Wrote " + file + " but could not add it to the project: " + e.getMessage(),
+                                            e));
+                        }
+                    });
+                },
+                "orientation-colour-export");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private static void closeQuietly(ImageServer<BufferedImage> server) {
+        if (server == null) {
+            return;
+        }
+        try {
+            server.close();
+        } catch (Exception e) {
+            logger.debug("Closing a partner image server failed: {}", e.getMessage());
+        }
     }
 
     private void updatePairingLabel() {
