@@ -326,6 +326,12 @@ Calibrate the two variable retarders of the universal compensator by finding the
   control; without it the calibration assumes 0 and overstates the extinction ratio). It must
   be in the counts of the camera's **current** pixel format: a black level above the darkest
   state measured is reported as a warning and makes the ratio unmeasurable
+- Measure on: the central part of the field (10 to 100%, each axis) the intensities are
+  averaged over, remembered across sessions. Below 100 the camera's own ROI is set for the run
+  and cleared afterwards, so frames read out faster (the iterative search takes several
+  hundred); a camera the core cannot give an ROI has every frame cropped in software instead,
+  which the result says. Use it to keep dust or other junk at the edges of the sensor out of
+  the measurement
 
 **Before acquiring**, the LC-PolScope acquisition panel opens with a **Ready to acquire?** box: calibration applied and its age and extinction ratio, black level set, a background for each LC-PolScope profile that matches the current calibration, the live camera settings (auto gain or exposure must be off; gamma and 8-bit are flagged), and the LC adapter wavelength. Lines marked **Fix** produce wrong or uncorrected results if left; **Check** lines are worth a look. **Recheck** after changing something in Micro-Manager.
 

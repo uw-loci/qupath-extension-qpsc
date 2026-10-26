@@ -16,6 +16,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.geometry.Pos;
 import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ButtonBar;
@@ -43,6 +44,7 @@ import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ConfigYamlEditor;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.gui.prefs.PathPrefs;
 
 /**
  * Calibrates the LC-PolScope liquid crystals from QuPath.
@@ -85,8 +87,23 @@ public class LCCalibrationWorkflow {
     // Parameters
     // ------------------------------------------------------------------
 
-    /** What the operator chooses; everything else comes from the microscope YAML. */
-    public record Params(String outputFolder, String strategy, Double blackLevel, Double exposureMs) {}
+    /**
+     * What the operator chooses; everything else comes from the microscope YAML.
+     *
+     * @param fieldFraction the central fraction of the field (each axis) the intensities are
+     *     measured through, or null for the whole field
+     */
+    public record Params(
+            String outputFolder, String strategy, Double blackLevel, Double exposureMs, Double fieldFraction) {}
+
+    /** The "Measure on the central N% of the field" choice, remembered across sessions. */
+    private static final javafx.beans.property.IntegerProperty FIELD_PERCENT =
+            PathPrefs.createPersistentPreference("lcpolscope.calibrationFieldPercent", 100);
+
+    /** The fraction to send for a percentage: null for 100 (the whole field) or a bad value. */
+    static Double fieldFraction(int percent) {
+        return percent >= 100 || percent < 1 ? null : percent / 100.0;
+    }
 
     /**
      * The reconstruction settings this calibration will run with, read from the microscope YAML.
@@ -398,6 +415,16 @@ public class LCCalibrationWorkflow {
         exposureField.setPromptText("blank = current Micro-Manager exposure");
         exposureField.setPrefColumnCount(10);
 
+        // The central part of the field the intensities are measured through: dust at the edges
+        // of the sensor stays out of the means, and a camera ROI reads out faster.
+        int savedPercent = FIELD_PERCENT.get();
+        Spinner<Integer> fieldSpinner =
+                new Spinner<>(10, 100, savedPercent >= 10 && savedPercent <= 100 ? savedPercent : 100, 10);
+        fieldSpinner.setEditable(true);
+        fieldSpinner.setPrefWidth(80);
+        HBox fieldRow = new HBox(6, fieldSpinner, new Label("% of the field, centred (100 = whole field)"));
+        fieldRow.setAlignment(Pos.CENTER_LEFT);
+
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
@@ -406,6 +433,7 @@ public class LCCalibrationWorkflow {
         grid.addRow(1, new Label("Search:"), strategyBox);
         grid.addRow(2, new Label("Exposure (ms):"), exposureField);
         grid.addRow(3, new Label("Black level:"), blackField);
+        grid.addRow(4, new Label("Measure on:"), fieldRow);
 
         Label notes = new Label("Search: one pass is usually enough. Iterative refines until the residual is small,\n"
                 + "at roughly three times the exposures -- a trade, not an upgrade.\n\n"
@@ -418,7 +446,12 @@ public class LCCalibrationWorkflow {
                 + "(reconstruction.black_level) when it is set there. It must be in the counts of the\n"
                 + "camera's current pixel format. Blank measures a dark frame, which needs lamp\n"
                 + "control this scope does not have; it then falls to 0, assumed, and the extinction\n"
-                + "ratio is overstated by about 10 percent per 50 counts.");
+                + "ratio is overstated by about 10 percent per 50 counts.\n\n"
+                + "Measure on: the central part of the field the intensities are averaged over. Below\n"
+                + "100 the camera's own ROI is set for the run (faster frames, which matters for the\n"
+                + "iterative search) and cleared afterwards; a camera that cannot be given one has\n"
+                + "every frame cropped in software instead. Use it to keep dust or other junk at the\n"
+                + "edges of the sensor out of the measurement.");
         notes.setStyle("-fx-font-size: 11px;");
 
         VBox content = new VBox(8, intro, fromConfig, showConfig, grid, notes);
@@ -465,7 +498,9 @@ public class LCCalibrationWorkflow {
                 return Optional.empty();
             }
         }
-        return Optional.of(new Params(folder, strategyBox.getValue(), black, exposure));
+        int percent = fieldSpinner.getValue() == null ? 100 : fieldSpinner.getValue();
+        FIELD_PERCENT.set(percent);
+        return Optional.of(new Params(folder, strategyBox.getValue(), black, exposure, fieldFraction(percent)));
     }
 
     // ------------------------------------------------------------------
@@ -521,6 +556,7 @@ public class LCCalibrationWorkflow {
                     params.blackLevel(),
                     params.exposureMs(),
                     params.strategy(),
+                    params.fieldFraction(),
                     message -> Platform.runLater(() -> status.setText(message))));
             String json = reply[0];
 

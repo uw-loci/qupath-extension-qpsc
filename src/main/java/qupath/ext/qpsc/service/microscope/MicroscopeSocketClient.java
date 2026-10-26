@@ -8216,6 +8216,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param exposureMs camera exposure for the calibration frames, set for the run and restored
      *     afterwards; null snaps at whatever Micro-Manager is set to. Recorded in the result either way
      * @param strategy {@code single_pass} or {@code iterative}
+     * @param roiFraction the central fraction of the field (each axis, 0 to 1 exclusive) the
+     *     intensities are measured through, as a camera ROI where the core allows one; null for
+     *     the whole field
      * @param statusCallback receives human-readable progress messages, may be null
      * @return the raw JSON result
      * @throws IOException if the server reports a failure or the connection breaks
@@ -8230,6 +8233,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             Double blackLevel,
             Double exposureMs,
             String strategy,
+            Double roiFraction,
             Consumer<String> statusCallback)
             throws IOException {
 
@@ -8256,6 +8260,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (strategy != null && !strategy.isBlank()) {
             messageBuilder.append(" --strategy ").append(strategy);
+        }
+        if (roiFraction != null && roiFraction > 0 && roiFraction < 1) {
+            messageBuilder.append(" --roi-fraction ").append(String.format(java.util.Locale.ROOT, "%.3f", roiFraction));
         }
         messageBuilder.append(" ").append(END_MARKER);
 
