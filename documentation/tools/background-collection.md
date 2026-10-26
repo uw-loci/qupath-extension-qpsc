@@ -16,6 +16,19 @@ Acquire flat-field correction images for improved image quality. Background imag
 - A [background profile](background-profiles.md) for the setup on the stage (create one with **Manage...** in this dialog, or in Utilities > Image Quality > Background Profiles...)
 - For JAI cameras: Run White Balance Calibration first
 
+### Opening it after a calibration
+
+A background set is collected at the exposures, lamp level and (LC-PolScope) palette in force at the time, so every calibration that changes one of those ends with the same **Collect background now...** button. It opens this dialog with the modality just calibrated selected (and, for white balance, the objective, detector and WB mode), in the active background profile:
+
+| After | Where the button is |
+|---|---|
+| JAI White Balance Calibration (**Run Simple WB**, **Run PPM WB**) | The results dialog, next to **Open Folder** |
+| Calibrate Liquid Crystals, **Apply to acquisition** | The "LC palette applied" summary; it first asks you to move to an empty field and defocus |
+| Live Viewer Camera tab, **Save to Profile** (brightfield lamp and exposure, LC-PolScope exposure, fluorescence channel exposures and intensities) | Beside **Save to Profile**, shown after a save (brightfield: any successful save; LC-PolScope exposure and fluorescence: only a save that changed something), until you use it |
+| Acquisition Wizard, Background Correction row | **Collect...** opens this dialog on the Wizard's modality, objective and detector |
+
+Sets collected before the calibration are stale in every background profile, and the Wizard shows that only for the active one, so re-collect for each profile you intend to use.
+
 ## Options
 
 ### General Settings

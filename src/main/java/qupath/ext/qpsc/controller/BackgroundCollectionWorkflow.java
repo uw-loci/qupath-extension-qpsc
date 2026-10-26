@@ -13,6 +13,9 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
+import javafx.scene.control.Alert;
+import javafx.scene.control.ButtonBar;
+import javafx.scene.control.ButtonType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
@@ -22,6 +25,7 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
@@ -57,6 +61,88 @@ import qupath.fx.dialogs.Dialogs;
 public class BackgroundCollectionWorkflow {
 
     private static final Logger logger = LoggerFactory.getLogger(BackgroundCollectionWorkflow.class);
+
+    /**
+     * The one label for the handoff from a calibration into this workflow. A background set is
+     * collected at the exposures, lamp level and (for LC-PolScope) palette in force at the time,
+     * so every calibration that changes one of those offers this button, and it means the same
+     * thing everywhere: open the collection dialog on the hardware that was just calibrated.
+     */
+    public static final String COLLECT_NOW = "Collect background now...";
+
+    /**
+     * What the collection dialog opens on. Every field may be null: the dialog then keeps the
+     * default it would have had anyway (the live objective, the last detector, the last
+     * white-balance mode), so a caller that knows only the modality passes only that.
+     */
+    public record Preselection(String modality, String objective, String detector, WbMode wbMode) {
+        /** Modality only: the dialog resolves the objective and detector from what is mounted. */
+        public static Preselection of(String modality) {
+            return new Preselection(modality, null, null, null);
+        }
+    }
+
+    /** Opens the collection dialog on the given hardware. */
+    public static void run(Preselection preselection) {
+        preselect(preselection);
+        run();
+    }
+
+    /**
+     * Records the preselection where the dialog reads its defaults: the shared modality and
+     * objective state and the last-detector and WB-mode preferences, the same route the
+     * Acquisition Wizard takes before it launches a sub-workflow. A modality the loaded
+     * configuration does not declare is left alone, so the dialog does not open on nothing.
+     */
+    static void preselect(Preselection preselection) {
+        if (preselection == null) {
+            return;
+        }
+        if (preselection.modality() != null) {
+            var state = qupath.ext.qpsc.state.ModalityState.getInstance();
+            Set<String> valid = state.getValidModalities();
+            if (valid.isEmpty() || valid.contains(preselection.modality())) {
+                state.setModality(preselection.modality());
+            } else {
+                logger.warn(
+                        "Background collection: modality '{}' is not in the loaded configuration; keeping '{}'",
+                        preselection.modality(),
+                        state.getModality());
+            }
+        }
+        if (preselection.objective() != null) {
+            qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(preselection.objective());
+        }
+        if (preselection.detector() != null) {
+            PersistentPreferences.setLastDetector(preselection.detector());
+        }
+        if (preselection.wbMode() != null) {
+            PersistentPreferences.setLastWhiteBalanceMode(preselection.wbMode().getDisplayName());
+        }
+    }
+
+    /**
+     * Adds {@link #COLLECT_NOW} to a calibration's result dialog. Pressing it closes the dialog
+     * and opens collection on {@code preselection}. Works for a dialog shown with either
+     * {@code show()} or {@code showAndWait()}: the dialog closes first, the collection dialog
+     * opens on the next FX pulse.
+     */
+    public static void offerCollection(Alert done, Preselection preselection) {
+        offerCollection(done, () -> run(preselection));
+    }
+
+    /**
+     * As {@link #offerCollection(Alert, Preselection)}, with a caller-supplied opener for a
+     * modality that needs a step of its own before collecting (LC-PolScope asks for an empty,
+     * defocused field first).
+     */
+    public static void offerCollection(Alert done, Runnable open) {
+        ButtonType collect = new ButtonType(COLLECT_NOW, ButtonBar.ButtonData.OK_DONE);
+        done.getButtonTypes().add(collect);
+        done.getDialogPane()
+                .lookupButton(collect)
+                .addEventFilter(javafx.event.ActionEvent.ACTION, event -> Platform.runLater(open));
+    }
 
     /**
      * Main entry point for background collection workflow.

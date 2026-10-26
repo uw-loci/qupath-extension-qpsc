@@ -799,13 +799,11 @@ public class LCCalibrationWorkflow {
         done.setHeaderText("Acquisition now uses this calibration");
         done.getDialogPane().setContent(copyableBody(String.join("\n", summary), Math.min(summary.size() + 1, 24)));
         done.setResizable(true);
-        ButtonType collect = new ButtonType("Collect background now...", ButtonBar.ButtonData.OK_DONE);
-        ButtonType later = new ButtonType("Later", ButtonBar.ButtonData.CANCEL_CLOSE);
-        done.getButtonTypes().setAll(collect, later);
+        done.getButtonTypes().setAll(new ButtonType("Later", ButtonBar.ButtonData.CANCEL_CLOSE));
+        qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.offerCollection(
+                done, LCCalibrationWorkflow::startBackgroundCollection);
         DialogOwner.own(done);
-        if (done.showAndWait().orElse(later) == collect) {
-            startBackgroundCollection();
-        }
+        done.showAndWait();
     }
 
     /**
@@ -826,7 +824,8 @@ public class LCCalibrationWorkflow {
                         5));
         DialogOwner.own(prepare);
         if (prepare.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-            qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.run();
+            qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.run(
+                    qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.Preselection.of(MODALITY_KEY));
         }
     }
 

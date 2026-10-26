@@ -388,9 +388,17 @@ public class WhiteBalanceWorkflow {
                             logger.warn("Server config reload failed (non-fatal): {}", reconfigEx.getMessage());
                         }
 
+                        final String calibratedModality = modality;
                         Platform.runLater(() -> {
                             progressStage.close();
-                            showSimpleResults(result, params.outputPath());
+                            showSimpleResults(
+                                    result,
+                                    params.outputPath(),
+                                    new BackgroundCollectionWorkflow.Preselection(
+                                            calibratedModality,
+                                            params.objective(),
+                                            params.detector(),
+                                            qupath.ext.qpsc.modality.WbMode.SIMPLE));
                         });
                         qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
 
@@ -474,8 +482,8 @@ public class WhiteBalanceWorkflow {
 
                         logger.info("WB calibration: objective={}, detector={}", params.objective(), params.detector());
 
-                        applyProfileLampForWb(
-                                client, yamlPath, resolveMultiAngleModality(yamlPath), params.objective());
+                        final String calibratedModality = resolveMultiAngleModality(yamlPath);
+                        applyProfileLampForWb(client, yamlPath, calibratedModality, params.objective());
 
                         Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
                                 params.outputPath(),
@@ -524,7 +532,14 @@ public class WhiteBalanceWorkflow {
 
                         Platform.runLater(() -> {
                             progressStage.close();
-                            showPPMResults(results, params.outputPath());
+                            showPPMResults(
+                                    results,
+                                    params.outputPath(),
+                                    new BackgroundCollectionWorkflow.Preselection(
+                                            calibratedModality,
+                                            params.objective(),
+                                            params.detector(),
+                                            qupath.ext.qpsc.modality.WbMode.PER_ANGLE));
                         });
                         qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
 
@@ -564,7 +579,10 @@ public class WhiteBalanceWorkflow {
     /**
      * Shows results dialog for simple white balance.
      */
-    private static void showSimpleResults(MicroscopeSocketClient.WhiteBalanceResult result, String outputPath) {
+    private static void showSimpleResults(
+            MicroscopeSocketClient.WhiteBalanceResult result,
+            String outputPath,
+            BackgroundCollectionWorkflow.Preselection calibrated) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Simple White Balance Complete");
         alert.setHeaderText(
@@ -591,11 +609,11 @@ public class WhiteBalanceWorkflow {
 
         content.append(String.format("\nAll angles converged: %s\n", result.converged ? "Yes" : "No"));
         content.append("\nPer-angle exposures have been saved to the imaging profile.\n");
-        content.append("Run Background Collection next to update background images.");
+        content.append(STALE_BACKGROUNDS_NOTE);
 
         alert.setContentText(content.toString());
 
-        configureResultDialog(alert, outputPath);
+        configureResultDialog(alert, outputPath, calibrated);
         DialogOwner.own(alert);
         alert.show();
     }
@@ -604,7 +622,9 @@ public class WhiteBalanceWorkflow {
      * Shows results dialog for PPM white balance.
      */
     private static void showPPMResults(
-            Map<String, MicroscopeSocketClient.WhiteBalanceResult> results, String outputPath) {
+            Map<String, MicroscopeSocketClient.WhiteBalanceResult> results,
+            String outputPath,
+            BackgroundCollectionWorkflow.Preselection calibrated) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("PPM White Balance Complete");
 
@@ -646,24 +666,37 @@ public class WhiteBalanceWorkflow {
 
         alert.setContentText(content.toString());
 
+        content.append("\n").append(STALE_BACKGROUNDS_NOTE);
         // Use a monospace font for the table
         alert.getDialogPane().lookup(".content.label").setStyle("-fx-font-family: monospace;");
 
         // Non-modal so user can reference results while continuing work
-        configureResultDialog(alert, outputPath);
+        configureResultDialog(alert, outputPath, calibrated);
         DialogOwner.own(alert);
         alert.show();
     }
 
     /**
-     * Configures a WB result dialog to be non-modal with Close and Open Folder buttons.
+     * Every background set for this objective and detector was collected at the exposures this
+     * calibration just replaced, in every background profile. The Wizard shows that as a stale
+     * Background Correction row for the active profile only.
+     */
+    private static final String STALE_BACKGROUNDS_NOTE =
+            "Backgrounds collected before this calibration are stale, in every background profile.\n" + "Press "
+                    + BackgroundCollectionWorkflow.COLLECT_NOW + " to re-collect them for the active profile.";
+
+    /**
+     * Configures a WB result dialog to be non-modal with Close, Open Folder and Collect background
+     * now buttons.
      * The X (close) button works because CLOSE is in the button types.
      */
-    private static void configureResultDialog(Alert alert, String outputPath) {
+    private static void configureResultDialog(
+            Alert alert, String outputPath, BackgroundCollectionWorkflow.Preselection calibrated) {
         alert.initModality(javafx.stage.Modality.NONE);
 
         // CLOSE button type enables the window X button
         alert.getButtonTypes().setAll(ButtonType.CLOSE);
+        BackgroundCollectionWorkflow.offerCollection(alert, calibrated);
 
         // Add Open Folder as a secondary action
         ButtonType openFolderButton = new ButtonType("Open Folder", ButtonBar.ButtonData.LEFT);

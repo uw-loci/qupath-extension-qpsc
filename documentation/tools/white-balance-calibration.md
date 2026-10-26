@@ -99,15 +99,22 @@ Calibration data is stored in the YAML configuration file
 ```yaml
 imaging_profiles:
   ppm:
-    LOCI_OBJECTIVE_20X:
-      LOCI_DETECTOR_JAI:
-        angles:
-          crossed:
-            exposures_ms: {r: 45.2, g: 38.1, b: 52.3}
+    LOCI_OBJECTIVE_OLYMPUS_20X_POL_001:
+      LOCI_DETECTOR_JAI_001:
+        exposures_ms:
+          crossed:   {all: 285.92, r: 285.92, g: 285.92, b: 285.92}
+          uncrossed: {all: 2.95, r: 1.96, g: 2.95, b: 3.83}
+          positive:  {all: 128.19, r: 128.19, g: 128.19, b: 128.19}
+          negative:  {all: 105.04, r: 105.04, g: 105.04, b: 105.04}
+        gains: {r: 1.2, g: 1.0, b: 1.1}
+        wb_last_modified: '2026-10-21T14:09:33'
 ```
 
-Subsequent background collection and acquisitions automatically use these
-per-channel exposure settings.
+The next background collection bakes these exposures into its set, and acquisitions
+then use the set's exposures. Every set collected before the calibration is stale, in
+every background profile, so the results dialog ends with **Collect background now...**:
+it opens Background Collection on this objective, detector and WB mode. The Wizard's
+Background Correction row shows the staleness for the active profile only.
 
 ## Tips & Troubleshooting
 

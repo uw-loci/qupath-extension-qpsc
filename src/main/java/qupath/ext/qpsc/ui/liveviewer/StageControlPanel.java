@@ -927,6 +927,9 @@ public class StageControlPanel extends VBox {
 
     private Label cameraStatusLabel;
     private VBox cameraModContent; // Swapped when modality changes
+    // The modality whose Save to Profile last changed what its backgrounds are collected at;
+    // its Collect background now... button stays beside Save until collection is opened.
+    private String backgroundRecollectModality;
     private volatile String currentCameraModality; // Current modality for preset refresh
 
     /**
@@ -2122,9 +2125,11 @@ public class StageControlPanel extends VBox {
                 + ".channels, for every objective of this microscope. A background collected at another "
                 + "exposure is flagged at acquisition, so collect it again afterwards."));
         saveBtn.setOnAction(e -> doSaveLcPolScopeExposure(modality, stateIds, parsePositive(expField.getText())));
+        HBox saveRow = new HBox(6, saveBtn, collectBackgroundButton(modality));
+        saveRow.setAlignment(Pos.CENTER_LEFT);
         cameraModContent
                 .getChildren()
-                .addAll(new Separator(), saveBtn, saveToProfileCaption("this exposure, for all five states,"));
+                .addAll(new Separator(), saveRow, saveToProfileCaption("this exposure, for all five states,"));
     }
 
     private VBox renderLcStateSignal(com.google.gson.JsonObject report, String failure) {
@@ -2223,6 +2228,9 @@ public class StageControlPanel extends VBox {
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Saved " + fmtNum(ms) + " ms to all states (" + changed
                                     + " changed). Collect a new background if this exposure is new.");
+                            if (changed > 0) {
+                                backgroundRecollectModality = modality;
+                            }
                             cameraStatusLabel.setStyle(
                                     "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                             rebuildCameraModContent(modality);
@@ -2239,6 +2247,30 @@ public class StageControlPanel extends VBox {
                 "Save-Profile-LCPS");
         t.setDaemon(true);
         t.start();
+    }
+
+    /**
+     * The same handoff every calibration offers, beside Save to Profile. Hidden until a save has
+     * changed what this modality's backgrounds are collected at (an exposure, a lamp level), then
+     * shown until collection is opened: a background taken at the old values is flagged at
+     * acquisition, so the reminder outlives the status line.
+     */
+    private Button collectBackgroundButton(String modality) {
+        Button collect = new Button(qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.COLLECT_NOW);
+        collect.setStyle("-fx-font-size: 10px;");
+        boolean pending = modality != null && modality.equals(backgroundRecollectModality);
+        collect.setVisible(pending);
+        collect.setManaged(pending);
+        collect.setTooltip(new Tooltip("Opens Background Collection on " + modality
+                + ". The values just saved are what the new background set is collected at."));
+        collect.setOnAction(e -> {
+            backgroundRecollectModality = null;
+            collect.setVisible(false);
+            collect.setManaged(false);
+            qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.run(
+                    qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.Preselection.of(modality));
+        });
+        return collect;
     }
 
     private Node buildBrightfieldSaveToProfileButton(String modality) {
@@ -2260,7 +2292,7 @@ public class StageControlPanel extends VBox {
                 + "After save: the Java MicroscopeConfigManager reloads from disk and the "
                 + "server runs RECONFG so both sides see the new value immediately."));
         saveBtn.setOnAction(e -> doSaveBrightfieldProfile(modality));
-        HBox row = new HBox(4, saveBtn);
+        HBox row = new HBox(6, saveBtn, collectBackgroundButton(modality));
         row.setAlignment(Pos.CENTER_LEFT);
         return new VBox(2, row, saveToProfileCaption("this lamp intensity and exposure"));
     }
@@ -2374,6 +2406,7 @@ public class StageControlPanel extends VBox {
                                         }
                                         Platform.runLater(() -> {
                                             cameraStatusLabel.setText("Saved: " + result.message);
+                                            backgroundRecollectModality = modality;
                                             cameraStatusLabel.setStyle(
                                                     "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                                             rebuildCameraModContent(modality);
@@ -2434,7 +2467,7 @@ public class StageControlPanel extends VBox {
                 + "Note: profile-level channel_overrides (per-objective tuning) are NOT "
                 + "touched -- this writes the modality-level base only."));
         saveBtn.setOnAction(e -> doSaveFluorescenceChannels(modality));
-        HBox row = new HBox(4, saveBtn);
+        HBox row = new HBox(6, saveBtn, collectBackgroundButton(modality));
         row.setAlignment(Pos.CENTER_LEFT);
         return new VBox(2, row, saveToProfileCaption("these channels' exposure and intensity"));
     }
@@ -2560,6 +2593,9 @@ public class StageControlPanel extends VBox {
                         logger.info("Save channels to YAML: {} write(s). Detail: {}", finalWrites, finalSummary);
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Saved " + finalWrites + " field(s) to YAML + reloaded server");
+                            if (finalWrites > 0) {
+                                backgroundRecollectModality = modality;
+                            }
                             cameraStatusLabel.setStyle(
                                     "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
                             rebuildCameraModContent(modality);
