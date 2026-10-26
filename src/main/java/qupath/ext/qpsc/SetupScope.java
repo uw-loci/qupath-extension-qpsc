@@ -261,6 +261,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
      */
     void loadConfigState(boolean autoInstalledOffline) {
         MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+        MicroscopeSwitcher.noteBuiltAgainst(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
         // 2) Validate microscope YAML up-front via QPScopeChecks
         configValid = QPScopeChecks.validateMicroscopeConfig();

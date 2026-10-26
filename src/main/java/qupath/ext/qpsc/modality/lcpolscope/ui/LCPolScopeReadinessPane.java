@@ -53,10 +53,18 @@ public final class LCPolScopeReadinessPane extends VBox {
                         if (!controller.isConnected()) {
                             return LCPolScopeReadiness.liveChecks(null);
                         }
-                        return LCPolScopeReadiness.liveChecks(controller
+                        List<Check> live = new ArrayList<>();
+                        Check files = LCPolScopeReadiness.serverConfigCheck(
+                                controller.getSocketClient().getConfiguredPath(),
+                                QPPreferenceDialog.getMicroscopeConfigFileProperty());
+                        if (files != null) {
+                            live.add(files);
+                        }
+                        live.addAll(LCPolScopeReadiness.liveChecks(controller
                                 .getSocketClient()
                                 .getLcPolScopeReadiness()
-                                .orElse(null));
+                                .orElse(null)));
+                        return live;
                     } catch (Exception e) {
                         logger.warn("LC-PolScope readiness check failed: {}", e.getMessage());
                         return List.of(new Check(Level.INFO, "Camera check failed: " + e.getMessage()));

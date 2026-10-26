@@ -44,6 +44,48 @@ public final class LCPolScopeReadiness {
 
     private LCPolScopeReadiness() {}
 
+    /**
+     * Whether the server and QPSC read the same microscope file. The server keeps the file of
+     * the last CONFIG it was sent, so a config switch in QPSC without a reconnect leaves the
+     * two on different files: the calibration lands in one, the background records the other,
+     * and the acquisition is checked against a third reading (2026-10-26, the two LC-PolScope
+     * configs). Null when they agree or either side is unknown.
+     */
+    public static Check serverConfigCheck(String serverPath, String qpscPath) {
+        if (serverPath == null || serverPath.isBlank() || qpscPath == null || qpscPath.isBlank()) {
+            return null;
+        }
+        if (normalise(serverPath).equalsIgnoreCase(normalise(qpscPath))) {
+            return null;
+        }
+        return new Check(
+                Level.FAIL,
+                "The microscope server is running " + fileName(serverPath) + " but QPSC is set to "
+                        + fileName(qpscPath) + ": the calibration, backgrounds and profiles are read from "
+                        + "different files. Disconnect and reconnect, or use Switch Microscope, so the server "
+                        + "loads the same file.");
+    }
+
+    private static String normalise(String path) {
+        try {
+            return java.nio.file.Path.of(path.trim())
+                    .toAbsolutePath()
+                    .normalize()
+                    .toString();
+        } catch (RuntimeException e) {
+            return path.trim();
+        }
+    }
+
+    private static String fileName(String path) {
+        try {
+            java.nio.file.Path name = java.nio.file.Path.of(path.trim()).getFileName();
+            return name == null ? path : name.toString();
+        } catch (RuntimeException e) {
+            return path;
+        }
+    }
+
     /** Checks answerable from the configuration and the background folders on disk. */
     public static List<Check> configChecks(MicroscopeConfigManager mgr, LocalDateTime now) {
         List<Check> checks = new ArrayList<>();

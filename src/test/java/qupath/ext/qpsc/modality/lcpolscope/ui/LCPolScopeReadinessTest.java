@@ -213,4 +213,23 @@ class LCPolScopeReadinessTest {
         assertEquals(Level.OK, find(ok, "LC adapter wavelength 549").level());
         assertEquals(Level.INFO, LCPolScopeReadiness.liveChecks(null).get(0).level());
     }
+
+    @Test
+    void serverAndQpscOnDifferentFilesIsAFailure() {
+        var check = LCPolScopeReadiness.serverConfigCheck(
+                "C:\\cfg\\config_LCPolScope.yml", "C:\\cfg\\config_LCPolScope_Hamamatsu.yml");
+        org.junit.jupiter.api.Assertions.assertNotNull(check);
+        org.junit.jupiter.api.Assertions.assertEquals(LCPolScopeReadiness.Level.FAIL, check.level());
+        org.junit.jupiter.api.Assertions.assertTrue(check.text().contains("config_LCPolScope.yml"), check.text());
+        org.junit.jupiter.api.Assertions.assertTrue(
+                check.text().contains("config_LCPolScope_Hamamatsu.yml"), check.text());
+    }
+
+    @Test
+    void theSameFileOrAnUnknownSideIsNoCheck() {
+        org.junit.jupiter.api.Assertions.assertNull(
+                LCPolScopeReadiness.serverConfigCheck("/cfg/config_PPM.yml", "/cfg/./config_PPM.yml"));
+        org.junit.jupiter.api.Assertions.assertNull(LCPolScopeReadiness.serverConfigCheck(null, "/cfg/a.yml"));
+        org.junit.jupiter.api.Assertions.assertNull(LCPolScopeReadiness.serverConfigCheck("/cfg/a.yml", ""));
+    }
 }

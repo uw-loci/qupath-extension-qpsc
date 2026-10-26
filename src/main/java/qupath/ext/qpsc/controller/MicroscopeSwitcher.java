@@ -55,10 +55,34 @@ public final class MicroscopeSwitcher {
 
     private static final AtomicBoolean inProgress = new AtomicBoolean(false);
 
+    /**
+     * The YAML the menu, viewers and server connection were last built against: set at install
+     * and after every completed switch. Kept apart from the config manager's own path because
+     * the manager reloads itself the moment any caller reads the changed preference (the Stage
+     * Map's position poller does, within a second), which on 2026-10-26 made the switch offer
+     * compare the new file with itself and do nothing: QPSC moved to the Hamamatsu config while
+     * the server stayed on the Oryx one, and the calibration, the background and the acquisition
+     * each read a different file.
+     */
+    private static volatile String builtAgainst;
+
     private MicroscopeSwitcher() {}
 
-    /** The YAML the extension is currently built against, or null before install. */
+    /** Records the YAML everything is now built against (install, or a completed switch). */
+    public static void noteBuiltAgainst(String path) {
+        builtAgainst = (path == null || path.isBlank()) ? null : path;
+    }
+
+    /**
+     * The YAML the extension is currently built against, or null before install. This is the
+     * file of the last install or completed switch, not whatever the config manager has most
+     * recently loaded; see {@link #noteBuiltAgainst}.
+     */
     public static String activePath() {
+        String noted = builtAgainst;
+        if (noted != null) {
+            return noted;
+        }
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
         return mgr == null ? null : mgr.getConfigPath();
     }
@@ -161,9 +185,14 @@ public final class MicroscopeSwitcher {
             int others = QpscWindows.showing().size();
             if (confirm && !confirmed(oldPath, newPath, wasLive, wasMap, others)) {
                 // Declined: put the preference back. Left on the new file it would be what the
-                // next reconnect sends the server, and what the next stage move loads.
+                // next reconnect sends the server, and what the next stage move loads. The
+                // config manager may already have reloaded the new file on its own; reading the
+                // restored preference puts it back too.
                 logger.info("Microscope switch to {} declined by the operator", newPath);
                 restorePreference(oldPath);
+                if (oldPath != null && !oldPath.isBlank()) {
+                    MicroscopeConfigManager.getInstance(oldPath);
+                }
                 return;
             }
 
@@ -221,6 +250,7 @@ public final class MicroscopeSwitcher {
                             // 7. Rebuild what the UI shows, against whichever config is now active.
                             SetupScope.reloadForNewConfig();
                             if (err == null) {
+                                noteBuiltAgainst(newPath);
                                 if (wasLive) {
                                     LiveViewerWindow.show();
                                 }

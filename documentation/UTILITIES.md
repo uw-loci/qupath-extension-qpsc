@@ -265,7 +265,7 @@ LC-PolScope functionality includes a liquid-crystal calibration workflow:
 **Extensions > QP Scope > LC-PolScope > LC-PolScope Setup...** opens one window with the steps in the order they have to happen, under the same **Ready to acquire?** status the acquisition panel shows:
 
 1. **Camera**: in Micro-Manager's Device Property Browser, Gain Auto and Exposure Auto Off, gamma off, a 12- or 16-bit pixel format. The window is not modal, and the status rechecks whenever you return to it.
-2. **Calibrate** on a clear, specimen-free field. This measures the black level, and Apply writes the palette and offers the measured black level and an exposure from the usable range.
+2. **Calibrate** on a clear, specimen-free field. This measures the black level, and Apply writes the palette and offers the measured black level and an exposure from the usable range. **Apply a saved calibration...** beside it applies an earlier run's `lc_calibration_*.json` to the current config instead (see [LC-PolScope Calibration](#lc-polscope-calibration)).
 3. **Background**, after every calibration: specimen-free, defocused 10-20 um, for each LC-PolScope profile you acquire with.
 
 ### LC-PolScope Calibration
@@ -333,7 +333,9 @@ Calibrate the two variable retarders of the universal compensator by finding the
   which the result says. Use it to keep dust or other junk at the edges of the sensor out of
   the measurement
 
-**Before acquiring**, the LC-PolScope acquisition panel opens with a **Ready to acquire?** box: calibration applied and its age and extinction ratio, black level set, a background for each LC-PolScope profile that matches the current calibration, the live camera settings (auto gain or exposure must be off; gamma and 8-bit are flagged), and the LC adapter wavelength. Lines marked **Fix** produce wrong or uncorrected results if left; **Check** lines are worth a look. **Recheck** after changing something in Micro-Manager.
+**Apply a saved calibration** (LC-PolScope Setup, step 2) applies an `lc_calibration_*.json` from an earlier run to the config QPSC is set to, through the same Apply step a fresh result gets. Use it when a calibration was applied to the other LC-PolScope config file (the two share one instrument), instead of running the nine-minute search again. Collect the background again afterwards.
+
+**Before acquiring**, the LC-PolScope acquisition panel opens with a **Ready to acquire?** box: whether the microscope server is running the same config file QPSC is set to (a switch of the preference without a reconnect leaves them on different files, and then the calibration, the backgrounds and the profiles are read from different places), calibration applied and its age and extinction ratio, black level set, a background for each LC-PolScope profile that matches the current calibration, the live camera settings (auto gain or exposure must be off; gamma and 8-bit are flagged), and the LC adapter wavelength. Lines marked **Fix** produce wrong or uncorrected results if left; **Check** lines are worth a look. **Recheck** after changing something in Micro-Manager.
 
 **Background correction**, after calibrating and applying: move to a specimen-free area,
 defocus 10-20 um, and run Background Collection for the LC-PolScope profile. Each state is

@@ -49,9 +49,13 @@ public final class LCPolScopeSetupWindow {
                         "2. Calibrate on a clear, specimen-free field",
                         "Finds the extinction point and swing states, measures the black level, and on Apply "
                                 + "writes the palette and offers the measured black level and an exposure from the "
-                                + "usable range. Apply then offers the background, step 3.",
+                                + "usable range. Apply then offers the background, step 3. A calibration file from "
+                                + "an earlier run can be applied to the current config instead, for instance one "
+                                + "that was applied to the other LC-PolScope config file.",
                         "Calibrate Liquid Crystals...",
-                        LCCalibrationWorkflow::run),
+                        LCCalibrationWorkflow::run,
+                        "Apply a saved calibration...",
+                        LCCalibrationWorkflow::applySaved),
                 step(
                         "3. Background, after every calibration",
                         "Move to a specimen-free area and defocus 10-20 um, then collect the five-state "
@@ -86,6 +90,11 @@ public final class LCPolScopeSetupWindow {
     }
 
     private static VBox step(String title, String text, String buttonText, Runnable action) {
+        return step(title, text, buttonText, action, null, null);
+    }
+
+    private static VBox step(
+            String title, String text, String buttonText, Runnable action, String secondText, Runnable second) {
         Label heading = new Label(title);
         heading.setStyle("-fx-font-weight: bold;");
         Label body = new Label(text);
@@ -94,7 +103,12 @@ public final class LCPolScopeSetupWindow {
         body.setStyle("-fx-font-size: 11px;");
         Button button = new Button(buttonText);
         button.setOnAction(e -> action.run());
-        HBox row = new HBox(button);
+        HBox row = new HBox(8, button);
+        if (secondText != null && second != null) {
+            Button other = new Button(secondText);
+            other.setOnAction(e -> second.run());
+            row.getChildren().add(other);
+        }
         row.setAlignment(Pos.CENTER_LEFT);
         return new VBox(4, heading, body, row);
     }

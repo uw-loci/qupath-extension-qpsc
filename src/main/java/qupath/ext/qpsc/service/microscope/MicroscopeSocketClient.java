@@ -899,6 +899,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws IOException if communication fails
      * @throws IllegalStateException if config file path is not set in preferences
      */
+    /**
+     * The config path the server was last told to load (the last CONFIG this client sent), or
+     * null before the first connection. The server keeps that file until the next CONFIG, so
+     * when the QPSC preference changes without a reconnect the two sides read different files.
+     */
+    public String getConfiguredPath() {
+        return configuredPath;
+    }
+
+    private volatile String configuredPath;
+
     public void sendConfig() throws IOException {
         if (!isConnected()) {
             throw new IllegalStateException("Cannot send config - not connected to server");
@@ -914,6 +925,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
 
         logger.info("Sending CONFIG command with path: {}", configPath);
+        configuredPath = configPath;
 
         synchronized (socketLock) {
             try {

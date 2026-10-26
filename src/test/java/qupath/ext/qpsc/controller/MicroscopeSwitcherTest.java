@@ -41,6 +41,21 @@ class MicroscopeSwitcherTest {
     }
 
     @Test
+    void theNotedFileIsTheActiveOneEvenAfterTheManagerReloads() {
+        // The config manager reloads on its own when any caller reads a changed preference, so
+        // the offer must compare against the file the extension was built against.
+        MicroscopeSwitcher.noteBuiltAgainst("/cfg/config_LCPolScope.yml");
+        try {
+            assertThat(MicroscopeSwitcher.activePath()).isEqualTo("/cfg/config_LCPolScope.yml");
+            assertThat(MicroscopeSwitcher.shouldOffer(
+                            MicroscopeSwitcher.activePath(), "/cfg/config_LCPolScope_Hamamatsu.yml", true))
+                    .isTrue();
+        } finally {
+            MicroscopeSwitcher.noteBuiltAgainst(null);
+        }
+    }
+
+    @Test
     void aMissingOrBlankCandidateIsIgnored() {
         // The preferences field fires on every keystroke; half-typed paths do not exist yet.
         assertThat(MicroscopeSwitcher.shouldOffer("/cfg/config_PPM.yml", "/cfg/config_OW", false))

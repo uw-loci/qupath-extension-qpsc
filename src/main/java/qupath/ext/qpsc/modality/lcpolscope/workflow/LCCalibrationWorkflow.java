@@ -83,6 +83,73 @@ public class LCCalibrationWorkflow {
         Platform.runLater(() -> promptForParameters().ifPresent(LCCalibrationWorkflow::startWithProgress));
     }
 
+    /**
+     * Applies a calibration written by an earlier run ({@code lc_calibration_*.json}) to the
+     * microscope configuration QPSC is set to, through the same Apply step a fresh result gets.
+     * For a calibration that landed in the wrong file: the two LC-PolScope configs share one
+     * instrument, and on 2026-10-26 the palette was applied to the Oryx file while the
+     * backgrounds and the acquisition used the Hamamatsu one.
+     */
+    public static void applySaved() {
+        Platform.runLater(() -> {
+            javafx.stage.FileChooser chooser = new javafx.stage.FileChooser();
+            chooser.setTitle("Apply a saved LC calibration");
+            chooser.getExtensionFilters()
+                    .add(new javafx.stage.FileChooser.ExtensionFilter(
+                            "LC calibration (lc_calibration_*.json)", "*.json"));
+            java.io.File start = new java.io.File(defaultOutputFolder());
+            if (start.isDirectory()) {
+                chooser.setInitialDirectory(start);
+            }
+            QuPathGUI gui = QuPathGUI.getInstance();
+            java.io.File file = chooser.showOpenDialog(gui == null ? null : gui.getStage());
+            if (file == null) {
+                return;
+            }
+            JsonObject result;
+            try {
+                result = JsonParser.parseString(Files.readString(file.toPath())).getAsJsonObject();
+            } catch (Exception e) {
+                UserErrors.show(
+                        logger,
+                        "LC-PolScope Calibration",
+                        new IOException(
+                                "Could not read " + file.getName() + " as a calibration: " + e.getMessage(), e));
+                return;
+            }
+            if (!result.has("palette_waves") || !result.get("palette_waves").isJsonObject()) {
+                UserErrors.show(
+                        logger,
+                        "LC-PolScope Calibration",
+                        file.getName() + " is not an LC calibration file: it has no palette_waves.");
+                return;
+            }
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            String when =
+                    result.has("calibrated_at") ? result.get("calibrated_at").getAsString() : "unknown date";
+            String ratio = result.has("extinction_ratio")
+                    ? String.format(
+                            java.util.Locale.ROOT,
+                            "%.1f",
+                            result.get("extinction_ratio").getAsDouble())
+                    : "?";
+            Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+            confirm.setTitle("Apply a saved LC calibration");
+            confirm.setHeaderText(
+                    "Apply " + file.getName() + " to " + Path.of(configPath).getFileName() + "?");
+            confirm.setContentText("Calibrated " + when.replace('T', ' ') + ", extinction ratio " + ratio
+                    + ".\n\nThe palette and date are written into that file as if the calibration had just "
+                    + "run; the next step offers the exposure and black level. A background collected "
+                    + "under another calibration is refused afterwards, so collect one again.");
+            DialogOwner.own(confirm);
+            if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
+                return;
+            }
+            logger.info("Applying the saved LC calibration {} to {}", file, configPath);
+            applyToAcquisition(result);
+        });
+    }
+
     // ------------------------------------------------------------------
     // Parameters
     // ------------------------------------------------------------------
