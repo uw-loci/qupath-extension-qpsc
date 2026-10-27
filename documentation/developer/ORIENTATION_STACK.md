@@ -89,10 +89,17 @@ Four factors stack along the light path, plus the macro-image flip that orients 
 | Rig | Scope | Insertion | Optical flip | Camera | Polarity |
 |-----|-------|-----------|--------------|--------|----------|
 | **PPM**  | upright | **B** | **180 / XY** (objective inversion) | NORMAL | NORMAL |
-| **OWS3** | (TBD by matching) | (TBD) | net camera view **reversed in X** (camera+optics combined; set optical to the observed net -- don't split it) | NORMAL | INVERT_XY |
+| **OWS3** | inverted | A | `xy` in `config_OWS3.yml` since 2026-08-09; the Camera View check against the Live Viewer is still owed (see the 2026-10-27 report) | NORMAL | INVERT_XY |
+| **LC-PolScope** (both cameras) | inverted | A | **`y`** (2026-10-27: with `none` the Camera View macro was mirrored top/bottom against the Live Viewer) | FLIP_V (Calibrate Directions, 2026-10-19) | INVERT_Y |
 
-PPM was pinned by matching the simulator. OWS3's optical value is the *net* the operator observes
-(camera view reversed in X); the camera-vs-optical split is unknown and does not need splitting.
+PPM was pinned by matching the simulator. The optical value on the other rigs is the *net* the
+operator observes by holding the Stage Map's Camera View next to the Live Viewer; the
+camera-vs-optical split is unknown and does not need splitting. It is display only: alignment
+and acquisition read the two preferences, so a wrong value here cannot move the stage. The
+LC-PolScope also carries `stage_view_flip: y`, so until 2026-10-27 its two views were the same
+picture (camera Y flip = Stage View mirror); with `optical_flip: y` Camera View is now the
+unmirrored stage frame and the two views differ, which is the expected state on an inverted
+scope.
 
 ## The Stage Map orientation controls (factors 1 and 2, made explicit)
 
@@ -177,8 +184,10 @@ Decisions locked (2026-08-07):
    remaining piece; it needs JavaFX runtime verification and will build on `LightPathModel`.
 
 Known values (by matching, not derivation): **PPM** = upright, Slide B, Optics 180 (XY). **OWS3** =
-inverted scope, Optics `none` (Camera View correct at zero flip; verified 2026-08-09), slide rotation
-per placement. On OWS3 the Stage View is correct with the scope-face flip **dropped** -- the inversion
-is already in the polarity/transform baseline.
+inverted scope, slide rotation per placement; `config_OWS3.yml` says Optics `xy` (2026-08-09) while
+the same day's note here said `none`, and the on-screen Camera View check is still owed. On OWS3
+the Stage View is correct with the scope-face flip **dropped** -- the inversion is already in the
+polarity/transform baseline. **LC-PolScope** = inverted scope, Slide A, Optics `y`, Stage View
+mirror `y` (both 2026-10-26/27, by looking).
 
 `LightPathModel` and this document remain the single source of truth in code.

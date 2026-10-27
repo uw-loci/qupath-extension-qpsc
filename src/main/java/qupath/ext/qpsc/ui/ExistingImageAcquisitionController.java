@@ -263,6 +263,15 @@ public class ExistingImageAcquisitionController {
 
         // UI Components - Refinement Section
         private ToggleGroup refinementGroup;
+        /**
+         * Set by a click on a refinement radio. The recommendation ({@link #updateRefinementRecommendation})
+         * re-runs when the transform combo changes and used to re-select its default over the
+         * operator's choice, which is one way a run could start with NONE while the dialog had
+         * shown Single-tile (LC-PolScope, 2026-10-27). Once the operator has clicked, the
+         * recommendation only updates its text.
+         */
+        private boolean refinementChosenByOperator = false;
+
         private RadioButton noRefineRadio;
         private RadioButton singleTileRadio;
         private RadioButton multiTileRadio;
@@ -988,6 +997,13 @@ public class ExistingImageAcquisitionController {
 
             fullManualRadio = new RadioButton("Full manual alignment (+10-15 min)");
             fullManualRadio.setToggleGroup(refinementGroup);
+            for (RadioButton rb : List.of(noRefineRadio, singleTileRadio, multiTileRadio, fullManualRadio)) {
+                // onAction fires on a click or a key press, not on setSelected from code.
+                rb.setOnAction(e -> {
+                    refinementChosenByOperator = true;
+                    logger.info("Refinement chosen by the operator: {}", selectedRefinement());
+                });
+            }
 
             // Add descriptions
             Label noRefineDesc = new Label(
@@ -2086,58 +2102,89 @@ public class ExistingImageAcquisitionController {
         }
 
         private void updateRefinementRecommendation() {
-            // Multi-slide batch: the slide is being aligned fresh for its current mount, so a
-            // prior alignment (built for a different insert) must not be trusted -- recommend
-            // verifying the fresh alignment with a single tile (which also captures the focus Z
-            // that seeds the unattended acquire pass), not "proceed without refinement".
+            RefinementChoice recommended;
+            String text;
+            String why;
             if (forceFreshAlignment) {
-                // Multi-slot vertical holder (e.g. quad_v): each slide sits loosely in a tall slot,
-                // so its true orientation carries rotation + scale "play" that translation-only
-                // single-tile refinement cannot correct. Default to MULTI_TILE (solves a stage-space
-                // similarity from 2+ tiles). Horizontal inserts and single vertical slides keep the
-                // single-tile default. The radio stays user-overridable either way.
+                // Multi-slide batch: the slide is being aligned fresh for its current mount, so a
+                // prior alignment (built for a different insert) must not be trusted -- recommend
+                // verifying the fresh alignment with a single tile (which also captures the focus Z
+                // that seeds the unattended acquire pass), not "proceed without refinement".
                 if (isMultiSlotVerticalHolder()) {
-                    multiTileRadio.setSelected(true);
-                    refinementRecommendationLabel.setText("[i] Recommendation: Multi-tile refinement -- "
+                    // Multi-slot vertical holder (e.g. quad_v): each slide sits loosely in a tall
+                    // slot, so its true orientation carries rotation + scale "play" that
+                    // translation-only single-tile refinement cannot correct. MULTI_TILE solves a
+                    // stage-space similarity from 2+ tiles. Horizontal inserts and single vertical
+                    // slides keep the single-tile default.
+                    recommended = RefinementChoice.MULTI_TILE;
+                    why = "fresh alignment in a multi-slot vertical holder";
+                    text = "[i] Recommendation: Multi-tile refinement -- "
                             + "this slide is aligned fresh in a multi-slide vertical holder, where slot "
                             + "play adds rotation and scale that single-tile (translation-only) cannot "
                             + "correct. Multi-tile solves rotation + scale from 2+ tiles and also captures "
-                            + "the focus depth for unattended acquisition.");
-                    return;
+                            + "the focus depth for unattended acquisition.";
+                } else {
+                    recommended = RefinementChoice.SINGLE_TILE;
+                    why = "fresh alignment for the holder";
+                    text = "[i] Recommendation: Single-tile refinement -- "
+                            + "this slide is aligned fresh for the holder; any saved alignment was for a "
+                            + "different insert and is not used. Single-tile verifies the alignment and "
+                            + "captures the focus depth for unattended acquisition.";
                 }
-                singleTileRadio.setSelected(true);
-                refinementRecommendationLabel.setText("[i] Recommendation: Single-tile refinement -- "
-                        + "this slide is aligned fresh for the holder; any saved alignment was for a "
-                        + "different insert and is not used. Single-tile verifies the alignment and "
-                        + "captures the focus depth for unattended acquisition.");
-                return;
-            }
-
-            // Bounding-box images have auto-registered alignment from known
-            // stage coordinates -- highest possible confidence, no refinement needed.
-            if (hasSlideAlignment) {
-                noRefineRadio.setSelected(true);
-                refinementRecommendationLabel.setText("[i] Recommendation: Proceed without refinement "
+            } else if (hasSlideAlignment) {
+                // Bounding-box images have auto-registered alignment from known
+                // stage coordinates -- highest possible confidence, no refinement needed.
+                recommended = RefinementChoice.NONE;
+                why = "the image has a slide-specific alignment";
+                text = "[i] Recommendation: Proceed without refinement "
                         + "(auto-registered from acquisition coordinates). Pick Single-tile refinement "
                         + "if the slide was removed and re-seated since the last acquisition -- the "
-                        + "corrected alignment is saved for next time.");
+                        + "corrected alignment is saved for next time.";
+            } else {
+                // A saved scanner preset is selected here (the refinement section only shows when
+                // "Use existing alignment" is active). Nothing about a preset says it still fits this
+                // slide on this stage, so single-tile refinement verifies it in 2-3 minutes. Full
+                // manual stays an explicit choice: defaulting old presets to it meant a 10-15 minute
+                // re-alignment from scratch for presets that were still usable.
+                long ageDays = AlignmentHelper.ageInDays(transformCombo.getValue());
+                recommended = RefinementChoice.SINGLE_TILE;
+                why = "a saved scanner preset is in use";
+                text = AlignmentHelper.ageBand(ageDays) == AlignmentHelper.PresetAgeBand.OLD
+                        ? "[i] Recommendation: Single-tile refinement (the saved transform is " + ageDays
+                                + " days old -- verify it; choose Full manual to re-align from scratch)"
+                        : "[i] Recommendation: Single-tile refinement (verifies the saved transform on this"
+                                + " slide in 2-3 minutes)";
+            }
+            refinementRecommendationLabel.setText(text);
+            if (refinementChosenByOperator) {
+                logger.info(
+                        "Refinement recommendation is {} ({}); keeping the operator's choice {}",
+                        recommended,
+                        why,
+                        selectedRefinement());
                 return;
             }
+            switch (recommended) {
+                case SINGLE_TILE -> singleTileRadio.setSelected(true);
+                case MULTI_TILE -> multiTileRadio.setSelected(true);
+                case FULL_MANUAL -> fullManualRadio.setSelected(true);
+                default -> noRefineRadio.setSelected(true);
+            }
+            logger.info("Refinement default set to {} ({})", recommended, why);
+        }
 
-            // A saved scanner preset is selected here (the refinement section only shows when
-            // "Use existing alignment" is active). Nothing about a preset says it still fits this
-            // slide on this stage, so single-tile refinement verifies it in 2-3 minutes. Full
-            // manual stays an explicit choice: defaulting old presets to it meant a 10-15 minute
-            // re-alignment from scratch for presets that were still usable.
-            long ageDays = AlignmentHelper.ageInDays(transformCombo.getValue());
-            singleTileRadio.setSelected(true);
-            String recommendation = AlignmentHelper.ageBand(ageDays) == AlignmentHelper.PresetAgeBand.OLD
-                    ? "[i] Recommendation: Single-tile refinement (the saved transform is " + ageDays
-                            + " days old -- verify it; choose Full manual to re-align from scratch)"
-                    : "[i] Recommendation: Single-tile refinement (verifies the saved transform on this"
-                            + " slide in 2-3 minutes)";
-
-            refinementRecommendationLabel.setText(recommendation);
+        /** The refinement radio currently selected. */
+        private RefinementChoice selectedRefinement() {
+            if (singleTileRadio.isSelected()) {
+                return RefinementChoice.SINGLE_TILE;
+            }
+            if (multiTileRadio.isSelected()) {
+                return RefinementChoice.MULTI_TILE;
+            }
+            if (fullManualRadio.isSelected()) {
+                return RefinementChoice.FULL_MANUAL;
+            }
+            return RefinementChoice.NONE;
         }
 
         /**
@@ -2637,14 +2684,12 @@ public class ExistingImageAcquisitionController {
                 boolean useExisting = useExistingRadio.isSelected();
                 AffineTransformManager.TransformPreset transform = useExisting ? transformCombo.getValue() : null;
 
-                RefinementChoice refinement = RefinementChoice.NONE;
-                if (singleTileRadio.isSelected()) {
-                    refinement = RefinementChoice.SINGLE_TILE;
-                } else if (multiTileRadio.isSelected()) {
-                    refinement = RefinementChoice.MULTI_TILE;
-                } else if (fullManualRadio.isSelected()) {
-                    refinement = RefinementChoice.FULL_MANUAL;
-                }
+                RefinementChoice refinement = selectedRefinement();
+                logger.info(
+                        "Refinement at Start: {} (chosen by the operator: {}; selected toggle: {})",
+                        refinement,
+                        refinementChosenByOperator,
+                        refinementGroup.getSelectedToggle() instanceof RadioButton rb ? rb.getText() : "none");
 
                 // Angle / channel-intensity overrides + focus channel from modality UI
                 // (green box params handled by ExistingAlignmentPath)
