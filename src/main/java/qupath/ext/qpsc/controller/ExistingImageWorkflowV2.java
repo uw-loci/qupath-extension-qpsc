@@ -1475,8 +1475,30 @@ public class ExistingImageWorkflowV2 {
                     }
                     return state;
                 }
-                // No alignment for the active scope. Check whether one exists for a
-                // *different* scope that we can route through the macro frame to here.
+                // No per-slide alignment for the active scope. A scanner preset for THIS
+                // microscope chosen in the dialog is the direct route (green box on the macro,
+                // then the operator's refinement); composing another microscope's per-slide
+                // file through the macro frame is only the fallback when there is none. The
+                // composition used to run first and win: Liver_L004 on the LC-PolScope, with
+                // Ocus40_to_LCPolScope_Hamamatsu selected, was acquired through the PPM file and
+                // its Single-tile refinement switched off (2026-10-27).
+                AffineTransformManager.TransformPreset chosen =
+                        state.alignmentChoice != null && state.alignmentChoice.useExistingAlignment()
+                                ? state.alignmentChoice.selectedTransform()
+                                : null;
+                String active = MicroscopeConfigManager.getInstance(
+                                QPPreferenceDialog.getMicroscopeConfigFileProperty())
+                        .getMicroscopeName();
+                if (chosen != null && active != null && active.equals(chosen.getMicroscope())) {
+                    logger.info(
+                            "No per-slide alignment for '{}'; using the selected scanner preset '{}' for this "
+                                    + "microscope (green box + refinement), not another microscope's per-slide file",
+                            active,
+                            chosen.getName());
+                    return state;
+                }
+                // Check whether one exists for a *different* scope that we can route through
+                // the macro frame to here.
                 tryComposeCrossScopeAlignment(state);
                 if (state.crossScope) {
                     // Review finding M8: surface the cross-scope decision so the operator
