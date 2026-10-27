@@ -333,7 +333,15 @@ Calibrate the two variable retarders of the universal compensator by finding the
   which the result says. Use it to keep dust or other junk at the edges of the sensor out of
   the measurement
 
-**Apply a saved calibration** (LC-PolScope Setup, step 2) applies an `lc_calibration_*.json` from an earlier run to the config QPSC is set to, through the same Apply step a fresh result gets. Use it when a calibration was applied to the other LC-PolScope config file (the two share one instrument), instead of running the nine-minute search again. Collect the background again afterwards.
+The result dialog has three tabs:
+
+- **Summary**: the text above, which is also written to the QuPath log.
+- **Palette**: each swing state's offset from extinction, LC-A across and LC-B up, against the ideal point at the swing on its own axis (grey). A good calibration puts each state on or near its grey point; one short of it needed less retardance than the swing to reach the same brightness. The lines under the plot give each offset and its share of the swing, the same deviation the Poincare-sphere warning reports.
+- **Search curves**: the mean intensity the search measured along each crystal through extinction (LC-A with LC-B held at its extinction value, and the reverse), with the target every swing state was matched to as a dashed line. The swing states are where the curves cross it. Both curves should be V-shaped and symmetric about 0; a curve that rises faster on one side shows a crystal whose response is lopsided about extinction, which no amount of searching changes. On the LC-PolScope Flash4 (2026-10-26) LC-B crosses the target at +0.014 and -0.025 waves while LC-A crosses at +/-0.030.
+
+Both tabs are drawn from the calibration file alone, so a result predating the search trace shows the palette but no curves.
+
+**Apply a saved calibration** (LC-PolScope Setup, step 2) applies an `lc_calibration_*.json` from an earlier run to the config QPSC is set to, through the same Apply step a fresh result gets. Use it when a calibration was applied to the other LC-PolScope config file (the two share one instrument), instead of running the nine-minute search again. Its confirmation has the same Palette and Search curves tabs, so it doubles as a way to look at an old calibration: press Cancel after looking. Collect the background again afterwards.
 
 **Before acquiring**, the LC-PolScope acquisition panel opens with a **Ready to acquire?** box: whether the microscope server is running the same config file QPSC is set to (a switch of the preference without a reconnect leaves them on different files, and then the calibration, the backgrounds and the profiles are read from different places), calibration applied and its age and extinction ratio, black level set, a background for each LC-PolScope profile that matches the current calibration, the live camera settings (auto gain or exposure must be off; gamma and 8-bit are flagged), and the LC adapter wavelength. Lines marked **Fix** produce wrong or uncorrected results if left; **Check** lines are worth a look. **Recheck** after changing something in Micro-Manager.
 

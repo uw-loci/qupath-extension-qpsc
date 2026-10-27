@@ -137,10 +137,15 @@ public class LCCalibrationWorkflow {
             confirm.setTitle("Apply a saved LC calibration");
             confirm.setHeaderText(
                     "Apply " + file.getName() + " to " + Path.of(configPath).getFileName() + "?");
-            confirm.setContentText("Calibrated " + when.replace('T', ' ') + ", extinction ratio " + ratio
+            Label about = new Label("Calibrated " + when.replace('T', ' ') + ", extinction ratio " + ratio
                     + ".\n\nThe palette and date are written into that file as if the calibration had just "
                     + "run; the next step offers the exposure and black level. A background collected "
-                    + "under another calibration is refused afterwards, so collect one again.");
+                    + "under another calibration is refused afterwards, so collect one again.\n\n"
+                    + "The Palette and Search curves tabs show this calibration as it was measured.");
+            about.setWrapText(true);
+            about.setPadding(new Insets(8));
+            confirm.getDialogPane().setContent(LCCalibrationPlots.tabs(about, result));
+            confirm.setResizable(true);
             DialogOwner.own(confirm);
             if (confirm.showAndWait().orElse(ButtonType.CANCEL) != ButtonType.OK) {
                 return;
@@ -769,7 +774,11 @@ public class LCCalibrationWorkflow {
             dialog.getButtonTypes().setAll(close);
         }
 
-        dialog.getDialogPane().setContent(copyableBody(String.join("\n", lines), Math.min(lines.size() + 1, 28)));
+        // The text first, then the two pictures of where the states landed and how the search
+        // got there: the numbers above cannot show a crystal that is lopsided about extinction.
+        dialog.getDialogPane()
+                .setContent(LCCalibrationPlots.tabs(
+                        copyableBody(String.join("\n", lines), Math.min(lines.size() + 1, 28)), result));
         dialog.setResizable(true);
         DialogOwner.own(dialog);
         if (dialog.showAndWait().orElse(close) != apply) {
