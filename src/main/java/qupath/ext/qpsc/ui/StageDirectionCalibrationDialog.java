@@ -370,9 +370,15 @@ public final class StageDirectionCalibrationDialog {
         }
 
         phaseHeader.setText("Camera orientation result");
-        phaseInstructions.setText("Apply to write the camera orientation to your preferences. "
+        CameraOrientation before = QPPreferenceDialog.getCameraOrientationProperty();
+        String change = changeWarning(before, solved.orientation());
+        phaseInstructions.setText((change == null ? "" : change + "\n\n")
+                + "Apply to write the camera orientation to your preferences. "
                 + "Stage polarity is left unchanged. Use Manual override if you need to edit "
                 + "both polarity and orientation together.");
+        if (change != null) {
+            logger.warn("Stage direction calibration: {}", change);
+        }
 
         TextArea previewDesc =
                 new TextArea(new StageImageTransform(solved.polarity(), solved.orientation()).describe());
@@ -516,6 +522,37 @@ public final class StageDirectionCalibrationDialog {
     }
 
     // ----- Back-solve -----
+
+    /**
+     * A warning for a result that changes the camera orientation, or null when it does not.
+     * Truthful answers solve to the same orientation every run, so a change means the
+     * microscope changed or an answer did not describe the tissue. A result turned 180
+     * degrees from the current one is the typical sign of answers given as the way the VIEW
+     * moved: on OWS3 on 2026-10-27 two runs two minutes apart applied ROT_180 and then
+     * NORMAL, and every direction (arrows, double-click, the alignment's second tile)
+     * reversed with it.
+     *
+     * <p>Visible for unit testing.
+     */
+    static String changeWarning(CameraOrientation before, CameraOrientation after) {
+        if (before == null || after == null || before == after) {
+            return null;
+        }
+        double[] bx = before.sampleToDisplay(1, 0);
+        double[] by = before.sampleToDisplay(0, 1);
+        double[] ax = after.sampleToDisplay(1, 0);
+        double[] ay = after.sampleToDisplay(0, 1);
+        boolean halfTurn = ax[0] == -bx[0] && ax[1] == -bx[1] && ay[0] == -by[0] && ay[1] == -by[1];
+        String base = "This changes the camera orientation from " + before + " to " + after
+                + ", which reverses directions everywhere they are used (arrows, double-click, "
+                + "SIFT, the alignment). A camera does not change on its own.";
+        return halfTurn
+                ? base + " The new result is turned 180 degrees from the current one, which is what "
+                        + "answers describing how the VIEW moved produce. Answer with the way the TISSUE "
+                        + "moved across the screen, or Cancel to keep " + before + "."
+                : base + " Apply only if the camera or the light path has changed; otherwise Re-test "
+                        + "or Cancel to keep " + before + ".";
+    }
 
     /**
      * Walked in this order so the first match wins. {@link CameraOrientation#NORMAL} comes
