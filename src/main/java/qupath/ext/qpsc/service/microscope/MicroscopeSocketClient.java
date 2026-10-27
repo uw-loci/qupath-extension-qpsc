@@ -48,6 +48,10 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  * @since 1.0
  */
 public class MicroscopeSocketClient implements AutoCloseable {
+
+    /** Read timeout for the autofocus validation test (TESTAFV): two scans, cancellable. */
+    private static final int AF_VALIDATION_TIMEOUT_MS = 15 * 60 * 1000;
+
     private static final Logger logger = LoggerFactory.getLogger(MicroscopeSocketClient.class);
 
     // Protocol constants
@@ -3190,7 +3194,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
             int originalTimeout = readTimeout;
             try {
                 if (socket != null) {
-                    socket.setSoTimeout(180000); // 3 minutes for both phases
+                    // Both phases are stop-and-snap scans whose length is the config's step count
+                    // times the stage's settle time, not a constant: on OWS3 (ZDrive, 100 steps)
+                    // phase 2 alone took 132 s and the whole test 183 s, three seconds past the
+                    // old fixed 180 s, so the client reported "Read timed out" just before the
+                    // server's answer (2026-10-27). The test is cancellable (ABORTAF), so a long
+                    // ceiling costs nothing.
+                    socket.setSoTimeout(AF_VALIDATION_TIMEOUT_MS);
                 }
 
                 output.write(Command.TESTAFV.getValue());
