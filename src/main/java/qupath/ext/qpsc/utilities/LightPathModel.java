@@ -138,17 +138,19 @@ public final class LightPathModel {
     }
 
     /**
-     * The "Slide in holder" captions, in order {A, B}, named after where the label is drawn: a
-     * scanner puts the label on the left of its macro, so an odd number of X mirrors between the
-     * scan and the map puts it on the right. The words then describe the picture on this rig,
-     * whichever way its stage frame runs (on the LC-PolScope, A draws the label on the right).
+     * The "Slide in holder" captions, in order {A, B}, named after where the label is as the
+     * operator faces the microscope and looks at the stage, which is where Stage View draws it. How the scanner
+     * happened to hold the slide is not the point and is not mentioned: the Stage Map works the
+     * drawn side out from the scanner's own label side ({@code macro.label_side} in its config)
+     * and the mirrors between the scan and the map. On the LC-PolScope A puts the label on the
+     * right.
      *
-     * @param labelOnRightForA whether placement A is drawn with the label on the right
+     * @param labelOnRightForA whether placement A has the label on the right of the stage
      */
     public static String[] placementCaptions(boolean labelOnRightForA) {
-        String a = labelOnRightForA ? "Label right" : "Label left";
-        String b = labelOnRightForA ? "Label left" : "Label right";
-        return new String[] {a + " (A, as placed)", b + " (B, rotated 180)"};
+        String a = labelOnRightForA ? "Label on your right" : "Label on your left";
+        String b = labelOnRightForA ? "Label on your left" : "Label on your right";
+        return new String[] {a + " (A)", b + " (B)"};
     }
 
     /** Default slide insertion from config; defaults to {@link #INSERT_A} (identity) when unset. */

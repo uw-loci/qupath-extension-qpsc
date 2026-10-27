@@ -138,6 +138,8 @@ public class StageMapWindow {
 
     private String currentMacroSampleName = null;
     private String currentMacroScannerName = null;
+    /** Which side of the scanner's macro the label is on ({@code macro.label_side}); Ocus40 = right. */
+    private boolean macroLabelOnRight = false;
     // Anchor metadata from the active preset (NaN for legacy presets, in which
     // case StageMapCanvas falls back to its 4-corner / config-offset paths).
     private double currentMacroAnchorMacroX = Double.NaN;
@@ -893,9 +895,9 @@ public class StageMapWindow {
         // until then the generic ones. Item 0 is always placement A, item 1 placement B.
         insertCombo.getItems().addAll(SLIDE_LABEL_LEFT, SLIDE_LABEL_RIGHT);
         insertCombo.getSelectionModel().select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? 1 : 0);
-        insertCombo.setTooltip(new Tooltip("How THIS slide sits in the holder: the two ways it drops in\n"
-                + "differ by a 180 in the plane. The captions name the side the label\n"
-                + "is drawn on in Stage View, so pick the one that matches the slide.\n"
+        insertCombo.setTooltip(new Tooltip("How THIS slide sits on the stage: the two ways it drops in\n"
+                + "differ by a 180 in the plane. Face the microscope and look at the\n"
+                + "slide: is the label on your left or your right? Pick that one.\n"
                 + "Stored PER-SLIDE and baked into the corrected (Camera View) image so\n"
                 + "it matches the live camera. Changing it marks the corrected image +\n"
                 + "alignment stale.\n\n"
@@ -1949,10 +1951,10 @@ public class StageMapWindow {
     }
 
     /**
-     * Names the two placements after where the label is drawn in Stage View, from the macro's
-     * baseline sign on the map: a scanner puts the label on the macro's left, so an odd number
-     * of X mirrors between the scan and the map (baseline, then the Stage View flip for A)
-     * draws it on the right. Keeps the current selection.
+     * Names the two placements after where the label sits on the stage, as drawn in Stage View:
+     * the scanner's own label side ({@code macro.label_side}, right on the Ocus40) mirrored by
+     * the macro's baseline sign on the map and the Stage View flip for A. Keeps the current
+     * selection.
      */
     private void refreshPlacementCaptions(double[] sign) {
         if (insertCombo == null || sign == null || sign.length < 1) {
@@ -1960,7 +1962,7 @@ public class StageMapWindow {
         }
         boolean baselineMirrorX = sign[0] < 0;
         boolean viewMirrorX = LightPathModel.currentStageViewFlip(LightPathModel.INSERT_A)[0];
-        String[] captions = LightPathModel.placementCaptions(baselineMirrorX ^ viewMirrorX);
+        String[] captions = LightPathModel.placementCaptions(macroLabelOnRight ^ baselineMirrorX ^ viewMirrorX);
         int selected = insertCombo.getSelectionModel().getSelectedIndex();
         if (captions[0].equals(insertCombo.getItems().get(0))) {
             return;
@@ -2988,6 +2990,10 @@ public class StageMapWindow {
                     if (ps != null && ps > 0) {
                         pixelSizeUm = ps;
                     }
+                    Object macroBlock = scannerConfig.get("macro");
+                    Object side = macroBlock instanceof Map<?, ?> m ? m.get("label_side") : null;
+                    macroLabelOnRight = side != null
+                            && "right".equalsIgnoreCase(side.toString().trim());
 
                     Double xOff =
                             MinorFunctions.getYamlDouble(scannerConfig, "macro", "stagemap_overlay", "x_offset_um");

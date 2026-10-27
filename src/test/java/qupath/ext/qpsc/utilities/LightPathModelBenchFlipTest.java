@@ -123,11 +123,11 @@ class LightPathModelBenchFlipTest {
 
     @Test
     void placementCaptionsNameTheDrawnSide() {
-        String[] rig = LightPathModel.placementCaptions(true); // the LC-PolScope: A draws the label right
-        assertEquals("Label right (A, as placed)", rig[0]);
-        assertEquals("Label left (B, rotated 180)", rig[1]);
-        String[] upright = LightPathModel.placementCaptions(false);
-        assertEquals("Label left (A, as placed)", upright[0]);
-        assertEquals("Label right (B, rotated 180)", upright[1]);
+        String[] rig = LightPathModel.placementCaptions(true); // the LC-PolScope: A puts the label right
+        assertEquals("Label on your right (A)", rig[0]);
+        assertEquals("Label on your left (B)", rig[1]);
+        String[] other = LightPathModel.placementCaptions(false);
+        assertEquals("Label on your left (A)", other[0]);
+        assertEquals("Label on your right (B)", other[1]);
     }
 }

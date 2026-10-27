@@ -119,11 +119,13 @@ light_path:
   `y`. `LightPathModel.stageViewFlipFlags(insertion, mirror)`, unit-tested in
   `LightPathModelBenchFlipTest`. Edited in Utilities -> Microscope Configuration -> Light Path
   Orientation.
-- **"Slide in holder" captions** are named after the picture: the Stage Map reads the macro's
-  baseline sign (`sX`) when the overlay is placed and, with the Stage View flip for A, works out
-  which side the label (on the scan's left) is drawn on. On the LC-PolScope A draws it on the right,
-  so the options read "Label right (A, as placed)" / "Label left (B, rotated 180)"
-  (`LightPathModel.placementCaptions`). Before the macro is placed the generic captions show.
+- **"Slide in holder" captions** name where the label is as the operator faces the microscope,
+  which is where Stage View draws it: the scanner's label side (`macro.label_side` in
+  `config_<scanner>.yml`; right on the Ocus40, left when absent) XOR the macro's baseline sign
+  (`sX`) when the overlay is placed XOR the Stage View flip for A. On the LC-PolScope A puts it on
+  the right, so the options read "Label on your right (A)" / "Label on your left (B)"
+  (`LightPathModel.placementCaptions`). "As scanned" is deliberately not used: it says nothing
+  about the stage. Before the macro is placed the generic captions show.
 - Defaults (`upright + A + optical none`) reduce both to identity, so Camera View == Stage View --
   the historical, inert behaviour. No regression until the rig is described.
 
