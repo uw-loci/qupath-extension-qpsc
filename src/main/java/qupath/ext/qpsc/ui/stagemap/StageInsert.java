@@ -111,7 +111,7 @@ public class StageInsert {
      * aperture calibration points. The synthesized-insert fallback
      * ({@code StageInsertRegistry.synthesizeFromStageLimits}) has no
      * calibration points, so it sets inversion explicitly from the
-     * stage-polarity preference instead. {@code originXUm}/{@code originYUm}
+     * stage polarity (stage.polarity in the config) instead. {@code originXUm}/{@code originYUm}
      * must already be the visual top-left corner consistent with these flags
      * (the larger stage value on an inverted axis).
      *

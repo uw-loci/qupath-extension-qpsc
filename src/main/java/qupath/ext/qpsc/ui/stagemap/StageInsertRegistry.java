@@ -4,7 +4,6 @@ import java.util.*;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.StagePolarity;
 
@@ -193,7 +192,7 @@ public class StageInsertRegistry {
      * Coverslip-corner calibration for petri-dish inserts. When an insert declares
      * {@code coverslip_c1_x_um/_y_um} .. {@code _c4_} corner points, the imaging
      * rectangle is the axis-aligned bounding box of the captured corners, and axis
-     * inversion is taken from the stage-polarity preference -- corners are captured
+     * inversion is taken from the stage polarity (stage.polarity in the config) -- corners are captured
      * in any order, so they cannot themselves indicate which way is visually-left
      * (resolving that is the deferred rotation feature). This injects the
      * {@code aperture_*_um} points the rest of the loader already understands, so
@@ -219,7 +218,7 @@ public class StageInsertRegistry {
             minY = Math.min(minY, c[1]);
             maxY = Math.max(maxY, c[1]);
         }
-        StagePolarity polarity = QPPreferenceDialog.getStagePolarityProperty();
+        StagePolarity polarity = StagePolarity.current();
         Map<String, Object> merged = new LinkedHashMap<>(cfg);
         merged.put("aperture_left_x_um", polarity.invertX ? maxX : minX);
         merged.put("aperture_right_x_um", polarity.invertX ? minX : maxX);
@@ -277,12 +276,12 @@ public class StageInsertRegistry {
                     "Slide 1", slideXOffsetMm, slideYOffsetMm, slideWidthUm / 1000.0, slideHeightUm / 1000.0, 0);
 
             // The synthesized aperture has no calibration points to detect axis
-            // inversion from, so take it from the stage-polarity preference.
+            // inversion from, so take it from the stage polarity (stage.polarity in the config).
             // On an X-inverted stage (MM +X -> lab -X, e.g. OWS3) the visual
             // origin is the LARGER stage value; assuming non-inverted here
             // mirrors the whole Stage Map and sends double-click moves to the
             // X-flipped position.
-            StagePolarity polarity = QPPreferenceDialog.getStagePolarityProperty();
+            StagePolarity polarity = StagePolarity.current();
             boolean xInverted = polarity.invertX;
             boolean yInverted = polarity.invertY;
             double originXUm = xInverted ? Math.max(xLow, xHigh) : Math.min(xLow, xHigh);

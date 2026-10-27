@@ -60,7 +60,7 @@ Four factors stack along the light path, plus the macro-image flip that orients 
 | 1b | **Slide insertion** | Which side the label is on -- the two ways a slide drops into the holder (an in-plane 180). With scope type, spans all four axis-aligned orientations; there is **no separate turn-over axis** (turning a slide over its long vs short axis == an in-plane 180 == insertion). | YAML `light_path.slide_insertion` -> `LightPathModel.slideInsertion()` | encoded |
 | 2 | **Optical flip** | Objective + tube-lens parity -- the camera-vs-stage flip. **This is why a scope needs a distinct Camera View at all** (e.g. PPM objective inversion = 180/XY). Display only. | YAML `light_path.optical_flip` -> `LightPathModel.opticalFlip()` (the per-detector `flip_x/flip_y` stays for macro resolution) | encoded |
 | 3 | **Camera orientation** | Camera mounting rotation on the port. | `CameraOrientation` pref -> `QPPreferenceDialog.getCameraOrientationProperty()` | pref (NORMAL both rigs) |
-| 4 | **Stage polarity** | Physical stage direction for a `+X/+Y` command. **Net of MicroManager's own axis inversion** (e.g. OWS3 inverts X in MM) plus wiring -- detected from behaviour, so never add a QPSC flip to compensate for the MM invert. Settled: unchanged across all working versions. | `StagePolarity` pref -> `QPPreferenceDialog.getStagePolarityProperty()` | pref |
+| 4 | **Stage polarity** | Physical stage direction for a `+X/+Y` command. **Net of MicroManager's own axis inversion** (e.g. OWS3 inverts X in MM) plus wiring -- detected from behaviour, so never add a QPSC flip to compensate for the MM invert. Settled: unchanged across all working versions. | `stage.polarity` in the microscope config -> `StagePolarity.current()` (a preference until 2026-10-27) | config |
 | + | **Macro image flip** | Parity between a scanner's macro image and the target microscope. Per `(source-scanner, target)` pair, applied to overlay pixels only -- **not** a camera-vs-stage flip. | Active `TransformPreset.flipMacroX/Y` -> `FlipResolver` | per-preset |
 
 ### How they compose (what is trustworthy)
@@ -172,7 +172,7 @@ initial setup. Where each factor lives today:
 
 - Factors 1 and 2 (scope type, slide insertion, optical flip): **per-microscope YAML `light_path`
   block** (done).
-- Factors 3 and 4 (camera, polarity): **install-wide prefs**, auto-detected; polarity is settled.
+- Factor 3 (camera): **install-wide pref**, auto-detected. Factor 4 (polarity): **per-microscope config** (`stage.polarity`, since 2026-10-27); polarity is settled.
 
 Decisions locked (2026-08-07):
 

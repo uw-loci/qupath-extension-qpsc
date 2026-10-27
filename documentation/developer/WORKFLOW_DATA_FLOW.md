@@ -26,7 +26,7 @@ workflow; update it when the data flow changes.
 | Camera FoV | `MicroscopeConfigManager.getModalityFOV(modality, objective, detector)` (= detector dims * pixel size) | Or live: `MicroscopeController.getCameraFOV()` -- only safe when MM has the same objective active |
 | MM live pixel size | `MicroscopeSocketClient.getMicroscopePixelSize()` | Reflects whatever objective MM thinks is active; **may diverge from the wizard objective** |
 | Optical flip (per scope pair) | `TransformPreset.flipMacroX/Y` (saved alignment preset) and per-slide alignment JSON | NOT per-entry metadata. See `claude-reports/design/2026-05-07_step-b-flipped-duplicate-restoration.md` |
-| Stage polarity | Stage-polarity preference (auto-detected once per scope) | Independent of optical flip |
+| Stage polarity | `stage.polarity` in the microscope config (`StagePolarity.current()`) | Independent of optical flip |
 | Source scanner of an entry | `source_microscope` per-entry metadata | Set at import time |
 | Alignment-JSON pixel frame | `pixelFrame` field in each alignment JSON: `"macro"` or `"sub"` | Macro = transform scale equals macro image pixel size (canonical workflow input). Sub = transform scale equals the sub-image's own pixel calibration (Live Viewer Go-To-Centroid input). Workflows operating on macro-frame annotations refuse `"sub"` at load. Legacy JSONs without the field default to `"macro"`. |
 | Parent macro of a sub-image entry | `base_image` per-entry metadata (set at import) | Workflow paths resolve this via `AlignmentHelper.resolveMacroLookupKey` before any alignment lookup, so a sub-image entry never causes its own alignment JSON to be picked up. |

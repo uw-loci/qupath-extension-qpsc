@@ -420,7 +420,7 @@ public class TilingUtilities {
         // than reading the booleans directly so the preferred access
         // pattern stays consistent across the codebase.
         double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-        StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
+        StagePolarity stagePolarity = StagePolarity.current();
         boolean stageInvertedX = stagePolarity.invertX;
         boolean stageInvertedY = stagePolarity.invertY;
 

@@ -90,7 +90,7 @@ public class StageImageTransform {
      * the usual entry point for live-view subsystems.
      */
     public static StageImageTransform current() {
-        StagePolarity polarity = QPPreferenceDialog.getStagePolarityProperty();
+        StagePolarity polarity = StagePolarity.current();
         CameraOrientation orientation = QPPreferenceDialog.getCameraOrientationProperty();
         return new StageImageTransform(polarity, orientation);
     }

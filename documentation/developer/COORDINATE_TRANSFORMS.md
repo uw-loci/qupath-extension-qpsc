@@ -200,7 +200,7 @@ graph TB
     subgraph "Stage Inversion (per-microscope)"
         I["Positive stage command moves<br/>opposite to visual convention"]
         I1["Corrected in tiling traversal<br/>order and transform sign"]
-        I2["Stored in QuPath preferences<br/>as stageInvertedX / stageInvertedY"]
+        I2["Stored in the microscope config<br/>as stage.polarity (StagePolarity.current())"]
     end
 ```
 
@@ -210,7 +210,7 @@ graph TB
 | What it affects | Pixel-to-stage transform direction | Tile traversal order, transform sign |
 | Where configured | `TransformPreset.flipMacroX/Y` in `saved_transforms.json`; mirrored on each per-slide alignment JSON | QuPath preferences per microscope |
 | Applied when | Each save site writes the transform in the frame of the entry it operates on; `AlignmentHelper.checkForSlideAlignment` loads it as-is (no bake) | Computing tile grid positions |
-| Storage post Step B | Per-pair preset + per-slide JSON `flipMacroX/Y` documents the frame. **Not** per-image metadata; per-image `FLIP_X/FLIP_Y` is no longer load-bearing for new code (legacy projects may still carry it). | Auto-detected from `StageInsert` calibration when YAML has `slide_holder`/`inserts`; the synthesized-insert path (`StageInsertRegistry.synthesizeFromStageLimits`, used when YAML has only `stage.limits`) takes inversion from the stage-polarity preference instead. |
+| Storage post Step B | Per-pair preset + per-slide JSON `flipMacroX/Y` documents the frame. **Not** per-image metadata; per-image `FLIP_X/FLIP_Y` is no longer load-bearing for new code (legacy projects may still carry it). | Auto-detected from `StageInsert` calibration when YAML has `slide_holder`/`inserts`; the synthesized-insert path (`StageInsertRegistry.synthesizeFromStageLimits`, used when YAML has only `stage.limits`) takes inversion from the stage polarity (`stage.polarity` in the microscope config) instead. |
 
 ### Stage Map "Apply Flips" uses the camera flip ONLY (not the stitcher composite)
 
@@ -270,7 +270,7 @@ Skipped with a written reason instead of guessed: rotated working entries (base 
 
 ### Polarity is NOT solved for -- this is deliberate
 
-`StagePolarity` and `CameraOrientation` are intentionally separate in this codebase (see "Flip vs Inversion" above). These call sites read `getStagePolarityProperty()` directly without composing with `CameraOrientation`:
+`StagePolarity` and `CameraOrientation` are intentionally separate in this codebase (see "Flip vs Inversion" above). These call sites read `StagePolarity.current()` (`stage.polarity` in the microscope config; a QuPath preference until 2026-10-27) directly without composing with `CameraOrientation`:
 
 - `utilities/TilingUtilities.java` (tile grid traversal direction)
 - `controller/BoundedAcquisitionWorkflow.java`
@@ -287,7 +287,7 @@ For these paths, picking a polarity that is *mathematically equivalent through `
 2. Issues `MicroscopeController.moveStageXY(curX + step, curY)` (the same code path the arrow buttons use), then asks the user which of Left / Right / Up / Down the tissue in the image appeared to move in (the opposite of the view's pan).
 3. Repeats for `+Y`.
 4. Calls `backSolve(xObserved, yObserved, currentPolarity)` -- walks the 8 `CameraOrientation` values and returns the unique one whose composite with the user's current `StagePolarity` reproduces both observations.
-5. Writes the result via `QPPreferenceDialog.setStageInvertedX/Y` (unchanged from current values) and `setCameraOrientationProperty(orientation)`.
+5. Writes the result: `StagePolarity.save(polarity)` only when the polarity differs (the manual override path; it writes `stage.polarity` to the active config), and `setCameraOrientationProperty(orientation)`.
 
 ### Predicting tissue motion
 

@@ -207,9 +207,9 @@ the offer QPSC makes, or choose **Extensions > QP Scope > Utilities > Microscope
 Configuration > Switch Microscope...**. If the demo changed the server host to `localhost`,
 set **Host** back under **Communication Settings...**. The demo also set the Live Viewer's
 remembered exposure to its 10 ms; if your first live frame on the real scope is dark, set
-**Exposure (ms)** again on the Camera tab. It also set the stage direction and camera
-orientation preferences to the demo's (not inverted); switching to your microscope puts your
-own values back. A demo server that QPSC started stops when
+**Exposure (ms)** again on the Camera tab. It also set the camera orientation
+preference to the demo's (NORMAL); switching to your microscope puts your own value back. The
+stage polarity comes with the demo's config. A demo server that QPSC started stops when
 QuPath exits; one you started yourself keeps running until you close its window, and while
 it runs nothing else can use the server port (5000 by default), so your real server will
 not start on this computer.
@@ -397,12 +397,14 @@ If you still see the symptom:
 - Mark reference points in QuPath and on microscope stage
 - System will calculate the correct transformation automatically
 
-#### Q: What does "Inverted X stage" / "Inverted Y stage" mean?
+#### Q: What is the stage polarity (`stage.polarity`, formerly "Inverted X stage" / "Inverted Y stage")?
 
-**A:** These describe the hardware wiring polarity of the stage — whether a positive MicroManager stage command moves the physical stage in the lab's positive or negative direction on each axis.
+**A:** It describes the hardware wiring polarity of the stage — whether a positive MicroManager stage command moves the physical stage in the lab's positive or negative direction on each axis.
 
-- **Inverted X stage = ON:** MM `+X` command moves the stage in lab `-X` (i.e. the stage encoder / device adapter is wired backwards on the X axis).
-- **Inverted Y stage = ON:** Same for the Y axis.
+- **`INVERT_X`:** MM `+X` command moves the stage in lab `-X` (i.e. the stage encoder / device adapter is wired backwards on the X axis).
+- **`INVERT_Y`:** Same for the Y axis. `INVERT_XY` is both, `NORMAL` neither.
+
+It is `stage.polarity` in the microscope config file, not a QuPath preference (it was one until 2026-10-27, which let one microscope's value follow QuPath to the next).
 
 These are NOT the same as macro image flip (which is about how the loaded macro image looks on screen) or camera orientation (which is about how the live image is oriented).
 
@@ -412,13 +414,13 @@ These are NOT the same as macro image flip (which is about how the loaded macro 
 core.setXYPosition(core.getXPosition() + 100, core.getYPosition());
 ```
 
-Observe which direction the physical stage actually moves. If it moves in the lab `-X` direction (from the operator's neutral viewpoint), enable "Inverted X stage". Same procedure for Y.
+Observe which direction the physical stage actually moves. If it moves in the lab `-X` direction (from the operator's neutral viewpoint), X is inverted. Same procedure for Y. Write the result as `stage.polarity` in the config, or with Calibrate Directions > Manual override.
 
 #### Q: Arrow buttons, joystick, or double-click-to-center move the wrong way
 
 **A:** This is the "stage-vs-image sign math" problem. Starting with commit `e3cb133` (2026-04-09), all three of these — plus the stitcher's tile placement — go through a single `StageImageTransform` that composes two independent settings:
 
-1. **Stage polarity** (Inverted X / Y stage) — hardware wiring
+1. **Stage polarity** (`stage.polarity` in the microscope config) — hardware wiring
 2. **Camera orientation** — how the camera mounts / optical path flips the image
 
 **Quick fix (try first):** Open the Live Viewer → Navigate tab → click **Calibrate Directions...** (also available as an optional step in the Setup Wizard). The dialog jogs the stage in +X then +Y, asks which direction the tissue in the image moved across the screen (the opposite of the view's pan), and writes the correct `Camera orientation` for you under your current polarity. Polarity itself is treated as a hardware-wiring fact and is NOT changed by the tool — if the dialog reports "no camera orientation matches," that is a signal that your polarity may be wrong; verify polarity by direct stage observation (MicroManager-script procedure above) before retrying.
@@ -442,9 +444,9 @@ Observe which direction the physical stage actually moves. If it moves in the la
    - Double-click on a feature that's currently visible but off-centre
 
 3. Each gesture should produce the "obvious" visual direction. If they don't:
-   - **Only Live Viewer X gesture is wrong** → toggle "Inverted X stage" in preferences
-   - **Only Live Viewer Y gesture is wrong** → toggle "Inverted Y stage"
-   - **Both Live Viewer axes are wrong** → toggle both
+   - **Only Live Viewer X gesture is wrong** → flip X in `stage.polarity` (e.g. `NORMAL` to `INVERT_X`)
+   - **Only Live Viewer Y gesture is wrong** → flip Y in `stage.polarity`
+   - **Both Live Viewer axes are wrong** → flip both
    - **Live Viewer gestures all work, BUT the stitched output has wrong corners** → change "Camera orientation", see below
 
 4. Acquire a small 2×2 bounding box test. Place it on a recognizable feature, run the acquisition, and look at the stitched output. Compare corner-by-corner against what you see in the live view at each stage position. **Do this step even if the Live Viewer gestures all look correct** — it's possible for gestures to look right while stitching is wrong (OWS3 showed exactly this during the 2026-04-09 refactor test).
@@ -456,7 +458,7 @@ Observe which direction the physical stage actually moves. If it moves in the la
 
 **CRITICAL misconception to avoid:** Setting `Camera orientation` to `FLIP_H` does **not** change what the Live Viewer shows. It does not flip your camera image on screen. It only tells the software that your scope's optical path already produces a horizontally-flipped relationship between stage coordinates and displayed pixels — and the software should do sign math accordingly. If your live image looks correct but your stitched output has mirrored corners, that's a legitimate reason to pick `FLIP_H` even though "nothing looks flipped" in the live view.
 
-**Real example from OWS3 (Nikon Ti2 + Hamamatsu Orca):** Live Viewer arrows, joystick, and double-click all worked correctly with `Inverted Y stage` = ON and `Camera orientation` = NORMAL. But a 2×2 stitched acquisition showed tiles with their X corners mirrored. The correct setting turned out to be `Camera orientation` = `FLIP_H`, because the Ti2 body's optical path produces a horizontally-flipped image. Nobody physically modified the camera; the flip is inherent to the scope. Setting `FLIP_H` did not alter the Live Viewer image at all — but it fixed the stitched output.
+**Real example from OWS3 (Nikon Ti2 + Hamamatsu Orca):** Live Viewer arrows, joystick, and double-click all worked correctly with Y polarity inverted and `Camera orientation` = NORMAL. But a 2×2 stitched acquisition showed tiles with their X corners mirrored. The correct setting turned out to be `Camera orientation` = `FLIP_H`, because the Ti2 body's optical path produces a horizontally-flipped image. Nobody physically modified the camera; the flip is inherent to the scope. Setting `FLIP_H` did not alter the Live Viewer image at all — but it fixed the stitched output.
 
 **Axis-aligned vs rotation values:**
 - `NORMAL`, `FLIP_H`, `FLIP_V`, `ROT_180` are the four axis-aligned values. These work everywhere, including the stitcher.

@@ -216,7 +216,7 @@ These are two independent concepts that affect coordinate mapping:
 
 - Corrects for stage coordinate system conventions
 - Affects which direction stage movement commands go
-- Set in Preferences: "Inverted X/Y stage"
+- Set in the microscope config as `stage.polarity` (not a QuPath preference; see [PREFERENCES.md](../PREFERENCES.md#stage-polarity-in-the-microscope-config-not-a-preference))
 
 **Typical Settings:**
 

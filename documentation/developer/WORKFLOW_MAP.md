@@ -293,7 +293,7 @@ reads:
   - DS9 (open entry: SOURCE_MICROSCOPE, ACQUIRED_ON_MICROSCOPE, BASE_IMAGE, ORIGINAL_IMAGE_ID, MODALITY, OBJECTIVE, DETECTOR_ID, XY_OFFSET_X/Y, FLIP_X/Y, STAGE_BOUNDS_*)
   - DS17 (MicroscopeController state: isConnected, currentTransform)
   - DS24 (PersistentPreferences: getLastModality, class list, metadata propagation prefix)
-  - DS25 (QPPreferenceDialog: projectsFolder, tileOverlapPercent, stagePolarity, stitching format)
+  - DS25 (QPPreferenceDialog: projectsFolder, tileOverlapPercent, stitching format; stage polarity moved to stage.polarity in the microscope config, 2026-10-27)
   - DS27 (project image list, sibling resolution)
   - DS41 (ModalityRegistry -> ModalityHandler for the chosen modality)
   - DS42 (ModalityState)
@@ -1614,7 +1614,7 @@ fields:
   FLIP_X, FLIP_Y (see DS9)
 note: "Maintained as a separate ID for cross-reference. All accesses MUST go through ImageMetadataManager.isFlippedX/Y. Per CLAUDE.md: optical flip is independent of stage wiring polarity. Do NOT XOR with stage polarity."
 related_surfaces:
-  - DS25 (StagePolarity preference -- distinct concept)
+  - DS25 (stage polarity, now stage.polarity in the microscope config -- distinct concept)
 ```
 
 ### Preferences

@@ -128,9 +128,9 @@ camera is `DCam` or `DMonoCam`; a server with any other camera is refused with a
 switches to the demo configuration through Switch Microscope, or just reconnects if the demo
 is already active; sets the Live Viewer's remembered exposure to the demo's 10 ms; applies
 the profile of the modality the Live Viewer remembers, so the simulated camera and lights
-match what it shows; sets the stage direction and camera orientation preferences to the
-demo's (its stage is not inverted), keeping your microscope's values and putting them back
-when you switch to another microscope; opens the Live Viewer. On success a notification reads *Started the demo server and connected.* or
+match what it shows; sets the camera orientation preference to the demo's (NORMAL), keeping your
+microscope's value and putting it back when you switch to another microscope (the demo's
+config carries its own stage polarity, `NORMAL`); opens the Live Viewer. On success a notification reads *Started the demo server and connected.* or
 *Connected to the server already running on port 5000.*; the second means QPSC reused a
 demo server that was already running.
 

@@ -111,7 +111,7 @@ public class BoundedAcquisitionWorkflow {
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
             // Stage polarity is read via the composite StagePolarity enum
             // so it matches what the rest of the refactored pipeline sees.
-            qupath.ext.qpsc.utilities.StagePolarity stagePolarity = QPPreferenceDialog.getStagePolarityProperty();
+            qupath.ext.qpsc.utilities.StagePolarity stagePolarity = StagePolarity.current();
             boolean stageInvertedX = stagePolarity.invertX;
             boolean stageInvertedY = stagePolarity.invertY;
 

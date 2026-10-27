@@ -39,7 +39,7 @@ import qupath.lib.projects.ProjectImageEntry;
  *   <li><b>Camera orientation</b> -- the camera's mounting rotation on the port,
  *       {@link CameraOrientation} via {@link QPPreferenceDialog#getCameraOrientationProperty()}.</li>
  *   <li><b>Stage polarity</b> -- which way the stage physically moves for a {@code +X/+Y} command,
- *       {@link StagePolarity} via {@link QPPreferenceDialog#getStagePolarityProperty()}. This is the
+ *       {@link StagePolarity} via {@link StagePolarity#current()} (stage.polarity in the microscope config). This is the
  *       <em>net</em> of any MicroManager-level axis inversion (e.g. OWS3 inverts X in MM) plus the
  *       physical wiring: it is detected from observed behaviour, so never add a QPSC flip to
  *       "compensate" for the MM invert -- polarity already contains it.</li>
@@ -82,7 +82,7 @@ public final class LightPathModel {
      * A residual mirror for the Stage View on top of the slide rotation and the stage polarity
      * ({@link #stageViewFlipFlags}): {@code none | x | y | xy}, default {@code none}. The polarity
      * term covers every rig measured so far, so this stays {@code none} unless a rig shows the
-     * slide mirrored with the polarity preferences known to be right.
+     * slide mirrored with stage.polarity known to be right.
      */
     public static final String KEY_STAGE_VIEW_FLIP = "stage_view_flip";
 
@@ -164,7 +164,7 @@ public final class LightPathModel {
 
     /** The Stage View's canvas flip for {@code insertion} under the active config. */
     public static boolean[] currentStageViewFlip(String insertion) {
-        return stageViewFlipFlags(insertion, stageViewFlip(), QPPreferenceDialog.getStagePolarityProperty());
+        return stageViewFlipFlags(insertion, stageViewFlip(), StagePolarity.current());
     }
 
     /**

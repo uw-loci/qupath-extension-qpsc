@@ -53,6 +53,12 @@ id_detector:
 
 stage:
   stage_id: OFFLINE_STAGE
+  # Stage polarity: which stage axes move opposite to the visual convention for a
+  # positive command (NORMAL | INVERT_X | INVERT_Y | INVERT_XY). Drives tile order,
+  # the alignment's directions, the Live Viewer controls and the Stage Map. Until
+  # 2026-10-27 this was a QuPath preference shared by every microscope one install
+  # switched between. No stage.
+  polarity: NORMAL
   limits:
     x_um:
       low: -10000.0

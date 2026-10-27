@@ -68,4 +68,81 @@ public enum StagePolarity {
         if (invertY) return INVERT_Y;
         return NORMAL;
     }
+
+    /** Config key, under the {@code stage} block of the microscope YAML. */
+    public static final String CONFIG_KEY = "polarity";
+
+    private static final org.slf4j.Logger logger = org.slf4j.LoggerFactory.getLogger(StagePolarity.class);
+    private static final java.util.List<Runnable> CHANGE_LISTENERS = new java.util.concurrent.CopyOnWriteArrayList<>();
+    private static volatile String lastWarnedConfig = null;
+
+    /**
+     * The active microscope's stage polarity, {@code stage.polarity} in its config
+     * ({@code NORMAL | INVERT_X | INVERT_Y | INVERT_XY}). A property of the stage, so it lives
+     * with the stage: it was a QuPath preference, one value per install, which a QuPath that
+     * switches between microscopes carried from one to the next (2026-10-27).
+     *
+     * <p>{@link #NORMAL} when no config is loaded, and when the key is missing or unreadable;
+     * the latter is logged once per config, since every tiling, stage-map and live-viewer
+     * direction follows this value.
+     */
+    public static StagePolarity current() {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null) {
+            return NORMAL;
+        }
+        String raw = mgr.getString("stage", CONFIG_KEY);
+        StagePolarity parsed = parse(raw);
+        if (parsed == null) {
+            String path = mgr.getConfigPath();
+            if (path != null && !path.equals(lastWarnedConfig)) {
+                lastWarnedConfig = path;
+                logger.warn(
+                        "stage.{} is {} in {}; using NORMAL. Set it to NORMAL, INVERT_X, INVERT_Y or INVERT_XY "
+                                + "(Live Viewer > Calibrate Directions > Manual override writes it).",
+                        CONFIG_KEY,
+                        raw == null ? "missing" : "'" + raw + "' (not a polarity)",
+                        path);
+            }
+            return NORMAL;
+        }
+        return parsed;
+    }
+
+    /** The polarity named by {@code value} (case and surrounding space ignored), or null. */
+    public static StagePolarity parse(String value) {
+        if (value == null || value.isBlank()) {
+            return null;
+        }
+        try {
+            return valueOf(value.trim().toUpperCase(java.util.Locale.ROOT));
+        } catch (IllegalArgumentException e) {
+            return null;
+        }
+    }
+
+    /**
+     * Writes {@code polarity} to the active microscope's config ({@code stage.polarity}), reloads
+     * the config and tells the listeners.
+     *
+     * @return true when the file changed
+     * @throws java.io.IOException when there is no writable config or the write failed
+     */
+    public static boolean save(StagePolarity polarity) throws java.io.IOException {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null || mgr.getConfigPath() == null) {
+            throw new java.io.IOException("no microscope config is loaded");
+        }
+        ConfigYamlEditor.Result r = ConfigYamlEditor.setTopLevelChildScalar(
+                java.nio.file.Path.of(mgr.getConfigPath()), "stage", CONFIG_KEY, polarity.name());
+        logger.info("Stage polarity written to {}: {} ({})", mgr.getConfigPath(), polarity, r.message);
+        mgr.reload();
+        CHANGE_LISTENERS.forEach(Runnable::run);
+        return r.changed;
+    }
+
+    /** Runs {@code listener} after {@link #save} changes the polarity. Not called on a microscope switch. */
+    public static void addChangeListener(Runnable listener) {
+        CHANGE_LISTENERS.add(listener);
+    }
 }

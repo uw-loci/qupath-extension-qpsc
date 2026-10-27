@@ -40,6 +40,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StageImageTransform;
+import qupath.ext.qpsc.utilities.StagePolarity;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
@@ -1861,8 +1862,8 @@ public class StageMapWindow {
      * Apply the initial flip state after the stage is shown.
      * Must be called after stage.show() so the StackPane scale transforms take effect.
      *
-     * <p>Also attaches change listeners to the underlying StagePolarity /
-     * CameraOrientation prefs so the toggle keeps tracking the hardware
+     * <p>Also attaches change listeners to the stage polarity (config) and the
+     * CameraOrientation pref so the toggle keeps tracking the hardware
      * settings if the user edits them mid-session (e.g. via Calibrate
      * Directions). Listener attachment is one-shot.
      */
@@ -1870,12 +1871,9 @@ public class StageMapWindow {
         syncApplyFlipsFromHardware("initial");
         // One-shot listener attachment; weak references are not needed because
         // the StageMapWindow is a singleton tied to QuPath's lifetime.
-        QPPreferenceDialog.stageInvertedXObservable()
-                .addListener(
-                        (obs, was, now) -> Platform.runLater(() -> syncApplyFlipsFromHardware("stage polarity X")));
-        QPPreferenceDialog.stageInvertedYObservable()
-                .addListener(
-                        (obs, was, now) -> Platform.runLater(() -> syncApplyFlipsFromHardware("stage polarity Y")));
+        // Polarity is stage.polarity in the microscope config: a switch rebuilds the map, and
+        // Calibrate Directions' manual override notifies here after writing it.
+        StagePolarity.addChangeListener(() -> Platform.runLater(() -> syncApplyFlipsFromHardware("stage polarity")));
         QPPreferenceDialog.cameraOrientationObservable()
                 .addListener(
                         (obs, was, now) -> Platform.runLater(() -> syncApplyFlipsFromHardware("camera orientation")));

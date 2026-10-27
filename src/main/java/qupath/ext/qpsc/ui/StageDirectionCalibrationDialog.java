@@ -212,9 +212,8 @@ public final class StageDirectionCalibrationDialog {
         HBox stepRow = new HBox(8, stepLabel, stepSpinner);
         stepRow.setAlignment(Pos.CENTER_LEFT);
 
-        Label polarityLabel = new Label(String.format(
-                "Assumed stage polarity: %s (unchanged by this calibration)",
-                QPPreferenceDialog.getStagePolarityProperty()));
+        Label polarityLabel = new Label(
+                String.format("Assumed stage polarity: %s (unchanged by this calibration)", StagePolarity.current()));
         polarityLabel.setStyle("-fx-font-style: italic;");
         polarityLabel.setWrapText(true);
         polarityLabel.setMinHeight(Region.USE_PREF_SIZE);
@@ -344,7 +343,7 @@ public final class StageDirectionCalibrationDialog {
     // ----- Phase: result -----
 
     private void showResultPhase(CompletableFuture<CalibrationResult> future) {
-        StagePolarity currentPolarity = QPPreferenceDialog.getStagePolarityProperty();
+        StagePolarity currentPolarity = StagePolarity.current();
         solved = backSolve(xObserved, yObserved, currentPolarity);
         if (solved == null) {
             phaseHeader.setText("No camera orientation matches");
@@ -404,15 +403,15 @@ public final class StageDirectionCalibrationDialog {
     private void showManualOverridePhase(CompletableFuture<CalibrationResult> future) {
         phaseHeader.setText("Manual override");
         phaseInstructions.setText("Pick the stage polarity and camera orientation you want to "
-                + "save. Polarity is a hardware-wiring fact -- only change it if you have verified "
+                + "save. Polarity is written to this microscope's config (stage.polarity); the camera "
+                + "orientation to your preferences. Polarity is a hardware-wiring fact -- only change it if you have verified "
                 + "via direct stage observation (e.g. via the MicroManager-script procedure in "
                 + "PREFERENCES.md) that positive commands move the stage carrier the wrong way. "
                 + "The preview below shows the resulting screen <-> stage sign math.");
 
         manualPolarityCombo = new ComboBox<>();
         manualPolarityCombo.getItems().setAll(StagePolarity.values());
-        manualPolarityCombo.setValue(
-                solved == null ? QPPreferenceDialog.getStagePolarityProperty() : solved.polarity());
+        manualPolarityCombo.setValue(solved == null ? StagePolarity.current() : solved.polarity());
 
         manualOrientationCombo = new ComboBox<>();
         manualOrientationCombo.getItems().setAll(CameraOrientation.values());
@@ -458,8 +457,10 @@ public final class StageDirectionCalibrationDialog {
 
     private void applyAndClose(CompletableFuture<CalibrationResult> future, CalibrationResult result) {
         try {
-            QPPreferenceDialog.setStageInvertedX(result.polarity().invertX);
-            QPPreferenceDialog.setStageInvertedY(result.polarity().invertY);
+            if (result.polarity() != StagePolarity.current()) {
+                // Polarity is a fact about this microscope's stage: stage.polarity in its config.
+                StagePolarity.save(result.polarity());
+            }
             QPPreferenceDialog.setCameraOrientationProperty(result.orientation());
             logger.info(
                     "Stage direction calibration applied: {}",
@@ -467,9 +468,7 @@ public final class StageDirectionCalibrationDialog {
         } catch (Exception ex) {
             logger.error("Failed to persist calibration result", ex);
             Alert alert = new Alert(
-                    Alert.AlertType.ERROR,
-                    "Could not save calibration to preferences:\n" + ex.getMessage(),
-                    ButtonType.OK);
+                    Alert.AlertType.ERROR, "Could not save the calibration:\n" + ex.getMessage(), ButtonType.OK);
             UserErrors.logAlert(logger, alert);
             UIFunctions.showAlertOverParent(alert, stage);
         }

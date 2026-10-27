@@ -12,8 +12,6 @@ This document provides comprehensive documentation for all QPSC preferences avai
 |------------|------|---------|-------------|
 | [Flip macro image X](#flip-macro-image-x) | Boolean | OFF | Flip image horizontally |
 | [Flip macro image Y](#flip-macro-image-y) | Boolean | OFF | Flip image vertically |
-| [Inverted X stage](#inverted-x-stage) | Boolean | OFF | Stage X wiring is inverted |
-| [Inverted Y stage](#inverted-y-stage) | Boolean | ON | Stage Y wiring is inverted |
 | [Camera orientation](#camera-orientation) | Enum | NORMAL | How the displayed image is oriented relative to the sample frame |
 | [Microscope Config File](#microscope-config-file) | File | - | Path to microscope YAML config |
 | [Server launcher](#server-launcher) | File | (empty) | Program QPSC runs to start the microscope server for the demo microscope |
@@ -105,49 +103,33 @@ Flips the image vertically for coordinate alignment. Enable when the optical lig
 
 ---
 
-### Inverted X stage
+### Stage polarity (in the microscope config, not a preference)
 
-| Property | Value |
-|----------|-------|
-| Type | Boolean |
-| Default | OFF |
-| Requires Restart | No |
+Until 2026-10-27 this was two preferences, **Inverted X stage** and **Inverted Y stage**. They were one pair per QuPath install, so a QuPath that switched between microscopes carried one stage's values to the next. It is now `stage.polarity` in each microscope's config file:
 
-**Description:**
-Hardware stage wiring polarity for the X axis. When enabled, MicroManager's `+X` command moves the physical stage in the lab `-X` direction (i.e. the encoder or device adapter is wired backwards relative to the lab frame).
+```yaml
+stage:
+  polarity: INVERT_XY   # NORMAL | INVERT_X | INVERT_Y | INVERT_XY
+```
 
-This is a pure hardware property — it does NOT describe how the image appears on screen. For image orientation, use [Camera orientation](#camera-orientation) instead.
-
-**How to diagnose:**
-This is a hardware-wiring property and must be verified by direct observation of the stage carrier, not by looking at the image. Issue `core.setXYPosition(core.getXPosition() + 100, core.getYPosition())` from a MicroManager script and watch which direction the physical stage actually moves. If positive commands move the carrier in the lab `-X` direction, enable this setting.
-
-The **Calibrate Directions** tool (Live Viewer → Navigate tab → `Calibrate Directions...`, also a Setup Wizard step) **does not change this preference** -- it solves for `Camera orientation` under your current polarity. If the calibration tool reports "no camera orientation matches," that is a signal that polarity may be wrong; re-run the MicroManager-script check above.
-
-**When to Enable:**
-- You've verified via the hardware check above that positive X commands move the stage the wrong way.
-- Do NOT enable this as a workaround for arrow buttons or stitched tiles looking flipped — that's a camera orientation issue; use the [Camera orientation](#camera-orientation) setting (or the Calibrate Directions tool) instead.
-
----
-
-### Inverted Y stage
-
-| Property | Value |
-|----------|-------|
-| Type | Boolean |
-| Default | ON |
-| Requires Restart | No |
+| Microscope | `stage.polarity` |
+|---|---|
+| PPM | `NORMAL` |
+| OWS3 | `INVERT_XY` |
+| LC-PolScope (both cameras) | `INVERT_Y` |
 
 **Description:**
-Hardware stage wiring polarity for the Y axis. When enabled, MicroManager's `+Y` command moves the physical stage in the lab `-Y` direction.
+Hardware stage wiring polarity. `INVERT_X` means MicroManager's `+X` command moves the physical stage in the lab `-X` direction (the encoder or device adapter is wired backwards relative to the lab frame); likewise for Y. It drives tile order, the alignment's directions, the Live Viewer arrows, joystick and double-click, the stitcher's flip flags and the Stage Map (including Stage View, which shows the stage as seen from the front). A config without it reads as `NORMAL`, with a warning in the QuPath log.
 
-As with the X polarity, this describes the stage wiring, NOT the image orientation on screen. For image orientation, use [Camera orientation](#camera-orientation) instead.
+This is a pure hardware property. It does NOT describe how the image appears on screen; for that, use [Camera orientation](#camera-orientation).
 
 **How to diagnose:**
-Same hardware check as X — set a new Y position via MM script and observe the physical stage direction. The **Calibrate Directions** tool does not change this preference.
+Verify it by direct observation of the stage carrier, not by looking at the image. Issue `core.setXYPosition(core.getXPosition() + 100, core.getYPosition())` from a MicroManager script and watch which way the physical stage moves; repeat for Y.
 
-**When to Enable:**
-- You've verified via the hardware check that positive Y commands move the stage the wrong way.
-- Default is ON because many common stages (e.g. Nikon Ti2) ship with this wiring convention.
+**How to change it:**
+Edit the config file, or use **Calibrate Directions** (Live Viewer > Navigate tab > `Calibrate Directions...`) > **Manual override**, which writes `stage.polarity` to the active microscope's config. The calibration itself does **not** change polarity: it solves `Camera orientation` under the polarity in the config. If it reports "no camera orientation matches," the polarity may be wrong; re-run the MicroManager-script check above.
+
+Do NOT change polarity as a workaround for arrow buttons or stitched tiles looking flipped; that is a camera orientation issue.
 
 ---
 
@@ -161,7 +143,7 @@ Same hardware check as X — set a new Y position via MM script and observe the 
 
 **Description:**
 
-`Camera orientation` describes the **net optical relationship** between your sample and your displayed image. It composes with the two stage-polarity preferences above via `StageImageTransform` to form the complete stage ⇔ image relationship used by arrow buttons, the virtual joystick, double-click-to-center, and the stitcher's tile placement.
+`Camera orientation` describes the **net optical relationship** between your sample and your displayed image. It composes with the [stage polarity](#stage-polarity-in-the-microscope-config-not-a-preference) (`stage.polarity` in the microscope config) via `StageImageTransform` to form the complete stage ⇔ image relationship used by arrow buttons, the virtual joystick, double-click-to-center, and the stitcher's tile placement.
 
 **⚠️ IMPORTANT — what this preference is NOT:**
 
@@ -191,11 +173,11 @@ Rotation / transpose cases (supported by Live Viewer controls but **not** by the
 
 **How to Configure:**
 
-**Easy path:** Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the tissue in the image moved across the screen (the opposite of the view's pan), and solves for the `Camera orientation` that matches under your current `Inverted X/Y stage` polarity. It writes only `Camera orientation` -- polarity is treated as a hardware-wiring fact (see the [Inverted X/Y stage](#inverted-x-stage) sections above) and must be verified separately by direct stage observation. If the tool reports "no camera orientation matches," that is a signal your polarity may be wrong; verify via the MicroManager-script check before retrying. Manual override is available for users who need to edit both at once.
+**Easy path:** Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the tissue in the image moved across the screen (the opposite of the view's pan), and solves for the `Camera orientation` that matches under the stage polarity in the config (`stage.polarity`). It writes only `Camera orientation` -- polarity is treated as a hardware-wiring fact (see the [stage polarity](#stage-polarity-in-the-microscope-config-not-a-preference) sections above) and must be verified separately by direct stage observation. If the tool reports "no camera orientation matches," that is a signal your polarity may be wrong; verify via the MicroManager-script check before retrying. Manual override is available for users who need to edit both at once.
 
 **Manual procedure (fallback):**
 
-The goal is to pick whichever combination of `Inverted X/Y stage` + `Camera orientation` makes **all four of these** produce the correct visual result on your scope:
+The goal is to pick whichever combination of `stage.polarity` (in the microscope config) + `Camera orientation` makes **all four of these** produce the correct visual result on your scope:
 
 1. Arrow buttons (Sample Movement checked) — direction matches the button you press
 2. Virtual joystick — direction matches the drag
@@ -203,7 +185,7 @@ The goal is to pick whichever combination of `Inverted X/Y stage` + `Camera orie
 4. A small stitched 2×2 acquisition — the corners are laid out as expected
 
 Procedure:
-1. Start with the `Inverted X/Y stage` settings you already had, and `Camera orientation = NORMAL`.
+1. Start with the `stage.polarity` your config already has, and `Camera orientation = NORMAL`.
 2. Test the four live gestures. If all four work, you may still need to verify stitching (step 4) — it's possible for gestures to appear correct but stitching to be wrong, as we found on OWS3.
 3. Run a small 2×2 stitched acquisition.
 4. If only the stitched X axis is wrong, try `FLIP_H`.
@@ -347,9 +329,9 @@ extracts a second bundled config, `<QuPath user directory>/qpsc-demo-microscope/
 becomes `C:\Users\<you>\QuPath\v0.7\qpsc-demo-microscope\config_Demo.yml`. Unlike the
 placeholder it is a complete, acquisition-capable configuration, driven by the microscope
 server started with `--demo`. The connect also sets the Live Viewer's remembered exposure
-to the demo's 10 ms. It also sets the **Inverted X stage** and **Inverted Y stage**
-preferences to OFF and the **Camera orientation** preference to NORMAL (the demo's values),
-saving your values; switching to another microscope puts them back. Switch back with **Extensions > QP Scope > Utilities > Microscope
+to the demo's 10 ms. It also sets the **Camera orientation** preference to NORMAL (the demo's value),
+saving yours; switching to another microscope puts it back. The stage polarity comes with
+the demo's config (`stage.polarity: NORMAL`), like every other microscope's. Switch back with **Extensions > QP Scope > Utilities > Microscope
 Configuration > Switch Microscope...**, or change this preference and accept the offer.
 
 **CRITICAL WARNING:**
@@ -1774,7 +1756,7 @@ QPSC uses several YAML configuration files:
 2. **Projects Folder** - Set your preferred data storage location
 3. **Microscope Server Host/Port** - Configure to match your server
 4. **Tile Overlap Percent** - Start with 10% default
-5. **Inverted Y stage** - Usually ON for most microscopes
+5. **Stage polarity** - `stage.polarity` in the microscope config (not a preference)
 
 Then verify settings using:
 - Extensions > QP Scope > Communication Settings > Test Connection

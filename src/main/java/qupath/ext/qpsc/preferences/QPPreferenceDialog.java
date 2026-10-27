@@ -26,15 +26,16 @@ import qupath.lib.images.writers.ome.OMEPyramidWriter;
  *
  * <p>Registers and exposes the subset of extension preferences you
  * want in QuPath's Preferences Pane:
- *   - Optical flip, stage axis inversion, script paths, directories, compression, overlap, etc.
- *   - Provides typed getters so other code can simply call getStageInvertedXProperty(), etc.
+ *   - Camera orientation, script paths, directories, compression, overlap, etc.
+ *   - Provides typed getters so other code can simply call getCameraOrientationProperty(), etc.
  *
  * <p><b>Terminology (see CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY"):</b>
  * <ul>
  *   <li><b>flipMacroX/Y</b> - Optical flip: the microscope's light path mirrors the camera
  *       image relative to the physical slide.  Used to create flipped duplicate images in QuPath.</li>
- *   <li><b>stageInvertedX/Y</b> - Stage axis inversion: positive stage commands move opposite
- *       to the visual convention.  Controls tile traversal order and affine transform sign.</li>
+ *   <li><b>Stage polarity</b> - Stage axis inversion: positive stage commands move opposite
+ *       to the visual convention. Not a preference: {@code stage.polarity} in the microscope
+ *       config, read through {@link StagePolarity#current()}.</li>
  * </ul>
  */
 public class QPPreferenceDialog {
@@ -57,13 +58,8 @@ public class QPPreferenceDialog {
     // through FlipResolver, which composes per-image metadata, the active preset, the detector
     // YAML config, and (as a safe default for fresh contexts) `false`.
 
-    // Stage axis inversion: whether positive stage commands move opposite to the visual convention.
-    // CRITICAL: The persisted key strings ("isInvertedXProperty" etc.) must NOT change --
-    // they are stored in user config files and changing them would reset user preferences.
-    private static final BooleanProperty stageInvertedXProperty =
-            PathPrefs.createPersistentPreference("isInvertedXProperty", false);
-    private static final BooleanProperty stageInvertedYProperty =
-            PathPrefs.createPersistentPreference("isInvertedYProperty", true);
+    // Stage axis inversion is not a preference: it is stage.polarity in the microscope config
+    // (StagePolarity.current()), so a QuPath that switches microscopes does not carry it along.
     // Camera orientation: 8-element dihedral group describing how the displayed
     // image is oriented relative to the sample frame. Distinct from stage polarity
     // (which is hardware wiring) and distinct from macro-image flip (which is a
@@ -306,23 +302,9 @@ public class QPPreferenceDialog {
         // Macro flip preferences removed in 0.4.x -- the flip is captured per-alignment in the
         // orientation question at the start of the Microscope Alignment workflow and saved into
         // the AffineTransformPreset.
-        items.add(new PropertyItemBuilder<>(stageInvertedXProperty, Boolean.class)
-                .name("Inverted X stage")
-                .category(CATEGORY)
-                .description("Stage X axis is inverted: positive X commands move left instead of right.\n"
-                        + "This controls tile traversal order and coordinate transform sign.\n"
-                        + "NOT the same as optical flip (Flip macro image X).")
-                .build());
-        items.add(new PropertyItemBuilder<>(stageInvertedYProperty, Boolean.class)
-                .name("Inverted Y stage")
-                .category(CATEGORY)
-                .description("Stage Y axis is inverted: positive Y commands move down instead of up.\n"
-                        + "This controls tile traversal order and coordinate transform sign.\n"
-                        + "NOT the same as optical flip (Flip macro image Y).")
-                .build());
 
         // Camera orientation enum (8-element dihedral group). Combines with the
-        // stage inversion booleans above via StageImageTransform to produce a
+        // stage polarity (stage.polarity in the microscope config) via StageImageTransform to produce a
         // single consistent relationship between user gestures and stage commands.
         List<String> cameraOrientationChoices = new ArrayList<>();
         for (CameraOrientation o : CameraOrientation.values()) {
@@ -862,36 +844,6 @@ public class QPPreferenceDialog {
     // --- Typed getters for use throughout your code ---
     // (Flip macro X/Y getters removed -- read flip via FlipResolver instead.)
 
-    /** Returns true if the stage X axis is inverted (stage inversion, not optical flip). */
-    public static boolean getStageInvertedXProperty() {
-        return stageInvertedXProperty.get();
-    }
-
-    /** Returns true if the stage Y axis is inverted (stage inversion, not optical flip). */
-    public static boolean getStageInvertedYProperty() {
-        return stageInvertedYProperty.get();
-    }
-
-    /** Setter used by the stage direction calibration dialog. */
-    public static void setStageInvertedX(boolean inverted) {
-        stageInvertedXProperty.set(inverted);
-    }
-
-    /** Setter used by the stage direction calibration dialog. */
-    public static void setStageInvertedY(boolean inverted) {
-        stageInvertedYProperty.set(inverted);
-    }
-
-    /**
-     * Returns the composite {@link StagePolarity} derived from the per-axis
-     * boolean preferences. This is the preferred way to access stage polarity
-     * in new code -- the two individual boolean prefs are retained for UI
-     * editing and backwards compatibility.
-     */
-    public static StagePolarity getStagePolarityProperty() {
-        return StagePolarity.fromBooleans(stageInvertedXProperty.get(), stageInvertedYProperty.get());
-    }
-
     /**
      * Returns the persisted {@link CameraOrientation}. Falls back to
      * {@link CameraOrientation#NORMAL} if the stored value is missing or
@@ -915,20 +867,6 @@ public class QPPreferenceDialog {
         if (orientation != null) {
             cameraOrientationProperty.set(orientation.name());
         }
-    }
-
-    /**
-     * Observable view of the stage X inversion preference. Use this to attach
-     * a change listener that needs to react when the stage polarity is edited
-     * (e.g. by the Calibrate Directions tool or the prefs dialog).
-     */
-    public static BooleanProperty stageInvertedXObservable() {
-        return stageInvertedXProperty;
-    }
-
-    /** Observable view of the stage Y inversion preference for change listeners. */
-    public static BooleanProperty stageInvertedYObservable() {
-        return stageInvertedYProperty;
     }
 
     /** Observable view of the camera orientation preference for change listeners. */
