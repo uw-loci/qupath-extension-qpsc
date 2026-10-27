@@ -635,6 +635,7 @@ When autofocus fails (both primary and fallback metrics), the system can request
   - **Exposure issues** -- saturation (reduce exposure) or too-long exposure for streaming AF (use Sweep Autofocus)
   - **Narrow search range** -- increase `sweep_range_um` for this objective
 - The hint also points you to where to change the AF strategy: the acquisition wizard's Advanced panel (one-time override) or Settings > Autofocus Configuration > Modality Bindings (persistent)
+- While the server waits, the Live Viewer's stage controls (Z and XY) are unlocked, so you can move to tissue to find focus by hand. The server returns the stage to the tile afterwards and finds Z for it. Other acquisition states keep the controls locked.
 - The server sends keepalive pings every 30 seconds while waiting
 
 This can be disabled with the **"No Manual Autofocus"** preference (Extensions > QP Scope > Preferences), in which case failures automatically use the current Z position.

@@ -306,6 +306,7 @@ The Live Viewer does not produce persistent output files. It provides real-time 
 - **Stage does not move**: Check hardware initialization in Micro-Manager
 - The dialog is a singleton -- opening it again brings the existing window to front
 - Live streaming pauses automatically during acquisition, camera operations, and WB preset application, then resumes afterward
+- During an acquisition the stage controls (Z and XY) are locked, so a stray click cannot move the stage off the tile being acquired. The exception is a manual-focus pause, when the server is waiting for you to focus by hand: then Z and XY are both unlocked, and the server returns the stage to the tile afterwards and finds Z for it. See [Autofocus](../AUTOFOCUS.md#manual-focus-fallback)
 - If frames stop arriving, the viewer will automatically attempt to restart the camera up to twice before turning off
 - Stage control settings (step size, sample movement mode) are persisted between sessions
 

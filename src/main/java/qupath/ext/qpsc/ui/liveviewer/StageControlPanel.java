@@ -4441,18 +4441,28 @@ public class StageControlPanel extends VBox {
     }
 
     /**
-     * @param allowDuringManualFocus true for Z controls, which stay usable while the server
-     *     is paused asking the user to focus by hand. XY passes false: moving off the tile
-     *     during an acquisition would acquire the wrong field.
+     * While the server is paused asking the operator to focus by hand, every control is
+     * usable: Z to focus, and XY because the operator may have to move to tissue to see focus
+     * at all (the server returns the stage to the tile afterwards, with the Z found). Outside
+     * that pause an acquisition locks everything, since moving off the tile would acquire the
+     * wrong field. Called from the joystick and arrow executors as well as the FX thread, so
+     * the status labels are set through {@code Platform.runLater}; a direct setText from the
+     * joystick thread threw and swallowed the move (2026-10-26).
+     *
+     * @param allowDuringManualFocus kept for the call sites; every control is now allowed
+     *     during a manual-focus pause, Z and XY alike
      */
     private boolean isAcquisitionBlocked(boolean allowDuringManualFocus) {
         MicroscopeController mc = MicroscopeController.getInstance();
         if (!mc.isAcquisitionActive()) return false;
-        if (allowDuringManualFocus && mc.isManualFocusPending()) {
-            Platform.runLater(() -> zStatus.setText("Manual focus: Z unlocked"));
+        if (mc.isManualFocusPending()) {
+            Platform.runLater(() -> {
+                zStatus.setText("Manual focus: Z unlocked");
+                xyStatus.setText("Manual focus: XY unlocked (returns to the tile afterwards)");
+            });
             return false;
         }
-        xyStatus.setText("Locked during acquisition");
+        Platform.runLater(() -> xyStatus.setText("Locked during acquisition"));
         return true;
     }
 
