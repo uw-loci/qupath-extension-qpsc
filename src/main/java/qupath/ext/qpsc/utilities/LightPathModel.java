@@ -79,12 +79,10 @@ public final class LightPathModel {
     public static final String KEY_SLIDE_INSERTION = "slide_insertion"; // factor 1b
     public static final String KEY_OPTICAL_FLIP = "optical_flip"; // factor 2: camera-vs-stage optical flip
     /**
-     * What the Stage View adds to the slide rotation so it shows the slide as the operator sees
-     * it from above: {@code none | x | y | xy}. On an inverted scope the slide is face down and
-     * the operator sees the tissue through the glass, one mirror away from the scan; whether the
-     * macro's baseline on the map already carries that mirror depends on the stage polarity and
-     * the alignment transform, so it is set per microscope by looking (the LC-PolScope needs
-     * {@code y}, 2026-10-26; OWS3 needed none, 2026-08-09).
+     * A residual mirror for the Stage View on top of the slide rotation and the stage polarity
+     * ({@link #stageViewFlipFlags}): {@code none | x | y | xy}, default {@code none}. The polarity
+     * term covers every rig measured so far, so this stays {@code none} unless a rig shows the
+     * slide mirrored with the polarity preferences known to be right.
      */
     public static final String KEY_STAGE_VIEW_FLIP = "stage_view_flip";
 
@@ -145,20 +143,28 @@ public final class LightPathModel {
     }
 
     /**
-     * The Stage View's canvas flip: the slide rotation for {@code insertion} composed with the
-     * per-microscope Stage View mirror ({@code none | x | y | xy}, see
-     * {@link #KEY_STAGE_VIEW_FLIP}). {@code none} leaves the historical behaviour, the rotation
-     * alone.
+     * The Stage View's canvas flip: the slide rotation for {@code insertion}, the stage polarity,
+     * and the per-microscope residual mirror ({@code none | x | y | xy}, see
+     * {@link #KEY_STAGE_VIEW_FLIP}).
+     *
+     * <p>The map draws stage coordinates through the insert's axis inversion, which is the stage
+     * polarity, so on an inverted-axis stage the picture came out mirrored on that axis relative to
+     * the stage seen from the front. The polarity term undoes it. It is what each rig needed by eye:
+     * the LC-PolScope (polarity Y) was given {@code stage_view_flip: y} by hand on 2026-10-26, OWS3
+     * (polarity X and Y) drew the slide turned 180 with its label on the left (2026-10-27), and the
+     * PPM (polarity normal) needed nothing. Display only.
      */
-    public static boolean[] stageViewFlipFlags(String insertion, String stageViewMirror) {
+    public static boolean[] stageViewFlipFlags(String insertion, String stageViewMirror, StagePolarity polarity) {
         boolean[] rotation = slideRotationFlipFlags(insertion);
         boolean[] mirror = opticalFlipFlags(stageViewMirror);
-        return new boolean[] {rotation[0] ^ mirror[0], rotation[1] ^ mirror[1]};
+        boolean px = polarity != null && polarity.invertX;
+        boolean py = polarity != null && polarity.invertY;
+        return new boolean[] {rotation[0] ^ mirror[0] ^ px, rotation[1] ^ mirror[1] ^ py};
     }
 
     /** The Stage View's canvas flip for {@code insertion} under the active config. */
     public static boolean[] currentStageViewFlip(String insertion) {
-        return stageViewFlipFlags(insertion, stageViewFlip());
+        return stageViewFlipFlags(insertion, stageViewFlip(), QPPreferenceDialog.getStagePolarityProperty());
     }
 
     /**

@@ -111,14 +111,22 @@ class LightPathModelBenchFlipTest {
     }
 
     @Test
-    void stageViewMirrorComposesWithTheSlideRotation() {
-        // none keeps the historical behaviour: the rotation alone.
-        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "none"), false, false, "A none");
-        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_B, "none"), true, true, "B none");
-        // y (the LC-PolScope, 2026-10-26): A mirrors Y, B = 180 xor Y = mirror X.
-        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "y"), false, true, "A y");
-        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_B, "y"), true, false, "B y");
-        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, null), false, false, "A null");
+    void stageViewComposesRotationMirrorAndPolarity() {
+        StagePolarity normal = StagePolarity.fromBooleans(false, false);
+        StagePolarity invY = StagePolarity.fromBooleans(false, true);
+        StagePolarity invXY = StagePolarity.fromBooleans(true, true);
+        // PPM (polarity normal, no mirror): the rotation alone.
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "none", normal), false, false, "PPM A");
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_B, "none", normal), true, true, "PPM B");
+        // LC-PolScope (polarity Y): the Y mirror it was given by hand on 2026-10-26 now comes
+        // from the polarity, so its config mirror is back to none.
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "none", invY), false, true, "LCPS A");
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_B, "none", invY), true, false, "LCPS B");
+        // OWS3 (polarity X and Y): the 180 it was missing on 2026-10-27.
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "none", invXY), true, true, "OWS3 A");
+        // A residual mirror still composes on top.
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, "y", invY), false, false, "residual y");
+        assertFlip(LightPathModel.stageViewFlipFlags(LightPathModel.INSERT_A, null, null), false, false, "nulls");
     }
 
     @Test

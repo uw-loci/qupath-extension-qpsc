@@ -72,8 +72,14 @@ Four factors stack along the light path, plus the macro-image flip that orients 
   the display factors below. This is why the Stage-Map/SIFT display bugs never corrupted data.
 - **Stage Map Camera View** = `cameraFlipFlags()` (factor 3) XOR `opticalFlipFlags` (factor 2) --
   so the map matches the Live Viewer. **Display only.**
-- **Stage Map Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b) XOR the per-microscope
-  Stage View mirror (`light_path.stage_view_flip`, see the YAML block above). It does **not** apply
+- **Stage Map Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b) XOR the stage polarity
+  (factor 4) XOR a residual per-microscope mirror (`light_path.stage_view_flip`, default `none`).
+  The polarity term (2026-10-27) is what every rig needed by eye: the LC-PolScope (polarity Y) had
+  been given `stage_view_flip: y` by hand, OWS3 (polarity X and Y) drew the slide turned 180 with
+  the label on the left, and the PPM (polarity normal) needed nothing. The map draws stage
+  coordinates through the insert's axis inversion, which is the polarity, so without the term an
+  inverted axis came out mirrored relative to the stage seen from the front. Superseded text
+  follows: It does **not** apply
   the scope-face flip (factor 1a) -- that is not derived from `scope_type`. On an inverted
   scope the physical inversion is already carried by the stage polarity (factor 4) and the per-slide
   alignment transform, so the Stage Map's macro overlay is already drawn in that inverted baseline
@@ -89,8 +95,8 @@ Four factors stack along the light path, plus the macro-image flip that orients 
 | Rig | Scope | Insertion | Optical flip | Camera | Polarity |
 |-----|-------|-----------|--------------|--------|----------|
 | **PPM**  | upright | **B** | **180 / XY** (objective inversion) | NORMAL | NORMAL |
-| **OWS3** | inverted | A | `xy` in `config_OWS3.yml` since 2026-08-09; the Camera View check against the Live Viewer is still owed (see the 2026-10-27 report) | NORMAL | INVERT_XY |
-| **LC-PolScope** (both cameras) | inverted | A | **`y`** (2026-10-27: with `none` the Camera View macro was mirrored top/bottom against the Live Viewer) | FLIP_V (Calibrate Directions, 2026-10-19) | INVERT_Y |
+| **OWS3** | inverted | A | `xy` in `config_OWS3.yml` since 2026-08-09; the Camera View check against the Live Viewer is still owed (see the 2026-10-27 report) | NORMAL | INVERT_XY (gives Stage View its 180, 2026-10-27) |
+| **LC-PolScope** (both cameras) | inverted | A | **`y`** (2026-10-27: with `none` the Camera View macro was mirrored top/bottom against the Live Viewer) | FLIP_V (Calibrate Directions, 2026-10-19) | INVERT_Y (also gives Stage View its Y mirror) |
 
 PPM was pinned by matching the simulator. The optical value on the other rigs is the *net* the
 operator observes by holding the Stage Map's Camera View next to the Live Viewer; the
@@ -117,8 +123,9 @@ light_path:
 - **Camera View** = `cameraFlipFlags` (factor 3) XOR `opticalFlipFlags` (factor 2) -- matches the
   Live Viewer. The optical flip is why Camera View differs from Stage View at all.
 - **Stage View** = `slideRotationFlipFlags(insertion)` (factor 1b, the slide-180 rotation) XOR the
-  per-microscope **Stage View mirror** `light_path.stage_view_flip` (`none | x | y | xy`, default
-  `none`). The scope-face flip is not derived from `scope_type`: whether the macro's baseline on the
+  stage polarity (factor 4, since 2026-10-27) XOR the residual **Stage View mirror**
+  `light_path.stage_view_flip` (`none | x | y | xy`, default `none`; `none` on every rig now). The
+  text below describes the 2026-10-26 hand-set mirror the polarity term replaced. The scope-face flip is not derived from `scope_type`: whether the macro's baseline on the
   map already carries the inversion depends on the stage polarity and the alignment transform (OWS3
   2026-08-09: it did, and re-applying it double-counted; LC-PolScope 2026-10-26: it did not, and Stage
   View showed the face-down slide face up while Camera View was right). So it is set per rig by

@@ -103,11 +103,10 @@ public final class LightPathSetupDialog {
         opticsHelp.setMaxWidth(460);
         opticsHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
-        Label stageViewHelp = new Label("Mirror added to the Stage View so it shows the slide as you see it "
-                + "looking down at the stage: on an inverted scope the slide is face down, so the tissue is "
-                + "seen through the glass, one mirror away from the scan. Whether the map's baseline already "
-                + "has that mirror depends on the stage polarity, so set it by looking: if Stage View shows "
-                + "the slide face up (text readable) on an inverted scope, choose Y. Display only.");
+        Label stageViewHelp = new Label("Extra mirror for the Stage View. Stage View already follows the stage "
+                + "polarity (Inverted X / Y stage in Preferences), which is what makes it show the slide as it "
+                + "sits on the stage on every microscope set up so far, so leave this at none. Use it only if "
+                + "Stage View still shows the slide mirrored with the polarity known to be right. Display only.");
         stageViewHelp.setWrapText(true);
         stageViewHelp.setMaxWidth(460);
         stageViewHelp.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
