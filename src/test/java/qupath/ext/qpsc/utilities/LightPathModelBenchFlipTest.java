@@ -123,11 +123,45 @@ class LightPathModelBenchFlipTest {
 
     @Test
     void placementCaptionsNameTheDrawnSide() {
-        String[] rig = LightPathModel.placementCaptions(true); // the LC-PolScope: A puts the label right
+        String[] rig = LightPathModel.placementCaptions(false, true); // the LC-PolScope: A puts the label right
         assertEquals("Label on your right (A)", rig[0]);
         assertEquals("Label on your left (B)", rig[1]);
-        String[] other = LightPathModel.placementCaptions(false);
+        String[] other = LightPathModel.placementCaptions(false, false);
         assertEquals("Label on your left (A)", other[0]);
         assertEquals("Label on your right (B)", other[1]);
+    }
+
+    @Test
+    void aVerticalHolderNamesTheEnds() {
+        // The four-slide carrier: slides stand along Y, the label is at the far or the near end,
+        // and the two placements are "upside down" to each other, not left and right.
+        String[] farForA = LightPathModel.placementCaptions(true, true);
+        assertEquals("Label away from you (A)", farForA[0]);
+        assertEquals("Label toward you (B)", farForA[1]);
+        String[] nearForA = LightPathModel.placementCaptions(true, false);
+        assertEquals("Label toward you (A)", nearForA[0]);
+        assertEquals("Label away from you (B)", nearForA[1]);
+        assertEquals("Label away from you (A)", LightPathModel.genericPlacementCaptions(true)[0]);
+        assertEquals("Placement A (as scanned)", LightPathModel.genericPlacementCaptions(false)[0]);
+    }
+
+    @Test
+    void theQuarterTurnMovesTheLabelToAnEnd() {
+        // Ocus40: label on the right of the scan. Rotated 270 (clockwise), the right edge is the
+        // top; rotated 90, the bottom. 180 swaps the sides; 0 leaves them.
+        assertArrayEquals(new boolean[] {false, true}, LightPathModel.rotatedLabelSide(true, 0));
+        assertArrayEquals(new boolean[] {false, false}, LightPathModel.rotatedLabelSide(true, 180));
+        assertArrayEquals(new boolean[] {true, true}, LightPathModel.rotatedLabelSide(true, 90));
+        assertArrayEquals(new boolean[] {true, false}, LightPathModel.rotatedLabelSide(true, 270));
+        assertArrayEquals(new boolean[] {true, true}, LightPathModel.rotatedLabelSide(false, 270));
+        assertArrayEquals(new boolean[] {true, false}, LightPathModel.rotatedLabelSide(true, -90));
+    }
+
+    @Test
+    void placementLabelsAreNeutralAboutTheSide() {
+        // Shown in warnings and the profile form on every holder, so they say which placement,
+        // not which side: the side depends on the holder and the scanner.
+        assertEquals("Placement A (as scanned)", LightPathModel.placementLabel(LightPathModel.INSERT_A));
+        assertEquals("Placement B (rotated 180)", LightPathModel.placementLabel(LightPathModel.INSERT_B));
     }
 }

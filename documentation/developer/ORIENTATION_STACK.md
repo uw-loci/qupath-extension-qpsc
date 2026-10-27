@@ -121,11 +121,19 @@ light_path:
   Orientation.
 - **"Slide in holder" captions** name where the label is as the operator faces the microscope,
   which is where Stage View draws it: the scanner's label side (`macro.label_side` in
-  `config_<scanner>.yml`; right on the Ocus40, left when absent) XOR the macro's baseline sign
-  (`sX`) when the overlay is placed XOR the Stage View flip for A. On the LC-PolScope A puts it on
-  the right, so the options read "Label on your right (A)" / "Label on your left (B)"
-  (`LightPathModel.placementCaptions`). "As scanned" is deliberately not used: it says nothing
-  about the stage. Before the macro is placed the generic captions show.
+  `config_<scanner>.yml`; right on the Ocus40, left when absent), turned by the open entry's
+  companion rotation (`lp_rotation_deg`; `LightPathModel.rotatedLabelSide`), XOR the macro's
+  baseline sign on that axis (`sX` for a side, `sY` for an end) when the overlay is placed XOR
+  the Stage View flip for A. A slide lying across the stage gets "Label on your right (A)" /
+  "Label on your left (B)" (the LC-PolScope). A slide standing in a vertical holder (the
+  four-slide carrier, `single_v`; the slot takes the scan a quarter-turn, 270 by default, which
+  puts a label-right scan's label at the top) gets "Label away from you (A)" / "Label toward you
+  (B)": the far end is the top of Stage View, which shows the stage as seen from the front
+  (`LightPathModel.placementCaptions(vertical, ...)`). "As scanned" is deliberately not used in
+  the captions: it says nothing about the stage. Before the macro is placed the generic captions
+  for the selected insert show (`genericPlacementCaptions`), and warnings and the Background
+  Profiles form use the side-neutral `placementLabel`: "Placement A (as scanned)" / "Placement B
+  (rotated 180)".
 - Defaults (`upright + A + optical none`) reduce both to identity, so Camera View == Stage View --
   the historical, inert behaviour. No regression until the rig is described.
 

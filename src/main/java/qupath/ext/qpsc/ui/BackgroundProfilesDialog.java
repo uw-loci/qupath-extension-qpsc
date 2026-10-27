@@ -356,9 +356,10 @@ public final class BackgroundProfilesDialog {
         });
         placementBox.setValue(creating ? placementDefault : nullToEmpty(existing.expectedSlideInsertion()));
         placementBox.setTooltip(new Tooltip("How the slide sits in the holder when these backgrounds are collected:"
-                + " label on the left (as scanned) or on the right (rotated 180), as the Stage Map's Slide"
-                + " control.\nAcquiring an image placed the other way gives a warning. New profiles start with"
-                + " the open image's setting, else the scope's default."));
+                + " placement A (as scanned) or B (rotated 180 in the plane), as the Stage Map's Slide in"
+                + " holder control, which names the two by where the label ends up on your stage.\nAcquiring"
+                + " an image placed the other way gives a warning. New profiles start with the open image's"
+                + " setting, else the scope's default."));
 
         TextField nameField = new TextField(
                 creating ? nullToEmpty(BackgroundProfileDefaults.suggestName(setup)) : nullToEmpty(existing.name()));

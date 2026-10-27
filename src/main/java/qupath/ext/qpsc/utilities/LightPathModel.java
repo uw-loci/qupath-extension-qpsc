@@ -107,12 +107,36 @@ public final class LightPathModel {
 
     /**
      * How a slide placement reads in the UI, in every dialog, warning and log line an operator
-     * sees: {@code "Label left (as scanned)"} for {@link #INSERT_A}, {@code "Label right (rotated
+     * sees: {@code "Placement A (as scanned)"} for {@link #INSERT_A}, {@code "Placement B (rotated
      * 180)"} for B. "Placement" alone was ambiguous next to the stage insert (the holder) and the
-     * per-slot Rotation of the multi-slide carrier.
+     * per-slot Rotation of the multi-slide carrier; "Label left / right" was wrong on a vertical
+     * holder, where the label is at the far or near end. Where the picture is known, the Stage
+     * Map names the drawn side instead ({@link #placementCaptions}).
      */
     public static String placementLabel(String insertion) {
-        return "B".equalsIgnoreCase(insertion) ? "Label right (rotated 180)" : "Label left (as scanned)";
+        return "B".equalsIgnoreCase(insertion) ? "Placement B (rotated 180)" : "Placement A (as scanned)";
+    }
+
+    /**
+     * Where the scanner's label lands once the macro has been turned by the companion's rotation
+     * ({@code lp_rotation_deg}: 0, 90, 180 or 270 clockwise, as {@code RotatedImageServer}
+     * applies it). A vertical holder's slot takes the scan a quarter-turn, so a label on the
+     * scanner's right ends up at the top (270) or the bottom (90) of the drawn macro.
+     *
+     * @param labelOnRight the scanner's label side ({@code macro.label_side}): true = right
+     * @param rotationDeg the companion's clockwise rotation
+     * @return {@code {vertical, positive}}: {@code vertical} when the label is now at an end
+     *     (top or bottom) rather than a side; {@code positive} = right for a side, bottom (+y
+     *     in image coordinates) for an end
+     */
+    public static boolean[] rotatedLabelSide(boolean labelOnRight, int rotationDeg) {
+        int r = ((rotationDeg % 360) + 360) % 360;
+        return switch (r) {
+            case 90 -> new boolean[] {true, labelOnRight};
+            case 180 -> new boolean[] {false, !labelOnRight};
+            case 270 -> new boolean[] {true, !labelOnRight};
+            default -> new boolean[] {false, labelOnRight};
+        };
     }
 
     /** The Stage View mirror token from config ({@link #KEY_STAGE_VIEW_FLIP}); {@code none} when unset. */
@@ -141,16 +165,38 @@ public final class LightPathModel {
      * The "Slide in holder" captions, in order {A, B}, named after where the label is as the
      * operator faces the microscope and looks at the stage, which is where Stage View draws it. How the scanner
      * happened to hold the slide is not the point and is not mentioned: the Stage Map works the
-     * drawn side out from the scanner's own label side ({@code macro.label_side} in its config)
-     * and the mirrors between the scan and the map. On the LC-PolScope A puts the label on the
-     * right.
+     * drawn side out from the scanner's own label side ({@code macro.label_side} in its config),
+     * the companion's rotation and the mirrors between the scan and the map. On the LC-PolScope
+     * A puts the label on the right.
      *
-     * @param labelOnRightForA whether placement A has the label on the right of the stage
+     * <p>A slide lying across the stage has its label on the left or the right. A slide standing
+     * in a vertical holder (the four-slide carrier, {@code single_v}) has it at the far end or the
+     * near end, and the two placements are still a 180 apart: "upside down" to the operator. The
+     * far end is the top of Stage View, which draws the stage as the operator sees it from the
+     * front. "Label left / right" on a vertical holder was the 2026-10-27 complaint.
+     *
+     * @param vertical whether the slide stands along the stage's Y axis (label at an end)
+     * @param labelRightOrAwayForA for a horizontal slide, whether placement A has the label on
+     *     the operator's right; for a vertical one, whether it has the label at the far end
      */
-    public static String[] placementCaptions(boolean labelOnRightForA) {
-        String a = labelOnRightForA ? "Label on your right" : "Label on your left";
-        String b = labelOnRightForA ? "Label on your left" : "Label on your right";
+    public static String[] placementCaptions(boolean vertical, boolean labelRightOrAwayForA) {
+        String near = vertical ? "Label toward you" : "Label on your left";
+        String far = vertical ? "Label away from you" : "Label on your right";
+        String a = labelRightOrAwayForA ? far : near;
+        String b = labelRightOrAwayForA ? near : far;
         return new String[] {a + " (A)", b + " (B)"};
+    }
+
+    /**
+     * The captions to show before the macro is placed, when nothing says which end or side A puts
+     * the label on: the scan's own orientation for a horizontal slot, and for a vertical slot the
+     * usual quarter-turn (270, the multi-slide default) of a label-right scan, which puts the
+     * label at the far end for A. {@link #placementCaptions} replaces them from the picture.
+     */
+    public static String[] genericPlacementCaptions(boolean vertical) {
+        return vertical
+                ? placementCaptions(true, true)
+                : new String[] {placementLabel(INSERT_A), placementLabel(INSERT_B)};
     }
 
     /** Default slide insertion from config; defaults to {@link #INSERT_A} (identity) when unset. */

@@ -593,6 +593,15 @@ public class StageInsert {
         return Collections.unmodifiableList(slides);
     }
 
+    /**
+     * Whether this insert stands its slides along the stage's Y axis (the four-slide carrier,
+     * {@code single_v}), so a slide's label is at its far or near end rather than on a side.
+     * False for a horizontal slide holder, a dish or an insert with no slide positions.
+     */
+    public boolean slidesVertical() {
+        return slides.stream().anyMatch(s -> Math.round(s.getRotationDeg()) % 180 == 90);
+    }
+
     /** Returns the carrier kind (slide_holder, dish_holder, well_plate). */
     public Kind getKind() {
         return kind;

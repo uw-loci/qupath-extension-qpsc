@@ -90,11 +90,6 @@ public class StageMapWindow {
 
     private ComboBox<String> insertCombo;
 
-    /** Slide-placement combo labels (map to light_path.slide_insertion A / B). */
-    private static final String SLIDE_LABEL_LEFT = LightPathModel.placementLabel(LightPathModel.INSERT_A);
-
-    private static final String SLIDE_LABEL_RIGHT = LightPathModel.placementLabel(LightPathModel.INSERT_B);
-
     // Orientation display factors seeded from the YAML light_path block. The Stage Map only lets the
     // operator toggle the slide-180 rotation (svSlideInsertion) -- the run-to-run variable. Stage View
     // = slideRotationFlipFlags(insertion) only; scope type and optical flip are set-once per-microscope
@@ -140,6 +135,8 @@ public class StageMapWindow {
     private String currentMacroScannerName = null;
     /** Which side of the scanner's macro the label is on ({@code macro.label_side}); Ocus40 = right. */
     private boolean macroLabelOnRight = false;
+    /** The macro's baseline sign {sX, sY} the last time the overlay was placed; null before that. */
+    private double[] lastMacroSign = null;
     // Anchor metadata from the active preset (NaN for legacy presets, in which
     // case StageMapCanvas falls back to its 4-corner / config-offset paths).
     private double currentMacroAnchorMacroX = Double.NaN;
@@ -664,6 +661,8 @@ public class StageMapWindow {
                 canvas.setInsert(selected);
                 PersistentPreferences.setStageMapInsert(selected.getId());
                 logger.debug("Switched to insert configuration: {}", selected.getId());
+                // A vertical holder names the label's end, a horizontal one its side.
+                refreshPlacementCaptionsForInsert(selected);
                 // One background profile declares this insert and is not active: offer it.
                 qupath.ext.qpsc.ui.BackgroundProfileHint.offerForInsert(
                         selected.getId(),
@@ -892,12 +891,18 @@ public class StageMapWindow {
         Label slideLabel = new Label(LightPathModel.PLACEMENT_CAPTION + ":");
         insertCombo = new ComboBox<>();
         // Captions are renamed from the picture once the macro is placed (refreshPlacementCaptions);
-        // until then the generic ones. Item 0 is always placement A, item 1 placement B.
-        insertCombo.getItems().addAll(SLIDE_LABEL_LEFT, SLIDE_LABEL_RIGHT);
+        // until then the generic ones for the selected insert: the sides for a horizontal slot,
+        // the ends for a vertical one. Item 0 is always placement A, item 1 placement B.
+        String[] generic = LightPathModel.genericPlacementCaptions(insertComboBox != null
+                && insertComboBox.getValue() != null
+                && insertComboBox.getValue().slidesVertical());
+        insertCombo.getItems().addAll(generic[0], generic[1]);
         insertCombo.getSelectionModel().select(LightPathModel.INSERT_B.equals(svSlideInsertion) ? 1 : 0);
         insertCombo.setTooltip(new Tooltip("How THIS slide sits on the stage: the two ways it drops in\n"
                 + "differ by a 180 in the plane. Face the microscope and look at the\n"
-                + "slide: is the label on your left or your right? Pick that one.\n"
+                + "slide: is the label on your left or your right (a slide lying\n"
+                + "across the stage), or away from you or toward you (a slide standing\n"
+                + "in a vertical holder)? Pick that one.\n"
                 + "Stored PER-SLIDE and baked into the corrected (Camera View) image so\n"
                 + "it matches the live camera. Changing it marks the corrected image +\n"
                 + "alignment stale.\n\n"
@@ -1957,19 +1962,74 @@ public class StageMapWindow {
      * selection.
      */
     private void refreshPlacementCaptions(double[] sign) {
-        if (insertCombo == null || sign == null || sign.length < 1) {
+        if (insertCombo == null || sign == null || sign.length < 2) {
             return;
         }
-        boolean baselineMirrorX = sign[0] < 0;
-        boolean viewMirrorX = LightPathModel.currentStageViewFlip(LightPathModel.INSERT_A)[0];
-        String[] captions = LightPathModel.placementCaptions(macroLabelOnRight ^ baselineMirrorX ^ viewMirrorX);
+        lastMacroSign = sign.clone();
+        // A vertical slot takes the scan a quarter-turn (the companion's rotation), which moves
+        // the scanner's label from a side to an end: the four-slide carrier's slides are placed
+        // label away from you or toward you, not left or right (2026-10-27).
+        boolean[] side = LightPathModel.rotatedLabelSide(macroLabelOnRight, currentSlideRotation());
+        boolean[] viewMirror = LightPathModel.currentStageViewFlip(LightPathModel.INSERT_A);
+        String[] captions;
+        if (side[0]) {
+            // The label is at an end: +y in the drawn macro is the bottom of Stage View, which
+            // shows the stage as the operator sees it from the front, so the bottom is near.
+            boolean bottomForA = side[1] ^ (sign[1] < 0) ^ viewMirror[1];
+            captions = LightPathModel.placementCaptions(true, !bottomForA);
+        } else {
+            boolean rightForA = side[1] ^ (sign[0] < 0) ^ viewMirror[0];
+            captions = LightPathModel.placementCaptions(false, rightForA);
+        }
+        applyPlacementCaptions(captions, "from the map");
+    }
+
+    /**
+     * Captions for the selected insert before the macro is placed: the ends for a vertical
+     * holder, the sides for a horizontal one. Replaced from the picture once there is one.
+     */
+    private void refreshPlacementCaptionsForInsert(StageInsert insert) {
+        if (lastMacroSign != null) {
+            refreshPlacementCaptions(lastMacroSign);
+            return;
+        }
+        boolean vertical = insert != null && insert.slidesVertical();
+        applyPlacementCaptions(LightPathModel.genericPlacementCaptions(vertical), "for the insert");
+    }
+
+    private void applyPlacementCaptions(String[] captions, String why) {
+        if (insertCombo == null) {
+            return;
+        }
         int selected = insertCombo.getSelectionModel().getSelectedIndex();
-        if (captions[0].equals(insertCombo.getItems().get(0))) {
+        if (!insertCombo.getItems().isEmpty()
+                && captions[0].equals(insertCombo.getItems().get(0))) {
             return;
         }
         insertCombo.getItems().setAll(captions[0], captions[1]);
         insertCombo.getSelectionModel().select(Math.max(0, selected));
-        logger.info("Slide in holder captions from the map: A = '{}', B = '{}'", captions[0], captions[1]);
+        logger.info("Slide in holder captions {}: A = '{}', B = '{}'", why, captions[0], captions[1]);
+    }
+
+    /**
+     * The companion rotation of the open entry ({@code lp_rotation_deg}: 0, 90, 180, 270), which
+     * is how far the drawn macro has been turned from the scan; 0 without an open project entry.
+     */
+    @SuppressWarnings("unchecked")
+    private static int currentSlideRotation() {
+        try {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui != null && gui.getProject() != null && gui.getImageData() != null) {
+                Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
+                if (entry != null) {
+                    return ImageMetadataManager.getRotationDegrees(entry);
+                }
+            }
+        } catch (Exception ignored) {
+            // no open entry: the scan's own orientation
+        }
+        return 0;
     }
 
     /**
