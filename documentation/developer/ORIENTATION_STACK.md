@@ -122,9 +122,11 @@ light_path:
 - **"Slide in holder" captions** name where the label is as the operator faces the microscope,
   which is where Stage View draws it: the scanner's label side (`macro.label_side` in
   `config_<scanner>.yml`; right on the Ocus40, left when absent), turned by the open entry's
-  companion rotation (`lp_rotation_deg`; `LightPathModel.rotatedLabelSide`), XOR the macro's
-  baseline sign on that axis (`sX` for a side, `sY` for an end) when the overlay is placed XOR
-  the Stage View flip for A. A slide lying across the stage gets "Label on your right (A)" /
+  companion rotation (`lp_rotation_deg`; `LightPathModel.rotatedLabelSide`), XOR the active
+  preset's `flipMacroX` (the overlay is drawn from the preset-flipped macro, and both OWS3
+  presets record `flipMacroX: true`; without this term "Label on your right" drew the label on
+  the left there, 2026-10-27), XOR the macro's baseline sign on that axis (`sX` for a side, `sY`
+  for an end) when the overlay is placed XOR the Stage View flip for A. A slide lying across the stage gets "Label on your right (A)" /
   "Label on your left (B)" (the LC-PolScope). A slide standing in a vertical holder (the
   four-slide carrier, `single_v`; the slot takes the scan a quarter-turn, 270 by default, which
   puts a label-right scan's label at the top) gets "Label away from you (A)" / "Label toward you

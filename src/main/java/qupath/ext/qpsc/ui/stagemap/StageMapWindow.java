@@ -1966,10 +1966,17 @@ public class StageMapWindow {
             return;
         }
         lastMacroSign = sign.clone();
+        // The overlay is the raw macro with the active preset's macro flip applied
+        // (prepareMacroOverlayImage), so the label has already changed sides when that flip
+        // mirrors X. Both OWS3 presets record flipMacroX=true, and without this term
+        // "Label on your right" drew the label on the left there (2026-10-27). The Y term
+        // never moves a label that sits at an end of the raw macro.
+        boolean[] presetFlip = activePresetMacroFlip();
         // A vertical slot takes the scan a quarter-turn (the companion's rotation), which moves
         // the scanner's label from a side to an end: the four-slide carrier's slides are placed
-        // label away from you or toward you, not left or right (2026-10-27).
-        boolean[] side = LightPathModel.rotatedLabelSide(macroLabelOnRight, currentSlideRotation());
+        // label away from you or toward you, not left or right (2026-10-27). The flip is in the
+        // raw frame, before the rotation, which is the order the overlay is built in.
+        boolean[] side = LightPathModel.rotatedLabelSide(macroLabelOnRight ^ presetFlip[0], currentSlideRotation());
         boolean[] viewMirror = LightPathModel.currentStageViewFlip(LightPathModel.INSERT_A);
         String[] captions;
         if (side[0]) {
@@ -2086,6 +2093,20 @@ public class StageMapWindow {
     }
 
     /**
+     * The active preset's macro flip, {@code {flipX, flipY}}; identity when no preset or the
+     * preset predates the flip state. Quiet: {@link #resolveMacroPresetFlip()} is the overlay
+     * path and says when it falls back.
+     */
+    private boolean[] activePresetMacroFlip() {
+        if (activePreset != null && activePreset.hasFlipState()) {
+            return new boolean[] {
+                Boolean.TRUE.equals(activePreset.getFlipMacroX()), Boolean.TRUE.equals(activePreset.getFlipMacroY())
+            };
+        }
+        return new boolean[] {false, false};
+    }
+
+    /**
      * Resolve the {flipX, flipY} optical flip for the macro overlay <em>image</em>
      * from the active source preset ({@code flipMacroX/Y}).
      *
@@ -2101,9 +2122,7 @@ public class StageMapWindow {
      */
     private boolean[] resolveMacroPresetFlip() {
         if (activePreset != null && activePreset.hasFlipState()) {
-            return new boolean[] {
-                Boolean.TRUE.equals(activePreset.getFlipMacroX()), Boolean.TRUE.equals(activePreset.getFlipMacroY())
-            };
+            return activePresetMacroFlip();
         }
         // Falling through to no-flip is only correct when the scope genuinely has no optical flip.
         // On a flip-needing scope it silently renders the macro mirrored against the camera, which

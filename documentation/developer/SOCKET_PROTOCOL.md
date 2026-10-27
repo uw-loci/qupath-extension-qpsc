@@ -607,9 +607,17 @@ handler running on the primary connection.
 
 `handle_streaming_focus` polls that Event between scan attempts and,
 inside `_run_streaming_scan`, between captured frames (~2 ms cadence).
-On abort it stops the scan, restores the camera ROI and stage speed,
-returns Z to the pre-scan position, and replies `ABORTED:user-cancelled`
-on the primary socket.
+On abort it stops the scan, halts the stage where it is, restores the
+camera ROI and stage speed, returns Z to the pre-scan position (an
+approach-from-safe-Z scan first retracts to the safe Z), and replies
+`ABORTED:user-cancelled` on the primary socket. The halt is
+`core.stop` on the focus device; when that device has no Stop (the
+Micro-Manager Prior adapter's `ZStage`) and the XY stage is the same
+adapter on the same serial port, the XY stage's Stop is sent instead,
+which on a ProScan halts every axis. Until 2026-10-27 the missing Stop
+was swallowed and the slow scan ran to its far end before the retract
+began, so a cancel on PPM looked like a drive to the bottom of the
+range followed by a fast jump back.
 
 `ABORTAF` is best-effort: `ACK` only means the request was recorded,
 not that a scan was running. An older server without the handler
