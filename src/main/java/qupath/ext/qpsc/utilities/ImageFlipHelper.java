@@ -236,27 +236,26 @@ public final class ImageFlipHelper {
 
         // Look for an existing flipped sibling of this base entry.
         ProjectImageEntry<BufferedImage> sibling = findFlippedSibling(project, openEntry, flipX, flipY);
-        if (sibling != null
-                && !new Parity(flipX, flipY).equals(builtParity(sibling))
-                && isReferencedAsParent(project, sibling)) {
-            // Acquisitions made from this companion point at its ID; replacing it would orphan
-            // them. Keep it (its pixels stay as built) and say so.
-            logger.warn(
-                    "validateAndFlipIfNeeded: companion '{}' is built with {} but {} is needed, and other "
-                            + "entries were acquired from it, so it is kept as is",
-                    sibling.getImageName(),
-                    builtParity(sibling),
-                    new Parity(flipX, flipY));
-        } else if (sibling != null && !new Parity(flipX, flipY).equals(builtParity(sibling))) {
+        List<ProjectImageEntry<BufferedImage>> children = List.of();
+        if (sibling != null && !new Parity(flipX, flipY).equals(builtParity(sibling))) {
             // There is one companion per base, and its pixels are flipped once, when it is
             // built. Reusing it for a different flip only re-stamped its metadata, so ticking Y
             // and then X as well left a Y-only image labelled X+Y (2026-10-19). The companion is
             // a viewing copy (annotations are mirrored from the base), so replace it.
+            //
+            // A companion that acquisitions were made from used to be kept as it was, so it
+            // could never change: in a project shared by the PPM (companion built X+Y) and the
+            // LC-PolScope (needs Y), the orientation dialog then reloaded the same image on every
+            // toggle, and a toggle matching the stale build did nothing at all (2026-10-27).
+            // original_image_id is the only reference to a companion by ID, so the children are
+            // repointed to the rebuilt one instead.
+            children = childrenOf(project, sibling);
             logger.info(
-                    "validateAndFlipIfNeeded: companion '{}' is built with {} but {} is needed; rebuilding it",
+                    "validateAndFlipIfNeeded: companion '{}' is built with {} but {} is needed; rebuilding it" + "{}",
                     sibling.getImageName(),
                     builtParity(sibling),
-                    new Parity(flipX, flipY));
+                    new Parity(flipX, flipY),
+                    children.isEmpty() ? "" : " and repointing " + children.size() + " acquisition(s) made from it");
             try {
                 project.removeImage(sibling, true);
                 project.syncChanges();
@@ -299,6 +298,7 @@ public final class ImageFlipHelper {
             // live hierarchy. createFlippedDuplicate no longer transfers annotations.
             mirrorAnnotationsToSibling(gui, created, flipX, flipY);
             stampCameraViewMetadata(openEntry, created, flipX, flipY);
+            repointChildren(children, created);
             syncStamp(project);
             switchOpenEntry(gui, created, future);
         } catch (Exception e) {
@@ -331,14 +331,26 @@ public final class ImageFlipHelper {
         }
     }
 
-    /** True when another entry records {@code entry} as its parent ({@code original_image_id}). */
-    private static boolean isReferencedAsParent(
+    /** The entries that record {@code entry} as their parent ({@code original_image_id}). */
+    static List<ProjectImageEntry<BufferedImage>> childrenOf(
             Project<BufferedImage> project, ProjectImageEntry<BufferedImage> entry) {
         String id = entry.getID();
+        List<ProjectImageEntry<BufferedImage>> out = new java.util.ArrayList<>();
         for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
-            if (e != entry && id.equals(ImageMetadataManager.getOriginalImageId(e))) return true;
+            if (e != entry && id.equals(ImageMetadataManager.getOriginalImageId(e))) out.add(e);
         }
-        return false;
+        return out;
+    }
+
+    /** Point every entry in {@code children} at {@code newParent} ({@code original_image_id}). */
+    static void repointChildren(List<ProjectImageEntry<BufferedImage>> children, ProjectImageEntry<?> newParent) {
+        for (ProjectImageEntry<BufferedImage> child : children) {
+            child.getMetadata().put(ImageMetadataManager.ORIGINAL_IMAGE_ID, newParent.getID());
+            logger.info(
+                    "validateAndFlipIfNeeded: '{}' now points at the rebuilt companion '{}'",
+                    child.getImageName(),
+                    newParent.getImageName());
+        }
     }
 
     /**
