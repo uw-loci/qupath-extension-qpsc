@@ -55,12 +55,13 @@ At each AF position:
 
 ### 4. WSI Tile Pre-Scoring (Existing Image Workflow)
 
-When acquiring from an existing image, QPSC pre-scores tiles from the overview image for two purposes:
+When acquiring from an existing image, QPSC pre-scores tiles from the overview image for three purposes:
 
 1. **Best starting tile selection** -- Picks the first autofocus tile, avoiding holes in tissue or blank regions.
-2. **Focus surface pre-measurement** (optional, experimental) -- If enabled via the **"Focus survey points"** preference, QPSC selects N spread-out, tissue-bearing tiles and measures focus at each one before the tile loop begins. These measurements populate the focus surface, so the tile loop itself runs with a measured, position-aware focus hint instead of discovering the plane tile by tile.
+2. **The autofocus allow-list** -- Every tile whose tissue fraction reaches the threshold is sent to the server as `--af-tissue-tiles`, and the server never starts a focus search on any other tile: not a planned one, not one forced by the distance safety nets, not one deferred from a rejected tile. A glass tile takes its Z from the nearest focused tile, and a focus search the nets wanted there runs on the next tissue tile instead. When scoring ran and no tile qualified, the server is told so (`none`) and searches only the preferred tile. When the macro image could not be scored, the flag is absent and the server plans by distance as before. The log says how many tiles qualified (`WSI tissue scoring: 23/140 tiles hold >= 15% tissue`). Added after a sparse LC-PolScope region on 2026-10-27 drew 28 focus searches, most on bare glass that the camera-side texture gate could not tell from tissue; each found a noise peak tens of micrometres away and the seeding spread those Zs across the mosaic.
+3. **Focus surface pre-measurement** (optional, experimental) -- If enabled via the **"Focus survey points"** preference, QPSC selects N spread-out, tissue-bearing tiles and measures focus at each one before the tile loop begins. These measurements populate the focus surface, so the tile loop itself runs with a measured, position-aware focus hint instead of discovering the plane tile by tile.
 
-Both use the same tissue-detection thresholds, configured in the autofocus YAML:
+All three use the same tissue-detection thresholds, configured in the autofocus YAML:
 
 | Parameter | Default | Description |
 |-----------|---------|-------------|

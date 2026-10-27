@@ -160,6 +160,8 @@ The ACQUIRE payload is a flag-based string:
 --af-tiles 9
 --af-steps 20
 --af-range 10.0
+--preferred-af-tile 5
+--af-tissue-tiles "2,5,9,14"
 --af-disabled
 --hint-z -3245.5
 --z-stack
@@ -179,6 +181,8 @@ ENDOFSTR
 `--display-colormap <uniform|ppm|hsv>` (LC-PolScope only) is the acquisition panel's **Orientation colour image** choice. It overrides `reconstruction.display_colormap` for this run and changes only the display-only `orientation_color` tiles. The flag is omitted when the panel says "As in the config", or when it says PPM and the config has no `display_hue_calibration`.
 
 `--display-ceiling-nm <nm>` (LC-PolScope only) is the panel's **Full brightness at** value: the retardance shown at full brightness in the `orientation_color` tiles. It overrides `reconstruction.display_retardance_ceiling_nm` for this run, display only. Omitted when the panel holds the config's own value. QPSC uses the same value for the display range it gives a stitched retardance image.
+
+`--preferred-af-tile <i>` is the first autofocus tile, chosen by QPSC from the macro image as the first tile in acquisition order whose tissue fraction reaches `wsi_tissue_threshold` (else the most tissue-bearing tile). `--af-tissue-tiles <i,j,k,...>` is the autofocus **allow-list**: every tile (TileConfiguration order) whose tissue fraction reaches the threshold. The server restricts every focus search to it -- planned positions off the list move to the nearest listed tile, the index-gap and spatial-gap safety nets do not fire on an unlisted tile (the search they wanted runs on the next listed one), a rejected tile defers only to a listed one, and the pre-acquisition tissue search walks listed tiles rather than one field toward the centre. `--af-tissue-tiles none` means scoring ran and nothing qualified: the server searches only the preferred tile and logs that the region holds no tissue by the macro. Absent means unscored; the server plans by distance as before. QPSC guarantees the preferred tile is on the list when both are sent. Needs microscope server 1.5.1 or later; an older server ignores the flag.
 
 `--af-disabled` is mutually exclusive with the `--af-tiles`/`--af-steps`/`--af-range` triplet. When the Java side's "Disable Autofocus" preference is on, the triplet is omitted and `--af-disabled` is sent in its place. The server short-circuits `_configure_autofocus` (no YAML load required, no AF positions scheduled), so no pre-acquisition AF fires, no per-tile sweep autofocus runs, and no manual-focus prompts appear.
 

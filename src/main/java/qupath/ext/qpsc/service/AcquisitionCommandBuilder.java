@@ -167,6 +167,9 @@ public class AcquisitionCommandBuilder {
     private Integer preferredAfTile;
     private Integer focusSurveyPoints;
     private List<Integer> focusSurveyTiles;
+    // The autofocus allow-list: every tile the WSI shows holding tissue. null = unscored (not
+    // sent); empty = scored and nothing qualified (sent as "none").
+    private List<Integer> afTissueTiles;
 
     /**
      * Private constructor - use static builder() method
@@ -703,6 +706,26 @@ public class AcquisitionCommandBuilder {
         return this;
     }
 
+    /**
+     * Every tile the macro image shows holding tissue, in acquisition order: the server's
+     * autofocus allow-list. It never starts a focus search on a tile outside it -- not a planned
+     * one, not a forced one, not a deferred one.
+     *
+     * <p>An empty list means scoring ran and no tile qualified; that is sent as
+     * {@code --af-tissue-tiles none}, so the server can say so and search only the preferred
+     * tile. Do not call this when scoring did not run: an absent flag leaves the server on its
+     * distance-only planning, exactly as before.
+     *
+     * <p>On 2026-10-27 the server ran 28 searches in a sparse LC-PolScope region, most on bare
+     * glass, because nothing told it which tiles were glass; its own texture gate reads glass and
+     * tissue alike on the Flash4. Each search on glass found a noise peak 44-63 um away and the
+     * nearest-seed logic spread those Zs across the mosaic.
+     */
+    public AcquisitionCommandBuilder afTissueTiles(List<Integer> tileIndices) {
+        this.afTissueTiles = tileIndices == null ? List.of() : List.copyOf(tileIndices);
+        return this;
+    }
+
     // ---- Inspection accessors used by the MDA writer integration ---------
     // These read-only accessors let MdaRequestBuilder turn an already-configured
     // command builder back into an MdaWriteRequest without duplicating the
@@ -1109,6 +1132,16 @@ public class AcquisitionCommandBuilder {
         // Add preferred AF tile from WSI tissue scoring
         if (preferredAfTile != null) {
             args.addAll(Arrays.asList("--preferred-af-tile", String.valueOf(preferredAfTile)));
+        }
+
+        // The autofocus allow-list. Absent when the macro image was not scored; "none" when it
+        // was and no tile qualified, so the server can tell the two apart.
+        if (afTissueTiles != null) {
+            args.addAll(Arrays.asList(
+                    "--af-tissue-tiles",
+                    afTissueTiles.isEmpty()
+                            ? "none"
+                            : afTissueTiles.stream().map(String::valueOf).collect(Collectors.joining(","))));
         }
 
         // Pre-scan focus survey. Only emitted when opted in, so an unchanged rig's

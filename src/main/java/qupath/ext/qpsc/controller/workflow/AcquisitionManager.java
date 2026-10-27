@@ -213,6 +213,13 @@ public class AcquisitionManager {
      */
     private static final int MAX_SURVEY_TILES_SCORED = 150;
 
+    /**
+     * Largest region the autofocus allow-list is built for. Every tile is scored (a strided
+     * list would leave glass tiles searchable), at one macro read each; beyond this the region
+     * is left unscored and the server plans by distance as before.
+     */
+    private static final int MAX_ALLOW_LIST_TILES_SCORED = 4000;
+
     /** Parent image entry captured at session start -- stable reference for metadata inheritance.
      *  Do NOT look this up from gui.getImageData() later, as the viewer state can change
      *  when stitching dialogs close or other images are opened. */
@@ -1224,8 +1231,11 @@ public class AcquisitionManager {
                             if (afParams.get("wsi_tissue_dark_threshold") instanceof Number)
                                 wsiDarkThreshold = ((Number) afParams.get("wsi_tissue_dark_threshold")).intValue();
                         }
-                        int preferredTile = findBestAfTileFromWSI(
-                                annotation, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                        // One macro-image scan serves the preferred tile, the allow-list and
+                        // the survey; it used to be prepared once per consumer.
+                        WsiTileScan scan = prepareWsiTileScan(annotation);
+                        int preferredTile =
+                                findBestAfTileFromWSI(scan, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
                         if (preferredTile >= 0) {
                             config.commandBuilder().preferredAfTile(preferredTile);
                             logger.info(
@@ -1234,12 +1244,51 @@ public class AcquisitionManager {
                                     annotation.getName());
                         }
 
+                        // The allow-list: every tile holding tissue. The server never starts a
+                        // focus search outside it. Sent whenever scoring ran, including when
+                        // nothing qualified ("none"), so the server can tell "unscored" from
+                        // "scored, glass everywhere".
+                        List<Integer> tissueTiles =
+                                findTissueTilesFromWSI(scan, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                        if (tissueTiles != null) {
+                            if (preferredTile >= 0 && !tissueTiles.isEmpty() && !tissueTiles.contains(preferredTile)) {
+                                // The preferred tile is the best-scoring one when none reached
+                                // the threshold, so this cannot happen while the list is
+                                // non-empty; guarantee the wire contract regardless.
+                                tissueTiles = new ArrayList<>(tissueTiles);
+                                tissueTiles.add(preferredTile);
+                                tissueTiles.sort(null);
+                            }
+                            config.commandBuilder().afTissueTiles(tissueTiles);
+                            if (tissueTiles.isEmpty()) {
+                                logger.info(
+                                        "WSI tissue scoring: 0/{} tiles hold >= {}% tissue for {}; no tile holds"
+                                                + " tissue; the server will search only tile {}",
+                                        scan == null ? 0 : scan.sites().size(),
+                                        (int) (wsiTissueThreshold * 100),
+                                        annotation.getName(),
+                                        preferredTile);
+                            } else {
+                                logger.info(
+                                        "WSI tissue scoring: {}/{} tiles hold >= {}% tissue for {}",
+                                        tissueTiles.size(),
+                                        scan.sites().size(),
+                                        (int) (wsiTissueThreshold * 100),
+                                        annotation.getName());
+                            }
+                        }
+
                         // Focus survey: measure the focus surface before the tile loop
                         // rather than discovering it tile by tile. Opt-in, 0 = off.
                         int surveyPoints = QPPreferenceDialog.getFocusSurveyPoints();
                         if (surveyPoints > 0) {
                             List<Integer> surveyTiles = findSpreadAfTilesFromWSI(
-                                    annotation, surveyPoints, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                                    scan,
+                                    annotation.getName(),
+                                    surveyPoints,
+                                    wsiTissueThreshold,
+                                    wsiWhiteThreshold,
+                                    wsiDarkThreshold);
                             config.commandBuilder().focusSurvey(surveyPoints);
                             if (!surveyTiles.isEmpty()) {
                                 config.commandBuilder().focusSurveyTiles(surveyTiles);
@@ -2882,15 +2931,13 @@ public class AcquisitionManager {
      * each tile's region in the WSI for tissue content. Returns the index of the
      * first tile (in acquisition order) that has sufficient tissue.
      *
-     * @param annotation The annotation being acquired
+     * @param scan the prepared macro-image scan, or null when it could not be prepared
      * @param minTissueScore Tissue fraction that is good enough to stop looking
      * @param whiteThreshold Pixel mean RGB above this = white/blank
      * @param darkThreshold Pixel mean RGB below this = background/artifact
      * @return Index of the best AF tile, or -1 if scoring fails
      */
-    private int findBestAfTileFromWSI(
-            PathObject annotation, double minTissueScore, int whiteThreshold, int darkThreshold) {
-        WsiTileScan scan = prepareWsiTileScan(annotation);
+    private int findBestAfTileFromWSI(WsiTileScan scan, double minTissueScore, int whiteThreshold, int darkThreshold) {
         if (scan == null) return -1;
 
         int bestTile = -1;
@@ -2926,6 +2973,59 @@ public class AcquisitionManager {
     }
 
     /**
+     * Every tile the macro image shows holding tissue: the server's autofocus allow-list.
+     *
+     * <p>Every site is scored, not a strided subset: a macro read per tile at the scan's
+     * downsample is cheap, and a list with holes in it would let the server search on glass.
+     * Regions above {@link #MAX_ALLOW_LIST_TILES_SCORED} tiles are left unscored (null) rather
+     * than half-scored.
+     *
+     * @param scan the prepared macro-image scan, or null when it could not be prepared
+     * @param minTissueScore Tissue fraction a tile must have to qualify
+     * @param whiteThreshold Pixel mean RGB above this = white/blank
+     * @param darkThreshold Pixel mean RGB below this = background/artifact
+     * @return qualifying tile indices in acquisition order, possibly empty, or null when
+     *     scoring did not run
+     */
+    private List<Integer> findTissueTilesFromWSI(
+            WsiTileScan scan, double minTissueScore, int whiteThreshold, int darkThreshold) {
+        if (scan == null) return null;
+        List<TileSite> all = scan.sites();
+        if (all.size() > MAX_ALLOW_LIST_TILES_SCORED) {
+            logger.info(
+                    "WSI tissue scoring: {} tiles exceed the {}-tile allow-list cap; leaving autofocus"
+                            + " placement to the server",
+                    all.size(),
+                    MAX_ALLOW_LIST_TILES_SCORED);
+            return null;
+        }
+        List<Integer> tissue = new ArrayList<>();
+        int unreadable = 0;
+        for (TileSite site : all) {
+            double tissueScore = scoreSite(scan, site, whiteThreshold, darkThreshold);
+            if (tissueScore < 0) {
+                unreadable++;
+                continue;
+            }
+            if (tissueScore >= minTissueScore) {
+                tissue.add(site.index());
+            }
+        }
+        if (unreadable == all.size()) {
+            logger.info("WSI tissue scoring: no tile region could be read; leaving autofocus placement to the server");
+            return null;
+        }
+        if (unreadable > 0) {
+            logger.info(
+                    "WSI tissue scoring: {} of {} tile regions could not be read and are not on the allow-list",
+                    unreadable,
+                    all.size());
+        }
+        tissue.sort(null);
+        return tissue;
+    }
+
+    /**
      * Picks tiles for a pre-scan focus survey: tissue-bearing, and spread out.
      *
      * <p>A focus survey measures the slide's focus surface before the tile loop instead
@@ -2940,7 +3040,8 @@ public class AcquisitionManager {
      * cost 1,300 macro-image reads to choose a dozen points, and a stride samples the
      * region evenly anyway, which is what the spread pass wants.
      *
-     * @param annotation The annotation being acquired
+     * @param scan the prepared macro-image scan, or null when it could not be prepared
+     * @param regionName the annotation's name, for the log
      * @param count How many survey tiles to return
      * @param minTissueScore Tissue fraction a tile must have to qualify
      * @param whiteThreshold Pixel mean RGB above this = white/blank
@@ -2948,9 +3049,13 @@ public class AcquisitionManager {
      * @return Tile indices in acquisition order, or an empty list when scoring fails
      */
     private List<Integer> findSpreadAfTilesFromWSI(
-            PathObject annotation, int count, double minTissueScore, int whiteThreshold, int darkThreshold) {
+            WsiTileScan scan,
+            String regionName,
+            int count,
+            double minTissueScore,
+            int whiteThreshold,
+            int darkThreshold) {
         if (count <= 0) return List.of();
-        WsiTileScan scan = prepareWsiTileScan(annotation);
         if (scan == null) return List.of();
 
         List<TileSite> all = scan.sites();
@@ -2987,7 +3092,7 @@ public class AcquisitionManager {
                     qualifying.size(), scored.size(), (int) (minTissueScore * 100), Math.min(count, pool.size()));
         }
         if (pool.isEmpty()) {
-            logger.info("Focus survey: no tile in {} had readable tissue", annotation.getName());
+            logger.info("Focus survey: no tile in {} had readable tissue", regionName);
             return List.of();
         }
 
@@ -3003,7 +3108,7 @@ public class AcquisitionManager {
         List<Integer> picked = farthestPointSelect(spreadPool, Math.min(count, spreadPool.size()));
         logger.info(
                 "Focus survey: {} tiles selected from {} candidates in {} (tissue >= {}%, " + "spread over the region)",
-                picked.size(), pool.size(), annotation.getName(), (int) (minTissueScore * 100));
+                picked.size(), pool.size(), regionName, (int) (minTissueScore * 100));
         return picked;
     }
 
