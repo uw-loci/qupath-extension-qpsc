@@ -79,6 +79,25 @@ public final class SafeZClearanceMonitor {
     }
 
     /**
+     * The focus positions recorded so far in the watched run, oldest first; empty when no run
+     * is being watched.
+     *
+     * <p>These are the only measurements of where THIS carrier's samples actually sit, so a
+     * decision that would otherwise rest on a record measured in another session -- the
+     * approach-from-safe-Z travel bound -- can be checked against them first.
+     *
+     * @return a copy of the recorded focus positions, in micrometers
+     */
+    public static List<Double> focusPositionsThisRun() {
+        if (!active) {
+            return List.of();
+        }
+        synchronized (focusPositions) {
+            return new ArrayList<>(focusPositions);
+        }
+    }
+
+    /**
      * Starts watching only if nothing else already is, and reports whether this caller now
      * owns the run.
      *

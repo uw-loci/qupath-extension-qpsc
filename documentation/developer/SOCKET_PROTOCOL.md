@@ -430,6 +430,7 @@ the one that moves nothing permanently.
 | `--safe-z <um>` | no | Declared retracted position for approach-from-safe-Z. Must be paired with `--approach-max`; a partial specification is rejected with a warning and the standard scan runs, because neither has a safe default. |
 | `--approach-max <um>` | no | Signed travel bound from the safe Z toward the sample. The **sign carries the approach direction**, so the server never infers upright/inverted or stage polarity. Clamped to `stage.limits.z_um`. |
 | `--tissue-gate 1` | no | Commit only to a peak where the strategy's validity check finds tissue. Set when validation found surfaces (coverslip, slide face) *before* focus -- exactly when committing to the first peak would land on glass. |
+| `--z-limit <um>` | no | The sample-side Z limit of the insert mounted now (`stage.inserts.configurations.<id>.z_limit_um`, resolved by QPSC because the server does not know which insert is fitted). Narrows `stage.limits.z_um` for this scan only, on the side `stage.focus.retract_sign` says is toward the sample (or, with no sign declared, the side the limit lies on relative to the current Z). Applies to the standard walk, the approach and the profiling traverse alike. |
 
 **Approach-from-safe-Z** (`--safe-z` + `--approach-max`) replaces the edge-retry
 walk for that call rather than seeding it. The walk starts wherever the stage was

@@ -145,6 +145,13 @@ public class MultiTileRefinement {
      * workflow produces, and until now only the last one survived, as a single scalar.
      * Collected here so the slide's focus surface can be fitted from all of them.
      *
+     * <p>Taken when the point is CAPTURED, not when its autofocus returns. The capture is
+     * where the operator (or SIFT) has looked at the field, and anything that happened in
+     * between -- a failed scan followed by a manual focus, the post-SIFT refocus -- is in
+     * the Z by then. Recording after the scan put +169.6 into one slide's surface on
+     * 2026-10-26, the Z of a scan that had found nothing; the point was captured ten
+     * minutes later at -121.
+     *
      * <p>Static for the same reason {@code SlotJumpAutofocus.focusZThisSlide} is:
      * refinement is one interactive flow at a time, and threading a collector through
      * the capture-pane callbacks would touch every signature between here and there.
@@ -167,21 +174,36 @@ public class MultiTileRefinement {
         }
     }
 
-    /** Record where autofocus left the stage at one refinement point. Best-effort. */
+    /**
+     * Record the stage position at which one refinement point was captured. Best-effort, on
+     * its own thread because the capture completes on the FX thread and the read is a socket
+     * round trip.
+     */
     private static void recordFocusPoint(int pointNumber) {
-        try {
-            double[] xyz = MicroscopeController.getInstance().getSocketClient().getStageXYZ();
-            focusPointsThisRun.add(new double[] {xyz[0], xyz[1], xyz[2]});
-            logger.info(
-                    "Multi-tile point {}: focus measured at X={}, Y={}, Z={} um (kept for the "
-                            + "slide's focus surface)",
-                    pointNumber,
-                    String.format("%.0f", xyz[0]),
-                    String.format("%.0f", xyz[1]),
-                    String.format("%.2f", xyz[2]));
-        } catch (Exception e) {
-            logger.debug("Could not record a focus point for refinement point {}: {}", pointNumber, e.getMessage());
-        }
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        double[] xyz = MicroscopeController.getInstance()
+                                .getSocketClient()
+                                .getStageXYZ();
+                        focusPointsThisRun.add(new double[] {xyz[0], xyz[1], xyz[2]});
+                        logger.info(
+                                "Multi-tile point {}: captured in focus at X={}, Y={}, Z={} um (kept for the "
+                                        + "slide's focus surface)",
+                                pointNumber,
+                                String.format("%.0f", xyz[0]),
+                                String.format("%.0f", xyz[1]),
+                                String.format("%.2f", xyz[2]));
+                    } catch (Exception e) {
+                        logger.debug(
+                                "Could not record a focus point for refinement point {}: {}",
+                                pointNumber,
+                                e.getMessage());
+                    }
+                },
+                "MultiTile-FocusPoint-" + pointNumber);
+        t.setDaemon(true);
+        t.start();
     }
 
     /**
@@ -788,10 +810,10 @@ public class MultiTileRefinement {
                                                     estimate);
                                     SlotJumpAutofocus.runAfterSlotMove(tissueSearch)
                                             .join();
-                                    // Autofocus has settled at this point's tissue height.
-                                    // Only here, not in the catch below: that path never got
-                                    // to focus, so the stage Z there describes nothing.
-                                    recordFocusPoint(pointNumber);
+                                    // The point's focus is recorded when it is CAPTURED (see
+                                    // hostCapturePane), not here: a scan that failed leaves
+                                    // the stage at a Z that describes nothing, and the operator
+                                    // may yet focus by hand before capturing.
                                     Platform.runLater(() -> {
                                         // Multi-slide alignment-step start: force Camera View
                                         // + zoom to tissue once, at the first point (no-op
@@ -807,6 +829,7 @@ public class MultiTileRefinement {
                                                 gui,
                                                 tile,
                                                 tileCoords,
+                                                pointNumber,
                                                 trustSift,
                                                 confidenceThreshold,
                                                 future);
@@ -835,6 +858,7 @@ public class MultiTileRefinement {
                                                 gui,
                                                 tile,
                                                 tileCoords,
+                                                pointNumber,
                                                 false,
                                                 confidenceThreshold,
                                                 future);
@@ -906,6 +930,7 @@ public class MultiTileRefinement {
             QuPathGUI gui,
             PathObject tile,
             double[] tileCoords,
+            int pointNumber,
             boolean autoRunSift,
             double confidenceThreshold,
             CompletableFuture<PointMeasure> future) {
@@ -926,6 +951,10 @@ public class MultiTileRefinement {
                         logger.warn("Multi-tile capture pane failed: {}", ex.getMessage());
                         future.complete(null);
                     } else if (measured != null) {
+                        // The stage is where the operator (or SIFT) confirmed the tile, in
+                        // whatever focus they confirmed it in: this is the measurement the
+                        // slide's focus surface wants.
+                        recordFocusPoint(pointNumber);
                         future.complete(new PointMeasure(tileCoords, measured, tile));
                     } else {
                         future.complete(null);

@@ -139,8 +139,14 @@ public class StreamingFocusController {
                             result.zSpan,
                             elapsedMs);
                     // A manual focus is still a measured sample plane for the loaded insert,
-                    // so it counts toward the safe-Z clearance check.
+                    // so it counts toward the safe-Z clearance check -- and it is a focus on
+                    // the slide being worked on, so the next slot-jump scan on that slide
+                    // searches near it instead of retracting and traversing the whole bound.
+                    // On 2026-10-26 the operator focused by hand at -128 after the first
+                    // refinement point's scan failed; the second point, 12 um away in Z, then
+                    // ran the full approach from 0 toward -693 because nothing had told it.
                     qupath.ext.qpsc.utilities.SafeZClearanceMonitor.recordFocus(result.finalZ);
+                    qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus.noteFocusOnThisSlide(result.finalZ);
                     finish(callback, okMsg, Outcome.SUCCESS);
                     return;
 

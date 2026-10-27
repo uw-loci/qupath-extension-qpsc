@@ -83,6 +83,7 @@ public final class InsertCalibrationDialog {
     // Single-axis edge fields (slide holders / legacy dishes). Shown only when present.
     private static final List<CalField> KNOWN_FIELDS = List.of(
             new CalField("safe_z_um", "Safe Z for THIS insert", Axis.Z),
+            new CalField("z_limit_um", "Z limit (closest to the sample) for THIS insert", Axis.Z),
             new CalField("aperture_left_x_um", "Well / aperture LEFT edge", Axis.X),
             new CalField("aperture_right_x_um", "Well / aperture RIGHT edge", Axis.X),
             new CalField("aperture_top_y_um", "Well / aperture TOP edge", Axis.Y),
@@ -132,11 +133,17 @@ public final class InsertCalibrationDialog {
             // was mounted at the time. A dish stands far taller than a slide, so that fallback
             // is the one number most worth setting per insert -- it cannot be prompted for if
             // it is only shown once it already exists.
-            if ("safe_z_um".equals(f.key()) || isNumber(insertConfig, f.key())) {
+            //
+            // The Z limit is offered for the same reason. It is the bound on the SAMPLE side,
+            // which the stage's travel envelope does not supply: on 2026-10-26 an approach scan
+            // ran 450 um past the focus plane toward the objective with nothing to stop it but
+            // the operator, because the only floor was the hardware's -720.
+            if ("safe_z_um".equals(f.key()) || "z_limit_um".equals(f.key()) || isNumber(insertConfig, f.key())) {
                 fields.add(f);
             }
         }
         boolean safeZMissing = !isNumber(insertConfig, "safe_z_um");
+        boolean zLimitMissing = !isNumber(insertConfig, "z_limit_um");
 
         // Per-slot slide-center capture for a multi-slot holder. A slot's CENTER is not a
         // point a human can aim at (the middle of a slide is featureless), so the operator
@@ -223,6 +230,16 @@ public final class InsertCalibrationDialog {
                 safeZPrompt.setMaxWidth(560);
                 safeZPrompt.setStyle("-fx-font-size: 10.5px; -fx-text-fill: " + ThemeColors.WARNING + ";");
                 grid.add(safeZPrompt, 0, row++, 4, 1);
+            }
+            if (zLimitMissing) {
+                Label zLimitPrompt = new Label("This insert has no Z limit of its own yet. With the thickest sample "
+                        + "this insert carries in focus, move the objective slightly closer to it than any focus "
+                        + "will ever need and capture that Z below. No autofocus scan or Z move will go past it "
+                        + "while this insert is selected.");
+                zLimitPrompt.setWrapText(true);
+                zLimitPrompt.setMaxWidth(560);
+                zLimitPrompt.setStyle("-fx-font-size: 10.5px; -fx-text-fill: " + ThemeColors.WARNING + ";");
+                grid.add(zLimitPrompt, 0, row++, 4, 1);
             }
             for (CalField f : fields) {
                 Label nameLabel = new Label(f.label() + "  (" + f.axis() + ")");

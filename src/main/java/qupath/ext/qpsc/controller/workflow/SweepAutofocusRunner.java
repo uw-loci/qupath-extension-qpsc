@@ -78,10 +78,17 @@ public final class SweepAutofocusRunner {
             zHolder[0] = initialZ;
             zHolder[1] = finalZ;
             zHolder[2] = zShift;
-            // Record AF result on the Z-bar tic history (advisory only).
+            // Record AF result on the Z-bar tic history (advisory only), and as a measured
+            // focus on the slide being worked on: every sweep caller -- the Live Viewer
+            // button, the post-SIFT refocus, the slot-jump fallback -- is a focus the next
+            // slot-jump scan on this slide should search near rather than rediscover with a
+            // retract-and-traverse, and one the safe-Z clearance check should see.
             if (finalZ != null) {
                 try {
-                    AfHistoryService.add(Double.parseDouble(finalZ));
+                    double z = Double.parseDouble(finalZ.trim());
+                    AfHistoryService.add(z);
+                    SlotJumpAutofocus.noteFocusOnThisSlide(z);
+                    qupath.ext.qpsc.utilities.SafeZClearanceMonitor.recordFocus(z);
                 } catch (NumberFormatException ignored) {
                     // history is advisory only
                 }

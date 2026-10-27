@@ -269,7 +269,7 @@ Note what this does **not** claim: nobody has yet measured how much it improves 
 
 ### When It's Measured
 
-A focus surface is fitted and saved when **multi-tile refinement** completes having measured **three or more** reference tiles. A plane has three parameters, so two points cannot define one -- a two-point refinement saves nothing, and single-tile refinement saves only the scalar focal-plane height it always did. Each point is the stage Z where that reference tile's autofocus settled, which is also the focus the operator confirmed by eye in the capture pane.
+A focus surface is fitted and saved when **multi-tile refinement** completes having measured **three or more** reference tiles. A plane has three parameters, so two points cannot define one -- a two-point refinement saves nothing, and single-tile refinement saves only the scalar focal-plane height it always did. Each point is the stage Z at the moment that reference tile was captured -- the focus the operator (or SIFT) confirmed by eye in the capture pane, whether autofocus found it or the operator focused by hand. A point whose autofocus failed is not left out, and nothing is recorded at the moment the scan returns.
 
 Measuring is unconditional and costs nothing: the record is additive and the next refinement replaces it. **Using** it is opt-in -- see [Enabling](#enabling-focus-surface-optimization).
 
@@ -489,9 +489,12 @@ autofocus that runs when moving between slides in a carrier, where the focus pos
 significantly and a far-from-focus starting Z is common.
 
 **When it falls back:** If no validation record exists, if the record is stale (safe Z or
-imaging conditions have changed significantly), or if the validation found a problem, QPSC logs
-a warning and falls back to the standard scan. The workflow still runs and acquires images, but
-using the slower edge-retry strategy.
+imaging conditions have changed significantly), if the validation found a problem, or if a focus
+already measured on this carrier in this run implies a safe-Z-to-focus distance that differs from
+the record's by more than 250 um (the record was measured on other glass, in another holder or
+another Z frame), QPSC logs a warning and falls back to the standard scan, which starts from the
+focus just measured. The workflow still runs and acquires images, but using the slower edge-retry
+strategy.
 
 The approach is also refused when the stage is on the far side of safe Z from the validated approach
 (for example, the stage is at +258 while the validation says the sample lies toward -693 from safe Z 0).
@@ -615,6 +618,11 @@ During multi-slide batch acquisitions, QPSC continuously monitors the focus posi
   `stage.limits.z_um`
 - Reload the config (Stage Map's **Reload** button, or restart QuPath)
 
+The clearance check is a warning at the end of a run. The hard stop on the sample side is the
+insert's **Z limit** (`stage.inserts.configurations.<insert>.z_limit_um`, captured from
+**Stage Map > Calibrate...**): no streaming autofocus scan and no Z move from QPSC goes past it
+while that insert is selected. See [Stage Map](tools/stage-map.md) for how to capture it.
+
 The check watches whatever focus positions a run produces, from both slot-jump autofocus and
 manual Live Viewer autofocus. It covers **multi-slide batches and single Existing Image runs**;
 a multi-slide batch reports once across all its slides rather than once per slot. It does
@@ -659,9 +667,10 @@ The licence lapses when:
 - **No validation exists** for that scope / modality / objective. *(Appears in status line.)*
 - **The validation failed** when it was measured (no usable peak, or the peak was on glass). *(Appears in status line.)*
 - **The safe Z of the currently-selected insert has changed by more than 1 um since the validation was measured.** The record itself is stored per scope / modality / objective, not per insert -- what makes it insert-specific is that the safe Z it is checked against is resolved through the insert selected in the Stage Map, so switching inserts invalidates it whenever they clear different distances. One stored record therefore cannot cover two inserts: re-validating for one overwrites the other. Re-measuring the safe Z -- which is exactly what happens after discovering it was on the wrong side -- also invalidates the validation for that insert. Re-run Focus Approach Validation afterward with the insert mounted and selected. *(Appears in status line.)*
-- **Focus is already established on this slide.** Deliberate: later points on the same glass are microns from the number already measured, and a full retract-and-traverse would spend ~40 s rediscovering it. Autofocus still runs -- as the standard scan, starting from the Z already measured, which is a short search. *(Server log only, no status line.)*
+- **A focus measured on this carrier in this run disagrees with the record.** Each focus measured this run implies its own safe-Z-to-focus distance; if one differs from the record's by more than 250 um, the record was measured on other glass, in another holder or in another Z frame, and the approach is refused. *(Appears in status line.)*
+- **Focus is already established on this slide.** Deliberate: later points on the same glass are microns from the number already measured, and a full retract-and-traverse would spend ~40 s rediscovering it. Any successful focus on the slide counts -- the slot-jump scan, Live Viewer autofocus, the post-SIFT refocus or a sweep -- not only the slot-jump scan. Autofocus still runs -- as the standard scan, starting from the Z already measured, which is a short search. *(Server log only, no status line.)*
 
-When the licence is missing or lapsed (first three reasons), the Live Viewer status line shows "Focusing (standard scan: <reason>)" and the server log carries the same detail. The fourth case is logged only, since it is the expected path for every point after the first on a slide.
+When the licence is missing or lapsed (first four reasons), the Live Viewer status line shows "Focusing (standard scan: <reason>)" and the server log carries the same detail. The fifth case is logged only, since it is the expected path for every point after the first on a slide.
 
 Note that the standard scan centres on the **current Z**, so where it searches depends on where the stage was left. A search running hundreds of micrometres from the sample means the starting Z was wrong, not the search width.
 

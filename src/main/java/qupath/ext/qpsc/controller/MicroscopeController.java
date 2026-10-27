@@ -494,6 +494,11 @@ public class MicroscopeController implements StagePositionProvider {
                     String.format("Target Z position %.2f is outside stage limits", z), "Stage Limits Exceeded");
             return;
         }
+        String insertLimit = mgr.insertZLimitProblem(z, PersistentPreferences.getStageMapInsert());
+        if (insertLimit != null) {
+            UIFunctions.notifyUserOfError(insertLimit, "Insert Z Limit");
+            return;
+        }
 
         try {
             socketClient.moveStageZ(z);
@@ -530,6 +535,11 @@ public class MicroscopeController implements StagePositionProvider {
             // this is a defensive guard. Log rather than pop a dialog, since an
             // interactive handler could otherwise spam alerts.
             logger.warn("Skipping non-blocking Z move: target {} is outside stage limits", z);
+            return;
+        }
+        String insertLimit = mgr.insertZLimitProblem(z, PersistentPreferences.getStageMapInsert());
+        if (insertLimit != null) {
+            logger.warn("Skipping non-blocking Z move: {}", insertLimit);
             return;
         }
 

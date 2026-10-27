@@ -22,8 +22,10 @@ import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Socket-based client for communicating with the Python microscope control server.
@@ -2120,6 +2122,27 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * The sample-side Z limit of the insert selected in the Stage Map, for the scan about to be
+     * requested, or null when the insert declares none or it cannot be resolved.
+     *
+     * <p>Null on any failure rather than an exception: the limit is a bound on the scan, and a
+     * config that cannot be read must not turn a focus request into a crash -- the server still
+     * has {@code stage.limits.z_um}.
+     */
+    private static Double insertZLimitForScan(String yamlPath) {
+        try {
+            String insertId = PersistentPreferences.getStageMapInsert();
+            if (insertId == null || insertId.isBlank()) {
+                return null;
+            }
+            return MicroscopeConfigManager.getInstance(yamlPath).getInsertZLimitUm(insertId);
+        } catch (RuntimeException e) {
+            logger.warn("Could not resolve the insert Z limit for the focus scan: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
      * Variant that opt-in enables server-side dump (TIFs + CSV + manifest)
      * for diagnostic / Test-button workflows. Returns the dumpPath in the
      * result so callers can render plots or open the folder.
@@ -2285,6 +2308,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
             if (requireTissueGate) {
                 msgBuilder.append(" --tissue-gate 1");
             }
+        }
+        // Every scan, whichever caller and mode: the server does not know which insert is
+        // mounted, so the sample-side Z limit the insert declares travels with the request.
+        // Resolved here rather than at each of the five call sites so none can forget it.
+        Double insertZLimit = insertZLimitForScan(yamlPath);
+        if (insertZLimit != null) {
+            msgBuilder.append(" --z-limit ").append(insertZLimit);
         }
         msgBuilder.append(" ").append(END_MARKER);
         String message = msgBuilder.toString();

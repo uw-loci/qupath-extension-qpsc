@@ -234,7 +234,7 @@ public class AffineTransformationController {
                             // If we have an existing transform estimate, auto-move the stage.
                             // afGate defers the confirm dialog until autofocus-on-slot-jump (if any)
                             // has settled, so the operator cannot start aligning mid-focus.
-                            CompletableFuture<Void> afGate = CompletableFuture.completedFuture(null);
+                            CompletableFuture<Boolean> afGate = CompletableFuture.completedFuture(false);
                             if (hasEstimate) {
                                 double[] estimatedStageCoords = TransformationFunctions.transformQuPathFullResToStage(
                                         qpRefCoords, existingTransformEstimate);

@@ -1271,6 +1271,10 @@ stage:
           ppm_20x: -450.0        # Specific to 20x PPM on this insert
           ppm: -440.0            # Family fallback: any ppm_* on this insert
           bf_10x: -470.0         # Specific to 10x brightfield
+
+        # The other bound: the closest the stage may come to the sample with THIS
+        # insert mounted. No scope-wide fallback and no default.
+        z_limit_um: -300.0
 ```
 
 **Resolution order (first-match wins):**
@@ -1284,6 +1288,12 @@ Returns null when nothing matches. There is no safe default: a guessed retractio
 **Why per-insert and per-modality:**
 - **Per insert:** A 35 mm dish, a 96-well plate, and a slide put the sample plane at quite different heights, so one retraction cannot safely clear all of them.
 - **Per modality:** On OWS3, fluorescence and brightfield were measured sitting at consistent offsets from each other.
+
+### Per-insert Z limit (`z_limit_um`)
+
+`stage.inserts.configurations.<insert>.z_limit_um` is the sample-side bound: the closest the stage may come to the sample while that insert is mounted. `stage.limits.z_um` only describes the hardware's travel, which on PPM is about seven times wider than any focus range. Which side of the limit is "past" comes from `stage.focus.retract_sign` (increasing Z retracts: the limit is a floor; decreasing: a ceiling), so a limit on a scope that has not declared its retract direction is logged and not enforced.
+
+While the insert is selected in the Stage Map, QPSC refuses any Z move past the limit and sends it with every streaming autofocus request (`--z-limit`), where it narrows the stage limits for that scan: the standard walk, the approach from safe Z and the profiling traverse all stay inside it. Capture it from **Stage Map > Calibrate...** with the thickest sample the insert carries in focus and the objective slightly closer than any focus will need. There is no scope-wide fallback and no default; an insert without one has no sample-side limit.
 
 ### Runtime Clearance Check
 

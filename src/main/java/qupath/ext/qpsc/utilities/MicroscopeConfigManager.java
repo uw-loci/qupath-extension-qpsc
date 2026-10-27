@@ -892,6 +892,81 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * The closest the stage may come to the sample with this insert mounted, from
+     * {@code stage.inserts.configurations.<insert>.z_limit_um}, or null when the insert
+     * declares none.
+     *
+     * <p>{@code stage.limits.z_um} is the travel envelope of the hardware and on PPM it is
+     * about seven times wider than any focus range; it stops nothing short of the end stop.
+     * This is the other bound, the one on the sample side, and it is per insert because a dish
+     * and a slide put the sample at different heights. Measured by the operator with the
+     * thickest sample the insert carries in focus, a little closer than any focus will need.
+     * There is no scope-wide fallback and no default: an insert without one has no sample-side
+     * limit, as before.
+     *
+     * @param insertId insert configuration key (e.g. {@code quad_v}); null or blank yields null
+     * @return the limit in micrometers, or null
+     */
+    public Double getInsertZLimitUm(String insertId) {
+        if (insertId == null || insertId.isBlank()) {
+            return null;
+        }
+        return getDouble("stage", "inserts", "configurations", insertId, "z_limit_um");
+    }
+
+    /**
+     * Why a move to {@code z} would pass the insert's sample-side Z limit, or null when it
+     * would not (or no limit applies).
+     *
+     * <p>Which side of the limit is "past" comes from {@code stage.focus.retract_sign}: when
+     * increasing Z retracts, the limit is a floor; when decreasing Z retracts, a ceiling. A
+     * limit declared on a scope that has not declared its retract direction cannot be
+     * oriented and is logged, not enforced.
+     *
+     * @param z        the target Z in micrometers
+     * @param insertId the insert mounted now
+     * @return a human-readable refusal, or null
+     */
+    public String insertZLimitProblem(double z, String insertId) {
+        Double limit = getInsertZLimitUm(insertId);
+        if (limit == null) {
+            return null;
+        }
+        Double retractSign = getFocusRetractSign();
+        if (retractSign == null) {
+            logger.warn(
+                    "Insert '{}' declares z_limit_um {} but stage.focus.retract_sign is not declared, so the"
+                            + " limit cannot be oriented and is not enforced",
+                    insertId,
+                    limit);
+            return null;
+        }
+        return zLimitProblem(z, limit, retractSign, insertId);
+    }
+
+    /**
+     * The orientation rule behind {@link #insertZLimitProblem(double, String)}, kept separate so
+     * it can be tested without a config file.
+     *
+     * @param z           target Z
+     * @param limitUm     the insert's sample-side limit
+     * @param retractSign +1 when increasing Z retracts, -1 when decreasing Z retracts
+     * @param insertId    for the message
+     * @return a refusal, or null when {@code z} is on the retracted side of the limit
+     */
+    public static String zLimitProblem(double z, double limitUm, double retractSign, String insertId) {
+        boolean past = retractSign > 0 ? z < limitUm : z > limitUm;
+        if (!past) {
+            return null;
+        }
+        return String.format(
+                "Z %.1f is past the Z limit of %.1f um declared for insert '%s' (the closest the stage may come to"
+                        + " the sample with it mounted). Refusing the move. If the limit is wrong, re-measure it in"
+                        + " Stage Map > Calibrate.",
+                z, limitUm, insertId);
+    }
+
+    /**
      * Which direction of Z increases the objective-sample separation, from
      * {@code stage.focus.retract_sign} ({@code positive} | {@code negative}).
      *

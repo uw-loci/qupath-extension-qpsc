@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import org.slf4j.Logger;
@@ -327,6 +328,23 @@ public final class SlotJumpAutofocus {
                 logger.info("Slot-jump AF: validation record has no usable approach bound; using the standard scan");
                 return ApproachPlan.disabled("the validated approach distance is unusable");
             }
+            // A focus already measured on THIS carrier in THIS run outranks the record. The
+            // record is keyed by scope, modality and objective only -- not by insert, and not by
+            // the Z frame a Prior stage loses at every power cycle -- so its distance can be
+            // hundreds of micrometres wrong for the carrier that is actually mounted, and the
+            // headroom then becomes the travel the scan spends PAST the sample. On PPM
+            // (2026-10-26) the record said 443 um while the slide was in focus 121 um from safe
+            // Z: the approach drove through the sample plane and 450 um beyond it before the
+            // operator cancelled.
+            String disagreement = approachDistanceProblem(
+                    currentSafeZ,
+                    record.approachDistanceUm(),
+                    SafeZClearanceMonitor.focusPositionsThisRun(),
+                    APPROACH_HEADROOM_UM);
+            if (disagreement != null) {
+                logger.warn("Slot-jump AF: approach-from-safe-Z refused ({}); using the standard scan", disagreement);
+                return ApproachPlan.disabled(disagreement);
+            }
             // Where the stage is NOW must agree with the record: safe Z has to be a retraction
             // from here. On PPM (2026-10-22) the record said focus lies below safe Z 0, while the
             // slide was in focus at +258; "retract to safe Z" then drove 258 um the other way and
@@ -388,6 +406,43 @@ public final class SlotJumpAutofocus {
                             + " %.1f; the Z frame or the mounting has changed since Focus Approach Validation."
                             + " Re-run Focus Approach Validation",
                     currentZUm, safeZUm, safeZUm + boundUm);
+        }
+        return null;
+    }
+
+    /**
+     * Why the validated approach distance cannot be trusted on the carrier now mounted, or null
+     * when every focus measured on it so far agrees with the record.
+     *
+     * <p>Each measured focus implies its own safe-Z-to-focus distance. One that differs from the
+     * record's by more than the headroom means the record was measured on different glass, in a
+     * different holder, or in a different Z frame -- and a bound built from it would either stop
+     * short of this carrier's samples or run that far past them. Either way the standard scan,
+     * which starts from the focus just measured, is the right tool.
+     *
+     * @param safeZUm            the retraction point
+     * @param recordDistanceUm   the unsigned safe-Z-to-focus distance the validation measured
+     * @param measuredFocusZUm   focus positions measured on this carrier in this run
+     * @param headroomUm         the extra travel the bound allows beyond the record's distance
+     */
+    static String approachDistanceProblem(
+            double safeZUm, double recordDistanceUm, List<Double> measuredFocusZUm, double headroomUm) {
+        if (Double.isNaN(safeZUm) || Double.isNaN(recordDistanceUm) || measuredFocusZUm == null) {
+            return null;
+        }
+        for (Double z : measuredFocusZUm) {
+            if (z == null || Double.isNaN(z)) {
+                continue;
+            }
+            double measuredDistance = Math.abs(z - safeZUm);
+            if (Math.abs(measuredDistance - recordDistanceUm) > headroomUm) {
+                return String.format(
+                        "a focus measured on this carrier this run (Z %.1f, %.1f um from safe Z %.1f) is more than"
+                                + " %.0f um from the validated approach distance of %.1f um; the validation was"
+                                + " measured on different glass or in a different Z frame. Re-run Focus Approach"
+                                + " Validation with this carrier mounted",
+                        z, measuredDistance, safeZUm, headroomUm, recordDistanceUm);
+            }
         }
         return null;
     }
@@ -585,7 +640,7 @@ public final class SlotJumpAutofocus {
      *
      * @param search where to look; {@code null} skips the search entirely
      */
-    public static synchronized CompletableFuture<Void> runAfterSlotMove(TissueSearchHint search) {
+    public static synchronized CompletableFuture<Boolean> runAfterSlotMove(TissueSearchHint search) {
         pendingTissueSearch = search;
         return runAfterSlotMove();
     }
@@ -609,10 +664,31 @@ public final class SlotJumpAutofocus {
      * and re-running the full traverse costs a minute and a half per slide to rediscover a number
      * already in hand.
      *
+     * <p>Set by whichever focus succeeds on the slide: this scan, the Live Viewer's autofocus
+     * button, the post-SIFT refocus, a sweep. Only the slot-jump scan used to set it, and on
+     * 2026-10-26 that was the gap: the first point's scan failed, the operator focused by hand,
+     * and the second point -- 12 um away in Z on the same slide -- still ran the full approach
+     * from the safe Z toward a 693 um bound, through the focus plane and 450 um past it before
+     * it was cancelled.
+     *
      * <p>Cleared by {@link #beginSlide()}, because the next slide's focus genuinely is unknown
      * again -- the measured spread across one carrier was 180 um.
      */
     private static volatile Double focusZThisSlide;
+
+    /**
+     * Records a focus measured on the slide currently being worked on, by any route, so the next
+     * slot-jump scan on it searches from there instead of retracting and traversing the whole
+     * approach bound.
+     *
+     * @param focusZUm the focus Z the microscope settled on, in micrometers; NaN is ignored
+     */
+    public static void noteFocusOnThisSlide(double focusZUm) {
+        if (Double.isNaN(focusZUm)) {
+            return;
+        }
+        focusZThisSlide = focusZUm;
+    }
 
     /**
      * Forget the focus established for the previous slide. Call as each slot's turn begins,
@@ -752,38 +828,39 @@ public final class SlotJumpAutofocus {
      * future ALWAYS completes -- AF failure is surfaced on the status line but never blocks the
      * alignment step.
      *
-     * @return a future that completes (with null) once AF settles or is skipped
+     * @return a future that completes once AF settles or is skipped, with true when a focus was
+     *         actually measured and false when the scan was skipped, failed or was cancelled
      */
-    public static synchronized CompletableFuture<Void> runAfterSlotMove() {
+    public static synchronized CompletableFuture<Boolean> runAfterSlotMove() {
         // Consume the hint here, once, so every early return below leaves it cleared and a
         // skipped AF cannot leak a search into the next caller.
         final TissueSearchHint tissueSearch = pendingTissueSearch;
         pendingTissueSearch = null;
         if (!PersistentPreferences.isMultiSlideAutofocusOnJump()) {
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(false);
         }
 
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null || !controller.isConnected()) {
             publishSkip("microscope not connected");
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(false);
         }
         // Same guard as the Live Viewer Autofocus button: never AF during an acquisition.
         if (controller.isAcquisitionActive()) {
             publishSkip("an acquisition is in progress");
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(false);
         }
 
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath == null || configPath.isBlank()) {
             publishSkip("microscope config not set");
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(false);
         }
         MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
         String objective = TestAutofocusWorkflow.getCurrentObjective(configManager);
         if (objective == null) {
             publishSkip("could not determine the current objective");
-            return CompletableFuture.completedFuture(null);
+            return CompletableFuture.completedFuture(false);
         }
         String outputPath = TestAutofocusWorkflow.getDefaultOutputPath();
 
@@ -886,7 +963,7 @@ public final class SlotJumpAutofocus {
         }
 
         publish("Focusing...", false);
-        CompletableFuture<Void> done = new CompletableFuture<>();
+        CompletableFuture<Boolean> done = new CompletableFuture<>();
         final boolean runStreaming = useStreaming;
         final String modalityForServer = resolvedModality;
 
@@ -913,6 +990,7 @@ public final class SlotJumpAutofocus {
                 () -> {
                     String errorMsg = null;
                     boolean cancelled = false;
+                    boolean focused = false;
                     // Tissue first, focus second: a scan started over blank glass finds
                     // coverslip contrast or nothing, and no amount of attempt budget fixes
                     // that. Off the FX thread by construction (we are on the AF daemon).
@@ -979,15 +1057,17 @@ public final class SlotJumpAutofocus {
                                         result.zSpan);
                                 warnIfImplausible(result);
                                 // Remember it for the remaining points on THIS slide.
-                                focusZThisSlide = result.finalZ;
+                                noteFocusOnThisSlide(result.finalZ);
                                 // Feed the safe-Z clearance monitor: this is a real,
                                 // measured sample plane for the insert currently loaded.
                                 SafeZClearanceMonitor.recordFocus(result.finalZ);
+                                focused = true;
                             }
                         } else {
                             // Shared sweep run + parse + AF-history core (identical to the Live Viewer
                             // SWEEP autofocus button). Narrow-range drift check -- used only as the
-                            // no-stream / SWEEP-pref fallback.
+                            // no-stream / SWEEP-pref fallback. The runner itself records the
+                            // measured focus for this slide and for the clearance monitor.
                             SweepAutofocusRunner.SweepResult result =
                                     SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
                             cancelled = result.cancelled();
@@ -997,15 +1077,7 @@ public final class SlotJumpAutofocus {
                                         result.zShift(),
                                         result.initialZ(),
                                         result.finalZ());
-                                // Same as the streaming branch: a measured focus for this slide,
-                                // so the next point does not start from scratch. Parsed because
-                                // SweepResult carries the server's formatted strings.
-                                try {
-                                    focusZThisSlide =
-                                            Double.parseDouble(result.finalZ().trim());
-                                } catch (RuntimeException parseEx) {
-                                    logger.debug("Slot-jump AF: could not parse sweep final Z '{}'", result.finalZ());
-                                }
+                                focused = result.finalZ() != null;
                             }
                         }
                     } catch (IOException ex) {
@@ -1027,7 +1099,7 @@ public final class SlotJumpAutofocus {
                     } else {
                         publish("Ready", false);
                     }
-                    done.complete(null);
+                    done.complete(focused && errorMsg == null && !cancelled);
                 },
                 "MultiSlide-SlotJumpAF");
         afThread.setDaemon(true);
