@@ -62,6 +62,10 @@ When you change the **Insert** in the Stage Map and exactly one profile declares
 | Delete... | Removes the profile folder and every background in it, after confirmation. |
 | Adopt old folders... | Shown only when folders from before profiles exist under the background folder: moves the ticked ones into a profile. |
 
+![Background Profiles dialog on the demo microscope: one profile, "Demo quad carrier", active, with its record below the list](../images/Docs_BackgroundProfiles.png)
+
+*The dialog on the demo microscope with one profile active. The lines under the list are the selected profile's record: id, description, what it expects, when it was created, which background sets it holds, and its folder.*
+
 ## What is checked, what is recorded
 
 Before an acquisition locks the stage, the usual background check (lamp level, exposure) also compares the active profile's `expects` with the current setup: the insert selected in the Stage Map and the slide's recorded **Slide in holder** setting (the open image's, else its base image's; nothing is compared when none is recorded). A difference is a warning with **Proceed Anyway / Cancel**, never a block, like every other background mismatch. Nothing in `attributes` is checked.
