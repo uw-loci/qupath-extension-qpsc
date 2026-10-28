@@ -31,7 +31,7 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.DialogOwner;
-import qupath.ext.qpsc.ui.StitchingBlockingDialog;
+import qupath.ext.qpsc.ui.StitchingQueueWindow;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
@@ -507,13 +507,13 @@ public class StitchingRecoveryWorkflow {
         for (File dir : angleDirs) {
             operationIds.put(dir, displaySampleName + " - " + dir.getName());
         }
-        final StitchingBlockingDialog[] dialogRef = {null};
+        final StitchingQueueWindow[] dialogRef = {null};
         final java.util.concurrent.CountDownLatch dialogLatch = new java.util.concurrent.CountDownLatch(1);
         try {
             Platform.runLater(() -> {
                 try {
                     for (String id : operationIds.values()) {
-                        dialogRef[0] = StitchingBlockingDialog.show(id, id);
+                        dialogRef[0] = StitchingQueueWindow.show(id, id);
                     }
                 } finally {
                     dialogLatch.countDown();
@@ -526,7 +526,7 @@ public class StitchingRecoveryWorkflow {
             // Never let the progress UI stop the stitch itself.
             logger.warn("Failed to create re-stitch progress dialog", e);
         }
-        final StitchingBlockingDialog progressDialog = dialogRef[0];
+        final StitchingQueueWindow progressDialog = dialogRef[0];
 
         // Determine thread pool size: all angles in parallel, or 1 for sequential
         int threadCount = parallel ? angleDirs.size() : 1;

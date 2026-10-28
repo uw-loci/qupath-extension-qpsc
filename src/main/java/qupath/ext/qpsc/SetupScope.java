@@ -35,6 +35,7 @@ import qupath.ext.qpsc.service.SessionLogBuffer;
 import qupath.ext.qpsc.ui.BugReportDialog;
 import qupath.ext.qpsc.ui.LightPathSetupDialog;
 import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
+import qupath.ext.qpsc.ui.StitchingQueueWindow;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
@@ -518,6 +519,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         + "stops; already-acquired data is kept. Use this when the progress window is gone.");
         stopAcquisitionOption.setOnAction(e -> confirmAndStopAcquisition());
 
+        // 7) Stitching queue: the background stitching jobs of this session, and the way to open
+        // a finished image, since stitching never opens one itself.
+        MenuItem stitchingQueueOption = new MenuItem(res.getString("menu.stitchingQueue"));
+        setMenuItemTooltip(
+                stitchingQueueOption,
+                "Show the stitching jobs of this session (queued, stitching, done, failed) and open a "
+                        + "finished image. Stitching runs in the background and never changes the open image.");
+        stitchingQueueOption.setOnAction(e -> StitchingQueueWindow.open());
+
         // === UTILITIES SUBMENU ===
         Menu utilitiesMenu = new Menu("Utilities");
 
@@ -952,6 +962,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         cameraControlOption,
                         stageMapOption,
                         new SeparatorMenuItem(),
+                        stitchingQueueOption,
                         stopAcquisitionOption);
         extensionMenu.getItems().add(acquisitionControlsMenu);
 

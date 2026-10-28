@@ -2003,6 +2003,11 @@ public class AcquisitionManager {
                 java.nio.file.Paths.get(tempTileDir).getParent().getParent();
         logger.debug("Derived projectsFolder for stitching: {}", projectsFolder);
 
+        // Show the job as QUEUED in the stitching queue window now: the single stitching thread
+        // may be busy with an earlier region (or an earlier slide) for minutes before it gets here.
+        String stitchJobId = state.projectInfo.getSampleName() + " - " + annotation.getName();
+        qupath.ext.qpsc.ui.StitchingQueueWindow.enqueue(stitchJobId, stitchJobId);
+
         // Create stitching future - use projectInfo.getSampleName() for correct folder path
         // Pass the dualProgressDialog so stitching status is shown in the unified progress window
         CompletableFuture<Void> stitchFuture = StitchingHelper.performAnnotationStitching(

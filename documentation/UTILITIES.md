@@ -37,6 +37,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Live Camera Viewer](tools/live-viewer.md) | Real-time camera feed with integrated stage control | Extensions > QP Scope > Acquisition controls > Live Viewer |
 | [Camera Control](tools/camera-control.md) | View/test camera exposure and gain settings | Extensions > QP Scope > Acquisition controls > Camera Control... |
 | [Stage Map](tools/stage-map.md) | Visual map with slide positions and macro overlay | Extensions > QP Scope > Acquisition controls > Stage Map |
+| Stitching queue | The session's background stitch jobs (queued / stitching / done / failed) with Open on finished rows | Extensions > QP Scope > Acquisition controls > Stitching queue |
 | Stop acquisition | Stop the running acquisition after the current tile, for when its progress dialog is gone (asks first) | Extensions > QP Scope > Acquisition controls > Stop acquisition... |
 | **Utilities Submenu** -- standalone tools | | |
 | Microscope Alignment | Semi-automated alignment between QuPath and microscope | Extensions > QP Scope > Utilities > Microscope Alignment... |

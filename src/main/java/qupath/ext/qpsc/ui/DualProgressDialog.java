@@ -901,46 +901,11 @@ public class DualProgressDialog {
             cancelButton.setVisible(false);
         }
 
-        // Check if stitching is still in progress
-        if (hasActiveStitchingOperations()) {
-            // Don't close yet - wait for stitching to finish
-            statusLabel.setText("Acquisitions complete - waiting for stitching...");
-            logger.info(
-                    "Acquisitions complete but {} stitching operations still active - keeping dialog open",
-                    activeStitchingOperations.size());
-
-            // Start a timer to check periodically for stitching completion
-            final Timeline[] stitchingWaitTimelineRef = {null};
-            stitchingWaitTimelineRef[0] = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
-                if (!hasActiveStitchingOperations()) {
-                    // Stop the timeline first to prevent multiple triggers
-                    if (stitchingWaitTimelineRef[0] != null) {
-                        stitchingWaitTimelineRef[0].stop();
-                    }
-                    // All stitching done - now we can close
-                    statusLabel.setText("All operations completed!");
-                    statusLabel.setTextFill(Color.GREEN);
-                    logger.info("All stitching operations complete - closing dialog");
-                    PauseTransition closePause = new PauseTransition(Duration.seconds(2));
-                    closePause.setOnFinished(ev -> close());
-                    closePause.play();
-                }
-            }));
-            stitchingWaitTimelineRef[0].setCycleCount(Timeline.INDEFINITE);
-            stitchingWaitTimelineRef[0].play();
-
-            // Store reference to stop when dialog closes
-            stage.setOnHiding(e -> {
-                if (stitchingWaitTimelineRef[0] != null) {
-                    stitchingWaitTimelineRef[0].stop();
-                }
-            });
-        } else {
-            // No stitching in progress - close after brief delay
-            PauseTransition pause = new PauseTransition(Duration.seconds(3));
-            pause.setOnFinished(e -> close());
-            pause.play();
-        }
+        // Stitching continues in the background and is shown in the stitching queue window;
+        // this dialog is about the acquisition, which is over. Close after a brief delay.
+        PauseTransition pause = new PauseTransition(Duration.seconds(3));
+        pause.setOnFinished(e -> close());
+        pause.play();
     }
 
     /**

@@ -1021,14 +1021,13 @@ If the first key you see is `STAGE_POSITIONS`, the file is from an old build and
 
 ### Stitching Issues
 
-#### Q: Stitching takes forever - QuPath freezes
+#### Q: Stitching takes forever - where is it?
 
-**A:** This is expected behavior - stitching can take several minutes for large images:
+**A:** Stitching runs in the background after each region is acquired and can take several minutes for large images. It does not block QuPath and never changes the open image:
 
-1. **Don't click anything in QuPath** during stitching - this can cause crashes
-2. A blocking dialog appears to prevent accidental interference
-3. You can dismiss the dialog "at your own risk" but this may crash QuPath
-4. Just wait - stitching time depends on number of tiles (2-10 minutes is normal)
+1. **Extensions > QP Scope > Acquisition controls > Stitching queue** lists every job of the session (queued, stitching, done, failed) with its latest status and elapsed time. The window opens on its own when a job is enqueued and hides itself a while after the queue drains; a failed job keeps it open with the reason.
+2. You can keep working, including aligning and acquiring the next slide; the stitched image is added to the project when it lands but is not opened. Use the **Open** button on its row, or the project browser.
+3. Stitching time depends on the number of tiles (2-10 minutes is normal); only one job stitches at a time, so a queue of several regions is served in order.
 
 **Stitching time guide:**
 - 10 tiles: ~30 seconds
@@ -1088,7 +1087,7 @@ If you have *old* stitched files with black upper levels from before this fix, r
 8. **Stitch duplicate image types in parallel** (checkbox): PPM angles and fluorescence channels are both "duplicate image types" — multiple captures of the same field at one stage position, captured with different settings. When checked, angles/channels stitch simultaneously (faster on SSDs); when unchecked, they stitch sequentially (safer for spinning-disk HDDs)
 9. Click **Stitch & Import**
 
-A progress dialog appears and updates as each angle (for PPM) or channel (for fluorescence) is stitched. The dialog shows which angle/channel is currently being processed and the count (e.g., "Stitching angle_1 (1/3)..."). For large acquisitions this can take several minutes—do not dismiss the dialog or interact with QuPath during stitching.
+The **Stitching queue** window (Extensions > QP Scope > Acquisition controls > Stitching queue) opens and shows one row per angle (for PPM) or channel (for fluorescence) as it is stitched, with its status ("solving registration...", "stitching...") and elapsed time. For large acquisitions this can take several minutes. The window is non-modal: you can keep working in QuPath while it runs, and the stitched images are not opened when they finish; use the row's **Open** button or the project browser.
 
 The stitched images will be created in `<projectDir>/SlideImages` (project-anchored, matching the regular acquisition path) and automatically imported into your project. Filenames follow your configured naming pattern (respecting Objective, Annotation, Angle, and other preferences).
 

@@ -31,7 +31,7 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.model.StitchingMetadata;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DualProgressDialog;
-import qupath.ext.qpsc.ui.StitchingBlockingDialog;
+import qupath.ext.qpsc.ui.StitchingQueueWindow;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -82,11 +82,21 @@ public class StitchingHelper {
      *     then also runs synchronously with respect to the stitch future
      * @param importedEntries thread-safe list every import appends its new entry to, or null
      */
-    public record ImportContext(boolean pipelinedBatchAcquire, List<ProjectImageEntry<BufferedImage>> importedEntries) {
+    public record ImportContext(
+            boolean pipelinedBatchAcquire, List<ProjectImageEntry<BufferedImage>> importedEntries, String operationId) {
+
+        public ImportContext(boolean pipelinedBatchAcquire, List<ProjectImageEntry<BufferedImage>> importedEntries) {
+            this(pipelinedBatchAcquire, importedEntries, null);
+        }
 
         /** Not pipelined, entries not recorded. */
         public static ImportContext none() {
-            return new ImportContext(false, null);
+            return new ImportContext(false, null, null);
+        }
+
+        /** The same context for one stitching-queue job, so its outputs show on that job's row. */
+        public ImportContext forOperation(String operationId) {
+            return new ImportContext(pipelinedBatchAcquire, importedEntries, operationId);
         }
 
         /** Copy the context into the {@code stitchParams} map read by {@code TileProcessingUtilities}. */
@@ -99,9 +109,13 @@ public class StitchingHelper {
 
         /** Record an entry added by an import that bypasses {@code stitchParams}. */
         public void record(ProjectImageEntry<BufferedImage> entry) {
-            if (entry != null && importedEntries != null) {
+            if (entry == null) {
+                return;
+            }
+            if (importedEntries != null) {
                 importedEntries.add(entry);
             }
+            StitchingQueueWindow.recordOutput(operationId, entry);
         }
     }
 
@@ -585,18 +599,19 @@ public class StitchingHelper {
             String projectsFolder,
             DualProgressDialog dualProgressDialog,
             StitchingOptions options,
-            ImportContext importContext) {
+            ImportContext importContextIn) {
 
         final StitchingOptions stitchOptions = options != null ? options : StitchingOptions.defaults();
 
-        // Create blocking dialog on JavaFX thread before starting stitching
+        // Register this job with the stitching queue window (non-modal) before starting
         final String operationId = sampleName + " - " + targetName;
-        final StitchingBlockingDialog[] dialogRef = {null};
+        final ImportContext importContext = importContextIn.forOperation(operationId);
+        final StitchingQueueWindow[] dialogRef = {null};
         final CountDownLatch dialogLatch = new CountDownLatch(1);
         try {
             Platform.runLater(() -> {
                 try {
-                    dialogRef[0] = StitchingBlockingDialog.show(operationId, operationId);
+                    dialogRef[0] = StitchingQueueWindow.show(operationId, operationId);
                     // Also register with DualProgressDialog if provided
                     if (dualProgressDialog != null) {
                         dualProgressDialog.registerStitchingOperation(operationId, operationId);
@@ -607,12 +622,12 @@ public class StitchingHelper {
             });
             // Wait for dialog creation to complete (max 5 seconds)
             if (!dialogLatch.await(5, TimeUnit.SECONDS)) {
-                logger.warn("Timeout waiting for stitching blocking dialog creation");
+                logger.warn("Timeout waiting for the stitching queue registration");
             }
         } catch (Exception e) {
-            logger.warn("Failed to create stitching blocking dialog", e);
+            logger.warn("Failed to register the stitching job in the queue window", e);
         }
-        final StitchingBlockingDialog blockingDialog = dialogRef[0];
+        final StitchingQueueWindow blockingDialog = dialogRef[0];
 
         // Channel-based modalities (widefield IF, BF+IF) write per-channel tiles into
         // per-channel subdirectories named after the channel id. Detect this by asking
@@ -1276,7 +1291,7 @@ public class StitchingHelper {
             List<String> channelIds,
             StitchingMetadata metadata,
             String operationId,
-            StitchingBlockingDialog blockingDialog,
+            StitchingQueueWindow blockingDialog,
             DualProgressDialog dualProgressDialog,
             String sampleName,
             String projectsFolder,
@@ -2322,7 +2337,7 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             Map<String, Object> stitchParams,
-            StitchingBlockingDialog blockingDialog,
+            StitchingQueueWindow blockingDialog,
             String operationId,
             List<String> stitchedImages) {
 

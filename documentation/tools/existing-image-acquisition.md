@@ -288,7 +288,7 @@ For each annotation, the system:
 
 ### Step 7: Completion
 
-Each annotation's acquisition is stitched in the background and added to the project as it completes. The new image is **not opened**: stitching may finish while you are already aligning the next slide, and the viewer stays where you are. The completion toast says how many images were added and names the first few; open them from the project browser (which refreshes as each lands). Metadata includes:
+Each annotation's acquisition is stitched in the background and added to the project as it completes. The new image is **not opened**: stitching may finish while you are already aligning the next slide, and the viewer stays where you are. The **Stitching queue** window (opens on its own; also under **Extensions > QP Scope > Acquisition controls**) lists each job with its status and elapsed time, and its **Open** button opens a finished image when you want it. The completion toast says how many images were added and names the first few. Metadata includes:
 
 - Parent image reference
 - Annotation name

@@ -312,6 +312,9 @@ public class ExistingImageWorkflowV2 {
          */
         private final boolean forceFreshAlignment;
 
+        /** This run's id in the {@link WorkflowRegistry}; 0 until activated. */
+        private long registryId;
+
         WorkflowOrchestrator(
                 Mode mode,
                 ExistingImageAcquisitionConfig presetConfig,
@@ -358,6 +361,17 @@ public class ExistingImageWorkflowV2 {
                 done.complete(null);
                 return done;
             }
+
+            // Step 1.0: claim the active-workflow slot. A run that is only stitching gives it
+            // up to this one; a run that is acquiring was refused in validatePrerequisites.
+            WorkflowRegistry.Activation activation =
+                    WorkflowRegistry.get().tryActivate("existing-image", openEntryNameForLog());
+            if (!activation.activated()) {
+                Platform.runLater(() -> UserErrors.show(logger, "Acquisition running", activation.refusal()));
+                done.complete(null);
+                return done;
+            }
+            registryId = activation.id();
 
             // Step 1a: If the open entry's source_microscope disagrees with the
             // active microscope, surface that before any further setup runs.
@@ -1404,7 +1418,50 @@ public class ExistingImageWorkflowV2 {
                 return false;
             }
 
+            if (MicroscopeController.getInstance().isAcquisitionActive()) {
+                // Two runs cannot drive one stage. Offer the stop control instead of a second
+                // run that would wait on the server and then collide with the first.
+                logger.warn("Refusing to start an Existing Image run: an acquisition is running");
+                Platform.runLater(() -> {
+                    javafx.scene.control.Alert ask = new javafx.scene.control.Alert(
+                            javafx.scene.control.Alert.AlertType.WARNING,
+                            "An acquisition is still running, so a new run cannot start.\n\n"
+                                    + "Stop it now? The current tile finishes, then the microscope stops; "
+                                    + "already-acquired data is kept and stitched. Then start the run again.",
+                            javafx.scene.control.ButtonType.YES,
+                            javafx.scene.control.ButtonType.NO);
+                    ask.setTitle("Acquisition running");
+                    ask.setHeaderText(null);
+                    UserErrors.logAlert(logger, ask);
+                    if (ask.showAndWait().orElse(javafx.scene.control.ButtonType.NO)
+                            == javafx.scene.control.ButtonType.YES) {
+                        new Thread(
+                                        () -> MicroscopeController.getInstance().stopActiveAcquisition(),
+                                        "StopAcquisitionFromStart")
+                                .start();
+                    }
+                });
+                return false;
+            }
+
             return true;
+        }
+
+        /** The open entry's name for the registry log, or a placeholder. */
+        private String openEntryNameForLog() {
+            try {
+                if (gui.getProject() != null && gui.getImageData() != null) {
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+                    ProjectImageEntry<BufferedImage> e = project.getEntry(gui.getImageData());
+                    if (e != null) {
+                        return e.getImageName();
+                    }
+                }
+            } catch (Exception ignore) {
+                // name is for the log only
+            }
+            return "<open image>";
         }
 
         /**
@@ -3114,12 +3171,20 @@ public class ExistingImageWorkflowV2 {
             }
             // Clear any preserved annotations (should already be restored, but cleanup just in case)
             state.annotationPreservation.clearPreservedAnnotations();
-            MicroscopeController.getInstance().setCurrentTransform(null);
-            // Phase 11: safety net for AcquisitionManager.processAnnotations throwing after
-            // setAcquisitionActive(true) but before its whenComplete reset. Without this the
-            // flag stays stuck across runs and PROBEZ / Live Viewer paths see acquisitionActive
-            // forever.
-            MicroscopeController.getInstance().setAcquisitionActive(false);
+            // The globals belong to whichever run holds the registry slot. This run's stitching
+            // can outlive its acquisition, and the next run may have set its own transform by
+            // the time we get here (2026-10-27: run N's cleanup nulled run N+1's transform).
+            if (WorkflowRegistry.get().isActive(registryId)) {
+                MicroscopeController.getInstance().setCurrentTransform(null);
+                // Phase 11: safety net for AcquisitionManager.processAnnotations throwing after
+                // setAcquisitionActive(true) but before its whenComplete reset. Without this the
+                // flag stays stuck across runs and PROBEZ / Live Viewer paths see acquisitionActive
+                // forever.
+                MicroscopeController.getInstance().setAcquisitionActive(false);
+            } else {
+                logger.info("Cleanup: another run is active; leaving the current transform and acquisition flag alone");
+            }
+            WorkflowRegistry.get().release(registryId);
         }
 
         /**

@@ -711,13 +711,13 @@ public class TileProcessingUtilities {
                         logger.info("Project browser refreshed");
                     }
 
-                    // Close blocking dialog if provided
+                    // Mark the job done in the stitching queue window, if this stitch has one
                     if (stitchParams != null && stitchParams.containsKey("blockingDialog")) {
-                        qupath.ext.qpsc.ui.StitchingBlockingDialog dialog =
-                                (qupath.ext.qpsc.ui.StitchingBlockingDialog) stitchParams.get("blockingDialog");
+                        qupath.ext.qpsc.ui.StitchingQueueWindow dialog =
+                                (qupath.ext.qpsc.ui.StitchingQueueWindow) stitchParams.get("blockingDialog");
                         String operationId = (String) stitchParams.get("operationId");
                         if (dialog != null && operationId != null) {
-                            logger.info("Completing stitching dialog operation after project import");
+                            logger.info("Completing stitching queue job after project import");
                             dialog.completeOperation(operationId);
                         }
                     }
@@ -787,6 +787,10 @@ public class TileProcessingUtilities {
         Object list = stitchParams.get(IMPORTED_ENTRIES_KEY);
         if (list instanceof List<?>) {
             ((List<ProjectImageEntry<BufferedImage>>) list).add(imported);
+        }
+        Object operationId = stitchParams.get("operationId");
+        if (operationId instanceof String id) {
+            qupath.ext.qpsc.ui.StitchingQueueWindow.recordOutput(id, imported);
         }
     }
 

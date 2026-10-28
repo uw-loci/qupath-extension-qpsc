@@ -139,7 +139,9 @@ sequenceDiagram
 
 The manager anchors the run to the entry `ExistingImageWorkflowV2` pinned at routing time (`WorkflowState.sourceEntry` / `sourceImageData`), not to the viewer: annotations, the tile hierarchy and the pre- and post-region `saveImageData` all go through that entry. The one active manager registers itself in a static so `AcquisitionManager.stopActiveAcquisition()` (QP Scope > Stop acquisition, the Live Viewer button) can reach it without the dialog; the dialog's Cancel no longer closes the dialog, `acknowledgeCancelled` from the chain's completion does.
 
-**Stitching runs detached.** Every stitch import (`TileProcessingUtilities.stitchImagesAndUpdateProject`, `StitchingHelper.importMergedImageOnly`, the per-channel fallback) adds the entry, stamps metadata and calls `gui.refreshProject()`, and nothing else: no `openImageEntry`, no save of the viewer's image data, no `setProject`. The entries it adds are appended to `WorkflowState.importedEntries` through `StitchingHelper.ImportContext`, which the run reports when it finishes. The only remaining mode flag is the pipelined multi-slide pass, which also suppresses the browser refresh and the toast.
+**Stitching runs detached.** Every stitch import (`TileProcessingUtilities.stitchImagesAndUpdateProject`, `StitchingHelper.importMergedImageOnly`, the per-channel fallback) adds the entry, stamps metadata and calls `gui.refreshProject()`, and nothing else: no `openImageEntry`, no save of the viewer's image data, no `setProject`. The entries it adds are appended to `WorkflowState.importedEntries` through `StitchingHelper.ImportContext`, which the run reports when it finishes. The only remaining mode flag is the pipelined multi-slide pass, which also suppresses the browser refresh and the toast. Each job is enqueued in `StitchingQueueWindow` from `AcquisitionManager.launchStitching` (so it is visible as QUEUED while the single `stitching-queue` thread is busy with an earlier region), started, updated and completed by `StitchingHelper`, and its outputs are recorded from the import sites by operation id.
+
+**One owner of the globals.** `WorkflowRegistry` hands out an active-run id in `ExistingImageWorkflowV2.execute()` after the prerequisites pass; a run whose acquisition is over but whose stitching is not yields the slot to the next run, and `cleanup()` clears `MicroscopeController`'s current transform and acquisition flag only while it still holds the slot. A run cannot start while an acquisition holds the stage: `validatePrerequisites` refuses and offers Stop acquisition.
 
 On the Python server side, the workflow calls `apply_mode_setup()` at the start of each acquisition. This function applies Micro-Manager ConfigGroup presets for the active modality, switches the illumination source and camera, and enforces PMT safety interlocks (e.g., shutting down PMTs before switching to brightfield illumination). The mode setup is driven by the `mode_setup` section in the microscope YAML config.
 
@@ -308,7 +310,8 @@ The UI layer uses JavaFX exclusively. Key components:
 | `UnifiedAcquisitionController` | Single consolidated dialog for all acquisition parameters |
 | `AcquisitionWizardDialog` | Multi-step guided acquisition setup |
 | `LiveViewerWindow` | Floating live camera feed with focus controls |
-| `DualProgressDialog` | Split progress bars for acquisition + stitching |
+| `DualProgressDialog` | Progress bars for the acquisition; closes when the acquisition ends |
+| `StitchingQueueWindow` | Non-modal table of the session's stitch jobs (`StitchingQueueModel`), with Open on finished rows; replaced the window-modal always-on-top blocking dialog |
 | `StageMapWindow` | Top-down stage position visualization |
 | `StageControlPanel` | XYZ joystick/button controls |
 | `CameraControlController` | Exposure/gain settings |
