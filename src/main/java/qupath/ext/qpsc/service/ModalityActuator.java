@@ -1,7 +1,6 @@
 package qupath.ext.qpsc.service;
 
 import java.util.List;
-import java.util.Map;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
 import javafx.application.Platform;
@@ -9,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.state.ModalityState;
+import qupath.ext.qpsc.state.ObjectiveState;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -144,6 +144,17 @@ public final class ModalityActuator {
         onModalityChanged(ModalityState.getInstance().getModality());
     }
 
+    /**
+     * Records a profile applied outside this actuator (the Live Viewer's Profile dropdown and
+     * its first Live click), so the next modality switch measures its parfocality delta from
+     * the profile that is really on the hardware.
+     */
+    public void noteApplied(String profileKey) {
+        if (profileKey != null) {
+            lastAppliedProfile = profileKey;
+        }
+    }
+
     private void onModalityChanged(String newModality) {
         if (newModality == null || newModality.isBlank()) {
             return;
@@ -153,17 +164,20 @@ public final class ModalityActuator {
             logger.debug("ModalityActuator: not connected; skipping APPLYPR for '{}'", newModality);
             return;
         }
-        final String profileToApply = findFirstMatchingProfile(newModality);
-        if (profileToApply == null) {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null || mgr.findFirstProfileForModality(newModality) == null) {
             logger.debug("ModalityActuator: no matching profile for '{}'; skipping APPLYPR", newModality);
             return;
         }
         final String previousProfile = lastAppliedProfile;
-        fireStatus(new ApplyStatus(Phase.SWITCHING, profileToApply, "Switching to " + profileToApply + "..."));
+        fireStatus(new ApplyStatus(Phase.SWITCHING, null, "Switching to " + newModality + "..."));
         Thread t = new Thread(
                 () -> {
+                    String profileToApply = null;
                     try {
-                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(profileToApply));
+                        profileToApply = profileForMountedHardware(mc, mgr, newModality);
+                        final String applying = profileToApply;
+                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(applying));
                         applyParfocalityDeltaIfApplicable(previousProfile, profileToApply);
                         lastAppliedProfile = profileToApply;
                         fireStatus(new ApplyStatus(Phase.SUCCEEDED, profileToApply, "Switched to " + profileToApply));
@@ -179,34 +193,35 @@ public final class ModalityActuator {
     }
 
     /**
-     * Same algorithm as the StageControlPanel helper of the same name (now
-     * removed). Prefer the longest case-insensitive prefix match of length 2+
-     * between the modality name and the profile's declared {@code modality}
-     * field.
+     * The modality's profile for the objective that is mounted: the objective Micro-Manager's
+     * pixel size identifies, else the last one recorded in {@link ObjectiveState}, resolved
+     * with the rule acquisition uses. When no profile of the modality fits that objective the
+     * first one declared is used, with a warning. Blocks on the socket.
      */
-    @SuppressWarnings("unchecked")
-    private static String findFirstMatchingProfile(String modality) {
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr == null) return null;
-            Object profiles = mgr.getConfigItem("acquisition_profiles");
-            if (!(profiles instanceof Map<?, ?> profileMap) || profileMap.isEmpty()) return null;
-            String modalityLower = modality.toLowerCase();
-            for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
-                if (!(entry.getValue() instanceof Map<?, ?> profileCfg)) continue;
-                Object profModality = profileCfg.get("modality");
-                if (profModality == null) continue;
-                String profModStr = profModality.toString().toLowerCase();
-                int prefix = Math.min(2, Math.min(modalityLower.length(), profModStr.length()));
-                if (modalityLower.regionMatches(0, profModStr, 0, prefix)) {
-                    return String.valueOf(entry.getKey());
-                }
-            }
-        } catch (Exception e) {
-            LoggerFactory.getLogger(ModalityActuator.class)
-                    .debug("findFirstMatchingProfile({}) failed: {}", modality, e.getMessage());
+    private static String profileForMountedHardware(
+            MicroscopeController mc, MicroscopeConfigManager mgr, String modality) {
+        var hardware = mc.detectMountedHardware();
+        String objective = hardware.map(MicroscopeConfigManager.HardwareSelection::objectiveId)
+                .orElse(ObjectiveState.getInstance().getObjective());
+        String source = hardware.isPresent() ? "MM pixel size" : "last selected objective";
+        String resolved = objective != null ? mgr.resolveProfileKey(modality, objective) : null;
+        if (resolved != null) {
+            logger.info(
+                    "ModalityActuator: '{}' -> profile {} for objective {} (from {})",
+                    modality,
+                    resolved,
+                    objective,
+                    source);
+            return resolved;
         }
-        return null;
+        String first = mgr.findFirstProfileForModality(modality);
+        logger.warn(
+                "ModalityActuator: no '{}' profile for objective {} (from {}); applying the first, {}",
+                modality,
+                objective,
+                source,
+                first);
+        return first;
     }
 
     /**

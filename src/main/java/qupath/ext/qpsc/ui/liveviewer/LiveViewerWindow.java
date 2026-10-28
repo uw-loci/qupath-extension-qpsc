@@ -1371,11 +1371,10 @@ public class LiveViewerWindow {
 
         boolean newState = !liveActive;
 
-        // The first Live click after the viewer opens puts the Camera tab's profile on the
+        // The first Live click after the viewer opens puts the Camera tab's settings on the
         // hardware. Not during an acquisition: that run owns the light path and camera.
-        final String profileToApply = newState && !cameraTabSettingsApplied && !controller.isAcquisitionActive()
-                ? stageControlPanel.cameraTabProfile()
-                : null;
+        final boolean applyCameraTab = newState && !cameraTabSettingsApplied && !controller.isAcquisitionActive();
+        final String profileToApply = applyCameraTab ? stageControlPanel.cameraTabProfile() : null;
 
         // Disable button and show pending state
         liveToggleButton.setDisable(true);
@@ -1385,11 +1384,16 @@ public class LiveViewerWindow {
         Thread toggleThread = new Thread(
                 () -> {
                     try {
-                        if (profileToApply != null) {
+                        if (applyCameraTab) {
                             try {
                                 stageControlPanel.applyCameraTabSettings(profileToApply);
                                 cameraTabSettingsApplied = true;
-                                logger.info("Live start: applied Camera tab profile '{}'", profileToApply);
+                                if (profileToApply != null) {
+                                    logger.info("Live start: applied Camera tab profile '{}'", profileToApply);
+                                } else {
+                                    logger.info("Live start: no acquisition profile; re-sent the Camera tab's"
+                                            + " saved exposure and lamp intensity");
+                                }
                             } catch (IOException e) {
                                 logger.warn(
                                         "Live start: could not apply Camera tab profile '{}': {}",

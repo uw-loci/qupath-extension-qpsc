@@ -351,7 +351,16 @@ drives the hardware (APPLYPR + parfocality Z delta) on every effective
 change. This means changing modality in any of the 8 linked combos updates
 all the others, persists to `PersistentPreferences`, and applies the
 hardware change -- the user's "selected modality" always equals the
-hardware state. Two combos are intentionally NOT linked: Camera Control's
+hardware state. The profile it applies is the modality's profile for the
+mounted objective: `MicroscopeController.detectMountedHardware()` identifies
+the objective and camera from Micro-Manager's pixel size (falling back to
+`ObjectiveState`), and `MicroscopeConfigManager.resolveProfileKey` picks the
+profile, as acquisition does; only when none fits is the first profile of the
+modality used, with a warning. Profiles applied from the Live Viewer's Camera
+tab are reported back with `noteApplied` so the parfocality delta starts from
+the profile really on the hardware, and the tab checks each applied profile
+against the hardware with `MicroscopeConfigManager.profileHardwareMismatch`.
+Two combos are intentionally NOT linked: Camera Control's
 profile-filter (a display filter, not a selector) and the Setup Wizard's
 config-time combo (runs before the scope is configured).
 

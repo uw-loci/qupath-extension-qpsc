@@ -1312,24 +1312,17 @@ public class StageControlPanel extends VBox {
 
             boolean detected = false;
             MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc != null && mc.isConnected()) {
-                try {
-                    double mmPx = mc.getSocketClient().getMicroscopePixelSize();
-                    var match =
-                            mgr.findHardwareByPixelSize(mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
-                    if (match.isPresent()) {
-                        currentCameraObjectiveId = match.get().objectiveId();
-                        currentCameraDetectorId = match.get().detectorId();
-                        detected = true;
-                        logger.info(
-                                "Camera tab: detected {}/{} from MM pixel size {}",
-                                currentCameraObjectiveId,
-                                currentCameraDetectorId,
-                                mmPx);
-                    }
-                } catch (Exception e) {
-                    logger.debug("Camera tab: pixel size detection failed: {}", e.getMessage());
-                }
+            var match = mc != null
+                    ? mc.detectMountedHardware()
+                    : java.util.Optional.<MicroscopeConfigManager.HardwareSelection>empty();
+            if (match.isPresent()) {
+                currentCameraObjectiveId = match.get().objectiveId();
+                currentCameraDetectorId = match.get().detectorId();
+                detected = true;
+                logger.info(
+                        "Camera tab: detected {}/{} from MM pixel size",
+                        currentCameraObjectiveId,
+                        currentCameraDetectorId);
             }
             if (!detected) {
                 // Fall back to the last known objective if it's still in the config.
@@ -3012,16 +3005,31 @@ public class StageControlPanel extends VBox {
     /**
      * Sends APPLYPR for the profile, then rebuilds the Camera tab on the FX thread so its
      * exposure and illumination fields push their saved values back over the profile's
-     * defaults. Blocks for the APPLYPR; call off the FX thread.
+     * defaults. The status line warns when the profile does not fit the objective and camera
+     * Micro-Manager then reports ({@link MicroscopeConfigManager#profileHardwareMismatch}).
+     * Blocks for the APPLYPR; call off the FX thread.
      */
     private void applyProfileAndRebuild(String profile, String modality) throws IOException {
         MicroscopeController mc = MicroscopeController.getInstance();
         if (mc == null || !mc.isConnected()) throw new IOException("Not connected");
         mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(profile));
+        qupath.ext.qpsc.service.ModalityActuator.getInstance().noteApplied(profile);
+        // Read the hardware after the apply: a profile can switch the camera.
+        String mismatch = mc.detectMountedHardware()
+                .map(hw -> mgr.profileHardwareMismatch(profile, hw.objectiveId(), hw.detectorId()))
+                .orElse(null);
+        if (mismatch != null) {
+            logger.warn("Camera tab: {}", mismatch);
+        }
         Platform.runLater(() -> {
-            cameraStatusLabel.setText("Profile applied: " + profile);
-            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
             rebuildCameraModContent(modality);
+            if (mismatch == null) {
+                cameraStatusLabel.setText("Profile applied: " + profile);
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
+            } else {
+                cameraStatusLabel.setText("Applied, but: " + mismatch);
+                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";");
+            }
         });
     }
 
@@ -3046,10 +3054,18 @@ public class StageControlPanel extends VBox {
      * whatever Micro-Manager loaded with (on PPM and OWS3, not a usable image). Blocks for
      * the APPLYPR; call off the FX thread.
      *
-     * @param profile from {@link #cameraTabProfile()}, read on the FX thread
+     * @param profile from {@link #cameraTabProfile()}, read on the FX thread; null when the
+     *     modality has no acquisition profile
      */
     void applyCameraTabSettings(String profile) throws IOException {
-        applyProfileAndRebuild(profile, currentCameraModality);
+        String modality = currentCameraModality;
+        if (profile != null) {
+            applyProfileAndRebuild(profile, modality);
+        } else if (modality != null) {
+            // No acquisition profile (PPM keeps its settings under imaging_profiles): the
+            // rebuild alone re-sends the tab's saved exposure and lamp intensity.
+            Platform.runLater(() -> rebuildCameraModContent(modality));
+        }
     }
 
     /** Profiles whose {@code modality} field is exactly this modality, in config order. */

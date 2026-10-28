@@ -2477,6 +2477,22 @@ public class MicroscopeConfigManager {
      * @return the matched profile key, or {@code null} if none matches
      */
     public String resolveProfileKey(String modality, String objective) {
+        String key = matchProfileKey(modality, objective);
+        if (key == null && modality != null && !modality.isEmpty()) {
+            Map<String, Object> profiles = getSection("acquisition_profiles");
+            if (profiles != null && !profiles.isEmpty()) {
+                logger.warn(
+                        "Could not resolve acquisition profile for modality='{}' objective='{}'. Available: {}",
+                        modality,
+                        objective,
+                        profiles.keySet());
+            }
+        }
+        return key;
+    }
+
+    /** {@link #resolveProfileKey} without the warning, for callers that only ask. */
+    private String matchProfileKey(String modality, String objective) {
         if (modality == null || modality.isEmpty()) {
             return null;
         }
@@ -2520,12 +2536,75 @@ public class MicroscopeConfigManager {
                 return key;
             }
         }
-        logger.warn(
-                "Could not resolve acquisition profile for modality='{}' objective='{}'. Available: {}",
-                modality,
-                objective,
-                profiles.keySet());
         return null;
+    }
+
+    /**
+     * True when two cameras have the same configured pixel size on this objective, so a
+     * camera identified from Micro-Manager's pixel size could be either of them.
+     */
+    private boolean samePixelSize(String objectiveId, String detectorA, String detectorB) {
+        if (objectiveId == null) {
+            return false;
+        }
+        Double a = getHardwarePixelSize(objectiveId, detectorA);
+        Double b = getHardwarePixelSize(objectiveId, detectorB);
+        return a != null && b != null && Math.abs(a - b) < DEFAULT_PIXEL_SIZE_TOLERANCE_UM;
+    }
+
+    /**
+     * Says how an acquisition profile disagrees with the mounted hardware, or null when it
+     * fits or the hardware is not known. A profile names its objective with an
+     * {@code objective} field or, by convention, with the suffix after its modality
+     * ({@code Brightfield_20x}); it is wrong for the mounted objective when that names another
+     * objective, or when {@link #resolveProfileKey} picks a different profile of the same
+     * modality for it (a {@code _60x} profile on the water 60x objective that has its own).
+     * A profile's {@code detector} field must equal the mounted camera, unless the two cameras
+     * have the same pixel size on that objective (the pixel size cannot tell them apart).
+     *
+     * @param profileKey  the {@code acquisition_profiles} key
+     * @param objectiveId the mounted objective, e.g. from {@link #findHardwareByPixelSize}; null if unknown
+     * @param detectorId  the active camera; null if unknown
+     */
+    public String profileHardwareMismatch(String profileKey, String objectiveId, String detectorId) {
+        Map<String, Object> profile = getSection("acquisition_profiles", profileKey);
+        if (profile == null) {
+            return null;
+        }
+        List<String> problems = new ArrayList<>();
+        if (objectiveId != null && !objectiveId.isBlank()) {
+            Object declared = profile.get("objective");
+            Object profModality = profile.get("modality");
+            if (declared != null) {
+                if (!declared.toString().equals(objectiveId)) {
+                    problems.add("is for objective " + declared);
+                }
+            } else if (profModality != null) {
+                String modality = profModality.toString();
+                String suffix = profileKey.toLowerCase().startsWith(modality.toLowerCase() + "_")
+                        ? profileKey.substring(modality.length() + 1)
+                        : "";
+                String fit = matchProfileKey(modality, objectiveId);
+                if (!suffix.isEmpty() && !objectiveId.toLowerCase().contains(suffix.toLowerCase())) {
+                    problems.add("is for a " + suffix + " objective");
+                } else if (fit != null && !fit.equals(profileKey)) {
+                    problems.add("is not the profile for this objective (" + fit + " is)");
+                }
+            }
+        }
+        Object declaredDetector = profile.get("detector");
+        if (detectorId != null
+                && !detectorId.isBlank()
+                && declaredDetector != null
+                && !declaredDetector.toString().equals(detectorId)
+                && !samePixelSize(objectiveId, declaredDetector.toString(), detectorId)) {
+            problems.add("uses camera " + declaredDetector);
+        }
+        if (problems.isEmpty()) {
+            return null;
+        }
+        return "Profile " + profileKey + " " + String.join(" and ", problems) + "; the microscope reports objective "
+                + objectiveId + (detectorId != null ? " and camera " + detectorId : "");
     }
 
     /**

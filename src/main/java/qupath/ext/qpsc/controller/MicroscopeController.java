@@ -815,6 +815,26 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
+     * The objective and camera Micro-Manager's pixel size identifies, matched against the
+     * configured per-(objective, detector) pixel sizes. Empty when not connected, when the
+     * read fails, or when no configured pair matches. Blocks on the socket; call off the FX
+     * thread.
+     */
+    public Optional<MicroscopeConfigManager.HardwareSelection> detectMountedHardware() {
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null || !isConnected()) {
+            return Optional.empty();
+        }
+        try {
+            double mmPx = socketClient.getMicroscopePixelSize();
+            return mgr.findHardwareByPixelSize(mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+        } catch (Exception e) {
+            logger.debug("Hardware detection from MM pixel size failed: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
      * Manually connects the primary socket to the microscope server.
      *
      * @apiNote UI/workflow code should prefer {@link #userTriggeredConnect()},
