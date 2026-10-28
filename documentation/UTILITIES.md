@@ -269,6 +269,7 @@ LC-PolScope functionality includes a liquid-crystal calibration workflow:
 1. **Camera**: in Micro-Manager's Device Property Browser, Gain Auto and Exposure Auto Off, gamma off, a 12- or 16-bit pixel format. The window is not modal, and the status rechecks whenever you return to it.
 2. **Calibrate** on a clear, specimen-free field. This measures the black level, and Apply writes the palette and offers the measured black level and an exposure from the usable range. **Apply a saved calibration...** beside it applies an earlier run's `lc_calibration_*.json` to the current config instead (see [LC-PolScope Calibration](#lc-polscope-calibration)).
 3. **Background**, after every calibration: specimen-free, defocused 10-20 um, for each LC-PolScope profile you acquire with.
+4. **Diagnostic: the crystals' own voltage curves.** Not part of getting ready; see [Measure LC voltage curves](#measure-lc-voltage-curves).
 
 ### LC-PolScope Calibration
 
@@ -342,6 +343,19 @@ The result dialog has three tabs:
 - **Search curves**: the mean intensity the search measured along each crystal through extinction (LC-A with LC-B held at its extinction value, and the reverse), with the target every swing state was matched to as a dashed line. The swing states are where the curves cross it. Both curves should be V-shaped and symmetric about 0; a curve that rises faster on one side shows a crystal whose response is lopsided about extinction, which no amount of searching changes. On the LC-PolScope Flash4 (2026-10-26) LC-B crosses the target at +0.014 and -0.025 waves while LC-A crosses at +/-0.030.
 
 Both tabs are drawn from the calibration file alone, so a result predating the search trace shows the palette but no curves.
+
+**Waves or volts.** The palette is set in the Meadowlark adapter's waves, which it converts to volts through its own table (`mmgr_dal_MeadowlarkLC.csv`). Calibrations from microscope server 1.5.x on also record the volts each crystal was driven at, on every search point and for every final state. Then the Search curves tab offers **x axis: Commanded waves | Drive volts**, and the Palette lines add each state's volts offset, e.g. `State2 LC-B +0.0142 waves (-179 mV)`. A curve that is lopsided in waves but symmetric in volts is a crystal behaving normally under a table that does not fit it. On the 10-26 LC-PolScope calibration, LC-B's swing states sit at +0.014 / -0.025 waves but about -180 / +200 mV.
+
+### Measure LC voltage curves
+
+**LC-PolScope Setup > Measure LC voltage curves...** measures what each liquid crystal really does. On a clear, specimen-free field (as for a calibration), the server holds one crystal still and sweeps the other's drive voltage across its whole range (about a thousand frames per crystal, a few minutes each). The fringes this makes sit at retardances known from the physics, so no reference sample is needed. LC-B is swept with LC-A at a quarter wave, because at a half wave its sweep is flat. The exposure is chosen for the sweep: it passes maximum transmission, several times the camera's range at a calibration exposure. Choose both crystals or one; the field is measured over the same central part as the calibration's **Measure on**.
+
+The result has a **Summary** and one tab per crystal:
+
+- **Summary**: for each crystal, its number of fringes, the exposure, and the largest gap between the adapter's table and the measured curve, judged around the voltages the palette uses. Then each swing state's offset from extinction, commanded, measured and in volts, e.g. `State2: LC-B +0.0140 commanded = +0.0xxx measured (-179 mV)`.
+- **LC-A / LC-B**: retardance against drive voltage. Blue is the crystal, from its fringes; grey is the adapter's table, read from the adapter itself by writing retardances and reading back the volts it chooses. Orange dots are the applied palette's states. **Around the palette** (default) or **Full range**. Where blue and grey part, every palette number in waves is off by that gap.
+
+Nothing changes: the server puts the crystals, the exposure and the camera ROI back afterwards. It writes `lc_sweep_<stamp>.json` and a plain CSV of the measured curves (millivolts against nm at the reconstruction wavelength) to the chosen folder. **That CSV is not in the adapter's file format and is not installed.** Replacing the adapter's table, or driving the crystals by voltage, is a separate decision. Needs microscope server 1.5.x or later and a matching `polscope_library`; an older server is reported within 30 s.
 
 **Apply a saved calibration** (LC-PolScope Setup, step 2) applies an `lc_calibration_*.json` from an earlier run to the config QPSC is set to, through the same Apply step a fresh result gets. Use it when a calibration was applied to the other LC-PolScope config file (the two share one instrument), instead of running the nine-minute search again. Its confirmation has the same Palette and Search curves tabs, so it doubles as a way to look at an old calibration: press Cancel after looking. Collect the background again afterwards.
 

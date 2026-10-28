@@ -100,4 +100,57 @@ class LCCalibrationPlotsTest {
     void seriesColoursAreModenaLookups() {
         assertEquals("CHART_COLOR_1: #111; CHART_COLOR_2: #222;", LCCalibrationPlots.seriesColors("#111", "#222"));
     }
+
+    /**
+     * The same LC-B search with drive volts, as server 1.5.x records them: lopsided in waves
+     * (+0.0142 / -0.0251) but -179 / +202 mV in volts, the 2026-10-26 run seen through the table.
+     */
+    private static final String REPLY_WITH_VOLTS = "{"
+            + "\"swing_waves\": 0.03,"
+            + "\"palette_waves\": {\"State0\": [0.2504, 0.4380], \"State2\": [0.2504, 0.4522],"
+            + " \"State4\": [0.2504, 0.4129]},"
+            + "\"state_intensities\": {\"State0\": 1495.8, \"State2\": 4865.6, \"State4\": 4864.5},"
+            + "\"palette_readback\": {"
+            + " \"State0\": {\"lca_volts\": 7.0145, \"lcb_volts\": 4.3528},"
+            + " \"State2\": {\"lca_volts\": 7.0145, \"lcb_volts\": 4.1738},"
+            + " \"State4\": {\"lca_volts\": 7.0145, \"lcb_volts\": 4.5548}},"
+            + "\"trace\": ["
+            + "{\"lca_waves\": 0.2504, \"lcb_waves\": 0.4380, \"lca_volts\": 7.0145, \"lcb_volts\": 4.3528,"
+            + " \"intensity\": 1496.0},"
+            + "{\"lca_waves\": 0.2504, \"lcb_waves\": 0.4522, \"lca_volts\": 7.0145, \"lcb_volts\": 4.1738,"
+            + " \"intensity\": 4862.0},"
+            + "{\"lca_waves\": 0.2504, \"lcb_waves\": 0.4129, \"lca_volts\": 7.0145, \"lcb_volts\": 4.5548,"
+            + " \"intensity\": 4870.0},"
+            // a point without volts (older library) is left out of the volts curve only
+            + "{\"lca_waves\": 0.2504, \"lcb_waves\": 0.4500, \"intensity\": 3844.0}"
+            + "]}";
+
+    private static JsonObject replyWithVolts() {
+        return JsonParser.parseString(REPLY_WITH_VOLTS).getAsJsonObject();
+    }
+
+    @Test
+    void voltsCurveIsInMillivoltsFromExtinction() {
+        assertTrue(LCCalibrationPlots.hasVolts(replyWithVolts()));
+        List<LCCalibrationPlots.Point> lcb = LCCalibrationPlots.curve(replyWithVolts(), false, true);
+        assertEquals(3, lcb.size(), lcb.toString());
+        assertEquals(-179.0, lcb.get(0).x(), 1e-9);
+        assertEquals(0.0, lcb.get(1).x(), 1e-9);
+        assertEquals(202.0, lcb.get(2).x(), 1e-9);
+        assertEquals(4, LCCalibrationPlots.curve(replyWithVolts(), false, false).size(), "waves keep every point");
+    }
+
+    @Test
+    void offsetLinesCarryTheVoltsWhenThereIsAReadback() {
+        List<String> lines = LCCalibrationPlots.offsetLines(replyWithVolts());
+        assertTrue(lines.get(0).contains("+0.0142 waves (-179 mV)"), lines.toString());
+        assertTrue(lines.get(1).contains("-0.0251 waves (+202 mV)"), lines.toString());
+        assertFalse(LCCalibrationPlots.offsetLines(reply()).get(1).contains("mV"), "no readback, no volts");
+    }
+
+    @Test
+    void anOldResultHasNoVolts() {
+        assertFalse(LCCalibrationPlots.hasVolts(reply()));
+        assertTrue(LCCalibrationPlots.curve(reply(), false, true).isEmpty());
+    }
 }

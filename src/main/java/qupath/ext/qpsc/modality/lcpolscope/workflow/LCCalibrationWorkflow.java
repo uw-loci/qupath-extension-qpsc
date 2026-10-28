@@ -169,7 +169,7 @@ public class LCCalibrationWorkflow {
             String outputFolder, String strategy, Double blackLevel, Double exposureMs, Double fieldFraction) {}
 
     /** The "Measure on the central N% of the field" choice, remembered across sessions. */
-    private static final javafx.beans.property.IntegerProperty FIELD_PERCENT =
+    static final javafx.beans.property.IntegerProperty FIELD_PERCENT =
             PathPrefs.createPersistentPreference("lcpolscope.calibrationFieldPercent", 100);
 
     /** The fraction to send for a percentage: null for 100 (the whole field) or a bad value. */
@@ -232,7 +232,7 @@ public class LCCalibrationWorkflow {
      * A calibration is a record of the instrument on the day, and the project is where the data
      * from that day is; when there is a project it goes in there. The server creates the folder.
      */
-    private static String defaultOutputFolder() {
+    static String defaultOutputFolder() {
         QuPathGUI gui = QuPathGUI.getInstance();
         if (gui != null && gui.getProject() != null && gui.getProject().getPath() != null) {
             Path projectDir = gui.getProject().getPath().getParent();

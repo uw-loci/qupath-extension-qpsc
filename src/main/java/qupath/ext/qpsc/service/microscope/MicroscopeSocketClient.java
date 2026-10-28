@@ -260,6 +260,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         /** LC-PolScope liquid-crystal calibration. */
         LCCALIB("lccalib_"),
         /**
+         * LC-PolScope voltage sweep: each crystal's own voltage-to-retardance curve, against the
+         * adapter's waves-to-volts table. Same framing as LCCALIB. Server 1.5.x and later.
+         */
+        LCSWEEP("lcsweep_"),
+        /**
          * LC-PolScope readiness: camera settings and their problems, and the LC adapter's
          * wavelength against the reconstruction's. No payload; reply is a 4-byte big-endian
          * length + UTF-8 JSON. Read-only. Older servers do not know it and send nothing.
@@ -8320,30 +8325,96 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         String message = messageBuilder.toString();
         logger.info("Sending LC-PolScope calibration command: {}", message);
+        return runLcLongCommand(Command.LCCALIB, message, "calibration", statusCallback);
+    }
 
+    /**
+     * Measures each liquid crystal's own voltage-to-retardance curve (LCSWEEP) on a clear field and
+     * compares it with the adapter's waves-to-volts table and the applied palette. Long-running: a
+     * thousand frames per crystal.
+     *
+     * @param outputFolder where the server writes {@code lc_sweep_<stamp>.json} and the curve CSV
+     * @param modality the LC-PolScope modality whose YAML palette is compared
+     * @param axes {@code LCA}, {@code LCB}, or both comma-separated; null for both
+     * @param stepV voltage step; null for the server's 0.02 V
+     * @param exposureMs fixed exposure; null to let the server choose one for the sweep
+     * @param roiFraction central fraction of the field, as for the calibration; null for all of it
+     * @param statusCallback receives progress messages, may be null
+     * @return the raw JSON summary
+     * @throws IOException if the server reports a failure, does not know the command, or the
+     *     connection breaks
+     */
+    public String runLcVoltageSweep(
+            String outputFolder,
+            String modality,
+            String axes,
+            Double stepV,
+            Double exposureMs,
+            Double roiFraction,
+            Consumer<String> statusCallback)
+            throws IOException {
+        StringBuilder messageBuilder = new StringBuilder();
+        messageBuilder.append("--output ").append(outputFolder);
+        if (modality != null && !modality.isBlank()) {
+            messageBuilder.append(" --modality ").append(modality);
+        }
+        if (axes != null && !axes.isBlank()) {
+            messageBuilder.append(" --axes ").append(axes);
+        }
+        if (stepV != null && stepV > 0) {
+            messageBuilder.append(" --step-v ").append(String.format(java.util.Locale.ROOT, "%.4f", stepV));
+        }
+        if (exposureMs != null && exposureMs > 0) {
+            messageBuilder.append(" --exposure-ms ").append(exposureMs);
+        }
+        if (roiFraction != null && roiFraction > 0 && roiFraction < 1) {
+            messageBuilder.append(" --roi-fraction ").append(String.format(java.util.Locale.ROOT, "%.3f", roiFraction));
+        }
+        messageBuilder.append(" ").append(END_MARKER);
+        String message = messageBuilder.toString();
+        logger.info("Sending LC-PolScope voltage sweep command: {}", message);
+        return runLcLongCommand(Command.LCSWEEP, message, "voltage sweep", statusCallback);
+    }
+
+    /**
+     * Sends one long-running LC command (LCCALIB, LCSWEEP) and follows its STARTED / PROGRESS /
+     * SUCCESS:json / FAILED replies on the primary socket.
+     */
+    private String runLcLongCommand(Command command, String message, String what, Consumer<String> statusCallback)
+            throws IOException {
         synchronized (socketLock) {
             ensureConnected();
             int originalTimeout = socket.getSoTimeout();
             try {
-                // A calibration is a few hundred exposures; the default read
-                // timeout is nowhere near long enough.
-                socket.setSoTimeout(600000);
+                // The server acknowledges at once. A server older than the command sends
+                // nothing, so the acknowledgement gets a short wait of its own.
+                socket.setSoTimeout(30000);
 
-                output.write(Command.LCCALIB.getValue());
+                output.write(command.getValue());
                 output.write(message.getBytes(StandardCharsets.UTF_8));
                 output.flush();
 
                 byte[] buffer = new byte[65536];
-                int bytesRead = input.read(buffer);
+                int bytesRead;
+                try {
+                    bytesRead = input.read(buffer);
+                } catch (java.net.SocketTimeoutException e) {
+                    throw new IOException("the microscope server did not acknowledge " + command
+                            + " within 30 s; it may be older than this command. Update the microscope server.");
+                }
+                // A calibration is a few hundred exposures and a sweep a few thousand; the
+                // default read timeout is nowhere near long enough. Progress arrives far
+                // more often than this.
+                socket.setSoTimeout(600000);
                 if (bytesRead <= 0) {
                     throw new IOException("No acknowledgment from server");
                 }
                 String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
                 if (response.startsWith("FAILED:")) {
-                    throw new IOException("Server rejected the calibration: " + response.substring(7));
+                    throw new IOException("Server rejected the " + what + ": " + response.substring(7));
                 }
                 if (!response.startsWith("STARTED:")) {
-                    logger.warn("Unexpected initial response to LCCALIB: {}", response);
+                    logger.warn("Unexpected initial response to {}: {}", command, response);
                 }
 
                 // The acknowledgement can arrive in the same read as the first progress
@@ -8364,7 +8435,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
                     String failure = replies.failure();
                     if (failure != null) {
-                        throw new IOException("Calibration failed: " + failure);
+                        throw new IOException("LC " + what + " failed: " + failure);
                     }
                     // PROGRESS:current:total:message -- only the message is useful here,
                     // since the state count is not known ahead.
@@ -8374,15 +8445,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
                     bytesRead = input.read(buffer);
                     if (bytesRead <= 0) {
-                        throw new IOException("Connection closed during calibration");
+                        throw new IOException("Connection closed during the LC " + what);
                     }
                     replies.append(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
                     lastActivityTime.set(System.currentTimeMillis());
                 }
             } catch (IOException e) {
-                logger.error("Error during LC-PolScope calibration", e);
-                handleIOException(new IOException("LC calibration error", e));
-                throw new IOException("LC calibration error: " + e.getMessage(), e);
+                logger.error("Error during LC-PolScope {}", what, e);
+                handleIOException(new IOException("LC " + what + " error", e));
+                throw new IOException("LC " + what + " error: " + e.getMessage(), e);
             } finally {
                 if (socket != null) {
                     try {

@@ -643,6 +643,8 @@ See `handlers/streaming_focus.py` for the implementation.
 | GETFOV | `getfov__` | none | 8 bytes: FOV X,Y as big-endian 32-bit floats (-1,-1 before CONFIG or on error) |
 | GETLOG | `getlog__` | none | 4-byte big-endian length + UTF-8 bytes (or 0 for no active log) |
 | LCREADY | `lcready_` | none | 4-byte big-endian length + UTF-8 JSON: the camera summary, `camera_fatal` / `camera_advisory` problems, `adapter_wavelength_nm`, `reconstruction_wavelength_nm` |
+| LCCALIB | `lccalib_` | Flag string `--yaml ... --output ... [--modality --swing --scheme --wavelength --black-level --exposure-ms --strategy --roi-fraction]` + `ENDOFSTR` | `STARTED:<folder>`, then `PROGRESS:<n>:<total>:<msg>` messages, then `SUCCESS:<json>` (palette, extinction ratio, camera, signal, `metadata_path`) or `FAILED:<reason>` |
+| LCSWEEP | `lcsweep_` | Flag string `--output ... [--modality --axes LCA,LCB --start-v --stop-v --step-v --exposure-ms --roi-fraction]` + `ENDOFSTR` | As LCCALIB; the JSON is the sweep summary (`axes`, `palette`, `palette_lines`, `metadata_path`, `curve_csv_path`) |
 | LCSIGNAL | `lcsignal` | 32-byte profile name (null-padded UTF-8) + 8-byte double `exposure_ms` + 8-byte double target fraction (big-endian) | 4-byte big-endian length + UTF-8 JSON: `states[]` (id, mean, p999, max, saturated_fraction, extinction), `full_scale`, `brightest_state`, `brightest_fraction`, `clipped`, `suggested_exposure_ms`, camera problems; or `error` |
 | MMPRESET | `mmpreset` | 4-byte big-endian length + UTF-8 JSON `{"action": "get" or "set", "group", "preset"}` | 4-byte big-endian length + UTF-8 JSON: `current`, `group_exists`, `preset_exists`, `presets` (or `groups` when the group is missing); for a set also `applied`, `previous`, `pixel_size_um`; a refusal is `error` |
 
@@ -655,6 +657,17 @@ Fetches the tail of the Python server's current session log (for bug reports). T
 #### LCREADY
 
 LC-PolScope readiness for the acquisition panel's "Ready to acquire?" box. Read-only. The camera as it is set (device, exposure, bit depth, significant bits, pixel type, binning, gain), the problems that make its counts non-linear or non-comparable (auto gain or exposure: `camera_fatal`; gamma, 8-bit: `camera_advisory`), and the Meadowlark adapter's wavelength against `reconstruction.wavelength_nm`. The client sets its own 6 s read timeout inside the socket lock, because an older server ignores the command and sends nothing.
+
+#### LCCALIB and LCSWEEP
+
+Long-running LC-PolScope commands on the **primary** socket, sharing one client loop
+(`MicroscopeSocketClient.runLcLongCommand`). The server acknowledges with `STARTED:` at once; the
+client waits **30 s** for it, so a server that predates the command (and sends nothing) fails fast
+with "Update the microscope server" instead of hanging, then reads progress and the final reply with
+a 600 s per-read timeout. LCCALIB's result file records the drive volts on every trace point and a
+`palette_readback` (server 1.5.x). LCSWEEP sweeps each crystal's drive voltage directly on a clear
+field, analyses the fringes and compares the measured curve with the Meadowlark adapter's
+waves-to-volts table; see the microscope server README, "LC-PolScope Voltage Sweep (LCSWEEP)".
 
 #### LCSIGNAL
 
@@ -692,6 +705,8 @@ The client polls STATUS and PROGRESS on a background thread while the primary so
 | Autofocus test | 120 s |
 | Background acquisition | 180 s |
 | Z-stack / time-lapse | 600 s |
+| LCCALIB / LCSWEEP acknowledgement | 30 s |
+| LCCALIB / LCSWEEP progress and reply (per read) | 600 s |
 
 ## Client-side dimension inference (no protocol change)
 

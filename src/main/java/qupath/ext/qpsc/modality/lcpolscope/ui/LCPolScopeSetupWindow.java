@@ -10,6 +10,7 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
 import qupath.ext.qpsc.modality.lcpolscope.workflow.LCCalibrationWorkflow;
+import qupath.ext.qpsc.modality.lcpolscope.workflow.LCVoltageSweepWorkflow;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.lib.gui.QuPathGUI;
 
@@ -62,7 +63,16 @@ public final class LCPolScopeSetupWindow {
                                 + "background for each LC-PolScope profile you will acquire with. A background from "
                                 + "an earlier calibration is refused by the acquisition.",
                         "Collect background...",
-                        LCCalibrationWorkflow::startBackgroundCollection));
+                        LCCalibrationWorkflow::startBackgroundCollection),
+                step(
+                        "Diagnostic: the crystals' own voltage curves",
+                        "Not part of getting ready. On a clear field, sweeps each crystal's voltage and measures "
+                                + "the retardance it really has, beside the Meadowlark adapter's waves-to-volts "
+                                + "table, with the applied palette marked. Use it when the palette looks lopsided "
+                                + "on one crystal. Changes nothing; collect the background again afterwards only "
+                                + "if you then change the calibration.",
+                        "Measure LC voltage curves...",
+                        LCVoltageSweepWorkflow::run));
 
         VBox root = new VBox(14, status, steps);
         root.setPadding(new Insets(12));
