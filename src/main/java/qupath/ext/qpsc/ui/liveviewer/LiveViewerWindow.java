@@ -162,6 +162,9 @@ public class LiveViewerWindow {
     // movement controls so the operator cannot bump the stage mid-scan, and turn the
     // Autofocus button into a Cancel toggle wired to externalAutofocusCancel (ABORTAF).
     private volatile boolean externalAutofocusRunning = false;
+    /** The operator clicked Cancel on an external autofocus that has not yet stopped. */
+    private volatile boolean externalAutofocusCancelling = false;
+
     private Runnable externalAutofocusCancel;
 
     // Live mode state (camera streaming on/off, independent of window visibility)
@@ -409,25 +412,41 @@ public class LiveViewerWindow {
     /** Applies the external-autofocus lock (FX thread). */
     private void applyExternalAutofocus(Runnable cancelAction) {
         externalAutofocusRunning = true;
+        externalAutofocusCancelling = false;
         externalAutofocusCancel = cancelAction;
         // Lock stage movement, but keep the Autofocus button live as a Cancel toggle.
         if (stageControlPanel != null) stageControlPanel.setDisable(true);
         if (stageControlToggle != null) stageControlToggle.setDisable(true);
         if (liveToggleButton != null) liveToggleButton.setDisable(true);
         if (focusRangeCombo != null) focusRangeCombo.setDisable(true);
-        if (autofocusButton != null) {
-            autofocusButton.setText("Cancel Autofocus");
-            autofocusButton.setStyle("-fx-base: #E57373;");
-            autofocusButton.setTooltip(new Tooltip("Autofocus running (multi-slide slot jump). Click to cancel "
-                    + "(Z is restored to the start position)."));
-            autofocusButton.setDisable(false);
-        }
+        showExternalAutofocusButton();
         updateStatus("Autofocus: running... (click Cancel to stop)");
+    }
+
+    /** The Autofocus button as a Cancel toggle for an autofocus another workflow started. */
+    private void showExternalAutofocusButton() {
+        if (autofocusButton == null) return;
+        if (externalAutofocusCancelling) {
+            autofocusButton.setText("Cancelling...");
+            autofocusButton.setDisable(true);
+            return;
+        }
+        autofocusButton.setText("Cancel Autofocus");
+        autofocusButton.setStyle("-fx-base: #E57373;");
+        autofocusButton.setTooltip(new Tooltip("Autofocus running (after a stage jump: multi-slide slot or "
+                + "single-tile refinement). Click to cancel (Z is restored to the start position)."));
+        autofocusButton.setDisable(false);
+    }
+
+    /** True while the status line is following an autofocus the window did not start (FX thread). */
+    private boolean isShowingAutofocus() {
+        return externalAutofocusRunning || serverAfStart != null;
     }
 
     /** Releases the external-autofocus lock (FX thread). */
     private void clearExternalAutofocus() {
         externalAutofocusRunning = false;
+        externalAutofocusCancelling = false;
         externalAutofocusCancel = null;
         if (autofocusButton != null) {
             autofocusButton.setText("Autofocus");
@@ -619,7 +638,9 @@ public class LiveViewerWindow {
             if (instance != null) {
                 instance.updateLiveButtonStyle(false);
                 instance.updateRefineFocusButtonState();
-                instance.updateStatus("Live OFF (paused for camera operation)");
+                if (!instance.isShowingAutofocus()) {
+                    instance.updateStatus("Live OFF (paused for camera operation)");
+                }
             }
         });
         logger.info("QPSC Live Viewer streaming stopped (window stays open)");
@@ -690,7 +711,9 @@ public class LiveViewerWindow {
                 if (instance == null) return;
                 instance.updateLiveButtonStyle(activeNow);
                 instance.updateRefineFocusButtonState();
-                if (activeNow) {
+                if (instance.isShowingAutofocus()) {
+                    // the autofocus status line stays until the search ends
+                } else if (activeNow) {
                     instance.updateStatus("Live ON - streaming...");
                 } else {
                     instance.liveToggleButton.setDisable(false);
@@ -1624,6 +1647,19 @@ public class LiveViewerWindow {
         if (streamingRunning) {
             return;
         }
+        // An autofocus another workflow started stops the live stream to use the camera, and
+        // the stream's stop and restart land here: keep its Cancel (and the "Autofocusing..."
+        // state) instead of resetting them. Resetting here is how the slot-jump and single-tile
+        // refinement autofocus lost both their Cancel and any sign they were running.
+        if (externalAutofocusRunning) {
+            showExternalAutofocusButton();
+            focusRangeCombo.setDisable(true);
+            return;
+        }
+        if (serverAfStart != null) {
+            showMicroscopeFocusing(serverAfStart);
+            return;
+        }
         boolean enabled = liveActive;
         autofocusButton.setText("Autofocus");
         autofocusButton.setStyle("");
@@ -1646,6 +1682,7 @@ public class LiveViewerWindow {
             // its cancellation. The scan owner (SlotJumpAutofocus) restores the button
             // when the aborted scan settles.
             Runnable cancel = externalAutofocusCancel;
+            externalAutofocusCancelling = true;
             autofocusButton.setText("Cancelling...");
             autofocusButton.setDisable(true);
             updateStatus("Autofocus: cancelling...");

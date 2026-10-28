@@ -167,7 +167,7 @@ Stage movement is disabled while Live View is OFF. When this occurs:
 
 This safety gate ensures you can see the stage move before issuing commands.
 
-**External autofocus lock:** While an autofocus scan started outside this window is running -- specifically the multi-slide slot-jump autofocus -- the entire stage-control panel (arrows, joystick, go-to-centroid, Z controls) is disabled to prevent accidental stage bumps mid-scan, and the Live toggle is disabled. The Autofocus button stays enabled and becomes a red "Cancel Autofocus" toggle, and the Live Viewer status bar shows "Autofocus: running... (click Cancel to stop)". Clicking Cancel sends ABORTAF (Z is restored to the pre-scan position); the controls unlock automatically when the scan settles.
+**External autofocus lock:** While an autofocus scan started outside this window is running -- the autofocus after a stage jump, which the multi-slide slot jump and single-tile refinement both run -- the entire stage-control panel (arrows, joystick, go-to-centroid, Z controls) is disabled to prevent accidental stage bumps mid-scan, and the Live toggle is disabled. The Autofocus button stays enabled and becomes a red "Cancel Autofocus" toggle, and the Live Viewer status bar shows "Autofocus: running... (click Cancel to stop)". Clicking Cancel sends ABORTAF (Z is restored to the pre-scan position); the controls unlock automatically when the scan settles. The button keeps its Cancel while the live stream pauses and resumes around the scan. The same search also opens a small **Autofocus** window with its curve and **Cancel autofocus**, so it can be cancelled with the Live Viewer closed.
 
 **Movement Controls:**
 

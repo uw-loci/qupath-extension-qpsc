@@ -416,7 +416,10 @@ for unattended acquisition:
   stage-movement controls (arrows, joystick, go-to-centroid) are locked to
   prevent accidental stage bumps mid-scan; the Autofocus button becomes a
   "Cancel Autofocus" toggle (red background) so you can abort the scan if needed
-  (Z is restored to the pre-scan position on cancel).
+  (Z is restored to the pre-scan position on cancel). Single-tile refinement runs
+  the same autofocus before its dialog opens. Every such scan also opens a small
+  **Autofocus** window with the live focus curve and a **Cancel autofocus** button,
+  so it can be cancelled even with the Live Viewer closed.
 
 The setup pass writes a fresh per-slide alignment JSON specific to that slide's
 position in the current holder, and records which stage insert it was made on.

@@ -11,6 +11,7 @@ import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.ui.AutofocusCancelWindow;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -972,7 +973,7 @@ public final class SlotJumpAutofocus {
         // scan. Cancel sends ABORTAF (aborts both the streaming and sweep paths); the
         // scan then returns ABORTED/cancelled and the completion below clears the lock.
         final MicroscopeSocketClient socketForCancel = controller.getSocketClient();
-        LiveViewerWindow.beginExternalAutofocus(() -> {
+        Runnable cancelSearch = () -> {
             Thread abortThread = new Thread(
                     () -> {
                         try {
@@ -984,7 +985,15 @@ public final class SlotJumpAutofocus {
                     "MultiSlide-SlotJumpAF-Cancel");
             abortThread.setDaemon(true);
             abortThread.start();
-        });
+        };
+        LiveViewerWindow.beginExternalAutofocus(cancelSearch);
+        // The Live Viewer's button is not enough: with the Live Viewer closed there was no Cancel
+        // anywhere, and single-tile refinement opens its dialog only after this returns.
+        final AutofocusCancelWindow cancelWindow = AutofocusCancelWindow.show(
+                tissueSearch != null
+                        ? "Searching for tissue, then focusing at the new stage position."
+                        : "Focusing at the new stage position.",
+                cancelSearch);
 
         Thread afThread = new Thread(
                 () -> {
@@ -1094,6 +1103,7 @@ public final class SlotJumpAutofocus {
                     // Release the Live Viewer stage-movement lock and restore the Autofocus
                     // button (whether AF succeeded, failed, or was cancelled).
                     LiveViewerWindow.endExternalAutofocus();
+                    cancelWindow.close();
                     if (errorMsg != null || cancelled) {
                         publish("Focus failed -- align manually", true);
                     } else {
