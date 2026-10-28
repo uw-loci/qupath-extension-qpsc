@@ -53,6 +53,8 @@ import qupath.ext.qpsc.controller.workflow.SweepAutofocusRunner;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.autofocus.AutofocusEvent;
+import qupath.ext.qpsc.service.autofocus.AutofocusFeed;
 import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -96,6 +98,24 @@ public class LiveViewerWindow {
     private Button autofocusButton;
     private Button stopAcquisitionButton;
     private javafx.animation.Timeline acquisitionWatch;
+
+    /** Stops the autofocus feed when the window closes. */
+    private Runnable autofocusFeedUnsubscribe;
+    /** Start event of the microscope's running autofocus search, or null. FX thread. */
+    private AutofocusEvent serverAfStart;
+    /** Z steps the running search has scored so far. FX thread. */
+    private int serverAfSteps;
+    /**
+     * Live-frame focus-trace samples wait until this time while the trace shows a search's own
+     * scores (another metric, on another scale): {@code Long.MAX_VALUE} while the search runs,
+     * a few seconds after it ends, 0 when not held.
+     */
+    private final java.util.concurrent.atomic.AtomicLong serverTraceHoldUntil =
+            new java.util.concurrent.atomic.AtomicLong(0);
+
+    /** How long a finished search's curve stays on the Z bar before live frames take it back. */
+    private static final long SERVER_TRACE_HOLD_MS = 8000;
+
     private StreamingFocusController streamingFocusController;
 
     /** Tooltip shown on the Autofocus button when it is idle (not mid-scan). */
@@ -1145,6 +1165,8 @@ public class LiveViewerWindow {
                 }));
         acquisitionWatch.setCycleCount(javafx.animation.Timeline.INDEFINITE);
         acquisitionWatch.play();
+        // Every autofocus the microscope runs, whoever started it, shows here.
+        autofocusFeedUnsubscribe = AutofocusFeed.getInstance().subscribe(this::onAutofocusEvent);
 
         HBox toolbar = new HBox(
                 8,
@@ -2118,6 +2140,14 @@ public class LiveViewerWindow {
             histExec.submit(() -> {
                 try {
                     if (stageControlPanel == null || stageControlPanel.getZBarPanel() == null) return;
+                    long hold = serverTraceHoldUntil.get();
+                    if (hold != 0) {
+                        if (System.currentTimeMillis() < hold) return;
+                        // The search's curve has had its time; its scores are on another scale.
+                        if (serverTraceHoldUntil.compareAndSet(hold, 0)) {
+                            stageControlPanel.getZBarPanel().getFocusTrace().clear();
+                        }
+                    }
                     double metric = qupath.ext.qpsc.utilities.FocusMetricCalculator.brennerGradient(frame);
                     double spread = qupath.ext.qpsc.utilities.FocusMetricCalculator.p98MinusP2(frame);
                     double z = MicroscopeController.getInstance().getStageZFast();
@@ -2817,6 +2847,65 @@ public class LiveViewerWindow {
     }
 
     /**
+     * An autofocus event from the microscope (FX thread): any search, whoever started it -- the
+     * acquisition's initial focus, survey and per-tile searches, a multi-slide slot jump, this
+     * window's own button. The Z bar draws the search's scores, the status line follows its
+     * steps, and the Autofocus button says the microscope is focusing unless this window is
+     * already showing its own search.
+     */
+    private void onAutofocusEvent(AutofocusEvent e) {
+        FocusTraceModel trace = stageControlPanel != null && stageControlPanel.getZBarPanel() != null
+                ? stageControlPanel.getZBarPanel().getFocusTrace()
+                : null;
+        if (e.isStart()) {
+            serverAfStart = e;
+            serverAfSteps = 0;
+            serverTraceHoldUntil.set(Long.MAX_VALUE);
+            if (trace != null) trace.clear();
+            showMicroscopeFocusing(e);
+            updateStatusHeld("Autofocus: " + e.describe() + (e.z0 != null ? String.format(", from Z %.2f", e.z0) : ""));
+        } else if (e.isSample()) {
+            if (e.z == null || e.score == null) return;
+            serverAfSteps++;
+            if (trace != null) trace.addSample(e.z, e.score, e.spread != null ? e.spread : Double.NaN);
+            String what = serverAfStart != null ? serverAfStart.describe() : "autofocus";
+            String steps =
+                    serverAfStart != null && serverAfStart.nSteps != null && serverAfSteps <= serverAfStart.nSteps
+                            ? serverAfSteps + " of " + serverAfStart.nSteps
+                            : String.valueOf(serverAfSteps);
+            updateStatusHeld(String.format("Autofocus: %s, step %s, Z %.2f", what, steps, e.z));
+        } else if (e.isEnd()) {
+            serverTraceHoldUntil.set(System.currentTimeMillis() + SERVER_TRACE_HOLD_MS);
+            updateStatusHeld("Autofocus: " + AutofocusEvent.describeOutcome(serverAfStart, e));
+            serverAfStart = null;
+            showMicroscopeFocusing(null);
+        }
+    }
+
+    /**
+     * Shows on the Autofocus button that the microscope is focusing ({@code start} non-null) or
+     * puts the button back. Leaves it alone while this window shows its own search: a sweep, a
+     * streaming scan, or an external one it was handed (each has its own Cancel or busy state).
+     */
+    private void showMicroscopeFocusing(AutofocusEvent start) {
+        if (autofocusButton == null) return;
+        boolean ownSearch = sweepRunning
+                || externalAutofocusRunning
+                || (streamingFocusController != null && streamingFocusController.isRunning());
+        if (ownSearch) return;
+        if (start != null) {
+            autofocusButton.setText("Autofocusing...");
+            autofocusButton.setStyle("-fx-base: #FFB74D;");
+            autofocusButton.setDisable(true);
+            autofocusButton.setTooltip(
+                    new Tooltip("The microscope is focusing: " + start.describe() + ".\nThe Z bar shows its scores."));
+        } else {
+            autofocusButton.setTooltip(new Tooltip(STREAMING_AF_TOOLTIP));
+            updateRefineFocusButtonState();
+        }
+    }
+
+    /**
      * Updates the status label and holds the message for a few seconds so the
      * frame-rate ticker does not immediately overwrite it.
      */
@@ -2876,6 +2965,10 @@ public class LiveViewerWindow {
         if (acquisitionWatch != null) {
             acquisitionWatch.stop();
             acquisitionWatch = null;
+        }
+        if (autofocusFeedUnsubscribe != null) {
+            autofocusFeedUnsubscribe.run();
+            autofocusFeedUnsubscribe = null;
         }
 
         // Detach the central-state title listener so a closed window doesn't

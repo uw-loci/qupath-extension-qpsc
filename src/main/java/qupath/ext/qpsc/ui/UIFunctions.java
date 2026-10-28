@@ -131,7 +131,13 @@ public class UIFunctions {
             Label progressLabel = new Label("Positions acquired: 0 of " + totalPositions);
             Label statusLabel = new Label("Acquisition in progress...");
 
-            VBox vbox = new VBox(10, progressBar, progressLabel, timeLabel, statusLabel);
+            // The microscope's autofocus searches, drawn as they run: the initial focus can take
+            // minutes before the first position, with nothing else moving here.
+            AutofocusCurvePane autofocusPane = new AutofocusCurvePane();
+            autofocusPane.setVisible(false);
+            autofocusPane.setManaged(false);
+
+            VBox vbox = new VBox(10, progressBar, progressLabel, timeLabel, statusLabel, autofocusPane);
             vbox.setStyle("-fx-padding: 10;");
             vbox.setAlignment(Pos.CENTER);
 
@@ -150,6 +156,19 @@ public class UIFunctions {
             stage.setScene(new Scene(vbox));
             stage.setAlwaysOnTop(true);
             stage.show();
+
+            Runnable stopAutofocusFeed = qupath.ext.qpsc.service.autofocus.AutofocusFeed.getInstance()
+                    .subscribe(e -> {
+                        if (!autofocusPane.isVisible()) {
+                            autofocusPane.setVisible(true);
+                            autofocusPane.setManaged(true);
+                            stage.sizeToScene();
+                        }
+                        autofocusPane.accept(e);
+                    });
+            stage.showingProperty().addListener((obs, was, showing) -> {
+                if (!showing) stopAutofocusFeed.run();
+            });
 
             // Shared timing state
             AtomicLong startTime = new AtomicLong(0);

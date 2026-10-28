@@ -340,6 +340,7 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
 | STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `ABORTED:<reason>` / `FAILED:<reason>` |
 | ABORTAF | `abortaf_` | none | `ACK` |
+| AFTRACE | `aftrace_` | 8-byte big-endian last-seen sequence number | 4-byte big-endian length + UTF-8 JSON (see below) |
 | FINDTISS | `findtiss` | `--yaml <path> [--modality <name>] [--objective <id>] [--dir <dx>,<dy>] [--step <um>] [--max-attempts <n>] ENDOFSTR` | `FOUND:<x>:<y>:<attempt>:<of>` / `NOTFOUND:<x>:<y>:<of>` / `ABORTED:<x>:<y>:<done>` / `FAILED:<reason>` |
 
 #### PROBEZ
@@ -592,6 +593,38 @@ it clears a session flag so nothing asks again, drops the primary socket so the 
 command reconnects onto a clean stream, and returns `FAILED`. Autofocus then runs from the
 predicted position -- the behaviour that predates the search. **Any future command that
 sends a payload needs the same treatment.**
+
+#### AFTRACE
+
+The microscope server's autofocus events after a sequence number, so QPSC can show every
+autofocus as it runs, whoever started it (an acquisition's initial focus, focus survey and
+per-tile searches, a multi-slide slot jump, the Live Viewer's button). Payload: 8 bytes, the
+last sequence number already seen (unsigned big-endian; 0 for none). Reply: a 4-byte big-endian
+length, then that many bytes of UTF-8 JSON:
+
+```json
+{"seq": 60, "first": 1, "more": false,
+ "active": {"type": "start", "run": 7, "method": "drift_check", ...} ,
+ "events": [
+   {"seq": 41, "t": 1730148000.1, "type": "start", "run": 7, "method": "drift_check",
+    "context": "Tile 12 of 80", "tile": 11, "x": 1200.0, "y": -340.0, "z0": -312.4,
+    "range_um": 20.0, "n_steps": 7, "score_metric": "normalized_variance"},
+   {"seq": 42, "t": 1730148000.9, "type": "sample", "run": 7, "z": -322.4, "score": 1.8e5},
+   {"seq": 49, "t": 1730148005.2, "type": "end", "run": 7, "method": "drift_check",
+    "context": "Tile 12 of 80", "status": "ok", "z": -310.9, "elapsed_s": 5.1}]}
+```
+
+`method` is `sweep` (the full search), `drift_check` or `streaming`; `status` is `ok`, `failed`,
+`aborted`, `error` or `unavailable` (streaming only), with a `reason` when one is known. A
+`sample` carries `spread` (P98 - P2) when the search measured it; streaming searches report each
+motion pass's samples when the pass ends. `active` is the running search's start event or null,
+`first` the oldest event the server still holds (4000 kept), and `more` means the reply stopped
+at 1000 events. The server reads only its in-memory log, never the hardware, so QPSC sends
+AFTRACE on its **auxiliary** socket, which answers while `STRMAFZ` holds the primary.
+`AutofocusFeed` polls it every 400 ms while a Live Viewer or a progress window is open. An
+older server ignores the command and its payload and sends nothing; after 2 s without a reply
+the client stops asking on that connection. During an acquisition the server also appends the
+same events to `af_trace.ndjson` in the run's output folder.
 
 #### ABORTAF
 

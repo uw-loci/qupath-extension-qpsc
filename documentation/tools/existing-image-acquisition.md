@@ -273,6 +273,7 @@ The progress monitor shows:
 - Current region / total regions
 - Tile progress within current region
 - Overall progress bar
+- An **Autofocus** section once the microscope starts a search: what it is for ("Initial focus", "Tile 12 of 80"), its step and Z, a plot of focus score against Z with the best score marked, and the result. It needs a microscope server that answers AFTRACE (2026-10-28 or later); an older server shows nothing new.
 
 **Stopping a run.** **Cancel Workflow** in the progress dialog stops after the current tile; the dialog then says it is waiting for the microscope to stop and closes once the run confirms the stage is released (after 60 s without confirmation it closes and points you at the menu item below). Closing the dialog with its **X** asks the same question. If the dialog is gone, **Extensions > QP Scope > Acquisition controls > Stop acquisition...** or the red **Stop acquisition** button the Live Viewer shows while an acquisition is running does the same thing. A cancel is honoured wherever it lands, including between the dialog opening and the first command being sent. Already-acquired regions are kept and stitched.
 

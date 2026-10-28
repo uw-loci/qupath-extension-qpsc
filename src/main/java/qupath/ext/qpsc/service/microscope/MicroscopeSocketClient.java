@@ -405,6 +405,12 @@ public class MicroscopeSocketClient implements AutoCloseable {
          * the STRMAFZ round-trip for the whole scan. Response: {@code ACK}.
          */
         ABORTAF("abortaf_"),
+        /**
+         * Autofocus events after a sequence number, for the operator's display: payload 8-byte
+         * big-endian last-seen sequence number; reply 4-byte big-endian length + UTF-8 JSON.
+         * Sent on the AUXILIARY socket, which a streaming autofocus does not hold.
+         */
+        AFTRACE("aftrace_"),
 
         /**
          * Setup-wizard probe: discovers the focus stage's writable speed
@@ -696,6 +702,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 auxOutput = new DataOutputStream(new BufferedOutputStream(auxSocket.getOutputStream()));
 
                 auxConnected.set(true);
+                afTraceSupported = true;
 
                 logger.info("Auxiliary connection established, sending config...");
 
@@ -7790,6 +7797,75 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new MicroscopeHardwareException(hardwareErrorMessage);
         }
         return ByteBuffer.wrap(reply).order(ByteOrder.BIG_ENDIAN).getFloat();
+    }
+
+    /** How long to wait for an AFTRACE reply before deciding the server does not know it. */
+    private static final int AFTRACE_TIMEOUT_MS = 2000;
+
+    /**
+     * False once AFTRACE went unanswered on the current auxiliary connection: an older server
+     * reads the command and its payload as two unknown commands and sends nothing. Reset when the
+     * auxiliary socket reconnects, in case the server was upgraded in between.
+     */
+    private volatile boolean afTraceSupported = true;
+
+    /**
+     * The microscope server's autofocus events after {@code sinceSeq} (AFTRACE), on the auxiliary
+     * socket so it answers while a streaming autofocus holds the primary.
+     *
+     * @param sinceSeq the last sequence number already seen; 0 for none
+     * @return the reply, or null when the server does not support AFTRACE
+     * @throws IOException if the auxiliary socket fails
+     */
+    public qupath.ext.qpsc.service.autofocus.AutofocusTraceReply getAutofocusEvents(long sinceSeq) throws IOException {
+        if (!afTraceSupported) {
+            return null;
+        }
+        synchronized (auxSocketLock) {
+            ensureAuxConnected();
+            int restoreTimeout = -1;
+            boolean replyStarted = false;
+            try {
+                if (auxSocket != null) {
+                    restoreTimeout = auxSocket.getSoTimeout();
+                    auxSocket.setSoTimeout(AFTRACE_TIMEOUT_MS);
+                }
+                auxOutput.write(Command.AFTRACE.getValue());
+                auxOutput.write(ByteBuffer.allocate(8).putLong(sinceSeq).array());
+                auxOutput.flush();
+                int length = auxInput.readInt();
+                replyStarted = true;
+                if (length < 0 || length > 16 * 1024 * 1024) {
+                    throw new IOException("AFTRACE reply length out of range: " + length);
+                }
+                byte[] body = new byte[length];
+                auxInput.readFully(body);
+                return qupath.ext.qpsc.service.autofocus.AutofocusTraceReply.parse(
+                        new String(body, StandardCharsets.UTF_8));
+            } catch (SocketTimeoutException e) {
+                if (replyStarted) {
+                    // Cut off mid-reply: the stream is no longer aligned to a command boundary.
+                    cleanupAuxiliary();
+                    throw e;
+                }
+                afTraceSupported = false;
+                logger.info("AFTRACE unanswered: this microscope server does not publish autofocus progress");
+                return null;
+            } catch (JsonSyntaxException e) {
+                throw new IOException("AFTRACE reply is not valid JSON: " + e.getMessage(), e);
+            } catch (IOException e) {
+                cleanupAuxiliary();
+                throw e;
+            } finally {
+                if (auxSocket != null && restoreTimeout >= 0) {
+                    try {
+                        auxSocket.setSoTimeout(restoreTimeout);
+                    } catch (IOException e) {
+                        logger.debug("Failed to restore aux socket timeout after AFTRACE", e);
+                    }
+                }
+            }
+        }
     }
 
     private byte[] executeCommandOnAux(Command command, byte[] payload, int responseLength) throws IOException {

@@ -195,6 +195,7 @@ After clicking **Start Acquisition**, the progress monitor appears showing:
 - Progress bar
 - Current stage position
 - Elapsed time
+- An **Autofocus** section once the microscope starts a search: what it is for ("Initial focus", "Tile 12 of 80"), its step and Z, a plot of focus score against Z with the best score marked, and the result. It needs a microscope server that answers AFTRACE (2026-10-28 or later); an older server shows nothing new.
 
 During acquisition:
 
@@ -231,6 +232,7 @@ After all tiles are captured, automatic stitching begins:
 - Stitched pyramidal image (OME-TIFF or OME-ZARR) added to the project
 - Acquisition metadata stored in project
 - Temporary tile images (handled per preference settings)
+- `af_trace.ndjson`: every autofocus search the run made, as it ran (written by the microscope server beside the tiles, so it goes with them: deleted if tile handling is set to delete them, zipped with them under zip)
 - Per-slide alignment JSON in `{project}/alignmentFiles/{imageName}_alignment.json`
 
 **Project Entry Grouping:** When acquiring with a modality that uses multiple angles (e.g., PPM 10x with 4 angles) or multiple channels, the resulting entries are grouped together under a single base-image name in the QuPath project sort. For example, a PPM 10x bounded acquisition appears as `bounds_ppm_10x_1` with all 4 angle entries logically grouped together, rather than as 4 separate ungrouped rows. Subsequent acquisitions of the same region use distinct base-image names (`bounds_ppm_10x_2`, etc.) for clear separation in the project.

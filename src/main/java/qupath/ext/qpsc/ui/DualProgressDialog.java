@@ -26,6 +26,7 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.AcquisitionPlan;
+import qupath.ext.qpsc.service.autofocus.AutofocusFeed;
 import qupath.ext.qpsc.service.mda.LiveDimensionDecomposer;
 
 /**
@@ -131,6 +132,13 @@ public class DualProgressDialog {
     // This allows users to see stitching progress alongside acquisition progress
     private final Map<String, String> activeStitchingOperations = new ConcurrentHashMap<>();
     private final VBox stitchingSection;
+
+    /** The microscope's autofocus searches, drawn as they run; hidden until the first one. */
+    private final AutofocusCurvePane autofocusPane = new AutofocusCurvePane();
+
+    /** Stops the autofocus feed when the dialog is hidden. */
+    private Runnable autofocusFeedUnsubscribe;
+
     private final Label stitchingHeader;
     private final ListView<String> stitchingListView;
     private final Label stitchingCountLabel;
@@ -270,6 +278,7 @@ public class DualProgressDialog {
                         currentProgressBar,
                         currentProgressLabel,
                         dimensionPanel,
+                        autofocusPane, // Autofocus curve - hidden until a search starts
                         new Separator(),
                         stitchingSection, // Stitching status - hidden until active
                         timeLabel,
@@ -296,6 +305,26 @@ public class DualProgressDialog {
         }
 
         stage.setScene(new Scene(vbox));
+
+        // Show the microscope's autofocus while the dialog is up: the initial focus and focus
+        // survey can take minutes before the first tile, with nothing else moving here.
+        autofocusPane.setVisible(false);
+        autofocusPane.setManaged(false);
+        stage.showingProperty().addListener((obs, was, showing) -> {
+            if (showing && autofocusFeedUnsubscribe == null) {
+                autofocusFeedUnsubscribe = AutofocusFeed.getInstance().subscribe(e -> {
+                    if (!autofocusPane.isVisible()) {
+                        autofocusPane.setVisible(true);
+                        autofocusPane.setManaged(true);
+                        stage.sizeToScene();
+                    }
+                    autofocusPane.accept(e);
+                });
+            } else if (!showing && autofocusFeedUnsubscribe != null) {
+                autofocusFeedUnsubscribe.run();
+                autofocusFeedUnsubscribe = null;
+            }
+        });
 
         // Create update timeline
         timeline = new Timeline();
