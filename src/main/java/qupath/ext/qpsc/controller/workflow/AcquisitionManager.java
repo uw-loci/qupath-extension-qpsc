@@ -225,6 +225,18 @@ public class AcquisitionManager {
      *  when stitching dialogs close or other images are opened. */
     private ProjectImageEntry<BufferedImage> parentEntry = null;
 
+    /**
+     * The manager whose acquisition currently holds the stage, or null. Set in
+     * {@link #processAnnotations} once the acquisition lock is engaged and cleared when the
+     * chain settles, so {@link #stopActiveAcquisition()} can reach the run from outside its
+     * progress dialog (QP Scope > Stop acquisition, the Live Viewer).
+     */
+    private static final java.util.concurrent.atomic.AtomicReference<AcquisitionManager> ACTIVE =
+            new java.util.concurrent.atomic.AtomicReference<>();
+
+    /** How long the progress dialog waits for the run to acknowledge a cancel before closing on its own. */
+    public static final long CANCEL_ACK_TIMEOUT_MS = 60_000L;
+
     /** ImageData captured at session start -- provides stable access to the WSI server
      *  for tile reading (e.g., WSI tissue scoring) even after the viewer loses its image. */
     private ImageData<BufferedImage> capturedImageData = null;
@@ -246,6 +258,24 @@ public class AcquisitionManager {
     }
 
     /**
+     * Saves the session image's data to its project entry (the pinned source, or the entry
+     * captured at prep). Reads nothing from the viewer: by the time a region finishes, the
+     * operator may be looking at another image.
+     */
+    private void saveSessionEntry(String what) {
+        try {
+            if (capturedImageData != null && parentEntry != null) {
+                parentEntry.saveImageData(capturedImageData);
+                logger.info("Saved {} to project entry '{}'", what, parentEntry.getImageName());
+            } else {
+                logger.warn("Could not save {}: no session entry captured", what);
+            }
+        } catch (Exception e) {
+            logger.error("Failed to save {} to the project entry", what, e);
+        }
+    }
+
+    /**
      * Checks whether the viewer is currently showing the acquisition session image.
      * Used to decide whether to fire UI refresh events (which are pointless if
      * the user is looking at a different image).
@@ -260,6 +290,63 @@ public class AcquisitionManager {
      * @param gui The QuPath GUI instance
      * @param state The current workflow state containing all necessary information
      */
+    /**
+     * Stops the acquisition that currently holds the stage, from anywhere.
+     *
+     * <p>Flips the run's stop flag (read by its {@link CancelGate} before every stage-driving
+     * step) and presses the progress dialog's Cancel when one exists, which sends CANCEL to the
+     * server. When the controller says an acquisition is active but no manager registered
+     * (a cleanup path that missed, or a run started by another client), CANCEL is sent
+     * directly on a worker thread.
+     *
+     * @return true when something was told to stop; false when nothing was running
+     */
+    public static boolean stopActiveAcquisition() {
+        AcquisitionManager active = ACTIVE.get();
+        if (active != null) {
+            logger.warn("Stop acquisition requested from outside the progress dialog");
+            active.state.cancelRequested.set(true);
+            DualProgressDialog dialog = active.dualProgressDialog;
+            if (dialog != null) {
+                dialog.requestCancel();
+            } else {
+                sendCancelOnWorker();
+            }
+            return true;
+        }
+        if (MicroscopeController.getInstance().isAcquisitionActive()) {
+            logger.warn("Stop acquisition requested: the acquisition lock is engaged but no run is registered; "
+                    + "sending CANCEL directly");
+            sendCancelOnWorker();
+            return true;
+        }
+        logger.info("Stop acquisition requested, but no acquisition is running");
+        return false;
+    }
+
+    private static void sendCancelOnWorker() {
+        new Thread(
+                        () -> {
+                            try {
+                                MicroscopeController.getInstance()
+                                        .getSocketClient()
+                                        .cancelAcquisition();
+                            } catch (IOException e) {
+                                logger.error("Failed to send cancel command", e);
+                            }
+                        },
+                        "AcquisitionCancelSender")
+                .start();
+    }
+
+    /** Reads every cancel signal this run can receive; see {@link CancelGate}. */
+    private CancelGate cancelGate(DualProgressDialog progressDialog) {
+        return new CancelGate(
+                () -> progressDialog != null && progressDialog.isCancelled(),
+                state.cancelRequested::get,
+                () -> state.cancellationToken != null && state.cancellationToken.isCancelled());
+    }
+
     public AcquisitionManager(QuPathGUI gui, WorkflowState state) {
         this.gui = gui;
         this.state = state;
@@ -443,41 +530,38 @@ public class AcquisitionManager {
 
             logger.info("Preparing for acquisition with {} angles", angleExposures.size());
 
-            // Capture parent entry NOW while the viewer definitely has the right image.
-            // This anchors the entire session to this specific image so that switching
-            // images in the viewer during acquisition does not crash or misdirect data.
+            // Anchor the session to the workflow's pinned source entry (routing pinned it and
+            // assertSourceImageOpen re-opened it just before this). Only a run with no pin
+            // (bounded acquisition) reads the viewer, and then only once, here, so a viewer
+            // switch during the run cannot misdirect data.
             if (capturedImageData == null) {
-                @SuppressWarnings("unchecked")
-                Project<BufferedImage> captureProject = (Project<BufferedImage>) state.projectInfo.getCurrentProject();
-                if (gui.getViewer().hasServer() && gui.getImageData() != null && captureProject != null) {
-                    capturedImageData = gui.getImageData();
-                    parentEntry = captureProject.getEntry(capturedImageData);
-                    logger.info(
-                            "Captured parent entry for session: {}",
-                            parentEntry != null ? parentEntry.getImageName() : "null");
+                if (state.sourceEntry != null && state.sourceImageData != null) {
+                    capturedImageData = state.sourceImageData;
+                    parentEntry = state.sourceEntry;
+                    logger.info("Session anchored to the pinned source entry: {}", parentEntry.getImageName());
                 } else {
-                    logger.warn(
-                            "No parent entry available at prep start -- " + "tile display will use fallback hierarchy");
+                    @SuppressWarnings("unchecked")
+                    Project<BufferedImage> captureProject =
+                            (Project<BufferedImage>) state.projectInfo.getCurrentProject();
+                    if (gui.getViewer().hasServer() && gui.getImageData() != null && captureProject != null) {
+                        capturedImageData = gui.getImageData();
+                        parentEntry = captureProject.getEntry(capturedImageData);
+                        logger.info(
+                                "No pinned source; captured the open entry for the session: {}",
+                                parentEntry != null ? parentEntry.getImageName() : "null");
+                    } else {
+                        logger.warn("No parent entry available at prep start -- "
+                                + "tile display will use fallback hierarchy");
+                    }
                 }
             }
 
-            // Save project entry state before acquisition starts
-            try {
-                var imageData = QP.getCurrentImageData();
-                var entry = QP.getProjectEntry();
-                if (imageData != null && entry != null) {
-                    entry.saveImageData(imageData);
-                    logger.info("Saved project entry state before acquisition");
-                } else {
-                    logger.warn("Could not save project entry state - imageData or entry is null");
-                }
-            } catch (Exception e) {
-                logger.error("Failed to save project entry state before acquisition", e);
-            }
+            // Save the session entry's state before acquisition starts
+            saveSessionEntry("before acquisition");
 
-            // Get current annotations using GUI hierarchy for reliable retrieval
+            // Annotations come from the session image's hierarchy, never the viewer's
             List<PathObject> currentAnnotations =
-                    AnnotationHelper.getCurrentValidAnnotations(gui, state.selectedAnnotationClasses);
+                    AnnotationHelper.getCurrentValidAnnotations(getSessionHierarchy(), state.selectedAnnotationClasses);
             if (currentAnnotations.isEmpty()) {
                 throw new RuntimeException("No valid annotations for acquisition");
             }
@@ -629,6 +713,7 @@ public class AcquisitionManager {
 
         // Lock stage movements before stopping live viewing to prevent user interference
         MicroscopeController.getInstance().setAcquisitionActive(true);
+        ACTIVE.set(this);
 
         // Stop live viewing before acquisition starts to prevent hardware conflicts
         MicroscopeController.LiveViewState liveState =
@@ -729,8 +814,10 @@ public class AcquisitionManager {
         if (progressDialog == null) {
             MicroscopeController.getInstance().restoreLiveViewState(liveState);
             MicroscopeController.getInstance().setAcquisitionActive(false);
+            ACTIVE.compareAndSet(this, null);
             return CompletableFuture.completedFuture(false);
         }
+        final CancelGate cancelGate = cancelGate(progressDialog);
 
         // Set initial steps-per-position for the progress dialog based on
         // the angle count we already have. For channel-based acquisitions
@@ -774,6 +861,15 @@ public class AcquisitionManager {
                     logger.debug("Skipping annotation {} -- previous acquisition failed", annotation.getName());
                     return CompletableFuture.completedFuture(false);
                 }
+                if (cancelGate.isCancelled()) {
+                    logger.info(
+                            "Cancelled ({}) before annotation {} of {}: {} -- nothing more is sent",
+                            cancelGate.source(),
+                            index,
+                            total,
+                            annotation.getName());
+                    return CompletableFuture.completedFuture(false);
+                }
 
                 logger.info("Processing annotation {} of {}: {}", index, total, annotation.getName());
 
@@ -784,7 +880,7 @@ public class AcquisitionManager {
 
                 showProgressNotification(index, total, annotation.getName());
 
-                return performSingleAnnotationAcquisition(annotation, angleExposures, progressDialog)
+                return performSingleAnnotationAcquisition(annotation, angleExposures, progressDialog, cancelGate)
                         .thenApply(success -> {
                             if (success) {
                                 // Capture final Z for tilt correction model
@@ -897,6 +993,7 @@ public class AcquisitionManager {
             // (stitching continues in background but does not use the stage)
             MicroscopeController.getInstance().restoreLiveViewState(liveState);
             MicroscopeController.getInstance().setAcquisitionActive(false);
+            ACTIVE.compareAndSet(this, null);
 
             // Deregister this dialog from the batch cancel token: this slot's acquisition has
             // settled, so a later Abort All must not trip this (now closing) dialog.
@@ -906,10 +1003,13 @@ public class AcquisitionManager {
 
             // Close dual progress dialog when workflow completes or fails
             if (progressDialog != null) {
-                if (error != null) {
+                if (cancelGate.isCancelled()) {
+                    // The stage is released: this is the acknowledgement the dialog has been
+                    // waiting for since Cancel was pressed (it no longer closes on its own).
+                    progressDialog.acknowledgeCancelled("Cancelled - the microscope has stopped");
+                } else if (error != null) {
                     Platform.runLater(() -> progressDialog.showError("Workflow failed: " + error.getMessage()));
-                } else if (!result && !progressDialog.isCancelled()) {
-                    // Only show error if not user-initiated cancellation
+                } else if (!result) {
                     Platform.runLater(() -> progressDialog.showError("Workflow stopped unexpectedly"));
                 }
                 // Dialog will auto-close after completion or error display
@@ -932,7 +1032,10 @@ public class AcquisitionManager {
      * @return CompletableFuture with true if successful, false if failed/cancelled
      */
     private CompletableFuture<Boolean> performSingleAnnotationAcquisition(
-            PathObject annotation, List<AngleExposure> angleExposures, DualProgressDialog progressDialog) {
+            PathObject annotation,
+            List<AngleExposure> angleExposures,
+            DualProgressDialog progressDialog,
+            CancelGate cancelGate) {
 
         return CompletableFuture.supplyAsync(() -> {
             try {
@@ -1318,6 +1421,17 @@ public class AcquisitionManager {
                 // controller's 0,0 moving, which no commanded-vs-reported check can see.
                 armStageFrameWatchdog(annotation);
                 try {
+                    // A Cancel pressed while the command was being prepared must not be
+                    // followed by the command. Checked here and again after the idle wait,
+                    // which can take tens of seconds.
+                    if (cancelGate.isCancelled()) {
+                        logger.info(
+                                "Cancelled ({}) before the idle wait for {}; ACQUIRE not sent",
+                                cancelGate.source(),
+                                annotation.getName());
+                        return false;
+                    }
+
                     // The server owns one stage and marks a socket busy until the previous
                     // acquisition's thread has fully finished, retract and return move included.
                     // Sending before then gets BUSY:ACQUIRING; ask first, with a bound.
@@ -1326,6 +1440,14 @@ public class AcquisitionManager {
                                 + (SERVER_IDLE_WAIT_MS / 1000)
                                 + " s. Cancel it from the server side, or restart the command server, "
                                 + "before acquiring " + annotation.getName());
+                    }
+
+                    if (cancelGate.isCancelled()) {
+                        logger.info(
+                                "Cancelled ({}) after the idle wait for {}; ACQUIRE not sent",
+                                cancelGate.source(),
+                                annotation.getName());
+                        return false;
                     }
 
                     // Start acquisition
@@ -1790,16 +1912,7 @@ public class AcquisitionManager {
                     // survive close/reopen. Tile detections are otherwise ephemeral
                     // (regenerated from annotation bounds on next open) and the
                     // measurements just attached would be lost on the next session.
-                    try {
-                        var imageData = QP.getCurrentImageData();
-                        var entry = QP.getProjectEntry();
-                        if (imageData != null && entry != null) {
-                            entry.saveImageData(imageData);
-                            logger.info("Saved tile measurements for {} to project", annotation.getName());
-                        }
-                    } catch (Exception e) {
-                        logger.warn("Could not persist tile measurements to project: {}", e.getMessage());
-                    }
+                    saveSessionEntry("tile measurements for " + annotation.getName());
 
                     return true;
 
@@ -1918,7 +2031,7 @@ public class AcquisitionManager {
                         state.splitChannelIds,
                         state.alignmentChannelIds,
                         state.focusChannelId),
-                state.pipelinedBatchAcquire);
+                new StitchingHelper.ImportContext(state.pipelinedBatchAcquire, state.importedEntries));
 
         state.stitchingFutures.add(stitchFuture);
         logger.info("Launched stitching for annotation: {}", annotation.getName());

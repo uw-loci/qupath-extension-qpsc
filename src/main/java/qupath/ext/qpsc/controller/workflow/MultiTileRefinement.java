@@ -369,9 +369,14 @@ public class MultiTileRefinement {
         solveButton.setStyle("-fx-font-weight: bold; -fx-base: #4CAF50; -fx-text-fill: white;");
         solveButton.setDisable(true);
 
-        Button cancelButton = new Button("Cancel");
+        // Skip = acquire with the prior alignment; Cancel (and the window's X) = no
+        // acquisition. They used to be the same thing, and closing the window started a run.
+        Button skipButton = new Button("Skip refinement");
+        skipButton.setTooltip(new Tooltip("Acquire with the prior alignment, without refining it."));
+        Button cancelButton = new Button("Cancel workflow");
+        cancelButton.setTooltip(new Tooltip("Close without acquiring. The prior alignment is kept."));
 
-        HBox buttons = new HBox(10, addButton, solveButton, cancelButton);
+        HBox buttons = new HBox(10, addButton, solveButton, skipButton, cancelButton);
         buttons.setAlignment(Pos.CENTER_LEFT);
 
         // Live-state row: filled in by the prep pass below. Starts neutral so the dialog does
@@ -420,7 +425,7 @@ public class MultiTileRefinement {
                         advanceAutomatically[0].run();
                     }
                 },
-                () -> future.complete(null));
+                () -> future.complete(SingleTileRefinement.RefinementResult.blocked(initialTransform, null)));
 
         // Guides the operator to the next OUTER action: pulse "Select tile" (blue) until 2 points
         // are captured, then pulse "Solve & Save" (green). The embedded SiftCapturePane guides the
@@ -591,6 +596,7 @@ public class MultiTileRefinement {
             selectionWatch.pause();
             addButton.setDisable(true);
             solveButton.setDisable(true);
+            skipButton.setDisable(true);
             cancelButton.setDisable(true);
             // A point is being captured -- the pane guides SIFT/capture; drop the outer pulse.
             outerPulse.clear();
@@ -631,6 +637,7 @@ public class MultiTileRefinement {
                         // still selected, and it is no longer a legal pick.
                         selectionWatch.play();
                         refreshAddButton.run();
+                        skipButton.setDisable(false);
                         cancelButton.setDisable(false);
                         refreshDiagnostics.run();
                         // Panel is idle again -- re-arm the countdown for the next step.
@@ -670,29 +677,40 @@ public class MultiTileRefinement {
                             "Alignment refined from %d points (rotation %.2f deg, scale %.4f).",
                             fit.pointCount(), fit.rotationDegrees(), fit.scale()));
             stage.close();
-            future.complete(new SingleTileRefinement.RefinementResult(
-                    refined, points.get(0).tile(), true));
+            future.complete(SingleTileRefinement.RefinementResult.accepted(
+                    refined, points.get(0).tile()));
+        });
+
+        skipButton.setOnAction(e -> {
+            outerPulse.clear();
+            logger.info(
+                    "Multi-tile refinement skipped ({} points captured); acquiring with the prior alignment",
+                    points.size());
+            SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+            stage.close();
+            future.complete(SingleTileRefinement.RefinementResult.skipped(
+                    initialTransform, points.isEmpty() ? null : points.get(0).tile()));
         });
 
         cancelButton.setOnAction(e -> {
             outerPulse.clear();
             logger.info(
-                    "Multi-tile refinement cancelled ({} points captured); preserving prior alignment", points.size());
+                    "Multi-tile refinement cancelled ({} points captured); no acquisition, prior alignment kept",
+                    points.size());
             SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             stage.close();
-            future.complete(new SingleTileRefinement.RefinementResult(
-                    initialTransform, points.isEmpty() ? null : points.get(0).tile(), false));
+            future.complete(SingleTileRefinement.RefinementResult.cancelled(
+                    initialTransform, points.isEmpty() ? null : points.get(0).tile()));
         });
 
         stage.setOnCloseRequest(e -> {
             outerPulse.clear();
             if (!future.isDone()) {
-                logger.info("Multi-tile refinement window closed; preserving prior alignment");
+                logger.info("Multi-tile refinement window closed with the window's X; refinement cancelled");
                 SiftAutoAlignHelper.clearSearchRangeOnStageMap();
-                future.complete(new SingleTileRefinement.RefinementResult(
+                future.complete(SingleTileRefinement.RefinementResult.cancelled(
                         initialTransform,
-                        points.isEmpty() ? null : points.get(0).tile(),
-                        false));
+                        points.isEmpty() ? null : points.get(0).tile()));
             }
         });
 

@@ -131,10 +131,15 @@ sequenceDiagram
 1. Resolves rotation angles via `AngleResolutionService`
 2. Creates tile grid via `TileHelper` -> `TilingUtilities`
 3. Builds the acquisition command via `AcquisitionCommandBuilder`
-4. Sends to Python server via `MicroscopeSocketClient`
-5. Monitors progress and updates `DualProgressDialog`
-6. Triggers stitching via `StitchingHelper`
-7. Writes metadata via `ImageMetadataManager`
+4. Consults the `CancelGate` (progress dialog, `stopActiveAcquisition()`, batch token) before the idle wait and again before the send
+5. Sends to Python server via `MicroscopeSocketClient`
+6. Monitors progress and updates `DualProgressDialog`
+7. Triggers stitching via `StitchingHelper`
+8. Writes metadata via `ImageMetadataManager`
+
+The manager anchors the run to the entry `ExistingImageWorkflowV2` pinned at routing time (`WorkflowState.sourceEntry` / `sourceImageData`), not to the viewer: annotations, the tile hierarchy and the pre- and post-region `saveImageData` all go through that entry. The one active manager registers itself in a static so `AcquisitionManager.stopActiveAcquisition()` (QP Scope > Stop acquisition, the Live Viewer button) can reach it without the dialog; the dialog's Cancel no longer closes the dialog, `acknowledgeCancelled` from the chain's completion does.
+
+**Stitching runs detached.** Every stitch import (`TileProcessingUtilities.stitchImagesAndUpdateProject`, `StitchingHelper.importMergedImageOnly`, the per-channel fallback) adds the entry, stamps metadata and calls `gui.refreshProject()`, and nothing else: no `openImageEntry`, no save of the viewer's image data, no `setProject`. The entries it adds are appended to `WorkflowState.importedEntries` through `StitchingHelper.ImportContext`, which the run reports when it finishes. The only remaining mode flag is the pipelined multi-slide pass, which also suppresses the browser refresh and the toast.
 
 On the Python server side, the workflow calls `apply_mode_setup()` at the start of each acquisition. This function applies Micro-Manager ConfigGroup presets for the active modality, switches the illumination source and camera, and enforces PMT safety interlocks (e.g., shutting down PMTs before switching to brightfield illumination). The mode setup is driven by the `mode_setup` section in the microscope YAML config.
 

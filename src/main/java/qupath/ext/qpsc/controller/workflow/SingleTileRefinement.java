@@ -2,6 +2,7 @@ package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.geom.AffineTransform;
 import java.util.List;
+import java.util.Objects;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -27,6 +28,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 
 /**
@@ -61,23 +63,57 @@ public class SingleTileRefinement {
      * cannot then be reconstructed from the original preset (review finding H7).
      */
     public static class RefinementResult {
-        public final AffineTransform transform;
-        public final PathObject selectedTile;
-        public final boolean accepted;
 
         /**
-         * Pass-through constructor: {@code accepted} defaults to {@code false}.
-         * Use when returning the initial transform unchanged (Skip / X-close /
-         * cancelled tile selection).
+         * How the refinement ended. Every outcome used to collapse into {@code accepted=false}
+         * and the workflow went on to acquire for all of them, so closing the dialog with the
+         * window's X started an acquisition (2026-10-27, LC-PolScope). Now only an explicit
+         * Skip proceeds.
          */
-        public RefinementResult(AffineTransform transform, PathObject selectedTile) {
-            this(transform, selectedTile, false);
+        public enum Outcome {
+            /** A refined transform was saved (SIFT auto-accept or Capture). */
+            ACCEPTED,
+            /** The operator pressed Skip: acquire with the prior alignment. */
+            SKIPPED,
+            /** The operator closed or cancelled the dialog, or cancelled the tile pick: no acquisition. */
+            CANCELLED,
+            /** The operator asked for a new manual alignment instead. */
+            NEW_ALIGNMENT,
+            /** The microscope could not be put into a state refinement can use (hard block). */
+            BLOCKED
         }
 
-        public RefinementResult(AffineTransform transform, PathObject selectedTile, boolean accepted) {
+        public final AffineTransform transform;
+        public final PathObject selectedTile;
+        public final Outcome outcome;
+        /** True only for {@link Outcome#ACCEPTED}. */
+        public final boolean accepted;
+
+        public RefinementResult(AffineTransform transform, PathObject selectedTile, Outcome outcome) {
             this.transform = transform;
             this.selectedTile = selectedTile;
-            this.accepted = accepted;
+            this.outcome = Objects.requireNonNull(outcome, "outcome");
+            this.accepted = outcome == Outcome.ACCEPTED;
+        }
+
+        public static RefinementResult accepted(AffineTransform refined, PathObject tile) {
+            return new RefinementResult(refined, tile, Outcome.ACCEPTED);
+        }
+
+        public static RefinementResult skipped(AffineTransform prior, PathObject tile) {
+            return new RefinementResult(prior, tile, Outcome.SKIPPED);
+        }
+
+        public static RefinementResult cancelled(AffineTransform prior, PathObject tile) {
+            return new RefinementResult(prior, tile, Outcome.CANCELLED);
+        }
+
+        public static RefinementResult newAlignment(PathObject tile) {
+            return new RefinementResult(null, tile, Outcome.NEW_ALIGNMENT);
+        }
+
+        public static RefinementResult blocked(AffineTransform prior, PathObject tile) {
+            return new RefinementResult(prior, tile, Outcome.BLOCKED);
         }
     }
 
@@ -146,8 +182,8 @@ public class SingleTileRefinement {
                                         : "You will then manually adjust the stage position to match."))
                 .thenAccept(selectedTile -> {
                     if (selectedTile == null) {
-                        logger.info("User cancelled tile selection");
-                        future.complete(new RefinementResult(initialTransform, null));
+                        logger.info("User cancelled tile selection; refinement cancelled");
+                        future.complete(RefinementResult.cancelled(initialTransform, null));
                         return;
                     }
 
@@ -159,7 +195,7 @@ public class SingleTileRefinement {
                             logger.error("Error during refinement", e);
                             UIFunctions.notifyUserOfError(
                                     "Error during refinement: " + e.getMessage(), "Refinement Error");
-                            future.complete(new RefinementResult(initialTransform, selectedTile));
+                            future.completeExceptionally(e);
                         }
                     });
                 });
@@ -312,7 +348,7 @@ public class SingleTileRefinement {
                         logger.error("Error resuming refinement after autofocus", ex);
                         UIFunctions.notifyUserOfError(
                                 "Error during refinement: " + ex.getMessage(), "Refinement Error");
-                        future.complete(new RefinementResult(initialTransform, selectedTile));
+                        future.completeExceptionally(ex);
                     }
                 }));
     }
@@ -386,7 +422,7 @@ public class SingleTileRefinement {
                                                         String.format(
                                                                 "Alignment refined automatically (confidence %.0f%%)",
                                                                 confidence * 100));
-                                                future.complete(new RefinementResult(refined, selectedTile, true));
+                                                future.complete(RefinementResult.accepted(refined, selectedTile));
                                             });
                                             return;
                                         } else {
@@ -494,7 +530,7 @@ public class SingleTileRefinement {
             logger.info("User requested new alignment");
             SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             dialogStage.close();
-            future.complete(new RefinementResult(null, selectedTile)); // Signal to switch to manual alignment
+            future.complete(RefinementResult.newAlignment(selectedTile));
         });
 
         Label siftDescription = new Label(String.format(
@@ -518,7 +554,11 @@ public class SingleTileRefinement {
                 .capture(false, 0.0)
                 .whenComplete((measured, ex) -> Platform.runLater(() -> {
                     if (ex != null) {
+                        // Never leave the workflow hanging on a future nobody will complete.
                         logger.warn("Single-tile capture pane failed: {}", ex.getMessage());
+                        SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                        dialogStage.close();
+                        future.completeExceptionally(ex);
                         return;
                     }
                     SiftAutoAlignHelper.clearSearchRangeOnStageMap();
@@ -532,10 +572,10 @@ public class SingleTileRefinement {
                                 measured[1]);
                         Dialogs.showInfoNotification(
                                 "Refine Alignment", "The alignment has been refined and saved for this slide.");
-                        future.complete(new RefinementResult(refinedTransform, selectedTile, true));
+                        future.complete(RefinementResult.accepted(refinedTransform, selectedTile));
                     } else {
-                        logger.info("User skipped refinement");
-                        future.complete(new RefinementResult(initialTransform, selectedTile));
+                        logger.info("User skipped refinement; acquiring with the prior alignment");
+                        future.complete(RefinementResult.skipped(initialTransform, selectedTile));
                     }
                 }));
 
@@ -555,7 +595,7 @@ public class SingleTileRefinement {
                 logger.info("Refinement dialog: Abort Batch requested");
                 SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                 dialogStage.close();
-                future.complete(new RefinementResult(initialTransform, selectedTile));
+                future.complete(RefinementResult.cancelled(initialTransform, selectedTile));
                 batchAbort.run();
             });
             Region spacer = new Region();
@@ -588,14 +628,37 @@ public class SingleTileRefinement {
                 dialogStage,
                 liveStateLabel,
                 null,
-                () -> future.complete(new RefinementResult(initialTransform, selectedTile)));
+                () -> future.complete(RefinementResult.blocked(initialTransform, selectedTile)));
 
-        // Handle window close (X button)
+        // Handle window close (X button): the operator did not choose to proceed, so the
+        // workflow is cancelled. "Skip" on the capture pane is the explicit way to acquire
+        // with the prior alignment.
         dialogStage.setOnCloseRequest(e -> {
-            logger.info("Refinement dialog closed without selection");
+            logger.info("Refinement dialog closed with the window's X; refinement cancelled");
             SiftAutoAlignHelper.clearSearchRangeOnStageMap();
-            future.complete(new RefinementResult(initialTransform, selectedTile));
+            future.complete(RefinementResult.cancelled(initialTransform, selectedTile));
         });
+
+        // If the viewer switches images while this dialog is open, the tile it refers to is
+        // no longer on screen and the alignment being refined is for another image: cancel
+        // rather than refine against the wrong picture. Imports no longer open images, so this
+        // fires only on an operator's own click in the project browser.
+        final ImageData<?> dialogImage = gui != null ? gui.getImageData() : null;
+        final javafx.beans.value.ChangeListener<ImageData<java.awt.image.BufferedImage>> viewerSwitch =
+                (obs, oldImage, newImage) -> {
+                    if (newImage == null || newImage == dialogImage || future.isDone()) {
+                        return;
+                    }
+                    logger.warn("The viewer switched to another image while the refinement dialog was open; "
+                            + "refinement cancelled");
+                    SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                    dialogStage.close();
+                    future.complete(RefinementResult.cancelled(initialTransform, selectedTile));
+                };
+        if (gui != null && dialogImage != null) {
+            gui.getViewer().imageDataProperty().addListener(viewerSwitch);
+            dialogStage.setOnHidden(e -> gui.getViewer().imageDataProperty().removeListener(viewerSwitch));
+        }
 
         Scene scene = new Scene(content);
         dialogStage.setScene(scene);

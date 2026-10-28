@@ -185,6 +185,19 @@ who want to acquire from a sub-image on a different scope should open
 the parent macro entry and let the cross-scope alignment path compose a
 fresh active-scope transform there.
 
+**The run's image is pinned, and stitching never touches the viewer (2026-10-27).**
+`reReadAnnotationsAfterRouting` pins the entry routing settled on as
+`WorkflowState.sourceEntry` (the flipped sibling when the entry switch had not
+committed yet), and `assertSourceImageOpen` re-opens it before refinement and before
+acquisition when the viewer shows something else; `AcquisitionManager` reads
+annotations, the tile hierarchy and its `saveImageData` targets from that pin. The
+stitch imports only `refreshProject()`; they never open the new entry, save the
+viewer's image data or re-set the project, so a stitch from run N landing during
+run N+1's refinement changes nothing in the viewer. Refinement results carry an
+`Outcome`; `RefinementOutcomePolicy.decide` maps them to BLOCK / CANCEL / PROCEED /
+MANUAL / ACCEPT and only SKIPPED proceeds. The acquisition loop checks `CancelGate`
+before each region, before `awaitServerIdle` and before `startAcquisition`.
+
 ### Multi-Slide Acquisition (`MultiSlideExistingImageWorkflow`)
 
 | Step | What |

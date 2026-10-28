@@ -245,6 +245,30 @@ public class ExistingImageWorkflowV2 {
     /**
      * Internal orchestrator class that manages the workflow execution.
      */
+    /**
+     * The completion toast: how many images the run added to which project, and the
+     * first few names, so the operator can find them in the project browser without the
+     * workflow opening any of them.
+     */
+    static String importedSummary(List<String> addedNames, String projectName) {
+        if (addedNames == null || addedNames.isEmpty()) {
+            return "All acquisitions have completed successfully.";
+        }
+        StringBuilder sb = new StringBuilder();
+        sb.append(addedNames.size())
+                .append(addedNames.size() == 1 ? " image" : " images")
+                .append(" added to ")
+                .append(projectName != null && !projectName.isBlank() ? "project " + projectName : "the project");
+        sb.append(": ");
+        int shown = Math.min(3, addedNames.size());
+        sb.append(String.join(", ", addedNames.subList(0, shown)));
+        if (addedNames.size() > shown) {
+            sb.append(" and ").append(addedNames.size() - shown).append(" more");
+        }
+        sb.append(". Open them from the project browser.");
+        return sb.toString();
+    }
+
     private static class WorkflowOrchestrator {
         private final QuPathGUI gui;
         private final WorkflowState state;
@@ -785,6 +809,7 @@ public class ExistingImageWorkflowV2 {
             List<PathObject> present = AnnotationHelper.getCurrentValidAnnotations(gui, null);
             if (!present.isEmpty()) {
                 state.annotations = present;
+                pinSource(state, null);
                 logger.info("Post-routing entry already has {} annotation(s); skipping re-prompt", present.size());
                 return CompletableFuture.completedFuture(state);
             }
@@ -795,17 +820,95 @@ public class ExistingImageWorkflowV2 {
             // saw '...(rotated 270)' FLIP_X=0 and popped "No annotations detected"). If the
             // current entry lacks the required flip but the matching flipped sibling has
             // annotations, use those directly instead of prompting.
-            List<PathObject> siblingAnnotations = readFlippedSiblingAnnotationsIfStale(state);
-            if (siblingAnnotations != null && !siblingAnnotations.isEmpty()) {
-                state.annotations = siblingAnnotations;
+            SiblingRead sibling = readFlippedSiblingAnnotationsIfStale(state);
+            if (sibling != null && !sibling.annotations().isEmpty()) {
+                state.annotations = sibling.annotations();
+                pinSource(state, sibling.entry());
                 logger.info(
                         "Post-routing entry is the pre-flip base; using {} annotation(s) from the flipped sibling "
                                 + "(entry switch had not committed yet)",
-                        siblingAnnotations.size());
+                        sibling.annotations().size());
                 return CompletableFuture.completedFuture(state);
             }
             state.annotations = null;
-            return ensureAnnotationsExist(state);
+            return ensureAnnotationsExist(state).thenApply(s -> {
+                if (s != null && s.sourceEntry == null) {
+                    pinSource(s, null);
+                }
+                return s;
+            });
+        }
+
+        /** A flipped sibling's persisted annotations, with the sibling entry they came from. */
+        private record SiblingRead(ProjectImageEntry<BufferedImage> entry, List<PathObject> annotations) {}
+
+        /**
+         * Pins the entry this run acquires from. With {@code entry} null the viewer's open entry
+         * is pinned (the normal case, right after routing settled on it); a non-null entry pins
+         * that one even though the viewer still shows something else (the flipped-sibling race),
+         * and {@link #assertSourceImageOpen} opens it before the stages that need it.
+         */
+        private void pinSource(WorkflowState state, ProjectImageEntry<BufferedImage> entry) {
+            if (state == null) {
+                return;
+            }
+            if (entry != null) {
+                state.sourceEntry = entry;
+                state.sourceImageData = null;
+                logger.info("Pinned source entry '{}' (not yet open in the viewer)", entry.getImageName());
+                return;
+            }
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ImageData<BufferedImage> open = gui.getImageData();
+            if (project == null || open == null) {
+                logger.warn("Cannot pin the source entry: no project or no open image");
+                return;
+            }
+            ProjectImageEntry<BufferedImage> openEntry = project.getEntry(open);
+            if (openEntry == null) {
+                logger.warn("Cannot pin the source entry: the open image is not a project entry");
+                return;
+            }
+            state.sourceEntry = openEntry;
+            state.sourceImageData = open;
+            logger.info("Pinned source entry '{}'", openEntry.getImageName());
+        }
+
+        /**
+         * Makes sure the pinned {@link WorkflowState#sourceEntry} is the image open in the
+         * viewer, re-opening it when something else is showing. Runs before refinement and
+         * before acquisition, which both create tiles on and read annotations from "the open
+         * image". No-op when nothing is pinned.
+         */
+        private CompletableFuture<WorkflowState> assertSourceImageOpen(WorkflowState state) {
+            if (state == null) return CompletableFuture.completedFuture(null);
+            if (state.sourceEntry == null) {
+                return CompletableFuture.completedFuture(state);
+            }
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
+            ImageData<BufferedImage> open = gui.getImageData();
+            ProjectImageEntry<BufferedImage> openEntry =
+                    project != null && open != null ? project.getEntry(open) : null;
+            if (openEntry != null && openEntry.getID().equals(state.sourceEntry.getID())) {
+                state.sourceImageData = open;
+                return CompletableFuture.completedFuture(state);
+            }
+            logger.warn(
+                    "The viewer shows '{}' but this run's source is '{}'; re-opening the source",
+                    openEntry != null ? openEntry.getImageName() : "<none>",
+                    state.sourceEntry.getImageName());
+            WorkflowHelpers.saveOpenImageDataQuietly(gui);
+            return ImageFlipHelper.openEntryAndAwaitInstall(gui, state.sourceEntry)
+                    .thenApply(installed -> {
+                        if (!installed) {
+                            throw new WorkflowBlockedException("the source image '" + state.sourceEntry.getImageName()
+                                    + "' could not be re-opened");
+                        }
+                        state.sourceImageData = gui.getImageData();
+                        return state;
+                    });
         }
 
         /**
@@ -815,7 +918,7 @@ public class ExistingImageWorkflowV2 {
          * sibling's persisted annotations directly. Returns null when no flip is required, the
          * current entry already carries the required flip (not stale), or no sibling exists.
          */
-        private List<PathObject> readFlippedSiblingAnnotationsIfStale(WorkflowState state) {
+        private SiblingRead readFlippedSiblingAnnotationsIfStale(WorkflowState state) {
             try {
                 @SuppressWarnings("unchecked")
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
@@ -854,9 +957,12 @@ public class ExistingImageWorkflowV2 {
                 }
                 ImageData<BufferedImage> sibData = sibling.readImageData();
                 try {
-                    return sibData.getHierarchy().getAnnotationObjects().stream()
-                            .filter(a -> a.getROI() != null && !a.getROI().isEmpty())
-                            .collect(java.util.stream.Collectors.toList());
+                    return new SiblingRead(
+                            sibling,
+                            sibData.getHierarchy().getAnnotationObjects().stream()
+                                    .filter(a ->
+                                            a.getROI() != null && !a.getROI().isEmpty())
+                                    .collect(java.util.stream.Collectors.toList()));
                 } finally {
                     try {
                         sibData.getServer().close();
@@ -925,13 +1031,14 @@ public class ExistingImageWorkflowV2 {
             // committed, so the open entry can still be the pre-flip base -- which is the
             // annotation-free (rotated N) intermediate. Before declaring "no annotations",
             // read the flipped sibling's persisted annotations and use them.
-            List<PathObject> siblingAnnotations = readFlippedSiblingAnnotationsIfStale(state);
-            if (siblingAnnotations != null && !siblingAnnotations.isEmpty()) {
-                state.annotations = siblingAnnotations;
+            SiblingRead sibling = readFlippedSiblingAnnotationsIfStale(state);
+            if (sibling != null && !sibling.annotations().isEmpty()) {
+                state.annotations = sibling.annotations();
+                pinSource(state, sibling.entry());
                 logger.info(
                         "Using {} annotation(s) from the flipped sibling before prompting (open entry was the "
                                 + "pre-flip base)",
-                        siblingAnnotations.size());
+                        sibling.annotations().size());
                 return CompletableFuture.completedFuture(state);
             }
 
@@ -2569,6 +2676,7 @@ public class ExistingImageWorkflowV2 {
             }
 
             return reassertFlippedSiblingForRefinement(state)
+                    .thenCompose(this::assertSourceImageOpen)
                     .thenCompose(this::reReadAnnotationsAfterRouting)
                     .thenCompose(this::createRefinementTilesAndRun);
         }
@@ -2648,6 +2756,11 @@ public class ExistingImageWorkflowV2 {
          */
         private CompletableFuture<WorkflowState> createRefinementTilesAndRun(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
+            return assertSourceImageOpen(state).thenCompose(this::createRefinementTilesAndRunOnSource);
+        }
+
+        private CompletableFuture<WorkflowState> createRefinementTilesAndRunOnSource(WorkflowState state) {
+            if (state == null) return CompletableFuture.completedFuture(null);
             if (state.annotations == null || state.annotations.isEmpty()) {
                 logger.warn("No annotations available for refinement after sibling re-assert");
                 return CompletableFuture.completedFuture(state);
@@ -2689,46 +2802,57 @@ public class ExistingImageWorkflowV2 {
                             ? MultiTileRefinement.performRefinement(gui, state.annotations, state.transform)
                             : SingleTileRefinement.performRefinement(gui, state.annotations, state.transform);
             return refineFuture
-                    .thenApply(result -> {
-                        // A null result is the refinement's hard-block signal (AlignmentLivePrep
-                        // ends an unattended refinement rather than aligning against an unusable
-                        // live view). Dereferencing it threw an NPE that reached the batch driver
-                        // as an unexplained failure -- the slide was correctly left unfinished,
-                        // but the log said NullPointerException instead of why.
-                        if (result == null) {
-                            throw new WorkflowBlockedException(
-                                    "alignment refinement could not run -- the microscope could not be put "
-                                            + "into a state alignment can use (see the preceding warning); "
-                                            + "the prior alignment is preserved");
+                    .thenCompose(result -> {
+                        if (result != null) {
+                            state.refinementTile = result.selectedTile;
                         }
-                        state.refinementTile = result.selectedTile;
-                        // Only consume the refined transform + persist the JSON when the
-                        // user actually accepted a refinement (Save Refined Position) or
-                        // SIFT auto-accepted. Skip / X-close return the initial transform
-                        // unchanged with accepted=false; re-installing it is a no-op but
-                        // re-writing the per-slide JSON destroys its original flipMacroX/Y
-                        // provenance (review finding H7).
-                        if (!result.accepted) {
-                            logger.info(
-                                    "Refinement not accepted (skip / cancel / X-close); preserving prior alignment");
-                            return state;
+                        RefinementOutcomePolicy.Decision decision = RefinementOutcomePolicy.decide(result);
+                        logger.info(
+                                "Refinement outcome {} -> {}",
+                                result == null ? "null (hard block)" : result.outcome,
+                                decision);
+                        switch (decision) {
+                            case BLOCK:
+                                // The hard-block signal (AlignmentLivePrep ends an unattended
+                                // refinement rather than aligning against an unusable live view).
+                                throw new WorkflowBlockedException(
+                                        "alignment refinement could not run -- the microscope could not be put "
+                                                + "into a state alignment can use (see the preceding warning); "
+                                                + "the prior alignment is preserved");
+                            case CANCEL:
+                                // X-close, Cancel, or a cancelled tile pick. The prior alignment
+                                // is untouched and nothing is acquired. handleError logs this as
+                                // an operator cancel and cleanup() runs.
+                                throw new CancellationException("Refinement cancelled by the operator; no acquisition");
+                            case MANUAL:
+                                // "Create New Alignment": run the full manual alignment on this
+                                // entry, then re-read the annotations it established.
+                                state.refinementChoice = RefinementSelectionController.RefinementChoice.FULL_MANUAL;
+                                return processManualAlignmentPath(state)
+                                        .thenCompose(this::reReadAnnotationsAfterRouting);
+                            case PROCEED:
+                                // Explicit Skip: acquire with the prior alignment. Re-installing the
+                                // unchanged transform is a no-op, and re-writing the per-slide JSON
+                                // would destroy its original flipMacroX/Y provenance (review
+                                // finding H7), so neither happens.
+                                logger.info("Refinement skipped; acquiring with the prior alignment");
+                                return CompletableFuture.completedFuture(state);
+                            case ACCEPT:
+                            default:
+                                AffineTransform beforeRefinement = state.transform;
+                                state.transform = result.transform;
+                                MicroscopeController.getInstance().setCurrentTransform(result.transform);
+                                logger.info("Updated transform with refined alignment");
+                                saveRefinedAlignment(state, beforeRefinement);
+                                return CompletableFuture.completedFuture(state);
                         }
-                        AffineTransform beforeRefinement = state.transform;
-                        if (result.transform != null) {
-                            state.transform = result.transform;
-                            MicroscopeController.getInstance().setCurrentTransform(result.transform);
-                            logger.info("Updated transform with refined alignment");
-                        }
-                        saveRefinedAlignment(state, beforeRefinement);
-                        return state;
                     })
                     .whenComplete((s, ex) -> {
-                        // Phase 11: on exception from refinement (not Skip / X-close, which
-                        // are normal non-accepted paths), force-delete the refinement tile
-                        // directory so a crashed refinement does not leave tiles polluting
-                        // the project. Skip / X-close return normally with accepted=false;
-                        // the workflow continues to acquisition which reuses the same dir,
-                        // so we leave tiles in place on the non-exception path.
+                        // Phase 11: on exception from refinement (a crash, a hard block or an
+                        // operator cancel), force-delete the refinement tile directory so a
+                        // refinement that does not lead to an acquisition leaves no tiles
+                        // polluting the project. Skip returns normally; the workflow continues
+                        // to acquisition which reuses the same dir, so tiles stay in place.
                         if (ex != null && state.projectInfo != null) {
                             String tempTileDir = state.projectInfo.getTempTileDirectory();
                             if (tempTileDir != null && !tempTileDir.isBlank()) {
@@ -2920,6 +3044,11 @@ public class ExistingImageWorkflowV2 {
          */
         private CompletableFuture<WorkflowState> performAcquisition(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
+            return assertSourceImageOpen(state).thenCompose(this::performAcquisitionOnSource);
+        }
+
+        private CompletableFuture<WorkflowState> performAcquisitionOnSource(WorkflowState state) {
+            if (state == null) return CompletableFuture.completedFuture(null);
 
             // Defense-in-depth: the wizard and pre-refinement gates already ran the same
             // check; this catches the case where MM state changed during refinement (user
@@ -3015,8 +3144,22 @@ public class ExistingImageWorkflowV2 {
         private void showSuccessNotification() {
             UIFunctions.playWorkflowCompletionBeep();
 
+            // The stitched images were added to the project but never opened: the viewer
+            // belongs to whatever the operator is doing by now. Say what landed and where.
+            final List<String> added;
+            synchronized (state.importedEntries) {
+                added = state.importedEntries.stream()
+                        .map(ProjectImageEntry::getImageName)
+                        .collect(Collectors.toList());
+            }
+            final String projectName =
+                    state.projectInfo != null && state.projectInfo.getCurrentProject() instanceof Project<?> p
+                            ? p.getName()
+                            : null;
             Platform.runLater(() -> {
-                Dialogs.showInfoNotification("Acquisition Complete", "All acquisitions have completed successfully.");
+                String message = importedSummary(added, projectName);
+                logger.info("Acquisition complete: {}", message);
+                Dialogs.showInfoNotification("Acquisition Complete", message);
             });
 
             String sampleName = state.sample != null ? state.sample.sampleName() : "Unknown";
@@ -3275,6 +3418,29 @@ public class ExistingImageWorkflowV2 {
         public ProjectHelper.ProjectInfo projectInfo;
         public List<PathObject> annotations = new ArrayList<>();
         public List<CompletableFuture<Void>> stitchingFutures = new ArrayList<>();
+
+        /**
+         * The project entry this run acquires from, pinned once routing has settled on the
+         * final (flipped / rotated / Camera View) entry. Every later stage that needs "the
+         * image" reads this, and {@code assertSourceImageOpen} re-opens it when the viewer has
+         * drifted to something else (an operator click, or before 2026-10-27 a stitch import
+         * opening its result). Null until routing completes, and for runs that never route
+         * (bounded acquisition).
+         */
+        public ProjectImageEntry<BufferedImage> sourceEntry;
+
+        /** The {@link #sourceEntry}'s ImageData as installed in the viewer when it was pinned; may be null. */
+        public ImageData<BufferedImage> sourceImageData;
+
+        /**
+         * Project entries the stitch imports of this run added, in import order. Appended from
+         * the FX thread by the import sites; read when the run finishes to report "N images
+         * added". The imports never open these entries: the viewer belongs to whatever the
+         * operator is doing by the time a stitch lands.
+         */
+        public final List<ProjectImageEntry<BufferedImage>> importedEntries =
+                java.util.Collections.synchronizedList(new ArrayList<>());
+
         /**
          * Regions (annotation names) the server reported COMPLETED in this run. The error path
          * keeps their tiles: they are finished data and may still be stitching.
@@ -3316,6 +3482,14 @@ public class ExistingImageWorkflowV2 {
          * own Cancel button is the only cancel affordance.
          */
         public CancellationToken cancellationToken;
+
+        /**
+         * Set by {@link AcquisitionManager#stopActiveAcquisition()} (QP Scope > Stop acquisition,
+         * the Live Viewer's Stop button) so a cancel from outside the progress dialog reaches the
+         * acquisition loop's {@link CancelGate}. Never cleared: a workflow state is one run.
+         */
+        public final java.util.concurrent.atomic.AtomicBoolean cancelRequested =
+                new java.util.concurrent.atomic.AtomicBoolean(false);
 
         /**
          * Pipelined multi-slide ACQUIRE-pass signal. Set true ONLY by

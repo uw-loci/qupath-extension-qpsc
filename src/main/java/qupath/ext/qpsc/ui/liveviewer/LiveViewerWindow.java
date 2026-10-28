@@ -94,6 +94,8 @@ public class LiveViewerWindow {
     // scan or stepped sweep) is chosen by the radio in the Autofocus
     // Configuration dialog and read from PersistentPreferences at click time.
     private Button autofocusButton;
+    private Button stopAcquisitionButton;
+    private javafx.animation.Timeline acquisitionWatch;
     private StreamingFocusController streamingFocusController;
 
     /** Tooltip shown on the Autofocus button when it is idle (not mid-scan). */
@@ -1102,9 +1104,44 @@ public class LiveViewerWindow {
 
         Button docHelpButton = DocumentationHelper.createHelpButton("liveViewer");
 
+        // Shown only while an acquisition holds the stage: the one control in this window
+        // that reaches a run whose progress dialog is gone.
+        stopAcquisitionButton = new Button("Stop acquisition");
+        stopAcquisitionButton.setStyle("-fx-base: #b00020; -fx-text-fill: white;");
+        stopAcquisitionButton.setTooltip(
+                new Tooltip("Stop the running acquisition. The current tile finishes, then the microscope stops; "
+                        + "already-acquired data is kept."));
+        stopAcquisitionButton.setVisible(false);
+        stopAcquisitionButton.setManaged(false);
+        stopAcquisitionButton.setOnAction(e -> {
+            logger.warn("Stop acquisition pressed in the Live Viewer");
+            stopAcquisitionButton.setDisable(true);
+            new Thread(
+                            () -> {
+                                MicroscopeController.getInstance().stopActiveAcquisition();
+                                Platform.runLater(() ->
+                                        updateStatus("Stop requested; the microscope stops after the current tile"));
+                            },
+                            "StopAcquisitionLiveViewer")
+                    .start();
+        });
+        acquisitionWatch =
+                new javafx.animation.Timeline(new javafx.animation.KeyFrame(javafx.util.Duration.seconds(1), e -> {
+                    MicroscopeController mc = MicroscopeController.getInstance();
+                    boolean active = mc != null && mc.isAcquisitionActive();
+                    if (active != stopAcquisitionButton.isVisible()) {
+                        stopAcquisitionButton.setVisible(active);
+                        stopAcquisitionButton.setManaged(active);
+                        stopAcquisitionButton.setDisable(false);
+                    }
+                }));
+        acquisitionWatch.setCycleCount(javafx.animation.Timeline.INDEFINITE);
+        acquisitionWatch.play();
+
         HBox toolbar = new HBox(
                 8,
                 liveToggleButton,
+                stopAcquisitionButton,
                 autofocusButton,
                 focusRangeCombo,
                 showTilesCheckBox,
@@ -2775,6 +2812,10 @@ public class LiveViewerWindow {
     private void stopAndDispose() {
         polling = false;
         logger.info("Stopping live viewer...");
+        if (acquisitionWatch != null) {
+            acquisitionWatch.stop();
+            acquisitionWatch = null;
+        }
 
         // Detach the central-state title listener so a closed window doesn't
         // retain a reference and keep getting modality updates.

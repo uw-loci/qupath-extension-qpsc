@@ -22,6 +22,7 @@ import qupath.ext.qpsc.controller.ExportSpatialSceneWorkflow;
 import qupath.ext.qpsc.controller.FocusApproachValidationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
+import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MicroscopeSwitcher;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.RegisterObjectiveWorkflow;
@@ -315,6 +316,40 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         me.addMenuItem(me.menuOwner);
     }
 
+    /**
+     * QP Scope > Acquisition controls > Stop acquisition: confirm, then stop the running
+     * acquisition off the FX thread (the CANCEL command can wait on the server's lock).
+     */
+    static void confirmAndStopAcquisition() {
+        if (!MicroscopeController.getInstance().isAcquisitionActive()) {
+            Dialogs.showInfoNotification("Stop acquisition", "No acquisition is running.");
+            return;
+        }
+        Alert ask = new Alert(
+                Alert.AlertType.CONFIRMATION,
+                "Stop the running acquisition?\n\nThe current tile finishes, then the microscope stops. "
+                        + "Already-acquired data is kept and stitched.",
+                ButtonType.YES,
+                ButtonType.NO);
+        ask.setTitle("Stop acquisition");
+        ask.setHeaderText(null);
+        if (ask.showAndWait().orElse(ButtonType.NO) != ButtonType.YES) {
+            return;
+        }
+        logger.warn("Stop acquisition chosen from the QP Scope menu");
+        new Thread(
+                        () -> {
+                            boolean stopped = MicroscopeController.getInstance().stopActiveAcquisition();
+                            Platform.runLater(() -> Dialogs.showInfoNotification(
+                                    "Stop acquisition",
+                                    stopped
+                                            ? "Stop requested. The microscope stops after the current tile."
+                                            : "No acquisition is running."));
+                        },
+                        "StopAcquisitionMenu")
+                .start();
+    }
+
     private void addMenuItem(QuPathGUI qupath) {
         // Create or get the top level Extensions > QP Scope menu
         var extensionMenu = qupath.getMenu("Extensions>" + EXTENSION_NAME, true);
@@ -472,6 +507,16 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 throw new RuntimeException(ex);
             }
         });
+
+        // 6) Stop acquisition: the one control that reaches a running acquisition from
+        // outside its progress dialog. Added after 2026-10-27, when a run whose dialog had
+        // closed itself could only be stopped by killing the server.
+        MenuItem stopAcquisitionOption = new MenuItem(res.getString("menu.stopAcquisition"));
+        setMenuItemTooltip(
+                stopAcquisitionOption,
+                "Stop the acquisition that is running now. The current tile finishes, then the microscope "
+                        + "stops; already-acquired data is kept. Use this when the progress window is gone.");
+        stopAcquisitionOption.setOnAction(e -> confirmAndStopAcquisition());
 
         // === UTILITIES SUBMENU ===
         Menu utilitiesMenu = new Menu("Utilities");
@@ -905,7 +950,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                         new SeparatorMenuItem(),
                         liveViewerOption,
                         cameraControlOption,
-                        stageMapOption);
+                        stageMapOption,
+                        new SeparatorMenuItem(),
+                        stopAcquisitionOption);
         extensionMenu.getItems().add(acquisitionControlsMenu);
 
         // 3. Modality extensions (dynamic submenus from registered handlers)

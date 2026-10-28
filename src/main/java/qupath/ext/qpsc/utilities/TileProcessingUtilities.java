@@ -183,11 +183,11 @@ public class TileProcessingUtilities {
                 annotationName,
                 matchingString);
 
-        // Pipelined multi-slide ACQUIRE pass: suppress this import's viewer side effects
-        // (open-entry / active-image save / setProject-reopen) so a background import cannot
-        // yank the active viewer out from under the next slot, and dispatch the import so the
-        // stitch future reflects real import completion. Add-to-project + syncChanges still run
-        // (they happen inside addImageToProject*). The multi-slide driver owns the open entry.
+        // Pipelined multi-slide ACQUIRE pass: suppress this import's project-browser refresh
+        // and toast (the batch driver reports once the whole batch settles) and dispatch the
+        // import so the stitch future reflects real import completion. Add-to-project +
+        // syncChanges still run (they happen inside addImageToProject*). No import path ever
+        // opens an image or re-sets the project.
         final boolean pipelinedBatchAcquire =
                 stitchParams != null && Boolean.TRUE.equals(stitchParams.get("pipelinedBatchAcquire"));
 
@@ -452,38 +452,7 @@ public class TileProcessingUtilities {
                             }
 
                             logger.info("Successfully imported {} to project", new File(pathToImport).getName());
-
-                            // Optionally open the first image (suppressed in the pipelined batch
-                            // acquire pass -- the driver owns the open entry).
-                            if (!pipelinedBatchAcquire
-                                    && allOmeFiles[0].getName().equals(originalName)) {
-                                logger.debug("Opening first image in viewer");
-
-                                // Save current image data before opening new image to prevent save prompts
-                                try {
-                                    var currentData = qupathGUI.getImageData();
-                                    var currentEntry = currentData != null ? project.getEntry(currentData) : null;
-                                    if (currentData != null && currentEntry != null) {
-                                        currentEntry.saveImageData(currentData);
-                                        logger.info("Saved current image data before opening stitched image");
-                                    }
-                                } catch (Exception saveEx) {
-                                    logger.warn(
-                                            "Could not save current image data before opening stitched image: {}",
-                                            saveEx.getMessage());
-                                }
-
-                                List<ProjectImageEntry<BufferedImage>> images = project.getImageList();
-                                images.stream()
-                                        .filter(e -> new File(e.getImageName())
-                                                .getName()
-                                                .equals(new File(pathToImport).getName()))
-                                        .findFirst()
-                                        .ifPresent(entry -> {
-                                            logger.info("Opening image entry: {}", entry.getImageName());
-                                            qupathGUI.openImageEntry(entry);
-                                        });
-                            }
+                            recordImportedEntry(stitchParams, imported);
                         } catch (IOException e) {
                             logger.error("Failed to import {}: {}", pathToImport, e.getMessage(), e);
                         }
@@ -495,14 +464,14 @@ public class TileProcessingUtilities {
 
             lastProcessedPath = lastPath;
 
-            // Update project on FX thread. Suppressed in the pipelined batch acquire pass:
-            // setProject/refresh switch active-viewer state, which must not fire under a
-            // background import while the next slot is opening its base entry. The batch driver
-            // refreshes the project view once the whole batch settles.
+            // Refresh the project browser on the FX thread. Only the browser: a stitch import
+            // never opens an image, saves the viewer's image data or re-sets the project, because
+            // another workflow (alignment, refinement, the next acquisition) may be using the
+            // viewer right now. Suppressed in the pipelined batch acquire pass, where the batch
+            // driver refreshes the project view once the whole batch settles.
             if (!pipelinedBatchAcquire) {
                 Platform.runLater(() -> {
                     logger.info("Refreshing project view");
-                    qupathGUI.setProject(project);
                     qupathGUI.refreshProject();
 
                     qupath.fx.dialogs.Dialogs.showInfoNotification(
@@ -728,42 +697,18 @@ public class TileProcessingUtilities {
                     qupath.ext.qpsc.controller.workflow.StitchingHelper.autoRegisterBoundsTransformIfAvailable(
                             new File(lastProcessedPath), finalMetadata, project);
 
-                    // In the pipelined batch acquire pass, suppress the active-image save, the
-                    // open-entry, and the setProject/refresh: switching the active viewer image
-                    // under a background import could yank the hierarchy out from under the next
-                    // slot's workflow. The entry is already persisted (addImageToProject* syncs);
-                    // the driver owns the open entry and refreshes the view when the batch settles.
+                    recordImportedEntry(stitchParams, imported);
+
+                    // Refresh the project browser only. A stitch import never opens the new
+                    // image, saves the viewer's image data or re-sets the project: stitching runs
+                    // in the background and the viewer may belong to the next workflow by now
+                    // (an open refinement dialog was switched to a freshly stitched image on
+                    // 2026-10-27). The entry is already persisted (addImageToProject* syncs).
+                    // Suppressed in the pipelined batch acquire pass, where the driver refreshes
+                    // the view when the batch settles.
                     if (!pipelinedBatchAcquire) {
-                        // Save current image data before opening new image to prevent save prompts
-                        try {
-                            var currentData = qupathGUI.getImageData();
-                            var currentEntry = currentData != null ? project.getEntry(currentData) : null;
-                            if (currentData != null && currentEntry != null) {
-                                currentEntry.saveImageData(currentData);
-                                logger.info("Saved current image data before opening stitched image");
-                            }
-                        } catch (Exception saveEx) {
-                            logger.warn(
-                                    "Could not save current image data before opening stitched image: {}",
-                                    saveEx.getMessage());
-                        }
-
-                        // Find and open the newly added entry
-                        List<ProjectImageEntry<BufferedImage>> images = project.getImageList();
-                        images.stream()
-                                .filter(e -> new File(e.getImageName())
-                                        .getName()
-                                        .equals(new File(lastProcessedPath).getName()))
-                                .findFirst()
-                                .ifPresent(entry -> {
-                                    logger.info("Opening image entry: {}", entry.getImageName());
-                                    qupathGUI.openImageEntry(entry);
-                                });
-
-                        // Ensure project is active & refreshed
-                        qupathGUI.setProject(project);
                         qupathGUI.refreshProject();
-                        logger.info("Project refreshed successfully");
+                        logger.info("Project browser refreshed");
                     }
 
                     // Close blocking dialog if provided
@@ -824,6 +769,27 @@ public class TileProcessingUtilities {
      * time to stamp the entry's {@code acquired_on_microscope} so the Existing
      * Image workflow can refuse cross-scope sub-image acquisition (finding H3).
      */
+    /**
+     * Key in {@code stitchParams} under which a workflow passes a thread-safe
+     * {@code List<ProjectImageEntry<BufferedImage>>} that every import appends its new entry
+     * to, so the run can report "N images added" when it finishes without any import having
+     * to touch the viewer.
+     */
+    public static final String IMPORTED_ENTRIES_KEY = "importedEntries";
+
+    /** Append {@code imported} to the {@link #IMPORTED_ENTRIES_KEY} list, when both exist. */
+    @SuppressWarnings("unchecked")
+    public static void recordImportedEntry(
+            Map<String, Object> stitchParams, ProjectImageEntry<BufferedImage> imported) {
+        if (imported == null || stitchParams == null) {
+            return;
+        }
+        Object list = stitchParams.get(IMPORTED_ENTRIES_KEY);
+        if (list instanceof List<?>) {
+            ((List<ProjectImageEntry<BufferedImage>>) list).add(imported);
+        }
+    }
+
     /** Save the entry stamps (acquiring scope, white balance) set after import. */
     private static void syncStamps(Project<BufferedImage> project) {
         try {

@@ -70,6 +70,42 @@ public class StitchingHelper {
     private static final Logger logger = LoggerFactory.getLogger(StitchingHelper.class);
 
     /**
+     * How a stitch run imports its results into the project.
+     *
+     * <p>No import ever opens an image, saves the viewer's image data or re-sets the project:
+     * stitching runs in the background and the viewer may belong to the next workflow by then.
+     * What varies is whether the project browser is refreshed and a toast shown per image
+     * (suppressed in the pipelined multi-slide ACQUIRE pass, whose driver reports once the batch
+     * settles) and where the entries added are recorded so the run can report them.
+     *
+     * @param pipelinedBatchAcquire true in the pipelined multi-slide ACQUIRE pass; the import
+     *     then also runs synchronously with respect to the stitch future
+     * @param importedEntries thread-safe list every import appends its new entry to, or null
+     */
+    public record ImportContext(boolean pipelinedBatchAcquire, List<ProjectImageEntry<BufferedImage>> importedEntries) {
+
+        /** Not pipelined, entries not recorded. */
+        public static ImportContext none() {
+            return new ImportContext(false, null);
+        }
+
+        /** Copy the context into the {@code stitchParams} map read by {@code TileProcessingUtilities}. */
+        public void applyTo(Map<String, Object> stitchParams) {
+            stitchParams.put("pipelinedBatchAcquire", pipelinedBatchAcquire);
+            if (importedEntries != null) {
+                stitchParams.put(TileProcessingUtilities.IMPORTED_ENTRIES_KEY, importedEntries);
+            }
+        }
+
+        /** Record an entry added by an import that bypasses {@code stitchParams}. */
+        public void record(ProjectImageEntry<BufferedImage> entry) {
+            if (entry != null && importedEntries != null) {
+                importedEntries.add(entry);
+            }
+        }
+    }
+
+    /**
      * Per-acquisition output options that control how stitched channels are
      * grouped into files. Independent of the global OME-TIFF/OME-ZARR file-format
      * preference.
@@ -192,7 +228,7 @@ public class StitchingHelper {
                 null,
                 null,
                 StitchingOptions.defaults(),
-                false);
+                ImportContext.none());
     }
 
     /**
@@ -213,11 +249,10 @@ public class StitchingHelper {
      * @param projectsFolder The actual projects folder path (from ProjectInfo, may differ from sample.projectsFolder())
      * @param dualProgressDialog Optional progress dialog for showing stitching status alongside acquisition progress (can be null)
      * @param parentEntry Pre-captured parent image entry for metadata inheritance (can be null to fall back to gui lookup)
-     * @param pipelinedBatchAcquire when true (pipelined multi-slide ACQUIRE pass), the
-     *     stitched-image import SUPPRESSES its viewer side effects (no open-entry / active-image
-     *     switch / setProject-reopen) so a background import cannot yank the active viewer out
-     *     from under the next slot, and the import runs synchronously w.r.t. the returned future
-     *     so it reflects real import completion. When false, the classic auto-open behavior.
+     * @param importContext how the stitched images are imported: whether this is the pipelined
+     *     multi-slide ACQUIRE pass (no project-browser refresh or toast per image, and the import
+     *     runs synchronously w.r.t. the returned future) and where to record the entries added.
+     *     No import path ever opens an image in the viewer.
      * @return CompletableFuture that completes when all stitching is done
      */
     public static CompletableFuture<Void> performAnnotationStitching(
@@ -236,7 +271,7 @@ public class StitchingHelper {
             DualProgressDialog dualProgressDialog,
             ProjectImageEntry<BufferedImage> parentEntry,
             StitchingOptions options,
-            boolean pipelinedBatchAcquire) {
+            ImportContext importContext) {
 
         // Use sample.sampleName() for file naming (source image name), not sampleName (project folder name)
         String displayName = sample.sampleName();
@@ -264,7 +299,7 @@ public class StitchingHelper {
                 projectsFolder,
                 dualProgressDialog,
                 options,
-                pipelinedBatchAcquire);
+                importContext);
     }
 
     /**
@@ -374,7 +409,7 @@ public class StitchingHelper {
                 projectsFolder,
                 null,
                 options,
-                false);
+                ImportContext.none());
     }
 
     /**
@@ -550,7 +585,7 @@ public class StitchingHelper {
             String projectsFolder,
             DualProgressDialog dualProgressDialog,
             StitchingOptions options,
-            boolean pipelinedBatchAcquire) {
+            ImportContext importContext) {
 
         final StitchingOptions stitchOptions = options != null ? options : StitchingOptions.defaults();
 
@@ -609,7 +644,7 @@ public class StitchingHelper {
                     executor,
                     handler,
                     stitchOptions,
-                    pipelinedBatchAcquire);
+                    importContext);
         }
 
         if (angleExposures != null && angleExposures.size() > 1) {
@@ -653,7 +688,7 @@ public class StitchingHelper {
                             // Pipelined multi-slide acquire: suppress the import's viewer side
                             // effects and await real import completion (read in
                             // TileProcessingUtilities.stitchImagesAndUpdateProject).
-                            stitchParams.put("pipelinedBatchAcquire", pipelinedBatchAcquire);
+                            importContext.applyTo(stitchParams);
                             // Do NOT include blockingDialog or operationId for multi-angle case
 
                             if (blockingDialog != null) {
@@ -826,7 +861,7 @@ public class StitchingHelper {
                             // Pipelined multi-slide acquire: suppress the import's viewer side
                             // effects and await real import completion (read in
                             // TileProcessingUtilities.stitchImagesAndUpdateProject).
-                            stitchParams.put("pipelinedBatchAcquire", pipelinedBatchAcquire);
+                            importContext.applyTo(stitchParams);
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -1252,7 +1287,7 @@ public class StitchingHelper {
             ExecutorService executor,
             ModalityHandler handler,
             StitchingOptions options,
-            boolean pipelinedBatchAcquire) {
+            ImportContext importContext) {
 
         logger.info(
                 "Stitching {} channels for: {} (organization={}, splitChannels={})",
@@ -1278,7 +1313,7 @@ public class StitchingHelper {
                         // Pipelined multi-slide acquire: suppress the import's viewer side
                         // effects and await real import completion (per-channel intermediates
                         // are not imported here, but the merged/fallback imports below are).
-                        stitchParams.put("pipelinedBatchAcquire", pipelinedBatchAcquire);
+                        importContext.applyTo(stitchParams);
                         // Skip per-channel project import: only the merged
                         // multichannel file becomes a project entry. The
                         // per-channel files are still stitched and renamed on
@@ -1399,13 +1434,7 @@ public class StitchingHelper {
                         // Channels the user split out become their own project entries.
                         if (!splitImages.isEmpty()) {
                             importPerChannelFallback(
-                                    splitImages,
-                                    metadata,
-                                    tileBaseDir.toFile(),
-                                    gui,
-                                    project,
-                                    handler,
-                                    pipelinedBatchAcquire);
+                                    splitImages, metadata, tileBaseDir.toFile(), gui, project, handler, importContext);
                         }
 
                         // Merge the remaining (non-split) per-channel pyramids into a single
@@ -1417,13 +1446,7 @@ public class StitchingHelper {
                                     "Only one channel to merge for {}; importing it directly as its own entry",
                                     annotationName);
                             importPerChannelFallback(
-                                    mergeImages,
-                                    metadata,
-                                    tileBaseDir.toFile(),
-                                    gui,
-                                    project,
-                                    handler,
-                                    pipelinedBatchAcquire);
+                                    mergeImages, metadata, tileBaseDir.toFile(), gui, project, handler, importContext);
                         } else if (mergeImages.size() >= 2) {
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -1521,7 +1544,7 @@ public class StitchingHelper {
                                             gui,
                                             project,
                                             handler,
-                                            pipelinedBatchAcquire);
+                                            importContext);
                                     deleteMergedIntermediates(mergedPath, mergeImages);
                                 } else {
                                     // Merge failed. Because skipProjectImport=true kept the
@@ -1543,7 +1566,7 @@ public class StitchingHelper {
                                             gui,
                                             project,
                                             handler,
-                                            pipelinedBatchAcquire);
+                                            importContext);
                                 }
                             } catch (Exception mergeEx) {
                                 logger.error(
@@ -1558,7 +1581,7 @@ public class StitchingHelper {
                                         gui,
                                         project,
                                         handler,
-                                        pipelinedBatchAcquire);
+                                        importContext);
                             }
                         } else {
                             logger.debug(
@@ -1972,7 +1995,8 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler,
-            boolean pipelinedBatchAcquire) {
+            ImportContext importContext) {
+        final boolean pipelinedBatchAcquire = importContext.pipelinedBatchAcquire();
         if (stitchedImages == null || stitchedImages.isEmpty()) {
             return;
         }
@@ -2028,18 +2052,18 @@ public class StitchingHelper {
                     // its own file name, so Move-to-centroid works on any of
                     // them individually (user may open any channel directly).
                     autoRegisterBoundsTransformIfAvailable(f, metadata, project);
+                    importContext.record(imported);
                     logger.info("Fallback imported per-channel file: {}", f.getName());
                 } catch (Exception e) {
                     logger.error("Fallback import failed for {}: {}", f.getName(), e.getMessage(), e);
                 }
             }
-            // In the pipelined multi-slide acquire pass, suppress the viewer/project refresh so
-            // a background import cannot yank the active viewer out from under the next slot; the
-            // entries are already persisted (addImageToProjectWithMetadata syncs). The driver owns
-            // the open entry.
+            // Refresh the project browser only; a stitch import never opens an image or re-sets
+            // the project (the viewer may belong to the next workflow). Suppressed in the
+            // pipelined multi-slide acquire pass, where the driver refreshes when the batch
+            // settles; the entries are already persisted (addImageToProjectWithMetadata syncs).
             if (!pipelinedBatchAcquire) {
                 try {
-                    gui.setProject(project);
                     gui.refreshProject();
                 } catch (Exception refreshEx) {
                     logger.warn("Failed to refresh project after fallback import: {}", refreshEx.getMessage());
@@ -2055,7 +2079,8 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler,
-            boolean pipelinedBatchAcquire) {
+            ImportContext importContext) {
+        final boolean pipelinedBatchAcquire = importContext.pipelinedBatchAcquire();
         final File mergedFile = new File(mergedPath);
 
         TileProcessingUtilities.runImportOnFxThread(pipelinedBatchAcquire, () -> {
@@ -2111,36 +2136,14 @@ public class StitchingHelper {
                 // on disk and its pixel dimensions can be read by the server.
                 autoRegisterBoundsTransformIfAvailable(mergedFile, metadata, project);
 
-                // In the pipelined multi-slide acquire pass, suppress the viewer/project refresh
-                // and the open-entry so a background import cannot yank the active viewer out from
-                // under the next slot; the entry is already persisted
-                // (addImageToProjectWithMetadata syncs). The driver owns the open entry.
-                if (!pipelinedBatchAcquire) {
-                    // Refresh the project view and open the merged entry.
-                    gui.setProject(project);
-                    gui.refreshProject();
+                importContext.record(imported);
 
-                    project.getImageList().stream()
-                            .filter(e -> {
-                                try {
-                                    java.net.URI u = e.getURIs().iterator().hasNext()
-                                            ? e.getURIs().iterator().next()
-                                            : null;
-                                    return u != null
-                                            && new File(u).getAbsolutePath().equals(mergedFile.getAbsolutePath());
-                                } catch (Exception ex) {
-                                    return false;
-                                }
-                            })
-                            .findFirst()
-                            .ifPresent(entry -> {
-                                logger.info("Opening merged image entry: {}", entry.getImageName());
-                                try {
-                                    gui.openImageEntry(entry);
-                                } catch (Exception openEx) {
-                                    logger.warn("Failed to open merged entry: {}", openEx.getMessage());
-                                }
-                            });
+                // Refresh the project browser only; a stitch import never opens the merged
+                // image or re-sets the project (the viewer may belong to the next workflow).
+                // Suppressed in the pipelined multi-slide acquire pass, where the driver
+                // refreshes when the batch settles; the entry is already persisted.
+                if (!pipelinedBatchAcquire) {
+                    gui.refreshProject();
                 }
             } catch (Exception e) {
                 logger.error(

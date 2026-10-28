@@ -303,10 +303,31 @@ public class DualProgressDialog {
         timeline.getKeyFrames().add(keyFrame);
         timeline.setCycleCount(Timeline.INDEFINITE);
 
-        // Set up window close handling
+        // Set up window close handling: during a run the X asks, and a yes is a Cancel. The
+        // window used to swallow the X silently, so an operator who could not find Cancel had
+        // no way to stop the run from here.
         stage.setOnCloseRequest(e -> {
-            if (!isWorkflowComplete()) {
-                e.consume(); // Prevent closing during active workflow
+            if (isWorkflowComplete()) {
+                return;
+            }
+            e.consume();
+            if (cancelled.get() || cancelButton == null) {
+                return;
+            }
+            Alert ask = new Alert(
+                    Alert.AlertType.CONFIRMATION,
+                    "Cancel the acquisition?\n\nThe current tile finishes, then the microscope stops. "
+                            + "Already-acquired data is kept.",
+                    ButtonType.YES,
+                    ButtonType.NO);
+            ask.setTitle("Acquisition running");
+            ask.setHeaderText(null);
+            ask.initOwner(stage);
+            if (ask.showAndWait().orElse(ButtonType.NO) == ButtonType.YES) {
+                logger.info("Workflow cancel requested by closing the progress dialog");
+                cancelButton.setDisable(true);
+                cancelButton.setText("Cancelling...");
+                triggerCancel();
             }
         });
 
@@ -928,6 +949,7 @@ public class DualProgressDialog {
     public void close() {
         Platform.runLater(() -> {
             timeline.stop();
+            stopCancelAckWatch();
             stage.close();
             logger.info("Dual progress dialog closed");
         });
@@ -976,18 +998,75 @@ public class DualProgressDialog {
      * Triggers cancellation and calls the cancel callback.
      */
     private void triggerCancel() {
-        cancelled.set(true);
-        statusLabel.setText("Cancelling workflow...");
+        if (!cancelled.compareAndSet(false, true)) {
+            return;
+        }
+        timeline.stop();
+        cancelAck = new qupath.ext.qpsc.controller.workflow.CancelAckState(
+                System::currentTimeMillis,
+                qupath.ext.qpsc.controller.workflow.AcquisitionManager.CANCEL_ACK_TIMEOUT_MS);
+        statusLabel.setText(qupath.ext.qpsc.controller.workflow.CancelAckState.WAITING_TEXT);
         statusLabel.setTextFill(Color.RED);
 
         if (cancelCallback != null) {
             cancelCallback.accept(null);
         }
 
-        // Close after showing cancel status
-        PauseTransition pause = new PauseTransition(Duration.seconds(2));
-        pause.setOnFinished(e -> close());
-        pause.play();
+        // The dialog stays open until the run acknowledges the cancel (acknowledgeCancelled),
+        // so there is always a window saying what is going on while the microscope stops. It
+        // used to close itself after two seconds, which on 2026-10-27 left an acquisition
+        // running with no Cancel control anywhere. If no acknowledgement arrives, close after
+        // the timeout and say where the stop control is.
+        cancelAckWatch = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
+            if (cancelAck != null
+                    && cancelAck.phase() == qupath.ext.qpsc.controller.workflow.CancelAckState.Phase.TIMED_OUT) {
+                stopCancelAckWatch();
+                statusLabel.setText(qupath.ext.qpsc.controller.workflow.CancelAckState.TIMED_OUT_TEXT);
+                logger.warn(
+                        "Cancel was not acknowledged within {} ms; closing the progress dialog",
+                        qupath.ext.qpsc.controller.workflow.AcquisitionManager.CANCEL_ACK_TIMEOUT_MS);
+                PauseTransition pause = new PauseTransition(Duration.seconds(5));
+                pause.setOnFinished(ev -> close());
+                pause.play();
+            }
+        }));
+        cancelAckWatch.setCycleCount(Timeline.INDEFINITE);
+        cancelAckWatch.play();
+    }
+
+    private qupath.ext.qpsc.controller.workflow.CancelAckState cancelAck;
+    private Timeline cancelAckWatch;
+
+    private void stopCancelAckWatch() {
+        if (cancelAckWatch != null) {
+            cancelAckWatch.stop();
+            cancelAckWatch = null;
+        }
+    }
+
+    /**
+     * The run confirms it has stopped after a cancel: show {@code message} and close after a
+     * moment. Called from the acquisition chain's completion, on any thread. A call before any
+     * cancel was requested (a cancel that arrived through the batch token only) still closes
+     * the dialog, since the run is over either way.
+     */
+    public void acknowledgeCancelled(String message) {
+        Platform.runLater(() -> {
+            stopCancelAckWatch();
+            if (cancelAck != null) {
+                cancelAck.acknowledge();
+            }
+            timeline.stop();
+            statusLabel.setText(message);
+            statusLabel.setTextFill(Color.RED);
+            if (cancelButton != null) {
+                cancelButton.setVisible(false);
+            }
+            logger.info("Cancel acknowledged: {}", message);
+            PauseTransition pause = new PauseTransition(Duration.seconds(2));
+            pause.setOnFinished(e -> close());
+            pause.play();
+        });
     }
 
     /**

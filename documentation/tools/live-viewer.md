@@ -67,6 +67,10 @@ Right-click the Snap button to open a context menu:
 
 The status bar reports a clickable "Show in folder" link after each successful save.
 
+### Stop acquisition
+
+While an acquisition holds the stage, a red **Stop acquisition** button appears on the toolbar (next to the live toggle) and disappears when the stage is released. It stops the running acquisition after the current tile, the same as **Extensions > QP Scope > Acquisition controls > Stop acquisition...**; already-acquired regions are kept and stitched. It is there for the case where the acquisition's own progress dialog is gone.
+
 ### Focus Controls Toolbar
 
 The toolbar contains a single autofocus button and a range selector:

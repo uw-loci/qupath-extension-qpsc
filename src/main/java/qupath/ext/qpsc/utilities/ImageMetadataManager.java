@@ -225,89 +225,12 @@ public class ImageMetadataManager {
     }
 
     /**
-     * Applies comprehensive metadata to a new image entry including all identification fields.
-     *
-     * @param entry The image entry to apply metadata to
-     * @param parentEntry Optional parent entry for collection inheritance
-     * @param xOffset X offset from slide corner in microns
-     * @param yOffset Y offset from slide corner in microns
-     * @param flipX Whether the image has been flipped horizontally
-     * @param flipY Whether the image has been flipped vertically
-     * @param sampleName The sample name
-     * @param modality The imaging modality (e.g., "ppm", "bf")
-     * @param objective The objective/magnification (e.g., "20x", "10x")
-     * @param angle The angle for multi-angle acquisitions (null if not applicable)
-     * @param annotationName The annotation name (null if not applicable)
-     * @param imageIndex The image index number
-     */
-    public static void applyImageMetadata(
-            ProjectImageEntry<?> entry,
-            ProjectImageEntry<?> parentEntry,
-            double xOffset,
-            double yOffset,
-            boolean flipX,
-            boolean flipY,
-            String sampleName,
-            String modality,
-            String objective,
-            String angle,
-            String annotationName,
-            Integer imageIndex) {
-        applyImageMetadata(
-                entry,
-                parentEntry,
-                xOffset,
-                yOffset,
-                flipX,
-                flipY,
-                sampleName,
-                modality,
-                objective,
-                angle,
-                annotationName,
-                imageIndex,
-                null,
-                null);
-    }
-
-    /**
-     * Backwards-compat overload: detector but no source microscope.
-     */
-    public static void applyImageMetadata(
-            ProjectImageEntry<?> entry,
-            ProjectImageEntry<?> parentEntry,
-            double xOffset,
-            double yOffset,
-            boolean flipX,
-            boolean flipY,
-            String sampleName,
-            String modality,
-            String objective,
-            String angle,
-            String annotationName,
-            Integer imageIndex,
-            String detectorId) {
-        applyImageMetadata(
-                entry,
-                parentEntry,
-                xOffset,
-                yOffset,
-                flipX,
-                flipY,
-                sampleName,
-                modality,
-                objective,
-                angle,
-                annotationName,
-                imageIndex,
-                detectorId,
-                null);
-    }
-
-    /**
      * Applies comprehensive metadata to a new image entry including all identification fields
      * and the detector that captured the image.
      *
+     * @param project The project the entry belongs to; the collection number is taken from
+     *     it, never from the GUI's current project (a stitch import may land while the
+     *     operator has moved on)
      * @param entry The image entry to apply metadata to
      * @param parentEntry Optional parent entry for collection inheritance
      * @param xOffset X offset from slide corner in microns
@@ -328,6 +251,7 @@ public class ImageMetadataManager {
      *                   workflows. {@code null} skips the field.
      */
     public static void applyImageMetadata(
+            Project<?> project,
             ProjectImageEntry<?> entry,
             ProjectImageEntry<?> parentEntry,
             double xOffset,
@@ -356,8 +280,7 @@ public class ImageMetadataManager {
             collectionNumber = parentEntry.getMetadata().get(IMAGE_COLLECTION);
             logger.info("Inheriting image_collection {} from parent: {}", collectionNumber, parentEntry.getImageName());
         } else {
-            // Get next available number
-            Project<?> project = QP.getProject();
+            // Get next available number from the entry's own project
             collectionNumber = String.valueOf(getNextImageCollectionNumber(project));
             logger.info("Assigning new image_collection: {}", collectionNumber);
         }
@@ -527,6 +450,7 @@ public class ImageMetadataManager {
      * @param sampleName The sample name
      */
     public static void applyImageMetadata(
+            Project<?> project,
             ProjectImageEntry<?> entry,
             ProjectImageEntry<?> parentEntry,
             double xOffset,
@@ -535,7 +459,21 @@ public class ImageMetadataManager {
             boolean flipY,
             String sampleName) {
         applyImageMetadata(
-                entry, parentEntry, xOffset, yOffset, flipX, flipY, sampleName, null, null, null, null, null);
+                project,
+                entry,
+                parentEntry,
+                xOffset,
+                yOffset,
+                flipX,
+                flipY,
+                sampleName,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null,
+                null);
     }
 
     /**

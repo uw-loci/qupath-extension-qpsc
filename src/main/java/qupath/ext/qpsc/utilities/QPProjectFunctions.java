@@ -617,6 +617,7 @@ public class QPProjectFunctions {
 
             // Apply comprehensive metadata with all identification fields
             ImageMetadataManager.applyImageMetadata(
+                    project,
                     newEntry,
                     parentEntry,
                     xOffset,
@@ -834,6 +835,7 @@ public class QPProjectFunctions {
         // Apply metadata - get offsets from original
         double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
         ImageMetadataManager.applyImageMetadata(
+                project,
                 flippedEntry,
                 originalEntry, // Use original as parent to inherit collection and base_image
                 offsets[0],
@@ -945,6 +947,7 @@ public class QPProjectFunctions {
 
         double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
         ImageMetadataManager.applyImageMetadata(
+                project,
                 rotatedEntry,
                 originalEntry, // inherit collection + base_image from the original
                 offsets[0],
@@ -1092,6 +1095,7 @@ public class QPProjectFunctions {
 
         double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
         ImageMetadataManager.applyImageMetadata(
+                project,
                 composedEntry,
                 originalEntry, // inherit collection + base_image from the original
                 offsets[0],

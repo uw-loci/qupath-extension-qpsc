@@ -246,6 +246,18 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
+     * Stops the running acquisition from outside its progress dialog (QP Scope > Stop
+     * acquisition, the Live Viewer's Stop button). Delegates to the registered
+     * {@link qupath.ext.qpsc.controller.workflow.AcquisitionManager}; when the lock is engaged
+     * with no run registered, CANCEL goes straight to the server.
+     *
+     * @return true when something was told to stop
+     */
+    public boolean stopActiveAcquisition() {
+        return qupath.ext.qpsc.controller.workflow.AcquisitionManager.stopActiveAcquisition();
+    }
+
+    /**
      * Marks that the server has paused an acquisition to ask the user to focus manually.
      *
      * <p>Set around the manual-focus dialog. While it is true, Z movement from the Live

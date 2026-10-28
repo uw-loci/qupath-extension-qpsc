@@ -236,6 +236,8 @@ If you choose Single-Tile or Multi-Tile Refinement, the workflow first generates
 
 For **Single-Tile Refinement,** an embedded capture pane appears in the refinement panel after the stage moves. It encourages you to click **Auto-Align (SIFT)** to refine the position automatically. The **Capture position** button is disabled until SIFT has run successfully, preventing accidental skipping of refinement. If SIFT finds no match, the pane says how far around the tile it searched and offers **Search wider (3 mm)**, which reruns SIFT once with a 3 mm margin; a slide whose alignment is off by more than the search margin can only be found that way. Otherwise use the microscope controls (joystick or Stage Control dialog) to nudge the stage closer, then try SIFT again. To keep the predicted position without refining, click **Skip point** instead of Capture.
 
+**What each way out of the refinement dialog does.** Only an explicit skip goes on to acquire. **Skip point** (single-tile) and **Skip refinement** (multi-tile) acquire with the prior alignment, unchanged. Closing the dialog with the window's **X**, **Cancel workflow** (multi-tile), and cancelling the tile pick all stop the workflow: nothing is acquired and the prior alignment is kept. **Create New Alignment** (single-tile) runs the full manual alignment on this image and then acquires. The log line `Refinement outcome <OUTCOME> -> <DECISION>` records which it was. If the viewer is switched to another image while the dialog is open, the refinement is cancelled too, since the tile it refers to is no longer on screen.
+
 For **Multi-Tile Refinement,** the refinement panel guides you through adding reference points: for each tile you select, the stage automatically moves to its predicted position, and an embedded capture pane appears where you can run SIFT automatically (or nudge manually and refine). The measured stage position is captured when you click **Capture position**. The panel displays the recovered rotation and scale live as you add points. After 2+ points, you can interpret the values:
 - **Non-zero rotation** (a few degrees) confirms the slide has play in the holder — this is normal and the correction handles it.
 - **Scale far from 1.0** suggests a residual pixel-size or objective mismatch — also correctable.
@@ -272,6 +274,10 @@ The progress monitor shows:
 - Tile progress within current region
 - Overall progress bar
 
+**Stopping a run.** **Cancel Workflow** in the progress dialog stops after the current tile; the dialog then says it is waiting for the microscope to stop and closes once the run confirms the stage is released (after 60 s without confirmation it closes and points you at the menu item below). Closing the dialog with its **X** asks the same question. If the dialog is gone, **Extensions > QP Scope > Acquisition controls > Stop acquisition...** or the red **Stop acquisition** button the Live Viewer shows while an acquisition is running does the same thing. A cancel is honoured wherever it lands, including between the dialog opening and the first command being sent. Already-acquired regions are kept and stitched.
+
+The acquisition reads the image the workflow was started on, whatever the viewer shows later: switching images in the project browser mid-run does not redirect it, and the workflow re-opens its own image before refinement and before acquisition if you have moved away.
+
 For each annotation, the system:
 
 1. Navigates to the annotation location
@@ -282,7 +288,7 @@ For each annotation, the system:
 
 ### Step 7: Completion
 
-Each annotation's acquisition is added to the project as it completes. Metadata includes:
+Each annotation's acquisition is stitched in the background and added to the project as it completes. The new image is **not opened**: stitching may finish while you are already aligning the next slide, and the viewer stays where you are. The completion toast says how many images were added and names the first few; open them from the project browser (which refreshes as each lands). Metadata includes:
 
 - Parent image reference
 - Annotation name
@@ -304,6 +310,8 @@ Each annotation's acquisition is added to the project as it completes. Metadata 
 | "Source microscope mismatch" dialog appears on startup | The image's `source_microscope` metadata differs from the active microscope | See the **Startup Check: Source Microscope Mismatch** section above. The most common fix: click **Fix source to `<active>`** to update the tag. |
 | "No annotations found" | No annotations on image | When opening a rotated or flipped sub-image that has no annotations, QPSC automatically copies annotations from the source macro image (after transforming them through the rotation+flip), if available. Only if both the sub-image and its source are empty does this dialog appear. **Draw annotations on the macro image and re-run the workflow.** **Note:** If annotations exist but do not match the pre-selected annotation classes, the workflow skips this dialog and goes directly to the Annotation Class Selection step so you can choose the classes that actually exist. |
 | "Transform validation failed" | Alignment is off | Run refinement or create a new transform |
+| Closing the refinement dialog ended the workflow | The window's X and Cancel mean "no acquisition" | Use **Skip point** / **Skip refinement** to acquire with the prior alignment. See Step 3. |
+| The progress dialog is gone but the microscope is still acquiring | The dialog closed (or was never shown) | **Extensions > QP Scope > Acquisition controls > Stop acquisition...**, or the Live Viewer's red **Stop acquisition** button. |
 | Scanner-preset combo is greyed out / unavailable | Image has no reachable macro (common for sub-images from prior QPSC acquisitions) | Use manual alignment, or if a slide-specific alignment was created during a prior acquisition, select "Use Existing Alignment" to access it directly without the scanner-preset combo. |
 | Images appear shifted | Coordinate mismatch | Check flip/invert settings in Preferences |
 | "Pixel size not set" | Missing calibration | Set image pixel size in QuPath image properties |

@@ -199,7 +199,25 @@ public class AnnotationHelper {
         }
         logger.info("Retrieving annotations from image: server={} entry=[{}]", imageName, entryDescription);
 
-        var hierarchy = gui.getImageData().getHierarchy();
+        return getCurrentValidAnnotations(gui.getImageData().getHierarchy(), validClasses);
+    }
+
+    /**
+     * Valid annotations of a given hierarchy: non-empty ROI, and of one of {@code validClasses}
+     * when that list is non-empty. The workflow passes the hierarchy of the entry it pinned at
+     * routing time, never the viewer's, so an image switched in the viewer mid-run (an import,
+     * the operator clicking the project browser) cannot change what gets acquired.
+     *
+     * @param hierarchy the hierarchy to read
+     * @param validClasses class names to keep; null or empty keeps every annotation
+     * @return matching annotations, never null
+     */
+    public static List<PathObject> getCurrentValidAnnotations(
+            qupath.lib.objects.hierarchy.PathObjectHierarchy hierarchy, List<String> validClasses) {
+        if (hierarchy == null) {
+            logger.warn("No hierarchy available - cannot get annotations");
+            return Collections.emptyList();
+        }
         var allAnnotations = hierarchy.getAnnotationObjects();
 
         // If validClasses is null or empty, accept ALL annotations (don't filter by class)
