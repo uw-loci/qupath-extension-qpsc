@@ -39,6 +39,8 @@ import qupath.ext.qpsc.controller.workflow.CancellationToken;
 import qupath.ext.qpsc.controller.workflow.MultiSlidePreflight;
 import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
+import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
+import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeSlideReminder;
 import qupath.ext.qpsc.model.AcquisitionTimeEstimator;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -820,6 +822,17 @@ public final class MultiSlideExistingImageWorkflow {
         // Two-pass PASS 2: unattended acquisition on every Set-up slot, replaying its
         // captured config against the alignment JSON persisted during setup.
         acquireAllBtn.setOnAction(e -> {
+            // LC-PolScope slides need their own calibration and background, which a batch cannot
+            // take yet: ask once now, while the operator is here, never per slide mid-run.
+            long lcSlides = states.stream()
+                    .filter(s -> s.status == Status.SET_UP
+                            && s.setup != null
+                            && LCPolScopeModalityHandler.isLcPolScope(
+                                    s.setup.config().modality()))
+                    .count();
+            if (!LCPolScopeSlideReminder.confirmBatch((int) lcSlides)) {
+                return;
+            }
             stopAfterCurrent.setSelected(false);
             setBusy.accept(true);
             // Keep the panel visible for the whole unattended pass (see autoCollapseEnabled above).

@@ -16,6 +16,7 @@ import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.controller.workflow.TileCleanupHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeSlideReminder;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -338,6 +339,11 @@ public class BoundedAcquisitionWorkflow {
                             logger.warn(
                                     "Skipping disk space check -- tile count is 0 (TileConfiguration not readable at {})",
                                     tempTileDir);
+                        }
+
+                        // LC-PolScope: the calibration and background must come from this slide.
+                        if (!LCPolScopeSlideReminder.confirmBeforeAcquiring(result.modality())) {
+                            return;
                         }
 
                         // The chosen white-balance mode's own calibration, now that it is known.

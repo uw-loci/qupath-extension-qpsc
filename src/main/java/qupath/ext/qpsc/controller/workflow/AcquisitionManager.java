@@ -31,6 +31,7 @@ import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeSlideReminder;
 import qupath.ext.qpsc.model.AcquisitionPlan;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -662,6 +663,11 @@ public class AcquisitionManager {
             String modality = state.sample.modality();
             String objective = state.sample.objective();
             String detector = state.sample.detector();
+            // LC-PolScope: the calibration and background must come from this slide. Quiet inside a
+            // multi-slide batch, which asked when Acquire All was pressed.
+            if (!LCPolScopeSlideReminder.confirmBeforeAcquiring(modality)) {
+                return null;
+            }
             // The chosen white-balance mode's own calibration, now that it is known. The
             // wizard no longer warns about modes this acquisition does not use.
             if (!BackgroundIlluminationCheck.checkChosenWbModeAndWarn(modality, objective, detector, state.wbMode)) {
