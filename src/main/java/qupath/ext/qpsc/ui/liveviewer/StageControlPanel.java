@@ -5,6 +5,7 @@ import java.awt.image.BufferedImage;
 import java.beans.PropertyChangeEvent;
 import java.beans.PropertyChangeListener;
 import java.io.File;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
@@ -2993,15 +2994,7 @@ public class StageControlPanel extends VBox {
         Thread t = new Thread(
                 () -> {
                     try {
-                        MicroscopeController mc = MicroscopeController.getInstance();
-                        if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
-                        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(selectedProfile));
-                        Platform.runLater(() -> {
-                            cameraStatusLabel.setText("Profile applied: " + selectedProfile);
-                            cameraStatusLabel.setStyle(
-                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
-                            rebuildCameraModContent(modality);
-                        });
+                        applyProfileAndRebuild(selectedProfile, modality);
                     } catch (Exception ex) {
                         logger.error("Failed to apply profile '{}': {}", selectedProfile, ex.getMessage());
                         Platform.runLater(() -> {
@@ -3017,34 +3010,97 @@ public class StageControlPanel extends VBox {
     }
 
     /**
+     * Sends APPLYPR for the profile, then rebuilds the Camera tab on the FX thread so its
+     * exposure and illumination fields push their saved values back over the profile's
+     * defaults. Blocks for the APPLYPR; call off the FX thread.
+     */
+    private void applyProfileAndRebuild(String profile, String modality) throws IOException {
+        MicroscopeController mc = MicroscopeController.getInstance();
+        if (mc == null || !mc.isConnected()) throw new IOException("Not connected");
+        mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(profile));
+        Platform.runLater(() -> {
+            cameraStatusLabel.setText("Profile applied: " + profile);
+            cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
+            rebuildCameraModContent(modality);
+        });
+    }
+
+    /**
+     * The acquisition profile the Camera tab stands for: the pick in the Profile dropdown,
+     * else the profile the current objective resolves to (the rule acquisition uses), else
+     * the first profile declared for the modality. Null when the modality has none. FX thread.
+     */
+    String cameraTabProfile() {
+        String modality = currentCameraModality;
+        if (modality == null || modality.isBlank()) return null;
+        java.util.List<String> matching = profilesForModality(modality);
+        if (matching.isEmpty()) return findFirstMatchingProfile(modality);
+        if (cameraActiveProfile != null && matching.contains(cameraActiveProfile)) return cameraActiveProfile;
+        return objectiveProfileOrFirst(modality, matching);
+    }
+
+    /**
+     * Puts the Camera tab's settings on the hardware, as re-picking its profile does.
+     * Nothing else does this when the Live Viewer opens: the Modality and Profile dropdowns
+     * are filled before their listeners attach, so the first stream would otherwise show
+     * whatever Micro-Manager loaded with (on PPM and OWS3, not a usable image). Blocks for
+     * the APPLYPR; call off the FX thread.
+     *
+     * @param profile from {@link #cameraTabProfile()}, read on the FX thread
+     */
+    void applyCameraTabSettings(String profile) throws IOException {
+        applyProfileAndRebuild(profile, currentCameraModality);
+    }
+
+    /** Profiles whose {@code modality} field is exactly this modality, in config order. */
+    private java.util.List<String> profilesForModality(String modality) {
+        java.util.List<String> matching = new java.util.ArrayList<>();
+        Object profiles = mgr.getConfigItem("acquisition_profiles");
+        if (!(profiles instanceof java.util.Map<?, ?> profileMap)) return matching;
+        String modalityLower = modality.toLowerCase();
+        for (var entry : profileMap.entrySet()) {
+            if (entry.getValue() instanceof java.util.Map<?, ?> profileCfg) {
+                Object profModality = profileCfg.get("modality");
+                if (profModality != null
+                        && profModality.toString().toLowerCase().equals(modalityLower)) {
+                    matching.add(String.valueOf(entry.getKey()));
+                }
+            }
+        }
+        return matching;
+    }
+
+    /**
+     * The profile the current objective resolves to (same rule acquisition uses), when it
+     * is one of {@code matching}; else the first of them.
+     */
+    private String objectiveProfileOrFirst(String modality, java.util.List<String> matching) {
+        try {
+            if (currentCameraObjectiveId != null) {
+                String resolved = mgr.resolveProfileKey(modality, currentCameraObjectiveId);
+                if (resolved != null && matching.contains(resolved)) {
+                    return resolved;
+                }
+            }
+        } catch (Exception ex) {
+            logger.debug("Could not resolve objective profile for Camera tab default: {}", ex.getMessage());
+        }
+        return matching.get(0);
+    }
+
+    /**
      * Build profile selector dropdown for acquisition profile switching.
      * Returns null if no acquisition profiles match the modality.
      */
     @SuppressWarnings("unchecked")
     private Node buildProfileSelector(String modality) {
         try {
-            var profiles = mgr.getConfigItem("acquisition_profiles");
-            if (!(profiles instanceof java.util.Map<?, ?> profileMap) || profileMap.isEmpty()) return null;
-
-            // Filter profiles to ONLY those declaring this exact modality.
-            // Mixing modalities here lets the user end up on Brightfield_10x
-            // while the modality combo still says Fluorescence -- the radio
-            // buttons then drive the wrong hardware path. The modality combo
-            // (above) is the single source of truth for cross-modality
-            // switching; this Profile: dropdown is just for picking the
-            // objective within the current modality.
-            java.util.List<String> matchingProfiles = new java.util.ArrayList<>();
-            String modalityLower = modality.toLowerCase();
-            for (var entry : profileMap.entrySet()) {
-                String profileName = String.valueOf(entry.getKey());
-                if (entry.getValue() instanceof java.util.Map<?, ?> profileCfg) {
-                    Object profModality = profileCfg.get("modality");
-                    if (profModality != null
-                            && profModality.toString().toLowerCase().equals(modalityLower)) {
-                        matchingProfiles.add(profileName);
-                    }
-                }
-            }
+            // Only profiles declaring this exact modality. Mixing modalities here lets the user
+            // end up on Brightfield_10x while the modality combo still says Fluorescence -- the
+            // radio buttons then drive the wrong hardware path. The modality combo is the single
+            // source of truth for cross-modality switching; this dropdown picks the objective
+            // within the current modality.
+            java.util.List<String> matchingProfiles = profilesForModality(modality);
 
             if (matchingProfiles.isEmpty()) return null;
 
@@ -3062,17 +3118,7 @@ public class StageControlPanel extends VBox {
             // Base default: the profile the CURRENT OBJECTIVE actually resolves to
             // (same rule acquisition uses), not just the first in the list -- so on
             // a 20x objective the Camera tab shows Brightfield_20x, not Brightfield_10x.
-            String defaultSelection = matchingProfiles.get(0);
-            try {
-                if (currentCameraObjectiveId != null) {
-                    String resolved = mgr.resolveProfileKey(modality, currentCameraObjectiveId);
-                    if (resolved != null && matchingProfiles.contains(resolved)) {
-                        defaultSelection = resolved;
-                    }
-                }
-            } catch (Exception ex) {
-                logger.debug("Could not resolve objective profile for Camera tab default: {}", ex.getMessage());
-            }
+            String defaultSelection = objectiveProfileOrFirst(modality, matchingProfiles);
             // A retained user pick still wins across rebuilds (Apply Profile, preset load).
             if (cameraActiveProfile != null && matchingProfiles.contains(cameraActiveProfile)) {
                 defaultSelection = cameraActiveProfile;

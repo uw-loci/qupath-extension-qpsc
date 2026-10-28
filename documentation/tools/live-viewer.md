@@ -215,6 +215,8 @@ Saved points are stored in JSON preferences and persist across sessions.
 
 Shows the current hardware and provides modality-dependent camera controls.
 
+**The first Live click applies the Camera tab.** Opening the Live Viewer only fills the Modality and Profile dropdowns; it does not send anything to the hardware. So the first time you turn Live on after opening the window, the tab's profile is applied with `APPLYPR` (the profile the Profile dropdown shows, which is the one the current objective resolves to unless you have picked another; PPM has no dropdown and always uses the objective's profile), and the tab is rebuilt so its saved exposure and lamp intensity are sent again. The first frames therefore show the tab's settings, not whatever Micro-Manager loaded with. This happens once per opening of the window, and not while an acquisition is running. The status line reads "Profile applied: [profile]".
+
 | Option | Type | Description |
 |--------|------|-------------|
 | Detector / Objective | Label | Read-only display of the current detector and objective (auto-detected from MicroManager pixel size) |

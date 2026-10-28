@@ -147,6 +147,12 @@ public class LiveViewerWindow {
     // Live mode state (camera streaming on/off, independent of window visibility)
     private volatile boolean liveActive = false;
 
+    /**
+     * True once a Live click has applied the Camera tab's profile in this window's life.
+     * Until then the hardware is in whatever state Micro-Manager or the last run left.
+     */
+    private volatile boolean cameraTabSettingsApplied = false;
+
     // Frame rendering state
     private WritableImage writableImage;
     private int[] argbBuffer;
@@ -1365,6 +1371,12 @@ public class LiveViewerWindow {
 
         boolean newState = !liveActive;
 
+        // The first Live click after the viewer opens puts the Camera tab's profile on the
+        // hardware. Not during an acquisition: that run owns the light path and camera.
+        final String profileToApply = newState && !cameraTabSettingsApplied && !controller.isAcquisitionActive()
+                ? stageControlPanel.cameraTabProfile()
+                : null;
+
         // Disable button and show pending state
         liveToggleButton.setDisable(true);
         updateStatus(newState ? "Starting live..." : "Stopping live...");
@@ -1373,6 +1385,18 @@ public class LiveViewerWindow {
         Thread toggleThread = new Thread(
                 () -> {
                     try {
+                        if (profileToApply != null) {
+                            try {
+                                stageControlPanel.applyCameraTabSettings(profileToApply);
+                                cameraTabSettingsApplied = true;
+                                logger.info("Live start: applied Camera tab profile '{}'", profileToApply);
+                            } catch (IOException e) {
+                                logger.warn(
+                                        "Live start: could not apply Camera tab profile '{}': {}",
+                                        profileToApply,
+                                        e.getMessage());
+                            }
+                        }
                         if (newState) {
                             controller.startContinuousAcquisition();
                         } else {
