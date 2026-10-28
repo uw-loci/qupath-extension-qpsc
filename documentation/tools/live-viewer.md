@@ -24,7 +24,7 @@ The window title dynamically displays the current imaging modality and expected 
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Fit Mode | Toggle | Scale image to fit the dialog window |
+| Fit Mode | Toggle | Scale image to fit the dialog window, with no scroll bars. Fixed display scales still scroll when the image is larger than the window. |
 | Display Scale | ComboBox | Select display magnification level |
 | Show Tiles | CheckBox | During acquisition, display the most recently acquired tile instead of the live feed. Updates approximately every 8 seconds as new tiles are captured. Useful for monitoring focus drift without waiting for stitching to complete. Works with multi-angle acquisitions (PPM). Shows camera tiles only: computed outputs a modality writes beside them (PPM's `.biref`/`.sum`, LC-PolScope's `retardance`, `orientation` and `orientation_color`) are skipped. |
 

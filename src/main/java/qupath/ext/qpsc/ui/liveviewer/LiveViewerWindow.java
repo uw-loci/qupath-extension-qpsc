@@ -216,6 +216,9 @@ public class LiveViewerWindow {
     private ScrollPane scrollPane; // Store reference for mode switching
     private StackPane imageContainer; // Inner container for centering
 
+    /** Fit-mode room around the image for the 3 px Live border on each side. */
+    private static final double FIT_BORDER_ROOM = 6;
+
     // Live XYZ(R) position overlay on the image + its toolbar toggle.
     private Label positionOverlayLabel;
     private ToggleButton positionOverlayToggle;
@@ -1029,15 +1032,14 @@ public class LiveViewerWindow {
             fitToContainer = "Fit".equals(selected);
 
             if (fitToContainer) {
-                // Fit mode: image scales to fill container, hide scrollbars
-                scrollPane.setFitToWidth(true);
-                scrollPane.setFitToHeight(true);
-                imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(2));
-                imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(2));
+                bindImageToViewport();
             } else {
                 // Explicit scale mode: unbind, show scrollbars as needed
                 scrollPane.setFitToWidth(false);
                 scrollPane.setFitToHeight(false);
+                scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+                scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+                imageContainer.setMinSize(Region.USE_COMPUTED_SIZE, Region.USE_COMPUTED_SIZE);
                 imageView.fitWidthProperty().unbind();
                 imageView.fitHeightProperty().unbind();
                 imageView.setFitWidth(0);
@@ -1224,11 +1226,12 @@ public class LiveViewerWindow {
             if (fovOverlayVisible) drawFovOverlay();
         });
 
+        // The scroll pane's preferred size must not come from the image: in Fit mode the
+        // image is sized from the scroll pane, so an image-derived preference closes a loop.
+        scrollPane.setPrefViewportWidth(640);
+        scrollPane.setPrefViewportHeight(480);
         // Default to Fit mode: image scales to fill container
-        scrollPane.setFitToWidth(true);
-        scrollPane.setFitToHeight(true);
-        imageView.fitWidthProperty().bind(scrollPane.widthProperty().subtract(2));
-        imageView.fitHeightProperty().bind(scrollPane.heightProperty().subtract(2));
+        bindImageToViewport();
 
         // Stage control panel (on right side, expanded by default for visibility)
         stageControlPanel = new StageControlPanel();
@@ -1451,6 +1454,36 @@ public class LiveViewerWindow {
      * below the image) and the right column (vertical, beside the stage
      * control). Default is the bottom dock. FX thread only.
      */
+    /**
+     * Fit mode: the image fills the scroll pane's viewport, less room for the Live border.
+     *
+     * <p>The size comes from the viewport, rounded down to whole pixels, and the container may
+     * shrink below the image, so nothing the image does can change the space it is given.
+     * Binding the image to the scroll pane's own size, with the content's size feeding the scroll
+     * pane's, oscillated by one physical pixel several times a second at 150% display scaling
+     * once the histogram shared the image's column, and the 3 px Live border made the content
+     * taller than the viewport, so a scroll bar stayed on in Fit mode.
+     */
+    private void bindImageToViewport() {
+        scrollPane.setFitToWidth(true);
+        scrollPane.setFitToHeight(true);
+        scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+        imageContainer.setMinSize(0, 0);
+        imageView
+                .fitWidthProperty()
+                .bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                        () -> Math.max(
+                                1, Math.floor(scrollPane.getViewportBounds().getWidth()) - FIT_BORDER_ROOM),
+                        scrollPane.viewportBoundsProperty()));
+        imageView
+                .fitHeightProperty()
+                .bind(javafx.beans.binding.Bindings.createDoubleBinding(
+                        () -> Math.max(
+                                1, Math.floor(scrollPane.getViewportBounds().getHeight()) - FIT_BORDER_ROOM),
+                        scrollPane.viewportBoundsProperty()));
+    }
+
     private void setHistogramDockedRight(boolean right) {
         if (histoNoiseGroup == null || rightArea == null || imageColumn == null) {
             return;
