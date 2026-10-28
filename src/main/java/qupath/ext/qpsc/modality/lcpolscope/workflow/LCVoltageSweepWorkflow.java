@@ -58,11 +58,14 @@ public final class LCVoltageSweepWorkflow {
         DialogOwner.own(dialog);
 
         Label about = new Label("On a clear, specimen-free field, as for a calibration. Each crystal is swept "
-                + "through its whole voltage range with the other parked, about a thousand frames per crystal "
-                + "(a few minutes each). The exposure is chosen for the sweep. The crystals, exposure and camera "
+                + "through its whole voltage range with the other parked: about a thousand frames per crystal. "
+                + "At full frame that is roughly 20 minutes per crystal on the LC-PolScope (about 1 s a frame); "
+                + "a smaller Measure on area in the calibration dialog makes it faster, and one crystal at a "
+                + "time halves it. The exposure is chosen for the sweep. The crystals, exposure and camera "
                 + "region are put back afterwards, and nothing in the configuration changes.");
         about.setWrapText(true);
-        about.setMaxWidth(520);
+        about.setPrefWidth(540);
+        about.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
         ChoiceBox<String> axes = new ChoiceBox<>();
         axes.getItems().addAll("Both crystals", "LC-A only", "LC-B only");
@@ -85,6 +88,9 @@ public final class LCVoltageSweepWorkflow {
         VBox content = new VBox(12, about, grid);
         content.setPadding(new Insets(8));
         dialog.getDialogPane().setContent(content);
+        // Without a width the pane sizes to the label's one-line width and nothing wraps.
+        dialog.getDialogPane().setPrefWidth(600);
+        dialog.setResizable(true);
         ButtonType go = new ButtonType("Sweep", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().setAll(go, ButtonType.CANCEL);
 
@@ -111,9 +117,16 @@ public final class LCVoltageSweepWorkflow {
         Label status = new Label("Starting...");
         ProgressIndicator spinner = new ProgressIndicator();
         spinner.setPrefSize(28, 28);
-        Label hint = new Label("Leave the field clear and the illumination steady.");
+        Label hint = new Label(
+                "Leave the field clear and the illumination steady. About 20 minutes per " + "crystal at full frame.");
         hint.setStyle("-fx-font-size: 11px;");
+        for (Label l : List.of(status, hint)) {
+            l.setWrapText(true);
+            l.setPrefWidth(460);
+            l.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        }
         progress.getDialogPane().setContent(new VBox(10, status, spinner, hint));
+        progress.getDialogPane().setPrefWidth(520);
         progress.getButtonTypes().setAll(ButtonType.CLOSE);
         DialogOwner.own(progress);
         progress.show();
