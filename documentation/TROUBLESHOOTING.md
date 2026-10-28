@@ -1028,6 +1028,7 @@ If the first key you see is `STAGE_POSITIONS`, the file is from an old build and
 1. **Extensions > QP Scope > Acquisition controls > Stitching queue** lists every job of the session (queued, stitching, done, failed) with its latest status and elapsed time. The window opens on its own when a job is enqueued and hides itself a while after the queue drains; a failed job keeps it open with the reason.
 2. You can keep working, including aligning and acquiring the next slide; the stitched image is added to the project when it lands but is not opened. Use the **Open** button on its row, or the project browser.
 3. Stitching time depends on the number of tiles (2-10 minutes is normal); only one job stitches at a time, so a queue of several regions is served in order.
+4. The project entries for a region appear as soon as it is handed to stitching, showing a four-piece puzzle picture ("Stitching in progress" in the description) until the file lands. An entry that keeps the picture after the queue is empty is a stitch that failed: its description says why, and **Utilities > Re-stitch Tiles...** can try again from the tiles on disk.
 
 **Stitching time guide:**
 - 10 tiles: ~30 seconds

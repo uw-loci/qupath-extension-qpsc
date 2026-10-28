@@ -37,8 +37,10 @@ import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MinorFunctions;
+import qupath.ext.qpsc.utilities.ProjectEntryReservation;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StageImageTransform;
+import qupath.ext.qpsc.utilities.StitchOutputPlanner;
 import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.ext.qpsc.utilities.TileProcessingUtilities;
 import qupath.ext.qpsc.utilities.TileRegistrationSupport;
@@ -427,6 +429,118 @@ public class StitchingHelper {
     }
 
     /**
+     * Plans this job's outputs and reserves a project entry for each, synchronously on the FX
+     * thread. Returns null when nothing is reserved (zarr output, no project path, or a
+     * failure, all logged), in which case every import adds its entry when the file lands.
+     */
+    private static ProjectEntryReservation reserveOutputs(
+            String targetName,
+            StitchingMetadata metadata,
+            String sampleName,
+            String projectsFolder,
+            String modeWithIndex,
+            List<AngleExposure> angleExposures,
+            List<String> channelIds,
+            StitchingOptions options,
+            ModalityHandler handler,
+            Project<BufferedImage> project) {
+        try {
+            StitchingConfig.OutputFormat format = qupath.ext.qpsc.preferences.StitchingFormatPreference.get();
+            String extension = format == StitchingConfig.OutputFormat.OME_TIFF ? ".ome.tif" : ".ome.zarr";
+            Path tileBaseDir = Paths.get(projectsFolder, sampleName, modeWithIndex, targetName);
+            Path slideImages = Paths.get(projectsFolder, sampleName, "SlideImages");
+
+            List<String> angleSubdirs = new ArrayList<>();
+            if (angleExposures != null) {
+                for (AngleExposure ae : angleExposures) {
+                    angleSubdirs.add(String.valueOf(ae.ticks()));
+                }
+            }
+            List<String> derivedDirs = new ArrayList<>();
+            if (handler != null
+                    && !handler.getPostProcessingDirectorySuffixes().isEmpty()
+                    && Files.isDirectory(tileBaseDir)) {
+                try (var dirs = Files.list(tileBaseDir)) {
+                    for (Path d : dirs.filter(Files::isDirectory).toList()) {
+                        String name = d.getFileName().toString();
+                        for (String suffix : handler.getPostProcessingDirectorySuffixes()) {
+                            if (name.endsWith(suffix)) {
+                                derivedDirs.add(name);
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+            java.util.Set<String> taken = new java.util.HashSet<>();
+            if (Files.isDirectory(slideImages)) {
+                try (var files = Files.list(slideImages)) {
+                    files.forEach(f -> taken.add(f.getFileName().toString()));
+                }
+            }
+            for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+                taken.add(e.getImageName());
+            }
+            String mergedModality = null;
+            if (channelIds != null && !channelIds.isEmpty()) {
+                String shortPrefix = ModalityRegistry.getShortPrefix(handler);
+                String parsedModality = ImageNameGenerator.parseImagingMode(modeWithIndex)[0];
+                mergedModality = parsedModality;
+                if (shortPrefix != null
+                        && !shortPrefix.isBlank()
+                        && parsedModality != null
+                        && parsedModality.toLowerCase().startsWith(shortPrefix.toLowerCase())) {
+                    mergedModality = shortPrefix;
+                }
+            }
+            final ModalityHandler h = handler;
+            java.util.function.Function<String, String> angleSuffix = tick -> {
+                if (h == null) {
+                    return null;
+                }
+                try {
+                    return h.getAngleSuffix(Double.parseDouble(tick));
+                } catch (NumberFormatException e) {
+                    return null;
+                }
+            };
+            StitchOutputPlanner.Inputs inputs = new StitchOutputPlanner.Inputs(
+                    TileProcessingUtilities.resolveDisplayName(metadata, sampleName),
+                    modeWithIndex,
+                    targetName,
+                    extension,
+                    angleSubdirs,
+                    angleSuffix,
+                    derivedDirs,
+                    channelIds == null ? List.of() : channelIds,
+                    options != null ? options.splitChannelIds() : java.util.Set.of(),
+                    mergedModality,
+                    taken);
+            List<StitchOutputPlanner.ReservedOutput> plan = StitchOutputPlanner.plan(inputs);
+            if (plan.isEmpty()) {
+                logger.info("No project entries reserved for {} (format {})", targetName, format);
+                return null;
+            }
+            final String acquiredOn = resolveSourceMicroscope();
+            final ProjectEntryReservation[] out = {null};
+            TileProcessingUtilities.runImportOnFxThread(
+                    true, () -> out[0] = ProjectEntryReservation.reserve(project, plan, metadata, acquiredOn));
+            if (out[0] != null) {
+                Platform.runLater(() -> {
+                    QuPathGUI g = QuPathGUI.getInstance();
+                    if (g != null) {
+                        g.refreshProject();
+                    }
+                });
+            }
+            return out[0];
+        } catch (Exception e) {
+            logger.warn("Could not reserve project entries for {}: {}", targetName, e.getMessage(), e);
+            return null;
+        }
+    }
+
+    /**
      * Shared implementation backing both {@link #performAnnotationStitching} and
      * {@link #performRegionStitching}. Dispatches between three branches based on
      * the modality's axis shape:
@@ -642,6 +756,22 @@ public class StitchingHelper {
                 channelIdsForStitching.size(),
                 channelIdsForStitching,
                 angleExposures != null ? angleExposures.size() : 0);
+        // Reserve the job's project entries now, before the stitching thread reaches it, so
+        // the operator sees them (with the stitching placeholder) while the stitch runs and
+        // while they go on to the next slide. OME-TIFF only; a wrong prediction is dropped when
+        // the job finishes and the real file is imported the ordinary way.
+        final ProjectEntryReservation reservation = reserveOutputs(
+                targetName,
+                metadata,
+                sampleName,
+                projectsFolder,
+                modeWithIndex,
+                angleExposures,
+                channelIdsForStitching,
+                stitchOptions,
+                handler,
+                project);
+
         if (!channelIdsForStitching.isEmpty()) {
             return stitchChannelDirectories(
                     targetName,
@@ -659,7 +789,8 @@ public class StitchingHelper {
                     executor,
                     handler,
                     stitchOptions,
-                    importContext);
+                    importContext,
+                    reservation);
         }
 
         if (angleExposures != null && angleExposures.size() > 1) {
@@ -704,6 +835,9 @@ public class StitchingHelper {
                             // effects and await real import completion (read in
                             // TileProcessingUtilities.stitchImagesAndUpdateProject).
                             importContext.applyTo(stitchParams);
+                            if (reservation != null) {
+                                stitchParams.put(ProjectEntryReservation.STITCH_PARAMS_KEY, reservation);
+                            }
                             // Do NOT include blockingDialog or operationId for multi-angle case
 
                             if (blockingDialog != null) {
@@ -812,6 +946,9 @@ public class StitchingHelper {
 
                             logger.info("Batch stitching completed for {}, output: {}", annotationName, outPath);
 
+                            if (reservation != null) {
+                                reservation.dropUnfilled("multi-angle job finished");
+                            }
                             // Complete the blocking dialog now that ALL angles/post-processing are done
                             if (blockingDialog != null) {
                                 logger.info("Completing stitching dialog operation after all images processed");
@@ -824,6 +961,9 @@ public class StitchingHelper {
 
                         } catch (Exception e) {
                             logger.error("Stitching failed for {}", targetName, e);
+                            if (reservation != null) {
+                                reservation.failUnfilled(e.getMessage());
+                            }
 
                             // Mark operation as failed
                             if (blockingDialog != null) {
@@ -877,6 +1017,9 @@ public class StitchingHelper {
                             // effects and await real import completion (read in
                             // TileProcessingUtilities.stitchImagesAndUpdateProject).
                             importContext.applyTo(stitchParams);
+                            if (reservation != null) {
+                                stitchParams.put(ProjectEntryReservation.STITCH_PARAMS_KEY, reservation);
+                            }
 
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -921,6 +1064,9 @@ public class StitchingHelper {
                                     handler,
                                     stitchParams // Pass metadata
                                     );
+                            if (reservation != null) {
+                                reservation.dropUnfilled("single-file job finished");
+                            }
 
                             logger.info("Stitching completed for {}, output: {}", annotationName, outPath);
 
@@ -933,6 +1079,9 @@ public class StitchingHelper {
 
                         } catch (Exception e) {
                             logger.error("Stitching failed for {}", targetName, e);
+                            if (reservation != null) {
+                                reservation.failUnfilled(e.getMessage());
+                            }
 
                             // Mark operation as failed
                             if (blockingDialog != null) {
@@ -1302,7 +1451,8 @@ public class StitchingHelper {
             ExecutorService executor,
             ModalityHandler handler,
             StitchingOptions options,
-            ImportContext importContext) {
+            ImportContext importContext,
+            ProjectEntryReservation reservation) {
 
         logger.info(
                 "Stitching {} channels for: {} (organization={}, splitChannels={})",
@@ -1329,6 +1479,9 @@ public class StitchingHelper {
                         // effects and await real import completion (per-channel intermediates
                         // are not imported here, but the merged/fallback imports below are).
                         importContext.applyTo(stitchParams);
+                        if (reservation != null) {
+                            stitchParams.put(ProjectEntryReservation.STITCH_PARAMS_KEY, reservation);
+                        }
                         // Skip per-channel project import: only the merged
                         // multichannel file becomes a project entry. The
                         // per-channel files are still stitched and renamed on
@@ -1364,6 +1517,9 @@ public class StitchingHelper {
 
                         if (acquiredChannelIds.isEmpty()) {
                             logger.error("No channel subdirectories found in {}; nothing to stitch", tileBaseDir);
+                            if (reservation != null) {
+                                reservation.failUnfilled("No channel tiles found");
+                            }
                             if (blockingDialog != null) {
                                 blockingDialog.failOperation(operationId, "No channel tiles found");
                             }
@@ -1431,10 +1587,12 @@ public class StitchingHelper {
                         List<String> mergeImages = new ArrayList<>();
                         List<String> mergeIds = new ArrayList<>();
                         List<String> splitImages = new ArrayList<>();
+                        List<String> splitIds = new ArrayList<>();
                         for (int i = 0; i < stitchedImages.size(); i++) {
                             String cid = successfullyStitchedChannelIds.get(i);
                             if (options.isSplit(cid)) {
                                 splitImages.add(stitchedImages.get(i));
+                                splitIds.add(cid);
                             } else {
                                 mergeImages.add(stitchedImages.get(i));
                                 mergeIds.add(cid);
@@ -1449,7 +1607,15 @@ public class StitchingHelper {
                         // Channels the user split out become their own project entries.
                         if (!splitImages.isEmpty()) {
                             importPerChannelFallback(
-                                    splitImages, metadata, tileBaseDir.toFile(), gui, project, handler, importContext);
+                                    splitImages,
+                                    splitIds,
+                                    metadata,
+                                    tileBaseDir.toFile(),
+                                    gui,
+                                    project,
+                                    handler,
+                                    importContext,
+                                    reservation);
                         }
 
                         // Merge the remaining (non-split) per-channel pyramids into a single
@@ -1461,7 +1627,15 @@ public class StitchingHelper {
                                     "Only one channel to merge for {}; importing it directly as its own entry",
                                     annotationName);
                             importPerChannelFallback(
-                                    mergeImages, metadata, tileBaseDir.toFile(), gui, project, handler, importContext);
+                                    mergeImages,
+                                    mergeIds,
+                                    metadata,
+                                    tileBaseDir.toFile(),
+                                    gui,
+                                    project,
+                                    handler,
+                                    importContext,
+                                    reservation);
                         } else if (mergeImages.size() >= 2) {
                             if (blockingDialog != null) {
                                 blockingDialog.updateStatus(
@@ -1559,7 +1733,8 @@ public class StitchingHelper {
                                             gui,
                                             project,
                                             handler,
-                                            importContext);
+                                            importContext,
+                                            reservation);
                                     deleteMergedIntermediates(mergedPath, mergeImages);
                                 } else {
                                     // Merge failed. Because skipProjectImport=true kept the
@@ -1576,12 +1751,14 @@ public class StitchingHelper {
                                             mergeImages.size());
                                     importPerChannelFallback(
                                             mergeImages,
+                                            mergeIds,
                                             metadata,
                                             tileBaseDir.toFile(),
                                             gui,
                                             project,
                                             handler,
-                                            importContext);
+                                            importContext,
+                                            reservation);
                                 }
                             } catch (Exception mergeEx) {
                                 logger.error(
@@ -1591,12 +1768,14 @@ public class StitchingHelper {
                                         mergeEx);
                                 importPerChannelFallback(
                                         mergeImages,
+                                        mergeIds,
                                         metadata,
                                         tileBaseDir.toFile(),
                                         gui,
                                         project,
                                         handler,
-                                        importContext);
+                                        importContext,
+                                        reservation);
                             }
                         } else {
                             logger.debug(
@@ -1633,6 +1812,9 @@ public class StitchingHelper {
                                     derivedImages);
                         }
 
+                        if (reservation != null) {
+                            reservation.dropUnfilled("channel job finished");
+                        }
                         if (blockingDialog != null) {
                             blockingDialog.completeOperation(operationId);
                         }
@@ -1641,6 +1823,9 @@ public class StitchingHelper {
                         }
                     } catch (Exception e) {
                         logger.error("Channel stitching failed for {}", annotationName, e);
+                        if (reservation != null) {
+                            reservation.failUnfilled(e.getMessage());
+                        }
                         if (blockingDialog != null) {
                             blockingDialog.failOperation(operationId, e.getMessage());
                         }
@@ -2005,18 +2190,22 @@ public class StitchingHelper {
      */
     private static void importPerChannelFallback(
             List<String> stitchedImages,
+            List<String> channelKeys,
             StitchingMetadata metadata,
             File tileFolder,
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler,
-            ImportContext importContext) {
+            ImportContext importContext,
+            ProjectEntryReservation reservation) {
         final boolean pipelinedBatchAcquire = importContext.pipelinedBatchAcquire();
         if (stitchedImages == null || stitchedImages.isEmpty()) {
             return;
         }
         TileProcessingUtilities.runImportOnFxThread(pipelinedBatchAcquire, () -> {
-            for (String path : stitchedImages) {
+            for (int i = 0; i < stitchedImages.size(); i++) {
+                String path = stitchedImages.get(i);
+                String key = channelKeys != null && i < channelKeys.size() ? channelKeys.get(i) : null;
                 File f = new File(path);
                 if (!f.exists()) {
                     logger.warn("Fallback import: file does not exist, skipping: {}", path);
@@ -2024,7 +2213,9 @@ public class StitchingHelper {
                 }
                 try {
                     qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> imported = null;
-                    if (metadata != null) {
+                    if (reservation != null && reservation.has(key)) {
+                        imported = reservation.fill(key, f, handler);
+                    } else if (metadata != null) {
                         // Pass false/false for flip flags here -- the stitcher
                         // already baked the flip into the pyramid via
                         // TileConfigurationTxtStrategy.flipStitchingX/Y. Passing
@@ -2094,7 +2285,8 @@ public class StitchingHelper {
             QuPathGUI gui,
             Project<BufferedImage> project,
             ModalityHandler handler,
-            ImportContext importContext) {
+            ImportContext importContext,
+            ProjectEntryReservation reservation) {
         final boolean pipelinedBatchAcquire = importContext.pipelinedBatchAcquire();
         final File mergedFile = new File(mergedPath);
 
@@ -2103,7 +2295,9 @@ public class StitchingHelper {
                 logger.info("Importing merged multichannel file to project: {}", mergedFile.getName());
 
                 qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> imported = null;
-                if (metadata != null) {
+                if (reservation != null && reservation.has(StitchOutputPlanner.MERGED_KEY)) {
+                    imported = reservation.fill(StitchOutputPlanner.MERGED_KEY, mergedFile, handler);
+                } else if (metadata != null) {
                     // Pass false/false for flip flags -- the per-channel
                     // pyramids were already written with the stitcher's
                     // flipStitchingX/Y baked in, and ChannelMerger preserves

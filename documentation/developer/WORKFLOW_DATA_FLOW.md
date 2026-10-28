@@ -196,7 +196,11 @@ viewer's image data or re-set the project, so a stitch from run N landing during
 run N+1's refinement changes nothing in the viewer. Refinement results carry an
 `Outcome`; `RefinementOutcomePolicy.decide` maps them to BLOCK / CANCEL / PROCEED /
 MANUAL / ACCEPT and only SKIPPED proceeds. The acquisition loop checks `CancelGate`
-before each region, before `awaitServerIdle` and before `startAcquisition`.
+before each region, before `awaitServerIdle` and before `startAcquisition`. A stitch job
+reserves its project entries before it runs (`StitchOutputPlanner` +
+`ProjectEntryReservation`, placeholder `<project>/qpsc/stitching-pending.tif`,
+`qpsc_stitch_status=pending`) and fills them in place when the OME-TIFF lands; an entry whose
+status is `failed` is a stitch that did not finish, with the reason in its description.
 
 ### Multi-Slide Acquisition (`MultiSlideExistingImageWorkflow`)
 

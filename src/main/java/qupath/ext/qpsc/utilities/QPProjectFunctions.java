@@ -1224,7 +1224,7 @@ public class QPProjectFunctions {
         return false;
     }
 
-    private static ImageData.ImageType determineImageType(
+    static ImageData.ImageType determineImageType(
             File imageFile,
             ImageServer<BufferedImage> server,
             ImageData<BufferedImage> imageData,
@@ -1348,7 +1348,7 @@ public class QPProjectFunctions {
      * depending on which tile BioFormats read first, breaking project-wide
      * display-settings reuse.</p>
      */
-    private static void applyChannelNameOverride(
+    static void applyChannelNameOverride(
             ImageData<BufferedImage> imageData,
             File imageFile,
             qupath.ext.qpsc.modality.ModalityHandler modalityHandler) {

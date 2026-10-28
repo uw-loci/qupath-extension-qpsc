@@ -3211,17 +3211,21 @@ public class ExistingImageWorkflowV2 {
 
             // The stitched images were added to the project but never opened: the viewer
             // belongs to whatever the operator is doing by now. Say what landed and where.
-            final List<String> added;
-            synchronized (state.importedEntries) {
-                added = state.importedEntries.stream()
-                        .map(ProjectImageEntry::getImageName)
-                        .collect(Collectors.toList());
-            }
+            // The list is read on the FX thread: a non-pipelined import is posted to it when
+            // the stitch finishes and the stitch future completes before the post runs, so a
+            // read here, on the worker, came up empty (demo, 2026-10-27). The FX queue is
+            // FIFO, so by the time this runnable runs the import has.
             final String projectName =
                     state.projectInfo != null && state.projectInfo.getCurrentProject() instanceof Project<?> p
                             ? p.getName()
                             : null;
             Platform.runLater(() -> {
+                final List<String> added;
+                synchronized (state.importedEntries) {
+                    added = state.importedEntries.stream()
+                            .map(ProjectImageEntry::getImageName)
+                            .collect(Collectors.toList());
+                }
                 String message = importedSummary(added, projectName);
                 logger.info("Acquisition complete: {}", message);
                 Dialogs.showInfoNotification("Acquisition Complete", message);

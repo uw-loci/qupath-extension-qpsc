@@ -648,9 +648,15 @@ public class TileProcessingUtilities {
                 ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
 
                 try {
-                    // Add to project with metadata if available
+                    // A reserved entry (placeholder shown since the acquisition handed this
+                    // region to the queue) is filled in place; otherwise add the entry now.
                     qupath.lib.projects.ProjectImageEntry<BufferedImage> imported = null;
-                    if (finalMetadata != null) {
+                    ProjectEntryReservation reservation = stitchParams == null
+                            ? null
+                            : (ProjectEntryReservation) stitchParams.get(ProjectEntryReservation.STITCH_PARAMS_KEY);
+                    if (reservation != null && reservation.has(matchingString)) {
+                        imported = reservation.fill(matchingString, new File(lastProcessedPath), modalityHandler);
+                    } else if (finalMetadata != null) {
                         // Stitched images from microscope don't need flipping - they come with correct orientation.
                         // Pass detector/source/baseImageOverride through so PPM bounding-box angle
                         // entries land under a single shared base_image (project-sort grouping).
@@ -899,14 +905,14 @@ public class TileProcessingUtilities {
      * @param sampleLabel project folder name; the final fallback when metadata is absent or sampleName is blank
      * @return the resolved display name; never {@code null} or empty unless {@code sampleLabel} itself is
      */
-    static String resolveDisplayName(StitchingMetadata metadata, String sampleLabel) {
+    public static String resolveDisplayName(StitchingMetadata metadata, String sampleLabel) {
         if (metadata != null && metadata.sampleName != null && !metadata.sampleName.isEmpty()) {
             return metadata.sampleName;
         }
         return sampleLabel;
     }
 
-    private static String extractOriginalRegionName(String annotationName) {
+    static String extractOriginalRegionName(String annotationName) {
         if (annotationName == null) {
             return "";
         }
