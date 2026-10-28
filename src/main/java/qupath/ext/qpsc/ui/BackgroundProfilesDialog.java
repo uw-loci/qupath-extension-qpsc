@@ -244,7 +244,7 @@ public final class BackgroundProfilesDialog {
                 .append(
                         p.expectedSlideInsertion() == null
                                 ? "(not declared)"
-                                : LightPathModel.placementLabel(p.expectedSlideInsertion()))
+                                : LightPathModel.placementLabel(p.expectedSlideInsertion(), p.expectedInsert()))
                 .append('\n');
         for (Map.Entry<String, String> a : p.attributes().entrySet()) {
             sb.append(a.getKey()).append(": ").append(a.getValue()).append('\n');
@@ -317,6 +317,7 @@ public final class BackgroundProfilesDialog {
                 currentInsert,
                 insertName(currentInsert),
                 placementDefault,
+                LightPathModel.labelSide(placementDefault, currentInsert),
                 imagePlacement != null,
                 BackgroundProfiles.currentSourceScanner());
 
@@ -346,7 +347,9 @@ public final class BackgroundProfilesDialog {
         placementBox.setConverter(new javafx.util.StringConverter<>() {
             @Override
             public String toString(String s) {
-                return s == null || s.isEmpty() ? "(not checked)" : LightPathModel.placementLabel(s);
+                return s == null || s.isEmpty()
+                        ? "(not checked)"
+                        : LightPathModel.placementLabel(s, editorText(insertBox));
             }
 
             @Override
@@ -357,7 +360,8 @@ public final class BackgroundProfilesDialog {
         placementBox.setValue(creating ? placementDefault : nullToEmpty(existing.expectedSlideInsertion()));
         placementBox.setTooltip(new Tooltip("How the slide sits in the holder when these backgrounds are collected:"
                 + " placement A (as scanned) or B (rotated 180 in the plane), as the Stage Map's Slide in"
-                + " holder control, which names the two by where the label ends up on your stage.\nAcquiring"
+                + " holder control, which names the two by where the label ends up on your stage. Shown by"
+                + " label side once the Stage Map has drawn a slide on this insert.\nAcquiring"
                 + " an image placed the other way gives a warning. New profiles start with the open image's"
                 + " setting, else the scope's default."));
 
@@ -400,10 +404,12 @@ public final class BackgroundProfilesDialog {
             try {
                 String insert = editorText(insertBox);
                 String placement = placementBox.getValue();
+                String placementOrNull = placement == null || placement.isEmpty() ? null : placement;
                 BackgroundProfileDefaults.Setup now = new BackgroundProfileDefaults.Setup(
                         insert,
                         insertName(insert),
-                        placement == null || placement.isEmpty() ? null : placement,
+                        placementOrNull,
+                        placementOrNull == null ? null : LightPathModel.labelSide(placementOrNull, insert),
                         placement != null && placement.equals(imagePlacement),
                         setup.sourceScanner());
                 if (!nameTouched[0]) {

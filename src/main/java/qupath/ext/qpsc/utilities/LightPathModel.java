@@ -1,8 +1,11 @@
 package qupath.ext.qpsc.utilities;
 
 import java.awt.image.BufferedImage;
+import java.util.LinkedHashMap;
+import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager.TransformPreset;
 import qupath.lib.projects.ProjectImageEntry;
@@ -203,6 +206,107 @@ public final class LightPathModel {
         return vertical
                 ? placementCaptions(true, true)
                 : new String[] {placementLabel(INSERT_A), placementLabel(INSERT_B)};
+    }
+
+    /**
+     * The Stage Map's captions for {@code insertId} on the active microscope, as it last worked
+     * them out from the picture ({@link #placementCaptions}), or null when it has not shown a slide
+     * on that insert yet. Remembered across sessions, so text written away from the Stage Map (a
+     * background profile's suggested name, a placement warning) names the label side the way the
+     * Stage Map does instead of guessing it: "label left" for A was wrong on the LC-PolScope,
+     * where A puts the label on the right (2026-10-28).
+     */
+    public static String[] knownPlacementCaptions(String insertId) {
+        String key = captionKey(insertId);
+        if (key == null) {
+            return null;
+        }
+        try {
+            return parseCaptionStore(PersistentPreferences.getPlacementCaptions())
+                    .get(key);
+        } catch (RuntimeException | LinkageError e) {
+            return null;
+        }
+    }
+
+    /** Remembers {@code captions} ({A, B}, from {@link #placementCaptions}) for {@code insertId}. */
+    public static void rememberPlacementCaptions(String insertId, String[] captions) {
+        String key = captionKey(insertId);
+        if (key == null || captions == null || captions.length < 2) {
+            return;
+        }
+        try {
+            Map<String, String[]> store = parseCaptionStore(PersistentPreferences.getPlacementCaptions());
+            String[] old = store.get(key);
+            if (old != null && old[0].equals(captions[0]) && old[1].equals(captions[1])) {
+                return;
+            }
+            store.put(key, new String[] {captions[0], captions[1]});
+            PersistentPreferences.setPlacementCaptions(formatCaptionStore(store));
+        } catch (RuntimeException | LinkageError e) {
+            logger.debug("Placement captions not remembered: {}", e.toString());
+        }
+    }
+
+    /**
+     * How {@code insertion} reads for a slide on {@code insertId}: the Stage Map's caption, e.g.
+     * "Label on your right (A)", when it is known, else {@link #placementLabel(String)}.
+     */
+    public static String placementLabel(String insertion, String insertId) {
+        String[] known = knownPlacementCaptions(insertId);
+        if (known == null) {
+            return placementLabel(insertion);
+        }
+        return "B".equalsIgnoreCase(insertion) ? known[1] : known[0];
+    }
+
+    /**
+     * Where the label is for {@code insertion} on {@code insertId}, e.g. "Label on your right",
+     * or null when the Stage Map has not worked it out for that insert.
+     */
+    public static String labelSide(String insertion, String insertId) {
+        String[] known = knownPlacementCaptions(insertId);
+        if (known == null) {
+            return null;
+        }
+        return stripPlacementSuffix("B".equalsIgnoreCase(insertion) ? known[1] : known[0]);
+    }
+
+    /** "Label on your right (A)" to "Label on your right". */
+    static String stripPlacementSuffix(String caption) {
+        return caption == null ? null : caption.replaceFirst("\\s*\\([AB]\\)$", "");
+    }
+
+    /** "microscope|insert" for the active microscope, or null when either is unknown. */
+    private static String captionKey(String insertId) {
+        if (insertId == null || insertId.isBlank()) {
+            return null;
+        }
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        String scope = mgr == null ? null : mgr.getMicroscopeName();
+        return scope == null || scope.isBlank() ? null : scope.trim() + "|" + insertId.trim();
+    }
+
+    /** One "key TAB captionA TAB captionB" line per entry; malformed lines are skipped. */
+    static Map<String, String[]> parseCaptionStore(String store) {
+        Map<String, String[]> out = new LinkedHashMap<>();
+        if (store == null) {
+            return out;
+        }
+        for (String line : store.split("\\R")) {
+            String[] f = line.split("\t", -1);
+            if (f.length == 3 && !f[0].isBlank() && !f[1].isBlank() && !f[2].isBlank()) {
+                out.put(f[0], new String[] {f[1], f[2]});
+            }
+        }
+        return out;
+    }
+
+    static String formatCaptionStore(Map<String, String[]> store) {
+        StringBuilder sb = new StringBuilder();
+        store.forEach((k, v) ->
+                sb.append(k).append('\t').append(v[0]).append('\t').append(v[1]).append('\n'));
+        return sb.toString();
     }
 
     /** Default slide insertion from config; defaults to {@link #INSERT_A} (identity) when unset. */

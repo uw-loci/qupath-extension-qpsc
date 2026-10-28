@@ -13,7 +13,8 @@ import java.util.Map;
  *
  * <p>A profile describes the sample setup on the stage, so the suggestion is built from what
  * QPSC already knows about it: the Stage Map's insert, the slide placement of the open image
- * (else the scope's default), and the scanner the open image came from. No QuPath state is read
+ * (else the scope's default) named by label side as the Stage Map names it, and the scanner the
+ * open image came from. No QuPath state is read
  * here; the dialog gathers the {@link Setup} and this class turns it into text, so it is
  * testable without a GUI.
  */
@@ -27,24 +28,31 @@ public final class BackgroundProfileDefaults {
      * @param insertId the Stage Map insert id, e.g. {@code single_h}
      * @param insertName that insert's display name, e.g. "Single slide (horizontal)"
      * @param placement slide placement, {@code A} or {@code B}
+     * @param labelSide where that placement puts the label, as the Stage Map captions it ("Label
+     *     on your right"); null when the Stage Map has not worked it out for this insert. Which
+     *     side A is depends on the scanner and the microscope, so it is never assumed.
      * @param placementFromImage true when {@code placement} came from the open image, false when
      *     it is the scope's default
      * @param sourceScanner the scanner the open image came from ({@code source_microscope})
      */
     public record Setup(
-            String insertId, String insertName, String placement, boolean placementFromImage, String sourceScanner) {}
+            String insertId,
+            String insertName,
+            String placement,
+            String labelSide,
+            boolean placementFromImage,
+            String sourceScanner) {}
 
-    /** "Single slide (horizontal), label left, from Aperio GT450", or null when nothing is known. */
+    /** "Single slide (horizontal), label on your right, from Ocus40", or null when nothing is known. */
     public static String suggestName(Setup s) {
         List<String> parts = new ArrayList<>();
         String insert = firstNonBlank(s.insertName(), s.insertId());
         if (insert != null) {
             parts.add(insert);
         }
-        if ("A".equals(s.placement())) {
-            parts.add("label left");
-        } else if ("B".equals(s.placement())) {
-            parts.add("label right");
+        String placement = placementText(s);
+        if (placement != null) {
+            parts.add(placement);
         }
         if (notBlank(s.sourceScanner())) {
             parts.add("from " + s.sourceScanner().trim());
@@ -86,15 +94,16 @@ public final class BackgroundProfileDefaults {
         return s;
     }
 
-    /** "Backgrounds for ...; slide label left (from the open image)." or null when nothing is known. */
+    /** "Backgrounds for ...; slide label on your right (as the open image)." or null when nothing is known. */
     public static String suggestDescription(Setup s) {
         List<String> parts = new ArrayList<>();
         String insert = firstNonBlank(s.insertName(), s.insertId());
         if (insert != null) {
             parts.add("Backgrounds collected on the " + insert + " insert");
         }
-        if ("A".equals(s.placement()) || "B".equals(s.placement())) {
-            parts.add("slide label " + ("A".equals(s.placement()) ? "left" : "right")
+        String placement = placementText(s);
+        if (placement != null) {
+            parts.add("slide " + placement
                     + (s.placementFromImage() ? " (as the open image)" : " (the scope's default)"));
         }
         if (notBlank(s.sourceScanner())) {
@@ -188,6 +197,21 @@ public final class BackgroundProfileDefaults {
         attributes.forEach(
                 (k, v) -> sb.append(k).append(": ").append(v == null ? "" : v).append('\n'));
         return sb.toString();
+    }
+
+    /**
+     * "label on your right" when the label side is known, else "placement A" / "placement B";
+     * null without a placement.
+     */
+    private static String placementText(Setup s) {
+        if (!"A".equals(s.placement()) && !"B".equals(s.placement())) {
+            return null;
+        }
+        if (notBlank(s.labelSide())) {
+            String side = s.labelSide().trim();
+            return Character.toLowerCase(side.charAt(0)) + side.substring(1);
+        }
+        return "placement " + s.placement();
     }
 
     private static boolean contains(Collection<String> ids, String id) {

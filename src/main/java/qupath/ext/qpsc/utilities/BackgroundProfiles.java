@@ -508,8 +508,9 @@ public final class BackgroundProfiles {
         String expected = profile.expectedSlideInsertion();
         String current = normalizeInsertion(currentInsertion);
         if (expected != null && current != null && !expected.equals(current)) {
-            problems.add(LightPathModel.PLACEMENT_CAPTION + " now: " + LightPathModel.placementLabel(current)
-                    + "; the profile expects: " + LightPathModel.placementLabel(expected));
+            String insert = currentInsert != null ? currentInsert : profile.expectedInsert();
+            problems.add(LightPathModel.PLACEMENT_CAPTION + " now: " + LightPathModel.placementLabel(current, insert)
+                    + "; the profile expects: " + LightPathModel.placementLabel(expected, insert));
         }
         return problems;
     }

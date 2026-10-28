@@ -1987,6 +1987,8 @@ public class StageMapWindow {
             captions = LightPathModel.placementCaptions(false, rightForA);
         }
         applyPlacementCaptions(captions, "from the map");
+        // So the background profiles and placement warnings name the same side.
+        LightPathModel.rememberPlacementCaptions(PersistentPreferences.getStageMapInsert(), captions);
     }
 
     /**

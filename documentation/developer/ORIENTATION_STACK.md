@@ -147,9 +147,14 @@ light_path:
   (B)": the far end is the top of Stage View, which shows the stage as seen from the front
   (`LightPathModel.placementCaptions(vertical, ...)`). "As scanned" is deliberately not used in
   the captions: it says nothing about the stage. Before the macro is placed the generic captions
-  for the selected insert show (`genericPlacementCaptions`), and warnings and the Background
-  Profiles form use the side-neutral `placementLabel`: "Placement A (as scanned)" / "Placement B
-  (rotated 180)".
+  for the selected insert show (`genericPlacementCaptions`). The captions worked out from the
+  picture are remembered per microscope and insert (`rememberPlacementCaptions`, preference
+  `stageMapPlacementCaptions`), and text away from the Stage Map -- the Background Profiles form,
+  its suggested name and description, the profile-mismatch and placement-change warnings -- uses
+  them through `placementLabel(insertion, insertId)` / `labelSide`. Until the Stage Map has drawn a
+  slide on that insert they fall back to the side-neutral "Placement A (as scanned)" / "Placement B
+  (rotated 180)"; no side is ever assumed (the profile form suggested "label left" for A on the
+  LC-PolScope, where A is label right, 2026-10-28).
 - Defaults (`upright + A + optical none`) reduce both to identity, so Camera View == Stage View --
   the historical, inert behaviour. No regression until the rig is described.
 

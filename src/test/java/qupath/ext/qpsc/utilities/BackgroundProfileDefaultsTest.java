@@ -14,33 +14,54 @@ import qupath.ext.qpsc.utilities.BackgroundProfileDefaults.Setup;
  */
 class BackgroundProfileDefaultsTest {
 
-    private static final Setup FULL = new Setup("quad_v", "Four slides (vertical)", "B", true, "Aperio GT450");
+    private static final Setup FULL =
+            new Setup("quad_v", "Four slides (vertical)", "B", "Label toward you", true, "Aperio GT450");
 
     @Test
     void theSuggestionDescribesTheSetupOnTheStage() {
         assertEquals(
-                "Four slides (vertical), label right, from Aperio GT450", BackgroundProfileDefaults.suggestName(FULL));
+                "Four slides (vertical), label toward you, from Aperio GT450",
+                BackgroundProfileDefaults.suggestName(FULL));
         assertEquals(
-                "four_slides_vertical_label_right_from_aperio_gt450",
+                "four_slides_vertical_label_toward_you_from_aperio_gt450",
                 BackgroundProfileDefaults.suggestId(BackgroundProfileDefaults.suggestName(FULL), List.of()));
         String description = BackgroundProfileDefaults.suggestDescription(FULL);
         assertTrue(description.contains("Four slides (vertical)"), description);
-        assertTrue(description.contains("as the open image"), description);
+        assertTrue(description.contains("slide label toward you (as the open image)"), description);
         assertEquals(
                 Map.of("slide_source", "Aperio GT450", "medium", ""),
                 BackgroundProfileDefaults.suggestAttributes(FULL));
     }
 
+    /**
+     * 2026-10-28, LC-PolScope: placement A was suggested as "label left" while the Stage Map, and
+     * the slide, had the label on the right. Which side A is depends on the scanner and the scope,
+     * so the label side comes from the Stage Map's caption or is not named at all.
+     */
+    @Test
+    void theLabelSideIsTheStageMapsNeverAssumed() {
+        Setup known = new Setup("single_h", null, "A", "Label on your right", false, "Ocus40");
+        assertEquals("single_h, label on your right, from Ocus40", BackgroundProfileDefaults.suggestName(known));
+        assertTrue(BackgroundProfileDefaults.suggestDescription(known).contains("slide label on your right"));
+
+        Setup unknown = new Setup("single_h", null, "A", null, false, null);
+        assertEquals("single_h, placement A", BackgroundProfileDefaults.suggestName(unknown));
+        for (String text : List.of(
+                BackgroundProfileDefaults.suggestName(unknown),
+                BackgroundProfileDefaults.suggestDescription(unknown))) {
+            assertFalse(text.contains("left") || text.contains("right"), text);
+        }
+    }
+
     @Test
     void aDefaultPlacementSaysSoAndNothingKnownSuggestsNothing() {
-        Setup scopeDefault = new Setup("single_h", null, "A", false, null);
-        assertEquals("single_h, label left", BackgroundProfileDefaults.suggestName(scopeDefault));
+        Setup scopeDefault = new Setup("single_h", null, "A", null, false, null);
         assertTrue(BackgroundProfileDefaults.suggestDescription(scopeDefault).contains("the scope's default"));
         assertEquals(
-                "Slide label left (the scope's default).",
-                BackgroundProfileDefaults.suggestDescription(new Setup(null, null, "A", false, null)),
+                "Slide placement A (the scope's default).",
+                BackgroundProfileDefaults.suggestDescription(new Setup(null, null, "A", null, false, null)),
                 "a sentence, capitalized");
-        Setup nothing = new Setup(null, null, null, false, null);
+        Setup nothing = new Setup(null, null, null, null, false, null);
         assertNull(BackgroundProfileDefaults.suggestName(nothing));
         assertEquals("profile", BackgroundProfileDefaults.suggestId(null, List.of()));
     }

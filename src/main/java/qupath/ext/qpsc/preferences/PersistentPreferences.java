@@ -66,6 +66,22 @@ public class PersistentPreferences {
     }
 
     /**
+     * The Stage Map's "Slide in holder" captions as it last worked them out from the picture, one
+     * line per microscope and insert; read and written through
+     * {@code LightPathModel.knownPlacementCaptions} / {@code rememberPlacementCaptions}.
+     */
+    private static final StringProperty placementCaptionsProperty =
+            PathPrefs.createPersistentPreference("stageMapPlacementCaptions", "");
+
+    public static String getPlacementCaptions() {
+        return placementCaptionsProperty.get();
+    }
+
+    public static void setPlacementCaptions(String store) {
+        placementCaptionsProperty.set(store == null ? "" : store);
+    }
+
+    /**
      * Program QPSC runs to start the microscope command server for the demo microscope: the
      * {@code microscope-command-server} executable from the Python environment that holds the
      * QPSC packages, or the repository's {@code start_server.bat}. Empty means "whatever is on

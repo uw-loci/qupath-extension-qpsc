@@ -4,6 +4,7 @@ import java.awt.image.BufferedImage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.LightPathModel;
@@ -87,7 +88,8 @@ final class PlacementChangeCoordinator {
         logger.info("Placement change applied to '{}': insertion={}", target.getImageName(), insertion);
         Dialogs.showWarningNotification(
                 LightPathModel.PLACEMENT_CAPTION + " changed",
-                LightPathModel.PLACEMENT_CAPTION + " set to " + LightPathModel.placementLabel(insertion)
+                LightPathModel.PLACEMENT_CAPTION + " set to "
+                        + LightPathModel.placementLabel(insertion, PersistentPreferences.getStageMapInsert())
                         + ". The corrected (Camera View) image and any saved alignment for this slide are now stale --"
                         + " re-run alignment before acquiring.");
         return true;
