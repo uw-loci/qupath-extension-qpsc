@@ -214,15 +214,25 @@ public final class ProjectEntryReservation {
         entry.setImageName(stitchedFile.getName());
         ImageData<BufferedImage> imageData = entry.readImageData();
         ImageServer<BufferedImage> server = imageData.getServer();
-        imageData.setImageType(QPProjectFunctions.determineImageType(stitchedFile, server, imageData, handler));
-        QPProjectFunctions.applyChannelNameOverride(imageData, stitchedFile, handler);
-        QPProjectFunctions.applyDisplayRangeOverride(imageData, stitchedFile, handler);
-        entry.saveImageData(imageData);
         try {
-            entry.setThumbnail(null);
-            entry.setThumbnail(ProjectCommands.getThumbnailRGB(server));
-        } catch (Exception e) {
-            logger.debug("Could not replace the thumbnail of {}: {}", stitchedFile.getName(), e.getMessage());
+            imageData.setImageType(QPProjectFunctions.determineImageType(stitchedFile, server, imageData, handler));
+            QPProjectFunctions.applyChannelNameOverride(imageData, stitchedFile, handler);
+            QPProjectFunctions.applyDisplayRangeOverride(imageData, stitchedFile, handler);
+            entry.saveImageData(imageData);
+            try {
+                entry.setThumbnail(null);
+                entry.setThumbnail(ProjectCommands.getThumbnailRGB(server));
+            } catch (Exception e) {
+                logger.debug("Could not replace the thumbnail of {}: {}", stitchedFile.getName(), e.getMessage());
+            }
+        } finally {
+            // The reader is not handed to a viewer; release the file (Windows keeps it locked
+            // otherwise, which blocked the test's temp-dir cleanup and would block a rename).
+            try {
+                server.close();
+            } catch (Exception e) {
+                logger.debug("Could not close the server of {}: {}", stitchedFile.getName(), e.getMessage());
+            }
         }
         entry.getMetadata().remove(STATUS_KEY);
         entry.setDescription("");

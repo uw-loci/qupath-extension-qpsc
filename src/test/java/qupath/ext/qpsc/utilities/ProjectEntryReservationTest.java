@@ -104,8 +104,12 @@ class ProjectEntryReservationTest {
         assertFalse(r.has("7.0"));
         assertTrue(r.isFilled("7.0"));
         ImageData<BufferedImage> data = filled.readImageData();
-        assertEquals(64, data.getServer().getWidth());
-        assertNotNull(data.getImageType());
+        try {
+            assertEquals(64, data.getServer().getWidth());
+            assertNotNull(data.getImageType());
+        } finally {
+            data.getServer().close();
+        }
         assertEquals(2, project.getImageList().size(), "filling adds no entry");
 
         // The other output never arrived: it is dropped when the job finishes.
