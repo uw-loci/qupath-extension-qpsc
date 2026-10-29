@@ -834,20 +834,21 @@ public class AcquisitionManager {
         final int finalInitialSteps = initialStepsPerPosition;
         Platform.runLater(() -> progressDialog.setStepsPerPosition(finalInitialSteps));
 
-        // Pre-compute file counts per annotation so the dialog can estimate
-        // time for future annotations accurately (instead of assuming all are
-        // the same size as the current one).
-        List<Integer> perAnnotationFileCounts = new ArrayList<>();
+        // Pre-compute each annotation's XY positions so the dialog can estimate time for the
+        // later annotations too (instead of assuming all are the size of the current one). In
+        // positions, not files: the files per position (channels, Z planes) are only resolved
+        // inside performSingleAnnotationAcquisition, and the dialog applies the corrected count.
+        List<Integer> perAnnotationPositionCounts = new ArrayList<>();
         for (PathObject ann : state.annotations) {
             String tileDirPath = Paths.get(state.projectInfo.getTempTileDirectory(), ann.getName())
                     .toString();
-            int tilesPerAngle = MinorFunctions.countExpectedTilesWithRetry(List.of(tileDirPath), 3, 200);
-            if (tilesPerAngle == 0) {
-                tilesPerAngle = estimateTileCount(ann);
+            int positions = MinorFunctions.countExpectedTilesWithRetry(List.of(tileDirPath), 3, 200);
+            if (positions == 0) {
+                positions = estimateTileCount(ann);
             }
-            perAnnotationFileCounts.add(tilesPerAngle * initialStepsPerPosition);
+            perAnnotationPositionCounts.add(positions);
         }
-        logger.info("Per-annotation file counts: {}", perAnnotationFileCounts);
+        logger.info("Per-annotation position counts: {}", perAnnotationPositionCounts);
 
         // Process each annotation sequentially
         CompletableFuture<Boolean> acquisitionChain = CompletableFuture.completedFuture(true);
@@ -856,9 +857,9 @@ public class AcquisitionManager {
             final PathObject annotation = state.annotations.get(i);
             final int index = i + 1;
             final int total = state.annotations.size();
-            // Future tile counts = file counts for annotations after this one
-            final List<Integer> futureCountsForThisStep = perAnnotationFileCounts.subList(
-                    Math.min(i + 1, perAnnotationFileCounts.size()), perAnnotationFileCounts.size());
+            // Positions of the annotations after this one
+            final List<Integer> futureCountsForThisStep = perAnnotationPositionCounts.subList(
+                    Math.min(i + 1, perAnnotationPositionCounts.size()), perAnnotationPositionCounts.size());
             // Copy to avoid subList reference issues across async boundaries
             final List<Integer> futureCounts = new ArrayList<>(futureCountsForThisStep);
 
@@ -881,7 +882,7 @@ public class AcquisitionManager {
 
                 // Tell the dialog about remaining annotations' sizes for accurate time estimates
                 if (progressDialog != null) {
-                    Platform.runLater(() -> progressDialog.setFutureTileCounts(futureCounts));
+                    Platform.runLater(() -> progressDialog.setFuturePositionCounts(futureCounts));
                 }
 
                 showProgressNotification(index, total, annotation.getName());

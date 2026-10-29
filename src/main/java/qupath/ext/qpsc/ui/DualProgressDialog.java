@@ -117,8 +117,10 @@ public class DualProgressDialog {
     static final int MAX_FILE_TIME_SAMPLES = 20000;
     private final AtomicBoolean firstTileProcessed = new AtomicBoolean(false);
 
-    // Per-annotation tracking for tile counts in future annotations
-    private final List<Integer> futureTileCounts = Collections.synchronizedList(new ArrayList<>());
+    // XY positions of each annotation after the current one. Kept in positions, not files, so
+    // they are multiplied by the steps per position in force when the estimate is made: that
+    // count is only known once the first annotation has resolved its channels and Z planes.
+    private final List<Integer> futurePositionCounts = Collections.synchronizedList(new ArrayList<>());
 
     // Manual focus pause tracking - excludes user wait time from timing estimates
     private final AtomicBoolean manualFocusPaused = new AtomicBoolean(false);
@@ -577,17 +579,34 @@ public class DualProgressDialog {
     }
 
     /**
-     * Sets the expected tile counts for future annotations.
-     * This enables accurate time estimation for the complete workflow.
+     * Sets the size of each annotation still to come, so the estimate covers the whole run.
      *
-     * @param tileCounts List of tile counts for remaining annotations (excluding current)
+     * @param positionCounts XY positions (tiles) of each annotation after the current one; the
+     *     estimate multiplies them by the current steps per position (angles or channels, times
+     *     Z planes)
      */
-    public void setFutureTileCounts(List<Integer> tileCounts) {
-        futureTileCounts.clear();
-        if (tileCounts != null) {
-            futureTileCounts.addAll(tileCounts);
-            logger.info("Set future tile counts for {} annotations: {}", tileCounts.size(), tileCounts);
+    public void setFuturePositionCounts(List<Integer> positionCounts) {
+        futurePositionCounts.clear();
+        if (positionCounts != null) {
+            futurePositionCounts.addAll(positionCounts);
+            logger.info("Set future position counts for {} annotations: {}", positionCounts.size(), positionCounts);
         }
+    }
+
+    /**
+     * Files still to write: the rest of the current annotation plus every later annotation's
+     * positions times the steps per position.
+     */
+    static int filesRemaining(
+            int currentExpectedFiles, int currentProgress, List<Integer> futurePositions, int stepsPerPosition) {
+        int current = Math.max(0, currentExpectedFiles - currentProgress);
+        int future = 0;
+        synchronized (futurePositions) {
+            for (int positions : futurePositions) {
+                future += positions;
+            }
+        }
+        return current + future * Math.max(1, stepsPerPosition);
     }
 
     /**
@@ -798,29 +817,27 @@ public class DualProgressDialog {
             avgMsPerTile = (double) elapsedMs / totalCompleted;
         }
 
-        // Calculate remaining work
+        // Calculate remaining work, in files
         int currentProgress = currentAnnotationProgress.get();
-        int tilesRemainingCurrentAnnotation = Math.max(0, currentAnnotationExpectedFiles - currentProgress);
-
-        int tilesRemainingFutureAnnotations;
-        if (!futureTileCounts.isEmpty()) {
-            tilesRemainingFutureAnnotations =
-                    futureTileCounts.stream().mapToInt(Integer::intValue).sum();
+        int steps = stepsPerPosition.get();
+        int totalTilesRemaining;
+        if (!futurePositionCounts.isEmpty() || completed >= totalAnnotations - 1) {
+            totalTilesRemaining =
+                    filesRemaining(currentAnnotationExpectedFiles, currentProgress, futurePositionCounts, steps);
         } else {
-            int avgTilesPerAnnotation = totalTilesPerAnnotation.get() > 0
+            // No sizes for the later annotations: assume each is as big as this one.
+            int avgFilesPerAnnotation = totalTilesPerAnnotation.get() > 0
                     ? totalTilesPerAnnotation.get()
                     : (currentAnnotationExpectedFiles > 0 ? currentAnnotationExpectedFiles : 100);
             int remainingAnnotations = totalAnnotations - completed - 1;
-            tilesRemainingFutureAnnotations = remainingAnnotations * avgTilesPerAnnotation;
+            totalTilesRemaining = Math.max(0, currentAnnotationExpectedFiles - currentProgress)
+                    + remainingAnnotations * avgFilesPerAnnotation;
         }
-
-        int totalTilesRemaining = tilesRemainingCurrentAnnotation + tilesRemainingFutureAnnotations;
         long totalRemainingMs = (long) (avgMsPerTile * totalTilesRemaining);
         long remainingSeconds = totalRemainingMs / 1000;
 
         String estimate = formatTime(remainingSeconds);
 
-        int steps = stepsPerPosition.get();
         int positionsRemaining = totalTilesRemaining / Math.max(1, steps);
 
         // Log periodically (every 25 tiles), but only ONCE per milestone --
