@@ -21,7 +21,6 @@ import qupath.ext.qpsc.ui.*;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
 import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.*;
 import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.fx.dialogs.Dialogs;
@@ -2896,11 +2895,10 @@ public class ExistingImageWorkflowV2 {
                                 return CompletableFuture.completedFuture(state);
                             case ACCEPT:
                             default:
-                                AffineTransform beforeRefinement = state.transform;
                                 state.transform = result.transform;
                                 MicroscopeController.getInstance().setCurrentTransform(result.transform);
                                 logger.info("Updated transform with refined alignment");
-                                saveRefinedAlignment(state, beforeRefinement);
+                                saveRefinedAlignment(state);
                                 return CompletableFuture.completedFuture(state);
                         }
                     })
@@ -2936,7 +2934,7 @@ public class ExistingImageWorkflowV2 {
          * corrupts every future macro-entry run. Found during the 2026-05-13 review as
          * direct fallout from the 2603535 routing fix.
          */
-        private void saveRefinedAlignment(WorkflowState state, AffineTransform beforeRefinement) {
+        private void saveRefinedAlignment(WorkflowState state) {
             if (isSubAcquisition()) {
                 logger.debug("saveRefinedAlignment: open entry is a sub-acquisition; "
                         + "offset-based transform is deterministic and not persisted.");
@@ -2997,8 +2995,6 @@ public class ExistingImageWorkflowV2 {
                 } catch (Exception e) {
                     logger.debug("Could not read stage Z to persist a focus seed: {}", e.getMessage());
                 }
-                // Read before the save, which rewrites the record without it.
-                double[] overlayShift = AffineTransformManager.loadMacroOverlayShift(project, lookupKey);
                 AffineTransformManager.saveSlideAlignment(
                         project,
                         lookupKey,
@@ -3011,15 +3007,9 @@ public class ExistingImageWorkflowV2 {
                         state.objective,
                         state.detector,
                         refinedFocusZ);
-                // Move the Stage Map's macro overlay by as much as this refinement moved the
-                // slide. Both transforms consume the open entry's full-resolution pixels.
-                var server = gui.getImageData() != null ? gui.getImageData().getServer() : null;
-                if (server != null) {
-                    overlayShift = AffineTransformManager.accumulateOverlayShift(
-                            overlayShift, beforeRefinement, state.transform, server.getWidth(), server.getHeight());
-                    AffineTransformManager.saveMacroOverlayShift(project, lookupKey, overlayShift);
-                    StageMapWindow.refreshMacroOverlay();
-                }
+                // Where this slide really is, for the Stage Map: the refined alignment's own
+                // placement, not the preset's assumption plus this refinement's move.
+                SlidePlacementRecorder.record(project, lookupKey, gui.getImageData(), state.transform);
                 logger.info(
                         "Saved refined alignment for image: {} (lookupKey={}, flipMacroX={}, flipMacroY={}, objective={}, detector={}, focusZ={})",
                         imageName,

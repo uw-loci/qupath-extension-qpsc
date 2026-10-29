@@ -1544,77 +1544,73 @@ public class AffineTransformManager {
         }
     }
 
-    /** Alignment-JSON key: how far refinements have moved this slide, stage um. */
-    static final String MACRO_OVERLAY_SHIFT_KEY = "macroOverlayShiftUm";
+    /** Alignment-JSON key: where this slide's image centre sits on the stage, um. */
+    static final String SLIDE_CENTRE_STAGE_KEY = "slideCentreStageUm";
 
     /**
-     * How far refinements have moved this slide's alignment since it was made, in stage um,
-     * or null when none has.
+     * Where this slide's alignment puts the centre of its image, in stage um, or null when no
+     * alignment has recorded it.
      *
      * <p>The Stage Map draws the macro overlay from the scanner preset, which places every slide
-     * where the preset expects it. A refinement measures where THIS slide really is, so the
-     * overlay is shifted by the same amount. 2026-10-19: a single-tile refinement moved a slide's
-     * alignment 2.5 mm and the overlay stayed put. A fresh alignment (every other save site)
-     * rewrites the file without this key, so the shift starts again from zero.
+     * where the preset's own slide sat. This is where THIS slide is, from its own alignment --
+     * manual, from a preset, borrowed from another microscope or refined -- so the overlay can
+     * be moved onto it (see {@link MacroOverlayPlacement}).
      */
-    public static double[] loadMacroOverlayShift(Project<BufferedImage> project, String sampleName) {
+    public static double[] loadSlideCentre(Project<BufferedImage> project, String sampleName) {
         Map<String, Object> data = readAlignmentJson(resolveAlignmentFile(project, sampleName));
-        return data == null ? null : parseShift(data.get(MACRO_OVERLAY_SHIFT_KEY));
+        return data == null ? null : parsePoint(data.get(SLIDE_CENTRE_STAGE_KEY));
     }
 
     /**
-     * Records the overlay shift after a refinement. Writes onto the existing alignment record,
-     * so call it after the refined alignment is saved.
+     * Records where the alignment just saved puts the centre of the image it maps. Writes onto
+     * the alignment record, so call it right after {@code saveSlideAlignment}; every per-slide
+     * save site does, because a save rewrites the record without it.
+     *
+     * <p>{@code imageWidth}/{@code imageHeight} are those of the pixel frame the transform maps
+     * FROM: for {@code pixelFrame="macro"} that is the entry's FULL-RESOLUTION image, not the
+     * macro thumbnail (which would be wrong by the pyramid's downsample). The centre because
+     * it is the same point whichever way the entry is flipped or rotated.
      *
      * @return true when it was written
      */
-    public static boolean saveMacroOverlayShift(Project<BufferedImage> project, String sampleName, double[] shift) {
+    public static boolean saveSlideCentre(
+            Project<BufferedImage> project,
+            String sampleName,
+            AffineTransform imageToStage,
+            int imageWidth,
+            int imageHeight) {
+        double[] centre = imageCentreOnStage(imageToStage, imageWidth, imageHeight);
         File file = resolveAlignmentFile(project, sampleName);
         Map<String, Object> data = readAlignmentJson(file);
-        if (data == null || shift == null || shift.length != 2) {
+        if (data == null || centre == null) {
             return false;
         }
-        data.put(MACRO_OVERLAY_SHIFT_KEY, List.of(shift[0], shift[1]));
+        data.put(SLIDE_CENTRE_STAGE_KEY, List.of(centre[0], centre[1]));
         try {
             String json = new GsonBuilder().setPrettyPrinting().create().toJson(data);
             Files.write(file.toPath(), json.getBytes(StandardCharsets.UTF_8));
             logger.info(
-                    "Saved Stage Map overlay shift for '{}': ({}, {}) um",
+                    "Slide '{}' image centre recorded at stage ({}, {}) um from its alignment",
                     sampleName,
-                    String.format("%.1f", shift[0]),
-                    String.format("%.1f", shift[1]));
+                    String.format("%.1f", centre[0]),
+                    String.format("%.1f", centre[1]));
             return true;
         } catch (Exception e) {
-            logger.warn("Could not save the Stage Map overlay shift for '{}': {}", sampleName, e.getMessage());
+            logger.warn("Could not record the slide centre for '{}': {}", sampleName, e.getMessage());
             return false;
         }
     }
 
-    /**
-     * Where a refinement moved the slide: the stage shift of the image centre between the
-     * transform before and after, added to the shift already recorded.
-     *
-     * <p>The centre because (W/2, H/2) is the same pixel whichever way the entry is flipped, so a
-     * flip difference between the two transforms' frames cannot corrupt it. Both transforms must
-     * map the same image's full-resolution pixels.
-     *
-     * @param previous the shift recorded so far, or null
-     */
-    public static double[] accumulateOverlayShift(
-            double[] previous, AffineTransform before, AffineTransform after, int imageWidth, int imageHeight) {
-        double[] total = previous != null && previous.length == 2 ? previous.clone() : new double[] {0, 0};
-        if (before == null || after == null || imageWidth <= 0 || imageHeight <= 0) {
-            return total;
+    /** Stage position of the image centre under {@code imageToStage}, or null. */
+    static double[] imageCentreOnStage(AffineTransform imageToStage, int imageWidth, int imageHeight) {
+        if (imageToStage == null || imageWidth <= 0 || imageHeight <= 0) {
+            return null;
         }
-        Point2D centre = new Point2D.Double(imageWidth / 2.0, imageHeight / 2.0);
-        Point2D was = before.transform(centre, null);
-        Point2D now = after.transform(centre, null);
-        total[0] += now.getX() - was.getX();
-        total[1] += now.getY() - was.getY();
-        return total;
+        Point2D c = imageToStage.transform(new Point2D.Double(imageWidth / 2.0, imageHeight / 2.0), null);
+        return new double[] {c.getX(), c.getY()};
     }
 
-    static double[] parseShift(Object value) {
+    static double[] parsePoint(Object value) {
         if (value instanceof List<?> list
                 && list.size() == 2
                 && list.get(0) instanceof Number x

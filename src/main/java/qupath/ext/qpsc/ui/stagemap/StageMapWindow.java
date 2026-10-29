@@ -33,9 +33,11 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.ext.qpsc.utilities.GreenBoxDetector;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.LightPathModel;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
+import qupath.ext.qpsc.utilities.MacroOverlayPlacement;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
@@ -130,7 +132,10 @@ public class StageMapWindow {
      * The overlay is placed from the scanner preset, which knows nothing of this slide; this is
      * what lines it up with where the slide was measured to be.
      */
-    private double[] currentMacroSlideShiftUm = null;
+    /** Where this slide's own alignment puts its image centre, stage um; null without one. */
+    private double[] currentMacroSlideCentreUm = null;
+    /** Centre of this slide's green box on the displayed macro, macro px; null if not found. */
+    private double[] currentMacroGreenBoxCentre = null;
 
     private String currentMacroSampleName = null;
     private String currentMacroScannerName = null;
@@ -2575,7 +2580,8 @@ public class StageMapWindow {
         Platform.runLater(() -> {
             logger.info("Checking macro overlay availability...");
             currentMacroImage = null;
-            currentMacroSlideShiftUm = null;
+            currentMacroSlideCentreUm = null;
+            currentMacroGreenBoxCentre = null;
             if (canvas != null) canvas.setNoAlignmentMessageVisible(false);
             currentMacroTransform = null;
             currentMacroSampleName = null;
@@ -2671,13 +2677,7 @@ public class StageMapWindow {
             }
 
             logger.info("Macro overlay: resolved sample name '{}', loading data...", sampleName);
-            currentMacroSlideShiftUm = AffineTransformManager.loadMacroOverlayShift(project, sampleName);
-            if (currentMacroSlideShiftUm != null) {
-                logger.info(
-                        "Macro overlay: shifting by ({}, {}) um, where refinement measured this slide",
-                        String.format("%.1f", currentMacroSlideShiftUm[0]),
-                        String.format("%.1f", currentMacroSlideShiftUm[1]));
-            }
+            currentMacroSlideCentreUm = AffineTransformManager.loadSlideCentre(project, sampleName);
 
             // Re-resolve activePreset from disk: AffineTransformManager is not a
             // singleton, so the saved-transforms file can change underneath us
@@ -2738,6 +2738,9 @@ public class StageMapWindow {
                             : "null");
 
             if (macroImage != null && overlayTransform != null) {
+                if (currentMacroSlideCentreUm != null) {
+                    currentMacroGreenBoxCentre = findGreenBoxCentre(macroImage);
+                }
                 currentMacroImage = macroImage;
                 currentMacroTransform = overlayTransform;
                 currentMacroSampleName = sampleName;
@@ -3041,6 +3044,81 @@ public class StageMapWindow {
      * Applies the macro overlay to the canvas, loading scanner-specific positioning
      * parameters from the scanner config file (pixel_size_um, stagemap_overlay offsets).
      */
+    /**
+     * The stage shift that moves the preset-placed macro onto this slide's measured position, or
+     * null when there is nothing to move it by: no alignment has recorded the slide's centre, its
+     * green box was not found on the macro, or the preset is a legacy one with no anchor (the
+     * 4-corner placement has no single macro pixel to pin).
+     */
+    private double[] slideShift(double macroPixelSizeUm) {
+        if (currentMacroSlideCentreUm == null || currentMacroGreenBoxCentre == null) {
+            return null;
+        }
+        if (Double.isNaN(currentMacroAnchorMacroX)
+                || Double.isNaN(currentMacroAnchorMacroY)
+                || Double.isNaN(currentMacroAnchorStageX)
+                || Double.isNaN(currentMacroAnchorStageY)
+                || !(macroPixelSizeUm > 0)) {
+            logger.info("Macro overlay: preset has no anchor; drawing it where the preset puts it, "
+                    + "not where this slide's alignment does");
+            return null;
+        }
+        double[] presetAt = MacroOverlayPlacement.presetStageOf(
+                currentMacroGreenBoxCentre[0],
+                currentMacroGreenBoxCentre[1],
+                currentMacroAnchorMacroX,
+                currentMacroAnchorMacroY,
+                currentMacroAnchorStageX,
+                currentMacroAnchorStageY,
+                macroPixelSizeUm,
+                currentMacroTransform.getScaleX(),
+                currentMacroTransform.getScaleY());
+        double[] shift = MacroOverlayPlacement.shiftOntoSlide(currentMacroSlideCentreUm, presetAt);
+        logger.info(
+                "Macro overlay: slide '{}' is at stage ({}, {}) um by its alignment; the preset puts its "
+                        + "green-box centre at ({}, {}); moving the overlay by ({}, {}) um",
+                currentMacroSampleName,
+                String.format("%.1f", currentMacroSlideCentreUm[0]),
+                String.format("%.1f", currentMacroSlideCentreUm[1]),
+                String.format("%.1f", presetAt[0]),
+                String.format("%.1f", presetAt[1]),
+                String.format("%.1f", shift[0]),
+                String.format("%.1f", shift[1]));
+        return shift;
+    }
+
+    /**
+     * Centre of this slide's green box (the scanned area) on the displayed macro, in its pixels,
+     * or null when it is not found. Uses the preset's detection settings, as the alignment that
+     * built the slide's transform did. Same frame as the preset's anchor: both are on the macro
+     * cropped to the slide and flipped by the preset.
+     */
+    private double[] findGreenBoxCentre(BufferedImage macro) {
+        try {
+            GreenBoxDetector.DetectionParams params = activePreset != null && activePreset.getGreenBoxParams() != null
+                    ? activePreset.getGreenBoxParams()
+                    : new GreenBoxDetector.DetectionParams();
+            GreenBoxDetector.DetectionResult found = GreenBoxDetector.detectGreenBox(macro, params);
+            if (found == null || found.getDetectedBox() == null) {
+                logger.info("Macro overlay: no green box found on the macro; the overlay stays where "
+                        + "the preset puts it");
+                return null;
+            }
+            var box = found.getDetectedBox();
+            double cx = box.getBoundsX() + box.getBoundsWidth() / 2.0;
+            double cy = box.getBoundsY() + box.getBoundsHeight() / 2.0;
+            logger.info(
+                    "Macro overlay: green box centre at macro ({}, {}), confidence {}",
+                    String.format("%.1f", cx),
+                    String.format("%.1f", cy),
+                    String.format("%.2f", found.getConfidence()));
+            return new double[] {cx, cy};
+        } catch (Exception e) {
+            logger.warn("Macro overlay: green box detection failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
     private void applyMacroOverlayToCanvas() {
         if (canvas == null || currentMacroImage == null || currentMacroTransform == null) {
             return;
@@ -3109,14 +3187,17 @@ public class StageMapWindow {
                 ? currentMacroPresetPixelSizeUm
                 : pixelSizeUm;
 
-        // Where refinement measured this slide, on both placement paths: the anchor's stage
-        // point, and the preset transform for the legacy 4-corner placement.
+        // Draw the slide where its own alignment says it is, not where the preset's slide lay:
+        // move the overlay by the difference at the green-box centre (see
+        // MacroOverlayPlacement). Applied to both the anchor and the transform, as the canvas
+        // uses the anchor and matches the slot with the transform.
         AffineTransform macroTransform = currentMacroTransform;
         double anchorStageX = currentMacroAnchorStageX;
         double anchorStageY = currentMacroAnchorStageY;
-        if (currentMacroSlideShiftUm != null) {
-            double dx = currentMacroSlideShiftUm[0];
-            double dy = currentMacroSlideShiftUm[1];
+        double[] shift = slideShift(effectivePixelSizeUm);
+        if (shift != null) {
+            double dx = shift[0];
+            double dy = shift[1];
             macroTransform = AffineTransform.getTranslateInstance(dx, dy);
             macroTransform.concatenate(currentMacroTransform);
             anchorStageX += dx;

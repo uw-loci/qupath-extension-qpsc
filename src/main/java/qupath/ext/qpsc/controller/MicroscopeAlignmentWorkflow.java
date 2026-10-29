@@ -1617,6 +1617,8 @@ public class MicroscopeAlignmentWorkflow {
                                 AffineTransformManager.PIXEL_FRAME_MACRO,
                                 objective,
                                 detector);
+                        qupath.ext.qpsc.controller.workflow.SlidePlacementRecorder.record(
+                                project, lookupKey, gui.getImageData(), fullResToStageTransform);
                         logger.info(
                                 "Saved per-slide alignment for '{}' (modality={}, flipMacroX={}, flipMacroY={}, "
                                         + "objective={}, detector={}) -- Existing Image Acquisition will load this "

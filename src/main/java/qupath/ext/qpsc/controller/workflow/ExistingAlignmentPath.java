@@ -16,7 +16,6 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.GreenBoxPreviewController;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.*;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -582,22 +581,7 @@ public class ExistingAlignmentPath {
         // dimensions passed are the entry server's, NOT processedMacroImage's: that is
         // the macro thumbnail, and using it would be wrong by the pyramid's downsample
         // factor while still producing a plausible-looking stage point.
-        if (openEntry != null && state.transform != null && gui.getImageData() != null) {
-            var server = gui.getImageData().getServer();
-            if (server != null) {
-                ImageMetadataManager.setSlideCenterStageXY(
-                        openEntry, state.transform, server.getWidth(), server.getHeight());
-                double[] centre = ImageMetadataManager.getSlideCenterStageXY(openEntry);
-                if (centre != null) {
-                    logger.info(
-                            "Slide '{}' centre measured at stage ({}, {}) um from its alignment",
-                            imageName,
-                            String.format("%.1f", centre[0]),
-                            String.format("%.1f", centre[1]));
-                    StageMapWindow.refreshSlotMacroPlacement();
-                }
-            }
-        }
+        SlidePlacementRecorder.record(project, imageName, gui.getImageData(), state.transform);
     }
 
     // Helper methods
