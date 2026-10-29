@@ -62,6 +62,8 @@ class SiftCapturePane extends VBox {
      * (manual nudge + capture is a first-class path there).
      */
     private final boolean gateCaptureOnSift;
+    /** Whether a SIFT move is followed by a short focus sweep; see {@link #attemptAutoAccept}. */
+    private final boolean refocusAfterMove;
 
     private final Label siftResultLabel;
     private final Button siftButton;
@@ -94,20 +96,18 @@ class SiftCapturePane extends VBox {
      * @param gui QuPath GUI (for the WSI server / SIFT and tile centering)
      * @param tile the target reference tile
      * @param gateCaptureOnSift disable Capture until a SIFT run has produced a valid offset
-     */
-    SiftCapturePane(QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift) {
-        this(gui, tile, gateCaptureOnSift, "Capture position");
-    }
-
-    /**
      * @param captureLabel label for the capture/accept button -- "Capture position" for single-tile,
      *     "Add reference point" for multi-tile (so the button reads as its numbered alignment step).
+     * @param refocusAfterMove run a short focus sweep after each SIFT move; see
+     *     {@link #attemptAutoAccept}
      */
-    SiftCapturePane(QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift, String captureLabel) {
+    SiftCapturePane(
+            QuPathGUI gui, PathObject tile, boolean gateCaptureOnSift, String captureLabel, boolean refocusAfterMove) {
         super(10);
         this.gui = gui;
         this.tile = tile;
         this.gateCaptureOnSift = gateCaptureOnSift;
+        this.refocusAfterMove = refocusAfterMove;
 
         setPadding(new Insets(10));
         setAlignment(Pos.CENTER_LEFT);
@@ -249,7 +249,11 @@ class SiftCapturePane extends VBox {
                                 // (or accepting) a stage position -- exactly the previous
                                 // "accept = autoAccept && ..." semantics.
                                 AutoAlignOutcome outcome = attemptAutoAccept(
-                                        gui, tile, autoAccept ? threshold : Double.POSITIVE_INFINITY, searchMarginUm);
+                                        gui,
+                                        tile,
+                                        autoAccept ? threshold : Double.POSITIVE_INFINITY,
+                                        searchMarginUm,
+                                        refocusAfterMove);
                                 double[] result = outcome.siftResult();
                                 double[] measured = outcome.measuredStageXY();
                                 Platform.runLater(() -> {
@@ -397,21 +401,26 @@ class SiftCapturePane extends VBox {
      * @param threshold minimum SIFT confidence (0.0-1.0) to accept; pass an unreachable value (e.g.
      *     {@link Double#POSITIVE_INFINITY}) to run SIFT for its raw result without accepting or
      *     reading a stage position
+     * @param refocusAfterMove run a short SWEEP focus after a valid match moved the stage, so the
+     *     Z read afterwards is focused on the field SIFT landed on. Multi-tile refinement wants it:
+     *     its points are reached without an autofocus of their own. Single-tile refinement does
+     *     not: the slot-jump autofocus has just focused at the predicted tile, a field or two from
+     *     where SIFT lands, and the acquisition focuses again at its first tile anyway
      * @return an {@link AutoAlignOutcome} carrying the raw result and (when accepted) the measured
      *     stage {@code [x, y]}
      * @throws Exception if the SIFT match or stage read fails (propagated for the caller to handle,
      *     exactly as the inline versions did inside their {@code catch (Exception)} blocks)
      */
-    static AutoAlignOutcome attemptAutoAccept(QuPathGUI gui, PathObject tile, double threshold, double searchMarginUm)
+    static AutoAlignOutcome attemptAutoAccept(
+            QuPathGUI gui, PathObject tile, double threshold, double searchMarginUm, boolean refocusAfterMove)
             throws Exception {
         double[] result = SiftAutoAlignHelper.autoAlign(gui, tile, searchMarginUm);
         boolean validMatch = result != null && result.length >= 2;
-        if (validMatch) {
+        if (validMatch && refocusAfterMove) {
             // SIFT has just moved the stage in XY, and the field it lands on is often slightly
-            // softer than the one focus was set on -- the sample is not flat. Nothing after this
-            // re-focuses, so a Z captured here is the Z that gets saved and later seeds
-            // acquisition. Re-focus BEFORE anything reads the position, so both the auto-accept
-            // path below and a manual Capture get a focused Z.
+            // softer than the one focus was set on -- the sample is not flat. Re-focus BEFORE
+            // anything reads the position, so both the auto-accept path below and a manual
+            // Capture get a focused Z.
             refocusAfterSiftMove();
         }
         boolean accept = validMatch && result.length >= 4 && result[3] >= threshold;

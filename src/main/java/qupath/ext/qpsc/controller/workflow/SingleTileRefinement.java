@@ -396,7 +396,8 @@ public class SingleTileRefinement {
                                             gui,
                                             selectedTile,
                                             confidenceThreshold,
-                                            qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm());
+                                            qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm(),
+                                            false);
                                     double[] result = outcome.siftResult();
                                     if (result != null && result.length >= 4) {
                                         double confidence = result[3]; // 4th element = confidence
@@ -521,7 +522,9 @@ public class SingleTileRefinement {
         // result label + Capture/Skip. gateCaptureOnSift=true preserves single-tile's
         // "Capture (Save) is disabled until Auto-Align (SIFT) has run successfully" gate,
         // so a quick click can't silently accept the predicted (unrefined) position.
-        SiftCapturePane capturePane = new SiftCapturePane(gui, selectedTile, true);
+        // No focus sweep after the SIFT move: the slot-jump autofocus above already focused at
+        // this tile, and SIFT lands within a field or two of it.
+        SiftCapturePane capturePane = new SiftCapturePane(gui, selectedTile, true, "Capture position", false);
 
         // "Create New Alignment" is a single-tile-only third outcome (switch to manual
         // alignment), so it stays outside the shared pane.

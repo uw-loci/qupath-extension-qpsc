@@ -956,7 +956,7 @@ public class MultiTileRefinement {
         // a prior SIFT run (unlike single-tile's Save-after-SIFT gate). SIFT moves the
         // stage by -offset with no rig transform (the match resolves orientation), so
         // the pane needs no alignment transform.
-        SiftCapturePane pane = new SiftCapturePane(gui, tile, false, "Add reference point");
+        SiftCapturePane pane = new SiftCapturePane(gui, tile, false, "Add reference point", true);
         captureSlot.getChildren().setAll(pane);
         // The window is non-resizable, so grow it to fit the embedded pane instead of squeezing the
         // instruction labels above it. Paired with the clear() below to shrink back when the pane exits.
