@@ -144,7 +144,7 @@ profile switches camera the way a two-camera scope does.
 |---|---|---|
 | Brightfield (`Brightfield_10x`) | colour `DCam`, 512 x 512 px at 0.65 um/px, 8-bit RGB | the H&E slide |
 | Fluorescence (`Fluorescence_10x`) | mono `DMonoCam`, 640 x 512 px at 0.586 um/px, 12-bit | four channels from a four-line LED: DAPI (nuclei), FITC (weak autofluorescence), TRITC (eosin), Cy5 (sparse puncta in part of the tissue) |
-| lcpolscope (`lcpolscope_10x`) | the same mono camera | five LC-PolScope states through a simulated Meadowlark compensator; the stroma is birefringent (3 to 18 nm, slow axis wandering over a few hundred um), nuclei and glass are not |
+| lcpolscope (`lcpolscope_10x`) | the same mono camera | five LC-PolScope states through a simulated Meadowlark compensator; collagen fibres are birefringent (up to 18 nm, slow axis along each fibre), vessel walls weakly so, nuclei, lumens and glass not at all |
 
 The LC-PolScope optics are imperfect in the ways a real instrument is, so its tools have
 something to do: the shipped palette is the demo compensator's calibrated one, which

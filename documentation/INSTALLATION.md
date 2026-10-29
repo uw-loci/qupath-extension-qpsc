@@ -241,8 +241,11 @@ microscope command server*. Step 2 below says what to do.
    means Communication Settings pointed at another computer; the demo server runs on this
    one. Set the host back when you return to the real microscope.
 4. Click **Live: OFF** at the top left of the Live Viewer. It turns green, reads **Live: ON**,
-   and shows a virtual H&E slide: pink is eosin-stained stroma, the small dark purple spots
-   (about 9 um) are nuclei, and near-white is bare glass. The stage starts at the slide
+   and shows a virtual H&E slide: pink is eosin-stained stroma with darker wavy collagen
+   fibres, the small dark purple spots are nuclei, purple rings around a pale center are
+   glands, red-dotted bands are blood vessels, and near-white is bare glass (or fat, where
+   thin pink lines outline the fat cells). No two fields look alike, so you can tell which
+   way the stage moved. The stage starts at the slide
    center, which is tissue, but best focus there is at about Z = +4 um, so the first frame is
    slightly soft: click **Autofocus**. The arrow buttons on the **Navigate** tab pan across
    the slide. Tissue sits in islands a few millimeters across, and about half the slide is
