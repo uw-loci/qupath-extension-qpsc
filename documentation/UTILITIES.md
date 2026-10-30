@@ -537,6 +537,7 @@ The tool works in two scenarios:
 
 - For the Convert path, all annotations, detections, image metadata, and thumbnails remain unchanged (`updateURIs()` only repoints the backing file).
 - Acquisition metadata files inside the tile folders are preserved -- only raw tile images are removed.
+- Anything in a `_protected` folder inside an acquisition folder (for example the background images a run used) is preserved, and the tile count the dialog shows leaves those files out.
 
 Individual tiles are only needed if you plan to **re-stitch** the acquisition. The dialog shows a permanent-deletion warning that changes with the selected options and requires confirmation before deleting anything.
 

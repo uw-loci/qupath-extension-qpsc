@@ -741,6 +741,8 @@ Controls what happens to intermediate tile images after stitching completes.
 
 **Important:** On acquisition or refinement failure, the temporary tiles of regions that did not finish are always deleted regardless of this preference. The preference applies only to successful runs. This prevents incomplete or corrupt tile sets from accumulating on disk. Regions that finished earlier in the same run keep their tiles, because they may still be stitching when a later region is cancelled.
 
+**Protected files:** Cleanup never deletes anything in a `_protected` folder inside an acquisition folder, such as the backgrounds a run used. Only the raw tile images outside that folder are removed.
+
 **Recommendations:**
 - **None**: During debugging or when you might need to re-stitch
 - **Zip**: For archival purposes with disk space management
