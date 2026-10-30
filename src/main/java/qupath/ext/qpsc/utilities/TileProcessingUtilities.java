@@ -49,6 +49,13 @@ public class TileProcessingUtilities {
     private static final Logger logger = LoggerFactory.getLogger(TileProcessingUtilities.class);
 
     /**
+     * Subfolder of an acquisition folder that tile cleanup and Make Project Portable leave alone,
+     * for what a run depends on, such as its background images. The microscope server writes it
+     * under the same name.
+     */
+    public static final String PROTECTED_FOLDER = "_protected";
+
+    /**
      * {@code stitchParams} key carrying an optional
      * {@link qupath.ext.basicstitching.registration.RegistrationMode} for this stitch.
      *
@@ -1016,7 +1023,7 @@ public class TileProcessingUtilities {
      * notably {@code TileConfiguration.txt}, {@code TileConfiguration_QP.txt}, and
      * any {@code acquisition_command_*.txt} -- are preserved so the acquisition
      * remains auditable and re-stitchable. The root directory itself is always
-     * preserved.
+     * preserved, and so is everything inside a {@value #PROTECTED_FOLDER} folder.
      *
      * <p>Used by the post-acquisition cleanup helper for both the "Delete" and
      * "Zip" tile-handling preferences. The Zip path archives the full tree first
@@ -1043,6 +1050,7 @@ public class TileProcessingUtilities {
             try (var s = Files.walk(dir)) {
                 tileCount = s.filter(Files::isRegularFile)
                         .filter(TileProcessingUtilities::isRawTile)
+                        .filter(p -> !isProtected(dir, p))
                         .count();
             }
             logger.info("Found {} tile image(s) to delete", tileCount);
@@ -1051,6 +1059,7 @@ public class TileProcessingUtilities {
             try (var s = Files.walk(dir)) {
                 s.filter(Files::isRegularFile)
                         .filter(TileProcessingUtilities::isRawTile)
+                        .filter(p -> !isProtected(dir, p))
                         .forEach(p -> {
                             try {
                                 Files.delete(p);
@@ -1082,6 +1091,22 @@ public class TileProcessingUtilities {
         } catch (IOException ex) {
             logger.error("Error during tile cleanup in folder: {}", folderPath, ex);
         }
+    }
+
+    /**
+     * True when {@code file} is inside a {@value #PROTECTED_FOLDER} folder below {@code root}.
+     *
+     * @param root the folder being cleaned; its own path is not tested
+     * @param file a file under {@code root}
+     * @return whether cleanup must leave the file alone
+     */
+    public static boolean isProtected(Path root, Path file) {
+        for (Path segment : root.relativize(file)) {
+            if (PROTECTED_FOLDER.equalsIgnoreCase(segment.toString())) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** True for files that are raw acquisition tiles (.tif / .tiff, case-insensitive). */

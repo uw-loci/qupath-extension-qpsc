@@ -74,7 +74,8 @@ import qupath.lib.projects.ProjectImageEntry;
  * and thumbnails are preserved because {@code updateURIs()} only changes the
  * backing file URI without touching the entry's data directory. Acquisition
  * metadata files inside the tile folders are also preserved -- only raw tile
- * images are removed.
+ * images are removed -- and so is everything in a {@code _protected} folder
+ * ({@link TileProcessingUtilities#PROTECTED_FOLDER}).
  */
 public class MakePortableWorkflow {
 
@@ -276,13 +277,13 @@ public class MakePortableWorkflow {
         return new TileScan(tileDirs, totalCount, totalBytes);
     }
 
-    /** Returns {@code [rawTileCount, totalBytes]} for raw tile images under {@code dir}. */
-    private static long[] tileStats(Path dir) {
+    /** Returns {@code [rawTileCount, totalBytes]} for the tile images deletion would remove. */
+    static long[] tileStats(Path dir) {
         long count = 0;
         long bytes = 0;
         try (Stream<Path> walk = Files.walk(dir)) {
             for (Path p : walk.filter(Files::isRegularFile).toList()) {
-                if (!isRawTile(p)) continue;
+                if (!isRawTile(p) || TileProcessingUtilities.isProtected(dir, p)) continue;
                 count++;
                 try {
                     bytes += Files.size(p);
@@ -363,8 +364,12 @@ public class MakePortableWorkflow {
             tileInfoLabel.setText(String.format(
                     "Found %d individual tile image(s) in %d acquisition folder(s) (%s). "
                             + "These are deleted by default -- they are only needed to re-stitch. "
-                            + "Check the box above to keep them.",
-                    tileScan.tileFileCount, tileScan.tileDirs.size(), formatBytes(tileScan.tileSizeBytes)));
+                            + "Check the box above to keep them. Files in a "
+                            + TileProcessingUtilities.PROTECTED_FOLDER
+                            + " folder, such as the backgrounds a run used, are always kept.",
+                    tileScan.tileFileCount,
+                    tileScan.tileDirs.size(),
+                    formatBytes(tileScan.tileSizeBytes)));
             tileInfoLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
         } else {
             tileInfoLabel.setText("No individual tile images found in the project folder.");
