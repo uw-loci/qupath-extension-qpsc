@@ -33,6 +33,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.ObjectivePresetActuator;
 import qupath.ext.qpsc.service.SessionLogBuffer;
 import qupath.ext.qpsc.ui.BugReportDialog;
+import qupath.ext.qpsc.ui.FlatfieldFitDialog;
 import qupath.ext.qpsc.ui.LightPathSetupDialog;
 import qupath.ext.qpsc.ui.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.StitchingQueueWindow;
@@ -546,6 +547,15 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
+        // Flat-field profile fitted from tiles, for detectors that have no background image.
+        MenuItem flatfieldFitOption = new MenuItem(res.getString("menu.flatfieldFit"));
+        flatfieldFitOption.setDisable(!configValid);
+        setMenuItemTooltip(
+                flatfieldFitOption,
+                "Fit the uneven brightness of a PMT or laser scanner from a folder of tiles, for detectors with no"
+                        + " background image. Apply the saved profile in Tiles to Pyramid.");
+        flatfieldFitOption.setOnAction(e -> FlatfieldFitDialog.show(qupath.getStage()));
+
         // Background profiles: one set of backgrounds per sample setup; manage and activate them.
         MenuItem backgroundProfilesOption = new MenuItem(res.getString("menu.backgroundProfiles"));
         backgroundProfilesOption.setDisable(!configValid);
@@ -822,7 +832,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
 
         // Image Quality: autofocus, white balance / camera calibration, background.
         Menu imageQualityMenu = new Menu("Image Quality");
-        imageQualityMenu.getItems().addAll(backgroundCollectionOption, backgroundProfilesOption);
+        imageQualityMenu.getItems().addAll(backgroundCollectionOption, backgroundProfilesOption, flatfieldFitOption);
         // WB Comparison compares JAI-only white-balance modes (camera_awb /
         // simple / per_angle); only meaningful on a JAI 3-CCD camera. Gate it the
         // same way as the "JAI Camera" submenu below so a monochrome scope

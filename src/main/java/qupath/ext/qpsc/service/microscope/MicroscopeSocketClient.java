@@ -54,6 +54,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(MicroscopeSocketClient.class);
 
+    /** A fit reads up to 500 tiles, possibly from a network drive. */
+    private static final int FLATFIT_TIMEOUT_MS = 15 * 60 * 1000;
+
     // Protocol constants
     /** End marker expected by Python server to indicate message completion */
     private static final String END_MARKER = "ENDOFSTR";
@@ -348,6 +351,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         SIFTAL("siftal__"),
         /** SIFT image-vs-image: match two on-disk image files (no camera snap) */
         SIFTIM("siftim__"),
+        /** Fit a BaSiC flat-field profile from a folder of tiles */
+        FLATFIT("flatfit_"),
 
         // Illumination & Profile Commands
         /** Get illumination state (power, range, on/off) */
@@ -8204,6 +8209,76 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     throw new IOException("SIFT matching failed: " + response.substring(7));
                 }
                 return response;
+            } finally {
+                socket.setSoTimeout(readTimeout);
+            }
+        }
+    }
+
+    /**
+     * What a flat-field fit found.
+     *
+     * @param flatfieldMin dimmest point of the shading, relative to its mean
+     * @param flatfieldMax brightest point of the shading, relative to its mean
+     * @param offset detector offset, raw counts
+     * @param imagesUsed planes fitted
+     * @param imagesRead planes read
+     */
+    public record FlatfieldFit(
+            double flatfieldMin, double flatfieldMax, double offset, int imagesUsed, int imagesRead) {}
+
+    /** Reads a FLATFIT reply, {@code SUCCESS:<json>}. */
+    static FlatfieldFit parseFlatfieldFit(String response) {
+        com.google.gson.JsonObject json =
+                new Gson().fromJson(response.substring("SUCCESS:".length()), com.google.gson.JsonObject.class);
+        return new FlatfieldFit(
+                json.get("flatfield_min").getAsDouble(),
+                json.get("flatfield_max").getAsDouble(),
+                json.get("offset").getAsDouble(),
+                json.get("images_used").getAsInt(),
+                json.get("images_read").getAsInt());
+    }
+
+    /**
+     * Fits a flat-field profile from a folder of tiles and saves it. Blocks for as long as the fit
+     * takes; call it off the FX thread.
+     *
+     * @param tilesFolder tiles, as the server sees them
+     * @param profileFolder where the server writes the profile
+     * @param channel MicroManager channel index, or null for every plane
+     * @param offset measured detector offset, or null to read it from the empty tiles
+     * @param label description recorded in the profile
+     * @return what the fit found
+     * @throws IOException if communication fails or the fit fails
+     */
+    public FlatfieldFit fitFlatfield(
+            String tilesFolder, String profileFolder, Integer channel, Double offset, String label) throws IOException {
+        // JSON, because a folder path can hold spaces
+        com.google.gson.JsonObject request = new com.google.gson.JsonObject();
+        request.addProperty("tiles", tilesFolder);
+        request.addProperty("profile", profileFolder);
+        request.addProperty("channel", channel);
+        request.addProperty("offset", offset);
+        request.addProperty("label", label);
+        String message = new Gson().newBuilder().serializeNulls().create().toJson(request) + " ENDOFSTR";
+
+        synchronized (socketLock) {
+            output.write(Command.FLATFIT.getValue());
+            output.write(message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            output.flush();
+            logger.info("FLATFIT command sent: {}", message);
+
+            socket.setSoTimeout(FLATFIT_TIMEOUT_MS);
+            try {
+                byte[] buf = new byte[4096];
+                int n = input.read(buf);
+                if (n <= 0) throw new IOException("FLATFIT: no response");
+                String response = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
+                logger.info("FLATFIT response: {}", response);
+                if (!response.startsWith("SUCCESS:")) {
+                    throw new IOException("Flat-field fit failed: " + response.replaceFirst("^FAILED:", ""));
+                }
+                return parseFlatfieldFit(response);
             } finally {
                 socket.setSoTimeout(readTimeout);
             }

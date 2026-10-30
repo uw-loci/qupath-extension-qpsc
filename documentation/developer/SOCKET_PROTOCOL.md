@@ -333,6 +333,7 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | TESTADAF | `testadaf` | params + ENDOFSTR | adaptive AF result |
 | AFBENCH | `afbench_` | params + ENDOFSTR | benchmark results |
 | SIFTAL | `siftal__` | `--wsi-region <path> --micro-px <f> --wsi-px <f> --min-px <f> --ratio <f> --min-matches <n> --contrast <f> [--nfeatures <n>] [--mono-norm PERCENTILE\|MIN_MAX\|BIT_SHIFT] [--pct-low <f>] [--pct-high <f>] [--clahe true\|false] [--clahe-clip <f>] [--rgb-conv GREEN\|LUMINANCE] [--flip-x] [--flip-y] ENDOFSTR` | `SUCCESS:x,y\|inliers:N\|confidence:C` or `FAILED:<reason>` |
+| FLATFIT | `flatfit_` | JSON `{"tiles", "profile", "channel", "offset", "label"}` + ENDOFSTR (JSON because a folder path can hold spaces) | `SUCCESS:<json>` with `flatfield_min`, `flatfield_max`, `offset`, `images_used`, `images_read`, or `FAILED:<reason>`. Reads files only. |
 | PPMBIREF | `ppmbiref` | params + ENDOFSTR | optimization result |
 | SBCALIB | `sbcalib_` | params + ENDOFSTR | calibration result |
 | WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
