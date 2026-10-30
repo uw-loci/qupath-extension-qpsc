@@ -38,6 +38,16 @@ public class TilingUtilities {
     private static final Logger logger = LoggerFactory.getLogger(TilingUtilities.class);
 
     /**
+     * A rectangular grid of tiles.
+     *
+     * @param startX the left edge of the first tile
+     * @param startY the top edge of the first tile
+     * @param cols   columns of tiles
+     * @param rows   rows of tiles
+     */
+    public record TileGrid(double startX, double startY, int cols, int rows) {}
+
+    /**
      * Main entry point for tile generation.
      * <p>
      * Analyzes the provided {@link TilingRequest} and delegates to the appropriate
@@ -75,35 +85,68 @@ public class TilingUtilities {
      * @throws IOException if unable to create directories or write configuration
      */
     private static void processBoundingBoxTilingRequest(TilingRequest request) throws IOException {
-        BoundingBox bb = request.getBoundingBox();
-
-        // Calculate grid bounds
-        double minX = bb.getMinX();
-        double maxX = bb.getMaxX();
-        double minY = bb.getMinY();
-        double maxY = bb.getMaxY();
-
         // Note: axis inversion is NOT applied to the bounding box here.
         // The set of tile positions is geometrically determined by the
         // bounding box alone; only the serpentine iteration order depends
         // on StagePolarity (see processTileGridRequest). Reversing minX/maxX
         // would double-count the inversion and produce incorrect positions.
-
-        // Expand bounds by half frame to ensure full coverage
-        double startX = minX - request.getFrameWidth() / 2.0;
-        double startY = minY - request.getFrameHeight() / 2.0;
-        double width = Math.abs(maxX - minX) + request.getFrameWidth();
-        double height = Math.abs(maxY - minY) + request.getFrameHeight();
+        TileGrid grid = boundingBoxGrid(
+                request.getBoundingBox(),
+                request.getFrameWidth(),
+                request.getFrameHeight(),
+                request.getOverlapPercent());
 
         // Create output directory and configuration path
         Path boundsDir = Paths.get(request.getOutputFolder(), "bounds");
         Files.createDirectories(boundsDir);
         String configPath = boundsDir.resolve("TileConfiguration.txt").toString();
 
-        logger.info("Creating bounding box tiles: start=({}, {}), size={}x{}", startX, startY, width, height);
+        logger.info(
+                "Creating bounding box tiles: start=({}, {}), {} x {} tiles",
+                grid.startX(),
+                grid.startY(),
+                grid.cols(),
+                grid.rows());
 
         // Generate the tile grid
-        processTileGridRequest(startX, startY, width, height, request, configPath, null, null);
+        processTileGridRequest(grid, request, configPath, null, null);
+    }
+
+    /**
+     * The tiles for a bounding box, in the box's units.
+     *
+     * <p>A box that needs more than one tile along an axis is expanded by half a frame on each
+     * side of that axis, so the first tile is centered on the box's edge. One that fits inside a
+     * frame along an axis needs no margin there: it gets one tile, centered on the box. Otherwise
+     * a 1 um x 1 um box would take 2 x 2 tiles.
+     *
+     * <p>The tiler, the Bounded Acquisition tile count and the MicroManager export all read this,
+     * so the count shown before a run is the count acquired.
+     *
+     * @param box            the region to cover
+     * @param frameWidth     camera field width, in the box's units
+     * @param frameHeight    camera field height, in the box's units
+     * @param overlapPercent tile overlap
+     * @return the grid
+     */
+    public static TileGrid boundingBoxGrid(
+            BoundingBox box, double frameWidth, double frameHeight, double overlapPercent) {
+        double overlapFraction = overlapPercent / 100.0;
+        double width = box.getMaxX() - box.getMinX();
+        double height = box.getMaxY() - box.getMinY();
+        boolean oneColumn = width <= frameWidth;
+        boolean oneRow = height <= frameHeight;
+        return new TileGrid(
+                oneColumn ? (box.getMinX() + box.getMaxX() - frameWidth) / 2.0 : box.getMinX() - frameWidth / 2.0,
+                oneRow ? (box.getMinY() + box.getMaxY() - frameHeight) / 2.0 : box.getMinY() - frameHeight / 2.0,
+                oneColumn ? 1 : tilesToCover(width + frameWidth, frameWidth * (1 - overlapFraction)),
+                oneRow ? 1 : tilesToCover(height + frameHeight, frameHeight * (1 - overlapFraction)));
+    }
+
+    /** Tiles at this step that cover this span; an exact fit takes one more for the far edge. */
+    private static int tilesToCover(double span, double step) {
+        int tiles = (int) Math.ceil(span / step);
+        return span % step == 0 ? tiles + 1 : tiles;
     }
 
     /**
@@ -167,8 +210,14 @@ public class TilingUtilities {
             String configPath = annotationDir.resolve("TileConfiguration.txt").toString();
 
             // Generate tiles
+            double overlapFraction = request.getOverlapPercent() / 100.0;
+            TileGrid grid = new TileGrid(
+                    x,
+                    y,
+                    tilesToCover(w, request.getFrameWidth() * (1 - overlapFraction)),
+                    tilesToCover(h, request.getFrameHeight() * (1 - overlapFraction)));
 
-            processTileGridRequest(x, y, w, h, request, configPath, roi, annotationName);
+            processTileGridRequest(grid, request, configPath, roi, annotationName);
         }
     }
 
@@ -184,10 +233,7 @@ public class TilingUtilities {
      *   <li>TileConfiguration.txt generation in ImageJ/Fiji format</li>
      * </ul>
      *
-     * @param startX         the left edge of the grid area
-     * @param startY         the top edge of the grid area
-     * @param width          the total width to cover
-     * @param height         the total height to cover
+     * @param grid           where the grid starts and how many tiles it has
      * @param request        the tiling parameters
      * @param configPath     the output path for TileConfiguration.txt
      * @param filterROI      optional ROI to filter tiles (only tiles intersecting this ROI are kept)
@@ -195,14 +241,7 @@ public class TilingUtilities {
      * @throws IOException if unable to write the configuration file
      */
     private static void processTileGridRequest(
-            double startX,
-            double startY,
-            double width,
-            double height,
-            TilingRequest request,
-            String configPath,
-            ROI filterROI,
-            String annotationName)
+            TileGrid grid, TilingRequest request, String configPath, ROI filterROI, String annotationName)
             throws IOException {
 
         // Calculate step sizes based on overlap
@@ -210,16 +249,13 @@ public class TilingUtilities {
         double xStep = request.getFrameWidth() * (1 - overlapFraction);
         double yStep = request.getFrameHeight() * (1 - overlapFraction);
 
-        // Calculate number of tiles needed
-        int nCols = (int) Math.ceil(width / xStep);
-        int nRows = (int) Math.ceil(height / yStep);
-
-        // If the division is exact, we still need one more tile to cover the far edge
-        if (width % xStep == 0) nCols++;
-        if (height % yStep == 0) nRows++;
+        double startX = grid.startX();
+        double startY = grid.startY();
+        int nCols = grid.cols();
+        int nRows = grid.rows();
 
         logger.info("Tile grid configuration:");
-        logger.info("  Area: ({}, {}) to ({}, {})", startX, startY, startX + width, startY + height);
+        logger.info("  First tile corner: ({}, {})", startX, startY);
         logger.info("  Frame size: {} x {} (in input units)", request.getFrameWidth(), request.getFrameHeight());
         logger.info("  Step size: {} x {} ({}% overlap)", xStep, yStep, request.getOverlapPercent());
         logger.info("  Grid: {} columns x {} rows", nCols, nRows);

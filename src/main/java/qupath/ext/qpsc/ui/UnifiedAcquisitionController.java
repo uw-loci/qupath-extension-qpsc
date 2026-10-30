@@ -43,10 +43,12 @@ import qupath.ext.qpsc.service.mda.TileStagePos;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
+import qupath.ext.qpsc.utilities.BoundingBox;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.ext.qpsc.utilities.SampleNameValidator;
+import qupath.ext.qpsc.utilities.TilingUtilities;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.QuPathStyleManager;
 
@@ -1906,10 +1908,10 @@ public class UnifiedAcquisitionController {
         }
 
         /**
-         * Generates tile centroids in stage micrometers for a bounding box,
-         * mirroring {@code TilingUtilities.processBoundingBoxTilingRequest}'s
-         * half-frame buffer on each side. No alignment transform is applied --
-         * inputs are already in stage coordinates.
+         * Generates tile centroids in stage micrometers for a bounding box, on
+         * the grid the acquisition itself uses
+         * ({@link TilingUtilities#boundingBoxGrid}). No alignment transform is
+         * applied -- inputs are already in stage coordinates.
          */
         private static List<TileStagePos> synthesizeBoundsCentroids(
                 double x1,
@@ -1924,20 +1926,14 @@ public class UnifiedAcquisitionController {
             if (strideX <= 0 || strideY <= 0) {
                 return List.of();
             }
-            double minX = x1 - frameWidthUm / 2.0;
-            double minY = y1 - frameHeightUm / 2.0;
-            double maxX = x2 + frameWidthUm / 2.0;
-            double maxY = y2 + frameHeightUm / 2.0;
-            int cols = (int) Math.ceil((maxX - minX) / strideX);
-            int rows = (int) Math.ceil((maxY - minY) / strideY);
-            if (cols < 1) cols = 1;
-            if (rows < 1) rows = 1;
-            List<TileStagePos> out = new ArrayList<>(cols * rows);
+            TilingUtilities.TileGrid grid = TilingUtilities.boundingBoxGrid(
+                    new BoundingBox(x1, y1, x2, y2), frameWidthUm, frameHeightUm, overlapPercent);
+            List<TileStagePos> out = new ArrayList<>(grid.cols() * grid.rows());
             int idx = 0;
-            for (int r = 0; r < rows; r++) {
-                for (int c = 0; c < cols; c++) {
-                    double cx = minX + c * strideX + frameWidthUm / 2.0;
-                    double cy = minY + r * strideY + frameHeightUm / 2.0;
+            for (int r = 0; r < grid.rows(); r++) {
+                for (int c = 0; c < grid.cols(); c++) {
+                    double cx = grid.startX() + c * strideX + frameWidthUm / 2.0;
+                    double cy = grid.startY() + r * strideY + frameHeightUm / 2.0;
                     // Z is unknown until autofocus runs; null keeps it out of the MM position list.
                     out.add(new TileStagePos(String.valueOf(idx++), cx, cy, null));
                 }
@@ -2171,19 +2167,12 @@ public class UnifiedAcquisitionController {
                 double frameWidth = fov[0];
                 double frameHeight = fov[1];
 
-                // Calculate tile grid
-                // Match the actual tiling logic in TilingUtilities.processBoundingBoxTilingRequest():
-                // The tiling expands bounds by half a frame on each side to ensure full coverage,
-                // so total tiling area = annotation + one full frame in each dimension.
-                double paddedWidth = width + frameWidth;
-                double paddedHeight = height + frameHeight;
-
+                // The count depends only on the region's size, not where it sits
                 double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-                double stepX = frameWidth * (1.0 - overlapPercent / 100.0);
-                double stepY = frameHeight * (1.0 - overlapPercent / 100.0);
-
-                int tilesX = (int) Math.ceil(paddedWidth / stepX);
-                int tilesY = (int) Math.ceil(paddedHeight / stepY);
+                TilingUtilities.TileGrid grid = TilingUtilities.boundingBoxGrid(
+                        new BoundingBox(0, 0, width, height), frameWidth, frameHeight, overlapPercent);
+                int tilesX = grid.cols();
+                int tilesY = grid.rows();
                 int totalTiles = tilesX * tilesY;
                 setTileCount(String.format("%d tiles (%d x %d)", totalTiles, tilesX, tilesY));
 

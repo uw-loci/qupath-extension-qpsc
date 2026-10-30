@@ -68,7 +68,7 @@ The center position defines the midpoint of the acquisition area. Tiles extend e
 | Width (um) | Text | Total width of the acquisition region in micrometers |
 | Height (um) | Text | Total height of the acquisition region in micrometers |
 | Use Current Position as Center | Button | Set center coordinates from the current stage position (Live Viewer field of view center) |
-| Tile count | Display | Shown beside **Height (um)**: how many tiles the region will take at the selected objective and detector, e.g. `20 tiles (10 x 2)`. It includes the half-field margin on each side and the tile overlap, and matches **Tile Grid** in the Acquisition Preview. |
+| Tile count | Display | Shown beside **Height (um)**: how many tiles the region will take at the selected objective and detector, e.g. `20 tiles (10 x 2)`. It includes the half-field margin on each side and the tile overlap, and matches **Tile Grid** in the Acquisition Preview. A region that fits inside one field takes a single tile centered on it, with no margin; the same holds for one direction alone, so a thin strip takes one row or one column. |
 
 **Two Corners Mode:**
 
