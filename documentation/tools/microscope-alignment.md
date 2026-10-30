@@ -132,6 +132,7 @@ The slot-center seed (from holder calibration) speeds up multi-slide runs by mov
 **Auto-Align (SIFT)**:
 - Extracts a region from the WSI around the selected tile (with the configured search margin, default 160um).
 - Snaps a microscope image and matches against the WSI region using SIFT feature detection.
+- Moves the stage onto the match, then matches again to confirm it landed. If an axis answered the opposite way, the correction uses the direction it measured; the log shows `SIFT verify` lines with each position and offset. A landing it cannot confirm is not auto-accepted.
 - Pixel size differences between the WSI and microscope are handled automatically (both images are rescaled to the lower resolution).
 - Optical flip is applied based on the image's per-slide metadata.
 - The stage moves to correct any offset found by the matching; the status line shows the offset and number of matched features.

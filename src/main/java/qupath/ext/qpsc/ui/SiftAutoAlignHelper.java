@@ -70,9 +70,9 @@ public final class SiftAutoAlignHelper {
      * @param searchMarginUm how far around the tile to search, normally the Search margin
      *     preference; a "Search wider" retry passes more
      * @return {@code [offsetX, offsetY, inliers, confidence]} on success;
-     *     {@code null} if matching failed. The returned offset is the raw
-     *     server offset (WSI-entry frame), unchanged, for display; the stage
-     *     move applies {@code -offset} (see {@link #composeSiftOffsetToStageDelta}).
+     *     {@code null} if matching failed. The offset is the first one measured, in the
+     *     WSI-entry frame, for display. Confidence is 0 when {@link SiftMoveLoop} could not
+     *     confirm the landing, so the caller does not auto-accept it.
      * @throws Exception if a low-level error occurs (server I/O, invalid
      *     pixel calibration, etc.). Match failures (insufficient features)
      *     return null rather than throwing.
@@ -310,59 +310,71 @@ public final class SiftAutoAlignHelper {
             boolean coarseToFine = PersistentPreferences.isSiftCoarseToFineEnabled();
             double coarsePx = PersistentPreferences.getSiftCoarsePixelSizeUm();
             String rgbConversion = PersistentPreferences.getSiftRgbConversion();
-            String response = mc.getSocketClient()
-                    .siftAutoAlign(
-                            tempFile.getAbsolutePath(),
-                            microPixelSize,
-                            effectiveWsiPx,
-                            flipX,
-                            flipY,
-                            minPx,
-                            ratioThreshold,
-                            minMatchCount,
-                            contrastThreshold,
-                            nFeatures,
-                            monoNorm,
-                            pctLow,
-                            pctHigh,
-                            claheEnabled,
-                            claheClip,
-                            coarseToFine,
-                            coarsePx,
-                            rgbConversion);
+            String referenceImage = tempFile.getAbsolutePath();
+            boolean serverFlipX = flipX;
+            boolean serverFlipY = flipY;
+            double centerShiftX = regionCenterShiftUm(regionX, regionW, tileX, tileW, wsiPixelSize, serverFlipX);
+            double centerShiftY = regionCenterShiftUm(regionY, regionH, tileY, tileH, wsiPixelSize, serverFlipY);
+            SiftMoveLoop.Meter meter = () -> {
+                String response = mc.getSocketClient()
+                        .siftAutoAlign(
+                                referenceImage,
+                                microPixelSize,
+                                effectiveWsiPx,
+                                serverFlipX,
+                                serverFlipY,
+                                minPx,
+                                ratioThreshold,
+                                minMatchCount,
+                                contrastThreshold,
+                                nFeatures,
+                                monoNorm,
+                                pctLow,
+                                pctHigh,
+                                claheEnabled,
+                                claheClip,
+                                coarseToFine,
+                                coarsePx,
+                                rgbConversion);
+                if (!response.startsWith("SUCCESS:")) {
+                    logger.warn("SIFT auto-align did not succeed: {}", response);
+                    return null;
+                }
+                double[] parsed = parseSiftResponse(response);
+                // The server measures from the center of the region it was sent
+                parsed[0] += centerShiftX;
+                parsed[1] += centerShiftY;
+                return parsed;
+            };
 
-            if (!response.startsWith("SUCCESS:")) {
-                logger.warn("SIFT auto-align did not succeed: {}", response);
+            double[] matched = meter.measure();
+            if (matched == null) {
                 return null;
             }
+            double offsetX = matched[0];
+            double offsetY = matched[1];
+            double inliers = matched[2];
+            double confidence = matched[3];
+            logger.info(
+                    "SIFT offset: ({}, {}) um from the tile (region center is ({}, {}) um from it), "
+                            + "inliers={}, confidence={}",
+                    offsetX,
+                    offsetY,
+                    centerShiftX,
+                    centerShiftY,
+                    (int) inliers,
+                    confidence);
 
-            String[] parts = response.substring(8).split("\\|");
-            String[] offsets = parts[0].split(",");
-            double offsetX = Double.parseDouble(offsets[0]);
-            double offsetY = Double.parseDouble(offsets[1]);
-
-            int inliers = 0;
-            double confidence = 0;
-            for (String part : parts) {
-                if (part.startsWith("inliers:")) inliers = Integer.parseInt(part.substring(8));
-                if (part.startsWith("confidence:")) confidence = Double.parseDouble(part.substring(11));
+            if (!moveStage) {
+                logger.info("SIFT measure-only: not moving the stage (checking the alignment, not applying it)");
+                return matched;
             }
 
-            logger.info("SIFT offset: ({}, {}) um, inliers={}, confidence={}", offsetX, offsetY, inliers, confidence);
-
             double[] currentPos = mc.getStagePositionXY();
-            // The SIFT offset points FROM the target tile TO the current camera
-            // position (server: micro-center-minus-WSI-center), so the stage must
-            // move by the NEGATION -- and by NEGATION ONLY, no rig transform. SIFT
-            // matches the WSI region against the live camera, so the match itself
-            // resolves the light-path orientation; the offset is already in the
-            // frame the stage command uses for a relative correction. Verified on
-            // both rigs (PPM identity, OWS3 INVERT_XY) 2026-08-09: -offset lands
-            // correctly on both, whereas mapping through the alignment transform
-            // mirrored the move on OWS3.
+            // The first move is -offset; SiftMoveLoop then checks it against the sample and takes
+            // any remaining correction from the response it measured (composeSiftOffsetToStageDelta
+            // and SiftMoveLoop say why).
             double[] stageDelta = composeSiftOffsetToStageDelta(offsetX, offsetY, flipX, flipY);
-            double newX = currentPos[0] + stageDelta[0];
-            double newY = currentPos[1] + stageDelta[1];
             logger.info(
                     "SIFT move: offset=({}, {}) um [WSI-entry frame, target->current], serverFlip=({}, {}) -> "
                             + "stageDelta=({}, {}) um [-offset]; stage ({}, {}) -> ({}, {})",
@@ -374,15 +386,26 @@ public final class SiftAutoAlignHelper {
                     String.format("%.2f", stageDelta[1]),
                     String.format("%.1f", currentPos[0]),
                     String.format("%.1f", currentPos[1]),
-                    String.format("%.1f", newX),
-                    String.format("%.1f", newY));
-            if (moveStage) {
-                mc.moveStageXY(newX, newY);
-            } else {
-                logger.info("SIFT measure-only: not moving the stage (checking the alignment, not applying it)");
-            }
+                    String.format("%.1f", currentPos[0] + stageDelta[0]),
+                    String.format("%.1f", currentPos[1] + stageDelta[1]));
 
-            return new double[] {offsetX, offsetY, inliers, confidence};
+            SiftMoveLoop.Stage stage = new SiftMoveLoop.Stage() {
+                @Override
+                public double[] position() throws Exception {
+                    return mc.getStagePositionXY();
+                }
+
+                @Override
+                public void moveTo(double x, double y) throws Exception {
+                    mc.moveStageXY(x, y);
+                    awaitArrival(mc, x, y);
+                }
+            };
+            double toleranceUm = Math.max(MIN_VERIFY_TOLERANCE_UM, VERIFY_TOLERANCE_PIXELS * siftTargetPx);
+            SiftMoveLoop.Landing landing =
+                    SiftMoveLoop.run(new double[] {offsetX, offsetY}, flipX, flipY, toleranceUm, stage, meter);
+            // Zero confidence keeps an unconfirmed landing away from the auto-accept gate
+            return new double[] {offsetX, offsetY, inliers, landing.verified() ? confidence : 0};
 
         } finally {
             mc.restoreLiveViewState(liveState);
@@ -392,11 +415,82 @@ public final class SiftAutoAlignHelper {
         }
     }
 
+    /** A verified landing is within this of the tile, or the next constant, whichever is larger. */
+    private static final double MIN_VERIFY_TOLERANCE_UM = 5;
+
+    /** SIFT's own repeatability, in pixels at the size it matches. */
+    private static final double VERIFY_TOLERANCE_PIXELS = 3;
+
+    private static final long ARRIVAL_TIMEOUT_MS = 15_000;
+    private static final long ARRIVAL_POLL_MS = 50;
+    private static final long ARRIVAL_SETTLE_MS = 150;
+    private static final double ARRIVAL_TOLERANCE_UM = 2;
+
+    /**
+     * How far the center of the region sent to the server sits from the tile's center, in the
+     * frame the server measures in. Near the image edge the region is clipped on that side, so its
+     * center is not the tile's. The server's offset is from the region's center and needs this
+     * added to be from the tile.
+     *
+     * @param regionStart region start along one axis, full-res px
+     * @param regionSize region size, full-res px
+     * @param tileStart tile start, full-res px
+     * @param tileSize tile size, full-res px
+     * @param pixelSizeUm full-res pixel size
+     * @param serverFlip whether the server mirrors the region along this axis
+     * @return the shift in um
+     */
+    static double regionCenterShiftUm(
+            double regionStart,
+            double regionSize,
+            double tileStart,
+            double tileSize,
+            double pixelSizeUm,
+            boolean serverFlip) {
+        double shift = ((regionStart + regionSize / 2.0) - (tileStart + tileSize / 2.0)) * pixelSizeUm;
+        return serverFlip ? -shift : shift;
+    }
+
+    /**
+     * Waits for the stage to reach a target. {@code moveStageXY} returns once the command is sent,
+     * so a position or a frame read straight after it can be from the middle of the move.
+     */
+    private static void awaitArrival(MicroscopeController mc, double x, double y) throws Exception {
+        long deadline = System.nanoTime() + ARRIVAL_TIMEOUT_MS * 1_000_000;
+        while (System.nanoTime() < deadline) {
+            double[] position = mc.getStagePositionXY();
+            if (Math.hypot(position[0] - x, position[1] - y) <= ARRIVAL_TOLERANCE_UM) {
+                Thread.sleep(ARRIVAL_SETTLE_MS);
+                return;
+            }
+            Thread.sleep(ARRIVAL_POLL_MS);
+        }
+        logger.warn("Stage did not reach ({}, {}) within {} ms", x, y, ARRIVAL_TIMEOUT_MS);
+    }
+
+    /** Reads {@code SUCCESS:x,y|inliers:n|confidence:c} into {@code [x, y, inliers, confidence]}. */
+    private static double[] parseSiftResponse(String response) {
+        String[] parts = response.substring(8).split("\\|");
+        String[] offsets = parts[0].split(",");
+        double inliers = 0;
+        double confidence = 0;
+        for (String part : parts) {
+            if (part.startsWith("inliers:")) inliers = Integer.parseInt(part.substring(8));
+            if (part.startsWith("confidence:")) confidence = Double.parseDouble(part.substring(11));
+        }
+        return new double[] {Double.parseDouble(offsets[0]), Double.parseDouble(offsets[1]), inliers, confidence};
+    }
+
     /**
      * Converts the SIFT offset into the stage displacement to ADD to the current
      * position to bring the camera onto the tile (micrometers): simply
      * {@code -offset} (after undoing any server-applied flip). <b>No rig
      * transform.</b>
+     *
+     * <p>This is the first move only. {@link SiftMoveLoop} checks it against the sample, because
+     * on OWS3 on 2026-10-27 X went the wrong way, at the same magnitude, with Y right. Neither this
+     * negation nor the alignment transform fitted both axes, so the loop measures the response
+     * instead of assuming one.
      *
      * <p><b>Direction.</b> The server computes the offset as
      * {@code (microscope-center-in-WSI) - (WSI-center)} -- it points FROM the
