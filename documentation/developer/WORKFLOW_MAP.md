@@ -340,7 +340,7 @@ common_failures:
   - "Wizard objective mismatch with MicroManager -- 5% pixel size threshold, hard-cancel via QPScopeChecks."
   - "Orphaned flipped sibling entry without parent macro -- dialog forces restart with valid base."
 related_design_reports:
-  - claude-reports/2026-05-31_stitching-recovery-dialog-fix.md
+  - claude-reports/archive/2026-05/2026-05-30_stitching-recovery-dialog-fix.md
   - claude-reports/design/2026-05-13_subimage-acquisition-routing-fix.md
   - claude-reports/design/2026-05-07_step-b-flipped-duplicate-restoration.md
   - claude-reports/design/2026-05-19_flip-frame-save-site-fix.md
@@ -539,7 +539,7 @@ common_failures:
   - "Pre-fix per-slide JSONs (no flipFrameVerified field) -> Continue/Cancel advisory."
 related_design_reports:
   - documentation/developer/COORDINATE_TRANSFORMS.md
-  - claude-reports/design/2026-05-26_microscope-alignment-flip-short-circuit.md
+  - claude-reports/archive/2026-05/2026-05-26_microscope-alignment-flip-short-circuit.md
 ```
 
 ### W4: BackgroundCollectionWorkflow
