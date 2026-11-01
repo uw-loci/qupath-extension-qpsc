@@ -1581,6 +1581,17 @@ scarce.
 
 ---
 
+## Flat-Field Correction (Persistent Preferences)
+
+These keys hold the **Flat-field correction** choice for monochrome detectors in Bounded Acquisition, Acquire from Existing Image and the Acquisition Wizard. The Z-Stack / Time-Lapse dialog follows the saved choice. They replace the older "Use background correction" checkbox, which is no longer read.
+
+| Key | Type | Default | Description |
+|---|---|---|---|
+| `flatfieldMethod` | String | `BACKGROUND` | `NONE` (no correction), `BACKGROUND` (divide by background images) or `BASIC` (apply a BaSiC profile). `BASIC` is offered only for laser-scanning and widefield modalities; other modalities fall back to `BACKGROUND`. JAI cameras and LC-PolScope do not use this choice. |
+| `flatfieldProfileFolder` | String | `""` | The folder of BaSiC profiles used when `flatfieldMethod` is `BASIC`. See [Background Profiles](tools/background-profiles.md#basic-profiles-when-there-is-no-background-image). |
+
+---
+
 ## White Balance Mode
 
 White balance mode is no longer a global preference. Instead, WB mode is selected per-acquisition from a dropdown in the acquisition dialog:
