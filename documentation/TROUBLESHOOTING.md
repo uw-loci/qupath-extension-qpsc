@@ -1107,6 +1107,8 @@ Every stitched image in `SlideImages/` has a plain-text `<image name>.stitch-inf
 
 **Which background was used?** The `background profile:` and `background folder:` lines in `[acquisition]`, read from `--bg-profile` and `--bg-folder` in the acquisition command. `none` means the acquisition ran without background correction; `not recorded` on the profile line means a folder was sent by a QPSC from before background profiles. The profile id is also saved on the image's project entry as `background_profile`. The server's `acquisition_metadata.json` in the acquisition folder records `bg_profile`, `bg_folder`, the files it loaded and whether it switched correction off (needs the matching microscope_command_server).
 
+**Was a BaSiC profile used?** The `BaSiC profile:` line in `[acquisition]`, read from `--flatfield-folder` in the acquisition command. `none` means no BaSiC profile was applied (background images, or no correction). The folder is also saved on the image's project entry as `flatfield_profile`. A BaSiC profile and background images are never both applied to one acquisition.
+
 A merged multichannel image's record lists the per-channel images it was built from and includes each one's record. The record follows the image when QPSC renames it, but not if you rename or move the image yourself. Rename the `.stitch-info.txt` to match, or it will no longer be next to its image. Needs tiles-to-pyramid 0.7.1 or later. With an older version, images have no record.
 
 **Alternative method - standalone stitching (file only, no project import):**

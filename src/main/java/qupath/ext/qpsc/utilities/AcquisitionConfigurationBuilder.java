@@ -43,7 +43,7 @@ public class AcquisitionConfigurationBuilder {
     /**
      * Whether background correction will effectively run for this
      * {@code (modality, detector)} pair, accounting for the YAML enabled flag,
-     * the monochrome "Use background correction" user-preference override, and
+     * the monochrome flat-field correction user-preference override, and
      * JAI handling. Mirrors the gating inside {@link #buildConfiguration} so
      * pre-acquisition checks (e.g. the background/profile illumination warning)
      * can decide whether a mismatch is even relevant without running the full
@@ -194,7 +194,7 @@ public class AcquisitionConfigurationBuilder {
         }
 
         // For monochrome (non-JAI) detectors, the user's
-        // "Use background correction" checkbox in the acquisition dialog
+        // flat-field correction choice in the acquisition dialog
         // overrides the YAML enabled flag. JAI cameras continue to use the
         // WB mode selector which bundles background correction.
         boolean isJai = configManager.isJAICamera(detector);
@@ -216,7 +216,7 @@ public class AcquisitionConfigurationBuilder {
             }
         }
         // LC-PolScope: the background is part of the reconstruction, not a flat-field divide, so
-        // neither the "Use background correction" checkbox (which is about flat-field) nor the
+        // neither the flat-field correction choice nor the
         // YAML enabled flag gates it. Whenever a background folder is configured it is sent; the
         // server checks it against the current LC calibration and refuses a mismatched one, and
         // reconstructs uncorrected (with a warning) when no background is there.
