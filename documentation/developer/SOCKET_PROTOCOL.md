@@ -176,6 +176,8 @@ The ACQUIRE payload is a flag-based string:
 ENDOFSTR
 ```
 
+`--flatfield-folder <folder>` is emitted only when the run's flat-field correction is a BaSiC profile (monochrome detectors, laser-scanning or widefield modalities). It is never sent together with `--bg-correction true`: a run takes background images or a BaSiC profile, not both. The folder holds one profile, or one subfolder per channel.
+
 `--timepoints` / `--interval` are emitted by `AcquisitionCommandBuilder` only when the user enables the Time-Lapse Options pane in the acquisition dialog (`timepoints > 1`). `--interval` is the seconds between the *start* of consecutive timepoints. Omitting both flags yields a single-timepoint acquisition (byte-identical to pre-time-lapse builds). The server's main multi-tile workflow loops over timepoints with a drift-corrected scheduler; see the `REQTWARN` poll below for the falling-behind warning channel.
 
 `--display-colormap <uniform|ppm|hsv>` (LC-PolScope only) is the acquisition panel's **Orientation colour image** choice. It overrides `reconstruction.display_colormap` for this run and changes only the display-only `orientation_color` tiles. The flag is omitted when the panel says "As in the config", or when it says PPM and the config has no `display_hue_calibration`.
