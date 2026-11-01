@@ -214,6 +214,15 @@ public interface ModalityHandler {
     }
 
     /**
+     * Whether a BaSiC flat-field profile can correct this modality's images. True where an image is
+     * an intensity with no measured background to prefer: laser scanning and widefield channels.
+     * False for polarization modalities, whose reconstructions depend on their own backgrounds.
+     */
+    default boolean supportsFlatfieldProfile() {
+        return false;
+    }
+
+    /**
      * Returns true if this modality expects every tile to fill the dynamic
      * range of the detector. When true, the acquisition server may flag
      * suspiciously dim tiles (median far below the calibration target) as

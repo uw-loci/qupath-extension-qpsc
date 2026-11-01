@@ -82,6 +82,9 @@ public class ImageMetadataManager {
     /** Background profile the tiles were flat-field corrected with (informational). */
     public static final String BACKGROUND_PROFILE = "background_profile";
 
+    /** Folder of the BaSiC flat-field profiles an image was corrected with. */
+    public static final String FLATFIELD_PROFILE = "flatfield_profile";
+
     // Camera field of view at acquisition time (microns). Needed for
     // coordinate propagation when the microscope is not connected.
     public static final String FOV_X_UM = "fov_x_um";
@@ -1080,6 +1083,16 @@ public class ImageMetadataManager {
             return;
         }
         entry.getMetadata().put(BACKGROUND_PROFILE, profileId);
+    }
+
+    /** Records the BaSiC profile folder an image was corrected with; null or empty removes it. */
+    public static void setFlatfieldProfile(ProjectImageEntry<?> entry, String folder) {
+        if (entry == null) return;
+        if (folder == null || folder.isEmpty()) {
+            entry.getMetadata().remove(FLATFIELD_PROFILE);
+            return;
+        }
+        entry.getMetadata().put(FLATFIELD_PROFILE, folder);
     }
 
     /** The background profile recorded at import, or null. */

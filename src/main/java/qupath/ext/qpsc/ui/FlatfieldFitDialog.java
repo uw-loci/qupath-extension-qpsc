@@ -2,6 +2,7 @@ package qupath.ext.qpsc.ui;
 
 import java.io.File;
 import java.io.IOException;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -11,6 +12,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.TextField;
 import javafx.scene.image.Image;
 import javafx.scene.image.ImageView;
+import javafx.scene.layout.FlowPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
@@ -34,13 +36,16 @@ public final class FlatfieldFitDialog {
     private static final String TITLE = "Estimate Flat-Field from Tiles (BaSiC)";
     private static final String PROFILE_SUFFIX = "_flatfield";
 
+    /** Below this a fit can come out nearly flat with no error; see correction/flatfield.py. */
+    private static final int MIN_PLANES = 40;
+
     private final TextField tilesField = new TextField();
     private final TextField profileField = new TextField();
     private final TextField channelField = new TextField();
     private final TextField offsetField = new TextField();
     private final TextField labelField = new TextField();
     private final Label statusLabel = new Label();
-    private final ImageView preview = new ImageView();
+    private final FlowPane previews = new FlowPane(8, 8);
     private final Button fitButton = new Button("Fit");
 
     private FlatfieldFitDialog() {}
@@ -82,18 +87,17 @@ public final class FlatfieldFitDialog {
         addFolderRow(grid, row, "Save profile to", profileField, stage);
         GridPane.setHgrow(tilesField, Priority.ALWAYS);
 
-        Label advice = new Label("Use raw tiles or averaged frames, never max projections. A profile is good "
-                + "for one detector, objective, zoom and channel.");
+        Label advice = new Label("Use raw tiles or averaged frames, never max projections, and at least "
+                + MIN_PLANES + " tiles with tissue in them. A profile is good for one detector, objective, zoom "
+                + "and channel. Choose a region's folder to fit each of its channels.");
         advice.setWrapText(true);
         advice.setMinHeight(Region.USE_PREF_SIZE);
         statusLabel.setWrapText(true);
         statusLabel.setMinHeight(Region.USE_PREF_SIZE);
-        preview.setFitWidth(256);
-        preview.setPreserveRatio(true);
         fitButton.setDefaultButton(true);
         fitButton.setOnAction(e -> fit());
 
-        VBox root = new VBox(10, advice, grid, new HBox(8, fitButton), statusLabel, preview);
+        VBox root = new VBox(10, advice, grid, new HBox(8, fitButton), statusLabel, previews);
         root.setPadding(new Insets(12));
         root.setPrefWidth(620);
         stage.setScene(new Scene(root));
@@ -150,7 +154,7 @@ public final class FlatfieldFitDialog {
 
         String label = labelField.getText().trim();
         fitButton.setDisable(true);
-        preview.setImage(null);
+        previews.getChildren().clear();
         statusLabel.setText("Fitting... A few hundred tiles take under a minute.");
         CompletableFuture.supplyAsync(() -> {
                     try {
@@ -170,16 +174,33 @@ public final class FlatfieldFitDialog {
                 }));
     }
 
-    private void showResult(MicroscopeSocketClient.FlatfieldFit fit, String profile) {
-        statusLabel.setText(String.format(
-                "Shading %.3f to %.3f of the mean, from %d of %d planes; offset %.1f counts. Dark blue below "
-                        + "is the dimmest part of the field, yellow the brightest. To use it, choose this folder "
-                        + "in Tiles to Pyramid: %s",
-                fit.flatfieldMin(), fit.flatfieldMax(), fit.imagesUsed(), fit.imagesRead(), fit.offset(), profile));
-        File picture = new File(profile, "flatfield_preview.png");
-        if (picture.isFile()) {
-            preview.setImage(new Image(picture.toURI().toString()));
+    private void showResult(List<MicroscopeSocketClient.FlatfieldFit> fits, String profile) {
+        StringBuilder text = new StringBuilder();
+        for (MicroscopeSocketClient.FlatfieldFit fit : fits) {
+            text.append(String.format(
+                    "%sShading %.3f to %.3f of the mean, from %d of %d planes; offset %.1f counts.%s%n",
+                    fit.channel() == null ? "" : fit.channel() + ": ",
+                    fit.flatfieldMin(),
+                    fit.flatfieldMax(),
+                    fit.imagesUsed(),
+                    fit.imagesRead(),
+                    fit.offset(),
+                    fit.imagesUsed() < MIN_PLANES
+                            ? " Too few planes to trust: below " + MIN_PLANES + " a fit can come out nearly flat."
+                            : ""));
+            File folder = fit.channel() == null ? new File(profile) : new File(profile, fit.channel());
+            File picture = new File(folder, "flatfield_preview.png");
+            if (picture.isFile()) {
+                ImageView view = new ImageView(new Image(picture.toURI().toString()));
+                view.setFitWidth(fits.size() == 1 ? 256 : 128);
+                view.setPreserveRatio(true);
+                previews.getChildren().add(new VBox(2, new Label(fit.channel() == null ? "" : fit.channel()), view));
+            }
         }
+        text.append("Dark blue below is the dimmest part of the field, yellow the brightest. To use it, choose this"
+                + " folder as the BaSiC profile for an acquisition, or in Tiles to Pyramid: ");
+        text.append(profile);
+        statusLabel.setText(text.toString());
         statusLabel.getScene().getWindow().sizeToScene();
     }
 }

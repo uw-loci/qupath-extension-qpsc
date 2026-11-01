@@ -23,7 +23,7 @@ class LCPolScopeBackgroundGatingTest {
     @TempDir
     Path tempDir;
 
-    private boolean savedMonoPref;
+    private FlatfieldMethod savedMethod;
     private String savedActiveProfile;
 
     private static final String MAIN_CONFIG = """
@@ -51,14 +51,14 @@ class LCPolScopeBackgroundGatingTest {
 
     @BeforeEach
     void savePref() {
-        savedMonoPref = PersistentPreferences.getUseBackgroundCorrectionMono();
+        savedMethod = PersistentPreferences.getFlatfieldMethod();
         savedActiveProfile = PersistentPreferences.getActiveBackgroundProfile();
         PersistentPreferences.setActiveBackgroundProfile("");
     }
 
     @AfterEach
     void restorePref() {
-        PersistentPreferences.setUseBackgroundCorrectionMono(savedMonoPref);
+        PersistentPreferences.setFlatfieldMethod(savedMethod);
         PersistentPreferences.setActiveBackgroundProfile(savedActiveProfile);
     }
 
@@ -94,7 +94,7 @@ class LCPolScopeBackgroundGatingTest {
     @Test
     void aConfiguredFolderIsUsedEvenWithTheFlatFieldToggleOff() throws IOException {
         MicroscopeConfigManager mgr = load(baseWithActiveProfile());
-        PersistentPreferences.setUseBackgroundCorrectionMono(false);
+        PersistentPreferences.setFlatfieldMethod(FlatfieldMethod.NONE);
 
         assertTrue(AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(
                 mgr, "lcpolscope", "DET_DUMMY"));
@@ -108,7 +108,7 @@ class LCPolScopeBackgroundGatingTest {
     @Test
     void noFolderMeansNoBackgroundWhateverTheToggleSays() throws IOException {
         MicroscopeConfigManager mgr = load("null");
-        PersistentPreferences.setUseBackgroundCorrectionMono(true);
+        PersistentPreferences.setFlatfieldMethod(FlatfieldMethod.BACKGROUND);
 
         assertFalse(AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(
                 mgr, "lcpolscope", "DET_DUMMY"));
@@ -119,7 +119,7 @@ class LCPolScopeBackgroundGatingTest {
         String base = tempDir.resolve("backgrounds").toString().replace('\\', '/');
         BackgroundProfiles.create(base, "p", "P", null, null, null, null);
         MicroscopeConfigManager mgr = load("'" + base + "'");
-        PersistentPreferences.setUseBackgroundCorrectionMono(true);
+        PersistentPreferences.setFlatfieldMethod(FlatfieldMethod.BACKGROUND);
 
         assertFalse(
                 AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(

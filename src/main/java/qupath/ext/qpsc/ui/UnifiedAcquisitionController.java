@@ -27,7 +27,6 @@ import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
-import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.model.SampleSetupResult;
@@ -244,7 +243,7 @@ public class UnifiedAcquisitionController {
         private ComboBox<String> wbModeComboBox;
         private BackgroundProfileSelector backgroundProfileSelector;
         private Label wbModeLabel;
-        private CheckBox monoBgCorrectionCheck;
+        private FlatfieldMethodSelector flatfieldSelector;
 
         // UI Components - Advanced Section Content
         private VBox advancedContent;
@@ -699,21 +698,10 @@ public class UnifiedAcquisitionController {
             grid.add(backgroundProfileSelector, 0, row, 2, 1);
             row++;
 
-            // Background correction toggle for monochrome (non-JAI) detectors.
-            // JAI cameras bundle background correction into the WB mode
-            // selector; monochrome detectors need an independent toggle so
-            // that brightfield / fluorescence acquisitions can apply flat-field
-            // correction when a matching background image exists on disk.
-            monoBgCorrectionCheck = new CheckBox("Use background correction");
-            monoBgCorrectionCheck.setSelected(PersistentPreferences.getUseBackgroundCorrectionMono());
-            monoBgCorrectionCheck.setTooltip(
-                    new Tooltip("Apply flat-field background correction to monochrome acquisitions.\n"
-                            + "Requires a matching background image collected at the same\n"
-                            + "objective/detector (and ideally the same exposure)."));
-            monoBgCorrectionCheck
-                    .selectedProperty()
-                    .addListener((obs, o, n) -> PersistentPreferences.setUseBackgroundCorrectionMono(n));
-            grid.add(monoBgCorrectionCheck, 0, row, 2, 1);
+            // Flat-field correction for monochrome (non-JAI) detectors. JAI cameras bundle
+            // background correction into the WB mode selector.
+            flatfieldSelector = new FlatfieldMethodSelector(this::refreshBackgroundStatusVisibility);
+            grid.add(flatfieldSelector, 0, row, 2, 1);
             row++;
 
             // Pixel size mismatch warning
@@ -1987,8 +1975,8 @@ public class UnifiedAcquisitionController {
             boolean modalityUsesWb = !"off".equals(defaultWb);
 
             // JAI cameras use the WB mode selector (which also controls bg
-            // correction mode). Monochrome detectors use the standalone
-            // "Use background correction" checkbox instead.
+            // correction mode). Monochrome detectors use the flat-field
+            // correction selector instead.
             // Hide WB entirely for modalities that don't use it (e.g. Fluorescence).
             boolean showWb = isJAI && modalityUsesWb;
             if (wbModeComboBox != null) {
@@ -1999,12 +1987,9 @@ public class UnifiedAcquisitionController {
                 wbModeLabel.setVisible(showWb);
                 wbModeLabel.setManaged(showWb);
             }
-            if (monoBgCorrectionCheck != null) {
-                // LC-PolScope applies its background inside the reconstruction whenever one is
-                // collected, so this flat-field toggle does not apply to it.
-                boolean showMonoBg = !isJAI && !LCPolScopeModalityHandler.isLcPolScope(modality);
-                monoBgCorrectionCheck.setVisible(showMonoBg);
-                monoBgCorrectionCheck.setManaged(showMonoBg);
+            if (flatfieldSelector != null) {
+                flatfieldSelector.refresh(modality, detector);
+                refreshBackgroundStatusVisibility();
             }
 
             // Reset WB default from handler when modality changes
@@ -2029,6 +2014,13 @@ public class UnifiedAcquisitionController {
             }
 
             logger.debug("WB/BG visibility updated: JAI={}, modalityWB={}, visible={}", isJAI, modalityUsesWb, showWb);
+        }
+
+        /** "No background profile" means nothing to a run that does not use backgrounds. */
+        private void refreshBackgroundStatusVisibility() {
+            if (backgroundProfileSelector != null && flatfieldSelector != null) {
+                backgroundProfileSelector.setStatusVisible(flatfieldSelector.usesBackground());
+            }
         }
 
         /**

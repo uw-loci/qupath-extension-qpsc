@@ -297,6 +297,7 @@ public class ExistingImageAcquisitionController {
         private Label wbLabel;
         private ComboBox<String> wbModeComboBox;
         private BackgroundProfileSelector backgroundProfileSelector;
+        private FlatfieldMethodSelector flatfieldSelector;
 
         // UI Components - Preview Section
         private Label previewAnnotationsLabel;
@@ -809,6 +810,10 @@ public class ExistingImageAcquisitionController {
                 refreshModalityReadout();
             });
             grid.add(backgroundProfileSelector, 0, row, 2, 1);
+            row++;
+
+            flatfieldSelector = new FlatfieldMethodSelector(this::refreshBackgroundStatusVisibility);
+            grid.add(flatfieldSelector, 0, row, 2, 1);
 
             hardwarePane = new TitledPane("HARDWARE CONFIGURATION", grid);
             hardwarePane.setExpanded(true);
@@ -2022,6 +2027,11 @@ public class ExistingImageAcquisitionController {
                 filterWbModesByBackgroundValidity(modality, detector, isMultiAngle);
             }
 
+            if (flatfieldSelector != null) {
+                flatfieldSelector.refresh(modality, detector);
+                refreshBackgroundStatusVisibility();
+            }
+
             if (backgroundProfileSelector != null) {
                 String objectiveDisplay = objectiveBox.getValue();
                 backgroundProfileSelector.refreshStatus(
@@ -2035,6 +2045,13 @@ public class ExistingImageAcquisitionController {
                     isJAI,
                     modalityUsesWb,
                     showWb);
+        }
+
+        /** "No background profile" means nothing to a run that does not use backgrounds. */
+        private void refreshBackgroundStatusVisibility() {
+            if (backgroundProfileSelector != null && flatfieldSelector != null) {
+                backgroundProfileSelector.setStatusVisible(flatfieldSelector.usesBackground());
+            }
         }
 
         /**

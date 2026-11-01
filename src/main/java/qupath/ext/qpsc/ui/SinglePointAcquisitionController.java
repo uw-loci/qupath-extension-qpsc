@@ -31,7 +31,9 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.state.ModalityState;
+import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AcquisitionTimingEstimator;
+import qupath.ext.qpsc.utilities.FlatfieldProfiles;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -153,6 +155,24 @@ public class SinglePointAcquisitionController {
             setupGrid.add(sampleNameField, 1, 0);
             setupGrid.add(new Label("Modality:"), 0, 1);
             setupGrid.add(modalityCombo, 1, 1);
+
+            // This dialog has no background images to choose between, but a saved BaSiC choice
+            // applies here, so it says so.
+            Label flatfieldLabel = new Label();
+            flatfieldLabel.setWrapText(true);
+            Runnable updateFlatfieldLabel = () -> {
+                String folder = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
+                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty()),
+                        modalityCombo.getValue() != null ? modalityCombo.getValue() : "brightfield",
+                        null);
+                flatfieldLabel.setText(
+                        folder == null ? "" : "Flat-field correction: " + FlatfieldProfiles.describe(folder));
+                flatfieldLabel.setVisible(folder != null);
+                flatfieldLabel.setManaged(folder != null);
+            };
+            modalityCombo.valueProperty().addListener((o, a, b) -> updateFlatfieldLabel.run());
+            updateFlatfieldLabel.run();
+            setupGrid.add(flatfieldLabel, 0, 2, 2, 1);
 
             // --- Z-stack section ---
             CheckBox zEnableCheckbox = new CheckBox("Enable Z-stack");
@@ -432,6 +452,9 @@ public class SinglePointAcquisitionController {
                 intervalSec,
                 outputFormat);
 
+        String flatfieldFolder = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
+                MicroscopeConfigManager.getInstance(configPath), modality, null);
+
         Thread worker = new Thread(
                 () -> {
                     try {
@@ -468,6 +491,7 @@ public class SinglePointAcquisitionController {
                                                 false,
                                                 null,
                                                 null,
+                                                flatfieldFolder,
                                                 tpForZ,
                                                 intervalForZ);
                             } else {
@@ -481,7 +505,11 @@ public class SinglePointAcquisitionController {
                                                 wbMode,
                                                 configPath,
                                                 null,
-                                                null);
+                                                null,
+                                                false,
+                                                null,
+                                                null,
+                                                flatfieldFolder);
                             }
                             logger.info("Single-point acquisition complete: {}", response);
                         });

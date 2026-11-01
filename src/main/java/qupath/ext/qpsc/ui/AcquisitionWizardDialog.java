@@ -130,6 +130,7 @@ public class AcquisitionWizardDialog {
     private ComboBox<String> objectiveCombo;
     private ComboBox<String> detectorCombo;
     private BackgroundProfileSelector backgroundProfileSelector;
+    private FlatfieldMethodSelector flatfieldSelector;
 
     // Step rows (for status updates)
     private final List<StepRow> stepRows = new ArrayList<>();
@@ -576,6 +577,8 @@ public class AcquisitionWizardDialog {
                 this::refreshCalibrationStatuses);
         backgroundProfileSelector.setStatusVisible(false);
         grid.add(backgroundProfileSelector, 0, 3, 2, 1);
+        flatfieldSelector = new FlatfieldMethodSelector(this::refreshCalibrationStatuses);
+        grid.add(flatfieldSelector, 0, 4, 2, 1);
 
         // Set column constraints
         ColumnConstraints labelCol = new ColumnConstraints();
@@ -1379,6 +1382,9 @@ public class AcquisitionWizardDialog {
         String modality = getSelectedModality();
         String objective = getSelectedObjective();
         String detector = getSelectedDetector();
+        if (flatfieldSelector != null) {
+            flatfieldSelector.refresh(modality, detector);
+        }
 
         CompletableFuture.runAsync(() -> {
             var wbByMode = CalibrationChecker.checkWhiteBalanceByMode(modality, objective, detector);

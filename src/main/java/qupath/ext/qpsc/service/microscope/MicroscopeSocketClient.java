@@ -7946,6 +7946,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 false,
                 null,
                 null,
+                null,
                 1,
                 0.0);
     }
@@ -7986,6 +7987,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 bgCorrectionEnabled,
                 bgFolder,
                 bgMethod,
+                null,
                 1,
                 0.0);
     }
@@ -8022,6 +8024,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             boolean bgCorrectionEnabled,
             String bgFolder,
             String bgMethod,
+            String flatfieldFolder,
             int timepoints,
             double intervalSec)
             throws IOException {
@@ -8043,6 +8046,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
             if (bgMethod != null) msg.append(" --bg-method ").append(bgMethod);
         }
+        if (flatfieldFolder != null)
+            msg.append(" --flatfield-folder \"").append(flatfieldFolder).append('"');
         if (timepoints > 1) {
             msg.append(" --timepoints ").append(timepoints);
             if (intervalSec > 0) msg.append(" --interval ").append(intervalSec);
@@ -8090,6 +8095,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 detector,
                 false,
                 null,
+                null,
                 null);
     }
 
@@ -8111,7 +8117,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String detector,
             boolean bgCorrectionEnabled,
             String bgFolder,
-            String bgMethod)
+            String bgMethod,
+            String flatfieldFolder)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--output ").append(outputFolder);
@@ -8128,6 +8135,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
             if (bgMethod != null) msg.append(" --bg-method ").append(bgMethod);
         }
+        if (flatfieldFolder != null)
+            msg.append(" --flatfield-folder \"").append(flatfieldFolder).append('"');
         msg.append(" ENDOFSTR");
 
         return executeChunkedCommand(Command.TLAPSE, msg.toString(), "TLAPSE");
@@ -8218,6 +8227,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /**
      * What a flat-field fit found.
      *
+     * @param channel channel id, or null when one profile covers every image
      * @param flatfieldMin dimmest point of the shading, relative to its mean
      * @param flatfieldMax brightest point of the shading, relative to its mean
      * @param offset detector offset, raw counts
@@ -8225,18 +8235,26 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param imagesRead planes read
      */
     public record FlatfieldFit(
-            double flatfieldMin, double flatfieldMax, double offset, int imagesUsed, int imagesRead) {}
+            String channel, double flatfieldMin, double flatfieldMax, double offset, int imagesUsed, int imagesRead) {}
 
-    /** Reads a FLATFIT reply, {@code SUCCESS:<json>}. */
-    static FlatfieldFit parseFlatfieldFit(String response) {
-        com.google.gson.JsonObject json =
+    /** Reads a FLATFIT reply, {@code SUCCESS:{"profiles": [...]}}. */
+    static List<FlatfieldFit> parseFlatfieldFit(String response) {
+        com.google.gson.JsonObject reply =
                 new Gson().fromJson(response.substring("SUCCESS:".length()), com.google.gson.JsonObject.class);
-        return new FlatfieldFit(
-                json.get("flatfield_min").getAsDouble(),
-                json.get("flatfield_max").getAsDouble(),
-                json.get("offset").getAsDouble(),
-                json.get("images_used").getAsInt(),
-                json.get("images_read").getAsInt());
+        List<FlatfieldFit> fits = new java.util.ArrayList<>();
+        for (var element : reply.getAsJsonArray("profiles")) {
+            com.google.gson.JsonObject json = element.getAsJsonObject();
+            fits.add(new FlatfieldFit(
+                    json.get("channel").isJsonNull()
+                            ? null
+                            : json.get("channel").getAsString(),
+                    json.get("flatfield_min").getAsDouble(),
+                    json.get("flatfield_max").getAsDouble(),
+                    json.get("offset").getAsDouble(),
+                    json.get("images_used").getAsInt(),
+                    json.get("images_read").getAsInt()));
+        }
+        return fits;
     }
 
     /**
@@ -8248,10 +8266,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param channel MicroManager channel index, or null for every plane
      * @param offset measured detector offset, or null to read it from the empty tiles
      * @param label description recorded in the profile
-     * @return what the fit found
+     * @return what the fit found, one entry per profile: a folder of channel folders gives one each
      * @throws IOException if communication fails or the fit fails
      */
-    public FlatfieldFit fitFlatfield(
+    public List<FlatfieldFit> fitFlatfield(
             String tilesFolder, String profileFolder, Integer channel, Double offset, String label) throws IOException {
         // JSON, because a folder path can hold spaces
         com.google.gson.JsonObject request = new com.google.gson.JsonObject();
@@ -8270,7 +8288,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
             socket.setSoTimeout(FLATFIT_TIMEOUT_MS);
             try {
-                byte[] buf = new byte[4096];
+                byte[] buf = new byte[65536];
                 int n = input.read(buf);
                 if (n <= 0) throw new IOException("FLATFIT: no response");
                 String response = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);

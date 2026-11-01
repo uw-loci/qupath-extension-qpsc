@@ -255,7 +255,7 @@ microscope command server*. Step 2 below says what to do.
 6. Optional: **Extensions -> QP Scope -> Acquisition controls -> Bounded Acquisition** acquires
    and stitches tiles. A worked example: Sample Name `DemoSample01`; **Center Point + Size**
    with Center X `0`, Center Y `0`, Width `2000`, Height `2000` (the preview reads *Tile Grid:
-   8 x 8 = 64 tiles*); **Use background correction** unticked; **Start Acquisition**. About
+   8 x 8 = 64 tiles*); **Flat-field correction** set to **None**; **Start Acquisition**. About
    70 s later `DemoSample01_0.0_001.ome.tif` (3737 x 3737 px at 0.65 um/px) appears in the
    project.
 

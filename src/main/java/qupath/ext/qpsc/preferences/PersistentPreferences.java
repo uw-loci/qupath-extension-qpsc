@@ -2143,20 +2143,29 @@ public class PersistentPreferences {
         lastModalityIlluminationsSaved.setValue(String.join(";", rebuilt));
     }
 
-    // ================== BACKGROUND CORRECTION (non-PPM) ==================
-    // Whether the user wants background correction applied to non-PPM
-    // (monochrome) acquisitions. JAI/PPM uses a WB-mode selector that
-    // implicitly controls background correction; monochrome needs an
-    // independent toggle.
-    private static final javafx.beans.property.BooleanProperty useBackgroundCorrectionMono =
-            PathPrefs.createPersistentPreference("UseBackgroundCorrectionMono", true);
+    // ================== FLAT-FIELD CORRECTION (non-PPM) ==================
+    // How non-PPM (monochrome) acquisitions are corrected. JAI/PPM uses a WB-mode selector that
+    // implicitly controls background correction; monochrome needs its own choice.
+    private static final StringProperty flatfieldMethod = PathPrefs.createPersistentPreference(
+            "flatfieldMethod", qupath.ext.qpsc.utilities.FlatfieldMethod.BACKGROUND.name());
 
-    public static boolean getUseBackgroundCorrectionMono() {
-        return useBackgroundCorrectionMono.get();
+    private static final StringProperty flatfieldProfileFolder =
+            PathPrefs.createPersistentPreference("flatfieldProfileFolder", "");
+
+    public static qupath.ext.qpsc.utilities.FlatfieldMethod getFlatfieldMethod() {
+        return qupath.ext.qpsc.utilities.FlatfieldMethod.fromName(flatfieldMethod.get());
     }
 
-    public static void setUseBackgroundCorrectionMono(boolean use) {
-        useBackgroundCorrectionMono.set(use);
+    public static void setFlatfieldMethod(qupath.ext.qpsc.utilities.FlatfieldMethod method) {
+        flatfieldMethod.set(method.name());
+    }
+
+    public static String getFlatfieldProfileFolder() {
+        return flatfieldProfileFolder.get();
+    }
+
+    public static void setFlatfieldProfileFolder(String folder) {
+        flatfieldProfileFolder.set(folder);
     }
 
     // ================== GENERIC DYNAMIC PREFERENCES ==================

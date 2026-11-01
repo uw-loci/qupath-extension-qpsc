@@ -89,3 +89,21 @@ Recorded:
 - [Background Collection](background-collection.md) - collecting a set into a profile
 - [Bounded Acquisition](bounded-acquisition.md) and [Existing Image Acquisition](existing-image-acquisition.md) - where the active profile is chosen for a run
 - [Stage Map](stage-map.md) - the insert the profile is checked against
+
+## BaSiC profiles: when there is no background image
+
+A background image is measured from an empty field. A PMT or laser scanner shades its field too, but an empty field reads only the detector's offset, so there is nothing to divide by. A BaSiC profile estimates the shading from tissue tiles instead. It is the alternative to background images for that run, never an addition to them.
+
+**Fit one.** Use **Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)...**. Choose a folder of tiles and where to save the profile; the microscope server does the fit, so it must be able to see the folder.
+
+- For a QPSC acquisition, choose a region's folder: each channel is fitted on its own and saved in a subfolder named for the channel.
+- For a MicroManager acquisition, enter the channel number and fit one channel at a time.
+- Use raw tiles or averaged frames, never max projections.
+- Use at least 40 tiles with tissue in them. With fewer, a fit can come out nearly flat with no error, and the dialog warns you.
+- A profile fits one detector, objective, zoom and channel. Fit again if any of those changes.
+- Tiles with no empty fields, such as confluent tissue, need the **Measured offset**: the detector's reading with no light.
+
+**Use one.** Set **Flat-field correction** to **BaSiC profile** in the Acquisition Wizard, Bounded Acquisition or Acquire from Existing Image, and choose the profile folder. The line under it says what the folder covers. Each plane is corrected as it is collected, before any Z projection and per channel. A channel with no profile, or a profile of the wrong size, is left uncorrected with a warning in the server log. The Z-Stack / Time-Lapse dialog follows the same choice and says so. For MicroManager data, tick **Correct uneven brightness with a flat-field profile** in Tiles to Pyramid.
+
+The correction is `(raw - offset) / flatfield + offset`, so the background keeps its value. It evens out brightness but does not improve signal to noise: the dim corners carry more noise afterwards. Live View, autofocus and saturation checks all use the uncorrected frames.
+

@@ -36,6 +36,11 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
     private static final Logger logger = LoggerFactory.getLogger(WidefieldFluorescenceModalityHandler.class);
 
     @Override
+    public boolean supportsFlatfieldProfile() {
+        return true;
+    }
+
+    @Override
     public CompletableFuture<List<AngleExposure>> getRotationAngles(
             String modalityName, String objective, String detector, String wbMode) {
         // wbMode is unused -- widefield fluorescence is always channel-based

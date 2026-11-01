@@ -86,6 +86,7 @@ public class AcquisitionCommandBuilder {
     private String backgroundCorrectionMethod;
     private String backgroundCorrectionFolder;
     private List<Double> backgroundCorrectionDisabledAngles = new ArrayList<>();
+    private String flatfieldFolder;
     // The background profile the folder above was resolved under; recorded by the server.
     private String backgroundProfile;
 
@@ -372,6 +373,16 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder nonRotation(boolean nonRotation) {
         this.nonRotation = nonRotation;
+        return this;
+    }
+
+    /**
+     * Sets the BaSiC flat-field profile folder, the alternative to background correction.
+     *
+     * @param folder the folder, or null for none
+     */
+    public AcquisitionCommandBuilder flatfieldFolder(String folder) {
+        this.flatfieldFolder = folder;
         return this;
     }
 
@@ -1005,6 +1016,10 @@ public class AcquisitionCommandBuilder {
                         .collect(Collectors.joining(",", "(", ")"));
                 args.addAll(Arrays.asList("--bg-disabled-angles", disabledAnglesStr));
             }
+        }
+
+        if (flatfieldFolder != null) {
+            args.addAll(Arrays.asList("--flatfield-folder", flatfieldFolder));
         }
 
         // Add white balance mode (single source of truth)

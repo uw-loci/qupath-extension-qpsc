@@ -5,10 +5,14 @@ import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
+import qupath.ext.qpsc.utilities.FlatfieldMethod;
+import qupath.ext.qpsc.utilities.FlatfieldProfiles;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
@@ -170,6 +174,17 @@ public class CalibrationChecker {
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
             // Reload to pick up any recent WB calibration changes
             mgr.reload(configPath);
+
+            FlatfieldMethod method = AcquisitionConfigurationBuilder.effectiveFlatfieldMethod(mgr, modality, detector);
+            if (method == FlatfieldMethod.NONE) {
+                return new StepStatus(Status.READY, "Flat-field correction is off");
+            }
+            if (method == FlatfieldMethod.BASIC) {
+                String folder = PersistentPreferences.getFlatfieldProfileFolder();
+                return new StepStatus(
+                        FlatfieldProfiles.covered(folder).isEmpty() ? Status.WARNING : Status.READY,
+                        FlatfieldProfiles.describe(folder));
+            }
 
             String bgFolder = mgr.getBackgroundProfileFolder();
             if (bgFolder == null) {

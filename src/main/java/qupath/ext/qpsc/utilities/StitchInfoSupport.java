@@ -122,6 +122,9 @@ public final class StitchInfoSupport {
                     bgProfile != null ? bgProfile : (bgFolder != null ? "not recorded" : "none"));
             put(entries, "background folder", bgFolder != null ? bgFolder : "none (no background correction)");
 
+            String flatfield = flatfieldProfile(tileFolder);
+            put(entries, "BaSiC profile", flatfield != null ? flatfield : "none");
+
             File acquisitionDir = acquisitionFolder(tileFolder);
             List<String> lines = new ArrayList<>();
             if (acquisitionDir != null) {
@@ -189,6 +192,7 @@ public final class StitchInfoSupport {
         }
         ImageMetadataManager.setWhiteBalance(entry, whiteBalanceMode(tileFolder));
         ImageMetadataManager.setBackgroundProfile(entry, backgroundProfile(tileFolder));
+        ImageMetadataManager.setFlatfieldProfile(entry, flatfieldProfile(tileFolder));
     }
 
     /**
@@ -198,6 +202,14 @@ public final class StitchInfoSupport {
      */
     public static String backgroundProfile(File tileFolder) {
         return commandFlag(tileFolder, BG_PROFILE_FLAG);
+    }
+
+    /**
+     * The BaSiC profile folder an acquisition was corrected with: the {@code --flatfield-folder}
+     * value in the newest acquisition command beside its tiles, or null. Never throws.
+     */
+    public static String flatfieldProfile(File tileFolder) {
+        return commandFlag(tileFolder, FLATFIELD_FLAG);
     }
 
     /** One flag's value from the newest acquisition command beside the tiles; null when absent. */
@@ -220,6 +232,8 @@ public final class StitchInfoSupport {
     private static final java.util.regex.Pattern WB_MODE_FLAG = java.util.regex.Pattern.compile("--wb-mode\\s+(\\S+)");
     private static final java.util.regex.Pattern BG_PROFILE_FLAG =
             java.util.regex.Pattern.compile("--bg-profile\\s+(\\S+)");
+    private static final java.util.regex.Pattern FLATFIELD_FLAG = java.util.regex.Pattern.compile(
+            "--flatfield-folder\\s+\"?([^\"\\r\\n]+?)\"?(?:\\s+--|\\s+\\\\|\\s*$)", java.util.regex.Pattern.MULTILINE);
     private static final java.util.regex.Pattern BG_FOLDER_FLAG =
             java.util.regex.Pattern.compile("--bg-folder\\s+(\\S+)");
 

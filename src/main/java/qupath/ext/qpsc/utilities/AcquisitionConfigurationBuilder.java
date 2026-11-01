@@ -60,7 +60,8 @@ public class AcquisitionConfigurationBuilder {
         boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(baseModality);
         String bgBaseFolder = configManager.getBackgroundProfileFolder();
         if (!configManager.isJAICamera(detector)) {
-            boolean monoPref = PersistentPreferences.getUseBackgroundCorrectionMono();
+            boolean monoPref =
+                    effectiveFlatfieldMethod(configManager, baseModality, detector) == FlatfieldMethod.BACKGROUND;
             if (bgEnabled && !monoPref) {
                 bgEnabled = false;
             } else if (!bgEnabled && monoPref && bgBaseFolder != null) {
@@ -71,6 +72,48 @@ public class AcquisitionConfigurationBuilder {
             bgEnabled = bgBaseFolder != null;
         }
         return bgEnabled;
+    }
+
+    /**
+     * The flat-field correction a run with this hardware uses. A JAI camera and LC-PolScope manage
+     * theirs elsewhere, and a saved BaSiC choice falls back to background images on a modality
+     * that takes no profile, such as brightfield.
+     *
+     * @param configManager config manager for the active microscope
+     * @param baseModality base modality name
+     * @param detector detector id in use; null when the caller has not resolved one
+     * @return the method to use
+     */
+    public static FlatfieldMethod effectiveFlatfieldMethod(
+            MicroscopeConfigManager configManager, String baseModality, String detector) {
+        if ((detector != null && configManager.isJAICamera(detector))
+                || LCPolScopeModalityHandler.isLcPolScope(baseModality)) {
+            return FlatfieldMethod.BACKGROUND;
+        }
+        FlatfieldMethod chosen = PersistentPreferences.getFlatfieldMethod();
+        return chosen == FlatfieldMethod.BASIC
+                        && !ModalityRegistry.getHandler(baseModality).supportsFlatfieldProfile()
+                ? FlatfieldMethod.BACKGROUND
+                : chosen;
+    }
+
+    /**
+     * The BaSiC profile folder this run should send to the server.
+     *
+     * @return the folder, or null when the run does not use a profile. A chosen method with no
+     *     folder logs a warning and gives null, so the run goes ahead uncorrected.
+     */
+    public static String flatfieldFolderForRun(
+            MicroscopeConfigManager configManager, String baseModality, String detector) {
+        if (effectiveFlatfieldMethod(configManager, baseModality, detector) != FlatfieldMethod.BASIC) {
+            return null;
+        }
+        String folder = PersistentPreferences.getFlatfieldProfileFolder();
+        if (FlatfieldProfiles.covered(folder).isEmpty()) {
+            logger.warn("BaSiC correction chosen but '{}' holds no profile; acquiring uncorrected", folder);
+            return null;
+        }
+        return folder;
     }
 
     /**
@@ -156,7 +199,8 @@ public class AcquisitionConfigurationBuilder {
         // WB mode selector which bundles background correction.
         boolean isJai = configManager.isJAICamera(detector);
         if (!isJai) {
-            boolean monoPref = qupath.ext.qpsc.preferences.PersistentPreferences.getUseBackgroundCorrectionMono();
+            boolean monoPref =
+                    effectiveFlatfieldMethod(configManager, baseModality, detector) == FlatfieldMethod.BACKGROUND;
             if (bgEnabled && !monoPref) {
                 logger.info("Monochrome BG correction disabled by user preference for {}", detector);
                 bgEnabled = false;
@@ -370,6 +414,7 @@ public class AcquisitionConfigurationBuilder {
             acquisitionBuilder.backgroundCorrection(true, bgMethod, bgFolder, disabledAngles);
             acquisitionBuilder.backgroundProfile(bgProfileId);
         }
+        acquisitionBuilder.flatfieldFolder(flatfieldFolderForRun(configManager, baseModality, detector));
 
         // Z-stack configuration from persistent preferences
         if (PersistentPreferences.isZStackEnabled()) {

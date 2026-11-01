@@ -56,6 +56,11 @@ public class LaserScanningModalityHandler implements ModalityHandler {
     }
 
     @Override
+    public boolean supportsFlatfieldProfile() {
+        return true;
+    }
+
+    @Override
     public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
         // Monochrome detector -- no Bayer pattern to decode
         builder.enableDebayer(false);

@@ -46,6 +46,7 @@ The dialog follows QuPath's open project while it is up. If you open or close a 
 | Detector | ComboBox | From config | Camera/detector. List updates based on selected objective. |
 | WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Lives under Hardware (rather than the Modality-Specific pane) because the choice is camera-specific and the underlying calibration set is loaded the moment the detector changes. |
 | Background profile | ComboBox + Manage... | Active profile | The [background profile](background-profiles.md) for the sample setup on the stage now (carrier, slide source, medium). Shows the QuPath-wide active profile and sets it for every acquisition dialog; the background status for the chosen hardware sits beside it. (none) runs without background correction. |
+| Flat-field correction | ComboBox + folder | Background images | Monochrome detectors only. **None**, **Background images**, or, for laser-scanning and widefield modalities, **BaSiC profile**, with its folder. Use one or the other, not both; see [Background Profiles](background-profiles.md#basic-profiles-when-there-is-no-background-image). |
 
 Only valid hardware combinations are shown via cascading selection.
 
