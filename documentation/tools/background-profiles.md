@@ -94,7 +94,7 @@ Recorded:
 
 A background image is measured from an empty field. A PMT or laser scanner shades its field too, but an empty field reads only the detector's offset, so there is nothing to divide by. A BaSiC profile estimates the shading from tissue tiles instead. It is the alternative to background images for that run, never an addition to them.
 
-**Fit one.** Use **Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)...**. Choose a folder of tiles and where to save the profile; the microscope server does the fit, so it must be able to see the folder.
+**Fit one.** Use **Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)...**. Choose a folder of tiles and where to save the profile; the microscope server does the fit, so it must be able to see the folder. The fit can take a while and the dialog will not start one during an acquisition: wait for the acquisition to finish first.
 
 - For a QPSC acquisition, choose a region's folder: each channel is fitted on its own and saved in a subfolder named for the channel.
 - For a MicroManager acquisition, enter the channel number and fit one channel at a time.
