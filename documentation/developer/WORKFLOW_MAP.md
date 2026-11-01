@@ -343,8 +343,8 @@ related_design_reports:
   - claude-reports/archive/2026-05/2026-05-30_stitching-recovery-dialog-fix.md
   - claude-reports/design/2026-05-13_subimage-acquisition-routing-fix.md
   - claude-reports/design/2026-05-07_step-b-flipped-duplicate-restoration.md
-  - claude-reports/design/2026-05-19_flip-frame-save-site-fix.md
-  - claude-reports/design/2026-05-19_stitching-cleanup-race.md
+  - claude-reports/archive/2026-05/2026-05-19_flipped-sibling-annotation-mirror-and-bake-removal.md
+  - claude-reports/archive/2026-05/2026-05-19_stitch-cleanup-stage-cache-dialog-storage.md
 ```
 
 ### W1a: processSubAcquisitionPath (sub-route of W1)
@@ -1701,7 +1701,7 @@ read_by:
 invariants:
   - "Migrated out of PathPrefs (8 KB cap) at 0.4.0 (commit e7a726b). One-time migration alert."
 related_design_reports:
-  - claude-reports/design/2026-05-19_dialog-position-storage-refactor.md
+  - claude-reports/archive/2026-05/2026-05-19_stitch-cleanup-stage-cache-dialog-storage.md
 ```
 
 ### In-memory / Singleton state
@@ -1960,7 +1960,7 @@ invariants:
   - "Compression / format set via QPPreferenceDialog.compressionTypeProperty / stitchingOutputFormat."
   - "moveDirectoryWithRetryAndCopyFallback (qpsc 732fbd4) prevents stranded _temp_<angle>_<hash> folders."
 related_design_reports:
-  - claude-reports/design/2026-05-19_stitching-cleanup-race.md
+  - claude-reports/archive/2026-05/2026-05-19_stitch-cleanup-stage-cache-dialog-storage.md
 related_surfaces:
   - DS28 (input)
   - DS9 (entry metadata stamped post-stitch)

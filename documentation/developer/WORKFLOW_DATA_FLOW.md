@@ -10,8 +10,9 @@ its dropdown but the on-disk tile configuration was *not* regenerated, and
 the resulting mosaic had ~50% empty space between every tile (10x stride at
 20x camera FoV). The pixel-size mismatch check existed but had a 25% threshold
 and only fired with a "Continue anyway?" confirm, so the warning was reachable
-but easy to ignore. See `claude-reports/2026-05-10_objective-pixel-size-validation.md`
-for the bug write-up and the fix.
+but easy to ignore. Commit `163d81fb` tightened it to 5% with a hard cancel on all
+workflows; `claude-reports/design/2026-05-14_phase2-silent-wrong-stage-fixes.md`
+covers the three-layer gate added afterward.
 
 This document is the canonical reference for **what each workflow reads,
 compares, writes, and gates**. Read it before changing any acquisition
