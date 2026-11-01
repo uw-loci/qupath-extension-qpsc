@@ -49,6 +49,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A scan taller than the stage can reach no longer stops the run.** Acquire from Existing Image compared the corners of the whole image with the stage limits, so a near-full-slide scan failed with "Transform validation failed" wherever the annotation was. Each region to be acquired is now checked instead, with half a field of view around it, and the error names the region and the limit it crosses.
 - **SIFT checks where it landed.** The match itself was right, but on OWS3 the move that follows could go the wrong way in X at 100% confidence, leaving the stage twice as far out on that axis. After moving, SIFT now matches again, measures which way each stage axis really answered, and corrects any remaining error from that, so no orientation setting has to be right. A landing it cannot confirm goes to the manual step instead of being accepted. Each SIFT alignment takes one extra match, or up to three when it has to correct.
 - **SIFT near the edge of an image.** The search region is clipped at the image edge, so its center was no longer the tile's and the move was out by half the clipped width. A wider search made this worse.
 - **The position after a SIFT move is read after the stage arrives.** It could be read mid-move, because the move command returns as soon as it is sent.

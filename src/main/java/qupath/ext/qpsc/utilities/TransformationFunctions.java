@@ -628,6 +628,48 @@ public class TransformationFunctions {
     // ==================== VALIDATION FUNCTIONS ====================
 
     /**
+     * Whether a region stays inside the stage limits once it is mapped to stage coordinates.
+     *
+     * @param fullResToStage the full-resolution to stage transform
+     * @param bounds the region in image pixels: x, y, width, height
+     * @param marginXUm how far past the region's left and right edges the stage must be able to go
+     * @param marginYUm how far past the region's top and bottom edges the stage must be able to go
+     * @param limits the stage limits in um: x low, x high, y low, y high, on either order per axis
+     * @return {@code null} when the region fits, otherwise what it crosses, as a phrase such as
+     *     "reaches stage Y 16549 um; the stage limit is 16000 um"
+     */
+    public static String stageLimitViolation(
+            AffineTransform fullResToStage, double[] bounds, double marginXUm, double marginYUm, double[] limits) {
+        double[] corners = {
+            bounds[0],
+            bounds[1],
+            bounds[0] + bounds[2],
+            bounds[1],
+            bounds[0],
+            bounds[1] + bounds[3],
+            bounds[0] + bounds[2],
+            bounds[1] + bounds[3]
+        };
+        fullResToStage.transform(corners, 0, corners, 0, 4);
+        double minX = Math.min(Math.min(corners[0], corners[2]), Math.min(corners[4], corners[6])) - marginXUm;
+        double maxX = Math.max(Math.max(corners[0], corners[2]), Math.max(corners[4], corners[6])) + marginXUm;
+        double minY = Math.min(Math.min(corners[1], corners[3]), Math.min(corners[5], corners[7])) - marginYUm;
+        double maxY = Math.max(Math.max(corners[1], corners[3]), Math.max(corners[5], corners[7])) + marginYUm;
+
+        double xLow = Math.min(limits[0], limits[1]);
+        double xHigh = Math.max(limits[0], limits[1]);
+        double yLow = Math.min(limits[2], limits[3]);
+        double yHigh = Math.max(limits[2], limits[3]);
+
+        String format = "reaches stage %s %.0f um; the stage limit is %.0f um";
+        if (minX < xLow) return String.format(Locale.ROOT, format, "X", minX, xLow);
+        if (maxX > xHigh) return String.format(Locale.ROOT, format, "X", maxX, xHigh);
+        if (minY < yLow) return String.format(Locale.ROOT, format, "Y", minY, yLow);
+        if (maxY > yHigh) return String.format(Locale.ROOT, format, "Y", maxY, yHigh);
+        return null;
+    }
+
+    /**
      * Validates a transform by checking if it produces reasonable stage coordinates.
      *
      * @param transform The transform to validate

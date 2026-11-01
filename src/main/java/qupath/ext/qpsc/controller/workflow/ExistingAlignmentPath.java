@@ -5,6 +5,9 @@ import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
@@ -307,9 +310,11 @@ public class ExistingAlignmentPath {
                 // Create transform
                 AffineTransform fullResToStage = createFullResToStageTransform(context);
 
-                // Validate transform
-                if (!validateTransform(fullResToStage)) {
-                    throw new RuntimeException("Transform validation failed - produces out-of-bounds coordinates");
+                // Every region must be reachable. The rest of the scan need not be: a whole-slide
+                // image can be taller than the stage travel.
+                List<String> outside = regionsOutsideStage(fullResToStage, state.annotations);
+                if (!outside.isEmpty()) {
+                    throw new RuntimeException(String.join("; ", outside));
                 }
 
                 state.transform = fullResToStage;
@@ -699,9 +704,15 @@ public class ExistingAlignmentPath {
     }
 
     /**
-     * Validates transform against stage boundaries with detailed logging.
+     * The regions that cannot be acquired because they reach past the stage limits, each as a
+     * line for the error dialog. A region's extent includes half a field of view on every side,
+     * since a tile center can sit that far outside the annotation.
+     *
+     * @param transform the full-resolution to stage transform
+     * @param annotations the regions to be acquired
+     * @return one description per region that does not fit; empty when all of them do
      */
-    private boolean validateTransform(AffineTransform transform) {
+    private List<String> regionsOutsideStage(AffineTransform transform, List<PathObject> annotations) {
         MicroscopeConfigManager mgr =
                 MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
@@ -714,65 +725,37 @@ public class ExistingAlignmentPath {
         logger.info("  X: {} to {} um", stageXMin, stageXMax);
         logger.info("  Y: {} to {} um", stageYMin, stageYMax);
 
-        int width = gui.getImageData().getServer().getWidth();
-        int height = gui.getImageData().getServer().getHeight();
-
-        logger.info("Image dimensions: {} x {} pixels", width, height);
-
-        // Log transform details
         TransformationFunctions.logTransformDetails("Full-res to stage", transform);
 
-        // Test key points with detailed logging
-        double[][] testPoints = {
-            {0, 0}, // Top-left
-            {width / 2, 0}, // Top-center
-            {width, 0}, // Top-right
-            {0, height / 2}, // Middle-left
-            {width / 2, height / 2}, // Center
-            {width, height / 2}, // Middle-right
-            {0, height}, // Bottom-left
-            {width / 2, height}, // Bottom-center
-            {width, height} // Bottom-right
-        };
-
-        String[] labels = {
-            "Top-left", "Top-center", "Top-right",
-            "Middle-left", "Center", "Middle-right",
-            "Bottom-left", "Bottom-center", "Bottom-right"
-        };
-
-        boolean allValid = true;
-        logger.info("Testing transform at key image points:");
-
-        for (int i = 0; i < testPoints.length; i++) {
-            double[] qpCoords = testPoints[i];
-            double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(qpCoords, transform);
-
-            boolean xValid = stageCoords[0] >= stageXMin && stageCoords[0] <= stageXMax;
-            boolean yValid = stageCoords[1] >= stageYMin && stageCoords[1] <= stageYMax;
-
-            String status = (xValid && yValid) ? "VALID" : "INVALID";
-            logger.info(
-                    "  {} ({}, {}) -> ({}, {}) [{}]",
-                    labels[i],
-                    qpCoords[0],
-                    qpCoords[1],
-                    stageCoords[0],
-                    stageCoords[1],
-                    status);
-
-            if (!xValid || !yValid) {
-                allValid = false;
-                if (!xValid) {
-                    logger.warn("    X coordinate {} is outside range [{}, {}]", stageCoords[0], stageXMin, stageXMax);
-                }
-                if (!yValid) {
-                    logger.warn("    Y coordinate {} is outside range [{}, {}]", stageCoords[1], stageYMin, stageYMax);
-                }
-            }
+        double marginX = 0;
+        double marginY = 0;
+        try {
+            double[] fov = MicroscopeController.getInstance()
+                    .getCameraFOVFromConfig(state.sample.modality(), state.sample.objective(), state.sample.detector());
+            marginX = fov[0] / 2;
+            marginY = fov[1] / 2;
+        } catch (IOException e) {
+            logger.warn("Checking regions against the stage limits without a field of view: {}", e.getMessage());
         }
 
-        return allValid;
+        List<String> outside = new ArrayList<>();
+        for (PathObject annotation : annotations) {
+            ROI roi = annotation.getROI();
+            String name = annotation.getDisplayedName();
+            String problem = TransformationFunctions.stageLimitViolation(
+                    transform,
+                    new double[] {roi.getBoundsX(), roi.getBoundsY(), roi.getBoundsWidth(), roi.getBoundsHeight()},
+                    marginX,
+                    marginY,
+                    new double[] {stageXMin, stageXMax, stageYMin, stageYMax});
+            if (problem == null) {
+                logger.info("Region '{}' is within the stage limits", name);
+            } else {
+                logger.warn("Region '{}' {}", name, problem);
+                outside.add("Region '" + name + "' " + problem);
+            }
+        }
+        return outside;
     }
 
     /**
