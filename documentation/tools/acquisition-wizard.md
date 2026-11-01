@@ -35,6 +35,7 @@ Dropdown selectors for the current hardware setup:
 | Objective | The objective lens to use (e.g., "20x"). Filtered by the selected modality. The initial selection auto-detects the currently mounted optics by querying Micro-Manager's reported pixel size and matching it against the active config (via the shared `ObjectiveSelector` component). Falls back to the last-used objective preference, then the first entry in the list. Catches operators who swap objectives between sessions without going through the wizard. **Objective changes sync across all open dialogs** (Live Viewer Camera Control, Background Collection, Existing-Image Acquisition, etc.), so selecting a new objective here updates all other open dialogs' selectors automatically. |
 | Detector | The camera/detector to use. Filtered by the selected modality and objective. |
 | Background profile | The [background profile](background-profiles.md) for the sample setup on the stage now (carrier, slide source, medium). Shows the QuPath-wide active profile and sets it for every acquisition dialog; (none) runs without background correction. |
+| Flat-field correction | Monochrome detectors only. **None**, **Background images**, or, for laser-scanning and widefield modalities, **BaSiC profile**, with its profile folder. Use one or the other, not both; see [Background Profiles](background-profiles.md#basic-profiles-when-there-is-no-background-image). |
 
 Changing any selector automatically refreshes the calibration status indicators
 for white balance and background correction.
