@@ -1335,7 +1335,7 @@ lifecycle:
   overwritten_when: "re-collecting BG for the same (backgroundProfile, detector, modality, magnification, wbMode/profileKey) tuple"
 invariants:
   - "Folder structure encodes magnification: a pixel-size mismatch between wizard objective and the magnification subfolder silently files BG for the wrong objective. W4 pre-validates via QPScopeChecks.validateObjectivePixelSize."
-  - "Per-modality monochrome toggle (DS24 pref UseBackgroundCorrectionMono) controls whether mono detector channels apply BG."
+  - "Per-modality monochrome choice (DS24 pref flatfieldMethod: NONE / BACKGROUND / BASIC, read via PersistentPreferences.getFlatfieldMethod) controls whether mono detector channels apply BG, or a BaSiC profile (pref flatfieldProfileFolder, sent as --flatfield-folder) instead. AcquisitionConfigurationBuilder.effectiveFlatfieldMethod resolves the choice per run."
   - "Per-modality-family adaptive mode (DS24 pref qpscBgExposureMode.<family>) chooses PROFILE / TARGET / OVERRIDE exposure strategy."
 related_surfaces:
   - DS22 (loaded form of the manifest)

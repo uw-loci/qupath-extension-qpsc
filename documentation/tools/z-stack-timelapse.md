@@ -30,6 +30,8 @@ At the top of the dialog, a **Setup** panel configures the microscope hardware s
 
 **Error state:** If required controls are not set, the status label will display "Pick a modality, profile, and channel (if shown) in Setup first." Configure the Setup row and try again.
 
+**Flat-field correction:** the dialog uses the flat-field correction last chosen in an acquisition dialog. When that is a **BaSiC profile** on a monochrome detector, a line under Setup names the profile's coverage (for example "BaSiC profile covers every image"), and the Z-stack or time-lapse is corrected per plane with it. See [Background Profiles](background-profiles.md#basic-profiles-when-there-is-no-background-image).
+
 ## Z-Stack
 
 Acquires images at multiple Z positions centered on the current focus, using the modality and profile selected in the Setup section.
