@@ -100,8 +100,8 @@ public class AcquisitionConfigurationBuilder {
     /**
      * The BaSiC profile folder this run should send to the server.
      *
-     * @return the folder, or null when the run does not use a profile. A chosen method with no
-     *     folder logs a warning and gives null, so the run goes ahead uncorrected.
+     * @return the folder, or null when the run does not use a profile. It is sent even when this
+     *     machine cannot see it: the server reads it, and warns if it holds no profile.
      */
     public static String flatfieldFolderForRun(
             MicroscopeConfigManager configManager, String baseModality, String detector) {
@@ -109,8 +109,8 @@ public class AcquisitionConfigurationBuilder {
             return null;
         }
         String folder = PersistentPreferences.getFlatfieldProfileFolder();
-        if (FlatfieldProfiles.covered(folder).isEmpty()) {
-            logger.warn("BaSiC correction chosen but '{}' holds no profile; acquiring uncorrected", folder);
+        if (folder == null || folder.isBlank()) {
+            logger.warn("BaSiC correction chosen but no profile folder is set; acquiring uncorrected");
             return null;
         }
         return folder;

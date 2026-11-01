@@ -54,8 +54,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
     private static final Logger logger = LoggerFactory.getLogger(MicroscopeSocketClient.class);
 
-    /** A fit reads up to 500 tiles, possibly from a network drive. */
-    private static final int FLATFIT_TIMEOUT_MS = 15 * 60 * 1000;
+    /** The server answers a flat-field command at once; the fit itself runs on its own thread. */
+    private static final int FLATFIT_REPLY_TIMEOUT_MS = 30_000;
+
+    private static final long FLATFIT_POLL_MS = 500;
 
     // Protocol constants
     /** End marker expected by Python server to indicate message completion */
@@ -351,8 +353,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         SIFTAL("siftal__"),
         /** SIFT image-vs-image: match two on-disk image files (no camera snap) */
         SIFTIM("siftim__"),
-        /** Fit a BaSiC flat-field profile from a folder of tiles */
+        /** Start fitting a BaSiC flat-field profile from a folder of tiles */
         FLATFIT("flatfit_"),
+        /** How the flat-field fit is going */
+        FLATPOLL("flatpoll"),
 
         // Illumination & Profile Commands
         /** Get illumination state (power, range, on/off) */
@@ -8258,8 +8262,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
-     * Fits a flat-field profile from a folder of tiles and saves it. Blocks for as long as the fit
-     * takes; call it off the FX thread.
+     * Fits a flat-field profile from a folder of tiles and saves it. The server fits on its own
+     * thread and this polls, so other commands keep working; it returns when the fit ends, so call
+     * it off the FX thread.
      *
      * @param tilesFolder tiles, as the server sees them
      * @param profileFolder where the server writes the profile
@@ -8280,23 +8285,54 @@ public class MicroscopeSocketClient implements AutoCloseable {
         request.addProperty("label", label);
         String message = new Gson().newBuilder().serializeNulls().create().toJson(request) + " ENDOFSTR";
 
-        synchronized (socketLock) {
-            output.write(Command.FLATFIT.getValue());
-            output.write(message.getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            output.flush();
-            logger.info("FLATFIT command sent: {}", message);
-
-            socket.setSoTimeout(FLATFIT_TIMEOUT_MS);
+        ensureConnected();
+        String started = flatfieldExchange(Command.FLATFIT, message);
+        if (!"STARTED".equals(started)) {
+            throw new IOException("Flat-field fit failed: " + started.replaceFirst("^FAILED:", ""));
+        }
+        // The lock is held only per poll: cancel and status polls share this socket
+        while (true) {
             try {
-                byte[] buf = new byte[65536];
-                int n = input.read(buf);
-                if (n <= 0) throw new IOException("FLATFIT: no response");
-                String response = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
-                logger.info("FLATFIT response: {}", response);
-                if (!response.startsWith("SUCCESS:")) {
-                    throw new IOException("Flat-field fit failed: " + response.replaceFirst("^FAILED:", ""));
+                Thread.sleep(FLATFIT_POLL_MS);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException("Interrupted waiting for the flat-field fit", e);
+            }
+            String reply = flatfieldExchange(Command.FLATPOLL, null);
+            if (reply.startsWith("SUCCESS:")) {
+                return parseFlatfieldFit(reply);
+            }
+            if (!"RUNNING".equals(reply)) {
+                throw new IOException("Flat-field fit failed: " + reply.replaceFirst("^FAILED:", ""));
+            }
+        }
+    }
+
+    /** Sends one flat-field command and reads its newline-terminated reply. */
+    private String flatfieldExchange(Command command, String payload) throws IOException {
+        synchronized (socketLock) {
+            output.write(command.getValue());
+            if (payload != null) {
+                output.write(payload.getBytes(java.nio.charset.StandardCharsets.UTF_8));
+            }
+            output.flush();
+
+            socket.setSoTimeout(FLATFIT_REPLY_TIMEOUT_MS);
+            try {
+                java.io.ByteArrayOutputStream reply = new java.io.ByteArrayOutputStream();
+                for (int b = input.read(); b != '\n'; b = input.read()) {
+                    if (b < 0) {
+                        throw new IOException(command + ": connection closed mid-reply");
+                    }
+                    reply.write(b);
                 }
-                return parseFlatfieldFit(response);
+                String text = reply.toString(java.nio.charset.StandardCharsets.UTF_8);
+                if (command == Command.FLATFIT || !"RUNNING".equals(text)) {
+                    logger.info("{} reply: {}", command, text);
+                }
+                return text;
+            } catch (java.net.SocketTimeoutException e) {
+                throw new IOException("The microscope server did not answer " + command + ". It may need updating.", e);
             } finally {
                 socket.setSoTimeout(readTimeout);
             }

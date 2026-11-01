@@ -43,6 +43,16 @@ public final class FlatfieldProfiles {
         return covered;
     }
 
+    /**
+     * Whether a single-position Z-stack or time-lapse can use this folder: those paths have no
+     * channel loop, so subfolders do not apply. A folder this machine cannot read gets the benefit
+     * of the doubt, since the server reads it.
+     */
+    public static boolean coversSinglePosition(String folder) {
+        List<String> covered = covered(folder);
+        return covered.isEmpty() || covered.contains(EVERY_IMAGE);
+    }
+
     /** @return one line saying what a folder covers, for a dialog or the wizard */
     public static String describe(String folder) {
         List<String> covered = covered(folder);

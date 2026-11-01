@@ -61,6 +61,9 @@ public class FlatfieldMethodSelector extends VBox {
                 + " channel.\nA profile fits one detector, objective, zoom and channel."));
         folderField.setText(PersistentPreferences.getFlatfieldProfileFolder());
         folderField.textProperty().addListener((obs, was, now) -> {
+            if (updating) {
+                return;
+            }
             PersistentPreferences.setFlatfieldProfileFolder(now.trim());
             refreshProfileRow();
             notifyChanged();
@@ -106,6 +109,7 @@ public class FlatfieldMethodSelector extends VBox {
         boolean basic = ModalityRegistry.getHandler(modality).supportsFlatfieldProfile();
         FlatfieldMethod saved = PersistentPreferences.getFlatfieldMethod();
         updating = true;
+        folderField.setText(PersistentPreferences.getFlatfieldProfileFolder());
         combo.setItems(
                 basic
                         ? FXCollections.observableArrayList(FlatfieldMethod.values())

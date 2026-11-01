@@ -32,4 +32,10 @@ public class BfIfModalityHandler extends WidefieldFluorescenceModalityHandler {
     public String getDisplayName() {
         return "Brightfield + Immunofluorescence";
     }
+
+    /** The brightfield channel needs its background image, and a run takes one method or the other. */
+    @Override
+    public boolean supportsFlatfieldProfile() {
+        return false;
+    }
 }

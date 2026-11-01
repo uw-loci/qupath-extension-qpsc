@@ -161,14 +161,19 @@ public class SinglePointAcquisitionController {
             Label flatfieldLabel = new Label();
             flatfieldLabel.setWrapText(true);
             Runnable updateFlatfieldLabel = () -> {
-                String folder = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
+                String folder = flatfieldFolder(modalityCombo.getValue());
+                String chosen = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
                         MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty()),
                         modalityCombo.getValue() != null ? modalityCombo.getValue() : "brightfield",
                         null);
+                boolean perChannelOnly = chosen != null && folder == null;
                 flatfieldLabel.setText(
-                        folder == null ? "" : "Flat-field correction: " + FlatfieldProfiles.describe(folder));
-                flatfieldLabel.setVisible(folder != null);
-                flatfieldLabel.setManaged(folder != null);
+                        perChannelOnly
+                                ? "Flat-field correction: not applied here. This dialog needs a BaSiC profile"
+                                        + " covering every image, not one per channel."
+                                : "Flat-field correction: " + FlatfieldProfiles.describe(folder));
+                flatfieldLabel.setVisible(chosen != null);
+                flatfieldLabel.setManaged(chosen != null);
             };
             modalityCombo.valueProperty().addListener((o, a, b) -> updateFlatfieldLabel.run());
             updateFlatfieldLabel.run();
@@ -399,6 +404,15 @@ public class SinglePointAcquisitionController {
         return future;
     }
 
+    /** The BaSiC profile folder for this dialog's run, or null when it has none it can use. */
+    private static String flatfieldFolder(String modality) {
+        String folder = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
+                MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty()),
+                modality != null ? modality : "brightfield",
+                null);
+        return folder != null && FlatfieldProfiles.coversSinglePosition(folder) ? folder : null;
+    }
+
     private static String validate(String sampleName, boolean zEnabled, boolean tEnabled, String outputFolder) {
         if (sampleName == null || sampleName.trim().isEmpty()) {
             return "Please enter a sample name.";
@@ -452,8 +466,7 @@ public class SinglePointAcquisitionController {
                 intervalSec,
                 outputFormat);
 
-        String flatfieldFolder = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
-                MicroscopeConfigManager.getInstance(configPath), modality, null);
+        String flatfieldFolder = flatfieldFolder(modality);
 
         Thread worker = new Thread(
                 () -> {

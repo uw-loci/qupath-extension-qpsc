@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.utilities;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.io.IOException;
@@ -38,6 +39,19 @@ class FlatfieldProfilesTest {
         assertTrue(FlatfieldProfiles.covered("  ").isEmpty());
         assertTrue(FlatfieldProfiles.covered(null).isEmpty());
         assertTrue(FlatfieldProfiles.describe(null).startsWith("No BaSiC profile"));
+    }
+
+    @Test
+    void singlePositionRunsNeedAProfileForEveryImage(@TempDir Path dir) throws IOException {
+        writeProfile(dir.resolve("DAPI"));
+        assertFalse(FlatfieldProfiles.coversSinglePosition(dir.toString()));
+        writeProfile(dir);
+        assertTrue(FlatfieldProfiles.coversSinglePosition(dir.toString()));
+    }
+
+    @Test
+    void aFolderThisMachineCannotSeeIsLeftToTheServer(@TempDir Path dir) {
+        assertTrue(FlatfieldProfiles.coversSinglePosition(dir.resolve("gone").toString()));
     }
 
     @Test

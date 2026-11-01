@@ -151,6 +151,10 @@ public final class FlatfieldFitDialog {
             statusLabel.setText("Connect to the microscope server first: it runs the fit.");
             return;
         }
+        if (controller.isAcquisitionActive()) {
+            statusLabel.setText("Wait for the acquisition to finish: a fit reads hundreds of tiles.");
+            return;
+        }
 
         String label = labelField.getText().trim();
         fitButton.setDisable(true);
@@ -196,6 +200,10 @@ public final class FlatfieldFitDialog {
                 view.setPreserveRatio(true);
                 previews.getChildren().add(new VBox(2, new Label(fit.channel() == null ? "" : fit.channel()), view));
             }
+        }
+        if (offsetField.getText().isBlank()) {
+            text.append("The offset came from the darkest tiles. If none of them is an empty field, enter a measured"
+                    + " offset and fit again.\n");
         }
         text.append("Dark blue below is the dimmest part of the field, yellow the brightest. To use it, choose this"
                 + " folder as the BaSiC profile for an acquisition, or in Tiles to Pyramid: ");
