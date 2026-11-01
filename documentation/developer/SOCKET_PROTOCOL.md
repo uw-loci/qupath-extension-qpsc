@@ -176,7 +176,7 @@ The ACQUIRE payload is a flag-based string:
 ENDOFSTR
 ```
 
-`--flatfield-folder <folder>` is emitted only when the run's flat-field correction is a BaSiC profile (monochrome detectors, laser-scanning or widefield modalities). It is never sent together with `--bg-correction true`: a run takes background images or a BaSiC profile, not both. The folder holds one profile, or one subfolder per channel.
+`--flatfield-folder <folder>` is emitted only when the run's flat-field correction is a BaSiC profile (monochrome detectors, laser-scanning or widefield modalities other than BF+IF). It is never sent together with `--bg-correction true`: a run takes background images or a BaSiC profile, not both. The folder holds one profile, or one subfolder per channel.
 
 `--timepoints` / `--interval` are emitted by `AcquisitionCommandBuilder` only when the user enables the Time-Lapse Options pane in the acquisition dialog (`timepoints > 1`). `--interval` is the seconds between the *start* of consecutive timepoints. Omitting both flags yields a single-timepoint acquisition (byte-identical to pre-time-lapse builds). The server's main multi-tile workflow loops over timepoints with a drift-corrected scheduler; see the `REQTWARN` poll below for the falling-behind warning channel.
 

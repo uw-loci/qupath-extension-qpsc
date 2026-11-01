@@ -1587,7 +1587,7 @@ These keys hold the **Flat-field correction** choice for monochrome detectors in
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `flatfieldMethod` | String | `BACKGROUND` | `NONE` (no correction), `BACKGROUND` (divide by background images) or `BASIC` (apply a BaSiC profile). `BASIC` is offered only for laser-scanning and widefield modalities; other modalities fall back to `BACKGROUND`. JAI cameras and LC-PolScope do not use this choice. |
+| `flatfieldMethod` | String | `BACKGROUND` | `NONE` (no correction), `BACKGROUND` (divide by background images) or `BASIC` (apply a BaSiC profile). `BASIC` is offered only for laser-scanning and widefield modalities, not BF+IF; other modalities fall back to `BACKGROUND`. JAI cameras and LC-PolScope do not use this choice. |
 | `flatfieldProfileFolder` | String | `""` | The folder of BaSiC profiles used when `flatfieldMethod` is `BASIC`. See [Background Profiles](tools/background-profiles.md#basic-profiles-when-there-is-no-background-image). |
 
 ---

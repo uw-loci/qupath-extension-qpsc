@@ -116,7 +116,7 @@ Select All / Deselect All buttons are available for convenience.
 | Detector | ComboBox | From config | Camera/detector combination |
 | WB Mode | ComboBox | From preference | White balance mode (JAI cameras only): Off, Camera AWB, Simple, or Per-angle calibrated exposures. Applies immediately on selection. Listed under hardware (rather than under acquisition options) because the choice is camera-specific and matches the underlying calibration set. |
 | Background profile | ComboBox + Manage... | Active profile | The [background profile](background-profiles.md) for the sample setup on the stage now (carrier, slide source, medium). Shows the QuPath-wide active profile and sets it for every acquisition dialog. (none) runs without background correction. |
-| Flat-field correction | ComboBox + folder | Background images | Monochrome detectors only. **None**, **Background images**, or, for laser-scanning and widefield modalities, **BaSiC profile**, with its folder. Use one or the other, not both; see [Background Profiles](background-profiles.md#basic-profiles-when-there-is-no-background-image). |
+| Flat-field correction | ComboBox + folder | Background images | Monochrome detectors only. **None**, **Background images**, or, for laser-scanning and widefield modalities (not BF+IF), **BaSiC profile**, with its folder. Use one or the other, not both; see [Background Profiles](background-profiles.md#basic-profiles-when-there-is-no-background-image). |
 | Angle Overrides | Various | - | Modality-specific angle controls (if applicable) |
 
 **Brightfield Exposure Readout:**
