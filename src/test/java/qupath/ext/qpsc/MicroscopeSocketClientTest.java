@@ -27,8 +27,6 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
  * @author Mike Nelson
  * @since 1.0
  */
-// TODO: Refactor to use embedded mock server that starts reliably in CI
-@Disabled("Requires running mock microscope socket server")
 class MicroscopeSocketClientTest {
 
     private MockMicroscopeServer mockServer;

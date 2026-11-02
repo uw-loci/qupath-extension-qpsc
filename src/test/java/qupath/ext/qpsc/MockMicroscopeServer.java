@@ -1,10 +1,14 @@
 package qupath.ext.qpsc;
 
 import java.io.*;
+import java.io.EOFException;
 import java.net.*;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
@@ -34,6 +38,12 @@ import org.slf4j.LoggerFactory;
  * @since 1.0
  */
 public class MockMicroscopeServer implements AutoCloseable {
+
+    private static final long SCRIPTED_REPLY_GAP_MS = 30;
+
+    private final Map<String, List<byte[]>> scriptedReplies = new ConcurrentHashMap<>();
+    private final Set<String> messagelessCommands = ConcurrentHashMap.newKeySet();
+    private final Map<String, String> lastScriptedMessages = new ConcurrentHashMap<>();
     private static final Logger logger = LoggerFactory.getLogger(MockMicroscopeServer.class);
 
     // Server configuration
@@ -77,6 +87,32 @@ public class MockMicroscopeServer implements AutoCloseable {
     private volatile String lastAutofocusMessage;
 
     /** Sets the final reply to TESTADAF, after its STARTED. */
+    /**
+     * Answers a command with these replies, each as its own TCP write. Join two replies in one
+     * string to put them in one read.
+     *
+     * @param command the command with its trailing underscores removed, e.g. {@code "testaf"}
+     * @param replies the text to send, in order
+     */
+    public void script(String command, String... replies) {
+        scriptedReplies.put(
+                command,
+                java.util.Arrays.stream(replies)
+                        .map(r -> r.getBytes(StandardCharsets.UTF_8))
+                        .toList());
+    }
+
+    /** As {@link #script(String, String...)}, for a command that sends no message after its name. */
+    public void scriptMessageless(String command, byte[]... replies) {
+        messagelessCommands.add(command);
+        scriptedReplies.put(command, List.of(replies));
+    }
+
+    /** The message the last scripted run of this command received. */
+    public String getLastMessage(String command) {
+        return lastScriptedMessages.get(command);
+    }
+
     public void setAutofocusReply(String reply) {
         autofocusReply = reply;
     }
@@ -169,7 +205,9 @@ public class MockMicroscopeServer implements AutoCloseable {
                     // Read command (8 bytes)
                     byte[] commandBytes = new byte[8];
                     input.readFully(commandBytes);
-                    String command = new String(commandBytes, StandardCharsets.UTF_8).trim();
+                    String command = new String(commandBytes, StandardCharsets.UTF_8)
+                            .trim()
+                            .replaceAll("_+$", "");
 
                     logger.debug("Received command '{}' from {}", command, clientId);
 
@@ -179,8 +217,8 @@ public class MockMicroscopeServer implements AutoCloseable {
                         case "getz" -> handleGetZ();
                         case "getr" -> handleGetR();
                         case "move" -> handleMoveXY();
-                        case "movez" -> handleMoveZ();
-                        case "mover" -> handleMoveR();
+                        case "move_z" -> handleMoveZ();
+                        case "move_r" -> handleMoveR();
                         case "quitclnt" -> {
                             logger.info("Client {} disconnecting", clientId);
                             return;
@@ -192,7 +230,15 @@ public class MockMicroscopeServer implements AutoCloseable {
                         }
                         case "acquire" -> handleAcquire();
                         case "testadaf" -> handleTestAdaptiveAutofocus();
-                        default -> logger.warn("Unknown command '{}' from {}", command, clientId);
+                        case "config" -> handleConfig();
+                        default -> {
+                            List<byte[]> replies = scriptedReplies.get(command);
+                            if (replies == null) {
+                                logger.warn("Unknown command '{}' from {}", command, clientId);
+                            } else {
+                                handleScripted(command, replies);
+                            }
+                        }
                     }
                 }
 
@@ -317,6 +363,40 @@ public class MockMicroscopeServer implements AutoCloseable {
             logger.info("Rotated to tick {} for client {}", r, clientId);
         }
 
+        /** Accepts the config path the way the server does: 4-byte length, path, then CFG___OK plus a version. */
+        private void handleConfig() throws IOException {
+            input.readFully(new byte[input.readInt()]);
+            byte[] version = "{\"server\":\"mock\"}".getBytes(StandardCharsets.UTF_8);
+            output.write("CFG___OK".getBytes(StandardCharsets.UTF_8));
+            output.writeInt(version.length);
+            output.write(version);
+            output.flush();
+        }
+
+        /** Reads the message up to its end marker, then writes each scripted reply as one TCP write. */
+        private void handleScripted(String command, List<byte[]> replies) throws IOException {
+            StringBuilder message = new StringBuilder();
+            byte[] buffer = new byte[1024];
+            while (!messagelessCommands.contains(command) && message.indexOf("ENDOFSTR") < 0) {
+                int bytesRead = input.read(buffer);
+                if (bytesRead < 0) {
+                    throw new EOFException();
+                }
+                message.append(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
+            }
+            lastScriptedMessages.put(command, message.toString());
+            for (byte[] reply : replies) {
+                output.write(reply);
+                output.flush();
+                try {
+                    Thread.sleep(SCRIPTED_REPLY_GAP_MS);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                    return;
+                }
+            }
+        }
+
         private void handleTestAdaptiveAutofocus() throws IOException {
             StringBuilder message = new StringBuilder();
             byte[] buffer = new byte[1024];
@@ -354,20 +434,17 @@ public class MockMicroscopeServer implements AutoCloseable {
                 String chunk = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
                 message.append(chunk);
 
-                if (message.toString().contains("END_MARKER")) {
+                if (message.toString().contains("ENDOFSTR")) {
                     break;
                 }
             }
 
-            String acquisitionParams = message.toString().replace("END_MARKER", "");
+            String acquisitionParams = message.toString().replace("ENDOFSTR", "");
             logger.info("Acquisition requested: {}", acquisitionParams);
 
-            // Simulate acquisition (would normally trigger hardware)
-            try {
-                Thread.sleep(1000); // Simulate acquisition time
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            }
+            // The server acknowledges in 16 bytes, like a status reply.
+            output.write(String.format("%-16s", "STARTED").getBytes(StandardCharsets.UTF_8));
+            output.flush();
         }
 
         private void simulateMovement() {
