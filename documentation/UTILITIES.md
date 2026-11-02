@@ -587,12 +587,12 @@ Easily submit bug reports directly from QuPath without needing a GitHub account 
 
 **How to use:**
 1. Go to **Extensions > QP Scope > Report a Bug...**
-2. Enter a one-line **Summary** (8–80 characters, required) — this becomes the GitHub issue title
-3. Write a **Description** of what went wrong (minimum 20 characters)
-4. Optionally add contact information so you're notified of replies:
+2. Fill in how to reach you first (the contact fields are at the top of the dialog):
    - **GitHub username** (e.g., "alice" or "@alice") — will mention you on the issue so GitHub notifies you of replies
    - **image.sc forum username** (e.g., "alice") — will link to your forum profile in the issue
-   - Both fields are optional and displayed publicly in the issue. Leave both blank to report anonymously.
+   - Both fields are optional and displayed publicly in the issue. Without a GitHub username nobody can reply to you about the report, so add one if you want to hear back. Leave both blank to report anonymously.
+3. Enter a one-line **Summary** (8–80 characters, required) — this becomes the GitHub issue title
+4. Write a **Description** of what went wrong (minimum 20 characters)
 5. Optionally include:
    - **System info** (OS version, Java version, QuPath version)
    - **QPSC session log** (activity from the current session)
@@ -602,7 +602,7 @@ Easily submit bug reports directly from QuPath without needing a GitHub account 
 6. Check **"Open the issue in my browser after submitting"** (enabled by default) to automatically open your submitted issue
 7. Click **Submit**
 
-**Important: reports are anonymous by default.** You do not need a GitHub account to file one -- the issue is created by the reporting service, not from your GitHub account, so GitHub does not automatically notify you of replies. To receive notifications, either add your GitHub username (which will @-mention you on the issue) or manually comment on the issue on GitHub after it is created.
+**Important: reports are anonymous by default.** You do not need a GitHub account to file one -- the issue is created by the reporting service, not from your GitHub account, so GitHub does not automatically notify you of replies. To receive notifications, either add your GitHub username (which will @-mention you on the issue) or manually comment on the issue on GitHub after it is created. If you submit without a GitHub username, the confirmation shows how to follow the issue: open it on GitHub and click **Subscribe** (this needs a GitHub account).
 
 The QuPath log is captured live in memory while QuPath runs, so it attaches even though QuPath does not write a log file by default. For a more complete log that also includes QuPath's startup (before the extension loaded), enable **Edit > Preferences > General > "Create log files"** (set a user directory if prompted) and restart QuPath; the reporter then attaches that on-disk log instead.
 
