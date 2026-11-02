@@ -190,8 +190,28 @@ abstract class AcquisitionDialogBuilder<R> {
     /** Called when the modality panel has been replaced: true if it has options to show. */
     protected void onModalityOptionsChanged(boolean hasOptions) {}
 
-    /** Largest value the Z range spinner accepts, in um. */
-    protected abstract double zRangeMaxUm();
+    /**
+     * Largest value the Z range spinner accepts, in um: the stage's Z travel from
+     * {@code stage.limits.z_um} in the microscope config, since a stack can span no more.
+     */
+    protected double zRangeMaxUm() {
+        return zRangeMaxUm(configManager);
+    }
+
+    /** Z travel from the config, or {@link #Z_RANGE_MAX_UNCONFIGURED_UM} when the limits are missing. */
+    public static double zRangeMaxUm(MicroscopeConfigManager mgr) {
+        Double travel = mgr != null ? mgr.getStageZTravelUm() : null;
+        if (travel == null || travel <= 0) {
+            logger.warn(
+                    "stage.limits.z_um is missing from the microscope config; Z range limited to {} um",
+                    Z_RANGE_MAX_UNCONFIGURED_UM);
+            return Z_RANGE_MAX_UNCONFIGURED_UM;
+        }
+        return travel;
+    }
+
+    /** Z range maximum when the config has no Z limits (the config check normally refuses such a config). */
+    static final double Z_RANGE_MAX_UNCONFIGURED_UM = 2000.0;
 
     /** Nodes of the preview section, top to bottom. */
     protected abstract Node[] previewContentNodes();
@@ -717,6 +737,10 @@ abstract class AcquisitionDialogBuilder<R> {
         if (uiOpt.isPresent()) {
             modalityUI = uiOpt.get();
             modalityContent.getChildren().add(modalityUI.getNode());
+            javafx.beans.value.ObservableValue<?> selection = modalityUI.selectionObservable();
+            if (selection != null) {
+                selection.addListener((obs, was, now) -> triggerPreviewUpdate());
+            }
             onModalityOptionsChanged(true);
             logger.debug("Added modality UI for: {}", modality);
             // Wire the "Save as MicroManager MDA..." button on the panel
@@ -887,11 +911,15 @@ abstract class AcquisitionDialogBuilder<R> {
         zStackEnableCheck.setSelected(PersistentPreferences.isZStackEnabled());
         CheckBox enableCheck = zStackEnableCheck;
 
-        Spinner<Double> rangeSpinner = new Spinner<>(1.0, zRangeMaxUm(), PersistentPreferences.getZStackRange(), 5.0);
+        double zMaxUm = zRangeMaxUm();
+        Spinner<Double> rangeSpinner = new Spinner<>(1.0, zMaxUm, PersistentPreferences.getZStackRange(), 5.0);
         rangeSpinner.setEditable(true);
         rangeSpinner.setPrefWidth(100);
-        rangeSpinner.setTooltip(new Tooltip(
-                "Total Z range in micrometers centered on autofocus. " + "Example: 20um = +/-10um around focus."));
+        rangeSpinner.setTooltip(new Tooltip("Total Z range in micrometers centered on autofocus. "
+                + "Example: 20um = +/-10um around focus. "
+                + String.format(
+                        "At most %.0f um, the stage's Z travel (stage.limits.z_um in the microscope config).",
+                        zMaxUm)));
 
         Spinner<Double> stepSpinner = new Spinner<>(0.1, 50.0, PersistentPreferences.getZStackStep(), 0.5);
         stepSpinner.setEditable(true);
@@ -957,13 +985,18 @@ abstract class AcquisitionDialogBuilder<R> {
         stepSpinner.disableProperty().bind(enableCheck.selectedProperty().not());
         projectionCombo.disableProperty().bind(enableCheck.selectedProperty().not());
 
-        // Save to preferences on change
-        enableCheck.selectedProperty().addListener((obs, o, n) -> PersistentPreferences.setZStackEnabled(n));
+        // Save to preferences on change, and refresh the preview, whose image count and time include the Z planes.
+        enableCheck.selectedProperty().addListener((obs, o, n) -> {
+            PersistentPreferences.setZStackEnabled(n);
+            triggerPreviewUpdate();
+        });
         rangeSpinner.valueProperty().addListener((obs, o, n) -> {
             if (n != null) PersistentPreferences.setZStackRange(n);
+            triggerPreviewUpdate();
         });
         stepSpinner.valueProperty().addListener((obs, o, n) -> {
             if (n != null) PersistentPreferences.setZStackStep(n);
+            triggerPreviewUpdate();
         });
         projectionCombo.valueProperty().addListener((obs, o, n) -> {
             if (n != null) PersistentPreferences.setZStackProjection(n);
@@ -1225,40 +1258,44 @@ abstract class AcquisitionDialogBuilder<R> {
     }
 
     /**
-     * Gets the number of images captured per tile position for a modality.
-     * For PPM this is the number of rotation angles; for fluorescence/BF-IF
-     * this is the number of channels.
+     * Images captured per tile position: the angles (PPM) or channels (fluorescence, BF-IF)
+     * the run will take.
      *
      * @param modality The modality name
      * @return Images per tile (minimum 1)
      */
     protected int getImagesPerTileForModality(String modality) {
         if (modality == null) return 1;
-
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
-        if (handler != null) {
-            // PPM: use angle overrides if available, else default angle count
-            if (handler.isMultiAngleModality()) {
-                if (modalityUI != null) {
-                    Map<String, Double> overrides = modalityUI.getAngleOverrides();
-                    if (overrides != null && !overrides.isEmpty()) {
-                        return overrides.size();
-                    }
+        boolean multiAngle = handler != null && handler.isMultiAngleModality();
+        // The panel's selection: the ticked angles, or the ticked channels when "override"
+        // is on (null means the defaults for every channel).
+        Map<String, Double> selection = modalityUI != null ? modalityUI.getAngleOverrides() : null;
+        int configured = 1;
+        if (multiAngle) {
+            configured = handler.getDefaultAngleCount();
+        } else {
+            try {
+                List<Channel> channels = configManager.getModalityChannels(modality);
+                if (channels != null && !channels.isEmpty()) {
+                    configured = channels.size();
                 }
-                return handler.getDefaultAngleCount();
+            } catch (Exception e) {
+                logger.debug("Could not read channels for modality {}: {}", modality, e.getMessage());
             }
         }
+        return imagesPerTile(selection, configured);
+    }
 
-        // Non-PPM: count channels from the modality config
-        try {
-            List<Channel> channels = configManager.getModalityChannels(modality);
-            if (channels != null && !channels.isEmpty()) {
-                return channels.size();
-            }
-        } catch (Exception e) {
-            logger.debug("Could not read channels for modality {}: {}", modality, e.getMessage());
+    /**
+     * The panel's selection size when it has one, else the configured count; never below 1.
+     * An empty selection (nothing ticked) is refused at Start, so it counts as the configured set.
+     */
+    static int imagesPerTile(Map<String, Double> selection, int configured) {
+        if (selection != null && !selection.isEmpty()) {
+            return selection.size();
         }
-        return 1;
+        return Math.max(1, configured);
     }
 
     /**

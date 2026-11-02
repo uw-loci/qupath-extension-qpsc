@@ -1756,6 +1756,23 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * The Z travel of the stage, {@code |stage.limits.z_um.high - stage.limits.z_um.low|}, in
+     * micrometers, or null when either limit is missing.
+     *
+     * <p>This is the largest span a Z-stack can cover, so the acquisition dialogs use it as the
+     * maximum of their Z range. It does not include the per-insert sample-side limit
+     * ({@link #getInsertZLimitUm}), which depends on where focus lands.
+     */
+    public Double getStageZTravelUm() {
+        Double zLow = getDouble("stage", "limits", "z_um", "low");
+        Double zHigh = getDouble("stage", "limits", "z_um", "high");
+        if (zLow == null || zHigh == null) {
+            return null;
+        }
+        return Math.abs(zHigh - zLow);
+    }
+
+    /**
      * Check if Z coordinate is within stage bounds.
      *
      * @param z Z coordinate in microns

@@ -242,11 +242,6 @@ public class UnifiedAcquisitionController {
             return PersistentPreferences.getLastSampleName();
         }
 
-        @Override
-        protected double zRangeMaxUm() {
-            return 200.0;
-        }
-
         Optional<UnifiedAcquisitionResult> buildAndShow() {
             dialog = new Dialog<>();
             // Non-modal so the operator can use the Live Viewer while this is open: the
@@ -1363,9 +1358,15 @@ public class UnifiedAcquisitionController {
 
                 OutputFormat stitchingOrganization = selectedStitchingOrganization();
 
-                // Get white balance settings from ComboBox
-                String wbModeDisplay = wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)";
-                String wbMode = WbMode.fromDisplayName(wbModeDisplay).getProtocolName();
+                // A monochrome detector has no white balance: send "off", which is also where
+                // Background Collection files its backgrounds. On a JAI camera the combo's value
+                // is sent even when the row is hidden (brightfield), because Background Collection
+                // offers every WB mode on a JAI and files the background under that mode's folder.
+                // Existing Image sends "off" there; which one is right is an open TODO item.
+                String wbMode = configManager.isJAICamera(detector)
+                        ? WbMode.fromDisplayName(wbModeComboBox != null ? wbModeComboBox.getValue() : "Per-angle (PPM)")
+                                .getProtocolName()
+                        : "off";
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 

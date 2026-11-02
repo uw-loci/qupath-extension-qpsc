@@ -353,6 +353,14 @@ public class ExistingImageWorkflowV2 {
         public CompletableFuture<WorkflowState> execute() {
             CompletableFuture<WorkflowState> done = new CompletableFuture<>();
 
+            // A second start while the dialog is up raises that dialog; it does not take the
+            // active-workflow slot from the run that owns it.
+            if (ExistingImageAcquisitionController.isDialogOpen()) {
+                ExistingImageAcquisitionController.bringOpenDialogToFront();
+                done.complete(null);
+                return done;
+            }
+
             // Watch this run's focus positions against the insert's declared retraction point.
             // beginIfIdle defers to a multi-slide batch that is already watching, so a batch
             // reports once across all its slides instead of once per slot.

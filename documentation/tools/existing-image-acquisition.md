@@ -11,6 +11,8 @@ Acquire high-resolution images of specific regions annotated on an existing macr
 
 The acquisition dialog consolidates all options in a single scrollable panel. You may need to scroll to see all options on smaller screens.
 
+The dialog does not block the rest of QuPath. Only one copy can be open at a time; choosing the menu item again brings the open one to the front. The dialog is built for the image that was open when it appeared: if you open another image or project while it is up, **Start Acquisition** is disabled with a message saying so. Cancel, open the image to acquire from, and start again.
+
 ![Existing Image Acquisition dialog -- top section](../images/Docs_ExistingImage_ConsolidatedDialog.png)
 
 ![Annotation class selection dialog](../images/Docs_AnnotationAcquisition.png)
@@ -142,6 +144,8 @@ Next to it, **Full brightness at [nm] nm retardance** sets the retardance shown 
 
 | Option | Type | Default | Description |
 |--------|------|---------|-------------|
+| Z range (um) | Spinner | From preference (20) | Total Z span of the stack, centered on each tile's autofocus Z. The largest value it accepts is the stage's Z travel, `stage.limits.z_um.high` minus `low` in the microscope configuration. Shared with Bounded Acquisition. |
+| Z step (um) | Spinner | From preference (2) | Distance between Z planes, 0.1 to 50 um. |
 | Z-Stack Projection | ComboBox | From preference | When acquiring Z-stacks, how to reduce the slices: Max, Min, Sum, Mean, Std, Extended Depth of Field, or **None** (preserve the full Z-stack as a multi-dimensional stitched image instead of projecting to 2D). Projection is applied on the microscope server during acquisition. See [Z-Stack / Time-Lapse](z-stack-timelapse.md) for full Z-stack configuration. |
 | EDF settings... | Button | - | **Enabled only when Extended Depth of Field projection is selected** (the button is always visible, grayed out otherwise). Opens a dialog to configure EDF parameters: sharpness metric (tenengrad, modified_laplacian, or variance), averaging window size (pixels), and focal-surface smoothing (median filter; 0 disables). Defaults are reasoned starting points, not measured optima — the right values depend on pixel size, camera noise, and sample focal structure. See [PREFERENCES > Extended Depth of Field](../PREFERENCES.md#extended-depth-of-field-edf) for full parameter descriptions. |
 | Stitched output | ComboBox | Single combined file | How to group stitched channels into files for multi-channel acquisitions. **Single combined file** merges all channels (except those marked "Split" in the channel picker) into one multichannel OME-TIFF, imported as a single entry. **Separate file per channel** writes every channel as its own stitched file, each imported as a separate entry. Per-channel "Split" checkboxes (when "Customize" is enabled in the channel picker) can override this global setting, writing individual channels as separate files even when "Single combined file" is selected. See [Preferences > Stitched output organization](../PREFERENCES.md#stitched-output-organization-multi-channel-acquisitions) for more details. |

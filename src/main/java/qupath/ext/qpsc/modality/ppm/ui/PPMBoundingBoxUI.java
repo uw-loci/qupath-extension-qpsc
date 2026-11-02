@@ -358,6 +358,20 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
         return root;
     }
 
+    @Override
+    public javafx.beans.value.ObservableValue<?> selectionObservable() {
+        if (selectionChanges == null) {
+            selectionChanges = new javafx.beans.property.SimpleIntegerProperty();
+            for (CheckBox cb : java.util.List.of(selMinus, selZero, selPlus, selUncrossed)) {
+                cb.selectedProperty().addListener((obs, was, now) -> selectionChanges.set(selectionChanges.get() + 1));
+            }
+        }
+        return selectionChanges;
+    }
+
+    /** Counts changes to the angle selection; built on first use. */
+    private javafx.beans.property.IntegerProperty selectionChanges;
+
     /**
      * Returns the selected angles as {name -> tick}. Presence of a key = that angle is
      * acquired; the value is the tick (a plus/minus override when "Override default angles" is

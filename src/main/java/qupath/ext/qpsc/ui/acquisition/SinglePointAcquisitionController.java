@@ -185,7 +185,9 @@ public class SinglePointAcquisitionController {
 
             // --- Z-stack section ---
             CheckBox zEnableCheckbox = new CheckBox("Enable Z-stack");
-            Spinner<Double> zRangeSpinner = new Spinner<>(0.1, 2000.0, 20.0, 5.0);
+            // A stack spans at most the stage's Z travel from the config.
+            Spinner<Double> zRangeSpinner = new Spinner<>(
+                    0.1, AcquisitionDialogBuilder.zRangeMaxUm(MicroscopeConfigManager.current()), 20.0, 5.0);
             zRangeSpinner.setEditable(true);
             zRangeSpinner.setPrefWidth(100);
             Spinner<Double> zStepSpinner = new Spinner<>(0.1, 50.0, 1.0, 0.5);

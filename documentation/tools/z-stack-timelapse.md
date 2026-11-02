@@ -38,7 +38,7 @@ Acquires images at multiple Z positions centered on the current focus, using the
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| Total range (um) | Full Z range to sweep (centered on current Z) | 20 |
+| Total range (um) | Full Z range to sweep (centered on current Z). At most the stage's Z travel, `stage.limits.z_um.high` minus `low` in the microscope configuration | 20 |
 | Step size (um) | Distance between Z planes | 1.0 |
 | Output folder | Directory for saved images | `<project>/zstack/` |
 

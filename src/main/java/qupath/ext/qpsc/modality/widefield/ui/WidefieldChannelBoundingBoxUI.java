@@ -1508,6 +1508,26 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         return result;
     }
 
+    /** Counts changes to the channel selection; built on first use. */
+    private javafx.beans.property.IntegerProperty selectionChanges;
+
+    @Override
+    public javafx.beans.value.ObservableValue<?> selectionObservable() {
+        if (selectionChanges == null) {
+            selectionChanges = new javafx.beans.property.SimpleIntegerProperty();
+            List<javafx.beans.value.ObservableValue<Boolean>> deps = new ArrayList<>();
+            channelCheckboxes.values().forEach(cb -> deps.add(cb.selectedProperty()));
+            if (masterOverride != null) {
+                deps.add(masterOverride.selectedProperty());
+            }
+            deps.add(equalExposureMode);
+            for (var dep : deps) {
+                dep.addListener((obs, was, now) -> selectionChanges.set(selectionChanges.get() + 1));
+            }
+        }
+        return selectionChanges;
+    }
+
     /**
      * Returns true if the UI is actually rendering a channel picker
      * (a library was found in the config). When false, the UI is a

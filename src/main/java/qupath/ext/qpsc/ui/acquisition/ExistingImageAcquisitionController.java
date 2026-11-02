@@ -173,6 +173,15 @@ public class ExistingImageAcquisitionController {
 
         Platform.runLater(() -> {
             try {
+                // The dialog is non-modal and the menu stays live, so a second request would
+                // otherwise open a second copy. A multi-slide batch asks once per slide, after
+                // the previous slide's dialog has closed, so it never meets this guard.
+                if (isDialogOpen()) {
+                    bringOpenDialogToFront();
+                    future.completeExceptionally(new java.util.concurrent.CancellationException(
+                            "Acquire from Existing Image is already open"));
+                    return;
+                }
                 ConsolidatedDialogBuilder builder =
                         new ConsolidatedDialogBuilder(defaultSampleName, annotations, forceFreshAlignment);
                 Optional<ExistingImageAcquisitionConfig> result = builder.buildAndShow();
@@ -195,6 +204,33 @@ public class ExistingImageAcquisitionController {
         return future;
     }
 
+    /** The dialog on screen, or null. Written on the FX thread, read from any thread. */
+    private static volatile Dialog<?> activeDialog;
+
+    /** True while the Acquire from Existing Image dialog is on screen. */
+    public static boolean isDialogOpen() {
+        Dialog<?> open = activeDialog;
+        return open != null && open.isShowing();
+    }
+
+    /** Raises the open dialog above other windows; does nothing when none is open. Any thread. */
+    public static void bringOpenDialogToFront() {
+        Platform.runLater(() -> {
+            Dialog<?> open = activeDialog;
+            if (open == null || open.getDialogPane().getScene() == null) {
+                return;
+            }
+            Window win = open.getDialogPane().getScene().getWindow();
+            if (win != null && win.isShowing()) {
+                logger.info("Acquire from Existing Image is already open - bringing it to the front");
+                win.requestFocus();
+                if (win instanceof javafx.stage.Stage openStage) {
+                    openStage.toFront();
+                }
+            }
+        });
+    }
+
     /**
      * Internal builder class that constructs and manages the consolidated dialog.
      */
@@ -212,6 +248,8 @@ public class ExistingImageAcquisitionController {
         // makes the refinement recommendation default to re-aligning rather than "proceed without".
         private final boolean forceFreshAlignment;
         private boolean hasMacroImage; // True if a macro image is reachable from this entry
+        private final Project<?> openedProject;
+        private final qupath.lib.images.ImageData<?> openedImageData;
 
         // UI Components - Banner
         private HBox variantBanner;
@@ -262,18 +300,21 @@ public class ExistingImageAcquisitionController {
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             this.transformManager = new AffineTransformManager(new File(configPath).getParent());
 
-            // Check if a project is already open
+            // The project and image this dialog is built for. Its alignment, macro and
+            // annotation checks below are read from them, so a change while the dialog is up
+            // blocks Start (see validateWorkflowFields) rather than being followed.
             QuPathGUI gui = QuPathGUI.getInstance();
-            this.hasOpenProject = (gui != null && gui.getProject() != null);
-
+            this.openedProject = gui != null ? gui.getProject() : null;
+            this.openedImageData = gui != null ? gui.getImageData() : null;
+            File projectFolder = null;
+            if (openedProject != null && openedProject.getPath() != null) {
+                projectFolder = openedProject.getPath().toFile().getParentFile();
+            }
+            this.hasOpenProject = projectFolder != null;
+            this.existingProjectFolder = projectFolder;
+            this.existingProjectName = projectFolder != null ? projectFolder.getName() : null;
             if (hasOpenProject) {
-                File projectFile = gui.getProject().getPath().toFile();
-                this.existingProjectFolder = projectFile.getParentFile();
-                this.existingProjectName = existingProjectFolder.getName();
                 logger.info("Found open project: {} in {}", existingProjectName, existingProjectFolder.getParent());
-            } else {
-                this.existingProjectFolder = null;
-                this.existingProjectName = null;
             }
 
             // Load available transforms
@@ -389,11 +430,6 @@ public class ExistingImageAcquisitionController {
         }
 
         @Override
-        protected double zRangeMaxUm() {
-            return 2000.0;
-        }
-
-        @Override
         protected Node[] previewContentNodes() {
             return new Node[] {previewAnnotationsLabel, previewTilesLabel, previewTimeLabel, previewStorageLabel};
         }
@@ -405,6 +441,23 @@ public class ExistingImageAcquisitionController {
             } else {
                 validationErrors.remove("transform");
             }
+            if (openImageChanged()) {
+                validationErrors.put(
+                        "openImage",
+                        "The open project or image changed after this dialog opened. Cancel, open the image"
+                                + " to acquire from, and start Acquire from Existing Image again.");
+            } else {
+                validationErrors.remove("openImage");
+            }
+        }
+
+        /** Whether QuPath's open project or image is no longer the one this dialog was built for. */
+        private boolean openImageChanged() {
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui == null) {
+                return false;
+            }
+            return gui.getProject() != openedProject || gui.getImageData() != openedImageData;
         }
 
         Optional<ExistingImageAcquisitionConfig> buildAndShow() {
@@ -512,7 +565,25 @@ public class ExistingImageAcquisitionController {
             // Multi-slide auto-advance: no-op unless a batch armed an automatic mode.
             // Fires startType specifically -- never the "Save MDA..." secondary or Cancel.
             AutoAdvanceController.attach(dialog, startType);
-            return dialog.showAndWait();
+
+            activeDialog = dialog;
+            QuPathGUI watchedGui = QuPathGUI.getInstance();
+            // imageDataProperty can change off the FX thread while an entry opens.
+            javafx.beans.value.ChangeListener<Object> openImageListener =
+                    (obs, was, now) -> Platform.runLater(this::validateAll);
+            if (watchedGui != null) {
+                watchedGui.projectProperty().addListener(openImageListener);
+                watchedGui.imageDataProperty().addListener(openImageListener);
+            }
+            try {
+                return dialog.showAndWait();
+            } finally {
+                if (watchedGui != null) {
+                    watchedGui.projectProperty().removeListener(openImageListener);
+                    watchedGui.imageDataProperty().removeListener(openImageListener);
+                }
+                activeDialog = null;
+            }
         }
 
         private void createVariantBanner() {

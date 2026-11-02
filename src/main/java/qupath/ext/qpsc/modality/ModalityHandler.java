@@ -924,5 +924,16 @@ public interface ModalityHandler {
         default java.util.List<String> getAlignmentChannelIds() {
             return java.util.List.of();
         }
+
+        /**
+         * A value that changes whenever the selection {@link #getAngleOverrides()} reports
+         * changes (an angle or channel ticked, the override switched), so the dialog can refresh
+         * its image count and time estimate. Only the fact of a change matters, not the value.
+         *
+         * @return the value, or {@code null} when the panel has no selection to watch
+         */
+        default javafx.beans.value.ObservableValue<?> selectionObservable() {
+            return null;
+        }
     }
 }
