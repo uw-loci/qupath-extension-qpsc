@@ -1133,48 +1133,7 @@ public class AffineTransformManager {
     }
 
     public static AffineTransform loadDerivedAlignment(Project<BufferedImage> project, String subImageName) {
-        if (project == null || subImageName == null) return null;
-        try {
-            File projectDir = project.getPath().toFile().getParentFile();
-            if (projectDir == null) return null;
-            File derivedDir = new File(new File(projectDir, "alignmentFiles"), "derived");
-            if (derivedDir.exists()) {
-                AffineTransform t = loadSlideAlignmentFromSpecificDir(derivedDir, subImageName);
-                if (t != null) return t;
-            }
-            // Backward compatibility: legacy sub-image JSONs were written to the flat directory.
-            return loadSlideAlignmentFromDirectory(projectDir, subImageName);
-        } catch (Exception e) {
-            logger.error("Failed to load derived alignment for {}", subImageName, e);
-            return null;
-        }
-    }
-
-    /**
-     * Helper: variant of {@link #loadSlideAlignmentFromDirectory(File, String)} that reads from
-     * a specific alignment directory rather than {@code projectDir/alignmentFiles}. Used by
-     * {@link #loadDerivedAlignment} to read the {@code derived/} subdirectory.
-     */
-    private static AffineTransform loadSlideAlignmentFromSpecificDir(File alignmentDir, String sampleName) {
-        if (alignmentDir == null || !alignmentDir.exists() || sampleName == null) return null;
-        String activeMicroscope = null;
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) activeMicroscope = mgr.getMicroscopeName();
-        } catch (Exception ignore) {
-        }
-        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
-            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
-            if (scoped.exists()) {
-                AffineTransform t = readAlignmentJson(scoped, activeMicroscope);
-                if (t != null) return t;
-            }
-        }
-        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
-        if (legacy.exists()) {
-            return readAlignmentJson(legacy, activeMicroscope);
-        }
-        return null;
+        return transformOf(loadDerivedAlignmentWithFrame(project, subImageName));
     }
 
     public static AffineTransform loadSlideAlignment(Project<BufferedImage> project, String sampleName) {
@@ -1214,15 +1173,8 @@ public class AffineTransformManager {
         if (!alignmentDir.exists()) {
             return null;
         }
-        String activeMicroscope = null;
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) {
-                activeMicroscope = mgr.getMicroscopeName();
-            }
-        } catch (Exception ignore) {
-        }
-        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+        String activeMicroscope = activeMicroscopeName();
+        if (activeMicroscope != null) {
             File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
             if (scoped.exists()) {
                 return scoped;
@@ -1632,52 +1584,22 @@ public class AffineTransformManager {
      * @return The slide-specific transform, or null if not found
      */
     public static AffineTransform loadSlideAlignmentFromDirectory(File projectDir, String sampleName) {
-        if (projectDir == null || !projectDir.exists() || sampleName == null) {
-            return null;
-        }
+        return transformOf(loadSlideAlignmentWithFrameFromDirectory(projectDir, sampleName));
+    }
 
-        File alignmentDir = new File(projectDir, "alignmentFiles");
-        if (!alignmentDir.exists()) {
-            return null;
-        }
+    private static AffineTransform transformOf(SlideAlignmentResult result) {
+        return result == null ? null : result.getTransform();
+    }
 
-        // Resolve the active microscope so we only load alignments built for it.
-        // Same project + same sample re-opened on a different scope used to load
-        // the wrong scope's transform because the file was keyed on sampleName
-        // alone. Now we look for <sample>_<scope>_alignment.json first, and
-        // fall back to legacy <sample>_alignment.json only if its in-JSON
-        // microscope field matches the active scope.
-        String activeMicroscope = null;
+    /** The active microscope's name, or null when no config has named one. */
+    private static String activeMicroscopeName() {
         try {
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) {
-                activeMicroscope = mgr.getMicroscopeName();
-            }
-        } catch (Exception ignore) {
+            String name = mgr == null ? null : mgr.getMicroscopeName();
+            return name == null || name.isEmpty() || "Unknown".equals(name) ? null : name;
+        } catch (Exception e) {
+            return null;
         }
-
-        // Preferred: scope-namespaced filename.
-        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
-            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
-            if (scoped.exists()) {
-                AffineTransform t = readAlignmentJson(scoped, activeMicroscope);
-                if (t != null) return t;
-            }
-        }
-
-        // Legacy: unnamespaced file. Only use when its microscope field matches
-        // the active scope, or when no active scope is known. A legacy file
-        // with no microscope field is treated as ambiguous and skipped -- the
-        // user should re-run alignment under the current scope rather than
-        // risk reusing a different scope's transform (the OWS3-loading-PPM-
-        // alignment bug).
-        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
-        if (legacy.exists()) {
-            return readAlignmentJson(legacy, activeMicroscope);
-        }
-
-        logger.debug("No slide-specific alignment found for sample '{}' under {}", sampleName, alignmentDir);
-        return null;
     }
 
     /**
@@ -1816,7 +1738,7 @@ public class AffineTransformManager {
             if (projectDir == null) return null;
             File derivedDir = new File(new File(projectDir, "alignmentFiles"), "derived");
             if (derivedDir.exists()) {
-                SlideAlignmentResult r = loadSlideAlignmentWithFrameFromSpecificDir(derivedDir, subImageName);
+                SlideAlignmentResult r = loadSlideAlignmentWithFrameFromAlignmentDir(derivedDir, subImageName);
                 if (r != null) return r;
             }
             // Backward compatibility: pre-restructure sub-image JSONs were written
@@ -1828,55 +1750,39 @@ public class AffineTransformManager {
         }
     }
 
-    /** Mirrors {@link #loadSlideAlignmentFromSpecificDir} but returns flip frame. */
-    private static SlideAlignmentResult loadSlideAlignmentWithFrameFromSpecificDir(
+    /**
+     * Reads a sample's alignment from one alignment folder: the file named for the active
+     * microscope first, then the unscoped name. A file built for another microscope is ignored.
+     */
+    private static SlideAlignmentResult loadSlideAlignmentWithFrameFromAlignmentDir(
             File alignmentDir, String sampleName) {
-        if (alignmentDir == null || !alignmentDir.exists() || sampleName == null) return null;
-        String activeMicroscope = null;
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) activeMicroscope = mgr.getMicroscopeName();
-        } catch (Exception ignore) {
+        if (alignmentDir == null || !alignmentDir.exists() || sampleName == null) {
+            return null;
         }
-        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
+        String activeMicroscope = activeMicroscopeName();
+        if (activeMicroscope != null) {
             File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
             if (scoped.exists()) {
                 SlideAlignmentResult r = readAlignmentJsonWithFrame(scoped, activeMicroscope);
-                if (r != null) return r;
+                if (r != null) {
+                    return r;
+                }
             }
         }
-        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
-        if (legacy.exists()) {
-            return readAlignmentJsonWithFrame(legacy, activeMicroscope);
+        File unscoped = new File(alignmentDir, sampleName + "_alignment.json");
+        if (unscoped.exists()) {
+            return readAlignmentJsonWithFrame(unscoped, activeMicroscope);
         }
+        logger.debug("No slide-specific alignment found for sample '{}' under {}", sampleName, alignmentDir);
         return null;
     }
 
-    /** Directory-based variant; mirrors {@link #loadSlideAlignmentFromDirectory(File, String)}. */
+    /** Directory-based variant of {@link #loadSlideAlignmentWithFrame(Project, String)}. */
     public static SlideAlignmentResult loadSlideAlignmentWithFrameFromDirectory(File projectDir, String sampleName) {
-        if (projectDir == null || !projectDir.exists() || sampleName == null) return null;
-        File alignmentDir = new File(projectDir, "alignmentFiles");
-        if (!alignmentDir.exists()) return null;
-
-        String activeMicroscope = null;
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) activeMicroscope = mgr.getMicroscopeName();
-        } catch (Exception ignore) {
+        if (projectDir == null || !projectDir.exists()) {
+            return null;
         }
-
-        if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
-            File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
-            if (scoped.exists()) {
-                SlideAlignmentResult r = readAlignmentJsonWithFrame(scoped, activeMicroscope);
-                if (r != null) return r;
-            }
-        }
-        File legacy = new File(alignmentDir, sampleName + "_alignment.json");
-        if (legacy.exists()) {
-            return readAlignmentJsonWithFrame(legacy, activeMicroscope);
-        }
-        return null;
+        return loadSlideAlignmentWithFrameFromAlignmentDir(new File(projectDir, "alignmentFiles"), sampleName);
     }
 
     /**
@@ -1944,23 +1850,55 @@ public class AffineTransformManager {
 
     /**
      * Read a slide alignment JSON and return both the transform and the
-     * recorded flip frame (or nulls). Mirrors the validation in
-     * {@link #readAlignmentJson(File, String)}.
+     * recorded flip frame (or nulls).
      */
     private static SlideAlignmentResult readAlignmentJsonWithFrame(File alignmentFile, String activeMicroscope) {
         try {
             String json = new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
             Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
             Map<String, Object> data = new Gson().fromJson(json, mapType);
-            if (data == null) return null;
+            if (data == null) {
+                return null;
+            }
 
             Object scopeObj = data.get("microscope");
             String fileScope = scopeObj instanceof String ? (String) scopeObj : null;
+
+            // Cross-scope guard:
+            //   active known + file has scope: must match
+            //   active known + file has no scope: ambiguous, reject
+            //   active unknown: accept either way (caller ran without a config)
             if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
-                if (fileScope == null) return null;
-                if (!fileScope.equals(activeMicroscope)) return null;
+                if (fileScope == null) {
+                    logger.warn(
+                            "Ignoring legacy slide alignment {} -- no microscope field, cannot verify it was "
+                                    + "built for active scope '{}'. Re-run alignment under {} to refresh.",
+                            alignmentFile.getName(),
+                            activeMicroscope,
+                            activeMicroscope);
+                    return null;
+                }
+                if (!fileScope.equals(activeMicroscope)) {
+                    logger.warn(
+                            "Ignoring slide alignment {} -- built for scope '{}' but active scope is '{}'.",
+                            alignmentFile.getName(),
+                            fileScope,
+                            activeMicroscope);
+                    return null;
+                }
             }
-            return alignmentResultFromData(data);
+
+            SlideAlignmentResult result = alignmentResultFromData(data);
+            if (result != null) {
+                logger.info(
+                        "Loaded slide alignment from {} (scope='{}', timestamp={}, scale X={}, Y={})",
+                        alignmentFile.getAbsolutePath(),
+                        fileScope == null ? "(unscoped)" : fileScope,
+                        data.get("timestamp"),
+                        result.getTransform().getScaleX(),
+                        result.getTransform().getScaleY());
+            }
+            return result;
         } catch (Exception e) {
             logger.error("Error reading slide alignment file {}: {}", alignmentFile, e.getMessage());
             return null;
@@ -2044,59 +1982,6 @@ public class AffineTransformManager {
      * @return the transform, or null if the file is empty / mismatched scope /
      *         legacy file with no microscope field
      */
-    private static AffineTransform readAlignmentJson(File alignmentFile, String activeMicroscope) {
-        try {
-            String json = new String(Files.readAllBytes(alignmentFile.toPath()), StandardCharsets.UTF_8);
-            Type mapType = new TypeToken<Map<String, Object>>() {}.getType();
-            Map<String, Object> data = new Gson().fromJson(json, mapType);
-            if (data == null) return null;
-
-            Object scopeObj = data.get("microscope");
-            String fileScope = scopeObj instanceof String ? (String) scopeObj : null;
-
-            // Cross-scope guard. Three cases:
-            //   active known + file has scope: must match
-            //   active known + file has no scope: legacy/ambiguous -> reject
-            //   active unknown: accept either way (caller ran without a config)
-            if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
-                if (fileScope == null) {
-                    logger.warn(
-                            "Ignoring legacy slide alignment {} -- no microscope field, cannot verify it was built for active scope '{}'. Re-run alignment under '{}' to refresh.",
-                            alignmentFile.getName(),
-                            activeMicroscope,
-                            activeMicroscope);
-                    return null;
-                }
-                if (!fileScope.equals(activeMicroscope)) {
-                    logger.warn(
-                            "Ignoring slide alignment {} -- built for scope '{}' but active scope is '{}'.",
-                            alignmentFile.getName(),
-                            fileScope,
-                            activeMicroscope);
-                    return null;
-                }
-            }
-
-            @SuppressWarnings("unchecked")
-            List<Double> tv = (List<Double>) data.get("transform");
-            if (tv == null || tv.size() != 6) return null;
-
-            AffineTransform transform =
-                    new AffineTransform(tv.get(0), tv.get(1), tv.get(2), tv.get(3), tv.get(4), tv.get(5));
-
-            logger.info("Loaded slide-specific alignment from: {}", alignmentFile.getAbsolutePath());
-            logger.info(
-                    "Alignment scope='{}', timestamp={}, scale=(X={}, Y={})",
-                    fileScope == null ? "(legacy/unscoped)" : fileScope,
-                    data.get("timestamp"),
-                    transform.getScaleX(),
-                    transform.getScaleY());
-            return transform;
-        } catch (Exception e) {
-            logger.error("Error reading slide alignment file {}: {}", alignmentFile, e.getMessage());
-            return null;
-        }
-    }
 
     /**
      * A per-slide alignment record paired with the microscope it was built against.
@@ -2153,7 +2038,7 @@ public class AffineTransformManager {
      * Loads every per-slide alignment found in {@code projectDir/alignmentFiles} for the
      * given sample, regardless of which microscope it was built against. Records whose
      * JSON has no {@code microscope} field are skipped (legacy/ambiguous, see
-     * {@link #readAlignmentJson(File, String)}).
+     * {@link #readAlignmentJsonWithFrame(File, String)}).
      *
      * <p>Used by cross-scope acquisition: an alignment built for microscope A can be
      * composed with a saved preset pair to drive microscope B, provided both presets
@@ -2251,14 +2136,7 @@ public class AffineTransformManager {
         // legacy unscoped <sample>_alignment.json is the fallback. Reading only
         // the legacy name would make any scoped alignment report
         // "Last refined: Unknown" and the age-based outdated warning never fire.
-        String activeMicroscope = null;
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-            if (mgr != null) {
-                activeMicroscope = mgr.getMicroscopeName();
-            }
-        } catch (Exception ignore) {
-        }
+        String activeMicroscope = activeMicroscopeName();
 
         File alignmentFile = null;
         if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
