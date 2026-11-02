@@ -703,7 +703,7 @@ public final class ImageFlipHelper {
             baseImage = qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName());
         }
         String baseImageFinal = baseImage;
-        int baseRotation = ImageMetadataManager.getRotationDegrees(baseEntry);
+        int baseRotation = ImageMetadataManager.getRotationDeg(baseEntry);
 
         // A camera-view companion sharing this base_image AND baked at the SAME rotation.
         // The rotation match keeps a rotated base from resolving to the un-rotated
@@ -713,7 +713,7 @@ public final class ImageFlipHelper {
             if (!ImageMetadataManager.isCameraView(e)) continue;
             String candBase = ImageMetadataManager.getBaseImage(e);
             if (candBase == null || !candBase.equals(baseImageFinal)) continue;
-            if (ImageMetadataManager.getRotationDegrees(e) != baseRotation) continue;
+            if (ImageMetadataManager.getRotationDeg(e) != baseRotation) continue;
             return e;
         }
         return null;

@@ -27,7 +27,7 @@ public class StageSpaceSimilarityTest {
         double[][] measured = {{10, -5}, {110, -5}, {10, 95}};
         SimilarityFit fit = TransformationFunctions.computeStageSpaceSimilarity(predicted, measured);
 
-        assertEquals(0.0, fit.rotationDegrees(), 1e-4, "no rotation");
+        assertEquals(0.0, fit.rotationDeg(), 1e-4, "no rotation");
         assertEquals(1.0, fit.scale(), 1e-6, "unit scale");
         assertEquals(0.0, fit.rmsResidualUm(), 1e-6, "exact fit");
 
@@ -54,7 +54,7 @@ public class StageSpaceSimilarityTest {
         }
 
         SimilarityFit fit = TransformationFunctions.computeStageSpaceSimilarity(predicted, measured);
-        assertEquals(30.0, fit.rotationDegrees(), 1e-4, "recovers +30 deg");
+        assertEquals(30.0, fit.rotationDeg(), 1e-4, "recovers +30 deg");
         assertEquals(1.0, fit.scale(), 1e-6, "no scale change");
         assertTrue(fit.rmsResidualUm() < 1e-6, "exact fit for noise-free rotation");
 
@@ -76,7 +76,7 @@ public class StageSpaceSimilarityTest {
             measured[i][1] = scale * predicted[i][1] - 5;
         }
         SimilarityFit fit = TransformationFunctions.computeStageSpaceSimilarity(predicted, measured);
-        assertEquals(0.0, fit.rotationDegrees(), 1e-4);
+        assertEquals(0.0, fit.rotationDeg(), 1e-4);
         assertEquals(1.05, fit.scale(), 1e-6, "recovers 1.05x scale");
     }
 

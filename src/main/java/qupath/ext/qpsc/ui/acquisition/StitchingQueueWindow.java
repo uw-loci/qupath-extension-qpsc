@@ -192,7 +192,7 @@ public final class StitchingQueueWindow {
 
         TableColumn<Job, String> elapsedCol = new TableColumn<>("Elapsed");
         elapsedCol.setCellValueFactory(
-                c -> new SimpleStringProperty(elapsedText(c.getValue().elapsedSeconds(System.currentTimeMillis()))));
+                c -> new SimpleStringProperty(elapsedText(c.getValue().elapsedSec(System.currentTimeMillis()))));
         elapsedCol.setPrefWidth(70);
 
         TableColumn<Job, Job> openCol = new TableColumn<>("Result");

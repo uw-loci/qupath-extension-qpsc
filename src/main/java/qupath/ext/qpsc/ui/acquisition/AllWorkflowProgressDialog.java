@@ -51,7 +51,7 @@ public final class AllWorkflowProgressDialog {
     private final ProgressBar overallBar = new ProgressBar(0);
     private final Label totalLabel = new Label();
     private final Label remainingLabel = new Label();
-    private final long startMillis;
+    private final long startMs;
     private Timeline ticker;
     private int completedCount = 0;
 
@@ -66,16 +66,16 @@ public final class AllWorkflowProgressDialog {
         final Label status = new Label("Pending");
         final Label elapsed = new Label("-");
         Status state = Status.PENDING;
-        long startedMillis = 0;
+        long startedMs = 0;
 
         Row(WorkflowTime wt) {
             this.wt = wt;
         }
     }
 
-    private AllWorkflowProgressDialog(Window owner, List<WorkflowEstimate> estimates, long nowMillis) {
+    private AllWorkflowProgressDialog(Window owner, List<WorkflowEstimate> estimates, long nowMs) {
         this.batch = AcquisitionTimeEstimator.estimateBatch(estimates);
-        this.startMillis = nowMillis;
+        this.startMs = nowMs;
         this.stage = new Stage();
         QpscWindows.track(this.stage);
         this.stage.setTitle("All-Workflow Acquisition Prediction");
@@ -133,14 +133,14 @@ public final class AllWorkflowProgressDialog {
                 "Total: %d workflow(s), %d images, est. %s",
                 batch.workflows().size(),
                 batch.workflows().stream().mapToLong(WorkflowTime::totalImages).sum(),
-                AcquisitionTimeEstimator.formatDuration(batch.totalSeconds())));
+                AcquisitionTimeEstimator.formatDuration(batch.totalSec())));
         totalLabel.setStyle("-fx-font-weight: bold;");
 
         overallBar.setMaxWidth(Double.MAX_VALUE);
         HBox.setHgrow(overallBar, Priority.ALWAYS);
         HBox barRow = new HBox(10, overallBar, remainingLabel);
         barRow.setAlignment(Pos.CENTER_LEFT);
-        remainingLabel.setText("Remaining: " + AcquisitionTimeEstimator.formatDuration(batch.totalSeconds()));
+        remainingLabel.setText("Remaining: " + AcquisitionTimeEstimator.formatDuration(batch.totalSec()));
 
         Label note = new Label("Estimate only (exposure + move/AF/stitch overhead). Updates as workflows finish.");
         note.setStyle("-fx-font-style: italic;");
@@ -159,7 +159,7 @@ public final class AllWorkflowProgressDialog {
             }
             Row row = rows.get(index);
             row.state = Status.RUNNING;
-            row.startedMillis = System.currentTimeMillis();
+            row.startedMs = System.currentTimeMillis();
             row.status.setText("Running");
         });
     }
@@ -176,9 +176,9 @@ public final class AllWorkflowProgressDialog {
             }
             row.state = Status.DONE;
             row.status.setText("Done");
-            if (row.startedMillis > 0) {
-                row.elapsed.setText(AcquisitionTimeEstimator.formatDuration(
-                        (System.currentTimeMillis() - row.startedMillis) / 1000.0));
+            if (row.startedMs > 0) {
+                row.elapsed.setText(
+                        AcquisitionTimeEstimator.formatDuration((System.currentTimeMillis() - row.startedMs) / 1000.0));
             }
             int n = rows.size();
             overallBar.setProgress(n == 0 ? 0 : (double) completedCount / n);
@@ -209,9 +209,9 @@ public final class AllWorkflowProgressDialog {
     private void tick() {
         // Update the running workflow's elapsed and a coarse batch remaining estimate.
         for (Row row : rows) {
-            if (row.state == Status.RUNNING && row.startedMillis > 0) {
-                row.elapsed.setText(AcquisitionTimeEstimator.formatDuration(
-                        (System.currentTimeMillis() - row.startedMillis) / 1000.0));
+            if (row.state == Status.RUNNING && row.startedMs > 0) {
+                row.elapsed.setText(
+                        AcquisitionTimeEstimator.formatDuration((System.currentTimeMillis() - row.startedMs) / 1000.0));
             }
         }
         double remaining = 0.0;

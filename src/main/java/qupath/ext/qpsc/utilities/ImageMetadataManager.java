@@ -1001,7 +1001,7 @@ public class ImageMetadataManager {
      * its source macro. Read from {@link #LP_ROTATION_DEG} metadata -- NOT by parsing
      * the entry name. Returns 0 when unset or unparseable.
      */
-    public static int getRotationDegrees(ProjectImageEntry<?> entry) {
+    public static int getRotationDeg(ProjectImageEntry<?> entry) {
         if (entry == null) return 0;
         String v = entry.getMetadata().get(LP_ROTATION_DEG);
         if (v == null || v.isBlank()) return 0;
@@ -1016,7 +1016,7 @@ public class ImageMetadataManager {
      * Record the baked quarter-rotation. Caller is responsible for
      * {@code project.syncChanges()}. A value of 0 removes the key.
      */
-    public static void setRotationDegrees(ProjectImageEntry<?> entry, int deg) {
+    public static void setRotationDeg(ProjectImageEntry<?> entry, int deg) {
         if (entry == null) return;
         int norm = ((deg % 360) + 360) % 360;
         Map<String, String> meta = entry.getMetadata();

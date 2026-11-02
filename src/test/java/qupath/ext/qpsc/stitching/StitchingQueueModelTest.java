@@ -29,8 +29,8 @@ class StitchingQueueModelTest {
         Job running = m.job("L004 - Tissue_1");
         assertEquals(State.RUNNING, running.state());
         assertEquals("stitching 90.0...", running.status());
-        assertEquals(0, running.elapsedSeconds(5_000));
-        assertEquals(7, running.elapsedSeconds(12_000));
+        assertEquals(0, running.elapsedSec(5_000));
+        assertEquals(7, running.elapsedSec(12_000));
         assertEquals("1 stitching, 1 queued", m.summary());
 
         m.recordOutput("L004 - Tissue_1", "L004_lcps_20x_001.ome.tif");
@@ -40,7 +40,7 @@ class StitchingQueueModelTest {
         Job done = m.job("L004 - Tissue_1");
         assertEquals(State.DONE, done.state());
         assertEquals(List.of("L004_lcps_20x_001.ome.tif"), done.outputs(), "outputs are recorded once");
-        assertEquals(60, done.elapsedSeconds(999_999), "elapsed freezes at completion");
+        assertEquals(60, done.elapsedSec(999_999), "elapsed freezes at completion");
         assertEquals(1, m.activeCount());
         assertFalse(m.isIdle());
     }

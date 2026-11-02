@@ -148,8 +148,8 @@ public class AutofocusBenchmarkWorkflow {
                             }
                             int totalTrials = standardTrials + adaptiveTrials;
 
-                            double avgSeconds = params.quickMode() ? 30.0 : 70.0;
-                            double totalMinutes = (totalTrials * avgSeconds) / 60.0;
+                            double avgSec = params.quickMode() ? 30.0 : 70.0;
+                            double totalMinutes = (totalTrials * avgSec) / 60.0;
                             double totalHours = totalMinutes / 60.0;
 
                             String estimatedTime;

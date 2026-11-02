@@ -98,7 +98,7 @@ public class TilingRequest {
     private List<PathObject> annotations;
 
     /** Pixel size in microns for coordinate conversion (required for annotation workflows, use 1.0 for bounding box) */
-    private double pixelSizeMicrons = -1.0; // -1.0 indicates not set
+    private double pixelSizeUm = -1.0; // -1.0 indicates not set
 
     // Builder pattern implementation
     /**
@@ -273,14 +273,14 @@ public class TilingRequest {
          * @param pixelSizeMicrons the pixel size in microns, must be positive
          * @return this builder instance for method chaining
          */
-        public Builder pixelSizeMicrons(double pixelSizeMicrons) {
-            logger.debug("Setting pixel size: {} microns", pixelSizeMicrons);
-            if (pixelSizeMicrons <= 0) {
+        public Builder pixelSizeUm(double pixelSizeUm) {
+            logger.debug("Setting pixel size: {} microns", pixelSizeUm);
+            if (pixelSizeUm <= 0) {
                 logger.warn(
                         "Pixel size must be positive: {} - this will cause incorrect coordinate conversion",
-                        pixelSizeMicrons);
+                        pixelSizeUm);
             }
-            request.pixelSizeMicrons = pixelSizeMicrons;
+            request.pixelSizeUm = pixelSizeUm;
             return this;
         }
 
@@ -325,7 +325,7 @@ public class TilingRequest {
             }
 
             // Validate pixel size is set for annotation workflows
-            if (request.hasAnnotations() && request.pixelSizeMicrons <= 0) {
+            if (request.hasAnnotations() && request.pixelSizeUm <= 0) {
                 String error = "Pixel size must be set for annotation-based workflows. "
                         + "Check that the image metadata contains valid pixel calibration, "
                         + "or verify the microscope configuration file has correct pixel size settings.";
@@ -334,8 +334,8 @@ public class TilingRequest {
             }
 
             // For bounding box workflows, default to 1.0 if not explicitly set
-            if (request.hasBoundingBox() && request.pixelSizeMicrons < 0) {
-                request.pixelSizeMicrons = 1.0;
+            if (request.hasBoundingBox() && request.pixelSizeUm < 0) {
+                request.pixelSizeUm = 1.0;
                 logger.debug("Bounding box workflow: using pixelSizeMicrons=1.0 (no conversion)");
             }
 
@@ -348,7 +348,7 @@ public class TilingRequest {
                     request.frameWidth,
                     request.frameHeight,
                     request.overlapPercent,
-                    request.pixelSizeMicrons);
+                    request.pixelSizeUm);
 
             return request;
         }
@@ -465,8 +465,8 @@ public class TilingRequest {
      *
      * @return the pixel size in microns
      */
-    public double getPixelSizeMicrons() {
-        return pixelSizeMicrons;
+    public double getPixelSizeUm() {
+        return pixelSizeUm;
     }
 
     /**

@@ -422,10 +422,10 @@ Every QPSC acquisition writes a Micro-Manager 2.0 compatible Multi-Dimensional A
 
 **File locations** (per region, in the per-region folder beside `TileConfiguration.txt`):
 
-- `<projects>/<sample>/<enhancedModality>/<region>/MDA_<region>.txt` -- MM `SequenceSettings` JSON. MM's MDA "Load..." filter shows `.txt` by default.
-- `<projects>/<sample>/<enhancedModality>/<region>/MDA_<region>.pos` -- MM `PositionList`, written in MM 2.0's
+- `<projects>/<sample>/<modality folder>/<region>/MDA_<region>.txt` -- MM `SequenceSettings` JSON. MM's MDA "Load..." filter shows `.txt` by default.
+- `<projects>/<sample>/<modality folder>/<region>/MDA_<region>.pos` -- MM `PositionList`, written in MM 2.0's
   "Micro-Manager Property Map" v2 encoding (the same format the Stage Position List window itself saves).
-- `<projects>/<sample>/<enhancedModality>/<region>/MDA_NOTES.txt` -- plaintext provenance, the autofocus caveat, and any dropped multi-group presets or fallback device names.
+- `<projects>/<sample>/<modality folder>/<region>/MDA_NOTES.txt` -- plaintext provenance, the autofocus caveat, and any dropped multi-group presets or fallback device names.
 
 **How to load in Micro-Manager 2.0:**
 

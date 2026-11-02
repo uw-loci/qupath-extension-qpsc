@@ -926,15 +926,15 @@ public class UnifiedAcquisitionController {
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configFileLocation);
 
-            String enhancedModality = ObjectiveUtils.createEnhancedFolderName(modality, objective);
+            String modalityFolder = ObjectiveUtils.createEnhancedFolderName(modality, objective);
             java.nio.file.Path regionDir = projectsFolder
                     .toPath()
                     .resolve(sampleName)
-                    .resolve(enhancedModality)
+                    .resolve(modalityFolder)
                     .resolve("bounds");
 
             AcquisitionCommandBuilder cmdBuilder =
-                    buildMdaCommand(sample, configFileLocation, mgr, enhancedModality, "bounds");
+                    buildMdaCommand(sample, configFileLocation, mgr, modalityFolder, "bounds");
             if (cmdBuilder == null) {
                 return MdaExportContext.notReady(MDA_NO_CHANNELS_MESSAGE);
             }
@@ -1136,16 +1136,16 @@ public class UnifiedAcquisitionController {
                     intervalSec = Math.max(0.0, PersistentPreferences.getTimeLapseIntervalSec());
                 }
 
-                double perTimepointAcqSeconds = estimatedAcquisitionSeconds(totalImages);
+                double perTimepointAcqSec = estimatedAcquisitionSec(totalImages);
                 totalImages *= timepoints;
                 // If the interval exceeds per-timepoint acquisition the run is interval-bound:
                 // (N-1) intervals to start the last timepoint, plus that timepoint's acquisition.
-                double estimatedSeconds = timepoints > 1
+                double estimatedSec = timepoints > 1
                         ? Math.max(
-                                estimatedAcquisitionSeconds(totalImages),
-                                (timepoints - 1) * intervalSec + perTimepointAcqSeconds)
-                        : perTimepointAcqSeconds;
-                String timeEstimate = formatTimeEstimate(estimatedSeconds);
+                                estimatedAcquisitionSec(totalImages),
+                                (timepoints - 1) * intervalSec + perTimepointAcqSec)
+                        : perTimepointAcqSec;
+                String timeEstimate = formatTimeEstimate(estimatedSec);
 
                 // Estimate storage (rough: 4MB per image for 16-bit 2048x2048)
                 double estimatedMB = totalImages * 4.0;
@@ -1193,7 +1193,7 @@ public class UnifiedAcquisitionController {
                 previewAnglesLabel.setText(anglesText);
                 previewTotalImagesLabel.setText(String.format("Total Images: %,d", totalImages));
                 previewTimeLabel.setText("Est. Time: " + timeEstimate);
-                previewCompletionLabel.setText("Est. Completion: " + formatCompletion(estimatedSeconds));
+                previewCompletionLabel.setText("Est. Completion: " + formatCompletion(estimatedSec));
                 previewStorageLabel.setText("Est. Storage: " + storageEstimate);
 
                 previewErrorLabel.setVisible(false);

@@ -451,8 +451,8 @@ public class AutofocusBenchmarkDialog {
 
                         // Estimate duration: ~30-90 seconds per trial on average
                         // Quick trials are faster (~20-40s), full grid has mix of fast and slow
-                        double avgSecondsPerTrial = quickMode ? 30.0 : 70.0;
-                        double totalMinutes = (totalTrials * avgSecondsPerTrial) / 60.0;
+                        double avgSecPerTrial = quickMode ? 30.0 : 70.0;
+                        double totalMinutes = (totalTrials * avgSecPerTrial) / 60.0;
                         double totalHours = totalMinutes / 60.0;
 
                         // Format the estimate string

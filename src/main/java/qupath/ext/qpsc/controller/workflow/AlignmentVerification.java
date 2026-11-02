@@ -71,8 +71,8 @@ public final class AlignmentVerification {
      * @param fovHeightUm camera field height (um), from the microscope config
      * @return the tolerance in um
      */
-    public static double toleranceUm(double fovWidthUm, double fovHeightUm) {
-        return Math.hypot(fovWidthUm, fovHeightUm);
+    public static double toleranceUm(double fovXUm, double fovYUm) {
+        return Math.hypot(fovXUm, fovYUm);
     }
 
     /**
@@ -185,8 +185,8 @@ public final class AlignmentVerification {
             PathObject annotation,
             AffineTransform transform,
             Double focusZUm,
-            double fovWidthUm,
-            double fovHeightUm,
+            double fovXUm,
+            double fovYUm,
             String modalityForServer,
             String objectiveId) {
 
@@ -205,10 +205,10 @@ public final class AlignmentVerification {
                     "The macro image has no pixel-size calibration, so it cannot be matched against the camera.");
         }
 
-        double maxOffsetUm = toleranceUm(fovWidthUm, fovHeightUm);
+        double maxOffsetUm = toleranceUm(fovXUm, fovYUm);
         List<double[]> points = candidatePoints(annotation.getROI());
-        double patchW = fovWidthUm / pixelSize;
-        double patchH = fovHeightUm / pixelSize;
+        double patchW = fovXUm / pixelSize;
+        double patchH = fovYUm / pixelSize;
 
         MicroscopeController mc = MicroscopeController.getInstance();
         int attempt = 0;

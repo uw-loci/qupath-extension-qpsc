@@ -70,7 +70,7 @@ class StageFrameWatchdogTest {
         watchdog = StageFrameWatchdog.getInstance();
         watchdog.resetForTesting();
         // The shipped grace period is 30 s, to cover the traverse into a region.
-        watchdog.setGraceMillisForTesting(0);
+        watchdog.setGraceMsForTesting(0);
     }
 
     @AfterEach
@@ -226,7 +226,7 @@ class StageFrameWatchdogTest {
 
     @Test
     void theGracePeriodCoversTheTraverseIntoTheRegion() {
-        watchdog.setGraceMillisForTesting(60_000);
+        watchdog.setGraceMsForTesting(60_000);
         watchdog.arm(MIN_X, MIN_Y, MAX_X, MAX_Y, "33775_25384", null);
         // An 85 mm traverse across the holder reports many positions outside the region.
         for (int i = 0; i < 20; i++) {
@@ -252,14 +252,14 @@ class StageFrameWatchdogTest {
         watchdog.pauseForOperator();
         report(MAX_X + 3400, MIN_Y - 1000);
 
-        watchdog.setGraceMillisForTesting(60_000);
+        watchdog.setGraceMsForTesting(60_000);
         watchdog.resumeAfterOperator();
         for (int i = 0; i < 5; i++) {
             report(MAX_X + 3400 - i * 600, MIN_Y - 1000);
         }
         assertThat(watchdog.suspectReason()).isNull();
 
-        watchdog.setGraceMillisForTesting(0);
+        watchdog.setGraceMsForTesting(0);
         report(0, 0);
         report(0, 0);
         report(0, 0);

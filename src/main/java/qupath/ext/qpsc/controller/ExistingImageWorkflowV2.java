@@ -2849,7 +2849,7 @@ public class ExistingImageWorkflowV2 {
                         state.annotations,
                         state.sample,
                         state.projectInfo.getTempTileDirectory(),
-                        state.projectInfo.getImagingModeWithIndex(),
+                        state.projectInfo.getAcquisitionFolder(),
                         state.pixelSize,
                         false, // Don't flip X - annotations already in correct space
                         false // Don't flip Y - annotations already in correct space

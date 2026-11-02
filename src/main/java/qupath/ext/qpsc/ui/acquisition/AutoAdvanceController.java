@@ -78,7 +78,7 @@ public final class AutoAdvanceController {
     public static final int FULLY_AUTOMATIC_FLOOR_SECONDS = 1;
 
     private static volatile MultiSlideAcquisitionMode mode = MultiSlideAcquisitionMode.MANUAL;
-    private static volatile int autoAdvanceSeconds = 0;
+    private static volatile int autoAdvanceSec = 0;
     private static volatile boolean overriddenThisSlide = false;
 
     private AutoAdvanceController() {}
@@ -95,7 +95,7 @@ public final class AutoAdvanceController {
      */
     public static void armSession(MultiSlideAcquisitionMode batchMode, int seconds) {
         mode = (batchMode == null) ? MultiSlideAcquisitionMode.MANUAL : batchMode;
-        autoAdvanceSeconds = Math.max(0, seconds);
+        autoAdvanceSec = Math.max(0, seconds);
         overriddenThisSlide = false;
         // Logged for EVERY mode, including MANUAL: "was this run armed?" is the first question
         // asked when an operator finds themselves clicking every dialog, and silence cannot answer it.
@@ -103,9 +103,7 @@ public final class AutoAdvanceController {
             logger.info(
                     "Auto-advance ARMED: mode={} countdown={}s",
                     mode,
-                    mode == MultiSlideAcquisitionMode.FULLY_AUTOMATIC
-                            ? FULLY_AUTOMATIC_FLOOR_SECONDS
-                            : autoAdvanceSeconds);
+                    mode == MultiSlideAcquisitionMode.FULLY_AUTOMATIC ? FULLY_AUTOMATIC_FLOOR_SECONDS : autoAdvanceSec);
         } else {
             logger.info(
                     "Auto-advance NOT armed: mode={} -- every dialog will wait for you. Set "
@@ -121,7 +119,7 @@ public final class AutoAdvanceController {
             logger.info("Auto-advance DISARMED");
         }
         mode = MultiSlideAcquisitionMode.MANUAL;
-        autoAdvanceSeconds = 0;
+        autoAdvanceSec = 0;
         overriddenThisSlide = false;
     }
 
@@ -312,7 +310,7 @@ public final class AutoAdvanceController {
         private final Button button;
         private final Node interactionRoot;
         private final String originalText;
-        private final int totalSeconds;
+        private final int totalSec;
         private final Timeline timeline = new Timeline();
         private final EventHandler<MouseEvent> mouseFilter;
         private final EventHandler<KeyEvent> keyFilter;
@@ -324,10 +322,10 @@ public final class AutoAdvanceController {
             this.button = button;
             this.interactionRoot = interactionRoot;
             this.originalText = button.getText();
-            this.totalSeconds = (mode == MultiSlideAcquisitionMode.FULLY_AUTOMATIC)
+            this.totalSec = (mode == MultiSlideAcquisitionMode.FULLY_AUTOMATIC)
                     ? FULLY_AUTOMATIC_FLOOR_SECONDS
-                    : Math.max(1, autoAdvanceSeconds);
-            this.remaining = totalSeconds;
+                    : Math.max(1, autoAdvanceSec);
+            this.remaining = totalSec;
 
             // Only AUTOMATIC_WITH_OVERRIDE yields to the operator. Use PRESSED rather than
             // hover/focus so drifting the pointer across the dialog is not an override.
@@ -343,7 +341,7 @@ public final class AutoAdvanceController {
                 interactionRoot.addEventFilter(KeyEvent.KEY_PRESSED, keyFilter);
             }
             timeline.getKeyFrames().add(new KeyFrame(Duration.seconds(1), e -> tick()));
-            timeline.setCycleCount(totalSeconds);
+            timeline.setCycleCount(totalSec);
             timeline.setOnFinished(e -> fire());
             timeline.play();
         }
@@ -370,7 +368,7 @@ public final class AutoAdvanceController {
                 return;
             }
             stop();
-            logger.info("Auto-advance firing \"{}\" after {}s", originalText, totalSeconds);
+            logger.info("Auto-advance firing \"{}\" after {}s", originalText, totalSec);
             button.fire();
         }
 

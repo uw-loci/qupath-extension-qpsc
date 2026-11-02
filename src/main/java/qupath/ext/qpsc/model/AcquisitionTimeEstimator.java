@@ -59,10 +59,10 @@ public final class AcquisitionTimeEstimator {
     public record WorkflowTime(String name, long totalImages, double seconds) {}
 
     /** The whole batch: per-workflow breakdown and the total. */
-    public record BatchTime(List<WorkflowTime> workflows, double totalSeconds) {}
+    public record BatchTime(List<WorkflowTime> workflows, double totalSec) {}
 
     /** Estimates one workflow's wall-clock seconds. */
-    public static double estimateSeconds(WorkflowEstimate w) {
+    public static double estimateSec(WorkflowEstimate w) {
         if (w == null || w.nPositions() <= 0 || w.exposuresMs().isEmpty()) {
             return 0.0;
         }
@@ -85,7 +85,7 @@ public final class AcquisitionTimeEstimator {
                 if (w == null) {
                     continue;
                 }
-                double s = estimateSeconds(w);
+                double s = estimateSec(w);
                 total += s;
                 perWorkflow.add(new WorkflowTime(w.name(), w.totalImages(), s));
             }

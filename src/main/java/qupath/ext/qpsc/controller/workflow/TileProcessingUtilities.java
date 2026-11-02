@@ -180,13 +180,13 @@ public class TileProcessingUtilities {
     public static String stitchImagesAndUpdateProject(
             String projectsFolderPath,
             String sampleLabel,
-            String imagingModeWithIndex,
+            String acquisitionFolder,
             String annotationName,
             String matchingString,
             QuPathGUI qupathGUI,
             Project<BufferedImage> project,
             String compression,
-            double pixelSizeMicrons,
+            double pixelSizeUm,
             int downsample,
             ModalityHandler modalityHandler,
             Map<String, Object> stitchParams)
@@ -195,7 +195,7 @@ public class TileProcessingUtilities {
         logger.debug(
                 "Starting stitching: {}/{}/{}, matching '{}'",
                 sampleLabel,
-                imagingModeWithIndex,
+                acquisitionFolder,
                 annotationName,
                 matchingString);
 
@@ -212,7 +212,7 @@ public class TileProcessingUtilities {
                 + File.separator
                 + sampleLabel
                 + File.separator
-                + imagingModeWithIndex
+                + acquisitionFolder
                 + File.separator
                 + annotationName;
         String stitchedFolder = projectsFolderPath + File.separator + sampleLabel + File.separator + "SlideImages";
@@ -250,7 +250,7 @@ public class TileProcessingUtilities {
         }
         // Second, independent bound on the cleanup: anything it deletes must ALSO have been
         // written after this point.
-        final long stitchStartMillis = System.currentTimeMillis();
+        final long stitchStartMs = System.currentTimeMillis();
         logger.info(
                 "Found {} existing stitched file(s) in {} before stitching; only files created after now "
                         + "are eligible for failure cleanup",
@@ -264,7 +264,7 @@ public class TileProcessingUtilities {
         logger.info(
                 "Configuring stitching: compression={}, pixelSize={} um, downsample={}, format={}",
                 compression,
-                pixelSizeMicrons,
+                pixelSizeUm,
                 downsample,
                 outputFormat);
 
@@ -278,11 +278,11 @@ public class TileProcessingUtilities {
         // Z-plane spacing for OME metadata. Only meaningful when the Z-stack is
         // preserved (projection "None"); a projected mosaic is 2D so the value is
         // unused. Source it from the same Z-stack preferences the acquisition used.
-        double zSpacingMicrons = 1.0;
+        double zSpacingUm = 1.0;
         if (PersistentPreferences.isZStackEnabled() && "None".equals(PersistentPreferences.getZStackProjection())) {
             double step = PersistentPreferences.getZStackStep();
             if (step > 0) {
-                zSpacingMicrons = step;
+                zSpacingUm = step;
             }
         }
 
@@ -291,10 +291,10 @@ public class TileProcessingUtilities {
                 tileFolder,
                 stitchedFolder,
                 compression,
-                pixelSizeMicrons,
+                pixelSizeUm,
                 downsample,
                 matchingString,
-                zSpacingMicrons,
+                zSpacingUm,
                 outputFormat);
         config.setOutputFilename(outputName);
 
@@ -328,7 +328,7 @@ public class TileProcessingUtilities {
                 throw new IOException("Stitching produced no output");
             }
         } catch (Exception stitchEx) {
-            cleanupCorruptStitchingOutput(outputDir, existingFiles, stitchStartMillis);
+            cleanupCorruptStitchingOutput(outputDir, existingFiles, stitchStartMs);
             throw new IOException("Stitching failed: " + stitchEx.getMessage(), stitchEx);
         } finally {
             TileConfigurationTxtStrategy.flipStitchingX = false;
@@ -402,7 +402,7 @@ public class TileProcessingUtilities {
                         .replace(File.separator, "_")
                         .replace("/", "_")
                         .replace("\\", "_");
-                String baseName = batchDisplayName + "_" + imagingModeWithIndex + "_" + sanitizedAnnotationName + "_"
+                String baseName = batchDisplayName + "_" + acquisitionFolder + "_" + sanitizedAnnotationName + "_"
                         + angleSuffix + extension;
                 File renamed = new File(stitchedFile.getParent(), baseName);
 
@@ -531,10 +531,10 @@ public class TileProcessingUtilities {
             }
 
             // Extract modality, objective, and index from imagingModeWithIndex
-            String[] modalityParts = ImageNameGenerator.parseImagingMode(imagingModeWithIndex);
+            String[] modalityParts = ImageNameGenerator.parseImagingMode(acquisitionFolder);
             String modality = modalityParts[0];
             String objective = modalityParts[1];
-            int imageIndex = ImageNameGenerator.extractImageIndex(imagingModeWithIndex);
+            int imageIndex = ImageNameGenerator.extractImageIndex(acquisitionFolder);
 
             // Extract and sanitize annotation name
             String originalRegionName = StitchOutputPlanner.extractOriginalRegionName(annotationName);
@@ -841,7 +841,7 @@ public class TileProcessingUtilities {
      * region and every previous run. A file is removed only when BOTH bounds agree it belongs
      * to the stitch that just failed: it was absent from {@code existingFiles} (the snapshot
      * taken immediately before this stitch started) AND it was written at or after
-     * {@code stitchStartMillis}.
+     * {@code stitchStartMs}.
      *
      * <p>The redundancy is deliberate. Trusting the snapshot alone is not enough: a cleanup
      * routine that can empty a directory when its keep-list arrives empty is one refactor away
@@ -853,7 +853,7 @@ public class TileProcessingUtilities {
      * @param stitchStartMillis wall-clock time this stitch began
      */
     // Package-private rather than private so the test can drive it directly.
-    static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles, long stitchStartMillis) {
+    static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles, long stitchStartMs) {
         File[] candidates = outputDir.listFiles((dir, name) ->
                 (name.endsWith(".ome.tif") || name.endsWith(".ome.zarr")) && !existingFiles.contains(name));
         if (candidates == null || candidates.length == 0) {
@@ -862,12 +862,12 @@ public class TileProcessingUtilities {
         for (File f : candidates) {
             // lastModified() is 0 when unreadable; treat that as "cannot prove it is mine".
             long modified = f.lastModified();
-            if (modified < stitchStartMillis) {
+            if (modified < stitchStartMs) {
                 logger.warn(
                         "NOT deleting {}: it predates this stitch (modified {} ms before start) despite being "
                                 + "absent from the pre-stitch snapshot. Leaving it alone.",
                         f.getName(),
-                        stitchStartMillis - modified);
+                        stitchStartMs - modified);
                 continue;
             }
             logger.info("Cleaning up corrupt stitching output: {}", f.getName());
@@ -940,12 +940,12 @@ public class TileProcessingUtilities {
     public static String stitchImagesAndUpdateProject(
             String projectsFolderPath,
             String sampleLabel,
-            String imagingModeWithIndex,
+            String acquisitionFolder,
             String annotationName,
             QuPathGUI qupathGUI,
             Project<BufferedImage> project,
             String compression,
-            double pixelSizeMicrons,
+            double pixelSizeUm,
             int downsample,
             ModalityHandler modalityHandler)
             throws IOException {
@@ -956,13 +956,13 @@ public class TileProcessingUtilities {
         return stitchImagesAndUpdateProject(
                 projectsFolderPath,
                 sampleLabel,
-                imagingModeWithIndex,
+                acquisitionFolder,
                 annotationName,
                 annotationName, // Use annotation name as matching string
                 qupathGUI,
                 project,
                 compression,
-                pixelSizeMicrons,
+                pixelSizeUm,
                 downsample,
                 modalityHandler,
                 null // No metadata

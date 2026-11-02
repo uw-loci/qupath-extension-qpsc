@@ -123,7 +123,7 @@ public class MultiTileRefinement {
         if (!isExactlyDetermined(fit)) {
             return false;
         }
-        return Math.abs(fit.rotationDegrees()) > THIRD_POINT_ROTATION_DEG
+        return Math.abs(fit.rotationDeg()) > THIRD_POINT_ROTATION_DEG
                 || Math.abs(fit.scale() - 1.0) > THIRD_POINT_SCALE_DEVIATION;
     }
 
@@ -441,7 +441,7 @@ public class MultiTileRefinement {
                 return;
             }
             TransformationFunctions.SimilarityFit fit = solve(points, initialTransform);
-            boolean rotationSuspect = Math.abs(fit.rotationDegrees()) > ROTATION_WARN_DEG;
+            boolean rotationSuspect = Math.abs(fit.rotationDeg()) > ROTATION_WARN_DEG;
             boolean scaleSuspect = fit.scale() < SCALE_WARN_LOW || fit.scale() > SCALE_WARN_HIGH;
             if (rotationSuspect || scaleSuspect) {
                 // The correction is far larger than slide play -> the base alignment does not
@@ -450,7 +450,7 @@ public class MultiTileRefinement {
                         "Multi-tile correction implausible after {} points: rotation {} deg, scale {} "
                                 + "-- base alignment likely does not match the stage (axis swap / wrong orientation)",
                         fit.pointCount(),
-                        String.format("%.2f", fit.rotationDegrees()),
+                        String.format("%.2f", fit.rotationDeg()),
                         String.format("%.4f", fit.scale()));
                 diagLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + "; -fx-font-weight: bold;");
                 diagLabel.setText(String.format(
@@ -459,7 +459,7 @@ public class MultiTileRefinement {
                                 + "means the transform is still axis-swapped -- e.g. a stale per-slide alignment, or "
                                 + "the wrong entry orientation). Re-check the alignment before saving; Solve is still "
                                 + "available if you are sure.",
-                        fit.rotationDegrees(), fit.scale()));
+                        fit.rotationDeg(), fit.scale()));
             } else if (shouldAskForThirdPoint(fit)) {
                 // Not implausible enough to be an axis swap, but too large to accept from two
                 // points that cannot contradict each other. A third point is the only thing that
@@ -469,7 +469,7 @@ public class MultiTileRefinement {
                                 + "slide play and not checkable at this point count (a 2-point similarity fit is "
                                 + "exactly determined, so its RMS is always 0). Advising a third point.",
                         fit.pointCount(),
-                        String.format("%.3f", fit.rotationDegrees()),
+                        String.format("%.3f", fit.rotationDeg()),
                         String.format("%.5f", fit.scale()));
                 diagLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
                 diagLabel.setText(String.format(
@@ -478,7 +478,7 @@ public class MultiTileRefinement {
                                 + "exactly, so the fit RMS is 0 no matter how good the points are, and a single "
                                 + "mis-measured point looks identical to a genuinely rotated slide. A third point "
                                 + "makes the RMS meaningful and settles which it is. Solve is still available.",
-                        fit.pointCount(), fit.rotationDegrees(), fit.scale()));
+                        fit.pointCount(), fit.rotationDeg(), fit.scale()));
                 // Keep the operator pointed at "Select tile" rather than "Solve & Save".
                 solveButton.setDisable(false);
                 outerPulse.highlight(addButton, "#EF6C00");
@@ -493,7 +493,7 @@ public class MultiTileRefinement {
                 diagLabel.setText(String.format(
                         "Correction from %d points: rotation %.2f deg, scale %.4f, %s.%s",
                         fit.pointCount(),
-                        fit.rotationDegrees(),
+                        fit.rotationDeg(),
                         fit.scale(),
                         rmsText,
                         !isExactlyDetermined(fit) && fit.rmsResidualUm() > 25.0
@@ -655,7 +655,7 @@ public class MultiTileRefinement {
             logger.info(
                     "Multi-tile refinement accepted: {} points, rotation={} deg, scale={}, RMS={}",
                     fit.pointCount(),
-                    String.format("%.3f", fit.rotationDegrees()),
+                    String.format("%.3f", fit.rotationDeg()),
                     String.format("%.5f", fit.scale()),
                     isExactlyDetermined(fit)
                             ? "n/a (exactly determined by 2 points)"
@@ -665,7 +665,7 @@ public class MultiTileRefinement {
                         "Multi-tile refinement saved with an unchecked correction: rotation={} deg, scale={} "
                                 + "from only {} points. If this slide's acquisition lands off-target, this fit is "
                                 + "the first thing to re-examine.",
-                        String.format("%.3f", fit.rotationDegrees()),
+                        String.format("%.3f", fit.rotationDeg()),
                         String.format("%.5f", fit.scale()),
                         fit.pointCount());
             }
@@ -674,7 +674,7 @@ public class MultiTileRefinement {
                     "Multi-Tile Refinement",
                     String.format(
                             "Alignment refined from %d points (rotation %.2f deg, scale %.4f).",
-                            fit.pointCount(), fit.rotationDegrees(), fit.scale()));
+                            fit.pointCount(), fit.rotationDeg(), fit.scale()));
             stage.close();
             future.complete(SingleTileRefinement.RefinementResult.accepted(
                     refined, points.get(0).tile()));

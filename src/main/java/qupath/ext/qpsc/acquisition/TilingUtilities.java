@@ -261,7 +261,7 @@ public class TilingUtilities {
         logger.info("  Frame size: {} x {} (in input units)", request.getFrameWidth(), request.getFrameHeight());
         logger.info("  Step size: {} x {} ({}% overlap)", xStep, yStep, request.getOverlapPercent());
         logger.info("  Grid: {} columns x {} rows", nCols, nRows);
-        logger.info("  Pixel size for coordinate conversion: {} um/px", request.getPixelSizeMicrons());
+        logger.info("  Pixel size for coordinate conversion: {} um/px", request.getPixelSizeUm());
         logger.info(
                 "  X-axis inverted: {}, Y-axis inverted: {}", request.isStageInvertedX(), request.isStageInvertedY());
 
@@ -414,11 +414,11 @@ public class TilingUtilities {
         // This ensures we use the correct detector (e.g., JAI vs TELEDYNE) that was selected by the user
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
-        double[] fovMicrons = mgr.getCameraFOV(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
-        double frameWidthMicrons = fovMicrons[0];
-        double frameHeightMicrons = fovMicrons[1];
+        double[] fovUm = mgr.getCameraFOV(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
+        double frameWidthUm = fovUm[0];
+        double frameHeightUm = fovUm[1];
 
-        logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+        logger.info("Camera FOV from config: {} x {} microns", frameWidthUm, frameHeightUm);
 
         // NOTE: no FOV-swap for rotated (multi-slide holder) acquisition images.
         // The (rotated N)(flipped XY) entry is in CAMERA orientation (camera-X = QuPath-X =
@@ -430,13 +430,10 @@ public class TilingUtilities {
         // and match the live camera FOV. See COORDINATE_TRANSFORMS.md "Rotated stage inserts".
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
-        if (frameWidthMicrons < 100
-                || frameWidthMicrons > 50000
-                || frameHeightMicrons < 100
-                || frameHeightMicrons > 50000) {
+        if (frameWidthUm < 100 || frameWidthUm > 50000 || frameHeightUm < 100 || frameHeightUm > 50000) {
             throw new IOException(String.format(
                     "Camera FOV seems unreasonable: %.1f x %.1f um. Expected between 100-50000 um",
-                    frameWidthMicrons, frameHeightMicrons));
+                    frameWidthUm, frameHeightUm));
         }
 
         // Get the actual image pixel size from QuPath
@@ -444,8 +441,8 @@ public class TilingUtilities {
                 gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
         // Convert to image pixels for QuPath visualization and tile calculation
-        double frameWidthPixels = frameWidthMicrons / imagePixelSize;
-        double frameHeightPixels = frameHeightMicrons / imagePixelSize;
+        double frameWidthPixels = frameWidthUm / imagePixelSize;
+        double frameHeightPixels = frameHeightUm / imagePixelSize;
 
         // Get tiling parameters from preferences.
         //
@@ -480,7 +477,7 @@ public class TilingUtilities {
                 .stageInvertedAxes(stageInvertedX, stageInvertedY)
                 .createDetections(true)
                 .addBuffer(true)
-                .pixelSizeMicrons(imagePixelSize) // For converting tile coordinates to microns
+                .pixelSizeUm(imagePixelSize) // For converting tile coordinates to microns
                 .build();
 
         createTiles(request);
@@ -535,11 +532,11 @@ public class TilingUtilities {
         // Get FOV using the explicit hardware configuration from sample setup
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
-        double[] fovMicrons = mgr.getCameraFOV(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
-        double frameWidthMicrons = fovMicrons[0];
-        double frameHeightMicrons = fovMicrons[1];
+        double[] fovUm = mgr.getCameraFOV(sampleSetup.modality(), sampleSetup.objective(), sampleSetup.detector());
+        double frameWidthUm = fovUm[0];
+        double frameHeightUm = fovUm[1];
 
-        logger.info("Camera FOV from config: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+        logger.info("Camera FOV from config: {} x {} microns", frameWidthUm, frameHeightUm);
 
         // NOTE: no FOV-swap for rotated (multi-slide holder) acquisition images.
         // The (rotated N)(flipped XY) entry is in CAMERA orientation (camera-X = QuPath-X =
@@ -551,13 +548,10 @@ public class TilingUtilities {
         // and match the live camera FOV. See COORDINATE_TRANSFORMS.md "Rotated stage inserts".
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
-        if (frameWidthMicrons < 100
-                || frameWidthMicrons > 50000
-                || frameHeightMicrons < 100
-                || frameHeightMicrons > 50000) {
+        if (frameWidthUm < 100 || frameWidthUm > 50000 || frameHeightUm < 100 || frameHeightUm > 50000) {
             throw new IOException(String.format(
                     "Camera FOV seems unreasonable: %.1f x %.1f um. Expected between 100-50000 um",
-                    frameWidthMicrons, frameHeightMicrons));
+                    frameWidthUm, frameHeightUm));
         }
 
         // Get the actual image pixel size from QuPath
@@ -565,8 +559,8 @@ public class TilingUtilities {
                 gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
         // Convert to image pixels for QuPath visualization and tile calculation
-        double frameWidthPixels = frameWidthMicrons / imagePixelSize;
-        double frameHeightPixels = frameHeightMicrons / imagePixelSize;
+        double frameWidthPixels = frameWidthUm / imagePixelSize;
+        double frameHeightPixels = frameHeightUm / imagePixelSize;
 
         // Get overlap from preferences (flip params are explicit)
         double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
@@ -589,7 +583,7 @@ public class TilingUtilities {
                 .stageInvertedAxes(stageInvertedX, stageInvertedY)
                 .createDetections(true)
                 .addBuffer(true)
-                .pixelSizeMicrons(imagePixelSize)
+                .pixelSizeUm(imagePixelSize)
                 .build();
 
         createTiles(request);

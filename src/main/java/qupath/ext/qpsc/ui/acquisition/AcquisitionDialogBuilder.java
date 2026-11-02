@@ -1304,7 +1304,7 @@ abstract class AcquisitionDialogBuilder<R> {
      * acquisitions, which already includes autofocus overhead at its actual frequency, else
      * a conservative 2 seconds per image.
      */
-    protected double estimatedAcquisitionSeconds(int images) {
+    protected double estimatedAcquisitionSec(int images) {
         if (PersistentPreferences.hasTimingData()) {
             return PersistentPreferences.estimateAcquisitionTime(images) / 1000.0;
         }
@@ -1502,7 +1502,7 @@ abstract class AcquisitionDialogBuilder<R> {
             SampleSetupResult sample,
             String configFileLocation,
             MicroscopeConfigManager mgr,
-            String enhancedModality,
+            String modalityFolder,
             String regionName) {
         String sampleName = sample.sampleName();
         String objective = sample.objective();
@@ -1522,13 +1522,13 @@ abstract class AcquisitionDialogBuilder<R> {
         // Resolve angles + channels (mirrors AcquisitionManager.performSingleAnnotationAcquisition).
         String wbMode = currentWbModeProtocol();
         List<AngleExposure> angleExposures = AngleResolutionService.resolve(
-                        enhancedModality, objective, detector, angleOverrides, wbMode)
+                        modalityFolder, objective, detector, angleOverrides, wbMode)
                 .join();
         List<ChannelExposure> channelExposures =
-                ChannelResolutionService.resolve(enhancedModality, objective, detector, angleOverrides, focusChannelId);
+                ChannelResolutionService.resolve(modalityFolder, objective, detector, angleOverrides, focusChannelId);
 
         if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
-                enhancedModality, objective, detector, angleOverrides)) {
+                modalityFolder, objective, detector, angleOverrides)) {
             return null;
         }
 
@@ -1537,7 +1537,7 @@ abstract class AcquisitionDialogBuilder<R> {
                 AcquisitionConfigurationBuilder.buildConfiguration(
                         sample,
                         configFileLocation,
-                        enhancedModality,
+                        modalityFolder,
                         regionName,
                         angleExposures,
                         channelExposures,

@@ -492,7 +492,7 @@ public class AnnotationHelper {
             // Skip derived companions (rotated and/or camera-view) via METADATA, not the
             // name -- the source macro is the un-rotated, non-camera-view original.
             if (name == null
-                    || qupath.ext.qpsc.utilities.ImageMetadataManager.getRotationDegrees(entry) != 0
+                    || qupath.ext.qpsc.utilities.ImageMetadataManager.getRotationDeg(entry) != 0
                     || qupath.ext.qpsc.utilities.ImageMetadataManager.isCameraView(entry)) {
                 continue;
             }
@@ -528,7 +528,7 @@ public class AnnotationHelper {
             boolean flipY) {
         try {
             // Rotation comes from metadata (source of truth), never the entry name.
-            int rotationDeg = qupath.ext.qpsc.utilities.ImageMetadataManager.getRotationDegrees(openEntry);
+            int rotationDeg = qupath.ext.qpsc.utilities.ImageMetadataManager.getRotationDeg(openEntry);
             // Final (rotated-frame) dimensions from the open entry's server.
             int wr = gui.getImageData().getServer().getWidth();
             int hr = gui.getImageData().getServer().getHeight();

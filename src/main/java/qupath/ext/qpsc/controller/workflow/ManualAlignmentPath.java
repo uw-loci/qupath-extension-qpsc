@@ -376,7 +376,7 @@ public class ManualAlignmentPath {
                 state.annotations,
                 state.sample,
                 state.projectInfo.getTempTileDirectory(),
-                state.projectInfo.getImagingModeWithIndex(),
+                state.projectInfo.getAcquisitionFolder(),
                 state.pixelSize);
 
         // slotJumpAssist = true only when this manual alignment is a multi-slide slot jump (a

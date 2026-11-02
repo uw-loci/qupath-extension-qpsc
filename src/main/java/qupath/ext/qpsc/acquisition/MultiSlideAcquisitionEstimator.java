@@ -72,7 +72,7 @@ public final class MultiSlideAcquisitionEstimator {
      * @param msPerFile per-file wall time (learned mean, or fallback)
      * @return estimated wall-clock seconds for this slot
      */
-    static double slotSeconds(long totalImages, int annotationCount, double msPerFile) {
+    static double slotSec(long totalImages, int annotationCount, double msPerFile) {
         return (msPerFile / 1000.0) * Math.max(0, totalImages)
                 + Math.max(0, annotationCount) * PER_ANNOTATION_OVERHEAD_S
                 + PER_SLIDE_OVERHEAD_S;
@@ -103,7 +103,7 @@ public final class MultiSlideAcquisitionEstimator {
             int slotCount,
             long totalTiles,
             long totalImages,
-            double totalSeconds,
+            double totalSec,
             boolean learned) {
 
         /** One-line summary, e.g. {@code "~1h 40m  --  4 slides, 3,100 tiles (measured timing)"}. */
@@ -113,7 +113,7 @@ public final class MultiSlideAcquisitionEstimator {
             }
             return String.format(
                     "~%s  --  %d slide%s, %,d tiles%s",
-                    AcquisitionTimeEstimator.formatDuration(totalSeconds),
+                    AcquisitionTimeEstimator.formatDuration(totalSec),
                     slotCount,
                     slotCount == 1 ? "" : "s",
                     totalTiles,
@@ -135,7 +135,7 @@ public final class MultiSlideAcquisitionEstimator {
         List<SlotEstimate> slots = new ArrayList<>();
         long totalTiles = 0;
         long totalImages = 0;
-        double totalSeconds = 0;
+        double totalSec = 0;
         if (inputs != null) {
             for (SlotInput in : inputs) {
                 if (in == null) {
@@ -145,7 +145,7 @@ public final class MultiSlideAcquisitionEstimator {
                 slots.add(se);
                 totalTiles += se.tiles();
                 totalImages += se.totalImages();
-                totalSeconds += se.seconds();
+                totalSec += se.seconds();
             }
         }
         logger.info(
@@ -153,9 +153,9 @@ public final class MultiSlideAcquisitionEstimator {
                 slots.size(),
                 totalTiles,
                 totalImages,
-                AcquisitionTimeEstimator.formatDuration(totalSeconds),
+                AcquisitionTimeEstimator.formatDuration(totalSec),
                 learned ? String.format("%.0f ms measured", msPerFile) : String.format("%.0f ms fallback", msPerFile));
-        return new BatchEstimate(slots, slots.size(), totalTiles, totalImages, totalSeconds, learned);
+        return new BatchEstimate(slots, slots.size(), totalTiles, totalImages, totalSec, learned);
     }
 
     private static SlotEstimate estimateSlot(SlotInput in, double overlapPct, double msPerFile) {
@@ -191,7 +191,7 @@ public final class MultiSlideAcquisitionEstimator {
             }
 
             long totalImages = tiles * captures;
-            double seconds = slotSeconds(totalImages, annCount, msPerFile);
+            double seconds = slotSec(totalImages, annCount, msPerFile);
             return new SlotEstimate(in.label(), annCount, tiles, captures, totalImages, seconds, null);
         } catch (Exception e) {
             logger.warn("Multi-slide estimate: could not estimate slot '{}': {}", in.label(), e.getMessage());

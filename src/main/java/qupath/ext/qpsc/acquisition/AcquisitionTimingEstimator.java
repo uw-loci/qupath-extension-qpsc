@@ -53,7 +53,7 @@ public final class AcquisitionTimingEstimator {
      * @param zPlanes  number of Z planes per timepoint (treated as >=1)
      * @return estimated seconds for one timepoint's acquisition
      */
-    public static double estimatePerTimepointSeconds(String modality, int zPlanes) {
+    public static double estimatePerTimepointSec(String modality, int zPlanes) {
         int planes = Math.max(1, zPlanes);
         int angles = 1;
         try {
@@ -92,7 +92,7 @@ public final class AcquisitionTimingEstimator {
             return true;
         }
         String modalityKey = modality != null ? modality : "(unknown)";
-        double estimateSec = estimatePerTimepointSeconds(modalityKey, zPlanes);
+        double estimateSec = estimatePerTimepointSec(modalityKey, zPlanes);
         if (estimateSec <= intervalSec) {
             return true;
         }

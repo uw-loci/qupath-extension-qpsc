@@ -462,7 +462,7 @@ public class CameraControlController {
 
         for (Map.Entry<String, Double> angleEntry : ppmAngles.entrySet()) {
             String angleName = angleEntry.getKey();
-            double angleDegrees = angleEntry.getValue();
+            double angleDeg = angleEntry.getValue();
 
             // Create a bordered VBox for each angle "card"
             VBox angleCard = new VBox(0);
@@ -475,13 +475,13 @@ public class CameraControlController {
             headerRow.setStyle(ANGLE_HEADER_STYLE);
             headerRow.setPadding(new Insets(6, 10, 6, 10));
 
-            Label angleLabel = new Label(String.format("%s (%.0f deg)", capitalize(angleName), angleDegrees));
+            Label angleLabel = new Label(String.format("%s (%.0f deg)", capitalize(angleName), angleDeg));
             angleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
             HBox.setHgrow(angleLabel, Priority.ALWAYS);
 
             Button applyButton = new Button("Apply & Go");
             applyButton.setTooltip(
-                    new Tooltip(String.format("Apply camera settings and rotate polarizer to %.0f deg", angleDegrees)));
+                    new Tooltip(String.format("Apply camera settings and rotate polarizer to %.0f deg", angleDeg)));
 
             headerRow.getChildren().addAll(angleLabel, applyButton);
             angleCard.getChildren().add(headerRow);
@@ -592,7 +592,7 @@ public class CameraControlController {
             applyButton.setOnAction(e -> applySettingsWithLiveModeHandling(
                     controller,
                     angleName,
-                    angleDegrees,
+                    angleDeg,
                     finalExpRField,
                     finalExpGField,
                     finalExpBField,
@@ -1215,7 +1215,7 @@ public class CameraControlController {
     private static void applySettingsWithLiveModeHandling(
             MicroscopeController controller,
             String angleName,
-            double angleDegrees,
+            double angleDeg,
             TextField expRField,
             TextField expGField,
             TextField expBField,
@@ -1267,18 +1267,18 @@ public class CameraControlController {
             // Apply settings with live mode handling - stops live mode if running,
             // applies settings, then restores live mode
             controller.withLiveModeHandling(
-                    () -> controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDegrees));
+                    () -> controller.applyCameraSettingsForAngle(angleName, exposures, gains, angleDeg));
 
             // Show status with any gain warnings
             if (gainWarnings.length() > 0) {
                 statusLabel.setText(String.format(
-                        "Applied %s (%.0f deg) - WARNING: %s", angleName, angleDegrees, gainWarnings.toString()));
+                        "Applied %s (%.0f deg) - WARNING: %s", angleName, angleDeg, gainWarnings.toString()));
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + ";");
                 logger.warn("Applied settings for {} with clamped gains: {}", angleName, gainWarnings);
             } else {
-                statusLabel.setText(String.format(res.getString("camera.status.applied"), angleName, angleDegrees));
+                statusLabel.setText(String.format(res.getString("camera.status.applied"), angleName, angleDeg));
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
-                logger.info("Applied settings for angle {} at {} degrees", angleName, angleDegrees);
+                logger.info("Applied settings for angle {} at {} degrees", angleName, angleDeg);
             }
 
         } catch (NumberFormatException ex) {

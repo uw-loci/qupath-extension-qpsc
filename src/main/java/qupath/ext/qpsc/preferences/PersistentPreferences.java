@@ -492,15 +492,15 @@ public class PersistentPreferences {
      * pattern: read {@code macro: pixel_size_um} from the selected scanner
      * config and fail with a remedy when it is absent.</p>
      */
-    private static final StringProperty macroImagePixelSizeInMicrons =
+    private static final StringProperty macroImagePixelSizeUm =
             PathPrefs.createPersistentPreference("macroImagePixelSizeInMicrons", "");
 
-    public static String getMacroImagePixelSizeInMicrons() {
-        return macroImagePixelSizeInMicrons.getValue();
+    public static String getMacroImagePixelSizeUm() {
+        return macroImagePixelSizeUm.getValue();
     }
 
-    public static void setMacroImagePixelSizeInMicrons(final String macroPixelSize) {
-        macroImagePixelSizeInMicrons.setValue(macroPixelSize);
+    public static void setMacroImagePixelSizeUm(final String macroPixelSize) {
+        macroImagePixelSizeUm.setValue(macroPixelSize);
     }
 
     // ================== STITCHING RECOVERY ==================
@@ -1317,8 +1317,8 @@ public class PersistentPreferences {
         return siftMinPixelSizeProperty.get();
     }
 
-    public static void setSiftMinPixelSize(double umPerPixel) {
-        siftMinPixelSizeProperty.set(umPerPixel);
+    public static void setSiftMinPixelSize(double pixelSizeUm) {
+        siftMinPixelSizeProperty.set(pixelSizeUm);
     }
 
     public static DoubleProperty siftMinPixelSizeProperty() {
@@ -1465,8 +1465,8 @@ public class PersistentPreferences {
         return siftCoarsePixelSizeUmProperty.get();
     }
 
-    public static void setSiftCoarsePixelSizeUm(double umPerPixel) {
-        siftCoarsePixelSizeUmProperty.set(umPerPixel);
+    public static void setSiftCoarsePixelSizeUm(double pixelSizeUm) {
+        siftCoarsePixelSizeUmProperty.set(pixelSizeUm);
     }
 
     public static DoubleProperty siftCoarsePixelSizeUmProperty() {

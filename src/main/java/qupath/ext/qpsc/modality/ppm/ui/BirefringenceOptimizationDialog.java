@@ -388,8 +388,8 @@ public class BirefringenceOptimizationDialog {
                 if (max > min && step > 0) {
                     int numAngles = (int) Math.ceil((max - min) / step) + 1;
                     int totalImages = numAngles * 2;
-                    int estimatedSeconds = totalImages * 2; // ~2 sec per image
-                    int minutes = estimatedSeconds / 60;
+                    int estimatedSec = totalImages * 2; // ~2 sec per image
+                    int minutes = estimatedSec / 60;
 
                     // Mode-specific duration estimates
                     String modeDescription;

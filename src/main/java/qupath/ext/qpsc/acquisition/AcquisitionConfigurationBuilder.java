@@ -136,7 +136,7 @@ public class AcquisitionConfigurationBuilder {
     public static AcquisitionConfiguration buildConfiguration(
             SampleSetupResult sample,
             String configFileLocation,
-            String modalityWithIndex,
+            String acquisitionFolder,
             String regionName,
             List<AngleExposure> angleExposures,
             String projectsFolder,
@@ -146,7 +146,7 @@ public class AcquisitionConfigurationBuilder {
         return buildConfiguration(
                 sample,
                 configFileLocation,
-                modalityWithIndex,
+                acquisitionFolder,
                 regionName,
                 angleExposures,
                 null,
@@ -166,7 +166,7 @@ public class AcquisitionConfigurationBuilder {
     public static AcquisitionConfiguration buildConfiguration(
             SampleSetupResult sample,
             String configFileLocation,
-            String modalityWithIndex,
+            String acquisitionFolder,
             String regionName,
             List<AngleExposure> angleExposures,
             List<ChannelExposure> channelExposures,
@@ -335,7 +335,7 @@ public class AcquisitionConfigurationBuilder {
                 .yamlPath(configFileLocation)
                 .projectsFolder(projectsFolder)
                 .sampleLabel(sampleName)
-                .scanType(modalityWithIndex)
+                .scanType(acquisitionFolder)
                 .regionName(regionName)
                 .angleExposures(angleExposures)
                 .nonRotation(isNonRotation)

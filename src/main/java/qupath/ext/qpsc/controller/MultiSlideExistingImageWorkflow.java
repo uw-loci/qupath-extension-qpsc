@@ -716,7 +716,7 @@ public final class MultiSlideExistingImageWorkflow {
                 AutoAdvanceController.armSession(
                         QPPreferenceDialog.getMultiSlideAcquisitionMode(),
                         MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty())
-                                .getMultiSlideAutoAdvanceSeconds());
+                                .getMultiSlideAutoAdvanceSec());
             } else {
                 AutoAdvanceController.disarmSession();
             }

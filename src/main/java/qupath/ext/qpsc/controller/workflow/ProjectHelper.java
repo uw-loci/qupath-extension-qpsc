@@ -86,7 +86,7 @@ public class ProjectHelper {
          *
          * @return Imaging mode string (e.g., "Brightfield_1")
          */
-        public String getImagingModeWithIndex() {
+        public String getAcquisitionFolder() {
             return (String) details.get("imagingModeWithIndex");
         }
 
@@ -151,9 +151,9 @@ public class ProjectHelper {
                     final String actualSampleName = sample.sampleName();
 
                     // Use enhanced modality name for consistent folder structure
-                    String enhancedModality =
+                    String modalityFolder =
                             ObjectiveUtils.createEnhancedFolderName(sample.modality(), sample.objective());
-                    logger.info("Using enhanced modality for project: {} -> {}", sample.modality(), enhancedModality);
+                    logger.info("Using enhanced modality for project: {} -> {}", sample.modality(), modalityFolder);
 
                     // Add the image WITHOUT flip - ImageFlipHelper.validateAndFlipIfNeeded()
                     // will create a separate flipped duplicate entry afterward.
@@ -164,7 +164,7 @@ public class ProjectHelper {
                             gui,
                             sample.projectsFolder().getAbsolutePath(),
                             actualSampleName,
-                            enhancedModality,
+                            modalityFolder,
                             false,
                             false);
 
@@ -252,15 +252,15 @@ public class ProjectHelper {
                     logger.info("Derived sample name from project folder: {}", actualSampleName);
 
                     // Use enhanced modality name for consistent folder structure
-                    String enhancedModality =
+                    String modalityFolder =
                             ObjectiveUtils.createEnhancedFolderName(sample.modality(), sample.objective());
                     logger.info(
                             "Using enhanced modality for existing project: {} -> {}",
                             sample.modality(),
-                            enhancedModality);
+                            modalityFolder);
 
                     final Map<String, Object> projectDetails = QPProjectFunctions.getCurrentProjectInformation(
-                            projectsFolder.toString(), actualSampleName, enhancedModality);
+                            projectsFolder.toString(), actualSampleName, modalityFolder);
 
                     // Handle image import if needed
                     handleExistingProjectImageImport(gui, flippedX, flippedY);
@@ -299,7 +299,7 @@ public class ProjectHelper {
             Map<String, Object> projectDetails,
             String actualSampleName,
             CompletableFuture<ProjectInfo> future,
-            long settleMillis) {
+            long settleMs) {
         logger.info("Project setup complete with sample name: {}", actualSampleName);
 
         // Copy microscope configuration files into the project for provenance
@@ -318,8 +318,8 @@ public class ProjectHelper {
         // settleMillis > 0 gives the GUI time to settle when the image was reopened WITHOUT an
         // awaited install signal (existing-project flip-reopen path). The new-project path passes
         // 0 because it already awaited the real install future before calling here.
-        if (settleMillis > 0) {
-            PauseTransition pause = new PauseTransition(Duration.millis(settleMillis));
+        if (settleMs > 0) {
+            PauseTransition pause = new PauseTransition(Duration.millis(settleMs));
             pause.setOnFinished(
                     e -> Platform.runLater(() -> future.complete(new ProjectInfo(projectDetails, actualSampleName))));
             pause.play();

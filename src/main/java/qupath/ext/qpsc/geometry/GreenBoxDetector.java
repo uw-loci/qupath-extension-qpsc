@@ -560,16 +560,16 @@ public class GreenBoxDetector {
         // We need to map macro pixels to main image pixels
 
         // Physical size of the green box in microns
-        double boxWidthMicrons = greenBoxInMacro.getBoundsWidth() * macroPixelSize;
-        double boxHeightMicrons = greenBoxInMacro.getBoundsHeight() * macroPixelSize;
+        double boxWidthUm = greenBoxInMacro.getBoundsWidth() * macroPixelSize;
+        double boxHeightUm = greenBoxInMacro.getBoundsHeight() * macroPixelSize;
 
         // Physical size of the main image in microns
-        double mainWidthMicrons = mainImageWidth * mainPixelSize;
-        double mainHeightMicrons = mainImageHeight * mainPixelSize;
+        double mainWidthUm = mainImageWidth * mainPixelSize;
+        double mainHeightUm = mainImageHeight * mainPixelSize;
 
         // These should be approximately equal - log any discrepancy
-        logger.info("Green box physical size: {}x{} um", boxWidthMicrons, boxHeightMicrons);
-        logger.info("Main image physical size: {}x{} um", mainWidthMicrons, mainHeightMicrons);
+        logger.info("Green box physical size: {}x{} um", boxWidthUm, boxHeightUm);
+        logger.info("Main image physical size: {}x{} um", mainWidthUm, mainHeightUm);
 
         // Calculate pixel-to-pixel scale factors
         double scaleX = mainImageWidth / greenBoxInMacro.getBoundsWidth();

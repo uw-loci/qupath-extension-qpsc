@@ -42,7 +42,7 @@ public final class StitchingQueueModel {
             long finishedAtMs) {
 
         /** Seconds the job has been running, or ran; 0 while queued. */
-        public long elapsedSeconds(long nowMs) {
+        public long elapsedSec(long nowMs) {
             if (startedAtMs <= 0) {
                 return 0;
             }

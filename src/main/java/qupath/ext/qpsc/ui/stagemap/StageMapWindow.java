@@ -2032,7 +2032,7 @@ public class StageMapWindow {
                 Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
                 ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
                 if (entry != null) {
-                    return ImageMetadataManager.getRotationDegrees(entry);
+                    return ImageMetadataManager.getRotationDeg(entry);
                 }
             }
         } catch (Exception ignored) {

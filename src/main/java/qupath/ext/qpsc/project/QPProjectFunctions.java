@@ -62,11 +62,11 @@ public class QPProjectFunctions {
      * Result container for creating/loading a project.
      */
     private static class ProjectSetup {
-        final String imagingModeWithIndex;
+        final String acquisitionFolder;
         final String tempTileDirectory;
 
-        ProjectSetup(String imagingModeWithIndex, String tempTileDirectory) {
-            this.imagingModeWithIndex = imagingModeWithIndex;
+        ProjectSetup(String acquisitionFolder, String tempTileDirectory) {
+            this.acquisitionFolder = acquisitionFolder;
             this.tempTileDirectory = tempTileDirectory;
         }
     }
@@ -86,7 +86,7 @@ public class QPProjectFunctions {
             QuPathGUI qupathGUI,
             String projectsFolderPath,
             String sampleLabel,
-            String enhancedModality,
+            String modalityFolder,
             boolean isSlideFlippedX,
             boolean isSlideFlippedY)
             throws IOException {
@@ -94,7 +94,7 @@ public class QPProjectFunctions {
         logger.info("Creating/opening project: {} in {}", sampleLabel, projectsFolderPath);
 
         // 1) Prepare folders and preferences
-        ProjectSetup setup = prepareProjectFolders(projectsFolderPath, sampleLabel, enhancedModality);
+        ProjectSetup setup = prepareProjectFolders(projectsFolderPath, sampleLabel, modalityFolder);
 
         // 2) Create or load the actual QuPath project file
         Project<BufferedImage> project = createOrLoadProject(projectsFolderPath, sampleLabel);
@@ -175,7 +175,7 @@ public class QPProjectFunctions {
         // 4) Package results
         Map<String, Object> result = new HashMap<>();
         result.put("matchingImage", matchingImage);
-        result.put("imagingModeWithIndex", setup.imagingModeWithIndex);
+        result.put("imagingModeWithIndex", setup.acquisitionFolder);
         result.put("currentQuPathProject", project);
         result.put("tempTileDirectory", setup.tempTileDirectory);
         // The reopened image installs asynchronously (see above). Callers that touch the
@@ -185,7 +185,7 @@ public class QPProjectFunctions {
 
         logger.info(
                 "Project setup complete. Mode: {}, Tile acquisition parent dir: {}",
-                setup.imagingModeWithIndex,
+                setup.acquisitionFolder,
                 setup.tempTileDirectory);
 
         return result;
@@ -386,18 +386,18 @@ public class QPProjectFunctions {
      * temp--tiles directory path.
      */
     private static ProjectSetup prepareProjectFolders(
-            String projectsFolderPath, String sampleLabel, String enhancedModality) {
+            String projectsFolderPath, String sampleLabel, String modalityFolder) {
 
         // Enhanced modality already includes magnification (e.g. "ppm_10x")
         // Apply unique folder naming to get indexed version (e.g. "ppm_10x_1", "ppm_10x_2", ...)
-        String imagingModeWithIndex = MinorFunctions.getUniqueFolderName(
-                Paths.get(projectsFolderPath, sampleLabel, enhancedModality).toString());
+        String acquisitionFolder = MinorFunctions.getUniqueFolderName(
+                Paths.get(projectsFolderPath, sampleLabel, modalityFolder).toString());
 
         // full path: /.../projectsFolder/sampleLabel/ppm_10x_1
         String tempTileDirectory =
-                Paths.get(projectsFolderPath, sampleLabel, imagingModeWithIndex).toString();
+                Paths.get(projectsFolderPath, sampleLabel, acquisitionFolder).toString();
 
-        return new ProjectSetup(imagingModeWithIndex, tempTileDirectory);
+        return new ProjectSetup(acquisitionFolder, tempTileDirectory);
     }
 
     /**
@@ -418,19 +418,19 @@ public class QPProjectFunctions {
      * @return map containing project info including "tempTileDirectory" and "imagingModeWithIndex"
      */
     public static Map<String, Object> getCurrentProjectInformation(
-            String projectsFolderPath, String sampleLabel, String enhancedModality) {
+            String projectsFolderPath, String sampleLabel, String modalityFolder) {
         Project<?> project = QP.getProject();
         // Enhanced modality already includes magnification (e.g. "ppm_10x")
         // Apply unique folder naming to get indexed version (e.g. "ppm_10x_1", "ppm_10x_2", ...)
-        String imagingModeWithIndex = MinorFunctions.getUniqueFolderName(
-                projectsFolderPath + File.separator + sampleLabel + File.separator + enhancedModality);
+        String acquisitionFolder = MinorFunctions.getUniqueFolderName(
+                projectsFolderPath + File.separator + sampleLabel + File.separator + modalityFolder);
         String tempTileDirectory =
-                projectsFolderPath + File.separator + sampleLabel + File.separator + imagingModeWithIndex;
+                projectsFolderPath + File.separator + sampleLabel + File.separator + acquisitionFolder;
         ProjectImageEntry<?> matchingImage = QP.getProjectEntry();
 
         Map<String, Object> result = new HashMap<>();
         result.put("matchingImage", matchingImage);
-        result.put("imagingModeWithIndex", imagingModeWithIndex);
+        result.put("imagingModeWithIndex", acquisitionFolder);
         result.put("currentQuPathProject", project);
         result.put("tempTileDirectory", tempTileDirectory);
 
@@ -875,7 +875,7 @@ public class QPProjectFunctions {
      * @return the new rotated entry, or null on failure / no-op
      */
     /** Maps a {@link RotatedImageServer.Rotation} to its degree measure (0/90/180/270). */
-    private static int rotationDegreesOf(RotatedImageServer.Rotation rotation) {
+    private static int rotationDegOf(RotatedImageServer.Rotation rotation) {
         if (rotation == null) return 0;
         return switch (rotation) {
             case ROTATE_90 -> 90;
@@ -954,7 +954,7 @@ public class QPProjectFunctions {
         // Record the baked rotation in metadata (the source of truth for the angle;
         // the "(rotated N)" name token is user-reference only). Code reads this, not
         // the name.
-        ImageMetadataManager.setRotationDegrees(rotatedEntry, rotationDegreesOf(rotation));
+        ImageMetadataManager.setRotationDeg(rotatedEntry, rotationDegOf(rotation));
 
         rotatedEntry.saveImageData(rotatedData);
         project.syncChanges();
@@ -1103,7 +1103,7 @@ public class QPProjectFunctions {
         // "(rotated N)" name token is user-reference only). The caller
         // (MultiSlideAssignmentDialog) stamps the light-path snapshot (camera_view flag
         // + baked parity) on top of this.
-        ImageMetadataManager.setRotationDegrees(composedEntry, rotationDegreesOf(rotation));
+        ImageMetadataManager.setRotationDeg(composedEntry, rotationDegOf(rotation));
 
         composedEntry.saveImageData(composedData);
         project.syncChanges();

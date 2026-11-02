@@ -794,7 +794,7 @@ public class AcquisitionCommandBuilder {
      *
      * @return Enhanced scan type with magnification (e.g., "ppm_20x_1")
      */
-    public String getEnhancedScanType() {
+    public String getModalityFolder() {
         if (objective == null) {
             logger.debug("No objective set, using original scan type: {}", scanType);
             return scanType;
@@ -836,12 +836,12 @@ public class AcquisitionCommandBuilder {
         List<String> args = new ArrayList<>();
 
         // Add required parameters with flags (use enhanced scan type with magnification)
-        String enhancedScanType = getEnhancedScanType();
+        String modalityFolder = getModalityFolder();
         args.addAll(Arrays.asList(
                 "--yaml", yamlPath,
                 "--projects", projectsFolder,
                 "--sample", sampleLabel,
-                "--scan-type", enhancedScanType,
+                "--scan-type", modalityFolder,
                 "--region", regionName));
 
         // Add hardware parameters (should be before optional params)

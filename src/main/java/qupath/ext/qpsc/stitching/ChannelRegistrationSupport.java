@@ -61,7 +61,7 @@ public final class ChannelRegistrationSupport {
             Path tileBaseDir,
             List<String> channels,
             List<String> alignOn,
-            double pixelSizeMicrons,
+            double pixelSizeUm,
             double downsample,
             Path solutionFile) {
         try {
@@ -80,7 +80,7 @@ public final class ChannelRegistrationSupport {
                 tileBaseDir.toString(),
                 tileBaseDir.toString(),
                 "LZW",
-                pixelSizeMicrons,
+                pixelSizeUm,
                 downsample,
                 "",
                 1.0,

@@ -229,22 +229,22 @@ public final class WorkflowDialogs {
                     long remMs = (long) ((elapsed / (double) current) * (totalFiles - current));
 
                     // Format time more nicely
-                    long remSeconds = remMs / 1000;
-                    if (remSeconds < 60) {
-                        timeLabel.setText("Time remaining: " + remSeconds + " seconds");
+                    long remSec = remMs / 1000;
+                    if (remSec < 60) {
+                        timeLabel.setText("Time remaining: " + remSec + " seconds");
                     } else {
-                        long minutes = remSeconds / 60;
-                        long seconds = remSeconds % 60;
+                        long minutes = remSec / 60;
+                        long seconds = remSec % 60;
                         timeLabel.setText(String.format("Time remaining: %d min %d sec", minutes, seconds));
                     }
                 } else if (current >= totalFiles) {
                     long totalTime = now - startTime.get();
-                    long totalSeconds = totalTime / 1000;
-                    if (totalSeconds < 60) {
-                        timeLabel.setText("Completed in " + totalSeconds + " seconds");
+                    long totalSec = totalTime / 1000;
+                    if (totalSec < 60) {
+                        timeLabel.setText("Completed in " + totalSec + " seconds");
                     } else {
-                        long minutes = totalSeconds / 60;
-                        long seconds = totalSeconds % 60;
+                        long minutes = totalSec / 60;
+                        long seconds = totalSec % 60;
                         timeLabel.setText(String.format("Completed in %d min %d sec", minutes, seconds));
                     }
                 }

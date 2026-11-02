@@ -132,9 +132,9 @@ public class BoundedAcquisitionWorkflow {
             // angle/channel resolution services and the per-profile channel library
             // lookup. The base modality name (result.modality(), e.g. "Fluorescence")
             // is only for user display and handler registry prefix matching.
-            final String enhancedModality =
+            final String modalityFolder =
                     ObjectiveUtils.createEnhancedFolderName(result.modality(), result.objective());
-            logger.info("Using enhanced modality for project: {} -> {}", result.modality(), enhancedModality);
+            logger.info("Using enhanced modality for project: {} -> {}", result.modality(), modalityFolder);
 
             // Create/open the QuPath project
             QuPathGUI qupathGUI = QPEx.getQuPath();
@@ -172,7 +172,7 @@ public class BoundedAcquisitionWorkflow {
                             existingFolderName,
                             result.sampleName());
                     pd = QPProjectFunctions.getCurrentProjectInformation(
-                            projectsFolder, existingFolderName, enhancedModality);
+                            projectsFolder, existingFolderName, modalityFolder);
                 } else {
                     projectsFolder = prefProjectsFolder;
                     logger.info("Creating new project with sample name: {}", result.sampleName());
@@ -180,7 +180,7 @@ public class BoundedAcquisitionWorkflow {
                     // flipping is needed. (Flip prefs control macro image orientation for the
                     // ExistingImage workflow, which is not used here.)
                     pd = QPProjectFunctions.createAndOpenQuPathProject(
-                            qupathGUI, projectsFolder, result.sampleName(), enhancedModality, false, false);
+                            qupathGUI, projectsFolder, result.sampleName(), modalityFolder, false, false);
                 }
             } catch (IOException e) {
                 throw new UncheckedIOException(e);
@@ -215,15 +215,15 @@ public class BoundedAcquisitionWorkflow {
                 }
             }
 
-            double frameWidthMicrons, frameHeightMicrons;
+            double frameWidthUm, frameHeightUm;
             try {
                 double[] fov = configManager.getModalityFOV(result.modality(), result.objective(), result.detector());
                 if (fov == null) {
                     throw new IOException("Could not calculate FOV for the selected hardware configuration");
                 }
-                frameWidthMicrons = fov[0];
-                frameHeightMicrons = fov[1];
-                logger.info("Camera FOV: {} x {} microns", frameWidthMicrons, frameHeightMicrons);
+                frameWidthUm = fov[0];
+                frameHeightUm = fov[1];
+                logger.info("Camera FOV: {} x {} microns", frameWidthUm, frameHeightUm);
             } catch (Exception e) {
                 UIFunctions.notifyUserOfError("Failed to get camera FOV: " + e.getMessage(), "FOV Error");
                 return;
@@ -256,7 +256,7 @@ public class BoundedAcquisitionWorkflow {
             TilingRequest request = new TilingRequest.Builder()
                     .outputFolder(tempTileDir)
                     .modalityName(modeWithIndex)
-                    .frameSize(frameWidthMicrons, frameHeightMicrons)
+                    .frameSize(frameWidthUm, frameHeightUm)
                     .overlapPercent(overlapPercent)
                     .boundingBox(result.x1(), result.y1(), result.x2(), result.y2())
                     .stageInvertedAxes(stageInvertedX, stageInvertedY)
@@ -270,7 +270,7 @@ public class BoundedAcquisitionWorkflow {
                 return;
             }
 
-            ModalityHandler modalityHandler = ModalityRegistry.getHandler(enhancedModality);
+            ModalityHandler modalityHandler = ModalityRegistry.getHandler(modalityFolder);
 
             double finalWSI_pixelSize_um = WSI_pixelSize_um;
 
@@ -278,7 +278,7 @@ public class BoundedAcquisitionWorkflow {
             // modality. Same error surface as the one inside runAsync below, but
             // checked here so the workflow never enters the async chain.
             if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
-                    enhancedModality, result.objective(), result.detector(), result.angleOverrides())) {
+                    modalityFolder, result.objective(), result.detector(), result.angleOverrides())) {
                 MicroscopeController.getInstance().setAcquisitionActive(false);
                 UIFunctions.notifyUserOfError(
                         "No fluorescence channels selected. Enable at least one channel, "
@@ -293,7 +293,7 @@ public class BoundedAcquisitionWorkflow {
             // position 0 so it's collected first per tile and the autofocus snap
             // shares hardware state with the first acquired image.
             final List<qupath.ext.qpsc.modality.ChannelExposure> channelExposures = ChannelResolutionService.resolve(
-                    enhancedModality,
+                    modalityFolder,
                     result.objective(),
                     result.detector(),
                     result.angleOverrides(),
@@ -303,7 +303,7 @@ public class BoundedAcquisitionWorkflow {
             // service short-circuits to an empty list (no rotation axis).
             CompletableFuture<List<qupath.ext.qpsc.modality.AngleExposure>> anglesFuture =
                     AngleResolutionService.resolve(
-                            enhancedModality,
+                            modalityFolder,
                             result.objective(),
                             result.detector(),
                             result.angleOverrides(),
@@ -566,7 +566,7 @@ public class BoundedAcquisitionWorkflow {
                                                         null,
                                                         WorkflowDialogs::showManualFocusDialog))
                                                 .tileDir(tileDirPath)
-                                                .modality(enhancedModality)
+                                                .modality(modalityFolder)
                                                 .pollInterval(500)
                                                 .timeout(300000));
 

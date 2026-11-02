@@ -1167,7 +1167,7 @@ public final class MultiSlideAssignmentDialog {
             if (e == base) {
                 continue;
             }
-            if (ImageMetadataManager.getRotationDegrees(e) != rotationDeg) {
+            if (ImageMetadataManager.getRotationDeg(e) != rotationDeg) {
                 continue;
             }
             if (ImageMetadataManager.isCameraView(e) != wantCameraView) {

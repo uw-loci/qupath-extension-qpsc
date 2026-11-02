@@ -495,7 +495,7 @@ public class RapidScanWorkflow {
     /**
      * Stitch rapid scan tiles using the same pipeline as normal acquisitions.
      */
-    private static void stitchRapidScanOutput(String tileFolder, double pixelSizeMicrons) throws Exception {
+    private static void stitchRapidScanOutput(String tileFolder, double pixelSizeUm) throws Exception {
         File tileFolderFile = new File(tileFolder);
         File stitchedFolder = new File(tileFolderFile.getParentFile(), "stitched");
         stitchedFolder.mkdirs();
@@ -509,7 +509,7 @@ public class RapidScanWorkflow {
                 tileFolder,
                 stitchedFolder.getAbsolutePath(),
                 params.compressionType(),
-                pixelSizeMicrons,
+                pixelSizeUm,
                 1,
                 ".",
                 1.0,

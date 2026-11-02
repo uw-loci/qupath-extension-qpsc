@@ -21,7 +21,7 @@
 >
 > **UPDATED 2026-08-11 (v0.9.1):** the baked quarter-rotation of a companion (multi-slide
 > holder mounting) is also metadata now -- **`lp_rotation_deg`**, read via
-> `ImageMetadataManager.getRotationDegrees(entry)`. Together with `bakedParity` and the
+> `ImageMetadataManager.getRotationDeg(entry)`. Together with `bakedParity` and the
 > `camera_view` flag this makes orientation **entirely metadata-driven**: no code path reads
 > the entry name for rotation or companion classification (the `(rotated N) (Camera View)`
 > name is user-reference only). Companion lookup matches on `base_image` + baked rotation +

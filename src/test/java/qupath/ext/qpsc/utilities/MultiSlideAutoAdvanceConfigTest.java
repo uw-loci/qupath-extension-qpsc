@@ -40,7 +40,7 @@ class MultiSlideAutoAdvanceConfigTest {
     void absentKeyFallsBackToTheDefault() throws IOException {
         assertEquals(
                 MicroscopeConfigManager.DEFAULT_AUTO_ADVANCE_SECONDS,
-                managerFor("").getMultiSlideAutoAdvanceSeconds(),
+                managerFor("").getMultiSlideAutoAdvanceSec(),
                 "a scope with no acquisition block must still yield a usable countdown");
     }
 
@@ -51,7 +51,7 @@ class MultiSlideAutoAdvanceConfigTest {
                   multislide:
                     auto_advance_seconds: 25
                 """);
-        assertEquals(25, mgr.getMultiSlideAutoAdvanceSeconds());
+        assertEquals(25, mgr.getMultiSlideAutoAdvanceSec());
     }
 
     @Test
@@ -61,8 +61,7 @@ class MultiSlideAutoAdvanceConfigTest {
                   multislide:
                     auto_advance_seconds: 0
                 """);
-        assertEquals(
-                0, mgr.getMultiSlideAutoAdvanceSeconds(), "0 is a deliberate 'confirm at once', not a missing key");
+        assertEquals(0, mgr.getMultiSlideAutoAdvanceSec(), "0 is a deliberate 'confirm at once', not a missing key");
     }
 
     @Test
@@ -72,7 +71,7 @@ class MultiSlideAutoAdvanceConfigTest {
                   multislide:
                     auto_advance_seconds: -5
                 """);
-        assertEquals(MicroscopeConfigManager.DEFAULT_AUTO_ADVANCE_SECONDS, mgr.getMultiSlideAutoAdvanceSeconds());
+        assertEquals(MicroscopeConfigManager.DEFAULT_AUTO_ADVANCE_SECONDS, mgr.getMultiSlideAutoAdvanceSec());
     }
 
     @Test
@@ -84,7 +83,7 @@ class MultiSlideAutoAdvanceConfigTest {
                 """);
         assertEquals(
                 MicroscopeConfigManager.MAX_AUTO_ADVANCE_SECONDS,
-                mgr.getMultiSlideAutoAdvanceSeconds(),
+                mgr.getMultiSlideAutoAdvanceSec(),
                 "an extra digit must not look like a hung batch");
     }
 
@@ -95,6 +94,6 @@ class MultiSlideAutoAdvanceConfigTest {
                   multislide:
                     auto_advance_seconds: soon
                 """);
-        assertEquals(MicroscopeConfigManager.DEFAULT_AUTO_ADVANCE_SECONDS, mgr.getMultiSlideAutoAdvanceSeconds());
+        assertEquals(MicroscopeConfigManager.DEFAULT_AUTO_ADVANCE_SECONDS, mgr.getMultiSlideAutoAdvanceSec());
     }
 }

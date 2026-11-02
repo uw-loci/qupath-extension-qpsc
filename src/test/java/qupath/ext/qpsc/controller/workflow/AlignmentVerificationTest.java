@@ -268,7 +268,7 @@ class AlignmentVerificationTest {
         String src = Files.readString(
                 Path.of("src/main/java/qupath/ext/qpsc/controller/workflow/AlignmentVerification.java"));
         assertThat(src).doesNotContain("REFOCUS_RANGE_UM").doesNotContain("MAX_OFFSET_UM");
-        assertThat(src).contains("Math.hypot(fovWidthUm, fovHeightUm)");
+        assertThat(src).contains("Math.hypot(fovXUm, fovYUm)");
 
         String slotJump =
                 Files.readString(Path.of("src/main/java/qupath/ext/qpsc/controller/workflow/SlotJumpAutofocus.java"));

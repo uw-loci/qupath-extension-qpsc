@@ -751,21 +751,21 @@ public class DualProgressDialog {
                         "Acquisition complete. Acquisition time: {}",
                         formatTime((acqEnd - workflowStartTime.get()) / 1000));
             }
-            long acqSeconds = (acqEnd - workflowStartTime.get()) / 1000;
+            long acqSec = (acqEnd - workflowStartTime.get()) / 1000;
 
             if (hasActiveStitchingOperations()) {
-                long stitchSeconds = (now - acqEnd) / 1000;
-                timeLabel.setText(String.format(
-                        "Acquisition: %s | Stitching: %s", formatTime(acqSeconds), formatTime(stitchSeconds)));
+                long stitchSec = (now - acqEnd) / 1000;
+                timeLabel.setText(
+                        String.format("Acquisition: %s | Stitching: %s", formatTime(acqSec), formatTime(stitchSec)));
             } else {
-                long totalSeconds = (now - workflowStartTime.get()) / 1000;
-                long stitchSeconds = (now - acqEnd) / 1000;
-                if (stitchSeconds > 5) {
+                long totalSec = (now - workflowStartTime.get()) / 1000;
+                long stitchSec = (now - acqEnd) / 1000;
+                if (stitchSec > 5) {
                     timeLabel.setText(String.format(
                             "Acquisition: %s | Stitching: %s | Total: %s",
-                            formatTime(acqSeconds), formatTime(stitchSeconds), formatTime(totalSeconds)));
+                            formatTime(acqSec), formatTime(stitchSec), formatTime(totalSec)));
                 } else {
-                    timeLabel.setText("Acquisition time: " + formatTime(acqSeconds));
+                    timeLabel.setText("Acquisition time: " + formatTime(acqSec));
                 }
             }
             return;
@@ -834,9 +834,9 @@ public class DualProgressDialog {
                     + remainingAnnotations * avgFilesPerAnnotation;
         }
         long totalRemainingMs = (long) (avgMsPerTile * totalTilesRemaining);
-        long remainingSeconds = totalRemainingMs / 1000;
+        long remainingSec = totalRemainingMs / 1000;
 
-        String estimate = formatTime(remainingSeconds);
+        String estimate = formatTime(remainingSec);
 
         int positionsRemaining = totalTilesRemaining / Math.max(1, steps);
 
@@ -855,7 +855,7 @@ public class DualProgressDialog {
         }
 
         timeLabel.setText(String.format("Time remaining: %s (%d positions)", estimate, positionsRemaining));
-        completionLabel.setText("Est. completion: " + formatCompletionClock(remainingSeconds));
+        completionLabel.setText("Est. completion: " + formatCompletionClock(remainingSec));
         completionLabel.setVisible(true);
         completionLabel.setManaged(true);
     }

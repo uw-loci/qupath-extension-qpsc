@@ -328,7 +328,7 @@ public final class StageFrameWatchdog {
     }
 
     /** Visible for testing: shorten the post-arming grace period. */
-    void setGraceMillisForTesting(long millis) {
+    void setGraceMsForTesting(long millis) {
         this.graceMs = millis;
     }
 

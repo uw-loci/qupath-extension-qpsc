@@ -203,7 +203,7 @@ public final class StitchingRegistration {
             List<String> channels,
             List<String> alignOn,
             Path tileBaseDir,
-            double pixelSizeMicrons,
+            double pixelSizeUm,
             double downsample,
             int maxConcurrency,
             TargetStitcher<String> stitcher) {
@@ -228,7 +228,7 @@ public final class StitchingRegistration {
         Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
         // If the solve fails no file exists (it is deleted first), so every channel's Apply warns and
         // stitches at nominal -- still mutually consistent, since none of them moved.
-        ChannelRegistrationSupport.solve(tileBaseDir, channels, alignOn, pixelSizeMicrons, downsample, solutionFile);
+        ChannelRegistrationSupport.solve(tileBaseDir, channels, alignOn, pixelSizeUm, downsample, solutionFile);
         Object applyMode = TileRegistrationSupport.applyMode(solutionFile);
         List<Integer> all = new ArrayList<>(channels.size());
         for (int i = 0; i < channels.size(); i++) {

@@ -577,7 +577,7 @@ public class AcquisitionManager {
                     currentAnnotations,
                     state.sample,
                     state.projectInfo.getTempTileDirectory(),
-                    state.projectInfo.getImagingModeWithIndex(),
+                    state.projectInfo.getAcquisitionFolder(),
                     state.pixelSize);
 
             // Transform tile configurations to stage coordinates
@@ -1049,7 +1049,7 @@ public class AcquisitionManager {
                 MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configFileLocation);
 
                 // Extract modality base name
-                String modalityWithIndex = state.projectInfo.getImagingModeWithIndex();
+                String acquisitionFolder = state.projectInfo.getAcquisitionFolder();
                 String baseModality = state.sample.modality();
 
                 // Get WSI pixel size using explicit hardware configuration
@@ -1105,7 +1105,7 @@ public class AcquisitionManager {
                         AcquisitionConfigurationBuilder.buildConfiguration(
                                 state.sample,
                                 configFileLocation,
-                                modalityWithIndex,
+                                acquisitionFolder,
                                 annotation.getName(),
                                 angleExposures,
                                 channelExposures,
@@ -1181,7 +1181,7 @@ public class AcquisitionManager {
                         commandString,
                         state.sample.projectsFolder().getAbsolutePath(),
                         actualSampleName, // Use actual sample name from project folder
-                        modalityWithIndex,
+                        acquisitionFolder,
                         annotation.getName());
 
                 // Write acquisition metadata for recovery workflow (idempotent per scan type)
@@ -2016,7 +2016,7 @@ public class AcquisitionManager {
         CompletableFuture<Void> stitchFuture = StitchingHelper.performAnnotationStitching(
                 annotation,
                 state.sample,
-                state.projectInfo.getImagingModeWithIndex(),
+                state.projectInfo.getAcquisitionFolder(),
                 angleExposures,
                 WSI_pixelSize_um,
                 gui,
@@ -2223,27 +2223,26 @@ public class AcquisitionManager {
             double imagePixelSize = imgData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
 
             // Convert to microns
-            double annWidthMicrons = annWidth * imagePixelSize;
-            double annHeightMicrons = annHeight * imagePixelSize;
+            double annWidthUm = annWidth * imagePixelSize;
+            double annHeightUm = annHeight * imagePixelSize;
 
             // Get camera FOV from configuration
-            double[] fovMicrons = MicroscopeController.getInstance()
+            double[] fovUm = MicroscopeController.getInstance()
                     .getCameraFOVFromConfig(state.sample.modality(), state.sample.objective(), state.sample.detector());
 
-            double fovWidthMicrons = fovMicrons[0];
-            double fovHeightMicrons = fovMicrons[1];
+            double fovXUm = fovUm[0];
+            double fovYUm = fovUm[1];
 
             // Get overlap percentage and delegate to the shared grid math (same formula the tiler uses)
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-            int totalTiles = TilingUtilities.estimateTileCount(
-                    annWidthMicrons, annHeightMicrons, fovWidthMicrons, fovHeightMicrons, overlapPercent);
+            int totalTiles = TilingUtilities.estimateTileCount(annWidthUm, annHeightUm, fovXUm, fovYUm, overlapPercent);
 
             logger.info(
                     "Tile estimate: annotation {}x{} um, FOV {}x{} um, overlap {}% = {} tiles",
-                    Math.round(annWidthMicrons),
-                    Math.round(annHeightMicrons),
-                    Math.round(fovWidthMicrons),
-                    Math.round(fovHeightMicrons),
+                    Math.round(annWidthUm),
+                    Math.round(annHeightUm),
+                    Math.round(fovXUm),
+                    Math.round(fovYUm),
                     Math.round(overlapPercent),
                     totalTiles);
 
@@ -2988,15 +2987,15 @@ public class AcquisitionManager {
             return null;
         }
 
-        double[] fovMicrons;
+        double[] fovUm;
         try {
-            fovMicrons = MicroscopeController.getInstance()
+            fovUm = MicroscopeController.getInstance()
                     .getCameraFOVFromConfig(state.sample.modality(), state.sample.objective(), state.sample.detector());
         } catch (Exception e) {
             return null;
         }
-        int frameW = (int) Math.round(fovMicrons[0] / pixelSize);
-        int frameH = (int) Math.round(fovMicrons[1] / pixelSize);
+        int frameW = (int) Math.round(fovUm[0] / pixelSize);
+        int frameH = (int) Math.round(fovUm[1] / pixelSize);
 
         List<TileSite> sites = new ArrayList<>();
         try {

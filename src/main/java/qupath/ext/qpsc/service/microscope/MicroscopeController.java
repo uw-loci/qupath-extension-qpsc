@@ -1033,9 +1033,9 @@ public class MicroscopeController implements StagePositionProvider {
      * @param rotationDegrees The rotation angle in degrees to move to
      * @throws IOException if communication fails
      */
-    public void applyCameraSettingsForAngle(String angleName, float[] exposures, float[] gains, double rotationDegrees)
+    public void applyCameraSettingsForAngle(String angleName, float[] exposures, float[] gains, double rotationDeg)
             throws IOException {
-        logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDegrees);
+        logger.info("Applying camera settings for angle '{}' at {} degrees", angleName, rotationDeg);
 
         boolean exposureIndividual = (exposures.length == 3);
 
@@ -1044,8 +1044,8 @@ public class MicroscopeController implements StagePositionProvider {
         // uses the main socket, so they don't contend.
         var rotationFuture = java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
-                socketClient.moveStageR(rotationDegrees);
-                logger.info("Moved rotation stage to {} degrees", rotationDegrees);
+                socketClient.moveStageR(rotationDeg);
+                logger.info("Moved rotation stage to {} degrees", rotationDeg);
             } catch (IOException e) {
                 throw new java.util.concurrent.CompletionException(e);
             }

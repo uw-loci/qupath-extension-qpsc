@@ -217,8 +217,8 @@ public class StageMapCanvas extends StackPane {
     private double currentStageY = Double.NaN;
     private double targetStageX = Double.NaN;
     private double targetStageY = Double.NaN;
-    private double fovWidthUm = 0;
-    private double fovHeightUm = 0;
+    private double fovXUm = 0;
+    private double fovYUm = 0;
     // Bounding-box preview: NaN = no preview shown
     private double bboxPreviewMinX = Double.NaN;
     private double bboxPreviewMinY = Double.NaN;
@@ -567,8 +567,8 @@ public class StageMapCanvas extends StackPane {
      * Updates the camera field of view dimensions.
      */
     public void updateFOV(double widthUm, double heightUm) {
-        this.fovWidthUm = widthUm;
-        this.fovHeightUm = heightUm;
+        this.fovXUm = widthUm;
+        this.fovYUm = heightUm;
         updateFOVOverlay();
     }
 
@@ -1194,8 +1194,8 @@ public class StageMapCanvas extends StackPane {
 
         if (Double.isNaN(currentStageX)
                 || Double.isNaN(currentStageY)
-                || fovWidthUm <= 0
-                || fovHeightUm <= 0
+                || fovXUm <= 0
+                || fovYUm <= 0
                 || currentInsert == null) {
             fovRect.setVisible(false);
             return;
@@ -1209,8 +1209,8 @@ public class StageMapCanvas extends StackPane {
 
         double sx = screenPos[0];
         double sy = screenPos[1];
-        double fovW = fovWidthUm * scale;
-        double fovH = fovHeightUm * scale;
+        double fovW = fovXUm * scale;
+        double fovH = fovYUm * scale;
 
         fovRect.setX(sx - fovW / 2);
         fovRect.setY(sy - fovH / 2);

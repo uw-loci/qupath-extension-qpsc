@@ -44,7 +44,7 @@ class StageSpaceSimilarityRmsTest {
         // "predicted stage" for point 2 was re-estimated after point 1 was captured, whereas the
         // solver uses the ORIGINAL transform's prediction for both. So assert the property that
         // matters -- a correction far above slide play, with nothing to flag it.
-        assertThat(Math.abs(fit.rotationDegrees())).isGreaterThan(0.5);
+        assertThat(Math.abs(fit.rotationDeg())).isGreaterThan(0.5);
     }
 
     @Test
@@ -58,7 +58,7 @@ class StageSpaceSimilarityRmsTest {
                 TransformationFunctions.computeStageSpaceSimilarity(predicted, measured);
 
         assertThat(fit.rmsResidualUm()).isEqualTo(0.0);
-        assertThat(Math.abs(fit.rotationDegrees())).isGreaterThan(5.0);
+        assertThat(Math.abs(fit.rotationDeg())).isGreaterThan(5.0);
     }
 
     @Test
@@ -87,7 +87,7 @@ class StageSpaceSimilarityRmsTest {
                 TransformationFunctions.computeStageSpaceSimilarity(predicted, measured);
 
         assertThat(fit.rmsResidualUm()).isLessThan(1.0);
-        assertThat(fit.rotationDegrees()).isCloseTo(0.0, org.assertj.core.data.Offset.offset(0.01));
+        assertThat(fit.rotationDeg()).isCloseTo(0.0, org.assertj.core.data.Offset.offset(0.01));
         assertThat(fit.scale()).isCloseTo(1.0, org.assertj.core.data.Offset.offset(0.001));
     }
 }

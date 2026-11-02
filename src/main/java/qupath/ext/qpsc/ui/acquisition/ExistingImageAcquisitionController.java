@@ -945,16 +945,16 @@ public class ExistingImageAcquisitionController {
             String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configFileLocation);
 
-            String enhancedModality = ObjectiveUtils.createEnhancedFolderName(modality, objective);
+            String modalityFolder = ObjectiveUtils.createEnhancedFolderName(modality, objective);
             java.nio.file.Path sampleRoot = projectsFolder.toPath().resolve(sampleName);
-            java.nio.file.Path modalityRoot = sampleRoot.resolve(enhancedModality);
+            java.nio.file.Path modalityRoot = sampleRoot.resolve(modalityFolder);
 
             String firstAnnotationName = annotations.get(0).getName();
             AcquisitionCommandBuilder cmdBuilder = buildMdaCommand(
                     sample,
                     configFileLocation,
                     mgr,
-                    enhancedModality,
+                    modalityFolder,
                     firstAnnotationName == null ? "region" : firstAnnotationName);
             if (cmdBuilder == null) {
                 return MdaExportContext.notReady(MDA_NO_CHANNELS_MESSAGE);
@@ -965,9 +965,9 @@ public class ExistingImageAcquisitionController {
             // synthesize centroids directly from the annotation bounds + camera
             // FOV without writing files (avoids polluting the project before
             // the user commits to actually acquiring).
-            double[] fovMicrons = mgr.getCameraFOV(modality, objective, detector);
-            double fovWumicrons = fovMicrons[0];
-            double fovHumicrons = fovMicrons[1];
+            double[] fovUm = mgr.getCameraFOV(modality, objective, detector);
+            double fovWumicrons = fovUm[0];
+            double fovHumicrons = fovUm[1];
             double overlap = QPPreferenceDialog.getTileOverlapPercentProperty();
 
             // Prompt for the tiling FoV to use for THIS export. Pre-filled with the camera
@@ -1523,8 +1523,8 @@ public class ExistingImageAcquisitionController {
             if (alignmentDate == null) {
                 return -1;
             }
-            long diffMillis = new Date().getTime() - alignmentDate.getTime();
-            return diffMillis / (1000 * 60 * 60 * 24); // Convert to days
+            long diffMs = new Date().getTime() - alignmentDate.getTime();
+            return diffMs / (1000 * 60 * 60 * 24); // Convert to days
         }
 
         /**
@@ -1612,8 +1612,8 @@ public class ExistingImageAcquisitionController {
                     previewTilesLabel.setText("Tiles: -- (FOV not available)");
                     return;
                 }
-                double fovWidthMicrons = fov[0];
-                double fovHeightMicrons = fov[1];
+                double fovXUm = fov[0];
+                double fovYUm = fov[1];
 
                 // Get image pixel size to convert annotation bounds from pixels to microns
                 double imagePixelSize = 1.0; // Default if no image
@@ -1625,7 +1625,7 @@ public class ExistingImageAcquisitionController {
 
                 // Calculate actual tile count from annotation bounds
                 double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-                int totalTiles = calculateTileCount(fovWidthMicrons, fovHeightMicrons, overlapPercent, imagePixelSize);
+                int totalTiles = calculateTileCount(fovXUm, fovYUm, overlapPercent, imagePixelSize);
 
                 // Get per-tile image count (angles for PPM, channels for fluorescence/BF-IF)
                 int imagesPerTile = getImagesPerTileForModality(modality);
@@ -1647,7 +1647,7 @@ public class ExistingImageAcquisitionController {
                             String.format("Tiles: %,d%s = %,d images", totalTiles, zSuffix, totalImages));
                 }
 
-                String timeEstimate = formatTimeEstimate(estimatedAcquisitionSeconds(totalImages));
+                String timeEstimate = formatTimeEstimate(estimatedAcquisitionSec(totalImages));
                 previewTimeLabel.setText("Estimated Time: " + timeEstimate);
 
                 // Storage estimate: ~4 MB per image
@@ -1669,30 +1669,29 @@ public class ExistingImageAcquisitionController {
          * @param imagePixelSize Image pixel size in microns
          * @return Total number of tiles
          */
-        private int calculateTileCount(
-                double fovWidthMicrons, double fovHeightMicrons, double overlapPercent, double imagePixelSize) {
+        private int calculateTileCount(double fovXUm, double fovYUm, double overlapPercent, double imagePixelSize) {
             if (annotations.isEmpty()) {
                 return 0;
             }
 
             // Effective FOV size considering overlap
-            double effectiveFovWidth = fovWidthMicrons * (1 - overlapPercent / 100.0);
-            double effectiveFovHeight = fovHeightMicrons * (1 - overlapPercent / 100.0);
+            double effectiveFovWidth = fovXUm * (1 - overlapPercent / 100.0);
+            double effectiveFovHeight = fovYUm * (1 - overlapPercent / 100.0);
 
             int totalTiles = 0;
             for (PathObject ann : annotations) {
                 if (ann.getROI() != null) {
                     // Get annotation bounds in pixels, convert to microns
-                    double annWidthMicrons = ann.getROI().getBoundsWidth() * imagePixelSize;
-                    double annHeightMicrons = ann.getROI().getBoundsHeight() * imagePixelSize;
+                    double annWidthUm = ann.getROI().getBoundsWidth() * imagePixelSize;
+                    double annHeightUm = ann.getROI().getBoundsHeight() * imagePixelSize;
 
                     // Add buffer (half FOV on each side) like TilingUtilities does
-                    annWidthMicrons += fovWidthMicrons;
-                    annHeightMicrons += fovHeightMicrons;
+                    annWidthUm += fovXUm;
+                    annHeightUm += fovYUm;
 
                     // Calculate tiles for this annotation
-                    int tilesX = (int) Math.ceil(annWidthMicrons / effectiveFovWidth);
-                    int tilesY = (int) Math.ceil(annHeightMicrons / effectiveFovHeight);
+                    int tilesX = (int) Math.ceil(annWidthUm / effectiveFovWidth);
+                    int tilesY = (int) Math.ceil(annHeightUm / effectiveFovHeight);
                     totalTiles += tilesX * tilesY;
                 }
             }

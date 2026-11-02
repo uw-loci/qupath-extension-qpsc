@@ -441,14 +441,14 @@ public class TransformationFunctions {
      */
     public static AffineTransform calculateFullResToStageTransform(
             Map<Point2D, Point2D> alignmentPoints,
-            double imagePixelSizeMicrons,
+            double imagePixelSizeUm,
             boolean stageInvertedX,
             boolean stageInvertedY) {
 
         if (alignmentPoints.size() < 2) {
             // Simple scaling based on pixel size
-            double scaleX = stageInvertedX ? -imagePixelSizeMicrons : imagePixelSizeMicrons;
-            double scaleY = stageInvertedY ? -imagePixelSizeMicrons : imagePixelSizeMicrons;
+            double scaleX = stageInvertedX ? -imagePixelSizeUm : imagePixelSizeUm;
+            double scaleY = stageInvertedY ? -imagePixelSizeUm : imagePixelSizeUm;
 
             return AffineTransform.getScaleInstance(scaleX, scaleY);
         }
@@ -1062,7 +1062,7 @@ public class TransformationFunctions {
      * @param pointCount number of correspondences used
      */
     public record SimilarityFit(
-            AffineTransform correction, double rotationDegrees, double scale, double rmsResidualUm, int pointCount) {}
+            AffineTransform correction, double rotationDeg, double scale, double rmsResidualUm, int pointCount) {}
 
     /**
      * Least-squares 2D similarity (rotation + isotropic scale + translation, NO
@@ -1133,7 +1133,7 @@ public class TransformationFunctions {
         AffineTransform correction = new AffineTransform(scaledCos, scaledSin, -scaledSin, scaledCos, tx, ty);
 
         double scale = Math.hypot(scaledCos, scaledSin);
-        double rotationDegrees = Math.toDegrees(Math.atan2(sinTerm, cosTerm));
+        double rotationDeg = Math.toDegrees(Math.atan2(sinTerm, cosTerm));
 
         double sumSq = 0;
         for (int i = 0; i < n; i++) {
@@ -1148,11 +1148,11 @@ public class TransformationFunctions {
         logger.info(
                 "Stage-space similarity fit ({} pts): rotation={} deg, scale={}, RMS residual={} um",
                 n,
-                String.format("%.3f", rotationDegrees),
+                String.format("%.3f", rotationDeg),
                 String.format("%.5f", scale),
                 String.format("%.2f", rmsResidualUm));
 
-        return new SimilarityFit(correction, rotationDegrees, scale, rmsResidualUm, n);
+        return new SimilarityFit(correction, rotationDeg, scale, rmsResidualUm, n);
     }
 
     /**

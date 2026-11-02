@@ -195,7 +195,7 @@ public class WBComparisonWorkflow {
                     .scanType(modality)
                     .regionName("bounds")
                     .hardware(objective, detector, pixelSize)
-                    .getEnhancedScanType();
+                    .getModalityFolder();
             logger.info("Enhanced scan type: {}", modeWithIndex);
 
             // Generate tile grid once (reused for all modes)

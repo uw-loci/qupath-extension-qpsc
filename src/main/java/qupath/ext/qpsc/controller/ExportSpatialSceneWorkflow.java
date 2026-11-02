@@ -167,7 +167,7 @@ public class ExportSpatialSceneWorkflow {
             this.entries = entries;
         }
 
-        record ServerFacts(int width, int height, double pixelSizeMicrons) {}
+        record ServerFacts(int width, int height, double pixelSizeUm) {}
 
         void addSubFrameAlignment(SavedAlignment a, File projectDir) {
             ProjectImageEntry<BufferedImage> entry = findByStrippedName(a.sampleName(), false);
@@ -211,12 +211,12 @@ public class ExportSpatialSceneWorkflow {
                                         + "so the half-FOV offset correction cannot be applied.");
                         continue;
                     }
-                    if (!(f.pixelSizeMicrons > 0)) {
+                    if (!(f.pixelSizeUm > 0)) {
                         builder.skip(entry.getImageName(), "Image has no pixel size.");
                         continue;
                     }
                     AffineTransform t = ForwardPropagationWorkflow.buildSubToStageTransform(
-                            f.pixelSizeMicrons, ImageMetadataManager.getXYOffset(entry), entry);
+                            f.pixelSizeUm, ImageMetadataManager.getXYOffset(entry), entry);
                     Map<String, Object> prov = provenance("xy_offset metadata with half-FOV correction", scope);
                     prov.put("fovMicrons", List.of(fov[0], fov[1]));
                     addToStage(entry, scope, List.of(t), prov);
@@ -244,7 +244,7 @@ public class ExportSpatialSceneWorkflow {
             for (ProjectImageEntry<BufferedImage> e : entries) {
                 if (e != base
                         && a.sampleName().equals(ImageMetadataManager.getBaseImage(e))
-                        && ImageMetadataManager.getRotationDegrees(e) != 0) {
+                        && ImageMetadataManager.getRotationDeg(e) != 0) {
                     builder.skip(
                             base.getImageName(),
                             "Alignment " + a.file().getName() + " belongs to a slide with a rotated working entry ("
@@ -284,8 +284,8 @@ public class ExportSpatialSceneWorkflow {
                             companion.getImageName(), "Camera View companion's base image has no stage transform.");
                     continue;
                 }
-                if (ImageMetadataManager.getRotationDegrees(companion) != 0
-                        || ImageMetadataManager.getRotationDegrees(base) != 0) {
+                if (ImageMetadataManager.getRotationDeg(companion) != 0
+                        || ImageMetadataManager.getRotationDeg(base) != 0) {
                     builder.skip(companion.getImageName(), "Rotated Camera View companions are not exported yet.");
                     continue;
                 }
@@ -352,7 +352,7 @@ public class ExportSpatialSceneWorkflow {
                 if (f != null) {
                     info.put("widthPx", f.width);
                     info.put("heightPx", f.height);
-                    if (f.pixelSizeMicrons > 0) info.put("pixelSizeMicrons", f.pixelSizeMicrons);
+                    if (f.pixelSizeUm > 0) info.put("pixelSizeMicrons", f.pixelSizeUm);
                 }
                 putIfPresent(info, "acquiredOnMicroscope", ImageMetadataManager.getAcquiredOnMicroscope(e));
                 putIfPresent(info, "sourceMicroscope", e.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE));

@@ -123,8 +123,8 @@ public class AffineTransformationController {
      * autofocus-on-jump). Equivalent to passing {@code slotJumpAssist = false}.
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
-            double macroPixelSizeMicrons, AffineTransform existingTransformEstimate) {
-        return setupAffineTransformationAndValidationGUI(macroPixelSizeMicrons, existingTransformEstimate, false);
+            double macroPixelSizeUm, AffineTransform existingTransformEstimate) {
+        return setupAffineTransformationAndValidationGUI(macroPixelSizeUm, existingTransformEstimate, false);
     }
 
     /**
@@ -148,7 +148,7 @@ public class AffineTransformationController {
      * @return CompletableFuture with the user's validated affine transform, or null if canceled.
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
-            double macroPixelSizeMicrons, AffineTransform existingTransformEstimate, boolean slotJumpAssist) {
+            double macroPixelSizeUm, AffineTransform existingTransformEstimate, boolean slotJumpAssist) {
 
         boolean hasEstimate = existingTransformEstimate != null;
         CompletableFuture<AffineTransform> future = new CompletableFuture<>();
@@ -161,7 +161,7 @@ public class AffineTransformationController {
                 StageImageTransform stageImage = StageImageTransform.current();
                 logger.info(
                         "Starting affine transformation setup (pixelSize: {}, {}, hasEstimate: {})",
-                        macroPixelSizeMicrons,
+                        macroPixelSizeUm,
                         stageImage,
                         hasEstimate);
 
@@ -169,7 +169,7 @@ public class AffineTransformationController {
 
                 // 1. Create initial scaling transform
                 AffineTransform scalingTransform =
-                        TransformationFunctions.setupAffineTransformation(macroPixelSizeMicrons, stageImage);
+                        TransformationFunctions.setupAffineTransformation(macroPixelSizeUm, stageImage);
                 logger.info("Initial scaling transform: {}", scalingTransform);
 
                 // Multi-slide alignment-step start (slotJumpAssist == a slide-carrier slot jump):

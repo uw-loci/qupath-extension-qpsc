@@ -793,7 +793,7 @@ public class MicroscopeConfigManager {
      *
      * @return countdown seconds, always in [0, {@value #MAX_AUTO_ADVANCE_SECONDS}]
      */
-    public int getMultiSlideAutoAdvanceSeconds() {
+    public int getMultiSlideAutoAdvanceSec() {
         Integer v = getInteger("acquisition", "multislide", "auto_advance_seconds");
         if (v == null || v < 0) {
             return DEFAULT_AUTO_ADVANCE_SECONDS;

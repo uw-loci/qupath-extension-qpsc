@@ -643,7 +643,7 @@ public class UIFunctions {
      * @param durationSeconds How long to show the notification (0 = until manually closed)
      * @return A Runnable that can be called to close the notification early
      */
-    public static Runnable showProgressNotification(String title, String message, int durationSeconds) {
+    public static Runnable showProgressNotification(String title, String message, int durationSec) {
         logger.debug("Showing progress notification: {}", title);
 
         final Stage[] stageHolder = new Stage[1];
@@ -684,8 +684,8 @@ public class UIFunctions {
             notificationStage.show();
 
             // Auto-close after duration if specified
-            if (durationSeconds > 0) {
-                PauseTransition pause = new PauseTransition(Duration.seconds(durationSeconds));
+            if (durationSec > 0) {
+                PauseTransition pause = new PauseTransition(Duration.seconds(durationSec));
                 pause.setOnFinished(e -> notificationStage.close());
                 pause.play();
             }
