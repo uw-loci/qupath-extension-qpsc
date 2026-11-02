@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality;
+package qupath.ext.qpsc.modality.ui;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -14,6 +14,9 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.modality.AcquisitionReadout;
+import qupath.ext.qpsc.modality.BrightfieldModalityHandler;
+import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
@@ -45,9 +48,6 @@ import qupath.ext.qpsc.ui.ThemeColors;
 public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
 
     private static final Logger logger = LoggerFactory.getLogger(BrightfieldExposureBoundingBoxUI.class);
-
-    /** Override-map key consumed by {@link BrightfieldModalityHandler#applyAngleOverrides}. */
-    static final String OVERRIDE_KEY = "exposure";
 
     private final VBox root;
     private final CheckBox overrideCheck;
@@ -208,7 +208,7 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
                 return Map.of();
             }
             Map<String, Double> overrides = new HashMap<>();
-            overrides.put(OVERRIDE_KEY, ms);
+            overrides.put(BrightfieldModalityHandler.EXPOSURE_OVERRIDE_KEY, ms);
             return overrides;
         } catch (NumberFormatException e) {
             logger.warn("Ignoring unparseable brightfield exposure override: '{}'", text);

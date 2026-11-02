@@ -206,7 +206,6 @@ graph TB
         PPM --> RM[RotationManager]
         RM --> RS[PPMRotationStrategy]
         RS --> PP[PPMPreferences<br/>exposure defaults]
-        PPM --> BUI[PPMBoundingBoxUI<br/>angle selection + overrides]
         PPM --> ER[PPMExposureResolver<br/>background/config/prefs]
     end
 ```
@@ -214,20 +213,27 @@ graph TB
 **ModalityHandler** interface defines the plugin contract:
 
 ```java
-public interface ModalityHandler {
-    CompletableFuture<List<AngleExposure>> getRotationAngles(modality, objective, detector);
-    Optional<BoundingBoxUI> createBoundingBoxUI();
+public interface ModalityHandler {   // acquisition logic, lower layer
+    CompletableFuture<List<AngleExposure>> getRotationAngles(modality, objective, detector, wbMode);
     List<AngleExposure> applyAngleOverrides(angles, overrides);
     Optional<ImageType> getImageType();
     BackgroundValidationResult validateBackgroundSettings(...);
-    List<ModalityMenuItem> getModalityMenuContributions();
+}
+
+public interface ModalityUi {        // panels, confirmations, menu items, in the modality's ui package
+    Optional<BoundingBoxUI> createBoundingBoxUI(modality);
+    boolean buildLiveCameraControls(modality, host);
+    boolean confirmBeforeAcquiring(modality);
+    List<ModalityMenuItem> getMenuContributions();
 }
 ```
 
 New modalities are added by:
 1. Implementing `ModalityHandler`
 2. Registering with a prefix in `ModalityRegistry`
-3. Defining `rotation_angles` in the YAML config
+3. If the modality has a panel or menu items, implementing `ModalityUi` in its `ui` package and
+   registering it in `ModalityUis.registerAll()`
+4. Defining `rotation_angles` in the YAML config
 
 See [PPM_MODALITY.md](PPM_MODALITY.md) for the full PPM implementation.
 
@@ -260,9 +266,19 @@ it at startup instead:
 - `MicroscopeSocketClient.addConfiguredListener`: work to run once the server has loaded the
   config, such as the objective preset check.
 
-One link still crosses the layers: each modality handler builds its own panels and workflows
-(`modality/ppm/ui`, `modality/lcpolscope/workflow` and so on), and those use the upper layers.
-Splitting each handler into a lower part and a UI part would remove the last package cycle.
+Each modality is split the same way. Its `ModalityHandler` (acquisition logic) is in the lower
+layer; its `ModalityUi` (the acquisition-dialog panel, Live Viewer camera controls, the
+confirmation before a run and the menu items that open its calibration workflows) is in the
+modality's `ui` package: `PPMModalityUi`, `LCPolScopeModalityUi`, `WidefieldModalityUi` (BF+IF
+uses it through the handler class it extends) and `modality/ui/BrightfieldModalityUi`.
+`ModalityUis.registerAll()`, at the top of the package tree, registers them with
+`ModalityRegistry.registerUi` when the extension starts, and callers ask
+`ModalityRegistry.getUi(modality)`. A modality without one gets `ModalityUi.NONE`: no panel, no
+confirmation, no menu. Saved LC-PolScope display settings, which the handler sends to the
+server, are in `modality/lcpolscope/LCDisplaySettings`; `LCColormapPane` only edits them.
+
+No lower package imports an upper one. Packages inside a layer still import each other both
+ways, so the package graph has one cycle in each layer, but none between them.
 
 ### Coordinate, configuration and tiling details
 

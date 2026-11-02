@@ -79,6 +79,9 @@ public final class ModalityRegistry {
     private static final Map<String, ModalityHandler> HANDLERS = new ConcurrentHashMap<>();
     private static final ModalityHandler NO_OP = new NoOpModalityHandler();
 
+    /** Each handler class's UI half, registered at extension start; see {@link ModalityUi}. */
+    private static final Map<Class<?>, ModalityUi> UIS = new ConcurrentHashMap<>();
+
     static {
         logger.info("Initializing ModalityRegistry with default modality handlers");
         registerHandler("ppm", new PPMModalityHandler());
@@ -323,5 +326,30 @@ public final class ModalityRegistry {
             }
         }
         return shortest;
+    }
+
+    /**
+     * Registers the UI half for a handler class and its subclasses (a subclass's own
+     * registration wins). Called by the upper layer when the extension starts, since the UI
+     * classes may use dialogs and workflows this package cannot import.
+     */
+    public static void registerUi(Class<? extends ModalityHandler> handlerClass, ModalityUi ui) {
+        UIS.put(handlerClass, ui);
+    }
+
+    /** The UI half for the handler of {@code modalityName}; {@link ModalityUi#NONE} when it has none. */
+    public static ModalityUi getUi(String modalityName) {
+        return getUi(getHandler(modalityName));
+    }
+
+    /** The UI half registered for this handler's class or its nearest superclass; else {@link ModalityUi#NONE}. */
+    public static ModalityUi getUi(ModalityHandler handler) {
+        for (Class<?> c = handler != null ? handler.getClass() : null; c != null; c = c.getSuperclass()) {
+            ModalityUi ui = UIS.get(c);
+            if (ui != null) {
+                return ui;
+            }
+        }
+        return ModalityUi.NONE;
     }
 }

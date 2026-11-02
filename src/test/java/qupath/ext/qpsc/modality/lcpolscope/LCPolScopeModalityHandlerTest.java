@@ -174,7 +174,7 @@ class LCPolScopeModalityHandlerTest {
         // keeps PPM's polarizer and reference-slide calibrations here. SetupScope hides the
         // whole submenu on a microscope whose config does not declare this modality, so no
         // gating logic is needed in the handler itself.
-        var contributions = new LCPolScopeModalityHandler().getMenuContributions();
+        var contributions = new qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeModalityUi().getMenuContributions();
         assertEquals(2, contributions.size());
         // The guided setup comes first: camera, calibration, background, in that order.
         assertEquals("lcSetup", contributions.get(0).id());

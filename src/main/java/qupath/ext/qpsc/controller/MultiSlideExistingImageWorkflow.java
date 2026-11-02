@@ -829,7 +829,8 @@ public final class MultiSlideExistingImageWorkflow {
                             s -> ModalityRegistry.getHandler(s.setup.config().modality()),
                             java.util.stream.Collectors.counting()));
             for (var batch : slidesPerHandler.entrySet()) {
-                if (!batch.getKey().confirmBatch(batch.getValue().intValue())) {
+                if (!ModalityRegistry.getUi(batch.getKey())
+                        .confirmBatch(batch.getValue().intValue())) {
                     return;
                 }
             }

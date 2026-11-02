@@ -9,8 +9,6 @@ import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
-import qupath.ext.qpsc.modality.ModalityMenuItem;
-import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
@@ -65,19 +63,6 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
         return CompletableFuture.completedFuture(resolveChannels(modalityName));
     }
 
-    @Override
-    public Optional<BoundingBoxUI> createBoundingBoxUI() {
-        return createBoundingBoxUI(null);
-    }
-
-    @Override
-    public Optional<BoundingBoxUI> createBoundingBoxUI(String modalityName) {
-        WidefieldChannelBoundingBoxUI ui = new WidefieldChannelBoundingBoxUI(modalityName);
-        // Only return the UI if a channel library is actually configured;
-        // otherwise fall through to the angle-based default (null UI, single snap).
-        return ui.hasChannels() ? Optional.of(ui) : Optional.empty();
-    }
-
     private List<Channel> resolveChannels(String profileKey) {
         if (profileKey == null || profileKey.isBlank()) {
             return List.of();
@@ -123,13 +108,6 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
     public String getDefaultWbMode() {
         // Fluorescence does not use white balance
         return "off";
-    }
-
-    @Override
-    public List<ModalityMenuItem> getMenuContributions() {
-        // No fluorescence-specific calibration workflows yet.
-        // Future: flat-field correction, channel registration, etc.
-        return List.of();
     }
 
     /**

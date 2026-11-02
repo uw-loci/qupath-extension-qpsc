@@ -1428,7 +1428,7 @@ public class StageControlPanel extends VBox {
         cameraModContent.getChildren().clear();
         if (modality == null || modality.isEmpty()) return;
 
-        if (ModalityRegistry.getHandler(modality).buildLiveCameraControls(modality, cameraHost)) {
+        if (ModalityRegistry.getUi(modality).buildLiveCameraControls(modality, cameraHost)) {
             return;
         }
         String norm = modality.toLowerCase();

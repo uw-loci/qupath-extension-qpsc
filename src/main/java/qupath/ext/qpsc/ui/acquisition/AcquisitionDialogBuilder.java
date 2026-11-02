@@ -24,13 +24,13 @@ import qupath.ext.qpsc.background.BackgroundValidityChecker;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.AcquisitionReadout;
 import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.BrightfieldExposureBoundingBoxUI;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
+import qupath.ext.qpsc.modality.ui.BrightfieldExposureBoundingBoxUI;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -730,7 +730,8 @@ abstract class AcquisitionDialogBuilder<R> {
     /** Swaps in the modality's panel and wires its MDA export button and readout. */
     private void updateModalityUI(String modality) {
         ModalityHandler handler = ModalityRegistry.getHandler(modality);
-        Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI(modality);
+        Optional<ModalityHandler.BoundingBoxUI> uiOpt =
+                ModalityRegistry.getUi(handler).createBoundingBoxUI(modality);
 
         modalityContent.getChildren().clear();
 

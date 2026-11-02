@@ -32,6 +32,9 @@ import qupath.lib.images.ImageData;
  */
 public class BrightfieldModalityHandler implements ModalityHandler {
 
+    /** Override-map key for the operator's exposure, set by the brightfield acquisition panel. */
+    public static final String EXPOSURE_OVERRIDE_KEY = "exposure";
+
     private static final Logger logger = LoggerFactory.getLogger(BrightfieldModalityHandler.class);
 
     /** Brightfield expects every tile to fill the dynamic range -- dim tiles are a calibration symptom. */
@@ -180,20 +183,8 @@ public class BrightfieldModalityHandler implements ModalityHandler {
     }
 
     /**
-     * Brightfield contributes an exposure panel to the Bounded Acquisition
-     * dialog: it states how the single exposure is resolved and lets the
-     * operator override it (with a warning that overriding invalidates the
-     * saved background/flat-field profile). See
-     * {@link BrightfieldExposureBoundingBoxUI}.
-     */
-    @Override
-    public Optional<BoundingBoxUI> createBoundingBoxUI() {
-        return Optional.of(new BrightfieldExposureBoundingBoxUI());
-    }
-
-    /**
      * Applies the operator's exposure override from
-     * {@link BrightfieldExposureBoundingBoxUI}. The override map carries a
+     * {@code BrightfieldExposureBoundingBoxUI}. The override map carries a
      * single {@code "exposure"} entry (milliseconds); when present it replaces
      * the exposure on every (single, angle=0) acquisition step. Without it the
      * handler-resolved exposure is used unchanged.
@@ -203,7 +194,7 @@ public class BrightfieldModalityHandler implements ModalityHandler {
         if (overrides == null) {
             return angles;
         }
-        Double exposure = overrides.get(BrightfieldExposureBoundingBoxUI.OVERRIDE_KEY);
+        Double exposure = overrides.get(EXPOSURE_OVERRIDE_KEY);
         if (exposure == null || exposure <= 0) {
             return angles;
         }
@@ -234,10 +225,5 @@ public class BrightfieldModalityHandler implements ModalityHandler {
     public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
         // Monochrome sCMOS -- no Bayer pattern
         builder.enableDebayer(false);
-    }
-
-    @Override
-    public List<ModalityMenuItem> getMenuContributions() {
-        return List.of();
     }
 }

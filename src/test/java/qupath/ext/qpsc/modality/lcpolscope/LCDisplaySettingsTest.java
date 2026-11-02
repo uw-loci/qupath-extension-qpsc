@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality.lcpolscope.ui;
+package qupath.ext.qpsc.modality.lcpolscope;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
@@ -9,28 +9,28 @@ import org.junit.jupiter.api.Test;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
 /** The acquisition panel's color-map choice and the flag it puts on the command. */
-class LCColormapPaneTest {
+class LCDisplaySettingsTest {
 
     @Test
     void onlySendableChoicesAreSent() {
-        assertEquals("uniform", LCColormapPane.effectiveChoice("uniform", false));
-        assertEquals("hsv", LCColormapPane.effectiveChoice("hsv", false));
-        assertEquals("ppm", LCColormapPane.effectiveChoice("ppm", true));
+        assertEquals("uniform", LCDisplaySettings.effectiveChoice("uniform", false));
+        assertEquals("hsv", LCDisplaySettings.effectiveChoice("hsv", false));
+        assertEquals("ppm", LCDisplaySettings.effectiveChoice("ppm", true));
         // No PPM calibration in the config: the server would refuse the reconstruction.
-        assertNull(LCColormapPane.effectiveChoice("ppm", false));
-        assertNull(LCColormapPane.effectiveChoice("", true));
-        assertNull(LCColormapPane.effectiveChoice("jet", true));
-        assertNull(LCColormapPane.effectiveChoice(null, true));
+        assertNull(LCDisplaySettings.effectiveChoice("ppm", false));
+        assertNull(LCDisplaySettings.effectiveChoice("", true));
+        assertNull(LCDisplaySettings.effectiveChoice("jet", true));
+        assertNull(LCDisplaySettings.effectiveChoice(null, true));
     }
 
     @Test
     void theCeilingIsSentOnlyWhenItDiffersFromTheConfig() {
-        assertNull(LCColormapPane.sendableCeiling(0.0, 20.0)); // never set
-        assertNull(LCColormapPane.sendableCeiling(-5.0, 20.0));
-        assertNull(LCColormapPane.sendableCeiling(Double.NaN, 20.0));
-        assertNull(LCColormapPane.sendableCeiling(20.0, 20.0)); // the config's own value
-        assertEquals(35.0, LCColormapPane.sendableCeiling(35.0, 20.0));
-        assertEquals(5.5, LCColormapPane.sendableCeiling(5.5, 20.0));
+        assertNull(LCDisplaySettings.sendableCeiling(0.0, 20.0)); // never set
+        assertNull(LCDisplaySettings.sendableCeiling(-5.0, 20.0));
+        assertNull(LCDisplaySettings.sendableCeiling(Double.NaN, 20.0));
+        assertNull(LCDisplaySettings.sendableCeiling(20.0, 20.0)); // the config's own value
+        assertEquals(35.0, LCDisplaySettings.sendableCeiling(35.0, 20.0));
+        assertEquals(5.5, LCDisplaySettings.sendableCeiling(5.5, 20.0));
     }
 
     @Test

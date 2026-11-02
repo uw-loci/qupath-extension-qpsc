@@ -49,14 +49,12 @@ import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
  * }</pre>
  *
  * <h3>UI Integration Pattern</h3>
- * <p>Modality handlers can provide custom UI components that integrate with the bounding box
- * dialog. These components allow users to override default parameters:</p>
+ * <p>A handler holds no UI. Its panels, Live Viewer controls, confirmations and menu items are a
+ * separate {@link ModalityUi} in the modality's {@code ui} package, registered when the
+ * extension starts:</p>
  *
  * <pre>{@code
- * @Override
- * public Optional<BoundingBoxUI> createBoundingBoxUI() {
- *     return Optional.of(new MyModalityBoundingBoxUI());
- * }
+ * ModalityRegistry.registerUi(MyModalityHandler.class, new MyModalityUi());
  * }</pre>
  *
  * @author Mike Nelson
@@ -102,52 +100,6 @@ public interface ModalityHandler {
             String modalityName, String objective, String detector, String wbMode);
 
     /**
-     * Creates an optional JavaFX UI component for modality-specific parameter controls.
-     *
-     * <p>This method allows modalities to provide custom user interface components that integrate
-     * with the bounding box dialog. These UI components typically allow users to override default
-     * acquisition parameters such as rotation angles, decimal exposure times, or other modality-specific
-     * settings before starting an acquisition.</p>
-     *
-     * <p>The returned {@link BoundingBoxUI} component is embedded in the main acquisition dialog
-     * and provides real-time parameter adjustment capabilities. When the user triggers an acquisition,
-     * the overrides from this UI are passed to {@link #applyAngleOverrides(List, Map)} to modify
-     * the default parameters.</p>
-     *
-     * <p><strong>UI Thread Safety:</strong> The JavaFX {@code Node} returned by the BoundingBoxUI
-     * must be created and accessed only on the JavaFX Application Thread. Implementations should
-     * ensure thread-safe access to any backing data models.</p>
-     *
-     * @return an {@code Optional} containing a {@link BoundingBoxUI} instance if this modality
-     *         provides custom UI controls, or {@code Optional.empty()} if no custom UI is needed.
-     *         The default implementation returns empty
-     * @implNote Consider implementing this method for modalities that benefit from user parameter
-     *           adjustment. Simple modalities with fixed parameters may safely use the default
-     *           implementation. UI components should be lightweight and responsive
-     * @see BoundingBoxUI#getAngleOverrides()
-     * @see #applyAngleOverrides(List, Map)
-     * @see qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI
-     */
-    default Optional<BoundingBoxUI> createBoundingBoxUI() {
-        return Optional.empty();
-    }
-
-    /**
-     * {@link #createBoundingBoxUI()} for a named modality. One handler serves every modality
-     * name its prefix matches, and a channel-based UI must show the channels of the modality
-     * the user picked, not those of whichever channel library comes first in the YAML (a
-     * config with Fluorescence ahead of BF_IF or lcpolscope showed the fluorescence channels
-     * for both). Handlers whose UI does not depend on the modality's own config need not
-     * override this.
-     *
-     * @param modalityName the modality key selected in the dialog, as in the YAML
-     * @return the UI, or empty
-     */
-    default Optional<BoundingBoxUI> createBoundingBoxUI(String modalityName) {
-        return createBoundingBoxUI();
-    }
-
-    /**
      * Applies user-provided parameter overrides to the default acquisition angles for this modality.
      *
      * <p>This method provides the mechanism for incorporating user customizations from the
@@ -175,7 +127,7 @@ public interface ModalityHandler {
      * @implNote Implementations should validate override values and handle edge cases gracefully.
      *           Consider preserving exposure times when only angle values are overridden. Document
      *           the expected override keys in the implementation class
-     * @see #createBoundingBoxUI()
+     * @see ModalityUi#createBoundingBoxUI(String)
      * @see BoundingBoxUI#getAngleOverrides()
      * @see qupath.ext.qpsc.modality.ppm.PPMModalityHandler#applyAngleOverrides(List, Map)
      */
@@ -232,36 +184,6 @@ public interface ModalityHandler {
      */
     default boolean reconstructsFromBackground() {
         return false;
-    }
-
-    /**
-     * Builds this modality's controls in the Live Viewer camera tab, into
-     * {@link LiveCameraHost#content()}. Runs on the FX thread.
-     *
-     * @return true when the controls are built; false leaves the panel to build its own
-     */
-    default boolean buildLiveCameraControls(String modality, LiveCameraHost host) {
-        return false;
-    }
-
-    /**
-     * Last check before a single acquisition, for anything the operator must confirm in person.
-     *
-     * @param modality the modality name
-     * @return false to stop the acquisition
-     */
-    default boolean confirmBeforeAcquiring(String modality) {
-        return true;
-    }
-
-    /**
-     * One check for a batch, asked while the operator is present.
-     *
-     * @param slides how many slides of this modality the batch holds
-     * @return false to stop the batch
-     */
-    default boolean confirmBatch(int slides) {
-        return true;
     }
 
     /**
@@ -598,18 +520,6 @@ public interface ModalityHandler {
     }
 
     /**
-     * Returns modality-specific menu items for the QPSC menu.
-     *
-     * <p>These items are added dynamically to a modality submenu during
-     * extension setup. Each item specifies an id, label, tooltip, and action.</p>
-     *
-     * @return list of menu item descriptors. Empty list if no menu contributions.
-     */
-    default List<ModalityMenuItem> getMenuContributions() {
-        return List.of();
-    }
-
-    /**
      * Returns the default white balance mode for this modality.
      *
      * <p>Used by the acquisition UI to set the initial WB mode dropdown value
@@ -790,7 +700,7 @@ public interface ModalityHandler {
      * }
      * }</pre>
      *
-     * @see #createBoundingBoxUI()
+     * @see ModalityUi#createBoundingBoxUI(String)
      * @see #applyAngleOverrides(List, Map)
      * @since 1.0
      */

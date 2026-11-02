@@ -8,8 +8,6 @@ import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
-import qupath.ext.qpsc.modality.ModalityMenuItem;
-import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.lib.images.ImageData;
 
@@ -28,7 +26,7 @@ import qupath.lib.images.ImageData;
  * <ul>
  *   <li>Automatic angle sequence loading from microscope configuration</li>
  *   <li>Decimal precision exposure times (e.g., 1.2ms, 500.0ms, 0.8ms)</li>
- *   <li>User-customizable angle overrides via {@link PPMBoundingBoxUI}</li>
+ *   <li>User-customizable angle overrides via {@code PPMBoundingBoxUI} (see {@code PPMModalityUi})</li>
  *   <li>Integration with {@link RotationManager} for hardware-specific angle conversion</li>
  *   <li>Post-processing directory discovery for birefringence and sum images</li>
  *   <li>Background validation with angle-specific exposure mismatch detection</li>
@@ -38,7 +36,7 @@ import qupath.lib.images.ImageData;
  * @author Mike Nelson
  * @since 1.0
  * @see qupath.ext.qpsc.modality.ModalityHandler
- * @see qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI
+ * @see qupath.ext.qpsc.modality.ppm.ui.PPMModalityUi
  * @see RotationManager
  */
 public class PPMModalityHandler implements ModalityHandler {
@@ -155,14 +153,6 @@ public class PPMModalityHandler implements ModalityHandler {
     @Override
     public Optional<ImageData.ImageType> getImageType() {
         return Optional.of(ImageData.ImageType.BRIGHTFIELD_H_E);
-    }
-
-    /**
-     * Creates the PPM-specific UI component for angle parameter customization.
-     */
-    @Override
-    public Optional<BoundingBoxUI> createBoundingBoxUI() {
-        return Optional.of(new PPMBoundingBoxUI());
     }
 
     /**
@@ -513,44 +503,6 @@ public class PPMModalityHandler implements ModalityHandler {
             return PPMPreferences.getUncrossedExposureMs();
         }
         return -1;
-    }
-
-    /**
-     * Returns PPM-specific menu items for calibration and optimization workflows.
-     */
-    @Override
-    public List<ModalityMenuItem> getMenuContributions() {
-        return List.of(
-                new ModalityMenuItem(
-                        "polarizerCalibration",
-                        "Polarizer Calibration (PPM)...",
-                        "Calibrate the polarizer rotation stage for polarized light microscopy (PPM). "
-                                + "Determines the correct rotation angles for optimal birefringence imaging.",
-                        () -> qupath.ext.qpsc.modality.ppm.workflow.PolarizerCalibrationWorkflow.run()),
-                new ModalityMenuItem(
-                        "ppmSensitivityTest",
-                        "PPM Rotation Sensitivity Test...",
-                        "Test PPM rotation stage sensitivity by acquiring images at precise angles. "
-                                + "Analyzes the impact of angular deviations on image quality and birefringence calculations. "
-                                + "Provides comprehensive analysis reports for validation and optimization.",
-                        () -> qupath.ext.qpsc.modality.ppm.workflow.PPMSensitivityTestWorkflow.run()),
-                new ModalityMenuItem(
-                        "birefringenceOptimization",
-                        "PPM Birefringence Optimization...",
-                        "Find the optimal polarizer angle for maximum birefringence signal contrast. "
-                                + "Systematically tests angles by acquiring paired images (+theta, -theta) and "
-                                + "computing their difference. Results include optimal angles, signal metrics, and "
-                                + "visualization plots. Supports multiple exposure modes (interpolate, calibrate, fixed).",
-                        () -> qupath.ext.qpsc.modality.ppm.workflow.BirefringenceOptimizationWorkflow.run()),
-                new ModalityMenuItem(
-                        "sunburstCalibration",
-                        "PPM Reference Slide...",
-                        "Create a hue-to-angle calibration from a PPM reference slide with sunburst pattern. "
-                                + "Acquires an image of radial spokes and creates a linear regression mapping "
-                                + "hue values to orientation angles for use in PPM analysis.",
-                        () -> qupath.ext.qpsc.modality.ppm.workflow.SunburstCalibrationWorkflow.run()));
-        // Analysis menu items (hue range, polarity plot, perpendicularity,
-        // batch analysis, back-propagate) are provided by qupath-extension-ppm
     }
 
     // ========================================================================

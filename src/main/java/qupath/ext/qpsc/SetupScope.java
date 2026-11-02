@@ -129,6 +129,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // attach it even when file logging is disabled (the default).
         SessionLogBuffer.init();
 
+        // Each modality's panels, confirmations and menu items, before anything builds a menu.
+        ModalityUis.registerAll();
+
         // 1) Register all our persistent preferences
         QPPreferenceDialog.installPreferences(qupath);
 
@@ -1022,7 +1025,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 continue;
             }
 
-            var contributions = handler.getMenuContributions();
+            var contributions = ModalityRegistry.getUi(handler).getMenuContributions();
             if (!contributions.isEmpty()) {
                 menuHandlersAdded.add(handler);
                 String name = handler.getDisplayName();

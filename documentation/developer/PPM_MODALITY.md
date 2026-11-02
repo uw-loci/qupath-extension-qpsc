@@ -26,18 +26,15 @@ classDiagram
     class ModalityHandler {
         <<interface>>
         +getRotationAngles(modality, objective, detector) CompletableFuture~List~AngleExposure~~
-        +createBoundingBoxUI() Optional~BoundingBoxUI~
         +applyAngleOverrides(angles, overrides) List~AngleExposure~
         +getImageType() Optional~ImageType~
         +validateBackgroundSettings(...) BackgroundValidationResult
-        +getModalityMenuContributions() List~ModalityMenuItem~
         +prepareForAcquisition(objective, detector)
         +getPostProcessingDirectorySuffixes() List~String~
     }
 
     class PPMModalityHandler {
         +getRotationAngles() creates RotationManager
-        +createBoundingBoxUI() returns PPMBoundingBoxUI
         +applyAngleOverrides() adjusts +/- angles
         +getImageType() returns BRIGHTFIELD_H_E
         +prepareForAcquisition() loads exposure profile
@@ -97,7 +94,7 @@ classDiagram
 
     ModalityHandler <|.. PPMModalityHandler
     PPMModalityHandler --> RotationManager
-    PPMModalityHandler --> PPMBoundingBoxUI
+    PPMModalityUi --> PPMBoundingBoxUI
     PPMModalityHandler --> PPMPreferences
     RotationManager --> RotationStrategy
     RotationStrategy <|.. PPMRotationStrategy
@@ -371,5 +368,6 @@ The new code path lives in `_acquire_tile_angles_angle_outer` in `microscope_com
 | `modality/ppm/RotationStrategy.java` | PPMRotationStrategy + NoRotationStrategy |
 | `modality/ppm/PPMPreferences.java` | Persistent exposure/angle defaults |
 | `modality/ppm/ui/PPMBoundingBoxUI.java` | Angle selection checkboxes, override spinners |
+| `modality/ppm/ui/PPMModalityUi.java` | PPM's UI half: builds `PPMBoundingBoxUI` and the PPM menu items (polarizer calibration, sensitivity test, birefringence optimization, reference slide) |
 | `service/AngleResolutionService.java` | Orchestrates the resolution pipeline |
 | `service/AcquisitionCommandBuilder.java` | Formats `--angles` and `--exposures` |

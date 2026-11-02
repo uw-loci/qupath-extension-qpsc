@@ -351,7 +351,7 @@ public class BoundedAcquisitionWorkflow {
                                     tempTileDir);
                         }
 
-                        if (!ModalityRegistry.getHandler(result.modality()).confirmBeforeAcquiring(result.modality())) {
+                        if (!ModalityRegistry.getUi(result.modality()).confirmBeforeAcquiring(result.modality())) {
                             return;
                         }
 

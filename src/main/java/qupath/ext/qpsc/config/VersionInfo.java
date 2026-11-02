@@ -1,6 +1,5 @@
 package qupath.ext.qpsc.config;
 
-import qupath.ext.qpsc.SetupScope;
 import qupath.lib.common.GeneralTools;
 
 /**
@@ -18,7 +17,9 @@ public class VersionInfo {
      * or "dev" if running from an IDE without packaging.
      */
     public static String getQpscVersion() {
-        String v = GeneralTools.getPackageVersion(SetupScope.class);
+        // Implementation-Version is in the jar manifest's main section, so it applies to every
+        // package in the jar; this class's own package reads it without naming SetupScope.
+        String v = GeneralTools.getPackageVersion(VersionInfo.class);
         return v != null ? v : "dev";
     }
 

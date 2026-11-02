@@ -32,10 +32,28 @@ class ModalityHooksTest {
 
     @Test
     void otherModalitiesAskNothingBeforeAcquiring() {
+        qupath.ext.qpsc.ModalityUis.registerAll();
         for (String other : new String[] {"ppm", "bf", "fl", "shg", null}) {
-            assertTrue(handler(other).confirmBeforeAcquiring(other));
-            assertTrue(handler(other).confirmBatch(3));
+            assertTrue(ModalityRegistry.getUi(other).confirmBeforeAcquiring(other));
+            assertTrue(ModalityRegistry.getUi(other).confirmBatch(3));
         }
+    }
+
+    @Test
+    void eachModalityGetsItsOwnUiHalf() {
+        qupath.ext.qpsc.ModalityUis.registerAll();
+        assertInstanceOf(qupath.ext.qpsc.modality.ppm.ui.PPMModalityUi.class, ModalityRegistry.getUi("ppm_20x"));
+        assertInstanceOf(
+                qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeModalityUi.class,
+                ModalityRegistry.getUi("lcpolscope"));
+        assertInstanceOf(qupath.ext.qpsc.modality.ui.BrightfieldModalityUi.class, ModalityRegistry.getUi("bf"));
+        assertInstanceOf(qupath.ext.qpsc.modality.widefield.ui.WidefieldModalityUi.class, ModalityRegistry.getUi("fl"));
+        // BF+IF's handler extends the widefield one, so it gets the widefield picker.
+        assertInstanceOf(
+                qupath.ext.qpsc.modality.widefield.ui.WidefieldModalityUi.class, ModalityRegistry.getUi("bf_if"));
+        // Laser scanning has no panel of its own.
+        assertSame(ModalityUi.NONE, ModalityRegistry.getUi("shg"));
+        assertSame(ModalityUi.NONE, ModalityRegistry.getUi((ModalityHandler) null));
     }
 
     @Test

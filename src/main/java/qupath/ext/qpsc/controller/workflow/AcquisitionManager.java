@@ -661,7 +661,7 @@ public class AcquisitionManager {
             String modality = state.sample.modality();
             String objective = state.sample.objective();
             String detector = state.sample.detector();
-            if (!ModalityRegistry.getHandler(modality).confirmBeforeAcquiring(modality)) {
+            if (!ModalityRegistry.getUi(modality).confirmBeforeAcquiring(modality)) {
                 return null;
             }
             // The chosen white-balance mode's own calibration, now that it is known. The

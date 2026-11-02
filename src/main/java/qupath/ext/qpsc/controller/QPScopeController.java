@@ -136,7 +136,7 @@ public class QPScopeController {
             }
             // PPM workflows (polarizerCalibration, birefringenceOptimization,
             // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
-            // via PPMModalityHandler.getMenuContributions() -- no case statements needed
+            // via PPMModalityUi.getMenuContributions() -- no case statements needed
             case "autofocusEditor" -> {
                 logger.debug("Launching autofocus settings editor");
                 AutofocusEditorWorkflow.run();

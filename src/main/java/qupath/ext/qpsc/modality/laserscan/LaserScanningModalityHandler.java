@@ -5,7 +5,6 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
-import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.lib.images.ImageData;
 
@@ -64,12 +63,5 @@ public class LaserScanningModalityHandler implements ModalityHandler {
     public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
         // Monochrome detector -- no Bayer pattern to decode
         builder.enableDebayer(false);
-    }
-
-    @Override
-    public List<ModalityMenuItem> getMenuContributions() {
-        // No laser-scanning-specific calibration workflows yet.
-        // Future: PMT gain optimization, laser power calibration, etc.
-        return List.of();
     }
 }
