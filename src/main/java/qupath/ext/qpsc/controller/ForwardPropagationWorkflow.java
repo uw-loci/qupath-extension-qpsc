@@ -1011,7 +1011,7 @@ public class ForwardPropagationWorkflow {
 
         // allowAutoCreate is kept in the signature but unused.
         if (allowAutoCreate) {
-            logger.debug("propagateBackFanOut: allowAutoCreate is now a no-op under Step B (no flipped siblings).");
+            logger.debug("propagateBackFanOut: allowAutoCreate has no effect (no flipped siblings).");
         }
         logger.info("Back-prop complete: {} sibling(s) updated, {} object(s) total", siblingsUpdated, totalWritten);
         return new FanOutResult(totalWritten, siblingsUpdated, 0, perSiblingLog, writtenByEntry);

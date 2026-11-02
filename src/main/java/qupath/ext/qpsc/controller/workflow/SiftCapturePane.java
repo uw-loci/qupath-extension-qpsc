@@ -457,7 +457,7 @@ class SiftCapturePane extends VBox {
             SweepAutofocusRunner.SweepResult sweep =
                     SweepAutofocusRunner.run(controller, configPath, outputPath, objective, false);
             if (sweep.cancelled()) {
-                logger.info("Post-SIFT refocus cancelled by the operator");
+                logger.info("Post-SIFT refocus canceled by the operator");
             } else {
                 logger.info(
                         "Post-SIFT refocus: Z {} -> {} (shift {})", sweep.initialZ(), sweep.finalZ(), sweep.zShift());

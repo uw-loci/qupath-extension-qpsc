@@ -494,7 +494,7 @@ public class LCCalibrationWorkflow {
                 new Spinner<>(10, 100, savedPercent >= 10 && savedPercent <= 100 ? savedPercent : 100, 10);
         fieldSpinner.setEditable(true);
         fieldSpinner.setPrefWidth(80);
-        HBox fieldRow = new HBox(6, fieldSpinner, new Label("% of the field, centred (100 = whole field)"));
+        HBox fieldRow = new HBox(6, fieldSpinner, new Label("% of the field, centered (100 = whole field)"));
         fieldRow.setAlignment(Pos.CENTER_LEFT);
 
         GridPane grid = new GridPane();
@@ -823,7 +823,7 @@ public class LCCalibrationWorkflow {
         // this illumination, so this is the moment to act on it.
         ApplySettings settings = chooseApplySettings(result);
         if (settings == null) {
-            logger.info("LC palette not applied: the Apply settings step was cancelled");
+            logger.info("LC palette not applied: the Apply settings step was canceled");
             return;
         }
         List<String> summary;

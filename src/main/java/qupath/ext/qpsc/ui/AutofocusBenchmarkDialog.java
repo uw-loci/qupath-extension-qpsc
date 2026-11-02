@@ -615,7 +615,7 @@ public class AutofocusBenchmarkDialog {
 
                 // Show dialog and complete future
                 dialog.showAndWait().ifPresentOrElse(future::complete, () -> {
-                    logger.info("Autofocus benchmark dialog cancelled");
+                    logger.info("Autofocus benchmark dialog canceled");
                     future.complete(null);
                 });
 

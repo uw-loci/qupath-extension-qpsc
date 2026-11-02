@@ -12,7 +12,7 @@ public final class OrientationColormap {
     /** The three maps, by their config names. */
     public enum Kind {
         UNIFORM("uniform", "Uniform lightness"),
-        PPM("ppm", "PPM colours"),
+        PPM("ppm", "PPM colors"),
         HSV("hsv", "HSV rainbow (OpenPolScope)");
 
         private final String configName;

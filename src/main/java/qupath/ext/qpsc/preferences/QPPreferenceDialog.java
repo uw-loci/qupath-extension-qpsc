@@ -587,7 +587,7 @@ public class QPPreferenceDialog {
                         + "region and match the camera against the macro image, to confirm the "
                         + "slide is still where its alignment says.\n"
                         + "\n"
-                        + "This is the only check that can catch the stage not travelling as far "
+                        + "This is the only check that can catch the stage not traveling as far "
                         + "as it was told. The controller reports the step count it was given, so "
                         + "a commanded position and the position read back always agree whether or "
                         + "not the stage followed -- on 2026-10-02 the Micro-Manager log showed a "
@@ -618,7 +618,7 @@ public class QPPreferenceDialog {
                         + "a quarter of the time -- usually at the first tile of a region, where "
                         + "the bad value then seeds every tile around it.\n"
                         + "\n"
-                        + "off -- today's behaviour: each tile holds the Z of the nearest focused "
+                        + "off -- today's behavior: each tile holds the Z of the nearest focused "
                         + "tile, whatever that Z was.\n"
                         + "observe -- fit the surface and log every disagreement, but change "
                         + "nothing. Start here: one run tells you what enforcing would have done.\n"
@@ -627,7 +627,7 @@ public class QPPreferenceDialog {
                         + "\n"
                         + "The surface declines to act unless it has enough spread-out, mutually "
                         + "agreeing points, so a folded section or a single-row annotation falls "
-                        + "back to the 'off' behaviour on its own.")
+                        + "back to the 'off' behavior on its own.")
                 .build());
 
         items.add(new PropertyItemBuilder<>(focusSurveyPointsProperty, Integer.class)
@@ -636,7 +636,7 @@ public class QPPreferenceDialog {
                 .description("Measure the focus surface at this many spread-out, tissue-bearing "
                         + "tiles BEFORE the tile loop, instead of discovering it tile by tile.\n"
                         + "\n"
-                        + "0 disables the survey, which is the current behaviour.\n"
+                        + "0 disables the survey, which is the current behavior.\n"
                         + "\n"
                         + "Needs 'Focus surface' set to observe or enforce -- the survey measures "
                         + "points for the surface to be fitted to, so with the surface off the "

@@ -79,7 +79,7 @@ public class BirefringenceOptimizationWorkflow {
                                 // Start optimization with progress dialog (all on FX thread initially)
                                 startOptimizationWithProgress(params);
                             } else {
-                                logger.info("Birefringence optimization cancelled by user");
+                                logger.info("Birefringence optimization canceled by user");
                             }
                         })
                         .exceptionally(ex -> {
@@ -137,7 +137,7 @@ public class BirefringenceOptimizationWorkflow {
         cancelButton.setOnAction(e -> {
             cancelled.set(true);
             progressStage.close();
-            logger.info("Birefringence optimization cancelled by user");
+            logger.info("Birefringence optimization canceled by user");
         });
 
         VBox content = new VBox(15);
@@ -333,7 +333,7 @@ public class BirefringenceOptimizationWorkflow {
                     statusCallback);
 
             if (cancelled.get()) {
-                logger.info("Optimization was cancelled by user");
+                logger.info("Optimization was canceled by user");
                 return;
             }
 
@@ -359,7 +359,7 @@ public class BirefringenceOptimizationWorkflow {
 
         } catch (Exception e) {
             if (cancelled.get()) {
-                logger.info("Optimization was cancelled during execution");
+                logger.info("Optimization was canceled during execution");
                 return;
             }
 

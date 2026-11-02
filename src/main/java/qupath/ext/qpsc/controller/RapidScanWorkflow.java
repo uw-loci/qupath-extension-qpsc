@@ -409,12 +409,12 @@ public class RapidScanWorkflow {
             if (selectedObj != null
                     && selectedDet != null
                     && !QPScopeChecks.validateObjectivePixelSize(selectedObj, selectedDet, "brightfield", pxSize)) {
-                statusLabel.setText("Workflow cancelled -- objective mismatch.");
+                statusLabel.setText("Workflow canceled -- objective mismatch.");
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }
             if (selectedDet != null && !QPScopeChecks.validateCameraRoi(selectedDet)) {
-                statusLabel.setText("Workflow cancelled -- camera ROI mismatch.");
+                statusLabel.setText("Workflow canceled -- camera ROI mismatch.");
                 statusLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.ERROR + ";");
                 return;
             }

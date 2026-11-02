@@ -239,7 +239,7 @@ public class ZBarPanel extends HBox {
         maxZFocusBtn.setMinWidth(javafx.scene.layout.Region.USE_PREF_SIZE);
         maxZFocusBtn.setTooltip(new javafx.scene.control.Tooltip(
                 "Move Z to the position of the highest recorded focus metric in the current trace."
-                        + " Greyed out when no trace samples are present."));
+                        + " Grayed out when no trace samples are present."));
         maxZFocusBtn.setOnAction(e -> {
             Double argmaxZ = findFocusArgmaxZ();
             if (argmaxZ == null) return;

@@ -84,7 +84,7 @@ public final class AutofocusEvent {
                 yield what + (end.z != null ? String.format(": focus at Z %.2f", end.z) : ": done") + shift + time;
             }
             case "failed" -> what + ": no focus found" + reason + time;
-            case "aborted" -> what + ": cancelled" + time;
+            case "aborted" -> what + ": canceled" + time;
             case "unavailable" -> what + ": not run" + reason;
             default -> what + ": stopped with an error" + reason + time;
         };

@@ -336,7 +336,7 @@ public final class BackgroundIlluminationCheck {
         var response = alert.showAndWait();
         boolean proceed = response.isPresent() && response.get() == proceedButton;
         if (!proceed) {
-            logger.info("Acquisition cancelled by user after background/acquisition settings mismatch warning");
+            logger.info("Acquisition canceled by user after background/acquisition settings mismatch warning");
         }
         return proceed;
     }

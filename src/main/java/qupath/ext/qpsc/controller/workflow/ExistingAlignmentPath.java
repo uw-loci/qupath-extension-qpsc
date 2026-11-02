@@ -204,7 +204,7 @@ public class ExistingAlignmentPath {
         return GreenBoxPreviewController.showPreviewDialog(macroContext.displayImage, params)
                 .thenApply(result -> {
                     if (result == null) {
-                        throw new CancellationException("Green box detection cancelled by user");
+                        throw new CancellationException("Green box detection canceled by user");
                     }
 
                     logger.info("Green box detected with confidence {}", result.getConfidence());
@@ -1008,8 +1008,8 @@ public class ExistingAlignmentPath {
                     return CompletableFuture.completedFuture(annotations);
 
                 case CANCEL:
-                    logger.info("User cancelled workflow due to no annotations");
-                    throw new CancellationException("Workflow cancelled - no annotations available");
+                    logger.info("User canceled workflow due to no annotations");
+                    throw new CancellationException("Workflow canceled - no annotations available");
 
                 default:
                     throw new RuntimeException("Unexpected annotation action: " + action);

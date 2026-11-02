@@ -161,7 +161,7 @@ Every BoundingBox acquisition registers its own per-slide alignment automaticall
 |-------|--------|
 | Stage bounds `(x1, y1, x2, y2)` in µm | User-entered in the BoundingBox dialog, carried through `StitchingMetadata.stageBoundsX1Um/...` |
 | Stitched image pixel dimensions `(widthPx, heightPx)` | Read from the stitched file's `ImageServer` after import |
-| Orientation | Guaranteed canonical — the stitcher already honours `StageImageTransform.stitcherFlipFlags()` when writing output |
+| Orientation | Guaranteed canonical — the stitcher already honors `StageImageTransform.stitcherFlipFlags()` when writing output |
 
 **Math** (in `AffineTransformManager.buildTransformFromStageBounds`):
 
@@ -328,7 +328,7 @@ sift_flip = required XOR applied XOR detector_flip
 
 - **Open entry = flipped sibling** (the normal manual-alignment case): the sibling was built from `required`, so `applied == required` and `required XOR applied = (false, false)`. No server flip — correct, because the sibling pixels are already camera-oriented.
 - **Open entry = unflipped base** (the `awaitOpenEntry` timeout "proceeding anyway" path): `applied = (false, false)`, so `sift_flip = required` — the base is flipped up to camera orientation. Correct.
-- **Non-flipped scope**: `required = applied = detector = (false, false)` → `(false, false)`. Identical to earlier behaviour.
+- **Non-flipped scope**: `required = applied = detector = (false, false)` → `(false, false)`. Identical to earlier behavior.
 
 The earlier formula `sift_flip = entry_flip XOR detector_flip` assumed the open entry was always the unflipped base (`FLIP = 0/0`). That assumption is false for **every** SIFT caller — all run downstream of `validateAndFlipIfNeeded` — so on a flipped scope it **re-applied** the flip already in the sibling's pixels, mirroring the WSI against the camera (OWS3: 44k keypoints → 5 inliers → FAILED). This is the same error class as the 2026-08-05 Stage Map fix, where the source preset's `flipMacroX` was double-counted into a canvas mirror that had already applied it.
 
@@ -380,7 +380,7 @@ The `--hint-z` flag tells the server to start its autofocus search near the pred
 > `(rotated N)(flipped XY)` entry is in **camera orientation** (camera-X = QuPath-X = stage-X), so
 > entry->stage should be **diagonal**, not axis-swapped. The axis swap came from an explicit `R270`
 > in `ExistingAlignmentPath` (`ef9926e5`) landing on the already-rotated entry via a pure-scale
-> `fullResToMacro`; `TilingUtilities`' FOV-swap then cancelled it at the level of stage *steps* ->
+> `fullResToMacro`; `TilingUtilities`' FOV-swap then canceled it at the level of stage *steps* ->
 > correct stitch but **portrait tiles rotated 90 deg from the camera**. Both were removed together
 > (diagonal transform + no FOV-swap => landscape tiles). **If the 2026-07-12 test confirms, rewrite
 > sections 1-2** to describe the diagonal transform as canonical and delete the FOV-swap/Display-note

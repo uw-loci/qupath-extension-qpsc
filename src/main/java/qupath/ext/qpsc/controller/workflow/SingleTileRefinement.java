@@ -180,7 +180,7 @@ public class SingleTileRefinement {
                                         : "You will then manually adjust the stage position to match."))
                 .thenAccept(selectedTile -> {
                     if (selectedTile == null) {
-                        logger.info("User cancelled tile selection; refinement cancelled");
+                        logger.info("User canceled tile selection; refinement canceled");
                         future.complete(RefinementResult.cancelled(initialTransform, null));
                         return;
                     }
@@ -633,7 +633,7 @@ public class SingleTileRefinement {
         // workflow is canceled. "Skip" on the capture pane is the explicit way to acquire
         // with the prior alignment.
         dialogStage.setOnCloseRequest(e -> {
-            logger.info("Refinement dialog closed with the window's X; refinement cancelled");
+            logger.info("Refinement dialog closed with the window's X; refinement canceled");
             SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             future.complete(RefinementResult.cancelled(initialTransform, selectedTile));
         });
@@ -649,7 +649,7 @@ public class SingleTileRefinement {
                         return;
                     }
                     logger.warn("The viewer switched to another image while the refinement dialog was open; "
-                            + "refinement cancelled");
+                            + "refinement canceled");
                     SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                     dialogStage.close();
                     future.complete(RefinementResult.cancelled(initialTransform, selectedTile));

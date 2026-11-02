@@ -102,7 +102,7 @@ public final class OrientationPairing {
                     ? Optional.of(new Source(
                             new OrientationPairServer(open, null),
                             null,
-                            name + " (no retardance image found: colour only)"))
+                            name + " (no retardance image found: color only)"))
                     : Optional.empty();
         }
         ImageServer<BufferedImage> other = partner.get().getServerBuilder().build();

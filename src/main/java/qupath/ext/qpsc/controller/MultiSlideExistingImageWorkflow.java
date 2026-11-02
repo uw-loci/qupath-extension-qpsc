@@ -222,7 +222,7 @@ public final class MultiSlideExistingImageWorkflow {
 
         MultiSlideAssignmentDialog.show(gui.getStage(), project).thenAccept(result -> {
             if (result == null) {
-                logger.info("MS workflow cancelled at assignment dialog");
+                logger.info("MS workflow canceled at assignment dialog");
                 return;
             }
             String runId = UUID.randomUUID().toString();
@@ -760,7 +760,7 @@ public final class MultiSlideExistingImageWorkflow {
             aborted.set(true);
             abortBtn.setText("Cancelling...");
             abortBtn.setDisable(true);
-            abortBtn.setTooltip(new Tooltip("Cancelling the running acquisition and landing the stage safely..."));
+            abortBtn.setTooltip(new Tooltip("Canceling the running acquisition and landing the stage safely..."));
             setPanelBusy(states, driverButtons, finishBtn, true);
             // Trip the token: flips the active DualProgressDialog's canceled flag + sends CANCEL.
             cancelToken.cancel();
@@ -784,7 +784,7 @@ public final class MultiSlideExistingImageWorkflow {
             // batch starts rather than an hour in, with nobody in the room. Advisory only: the
             // operator may plan to draw regions as each slide comes up.
             if (!confirmAnnotationsPreflight(gui, states)) {
-                logger.info("MS workflow: Set Up All cancelled at the annotation pre-flight, runId={}", runId);
+                logger.info("MS workflow: Set Up All canceled at the annotation pre-flight, runId={}", runId);
                 return;
             }
             boolean reuse = resolveReuseForBatch(reuseDecision);
@@ -1235,7 +1235,7 @@ public final class MultiSlideExistingImageWorkflow {
                         logger.info("MS workflow: slot {} acquired", s.assignment.position());
                     } else {
                         logger.info(
-                                "MS workflow: slot {} did not acquire (cancelled / gated); leaving In progress",
+                                "MS workflow: slot {} did not acquire (canceled / gated); leaving In progress",
                                 s.assignment.position());
                     }
                     refreshFinish.run();
@@ -1304,7 +1304,7 @@ public final class MultiSlideExistingImageWorkflow {
                         logger.info("MS workflow: slot {} set up (ready to acquire)", s.assignment.position());
                     } else {
                         logger.info(
-                                "MS workflow: slot {} setup cancelled / gated; leaving In progress",
+                                "MS workflow: slot {} setup canceled / gated; leaving In progress",
                                 s.assignment.position());
                     }
                     refreshFinish.run();

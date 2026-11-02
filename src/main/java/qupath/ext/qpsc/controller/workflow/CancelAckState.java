@@ -24,7 +24,7 @@ public final class CancelAckState {
     }
 
     /** Status text while waiting. */
-    public static final String WAITING_TEXT = "Cancelling... waiting for the microscope to stop";
+    public static final String WAITING_TEXT = "Canceling... waiting for the microscope to stop";
 
     /** Status text after the timeout. */
     public static final String TIMED_OUT_TEXT =

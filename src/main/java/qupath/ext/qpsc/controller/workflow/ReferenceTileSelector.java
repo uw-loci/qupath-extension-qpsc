@@ -179,7 +179,7 @@ public final class ReferenceTileSelector {
         if (tissueByName.isEmpty() && !tissue.isEmpty()) {
             logger.warn(
                     "Reference tile selection: {} annotation(s) but none carry a name, so tiles cannot be matched "
-                            + "to them; falling back to the neighbour-ring filter alone",
+                            + "to them; falling back to the neighbor-ring filter alone",
                     tissue.size());
         }
         List<PathObject> chosen = select(tiles, tissueByName, gui.getImageData().getServer(), k);

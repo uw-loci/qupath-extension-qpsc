@@ -766,8 +766,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         MenuItem orientationColourViewOption = new MenuItem(res.getString("menu.orientationColourView"));
         setMenuItemTooltip(
                 orientationColourViewOption,
-                "Colour an LC-PolScope orientation image live, with its retardance image setting the "
-                        + "brightness. Change the colour map and brightness ceiling and see it at once; "
+                "Color an LC-PolScope orientation image live, with its retardance image setting the "
+                        + "brightness. Change the color map and brightness ceiling and see it at once; "
                         + "nothing is re-stitched or saved.");
         orientationColourViewOption.setOnAction(e -> OrientationColorViewWindow.show(qupath));
 

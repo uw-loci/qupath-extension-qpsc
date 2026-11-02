@@ -146,8 +146,8 @@ final class LCVoltageSweepPlots {
             hi = Math.max(hi, s.volts());
         }
         Label caption = note("Blue is the retardance this crystal really has at each voltage, from its own "
-                + "fringes; grey is what the Meadowlark adapter's table assumes. Orange marks the palette's "
-                + "states at the volts the adapter drives them. Where blue and grey part, every palette number "
+                + "fringes; gray is what the Meadowlark adapter's table assumes. Orange marks the palette's "
+                + "states at the volts the adapter drives them. Where blue and gray part, every palette number "
                 + "in waves is off by the gap.");
         if (!(hi >= lo)) {
             VBox box = new VBox(6, full, caption);

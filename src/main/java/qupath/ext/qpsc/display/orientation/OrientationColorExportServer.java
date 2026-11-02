@@ -33,7 +33,7 @@ final class OrientationColorExportServer extends AbstractTileableImageServer {
                 .channels(ImageChannel.getDefaultRGBChannels())
                 .pixelType(PixelType.UINT8)
                 .rgb(true)
-                .name("Orientation colour (" + settings.kind().configName() + ")")
+                .name("Orientation color (" + settings.kind().configName() + ")")
                 .build();
     }
 
@@ -61,7 +61,7 @@ final class OrientationColorExportServer extends AbstractTileableImageServer {
 
     @Override
     public String getServerType() {
-        return "Orientation colour export";
+        return "Orientation color export";
     }
 
     @Override

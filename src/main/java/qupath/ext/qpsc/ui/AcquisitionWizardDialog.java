@@ -1095,9 +1095,9 @@ public class AcquisitionWizardDialog {
                             javafx.application.Platform.runLater(() -> {
                                 endValidation.run();
                                 if ("true".equals(result.get("cancelled"))) {
-                                    logger.info("Autofocus validation cancelled: {}", result.get("message"));
+                                    logger.info("Autofocus validation canceled: {}", result.get("message"));
                                     qupath.fx.dialogs.Dialogs.showInfoNotification(
-                                            "Autofocus Validation", "Cancelled. Z is back where the test started.");
+                                            "Autofocus Validation", "Canceled. Z is back where the test started.");
                                 } else {
                                     qupath.ext.qpsc.controller.AutofocusEditorWorkflow.showValidationResultStatic(
                                             result);
@@ -1622,7 +1622,7 @@ public class AcquisitionWizardDialog {
             logger.warn("User proceeding with calibration warnings: {}", warnings);
             return true;
         }
-        logger.info("User cancelled acquisition due to calibration warnings");
+        logger.info("User canceled acquisition due to calibration warnings");
         return false;
     }
 }

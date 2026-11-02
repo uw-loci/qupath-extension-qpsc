@@ -47,7 +47,7 @@ Sets collected before the calibration are stale in every background profile, and
 
 ### Background Status Per WB Mode
 
-Below the controls, the dialog shows a live status list of background coverage for each WB mode the active modality supports. Each row is colour-coded:
+Below the controls, the dialog shows a live status list of background coverage for each WB mode the active modality supports. Each row is color-coded:
 
 - **[OK]** -- backgrounds exist and match the active calibration.
 - **[STALE]** -- backgrounds exist but the calibration changed since they were collected; re-run for that mode to refresh.
@@ -151,7 +151,7 @@ For each in-use channel in the selected profile:
 Backgrounds are filed by background profile, then hardware: `<base>/profiles/<profile id>/<detector>/<modality>/<mag>/`. Folders directly under `<base>` (the layout from before profiles) are not read; the Background Profiles dialog can move them into a profile. Below the profile folder, the white-balance mode determines whether a further subfolder is added:
 
 - **Monochrome / no white balance (`off`)** -- saved to the **flat** `.../<detector>/<modality>/<mag>/` folder (e.g. `.../profiles/carrier4/HAMAMATSU_DCAM_01/Brightfield/10x/background.tif`). There is **no** `off` subfolder.
-- **Colour WB modes (`simple`, `per_angle`, `camera_awb`)** -- saved under a `<wbMode>/` subfolder so the modes coexist.
+- **Color WB modes (`simple`, `per_angle`, `camera_awb`)** -- saved under a `<wbMode>/` subfolder so the modes coexist.
 
 Collection and acquisition resolve this path through the same helper, so a freshly collected background lands exactly where acquisition reads it. (A prior bug filed monochrome backgrounds in a stray `off/` subfolder while acquisition kept reading the flat path and silently reused a stale background -- fixed; re-collect once to overwrite any stale flat-folder file.)
 

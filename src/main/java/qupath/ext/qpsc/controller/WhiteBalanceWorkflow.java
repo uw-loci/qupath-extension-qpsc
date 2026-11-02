@@ -73,7 +73,7 @@ public class WhiteBalanceWorkflow {
         WhiteBalanceDialog.showDialog()
                 .thenAccept(result -> {
                     if (result == null) {
-                        logger.info("White balance calibration cancelled by user");
+                        logger.info("White balance calibration canceled by user");
                         // Don't close client - it's the singleton's shared connection
                         return;
                     }
@@ -162,7 +162,7 @@ public class WhiteBalanceWorkflow {
                                         ? result.getSimpleParams().detector()
                                         : result.getPPMParams().detector();
                                 if (!validateObjectiveBeforeCalibration(wbObjective, wbDetector, result.isSimple())) {
-                                    logger.info("White balance cancelled by objective pixel-size mismatch");
+                                    logger.info("White balance canceled by objective pixel-size mismatch");
                                     return;
                                 }
                                 if (result.isSimple()) {
@@ -171,7 +171,7 @@ public class WhiteBalanceWorkflow {
                                     runPPMCalibration(client, result.getPPMParams());
                                 }
                             } else {
-                                logger.info("White balance cancelled by user at confirmation");
+                                logger.info("White balance canceled by user at confirmation");
                             }
                         });
                     });

@@ -26,9 +26,9 @@ light source, or optical path has changed.
 
 ## Options
 
-Modes are now grouped into colour-coded collapsible sections so the active mode is unambiguous at a glance. Each mode's header band identifies which calibration regime will be written, and only one section needs to be expanded at a time:
+Modes are now grouped into color-coded collapsible sections so the active mode is unambiguous at a glance. Each mode's header band identifies which calibration regime will be written, and only one section needs to be expanded at a time:
 
-| Section | Header colour | What it produces |
+| Section | Header color | What it produces |
 |---|---|---|
 | **Simple (90 deg)** | Blue | Calibrates R/G/B at 90 deg first, then rotates to each remaining angle and re-calibrates using that result as a seed. ~1-2 min for all angles. |
 | **PPM White Balance (4 Angles)** | Distinct accent | Independent calibration at all 4 angles with per-angle target intensities; most accurate. |

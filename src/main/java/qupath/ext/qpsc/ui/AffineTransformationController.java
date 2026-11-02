@@ -217,7 +217,7 @@ public class AffineTransformationController {
                 resolveReferenceTile(gui, tileSelectionPrompt)
                         .thenCompose(refTile -> {
                             if (refTile == null) {
-                                logger.info("User cancelled reference tile selection.");
+                                logger.info("User canceled reference tile selection.");
                                 future.complete(null);
                                 return CompletableFuture.completedFuture(null);
                             }
@@ -274,7 +274,7 @@ public class AffineTransformationController {
                                             gui, refTile, "Reference tile alignment", confirmInstruction)
                                     .thenCompose(aligned -> {
                                         if (!aligned) {
-                                            logger.info("User cancelled at manual alignment step.");
+                                            logger.info("User canceled at manual alignment step.");
                                             future.complete(null);
                                             return CompletableFuture.completedFuture(null);
                                         }
@@ -396,7 +396,7 @@ public class AffineTransformationController {
                 UIFunctions.stageAlignmentConfirmAsync(gui, tile, "Refinement tile alignment", refineInstruction)
                         .thenAccept(ok -> {
                             if (!ok) {
-                                logger.info("User cancelled during secondary alignment at tile '{}'.", tile.getName());
+                                logger.info("User canceled during secondary alignment at tile '{}'.", tile.getName());
                                 tileFuture.complete(null);
                                 return;
                             }

@@ -96,7 +96,7 @@ class AutofocusTraceReplyTest {
                 "Tile 3 of 10 (drift check): no focus found: peak at the edge, 40.0 s",
                 AutofocusEvent.describeOutcome(tile, end("failed", null, 40.0, "peak at the edge")));
         assertEquals(
-                "full search: cancelled, 3.0 s",
+                "full search: canceled, 3.0 s",
                 AutofocusEvent.describeOutcome(start(null, "sweep", null), end("aborted", null, 3.0, null)));
         assertEquals(
                 "streaming: not run: no calibration",

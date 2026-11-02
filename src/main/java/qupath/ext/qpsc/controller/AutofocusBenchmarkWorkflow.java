@@ -107,7 +107,7 @@ public class AutofocusBenchmarkWorkflow {
             AutofocusBenchmarkDialog.showDialog(zPos, null)
                     .thenAccept(params -> {
                         if (params == null) {
-                            logger.info("Benchmark cancelled by user");
+                            logger.info("Benchmark canceled by user");
                             closeClient(client);
                             return;
                         }
@@ -184,7 +184,7 @@ public class AutofocusBenchmarkWorkflow {
                                     // Run benchmark
                                     runBenchmark(client, params);
                                 } else {
-                                    logger.info("Benchmark cancelled by user at confirmation");
+                                    logger.info("Benchmark canceled by user at confirmation");
                                     closeClient(client);
                                 }
                             });
@@ -358,8 +358,8 @@ public class AutofocusBenchmarkWorkflow {
                                 // Check if this was a user cancellation
                                 if (cancelled.get()) {
                                     Alert alert = new Alert(Alert.AlertType.INFORMATION);
-                                    alert.setTitle("Benchmark Cancelled");
-                                    alert.setHeaderText("Benchmark was cancelled by user");
+                                    alert.setTitle("Benchmark Canceled");
+                                    alert.setHeaderText("Benchmark was canceled by user");
                                     alert.setContentText("The benchmark has been stopped.\n\n"
                                             + "Partial results may have been saved to:\n"
                                             + params.outputPath());

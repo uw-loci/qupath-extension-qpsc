@@ -322,8 +322,8 @@ public final class LCCalibrationPlots {
         }
         chart.setPrefSize(520, 440);
 
-        Label caption = note("Each swing state should sit on the grey point of its own axis: the same distance "
-                + "from extinction on both crystals. A state short of its grey point needed less retardance "
+        Label caption = note("Each swing state should sit on the gray point of its own axis: the same distance "
+                + "from extinction on both crystals. A state short of its gray point needed less retardance "
                 + "than the swing to reach the same brightness.\n" + String.join("\n", offsetLines(result)));
         caption.setStyle(caption.getStyle() + " -fx-font-family: monospace;");
         VBox box = new VBox(6, chart, caption);

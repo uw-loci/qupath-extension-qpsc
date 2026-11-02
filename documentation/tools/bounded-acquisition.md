@@ -15,7 +15,7 @@ QPSC covers the chosen region with a tile grid and acquires every tile, here sho
 
 The dialog does not block the rest of QuPath, so you can drive the Live Viewer while it is
 open -- which is what **"Use Current Position as Center"** and **"Get Stage Position"** are
-for, since both read the centre of the Live Viewer field of view. Only one copy can be open
+for, since both read the center of the Live Viewer field of view. Only one copy can be open
 at a time; choosing the menu item again brings the existing window to the front.
 
 ## Prerequisites
@@ -52,7 +52,7 @@ Only valid hardware combinations are shown via cascading selection.
 
 A pixel-size warning appears at the top of the dialog if the active objective's microscope-config pixel size disagrees with what MicroManager reports for the currently-mounted optics. Acquiring under a mismatch produces tiles with wrong physical dimensions; resolve via the Setup Wizard or by re-running objective-calibration before continuing.
 
-When the acquisition starts, QPSC compares the two pixel sizes again. More than 5% apart means the wrong objective is in the light path, and the acquisition is cancelled. From 0.5% to 5% apart is treated as calibration drift: the acquisition goes ahead, the QuPath log gets a WARNING with both values, and a notification shows them once per session. Tile registration absorbs a drift that size, so the stitch still lines up, but the config value is worth re-measuring and updating (`pixel_size_xy_um` for the objective).
+When the acquisition starts, QPSC compares the two pixel sizes again. More than 5% apart means the wrong objective is in the light path, and the acquisition is canceled. From 0.5% to 5% apart is treated as calibration drift: the acquisition goes ahead, the QuPath log gets a WARNING with both values, and a notification shows them once per session. Tile registration absorbs a drift that size, so the stitch still lines up, but the config value is worth re-measuring and updating (`pixel_size_xy_um` for the objective).
 
 ### Acquisition Region
 
@@ -107,11 +107,11 @@ When using a PPM modality, the acquisition dialog includes a **PPM Polarization 
 
 The angle selection and override controls are set upfront in this dialog -- there is no per-image angle popup during acquisition. This design supports unattended multi-slide workflows.
 
-**Orientation colour image (LC-PolScope only):**
+**Orientation color image (LC-PolScope only):**
 
-The LC-PolScope panel has an **Orientation colour image** dropdown that chooses the colour map of the display-only `orientation_color` image for the next runs. The choices are **As in the config** (the default; uses `reconstruction.display_colormap` from the microscope YAML), **Uniform lightness**, **PPM colours** (listed only when the config has a PPM hue calibration) and **HSV rainbow (OpenPolScope)**. The choice is remembered across QuPath sessions. It changes the tiles reconstructed from then on and never the retardance or orientation values; tiles already written keep their colours.
+The LC-PolScope panel has an **Orientation color image** dropdown that chooses the color map of the display-only `orientation_color` image for the next runs. The choices are **As in the config** (the default; uses `reconstruction.display_colormap` from the microscope YAML), **Uniform lightness**, **PPM colors** (listed only when the config has a PPM hue calibration) and **HSV rainbow (OpenPolScope)**. The choice is remembered across QuPath sessions. It changes the tiles reconstructed from then on and never the retardance or orientation values; tiles already written keep their colors.
 
-Next to it, **Full brightness at [nm] nm retardance** sets the retardance shown at full brightness in the orientation colour image, and the top of the display range a stitched retardance image opens with. It starts at the config's `reconstruction.display_retardance_ceiling_nm` (20 nm by default), is remembered across sessions, and **Config (N nm)** returns to the config's value. Raise it for a mounting medium or a thicker section that gives more retardance than the default is made for. See [CHANNELS.md](../CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization) for what each map shows.
+Next to it, **Full brightness at [nm] nm retardance** sets the retardance shown at full brightness in the orientation color image, and the top of the display range a stitched retardance image opens with. It starts at the config's `reconstruction.display_retardance_ceiling_nm` (20 nm by default), is remembered across sessions, and **Config (N nm)** returns to the config's value. Raise it for a mounting medium or a thicker section that gives more retardance than the default is made for. See [CHANNELS.md](../CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization) for what each map shows.
 
 **Dedicated focus channel (optional):**
 
@@ -119,7 +119,7 @@ Autofocus normally runs under whichever channel the previous tile happened to le
 
 | Option | Type | Description |
 |--------|------|-------------|
-| Focus on a dedicated channel | CheckBox | Off by default. When off, autofocus behaviour is unchanged. |
+| Focus on a dedicated channel | CheckBox | Off by default. When off, autofocus behavior is unchanged. |
 | Channel | ComboBox | The channel every focus attempt uses. **It does not have to be one of the acquired channels** -- focusing on a bright, well-covered stain while imaging dim ones is the main use. |
 | Focus exposure (ms) | Spinner | Exposure for focus frames only. A focus frame needs contrast, not image quality, so this is usually well below the imaging exposure and makes every focus attempt cheaper. |
 | Intensity | Spinner | Illumination for focus frames only. Only sent for channels that declare an `intensity_property`. Hidden for LC-PolScope, whose focus frames use the exposure alone. |

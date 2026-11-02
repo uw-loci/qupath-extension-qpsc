@@ -45,7 +45,7 @@ final class OrientationPairServer extends AbstractTileableImageServer {
                 .channels(channels)
                 .pixelType(PixelType.UINT16)
                 .rgb(false)
-                .name("Orientation colour view")
+                .name("Orientation color view")
                 .build();
     }
 
@@ -97,7 +97,7 @@ final class OrientationPairServer extends AbstractTileableImageServer {
 
     @Override
     public String getServerType() {
-        return "Orientation colour view";
+        return "Orientation color view";
     }
 
     @Override

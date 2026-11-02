@@ -67,7 +67,7 @@ public class SunburstCalibrationWorkflow {
                                 // Start calibration with progress dialog (all on FX thread initially)
                                 startCalibrationWithProgress(params);
                             } else {
-                                logger.info("Sunburst calibration cancelled by user");
+                                logger.info("Sunburst calibration canceled by user");
                             }
                         })
                         .exceptionally(ex -> {
@@ -240,7 +240,7 @@ public class SunburstCalibrationWorkflow {
             ThresholdPreviewDialog.showDialog(imagePath, params.saturationThreshold(), params.valueThreshold())
                     .thenAccept(thresholdResult -> {
                         if (thresholdResult == null) {
-                            logger.info("Threshold tuning cancelled");
+                            logger.info("Threshold tuning canceled");
                             return;
                         }
 

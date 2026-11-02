@@ -70,7 +70,7 @@ public class WBComparisonWorkflow {
         WBComparisonDialog.showDialog()
                 .thenAccept(params -> {
                     if (params == null) {
-                        logger.info("WB Comparison cancelled by user");
+                        logger.info("WB Comparison canceled by user");
                         return;
                     }
 
@@ -136,11 +136,11 @@ public class WBComparisonWorkflow {
 
         // Block if MicroManager's active pixel size disagrees with the resolved objective.
         if (!QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, pixelSize)) {
-            logger.info("WB comparison cancelled by objective pixel-size mismatch");
+            logger.info("WB comparison canceled by objective pixel-size mismatch");
             return;
         }
         if (!QPScopeChecks.validateCameraRoi(detector)) {
-            logger.info("WB comparison cancelled by camera ROI mismatch");
+            logger.info("WB comparison canceled by camera ROI mismatch");
             return;
         }
 

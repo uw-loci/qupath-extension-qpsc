@@ -264,7 +264,7 @@ Consequences for the code:
   20x image carrying a "40x" calibration path is valid, just where it was
   captured.)
 - If the magnification in the stamped path is ever surfaced to users as a
-  potential mismatch, that is a labelling concern, not a data concern.
+  potential mismatch, that is a labeling concern, not a data concern.
 
 ## Post-Processing Outputs
 

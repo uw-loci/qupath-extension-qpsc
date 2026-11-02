@@ -74,11 +74,11 @@ public final class OrientationColorViewWindow {
     private final Stage stage = new Stage();
     private final Label pairing = new Label();
     private final Button toggle = new Button();
-    private final Button export = new Button("Export colour image...");
+    private final Button export = new Button("Export color image...");
     private final ComboBox<Kind> kind = new ComboBox<>();
     private final Spinner<Double> ceiling = new Spinner<>();
     private final Slider ceilingSlider = new Slider(1, 100, 20);
-    private final CheckBox colourOnly = new CheckBox("Colour only (ignore retardance)");
+    private final CheckBox colourOnly = new CheckBox("Color only (ignore retardance)");
 
     private final PpmHue ppm;
     private final int sign;
@@ -149,7 +149,7 @@ public final class OrientationColorViewWindow {
         GridPane grid = new GridPane();
         grid.setHgap(8);
         grid.setVgap(6);
-        grid.add(new Label("Colour map:"), 0, 0);
+        grid.add(new Label("Color map:"), 0, 0);
         grid.add(kind, 1, 0, 2, 1);
         grid.add(new Label("Full brightness at:"), 0, 1);
         HBox ceilingRow = new HBox(6, ceiling, new Label("nm retardance"));
@@ -176,7 +176,7 @@ public final class OrientationColorViewWindow {
         });
         export.setOnAction(e -> exportColourImage());
         export.setTooltip(new javafx.scene.control.Tooltip(
-                "Write the coloured image, with the settings above, as a pyramidal RGB OME-TIFF "
+                "Write the colored image, with the settings above, as a pyramidal RGB OME-TIFF "
                         + "beside the stitched images and add it to the project."));
         Button close = new Button("Close");
         close.setOnAction(e -> stage.hide());
@@ -186,7 +186,7 @@ public final class OrientationColorViewWindow {
         VBox root = new VBox(10, pairing, grid, note, buttons);
         root.setPadding(new Insets(12));
         root.setPrefWidth(420);
-        stage.setTitle("Orientation Colour View");
+        stage.setTitle("Orientation Color View");
         stage.initOwner(qupath.getStage());
         stage.setScene(new Scene(root));
         updateToggle();
@@ -220,7 +220,7 @@ public final class OrientationColorViewWindow {
         viewer.setCustomPixelLayerOverlay(overlay);
         viewer.imageDataProperty().addListener(imageListener);
         overlayViewer = viewer;
-        logger.info("Orientation colour view on ({})", renderer.getSettings());
+        logger.info("Orientation color view on ({})", renderer.getSettings());
         updateToggle();
         updatePairingLabel();
     }
@@ -243,7 +243,7 @@ public final class OrientationColorViewWindow {
             }
         }
         opened.clear();
-        logger.info("Orientation colour view off");
+        logger.info("Orientation color view off");
         updateToggle();
         updatePairingLabel();
     }
@@ -266,7 +266,7 @@ public final class OrientationColorViewWindow {
             source =
                     OrientationPairing.sourceFor(imageData, qupath.getProject()).orElse(null);
         } catch (Exception e) {
-            logger.warn("Orientation colour view cannot pair this image: {}", e.getMessage());
+            logger.warn("Orientation color view cannot pair this image: {}", e.getMessage());
         }
         if (source != null && source.opened() != null) {
             opened.add(source.opened());
@@ -285,7 +285,7 @@ public final class OrientationColorViewWindow {
      * the partner image under the writer.
      */
     private void exportColourImage() {
-        String title = "Export orientation colour image";
+        String title = "Export orientation color image";
         QuPathViewer viewer = qupath.getViewer();
         ImageData<BufferedImage> data = viewer == null ? null : viewer.getImageData();
         Project<BufferedImage> project = qupath.getProject();
@@ -324,7 +324,7 @@ public final class OrientationColorViewWindow {
         QpscWindows.track(progressStage);
         progressStage.initOwner(stage);
         progressStage.initModality(Modality.NONE);
-        progressStage.setTitle("Exporting colour image");
+        progressStage.setTitle("Exporting color image");
         ProgressBar bar = new ProgressBar(0);
         bar.setPrefWidth(360);
         Label what = new Label("Writing " + stem + ".ome.tif\nA whole slide takes a few minutes.");
@@ -474,7 +474,7 @@ public final class OrientationColorViewWindow {
                 try {
                     mgr = MicroscopeConfigManager.getInstance(path);
                 } catch (RuntimeException e) {
-                    logger.debug("No microscope config for the colour view: {}", e.getMessage());
+                    logger.debug("No microscope config for the color view: {}", e.getMessage());
                 }
             }
         }

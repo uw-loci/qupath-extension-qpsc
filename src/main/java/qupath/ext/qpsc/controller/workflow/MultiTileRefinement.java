@@ -694,7 +694,7 @@ public class MultiTileRefinement {
         cancelButton.setOnAction(e -> {
             outerPulse.clear();
             logger.info(
-                    "Multi-tile refinement cancelled ({} points captured); no acquisition, prior alignment kept",
+                    "Multi-tile refinement canceled ({} points captured); no acquisition, prior alignment kept",
                     points.size());
             SiftAutoAlignHelper.clearSearchRangeOnStageMap();
             stage.close();
@@ -705,7 +705,7 @@ public class MultiTileRefinement {
         stage.setOnCloseRequest(e -> {
             outerPulse.clear();
             if (!future.isDone()) {
-                logger.info("Multi-tile refinement window closed with the window's X; refinement cancelled");
+                logger.info("Multi-tile refinement window closed with the window's X; refinement canceled");
                 SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                 future.complete(SingleTileRefinement.RefinementResult.cancelled(
                         initialTransform,
@@ -761,7 +761,7 @@ public class MultiTileRefinement {
         }
         tileSource.thenAccept(tile -> {
             if (tile == null || tile.getROI() == null) {
-                logger.info("Multi-tile: tile selection cancelled for point {}", pointNumber);
+                logger.info("Multi-tile: tile selection canceled for point {}", pointNumber);
                 future.complete(null);
                 return;
             }

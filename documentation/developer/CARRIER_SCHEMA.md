@@ -7,7 +7,7 @@ Multi-Slide Existing Image workflow both consume the parsed `StageInsert` model
 described here.
 
 The schema is additive over the legacy single-slide/quad-slide configuration. Files
-that omit the new fields keep their previous behaviour exactly.
+that omit the new fields keep their previous behavior exactly.
 
 ## Top-level structure
 
@@ -75,7 +75,7 @@ Each entry is one sample (or, for `well_grid`, expands into many). Common fields
 
 #### Lip convention
 
-For rectangle samples the lip is modelled as **a pair of measurable widths along
+For rectangle samples the lip is modeled as **a pair of measurable widths along
 the slide's long axis**. `lip_a_mm` is the lip nearer end "a" and `lip_b_mm`
 nearer end "b". With `rotation_deg = 90` the long axis is along stage Y, so
 lip A appears at the top and lip B at the bottom (in the overlay's screen

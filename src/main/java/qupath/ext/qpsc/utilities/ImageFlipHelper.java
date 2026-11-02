@@ -516,7 +516,7 @@ public final class ImageFlipHelper {
      * FX-safe, blocking, OK-only.
      */
     private static void showMissingSourceMicroscopeDialog(String entryName) {
-        String title = "Source Microscope Missing -- Workflow Cancelled";
+        String title = "Source Microscope Missing -- Workflow Canceled";
         String header = "This entry has no source-scanner metadata.";
         StringBuilder body = new StringBuilder();
         body.append(String.format(
@@ -531,7 +531,7 @@ public final class ImageFlipHelper {
         body.append("To fix, set the source scanner via:\n");
         body.append("  Extensions -> QP Scope -> Stage Map -> pick the Source, or\n");
         body.append("  set it in the Multi-Slide assignment dialog, then re-run.\n\n");
-        body.append("This workflow has been cancelled.");
+        body.append("This workflow has been canceled.");
 
         Runnable show = () -> {
             javafx.scene.control.Alert alert =

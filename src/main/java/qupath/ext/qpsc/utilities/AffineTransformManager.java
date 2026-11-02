@@ -1587,13 +1587,13 @@ public class AffineTransformManager {
             String json = new GsonBuilder().setPrettyPrinting().create().toJson(data);
             Files.write(file.toPath(), json.getBytes(StandardCharsets.UTF_8));
             logger.info(
-                    "Slide '{}' image centre recorded at stage ({}, {}) um from its alignment",
+                    "Slide '{}' image center recorded at stage ({}, {}) um from its alignment",
                     sampleName,
                     String.format("%.1f", centre[0]),
                     String.format("%.1f", centre[1]));
             return true;
         } catch (Exception e) {
-            logger.warn("Could not record the slide centre for '{}': {}", sampleName, e.getMessage());
+            logger.warn("Could not record the slide center for '{}': {}", sampleName, e.getMessage());
             return false;
         }
     }

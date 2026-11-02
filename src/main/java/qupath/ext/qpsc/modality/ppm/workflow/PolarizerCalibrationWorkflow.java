@@ -71,7 +71,7 @@ public class PolarizerCalibrationWorkflow {
                                 // Start calibration with progress dialog (all on FX thread initially)
                                 startCalibrationWithProgress(params);
                             } else {
-                                logger.info("Polarizer calibration cancelled by user");
+                                logger.info("Polarizer calibration canceled by user");
                             }
                         })
                         .exceptionally(ex -> {

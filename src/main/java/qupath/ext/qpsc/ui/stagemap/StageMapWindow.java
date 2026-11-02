@@ -261,7 +261,7 @@ public class StageMapWindow {
         canvas.setSlotMacroPreviews(refreshed);
         if (newlyMeasured > 0) {
             logger.info(
-                    "Stage Map: {} slide(s) moved from nominal slot centres to their measured positions",
+                    "Stage Map: {} slide(s) moved from nominal slot centers to their measured positions",
                     newlyMeasured);
         }
     }
@@ -3071,7 +3071,7 @@ public class StageMapWindow {
         double[] shift = MacroOverlayPlacement.shiftOntoSlide(currentMacroSlideCentreUm, presetAt);
         logger.info(
                 "Macro overlay: slide '{}' is at stage ({}, {}) um by its alignment; the preset puts its "
-                        + "green-box centre at ({}, {}); moving the overlay by ({}, {}) um",
+                        + "green-box center at ({}, {}); moving the overlay by ({}, {}) um",
                 currentMacroSampleName,
                 String.format("%.1f", currentMacroSlideCentreUm[0]),
                 String.format("%.1f", currentMacroSlideCentreUm[1]),
@@ -3103,7 +3103,7 @@ public class StageMapWindow {
             double cx = box.getBoundsX() + box.getBoundsWidth() / 2.0;
             double cy = box.getBoundsY() + box.getBoundsHeight() / 2.0;
             logger.info(
-                    "Macro overlay: green box centre at macro ({}, {}), confidence {}",
+                    "Macro overlay: green box center at macro ({}, {}), confidence {}",
                     String.format("%.1f", cx),
                     String.format("%.1f", cy),
                     String.format("%.2f", found.getConfidence()));

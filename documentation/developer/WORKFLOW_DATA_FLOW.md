@@ -147,7 +147,7 @@ Going the other direction (40x saved -> 10x wizard) leaves the linear
 transform valid and any refinement translation shrinks into a sub-tile
 fraction of the new tile, so the dialog is suppressed. On pixel-size
 lookup failure (config gap, missing objective entry) the gate falls back
-to the pre-2026-05-19 behaviour and surfaces the advisory regardless of
+to the pre-2026-05-19 behavior and surfaces the advisory regardless of
 direction. Pre-Phase-3 JSONs without the `objective` field load with
 `null` and stay silent.
 
@@ -291,7 +291,7 @@ the wrong key.
 
 Output folder structure encodes the background profile and the magnification:
 `<base>/profiles/<profile>/<detector>/<modality>/<magnification>/` for `off`
-(no WB subfolder), `.../<wbMode>/` for colour WB modes, `.../<acquisition profile>/`
+(no WB subfolder), `.../<wbMode>/` for color WB modes, `.../<acquisition profile>/`
 for channel modalities. `<base>` is the scope-wide `background_correction.base_folder`;
 the profile is the QuPath-wide `activeBackgroundProfile` preference, required
 (`BackgroundProfiles`). A mismatch silently files the background under the wrong

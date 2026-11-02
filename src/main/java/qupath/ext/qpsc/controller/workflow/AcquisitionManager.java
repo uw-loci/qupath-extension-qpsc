@@ -373,13 +373,13 @@ public class AcquisitionManager {
         return StitchingConfiguration.validateWithRetryAsync()
                 .thenCompose(valid -> {
                     if (!valid) {
-                        throw new CancellationException("Cancelled due to invalid stitching settings");
+                        throw new CancellationException("Canceled due to invalid stitching settings");
                     }
                     return validateAnnotations();
                 })
                 .thenCompose(valid -> {
                     if (!valid) {
-                        logger.info("Annotation validation failed or cancelled");
+                        logger.info("Annotation validation failed or canceled");
                         return CompletableFuture.completedFuture(null);
                     }
                     return getRotationAngles();
@@ -401,7 +401,7 @@ public class AcquisitionManager {
                         throw new RuntimeException("Acquisition failed: " + failure.getMessage(), failure);
                     }
                     // User canceled (e.g. dismissed annotation dialog) - not an error
-                    throw new CancellationException("Acquisition cancelled by user");
+                    throw new CancellationException("Acquisition canceled by user");
                 });
     }
 
@@ -471,7 +471,7 @@ public class AcquisitionManager {
         return AnnotationAcquisitionDialog.showDialog(existingClassNames, preselected)
                 .thenApply(result -> {
                     if (!result.proceed || result.selectedClasses.isEmpty()) {
-                        logger.info("Acquisition cancelled or no classes selected");
+                        logger.info("Acquisition canceled or no classes selected");
                         return false;
                     }
 
@@ -525,7 +525,7 @@ public class AcquisitionManager {
         return CompletableFuture.supplyAsync(() -> {
             // Check for cancellation (null angleExposures indicates canceled/failed)
             if (angleExposures == null) {
-                logger.info("Skipping acquisition preparation - workflow was cancelled");
+                logger.info("Skipping acquisition preparation - workflow was canceled");
                 return null;
             }
 
@@ -634,7 +634,7 @@ public class AcquisitionManager {
                     Paths.get(tempTileDir), totalTiles, angleExposures.size(), bytesPerTile);
 
             if (!result.proceed()) {
-                logger.warn("Acquisition cancelled by user after low-disk-space warning");
+                logger.warn("Acquisition canceled by user after low-disk-space warning");
                 return null;
             }
             return angleExposures;
@@ -670,7 +670,7 @@ public class AcquisitionManager {
             // The chosen white-balance mode's own calibration, now that it is known. The
             // wizard does not warn about modes this acquisition does not use.
             if (!BackgroundIlluminationCheck.checkChosenWbModeAndWarn(modality, objective, detector, state.wbMode)) {
-                logger.warn("Acquisition cancelled by user after the white balance calibration warning");
+                logger.warn("Acquisition canceled by user after the white balance calibration warning");
                 return null;
             }
             // Only relevant when flat-field correction will actually run for this
@@ -682,7 +682,7 @@ public class AcquisitionManager {
             boolean proceed = BackgroundIlluminationCheck.checkAndWarn(
                     cfg, modality, objective, detector, state.wbMode, bgBaseFolder, angleExposures);
             if (!proceed) {
-                logger.warn("Acquisition cancelled by user after background/profile illumination mismatch warning");
+                logger.warn("Acquisition canceled by user after background/profile illumination mismatch warning");
                 return null;
             }
             return angleExposures;
@@ -707,7 +707,7 @@ public class AcquisitionManager {
 
         // Check for cancellation (null angleExposures indicates canceled/failed)
         if (angleExposures == null) {
-            logger.info("Skipping annotation processing - workflow was cancelled");
+            logger.info("Skipping annotation processing - workflow was canceled");
             return CompletableFuture.completedFuture(false);
         }
 
@@ -869,7 +869,7 @@ public class AcquisitionManager {
                 }
                 if (cancelGate.isCancelled()) {
                     logger.info(
-                            "Cancelled ({}) before annotation {} of {}: {} -- nothing more is sent",
+                            "Canceled ({}) before annotation {} of {}: {} -- nothing more is sent",
                             cancelGate.source(),
                             index,
                             total,
@@ -1012,7 +1012,7 @@ public class AcquisitionManager {
                 if (cancelGate.isCancelled()) {
                     // The stage is released: this is the acknowledgement the dialog has been
                     // waiting for since Cancel was pressed (it does not close on its own).
-                    progressDialog.acknowledgeCancelled("Cancelled - the microscope has stopped");
+                    progressDialog.acknowledgeCancelled("Canceled - the microscope has stopped");
                 } else if (error != null) {
                     Platform.runLater(() -> progressDialog.showError("Workflow failed: " + error.getMessage()));
                 } else if (!result) {
@@ -1432,7 +1432,7 @@ public class AcquisitionManager {
                     // which can take tens of seconds.
                     if (cancelGate.isCancelled()) {
                         logger.info(
-                                "Cancelled ({}) before the idle wait for {}; ACQUIRE not sent",
+                                "Canceled ({}) before the idle wait for {}; ACQUIRE not sent",
                                 cancelGate.source(),
                                 annotation.getName());
                         return false;
@@ -1450,7 +1450,7 @@ public class AcquisitionManager {
 
                     if (cancelGate.isCancelled()) {
                         logger.info(
-                                "Cancelled ({}) after the idle wait for {}; ACQUIRE not sent",
+                                "Canceled ({}) after the idle wait for {}; ACQUIRE not sent",
                                 cancelGate.source(),
                                 annotation.getName());
                         return false;
@@ -1519,7 +1519,7 @@ public class AcquisitionManager {
                                                 // lock and can sit behind a tile capture for tens of seconds.
                                                 try {
                                                     logger.error(
-                                                            "Cancelling the acquisition because the stage frame is no longer trustworthy");
+                                                            "Canceling the acquisition because the stage frame is no longer trustworthy");
                                                     MicroscopeController.getInstance()
                                                             .getSocketClient()
                                                             .cancelAcquisition();
@@ -1923,7 +1923,7 @@ public class AcquisitionManager {
                     return true;
 
                 case CANCELLED:
-                    logger.info("Acquisition was cancelled for {}", annotation.getName());
+                    logger.info("Acquisition was canceled for {}", annotation.getName());
                     // User clicked cancel - no error notification needed, dialog already shows state
                     if (progressDialog != null && progressDialog.isCancelled()) {
                         logger.info("Cancellation was initiated via dual progress dialog");
@@ -2398,7 +2398,7 @@ public class AcquisitionManager {
     private void showCancellationNotification() {
         // User initiated cancellation - no error notification needed
         // Dual progress dialog already displays cancellation state
-        logger.info("Acquisition cancelled by user request");
+        logger.info("Acquisition canceled by user request");
     }
 
     /**

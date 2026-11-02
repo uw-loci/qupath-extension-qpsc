@@ -90,7 +90,7 @@ public class BoundedAcquisitionWorkflow {
         // Show the unified acquisition dialog
         UnifiedAcquisitionController.showDialog().thenAccept(result -> {
             if (result == null) {
-                logger.info("Unified acquisition dialog cancelled");
+                logger.info("Unified acquisition dialog canceled");
                 return;
             }
 
@@ -332,7 +332,7 @@ public class BoundedAcquisitionWorkflow {
                             AcquisitionSpaceCheck.Result spaceResult = AcquisitionSpaceCheck.checkAndWarn(
                                     Paths.get(tempTileDir), tileCount, sequenceSteps, bytesPerTile);
                             if (!spaceResult.proceed()) {
-                                logger.warn("Acquisition cancelled by user after low-disk-space warning");
+                                logger.warn("Acquisition canceled by user after low-disk-space warning");
                                 return;
                             }
                         } else {
@@ -349,7 +349,7 @@ public class BoundedAcquisitionWorkflow {
                         // The chosen white-balance mode's own calibration, now that it is known.
                         if (!BackgroundIlluminationCheck.checkChosenWbModeAndWarn(
                                 result.modality(), result.objective(), result.detector(), result.wbMode())) {
-                            logger.warn("Acquisition cancelled by user after the white balance calibration warning");
+                            logger.warn("Acquisition canceled by user after the white balance calibration warning");
                             return;
                         }
 
@@ -368,7 +368,7 @@ public class BoundedAcquisitionWorkflow {
                                     bgBaseFolder,
                                     angleExposures);
                             if (!proceed) {
-                                logger.warn("Acquisition cancelled by user after background/profile "
+                                logger.warn("Acquisition canceled by user after background/profile "
                                         + "illumination mismatch warning");
                                 return;
                             }
@@ -665,7 +665,7 @@ public class BoundedAcquisitionWorkflow {
                                 .exceptionally(ex -> {
                                     Throwable cause = ex.getCause() != null ? ex.getCause() : ex;
                                     if (cause instanceof java.util.concurrent.CancellationException) {
-                                        logger.info("Acquisition workflow cancelled by user");
+                                        logger.info("Acquisition workflow canceled by user");
                                     } else {
                                         logger.error("Workflow failed", ex);
                                         String errorMessage =
@@ -705,9 +705,9 @@ public class BoundedAcquisitionWorkflow {
                                                 || message.contains("ANGLE_SELECTION_CANCELLED")));
 
                         if (isCancellation) {
-                            logger.info("Acquisition cancelled by user");
+                            logger.info("Acquisition canceled by user");
                             Platform.runLater(() -> qupath.fx.dialogs.Dialogs.showInfoNotification(
-                                    "Acquisition Cancelled", "Acquisition was cancelled by user request"));
+                                    "Acquisition Canceled", "Acquisition was canceled by user request"));
                         } else {
                             logger.error("Workflow failed", ex);
                             String msg = message != null ? message : "Unknown error occurred";

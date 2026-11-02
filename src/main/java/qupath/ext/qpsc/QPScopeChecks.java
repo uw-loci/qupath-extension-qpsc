@@ -286,10 +286,10 @@ public class QPScopeChecks {
         body.append("'Reset ROI' button in the toolbar).\n");
         body.append(String.format("  3. Set ROI to full sensor (%d x %d) or clear it.%n", configW, configH));
         body.append("  4. Restart this workflow.\n\n");
-        body.append("This workflow has been cancelled.");
+        body.append("This workflow has been canceled.");
 
         showMismatchDialog(
-                "Camera ROI Mismatch -- Workflow Cancelled",
+                "Camera ROI Mismatch -- Workflow Canceled",
                 "MicroManager has the camera cropped to a sub-region of the full sensor.",
                 body.toString(),
                 parentStage);
@@ -417,10 +417,10 @@ public class QPScopeChecks {
         body.append("To fix: change the objective in MicroManager to match the wizard, OR change the ");
         body.append("wizard's objective dropdown to match what is physically on the microscope, then ");
         body.append("restart the workflow.\n\n");
-        body.append("This workflow has been cancelled.");
+        body.append("This workflow has been canceled.");
 
         showMismatchDialog(
-                "Objective Pixel-Size Mismatch -- Workflow Cancelled",
+                "Objective Pixel-Size Mismatch -- Workflow Canceled",
                 "MicroManager's active objective does not match the wizard's selection.",
                 body.toString(),
                 parentStage);

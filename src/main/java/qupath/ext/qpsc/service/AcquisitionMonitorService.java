@@ -107,11 +107,11 @@ public final class AcquisitionMonitorService {
                 return state;
 
             case CANCELLED:
-                logger.info("Acquisition was cancelled");
+                logger.info("Acquisition was canceled");
                 if (config.onCancelled != null) {
                     config.onCancelled.run();
                 }
-                throw new CancellationException("Acquisition was cancelled");
+                throw new CancellationException("Acquisition was canceled");
 
             case FAILED:
                 String failureMessage = socketClient.getLastFailureMessage();

@@ -181,7 +181,7 @@ The goal is to pick whichever combination of `stage.polarity` (in the microscope
 
 1. Arrow buttons (Sample Movement checked) — direction matches the button you press
 2. Virtual joystick — direction matches the drag
-3. Double-click-to-center — the clicked feature jumps to the centre of the view
+3. Double-click-to-center — the clicked feature jumps to the center of the view
 4. A small stitched 2×2 acquisition — the corners are laid out as expected
 
 Procedure:
@@ -647,7 +647,7 @@ Method used to measure sharpness at each pixel to select which Z-plane is sharpe
 | Metric | When to use | Trade-offs |
 |--------|-------------|-----------|
 | **tenengrad** (default) | Most use cases, especially stained tissue | Gradient strength; matches the autofocus metric of the same name, so fused output agrees with what autofocus was optimizing. Good default for H&E and other histology. |
-| **modified_laplacian** | Fibres, filaments, elongated structures | Second differences per axis; peaks more sharply in Z than tenengrad. More sensitive to noise; good when the sample has elongated features and you want crisp selection. |
+| **modified_laplacian** | Fibers, filaments, elongated structures | Second differences per axis; peaks more sharply in Z than tenengrad. More sensitive to noise; good when the sample has elongated features and you want crisp selection. |
 | **variance** | Noisy samples or high-bit-depth data | Local contrast; cheapest to compute and most forgiving of camera noise. Responds to any blob regardless of edge sharpness; try this when the others chase noise. |
 
 ---
@@ -739,7 +739,7 @@ Controls what happens to intermediate tile images after stitching completes.
 | **Zip** | Compress tiles into a zip archive after stitching |
 | **Delete** | Remove tile images after successful stitching |
 
-**Important:** On acquisition or refinement failure, the temporary tiles of regions that did not finish are always deleted regardless of this preference. The preference applies only to successful runs. This prevents incomplete or corrupt tile sets from accumulating on disk. Regions that finished earlier in the same run keep their tiles, because they may still be stitching when a later region is cancelled.
+**Important:** On acquisition or refinement failure, the temporary tiles of regions that did not finish are always deleted regardless of this preference. The preference applies only to successful runs. This prevents incomplete or corrupt tile sets from accumulating on disk. Regions that finished earlier in the same run keep their tiles, because they may still be stitching when a later region is canceled.
 
 **Protected files:** Cleanup never deletes anything in a `_protected` folder inside an acquisition folder, such as the backgrounds a run used. Only the raw tile images outside that folder are removed.
 
@@ -856,7 +856,7 @@ Note: when **Register tiles on image content** is enabled, one angle/channel of 
 | Requires Restart | No |
 
 **Description:**
-Correct tile positions by matching the image content in the overlap between neighbouring tiles, rather than placing tiles purely where the stage said it was.
+Correct tile positions by matching the image content in the overlap between neighboring tiles, rather than placing tiles purely where the stage said it was.
 
 Stage coordinates are *nominal*. Real stages have backlash, finite encoder resolution, and thermal drift over a long acquisition, so tiles placed from reported coordinates alone can leave thin seams or soft double images along every tile boundary. With this enabled, the stitcher measures where adjacent tiles actually line up and adjusts them before compositing.
 
@@ -996,7 +996,7 @@ acquisition:
 
 **Tiles are picked for you** in the automatic modes — the first landmark of each slide,
 the single-tile refinement pick, and every multi-tile reference point. Only interior tiles
-qualify (full ring of 8 neighbours, centre inside the annotation), ranked by texture and
+qualify (full ring of 8 neighbors, center inside the annotation), ranked by texture and
 spread apart. The "Alignment - Select tile" dialog does not appear at all. This is what removes the
 stop: that dialog's Confirm button is created disabled and only enables on a viewer
 selection, so a countdown could never have driven it. Multi-tile refinement also drives its
@@ -1024,7 +1024,7 @@ manual alignment. The base transform lands it a median 600 um out (worst 1.5 mm)
 blank glass where a focus scan finds coverslip contrast rather than the sample. The
 microscope now checks whether it is on tissue and, if not, steps outward toward the tile
 grid in FOV-sized hops. Only that first point does this — the second lands within 26 um. If nothing is found the stage returns to where it
-started and focusing proceeds anyway — the search is an optimisation on a step that
+started and focusing proceeds anyway — the search is an optimization on a step that
 already worked without it, so a failed search does **not** hand the slide back or stop
 an automatic batch. The steps that can actually tell — autofocus and the SIFT
 confidence gate — hand the slide back themselves if they fail.
@@ -1357,7 +1357,7 @@ Before each slide of an **unattended batch** (the two-pass multi-slide acquire),
 moves to a point inside the first region and matches the live camera against the macro
 image, to confirm the slide is still where its stored alignment says.
 
-This is the only check that can catch the stage not travelling as far as it was told. The
+This is the only check that can catch the stage not traveling as far as it was told. The
 Prior controller reports the step count it was given, so a commanded position and the
 position read back agree whether or not the stage followed, and a slip during a move leaves
 no discontinuity to find. On the four-slide run of 2026-10-02 the Micro-Manager log showed
@@ -1368,7 +1368,7 @@ asks the controller where it is can see that; only matching against the sample c
 
 Three outcomes, because a failure to match and a measured disagreement are different facts:
 
-| outcome | meaning | `halt` behaviour |
+| outcome | meaning | `halt` behavior |
 |---|---|---|
 | confirmed | matched within one camera field diagonal | acquire |
 | misaligned | matched, but further than that | stop the batch, reporting the distance |
@@ -1437,15 +1437,15 @@ Fits a tilted plane through the autofocus results an acquisition has already pro
 
 Why it exists. Today each tile that does not autofocus holds the Z of the spatially nearest tile that did — a focus map with no fitting and no outlier rejection, so a wrong measurement is indistinguishable from a right one. Measured over ten regions on PPM and OWS3 slides, a single plane describes focus to 0.27–1.11 µm RMS across a whole region while focus itself travels 4–150 µm; the narrow drift sweep agrees with that plane 98.8% of the time, and the wide standard search disagrees by more than 5 µm **25%** of the time (more than 15 µm, 21% of the time; worst case 73 µm). The wide search is what runs at the first tissue tile of every region and after every jump, so one bad result could put a whole region out of focus with nothing in the log. Full measurement: `claude-reports/design/autofocus-empirical/summaries/focus_surface.md`.
 
-| Mode | Behaviour |
+| Mode | Behavior |
 |---|---|
-| `off` | Today's behaviour, unchanged. |
+| `off` | Today's behavior, unchanged. |
 | `observe` | Fits the surface and logs every disagreement, changing nothing. One run tells you what enforcing would have done. |
 | `enforce` | Predicts Z for tiles that do not autofocus, and replaces an autofocus result that disagrees with the surface beyond the gate. |
 
 **Start with `observe`.** It cannot affect a run, and it measures the premise on your sample before anything acts on it.
 
-The surface declines to act unless four conditions hold, so an unsuitable sample falls back to the `off` behaviour by itself: at least 6 mutually agreeing points, a fit residual under 3 µm, at least 60% of points agreeing with it, and enough spread in the weaker direction to constrain the second tilt (0.5 mm, or 60% of the region's own narrow dimension for a region too thin to provide that). The spread condition matters because scan order produces a *column* of points first, which fixes one tilt and says nothing about the other. The rejection gate is `max(5 µm, 4 × fit RMS)`, so a noisier fit is less willing to overrule a measurement.
+The surface declines to act unless four conditions hold, so an unsuitable sample falls back to the `off` behavior by itself: at least 6 mutually agreeing points, a fit residual under 3 µm, at least 60% of points agreeing with it, and enough spread in the weaker direction to constrain the second tilt (0.5 mm, or 60% of the region's own narrow dimension for a region too thin to provide that). The spread condition matters because scan order produces a *column* of points first, which fixes one tilt and says nothing about the other. The rejection gate is `max(5 µm, 4 × fit RMS)`, so a noisier fit is less willing to overrule a measurement.
 
 Replayed over all 34 available server logs, the surface becomes licensed after a median of 8 measurements (p90 12), is licensed for a median 93% of a region's measurements, and would have overruled 21% of wide standard searches against 2.9% of narrow drift sweeps. Six of 51 regions never licensed: three had almost no usable autofocus results at all, and three were correct refusals where under half the measurements agreed with any plane.
 
@@ -1703,7 +1703,7 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 | SIFT percentile high | Double | 98.0 | Upper clip percentile (0-100) used by `PERCENTILE` mode. Pixels above this map to 255. |
 | SIFT CLAHE enabled | Boolean | ON | Apply Contrast-Limited Adaptive Histogram Equalisation to both microscope and WSI grayscale images before SIFT. Standard cross-modality robustness trick; dramatically improves matching of monochrome brightfield against H&E references. |
 | SIFT CLAHE clip limit | Double | 2.0 | CLAHE `clipLimit`. Higher values produce more aggressive equalisation. |
-| SIFT RGB conversion | Enum | `GREEN` | How a colour (RGB, e.g. H&E) reference image is collapsed to one channel before SIFT. Only affects colour images -- the monochrome camera snapshot is untouched. `GREEN` takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). |
+| SIFT RGB conversion | Enum | `GREEN` | How a color (RGB, e.g. H&E) reference image is collapsed to one channel before SIFT. Only affects color images -- the monochrome camera snapshot is untouched. `GREEN` takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). |
 
 **When to adjust these:**
 - **Trust SIFT**: Enable when alignment is reliable and you want fully unattended acquisition
@@ -1712,7 +1712,7 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 - **Coarse-to-fine enabled**: Keep enabled for large WSI regions or wide search margins. Disable if you have a fast computer and want a single-pass search (marginally simpler debugging).
 - **Coarse pixel size**: Raise (e.g., 8.0) to search faster and further, at the cost of a coarser initial estimate. Lower (e.g., 2.0) for more precision on smaller regions. The Stage Map shows the search range as a bright-orange dashed rectangle while the refinement dialog is open, updating live as you change the search margin.
 - **Search margin**: Raise to enlarge the area SIFT searches around the predicted position (how far off the stage can be and still match). Coarse-to-fine keeps large margins fast. The bright-orange box on the Stage Map shows the resulting area; range 50-5000 um.
-- **RGB conversion**: Leave on `GREEN` for H&E (and colour brightfield) references -- it is the lever that makes an H&E scan match against a monochrome brightfield camera. Switch to `LUMINANCE` only to reproduce legacy alignment runs. Do not expect an absorbance/optical-density option: it would invert tissue polarity and fight the intensity microscope image.
+- **RGB conversion**: Leave on `GREEN` for H&E (and color brightfield) references -- it is the lever that makes an H&E scan match against a monochrome brightfield camera. Switch to `LUMINANCE` only to reproduce legacy alignment runs. Do not expect an absorbance/optical-density option: it would invert tissue polarity and fight the intensity microscope image.
 - **Mono normalization**: Leave on `PERCENTILE` unless you have a specific calibrated reason. Switch to `BIT_SHIFT` only when reproducing legacy alignment runs.
 - **Percentile low/high**: Tighten (e.g., 5/95) to suppress speckle/noise; widen (e.g., 0.5/99.5) when matching very faint features against a bright reference.
 - **CLAHE clip limit**: Raise (e.g., 3.0-4.0) for very low-contrast samples; lower (e.g., 1.0) when CLAHE is amplifying noise into spurious feature matches.

@@ -75,7 +75,7 @@ In the assignment dialog:
    holder's slots, updating live as you change rotations. The preview stays
    visible after the dialog closes, as a layout reference through the alignments
    that follow. Once the batch starts, each slide's position on the map reflects
-   its nominal slot centre initially. As each slide's alignment is saved during
+   its nominal slot center initially. As each slide's alignment is saved during
    the run, the Stage Map automatically updates that slide's position to show
    where it was actually placed in the holder (measured landing error: median ~600 µm).
    This improves over the course of the run — by the time all slides are aligned,
@@ -104,13 +104,13 @@ slide 1's acquisition dialog, after you had already committed to a carrier and i
 assignments. And every slide in the batch uses the same combination, so picking it once
 removes a repeated choice from every per-slide dialog.
 
-**Status is reported per white-balance mode, and coloured per mode.** Both white
+**Status is reported per white-balance mode, and colored per mode.** Both white
 balance and background correction are checked mode by mode, and each line carries its
-own colour. This matters because the modes disagree in exactly the case that counts:
+own color. This matters because the modes disagree in exactly the case that counts:
 "Backgrounds (Per-angle): valid" in green next to "Backgrounds (Simple (90deg)):
 stale" in orange tells you the mode you are about to acquire with is fine. Previously
 one stale mode turned the whole block red, and there was no way to see that from the
-colour. A monochrome camera or a per-channel fluorescence profile shows a single
+color. A monochrome camera or a per-channel fluorescence profile shows a single
 line instead, since neither splits by WB mode.
 
 The calibration line is **advisory, not a gate** -- you may be deliberately acquiring
@@ -234,7 +234,7 @@ prevent.
 **Every tile is picked for you.** In an automatic mode no "Alignment - Select tile" dialog appears at
 all -- not for the first landmark of a slide, not for single-tile refinement, and not for
 each multi-tile reference point. Tiles are chosen the way an operator would: only tiles
-whose full ring of 8 neighbours is present and whose centre is inside the annotation are
+whose full ring of 8 neighbors is present and whose center is inside the annotation are
 eligible (so the camera does not land half on background), those are ranked by how much
 texture they contain (SIFT needs structure), and well-separated ones are taken so the fit
 is well conditioned.
@@ -270,7 +270,7 @@ minutes. What happens next differs, and it is worth knowing which is which:
 | No qualifying tile, or SIFT below threshold | The slide's dialog **waits for you**. The batch does NOT advance past it -- the slide is unfinished, and finishing it is a human decision |
 
 The second row is the one to plan around: in `AUTOMATIC_WITH_OVERRIDE` that is the intended
-behaviour, since the mode exists so you can take a slide over. In `FULLY_AUTOMATIC` nobody
+behavior, since the mode exists so you can take a slide over. In `FULLY_AUTOMATIC` nobody
 is coming, so the run stops there until you return -- the 20-minute notification tells you,
 but the remaining slides wait. Another reason to prove a batch in `AUTOMATIC_WITH_OVERRIDE`
 first. Configure one under *Notifications* in preferences, or an unattended run will
@@ -329,7 +329,7 @@ that slot.
 ### Finishing
 
 A slot advances to **Done** on a successful acquisition, or stays **In
-Progress** / **Set up** if a run is cancelled at a gate or hits a handled error
+Progress** / **Set up** if a run is canceled at a gate or hits a handled error
 (so you can retry or mark it Skipped). Once every slot is **Done** or
 **Skipped**, click **Finish**. A combined saturation summary is shown if any
 tiles had concerning saturation during the run.
@@ -419,7 +419,7 @@ for unattended acquisition:
   (Z is restored to the pre-scan position on cancel). Single-tile refinement runs
   the same autofocus before its dialog opens. Every such scan also opens a small
   **Autofocus** window with the live focus curve and a **Cancel autofocus** button,
-  so it can be cancelled even with the Live Viewer closed.
+  so it can be canceled even with the Live Viewer closed.
 
 The setup pass writes a fresh per-slide alignment JSON specific to that slide's
 position in the current holder, and records which stage insert it was made on.
@@ -457,7 +457,7 @@ done. Push notifications require ntfy.sh configured in
 A batch that halts with this alert has detected that the stage's reported
 position and the coordinates in use disagree: the stage was reported well
 outside the region being acquired, for several samples running. The region's
-acquisition is cancelled and the rest of the pass is halted.
+acquisition is canceled and the rest of the pass is halted.
 
 **What it means.** A Prior controller has no absolute reference and nothing to
 home to. One that restarts resumes with position 0,0 wherever it is standing,
@@ -471,7 +471,7 @@ slide box can straddle the stage origin -- slot 2 of the PPM quad holder does --
 which would make a re-zeroed controller reporting 0,0 look like it was sitting
 legally on the slide. It allows a 2 mm margin for the autofocus tissue search,
 and ignores the first 30 seconds after a region starts, which is when the stage
-is still travelling to it.
+is still traveling to it.
 
 **Why the whole pass stops.** Every slide's alignment was measured against the
 old origin, so acquiring the remaining ones would image the wrong part of each.
@@ -493,7 +493,7 @@ positioned where its alignment says it is. If verification fails, the batch stop
 
 **Why this check exists.** A Prior stage is open-loop: it reports the step count
 it was given, so a commanded position and the reported position always agree
-whether or not the stage actually travelled that far. Logging shows a provably
+whether or not the stage actually traveled that far. Logging shows a provably
 clean counter over 34 hours while three of four slides came out offset by
 millimetres. Nothing that asks the controller where it is can see that; only
 matching against the sample can.

@@ -70,7 +70,7 @@ public class PPMSensitivityTestWorkflow {
                                 // Start test with progress dialog (all on FX thread initially)
                                 startTestWithProgress(params);
                             } else {
-                                logger.info("PPM sensitivity test cancelled by user");
+                                logger.info("PPM sensitivity test canceled by user");
                             }
                         })
                         .exceptionally(ex -> {

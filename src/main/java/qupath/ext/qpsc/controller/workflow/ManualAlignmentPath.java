@@ -417,7 +417,7 @@ public class ManualAlignmentPath {
                         fullResPixelSize, slotEstimate, slotJumpAssist)
                 .thenApply(transform -> {
                     if (transform == null) {
-                        throw new CancellationException("Manual alignment cancelled by user");
+                        throw new CancellationException("Manual alignment canceled by user");
                     }
                     logger.info("Manual transform created successfully");
                     state.transform = transform;

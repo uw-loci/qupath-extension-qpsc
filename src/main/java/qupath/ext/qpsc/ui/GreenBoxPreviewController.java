@@ -511,7 +511,7 @@ public class GreenBoxPreviewController {
                         params.saveToPreferences();
                         return currentResult[0];
                     } else if (button == cancelType) {
-                        logger.info("User cancelled green box detection dialog");
+                        logger.info("User canceled green box detection dialog");
                         if (currentTask[0] != null) {
                             currentTask[0].cancel();
                         }

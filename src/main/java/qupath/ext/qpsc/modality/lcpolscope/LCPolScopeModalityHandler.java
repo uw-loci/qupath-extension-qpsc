@@ -171,7 +171,7 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
                         + "degrees, perpendicular to the truth and entirely plausible-looking. Seam "
                         + "blending and pyramid downsampling must therefore go through sin(2t)/cos(2t), "
                         + "and mirroring the image negates the angle. The written tiles declare this in "
-                        + "their OME metadata; any external tool you use on them must honour it.");
+                        + "their OME metadata; any external tool you use on them must honor it.");
         return Optional.of(ui);
     }
 

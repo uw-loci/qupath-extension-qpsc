@@ -1681,7 +1681,7 @@ public class LiveViewerWindow {
             externalAutofocusCancelling = true;
             autofocusButton.setText("Cancelling...");
             autofocusButton.setDisable(true);
-            updateStatus("Autofocus: cancelling...");
+            updateStatus("Autofocus: canceling...");
             if (cancel != null) {
                 cancel.run();
             }
@@ -1821,7 +1821,7 @@ public class LiveViewerWindow {
     private void cancelSweepFocus() {
         autofocusButton.setText("Cancelling...");
         autofocusButton.setDisable(true);
-        updateStatus("Sweep Autofocus: cancelling...");
+        updateStatus("Sweep Autofocus: canceling...");
         MicroscopeController controller = MicroscopeController.getInstance();
         if (controller == null || controller.getSocketClient() == null) {
             return;
@@ -1888,7 +1888,7 @@ public class LiveViewerWindow {
                         SweepAutofocusRunner.run(controller, configPath, outputPath, objective, false);
                 if (result.cancelled()) {
                     // User canceled; server restored Z. Not a failure.
-                    Platform.runLater(() -> updateStatusHeld("Sweep Autofocus cancelled (Z restored)"));
+                    Platform.runLater(() -> updateStatusHeld("Sweep Autofocus canceled (Z restored)"));
                 } else {
                     String z0 = result.initialZ();
                     String z1 = result.finalZ();
@@ -1933,7 +1933,7 @@ public class LiveViewerWindow {
             streamingFocusController.cancel();
             autofocusButton.setText("Cancelling...");
             autofocusButton.setDisable(true);
-            updateStatus("Autofocus: cancelling...");
+            updateStatus("Autofocus: canceling...");
             return;
         }
 

@@ -2652,7 +2652,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         Double.parseDouble(p[1].trim()),
                         Integer.parseInt(p[2].trim()),
                         Integer.parseInt(p[2].trim()),
-                        "cancelled by the operator");
+                        "canceled by the operator");
             }
             if (trimmed.startsWith("NOTFOUND:")) {
                 String[] p = trimmed.substring("NOTFOUND:".length()).split(":");
@@ -5719,7 +5719,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     if (sinceReply > timeoutMs) {
                         logger.warn(
                                 "Server has not answered STATUS for {} ms (last progress: {} files); "
-                                        + "cancelling the acquisition rather than abandoning it",
+                                        + "canceling the acquisition rather than abandoning it",
                                 sinceReply,
                                 lastProgressCount);
                         // Never walk away from a RUNNING acquisition. The thread we leave behind
@@ -5727,7 +5727,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         // nobody is listening to, and every later ACQUIRE is refused.
                         cancelAbandonedAcquisition();
                         throw new IOException("The microscope server stopped answering for " + (sinceReply / 1000)
-                                + " s; the acquisition was cancelled, not completed");
+                                + " s; the acquisition was canceled, not completed");
                     }
                 }
 

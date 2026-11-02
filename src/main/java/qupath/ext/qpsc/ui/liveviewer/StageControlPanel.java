@@ -2199,7 +2199,7 @@ public class StageControlPanel extends VBox {
                 + "\nBackgrounds collected at another exposure are flagged at acquisition:"
                 + "\ncollect a new background afterwards (LC-PolScope Setup, step 3).";
         if (!confirmSaveToYaml("Save the LC-PolScope exposure?", details)) {
-            cameraStatusLabel.setText("Save cancelled");
+            cameraStatusLabel.setText("Save canceled");
             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             return;
         }
@@ -2367,7 +2367,7 @@ public class StageControlPanel extends VBox {
                                 + "acquisition inherits (brightfield has no profile-level exposure\n"
                                 + "field).";
                         if (!confirmSaveToYaml("Save camera settings to acquisition profile?", details)) {
-                            cameraStatusLabel.setText("Save cancelled");
+                            cameraStatusLabel.setText("Save canceled");
                             cameraStatusLabel.setStyle(
                                     "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
                             return;
@@ -2525,7 +2525,7 @@ public class StageControlPanel extends VBox {
                 .append(modality)
                 .append(".channels[*]\n(exposure_ms + the intensity device property).");
         if (!confirmSaveToYaml("Save channel settings to YAML?", confirmDetails.toString())) {
-            cameraStatusLabel.setText("Save cancelled");
+            cameraStatusLabel.setText("Save canceled");
             cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             return;
         }
@@ -5176,7 +5176,7 @@ public class StageControlPanel extends VBox {
                                 logger.info(
                                         "Backfilled bounding-box metadata on legacy entry '{}': "
                                                 + "bounds=({},{}) -> ({},{}) flip=({},{}) "
-                                                + "[recovered from alignment JSON; see 2026-05-15 regression report]",
+                                                + "[recovered from alignment JSON]",
                                         openEntry.getImageName(),
                                         String.format("%.1f", imgX1),
                                         String.format("%.1f", imgY1),

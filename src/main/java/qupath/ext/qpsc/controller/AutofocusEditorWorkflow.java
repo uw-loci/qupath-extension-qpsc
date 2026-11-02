@@ -512,7 +512,7 @@ public class AutofocusEditorWorkflow {
                 + "Check (per-tile) -- both edited in the Per-Objective\n"
                 + "settings above. Streaming AF is not invoked during\n"
                 + "acquisition; switch the Live Viewer button to 'Sweep'\n"
-                + "if you want acquisition-style behaviour interactively.");
+                + "if you want acquisition-style behavior interactively.");
         intro.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         Label sourcesHeader = new Label("Effective settings (where each comes from):");

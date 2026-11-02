@@ -108,7 +108,7 @@ public final class OrientationColorExport {
         Files.createDirectories(directory);
         Path target = Paths.get(UtilityFunctions.getUniqueFilePath(
                 directory.resolve(stem + ".ome.tif").toString()));
-        logger.info("Writing orientation colour image {} ({})", target, settings);
+        logger.info("Writing orientation color image {} ({})", target, settings);
         long start = System.currentTimeMillis();
         try (ImageServer<BufferedImage> colour = new OrientationColorExportServer(pair, settings)) {
             DirectTiffOutputWriter.write(colour, target.toString(), compression, TILE_SIZE, 1.0, progress);
@@ -173,7 +173,7 @@ public final class OrientationColorExport {
         Map<String, String> m = new LinkedHashMap<>();
         m.put(METADATA_PREFIX + "display_only", "true; measure on the retardance and orientation images");
         m.put(METADATA_PREFIX + "map", settings.kind().configName());
-        m.put(METADATA_PREFIX + "hue", "slow-axis orientation, one colour cycle over 0..180 deg");
+        m.put(METADATA_PREFIX + "hue", "slow-axis orientation, one color cycle over 0..180 deg");
         m.put(
                 METADATA_PREFIX + "brightness",
                 settings.colourOnly()

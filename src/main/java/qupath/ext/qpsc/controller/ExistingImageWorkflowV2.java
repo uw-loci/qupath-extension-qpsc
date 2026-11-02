@@ -457,7 +457,7 @@ public class ExistingImageWorkflowV2 {
                                 existingClasses, preselected)
                         .thenCompose(annotationResult -> {
                             if (!annotationResult.proceed || annotationResult.selectedClasses.isEmpty()) {
-                                throw new CancellationException("Annotation selection cancelled");
+                                throw new CancellationException("Annotation selection canceled");
                             }
 
                             // Store selected classes in state for later use
@@ -1079,8 +1079,8 @@ public class ExistingImageWorkflowV2 {
                         return selectClassesAfterDetection(state);
 
                     case CANCEL:
-                        logger.info("User cancelled workflow due to no annotations");
-                        throw new CancellationException("Workflow cancelled - no annotations available");
+                        logger.info("User canceled workflow due to no annotations");
+                        throw new CancellationException("Workflow canceled - no annotations available");
 
                     default:
                         throw new RuntimeException("Unexpected annotation action: " + action);
@@ -1107,7 +1107,7 @@ public class ExistingImageWorkflowV2 {
             List<String> preselected = PersistentPreferences.getSelectedAnnotationClasses();
             return AnnotationAcquisitionDialog.showDialog(existing, preselected).thenApply(result -> {
                 if (result == null || !result.proceed || result.selectedClasses.isEmpty()) {
-                    throw new CancellationException("Annotation class selection cancelled after detection");
+                    throw new CancellationException("Annotation class selection canceled after detection");
                 }
                 state.selectedAnnotationClasses = result.selectedClasses;
                 state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, result.selectedClasses);
@@ -1268,7 +1268,7 @@ public class ExistingImageWorkflowV2 {
             Optional<javafx.scene.control.ButtonType> result = alert.showAndWait();
             if (result.isEmpty() || result.get() == cancel) {
                 logger.info(
-                        "Source mismatch dialog: user cancelled (source='{}' active='{}' acquired_on='{}')",
+                        "Source mismatch dialog: user canceled (source='{}' active='{}' acquired_on='{}')",
                         source,
                         active,
                         acquiredOn);
@@ -1485,7 +1485,7 @@ public class ExistingImageWorkflowV2 {
                 // .exceptionally chain treats CancellationException as user cancel
                 // (logs "Workflow cancelled by user" without an error dialog).
                 return CompletableFuture.failedFuture(
-                        new CancellationException("Acquisition configuration dialog cancelled"));
+                        new CancellationException("Acquisition configuration dialog canceled"));
             }
 
             logger.info("Initializing workflow from consolidated config");
@@ -1668,7 +1668,7 @@ public class ExistingImageWorkflowV2 {
                     if (!confirmCrossScopeAlignment(state)) {
                         // Throw rather than return null so handleError is the
                         // single workflow terminal.
-                        throw new CancellationException("User cancelled cross-scope alignment");
+                        throw new CancellationException("User canceled cross-scope alignment");
                     }
                     // Refinement on the *target* scope mis-frames the
                     // composed transform's expected pixel input (the source per-slide
@@ -2103,7 +2103,7 @@ public class ExistingImageWorkflowV2 {
                     // ExistingAlignmentPath returned null (e.g. no macro image, user canceled).
                     // Explicit cancellation routes through handleError instead of
                     // propagating null through the chain.
-                    throw new CancellationException("ExistingAlignmentPath cancelled (no macro / user cancel)");
+                    throw new CancellationException("ExistingAlignmentPath canceled (no macro / user cancel)");
                 }
                 // Copy back relevant state from the working implementation
                 state.transform = legacyState.transform;
@@ -2290,7 +2290,7 @@ public class ExistingImageWorkflowV2 {
                     && !state.objective.equals(entryObjective)
                     && !confirmContinueWithEntryObjectiveMismatch(
                             entry.getImageName(), entryObjective, state.objective)) {
-                logger.info("User cancelled at sub-image entry-objective mismatch advisory");
+                logger.info("User canceled at sub-image entry-objective mismatch advisory");
                 CompletableFuture<WorkflowState> cancelled = new CompletableFuture<>();
                 cancelled.completeExceptionally(new CancellationException("Sub-image entry-objective mismatch"));
                 return cancelled;
@@ -2622,7 +2622,7 @@ public class ExistingImageWorkflowV2 {
             if (state == null) return CompletableFuture.completedFuture(null);
 
             if (!validateMMAgainstSelection(state)) {
-                logger.warn("Pixel-size or camera-ROI validation failed before refinement; cancelling workflow");
+                logger.warn("Pixel-size or camera-ROI validation failed before refinement; canceling workflow");
                 // Explicit cancellation -- the validate dialog already informed
                 // the user, so handleError just logs "Workflow cancelled by user" and runs
                 // cleanup.
@@ -2868,7 +2868,7 @@ public class ExistingImageWorkflowV2 {
                                 // X-close, Cancel, or a canceled tile pick. The prior alignment
                                 // is untouched and nothing is acquired. handleError logs this as
                                 // an operator cancel and cleanup() runs.
-                                throw new CancellationException("Refinement cancelled by the operator; no acquisition");
+                                throw new CancellationException("Refinement canceled by the operator; no acquisition");
                             case MANUAL:
                                 // "Create New Alignment": run the full manual alignment on this
                                 // entry, then re-read the annotations it established.
@@ -3089,7 +3089,7 @@ public class ExistingImageWorkflowV2 {
             // check; this catches the case where MM state changed during refinement (user
             // switched objective in MicroManager, applied a ROI crop, etc.).
             if (!validateMMAgainstSelection(state)) {
-                logger.warn("Pixel-size or camera-ROI validation failed before acquisition; cancelling workflow");
+                logger.warn("Pixel-size or camera-ROI validation failed before acquisition; canceling workflow");
                 // Explicit cancellation through handleError. The validate dialog
                 // already informed the user.
                 return CompletableFuture.failedFuture(
@@ -3249,7 +3249,7 @@ public class ExistingImageWorkflowV2 {
                 logger.warn("Workflow STOPPED before it could finish: {}", cause.getMessage());
             } else if (cause instanceof CancellationException) {
                 logger.info(
-                        "Workflow cancelled by user{}",
+                        "Workflow canceled by user{}",
                         cause.getMessage() == null ? "" : " (" + cause.getMessage() + ")");
             } else {
                 logger.error("Workflow error", cause);
@@ -3302,7 +3302,7 @@ public class ExistingImageWorkflowV2 {
          */
         private static void showSubImageCrossScopeMismatchDialog(
                 String acquiredOn, String activeMicroscope, String entryName) {
-            String title = "Sub-image Acquired on a Different Microscope -- Workflow Cancelled";
+            String title = "Sub-image Acquired on a Different Microscope -- Workflow Canceled";
             String header = "This sub-image was acquired on a different microscope.";
             StringBuilder body = new StringBuilder();
             body.append(String.format(
@@ -3319,7 +3319,7 @@ public class ExistingImageWorkflowV2 {
             body.append("  2. Open the parent macro entry and run the workflow against\n");
             body.append("     a fresh annotation on the macro -- the cross-scope alignment\n");
             body.append("     path will compose a transform for this microscope.\n\n");
-            body.append("This workflow has been cancelled.");
+            body.append("This workflow has been canceled.");
 
             Runnable show = () -> {
                 javafx.scene.control.Alert alert =
@@ -3371,7 +3371,7 @@ public class ExistingImageWorkflowV2 {
          * right now, which may not match the saved sub-image.
          */
         private static void showMissingEntryObjectiveDialog(String entryName) {
-            String title = "Sub-image Missing Objective -- Workflow Cancelled";
+            String title = "Sub-image Missing Objective -- Workflow Canceled";
             String header = "This sub-image has no objective metadata.";
             StringBuilder body = new StringBuilder();
             body.append(String.format("The open entry%n  '%s'%nhas no 'objective' metadata.%n%n", entryName));
@@ -3383,7 +3383,7 @@ public class ExistingImageWorkflowV2 {
             body.append("To fix, re-acquire the sub-image with the current workflow (which\n");
             body.append("stamps the objective on import), or hand-edit the project entry's\n");
             body.append("metadata to add the correct objective.\n\n");
-            body.append("This workflow has been cancelled.");
+            body.append("This workflow has been canceled.");
 
             Runnable show = () -> {
                 javafx.scene.control.Alert alert =

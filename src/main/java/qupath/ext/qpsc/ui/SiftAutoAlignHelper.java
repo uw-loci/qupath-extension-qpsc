@@ -1211,7 +1211,7 @@ public final class SiftAutoAlignHelper {
         grid.add(confHelp, 0, ++row, 2, 1);
 
         // ---- Color (H&E) conversion ----
-        Label rgbHeader = new Label("Colour reference conversion");
+        Label rgbHeader = new Label("Color reference conversion");
         rgbHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
         grid.add(rgbHeader, 0, ++row, 2, 1);
 
@@ -1222,7 +1222,7 @@ public final class SiftAutoAlignHelper {
         rgbConvChoice.setPrefWidth(150);
         grid.add(new Label("RGB -> gray:"), 0, ++row);
         grid.add(rgbConvChoice, 1, row);
-        Label rgbHelp = new Label("How to collapse a colour (H&E) reference image to one channel. Only affects colour "
+        Label rgbHelp = new Label("How to collapse a color (H&E) reference image to one channel. Only affects color "
                 + "images -- the mono camera snapshot is untouched. GREEN (default) takes the green channel: both "
                 + "H&E stains absorb green, so it carries the most tissue structure and keeps the same "
                 + "tissue-dark polarity as a brightfield mono camera. LUMINANCE is the legacy weighting, which "
@@ -1246,7 +1246,7 @@ public final class SiftAutoAlignHelper {
         Label monoHelp = new Label("How to compress >8-bit grayscale (microscope camera) to 8-bit before matching. "
                 + "PERCENTILE clips outliers and stretches; best when the camera doesn't use the full bit "
                 + "range (typical 12-14 bit cameras). MIN_MAX uses the actual data extremes. "
-                + "BIT_SHIFT is the legacy /256 behaviour.");
+                + "BIT_SHIFT is the legacy /256 behavior.");
         monoHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         monoHelp.setWrapText(true);
         grid.add(monoHelp, 0, ++row, 2, 1);
@@ -1273,7 +1273,7 @@ public final class SiftAutoAlignHelper {
         claheCheckbox.setSelected(prefs.isClaheEnabled());
         grid.add(claheCheckbox, 0, ++row, 2, 1);
         Label claheHelp =
-                new Label("Cross-modality contrast normalisation. Strongly recommended when matching a monochrome "
+                new Label("Cross-modality contrast normalization. Strongly recommended when matching a monochrome "
                         + "brightfield camera against an H&E (RGB) WSI -- the staining and the camera have very "
                         + "different intensity statistics, and CLAHE makes the keypoints commensurate.");
         claheHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");

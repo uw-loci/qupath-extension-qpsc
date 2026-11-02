@@ -158,7 +158,7 @@ public class StreamingFocusController {
 
                 case ABORTED:
                     logger.info("Autofocus ABORTED by user: {}", result.reason);
-                    finish(callback, "Autofocus cancelled -- Z restored to start position", Outcome.CANCELLED);
+                    finish(callback, "Autofocus canceled -- Z restored to start position", Outcome.CANCELLED);
                     return;
 
                 case FAILED:

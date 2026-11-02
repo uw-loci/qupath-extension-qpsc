@@ -225,7 +225,7 @@ public final class ObjectivePresetActuator {
                     spec.group(),
                     string(r, "previous"),
                     spec.preset(),
-                    spec.motorized() ? "motorized turret, confirmed" : "labelling device",
+                    spec.motorized() ? "motorized turret, confirmed" : "labeling device",
                     string(r, "pixel_size_um"));
         }
     }

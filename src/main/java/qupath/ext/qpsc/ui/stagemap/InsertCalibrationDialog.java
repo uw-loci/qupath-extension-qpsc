@@ -273,7 +273,7 @@ public final class InsertCalibrationDialog {
                     + "Only X differs per slide, and the side edges are reachable: capture each slide's LEFT and "
                     + "RIGHT edge and its center X is their midpoint. Capture center takes both at once when the "
                     + "middle can be judged directly. Any field can be typed.\n"
-                    + "The captured point centres a slide-sized rectangle on the map, so it is the middle of the "
+                    + "The captured point centers a slide-sized rectangle on the map, so it is the middle of the "
                     + "PHYSICAL SLIDE, not the coverslip -- a coverslip sitting off-centre would shift the whole "
                     + "slot. These are stage coordinates: recapture them after a stage re-zero. The aperture "
                     + "edges above position the drawn outline and the view extent, not the slots.");
@@ -340,7 +340,7 @@ public final class InsertCalibrationDialog {
 
                 Button captureCenter = new Button("Capture center");
                 captureCenter.setTooltip(new Tooltip("Drive to the middle of slide " + k
-                        + " -- the centre of the physical slide, not the coverslip -- then click.\n"
+                        + " -- the center of the physical slide, not the coverslip -- then click.\n"
                         + "Use this when you can judge the middle directly; it needs no corners."));
                 captureCenter.setOnAction(e -> {
                     if (slideWireframe != null) {

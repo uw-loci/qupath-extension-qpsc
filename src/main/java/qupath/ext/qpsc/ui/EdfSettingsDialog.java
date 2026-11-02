@@ -61,9 +61,9 @@ public class EdfSettingsDialog {
         metricCombo.setValue(PersistentPreferences.getEdfMetric());
         metricCombo.setTooltip(new Tooltip("How sharpness is measured at each pixel.\n\n"
                 + "tenengrad -- gradient strength. Matches the autofocus metric of the same name, so the "
-                + "fused image agrees with what autofocus was optimising. Good default for stained tissue.\n\n"
+                + "fused image agrees with what autofocus was optimizing. Good default for stained tissue.\n\n"
                 + "modified_laplacian -- second differences taken per axis, so opposite curvature in X and Y "
-                + "cannot cancel. Peaks more sharply in Z than tenengrad, which helps on fibres and other "
+                + "cannot cancel. Peaks more sharply in Z than tenengrad, which helps on fibers and other "
                 + "elongated structures, but is more sensitive to noise.\n\n"
                 + "variance -- local contrast. Cheapest and the most forgiving of noise, but responds to a "
                 + "blob whether or not its edges are sharp. Try it when the others chase noise."));

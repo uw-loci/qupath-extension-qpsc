@@ -66,7 +66,7 @@ public final class LCColormapPane extends VBox {
         if (ppmSource != null) {
             options.add(new Option(
                     "ppm",
-                    "PPM colours (" + ppmSource + ")",
+                    "PPM colors (" + ppmSource + ")",
                     "The hue a PPM image shows for the angle. The angle registration to PPM is in the config."));
         }
         options.add(new Option(
@@ -92,10 +92,10 @@ public final class LCColormapPane extends VBox {
             }
         });
 
-        Label heading = new Label("Orientation colour image:");
+        Label heading = new Label("Orientation color image:");
         Tooltip.install(
                 heading,
-                new Tooltip("Display only: changes how the colour image looks, never the retardance or "
+                new Tooltip("Display only: changes how the color image looks, never the retardance or "
                         + "orientation values. Applies to tiles reconstructed from now on."));
         HBox row = new HBox(8, heading, combo);
         row.setAlignment(Pos.CENTER_LEFT);
@@ -125,7 +125,7 @@ public final class LCColormapPane extends VBox {
         Label heading = new Label("Full brightness at:");
         Tooltip.install(
                 heading,
-                new Tooltip("The retardance shown at full brightness in the orientation colour image, and the top "
+                new Tooltip("The retardance shown at full brightness in the orientation color image, and the top "
                         + "of the retardance image's display range. Display only. Raise it for a mounting medium "
                         + "or a section thickness that gives more retardance than the default is made for."));
         HBox row = new HBox(8, heading, spinner, new Label("nm retardance"), useConfig);

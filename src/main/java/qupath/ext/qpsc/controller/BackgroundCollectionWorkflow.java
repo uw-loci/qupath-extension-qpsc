@@ -186,7 +186,7 @@ public class BackgroundCollectionWorkflow {
                                     return null;
                                 });
                     } else {
-                        logger.info("Background collection cancelled by user");
+                        logger.info("Background collection canceled by user");
                     }
                 })
                 .exceptionally(ex -> {
@@ -292,11 +292,11 @@ public class BackgroundCollectionWorkflow {
                 if (configPx != null
                         && configPx > 0.0
                         && !QPScopeChecks.validateObjectivePixelSize(objective, detector, modality, configPx)) {
-                    logger.info("Background collection cancelled by objective pixel-size mismatch");
+                    logger.info("Background collection canceled by objective pixel-size mismatch");
                     return;
                 }
                 if (!QPScopeChecks.validateCameraRoi(detector)) {
-                    logger.info("Background collection cancelled by camera ROI mismatch");
+                    logger.info("Background collection canceled by camera ROI mismatch");
                     return;
                 }
             } catch (Exception ex) {

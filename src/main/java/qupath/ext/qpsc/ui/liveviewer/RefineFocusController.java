@@ -529,7 +529,7 @@ public class RefineFocusController {
         }
         double shift = bestZ - startZ;
         String msg = cancelled
-                ? String.format("Refine Focus cancelled: shifted %.1fum to best position", shift)
+                ? String.format("Refine Focus canceled: shifted %.1fum to best position", shift)
                 : String.format("Refine Focus complete: shifted %.1fum", shift);
         finish(callback, msg, Outcome.SUCCESS);
     }

@@ -180,9 +180,9 @@ Streaming autofocus uses continuous-Z scanning. Unlike the stepped Sweep Autofoc
 
 On PPM at the production 0.73 ms exposure, a 6 um Streaming scan completes in ~1 second and delivers ~25-30 usable (z, metric) samples -- far denser than the stepped Sweep could produce in the same time.
 
-**Where a sample's Z comes from (2026-08-26).** `z_at_pop` is read from the parallel Z-poll trace -- a background thread sampling `core.get_position()` throughout the scan -- and not from `wall_ms * slow_speed_um_per_s`. The velocity model extrapolates from a hand-calibrated constant and cannot represent the stage's acceleration and deceleration ramps, so its error accumulates with distance travelled. Measured on PPM 20x over a 267 um approach traverse: configured 11.5 um/s against a real ~11.96 um/s in the constant-velocity phase, which by the sample plane had become an 8.6 um labelling error (operator focus -237.0; peak at measured Z -236.65 versus modelled Z -228.08).
+**Where a sample's Z comes from (2026-08-26).** `z_at_pop` is read from the parallel Z-poll trace -- a background thread sampling `core.get_position()` throughout the scan -- and not from `wall_ms * slow_speed_um_per_s`. The velocity model extrapolates from a hand-calibrated constant and cannot represent the stage's acceleration and deceleration ramps, so its error accumulates with distance traveled. Measured on PPM 20x over a 267 um approach traverse: configured 11.5 um/s against a real ~11.96 um/s in the constant-velocity phase, which by the sample plane had become an 8.6 um labeling error (operator focus -237.0; peak at measured Z -236.65 versus modeled Z -228.08).
 
-This matters far more for approach-from-safe-Z than for a routine sweep. The same mis-calibration over a 20-40 um sweep is sub-micron and invisible, which is why it went unnoticed; the approach traverses ten times further from a retracted start. Note that the endpoint-average velocity check in the logs cannot detect it -- the stage still arrives at `z_end`, so displacement over total time lands back on the configured value while the mid-scan labelling is wrong throughout. Each scan now logs the model-versus-measurement drift (warning past 2 um) and the achieved sampling density in um/sample.
+This matters far more for approach-from-safe-Z than for a routine sweep. The same mis-calibration over a 20-40 um sweep is sub-micron and invisible, which is why it went unnoticed; the approach traverses ten times further from a retracted start. Note that the endpoint-average velocity check in the logs cannot detect it -- the stage still arrives at `z_end`, so displacement over total time lands back on the configured value while the mid-scan labeling is wrong throughout. Each scan now logs the model-versus-measurement drift (warning past 2 um) and the achieved sampling density in um/sample.
 
 ### Feasibility envelope
 
@@ -268,7 +268,7 @@ A **focus surface** is a tilted plane fitted to focus measurements, capturing ho
 
 ### Why It Helps
 
-Measured across ten regions, a single tilted plane describes focus to 0.3–1.1 µm RMS across a whole annotation while the focal plane itself travels 4–150 µm. The wide standard autofocus at the first tile of a region starts from a scalar hint (last acquisition Z, or the tilt model), and measured against that plane it lands more than 5 µm out **25% of the time** and more than 15 µm out 21% of the time, worst case 73 µm — and its answer then seeds every tile around it. A position-aware hint centres the search near the actual focal plane at that position instead, which is the difference between a wide search that starts inside the sample's focus range and one that does not.
+Measured across ten regions, a single tilted plane describes focus to 0.3–1.1 µm RMS across a whole annotation while the focal plane itself travels 4–150 µm. The wide standard autofocus at the first tile of a region starts from a scalar hint (last acquisition Z, or the tilt model), and measured against that plane it lands more than 5 µm out **25% of the time** and more than 15 µm out 21% of the time, worst case 73 µm — and its answer then seeds every tile around it. A position-aware hint centers the search near the actual focal plane at that position instead, which is the difference between a wide search that starts inside the sample's focus range and one that does not.
 
 Note what this does **not** claim: nobody has yet measured how much it improves first-tile autofocus success on this rig. The 25% figure says how often the wide search is wrong today; whether a better starting hint fixes that is the point of the hardware check in `claude-reports/MANUAL_TEST_QUEUE.md`.
 
@@ -391,11 +391,11 @@ Validating the worst case licenses the rest.
      where you expected. When ready, click **Continue** to proceed to the next scan.
    
    **Watch the stage during this.** One limit worth knowing: the initial retraction is a plain stage
-   move, so cancelling during it stops the scan that follows but does not interrupt the move
+   move, so canceling during it stops the scan that follows but does not interrupt the move
    already in flight. After a successful scan the stage returns to the Z **you** focused at, not
    the peak the scan measured (those can differ -- the gap between them is one of the things being
    checked). It is a position the stage was at moments earlier, so re-running the validation needs
-   no re-focusing. A cancelled or failed scan returns to the safe Z instead.
+   no re-focusing. A canceled or failed scan returns to the safe Z instead.
 5. Move in XY to a **bare** part of the same slide, changing nothing else; confirm.
 6. The identical scan runs there, with the same cancellable window. The direction confirmation
    in step 3 is asked only once -- the retraction is unchanged for the second scan.
@@ -436,7 +436,7 @@ before), the checkbox text adds a note: **"(kept on from your last run)"** to ex
 pre-filled setting does not match the measurement.
 
 **When to turn it on:** whenever focus lands short of the sample, or you simply want the
-safer behaviour. With the gate on, the approach snaps at each candidate peak and stops only
+safer behavior. With the gate on, the approach snaps at each candidate peak and stops only
 where tissue is actually detected, so a coverslip or slide surface is rejected and it carries
 on inward. Cost is one extra snap per rejected peak.
 
@@ -535,7 +535,7 @@ Before focusing at that landmark, QPSC asks the microscope to look for tissue
 acquisition path uses** — resolved through the same modality binding, so a modality that
 widens its tissue band or lowers its area floor in `autofocus_<scope>.yml` gets those
 values here too — and if it is background, step one field-of-view diagonal outward
-and check again — fanning around a direction hint that points toward the centre of the
+and check again — fanning around a direction hint that points toward the center of the
 tile grid, since that is where the tissue is. Two rings of eight bearings are swept by
 default -- seventeen positions, reaching roughly 890 um at 20x.
 
@@ -543,7 +543,7 @@ The hint decides the **order** bearings are tried in, never which ones. A good h
 the search returns on its first or second position; a bad one costs attempts rather than
 the slide. That matters because the hint is measured in the transform's own frame, and the
 transform is off by the very offset being defeated -- so when the predicted point sits near
-the tile-grid centre (common: the tile picker favours interior tiles) the hint's direction
+the tile-grid center (common: the tile picker favors interior tiles) the hint's direction
 is dominated by that error and can point anywhere.
 
 The step is deliberately coarse and leaves gaps between fields. That is the right trade
@@ -583,7 +583,7 @@ loop here would silently change what the next step depends on. This is a deliber
 difference from the acquisition path's first-tile search, which does adjust exposure.
 
 **When nothing is found:** the stage is returned to the predicted position and focusing
-runs anyway. The search is an optimisation on a step that already worked without it, so a
+runs anyway. The search is an optimization on a step that already worked without it, so a
 failed search does **not** hand the slide back or stop an automatic batch — on a small or
 sparse section the pattern can miss while autofocus and SIFT both succeed, and halting
 there would make the feature that exists to keep an unattended run moving the thing that
@@ -591,11 +591,11 @@ stops it. The steps that can actually tell — autofocus, and the SIFT confidenc
 hand the slide back themselves if they fail.
 
 > **Not yet verified on a microscope.** The search geometry is unit-tested on both sides;
-> the behaviour on real tissue is not.
+> the behavior on real tissue is not.
 
 **If the command server is too old to know `FINDTISS`,** the client detects the missing
 reply, stops asking for the rest of the session, reconnects its primary socket, and focuses
-from the predicted position — the behaviour that predates the search. The reconnect is not
+from the predicted position — the behavior that predates the search. The reconnect is not
 cosmetic: an old server consumes the command's text payload as if each eight bytes were
 another command, which would otherwise shift every later command on that connection. Update
 the command server alongside the extension.
@@ -677,7 +677,7 @@ The licence lapses when:
 
 When the licence is missing or lapsed (first four reasons), the Live Viewer status line shows "Focusing (standard scan: <reason>)" and the server log carries the same detail. The fifth case is logged only, since it is the expected path for every point after the first on a slide.
 
-Note that the standard scan centres on the **current Z**, so where it searches depends on where the stage was left. A search running hundreds of micrometres from the sample means the starting Z was wrong, not the search width.
+Note that the standard scan centers on the **current Z**, so where it searches depends on where the stage was left. A search running hundreds of micrometres from the sample means the starting Z was wrong, not the search width.
 
 ## Dedicated focus channel (multi-channel modalities)
 
@@ -685,7 +685,7 @@ On a channel modality, autofocus runs under whichever channel the acquisition lo
 
 Intended use: focus on a bright channel with good coverage, at a short exposure. Focus frames are scored for contrast, not archived, so imaging-quality exposure is wasted time on every attempt. The channel may be one the run does not acquire at all.
 
-Wire format and server behaviour: `--af-channel` / `--af-channel-exposure` / `--af-channel-intensity`, handled by `apply_af_channel_state` (see [CHANNELS.md](CHANNELS.md#dedicated-focus-channel-optional)). Opt-in: without the flags, nothing about autofocus changes. The acquisition loop re-applies each acquired channel before snapping, so the focus channel never appears in an image.
+Wire format and server behavior: `--af-channel` / `--af-channel-exposure` / `--af-channel-intensity`, handled by `apply_af_channel_state` (see [CHANNELS.md](CHANNELS.md#dedicated-focus-channel-optional)). Opt-in: without the flags, nothing about autofocus changes. The acquisition loop re-applies each acquired channel before snapping, so the focus channel never appears in an image.
 
 ## Modality-Aware Autofocus
 
@@ -796,7 +796,7 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 | `search_range_um` | Total Z search range in micrometers | 12-50 |
 | `n_tiles` | Spatial grid spacing for AF positions (every ~N tiles in each axis) | 3-7 |
 | `score_metric` | Focus quality algorithm | `normalized_variance` |
-| `channel_reduction` | How a color frame becomes the grey image the metric scores. Omit it for the equal-weighted mean of R, G and B. `green` scores the green channel alone. Not shown in the editor; edit the YAML. See [Channel reduction](#channel-reduction). | omitted, or `green` |
+| `channel_reduction` | How a color frame becomes the gray image the metric scores. Omit it for the equal-weighted mean of R, G and B. `green` scores the green channel alone. Not shown in the editor; edit the YAML. See [Channel reduction](#channel-reduction). | omitted, or `green` |
 | `texture_threshold` | Min texture for tissue detection. A modality bound to a strategy with its own `validity_params` (PPM is) uses those instead; see [What decides what on PPM](#what-decides-what-on-ppm). | 0.005-0.030 |
 | `tissue_area_threshold` | Min tissue coverage fraction | 0.05-0.30 |
 | `sweep_range_um` | Z range for sweep autofocus | 6-10 |
@@ -808,15 +808,15 @@ Autofocus parameters are configured **per objective** in the autofocus YAML file
 
 ### Channel reduction
 
-Every focus metric scores a single grey image. By default a color frame becomes one by
+Every focus metric scores a single gray image. By default a color frame becomes one by
 averaging R, G and B with equal weights, which is also what standard autofocus has always done.
 Setting `channel_reduction: green` on an objective scores the green channel alone.
 
 Green helps when achromatic debris shares the field with stained tissue. A dust speck or a dark
-fibre has the same contrast in all three channels, while tissue's contrast sits in the channels
+fiber has the same contrast in all three channels, while tissue's contrast sits in the channels
 its stain absorbs. Averaging keeps all of the debris signal and dilutes the tissue's, so the
 debris can win. On four PPM 20x traverses measured on 2026-09-04, the equal-weighted mean put
-focus on a fibre 113 um from the tissue on one field. Green found the tissue there and was as
+focus on a fiber 113 um from the tissue on one field. Green found the tissue there and was as
 good or better on the other three. The measurements are in the `microscope_imageprocessing`
 source, in `focus/metrics.py`.
 
@@ -832,7 +832,7 @@ different places:
 |---|---|---|
 | Is there tissue in this field worth focusing on? | The `ppm` modality binding and its strategy's `validity_params` | `stained_colour`: at least 15% of pixels with chroma of 28 counts or more |
 | Which metric scores sharpness? | `score_metric` on the objective's row | 10x and 20x `brenner_gradient`, 40x `tenengrad` |
-| Which grey image is scored? | `channel_reduction` on the objective's row | 20x `green`; 10x and 40x the equal-weighted mean |
+| Which gray image is scored? | `channel_reduction` on the objective's row | 20x `green`; 10x and 40x the equal-weighted mean |
 
 The flat `texture_threshold` and `tissue_area_threshold` on each objective row do not decide
 tissue for PPM, because the binding's check replaces them. The `score_metric` written inside a

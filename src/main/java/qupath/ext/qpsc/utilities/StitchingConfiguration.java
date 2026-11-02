@@ -202,7 +202,7 @@ public class StitchingConfiguration {
             }
 
             if (!userWantsRetry.get()) {
-                logger.info("User cancelled due to invalid stitching settings");
+                logger.info("User canceled due to invalid stitching settings");
                 return false;
             }
 

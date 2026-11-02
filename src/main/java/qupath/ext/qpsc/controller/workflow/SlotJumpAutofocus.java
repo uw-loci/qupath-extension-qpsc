@@ -624,7 +624,7 @@ public final class SlotJumpAutofocus {
             return new TissueSearchHint(Double.NaN, Double.NaN);
         }
         logger.info(
-                "Tissue search: hint toward the tile-grid centre ({}, {}) um",
+                "Tissue search: hint toward the tile-grid center ({}, {}) um",
                 String.format("%.1f", hint[0]),
                 String.format("%.1f", hint[1]));
         return new TissueSearchHint(hint[0], hint[1]);
@@ -760,7 +760,7 @@ public final class SlotJumpAutofocus {
                     // The operator canceled. Say nothing alarming and do not hand the slide
                     // back for "no tissue" -- they stopped it on purpose, and the AF path
                     // below reports the cancel itself.
-                    logger.info("Slot-jump tissue search cancelled by the operator");
+                    logger.info("Slot-jump tissue search canceled by the operator");
                 }
                 case NOT_FOUND -> {
                     // The server has already put the stage back where it started, so the

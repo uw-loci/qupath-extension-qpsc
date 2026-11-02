@@ -19,7 +19,7 @@ figures -- one per branch you are likely to be hunting in:
 > menu item moves, the fix is a one-line edit and a re-run rather than four
 > re-captured nested screenshots.
 
-The **QP Scope** entry in the menu bar shows a coloured dot so it stands out when multiple QuPath extensions are installed. The dot colour and visibility are configured in `Preferences > QuPath Scope > Show menu colour dot` and `Menu dot colour`.
+The **QP Scope** entry in the menu bar shows a colored dot so it stands out when multiple QuPath extensions are installed. The dot color and visibility are configured in `Preferences > QuPath Scope > Show menu colour dot` and `Menu dot colour`.
 
 ---
 
@@ -57,7 +57,7 @@ The **QP Scope** entry in the menu bar shows a coloured dot so it stands out whe
 | [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... |
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... |
 | Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... |
-| [Orientation Colour View](#orientation-colour-view) | Colour an LC-PolScope orientation image live, brightness from its retardance image; export it as an RGB OME-TIFF on request | Extensions > QP Scope > Utilities > Project Tools > Orientation Colour View... |
+| [Orientation Color View](#orientation-color-view) | Color an LC-PolScope orientation image live, brightness from its retardance image; export it as an RGB OME-TIFF on request | Extensions > QP Scope > Utilities > Project Tools > Orientation Color View... |
 | Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... |
 | [Export Spatial Relationships](#export-spatial-relationships-ome-ngff-06) | Write how the project's images relate to each other and to the stage as OME-NGFF 0.6 scene metadata | Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... |
 | **Utilities > Microscope Configuration** | | |
@@ -143,9 +143,9 @@ profile switches camera the way a two-camera scope does.
 
 | Modality (profile) | Camera | What it shows |
 |---|---|---|
-| Brightfield (`Brightfield_10x`) | colour `DCam`, 512 x 512 px at 0.65 um/px, 8-bit RGB | the H&E slide |
+| Brightfield (`Brightfield_10x`) | color `DCam`, 512 x 512 px at 0.65 um/px, 8-bit RGB | the H&E slide |
 | Fluorescence (`Fluorescence_10x`) | mono `DMonoCam`, 640 x 512 px at 0.586 um/px, 12-bit | four channels from a four-line LED: DAPI (nuclei), FITC (weak autofluorescence), TRITC (eosin), Cy5 (sparse puncta in part of the tissue) |
-| lcpolscope (`lcpolscope_10x`) | the same mono camera | five LC-PolScope states through a simulated Meadowlark compensator; collagen fibres are birefringent (up to 18 nm, slow axis along each fibre), vessel walls weakly so, nuclei, lumens and glass not at all |
+| lcpolscope (`lcpolscope_10x`) | the same mono camera | five LC-PolScope states through a simulated Meadowlark compensator; collagen fibers are birefringent (up to 18 nm, slow axis along each fiber), vessel walls weakly so, nuclei, lumens and glass not at all |
 
 The LC-PolScope optics are imperfect in the ways a real instrument is, so its tools have
 something to do: the shipped palette is the demo compensator's calibrated one, which
@@ -340,7 +340,7 @@ Calibrate the two variable retarders of the universal compensator by finding the
 The result dialog has three tabs:
 
 - **Summary**: the text above, which is also written to the QuPath log.
-- **Palette**: each swing state's offset from extinction, LC-A across and LC-B up, against the ideal point at the swing on its own axis (grey). A good calibration puts each state on or near its grey point; one short of it needed less retardance than the swing to reach the same brightness. The lines under the plot give each offset and its share of the swing, the same deviation the Poincare-sphere warning reports.
+- **Palette**: each swing state's offset from extinction, LC-A across and LC-B up, against the ideal point at the swing on its own axis (gray). A good calibration puts each state on or near its gray point; one short of it needed less retardance than the swing to reach the same brightness. The lines under the plot give each offset and its share of the swing, the same deviation the Poincare-sphere warning reports.
 - **Search curves**: the mean intensity the search measured along each crystal through extinction (LC-A with LC-B held at its extinction value, and the reverse), with the target every swing state was matched to as a dashed line. The swing states are where the curves cross it. Both curves should be V-shaped and symmetric about 0; a curve that rises faster on one side shows a crystal whose response is lopsided about extinction, which no amount of searching changes. On the LC-PolScope Flash4 (2026-10-26) LC-B crosses the target at +0.014 and -0.025 waves while LC-A crosses at +/-0.030.
 
 Both tabs are drawn from the calibration file alone, so a result predating the search trace shows the palette but no curves.
@@ -354,7 +354,7 @@ Both tabs are drawn from the calibration file alone, so a result predating the s
 The result has a **Summary** and one tab per crystal:
 
 - **Summary**: for each crystal, its number of fringes, the exposure, and the largest gap between the adapter's table and the measured curve, judged around the voltages the palette uses. Then each swing state's offset from extinction, commanded, measured and in volts, e.g. `State2: LC-B +0.0140 commanded = +0.0xxx measured (-179 mV)`.
-- **LC-A / LC-B**: retardance against drive voltage. Blue is the crystal, from its fringes; grey is the adapter's table, read from the adapter itself by writing retardances and reading back the volts it chooses. Orange dots are the applied palette's states. **Around the palette** (default) or **Full range**. Where blue and grey part, every palette number in waves is off by that gap.
+- **LC-A / LC-B**: retardance against drive voltage. Blue is the crystal, from its fringes; gray is the adapter's table, read from the adapter itself by writing retardances and reading back the volts it chooses. Orange dots are the applied palette's states. **Around the palette** (default) or **Full range**. Where blue and gray part, every palette number in waves is off by that gap.
 
 Nothing changes: the server puts the crystals, the exposure and the camera ROI back afterwards. It writes `lc_sweep_<stamp>.json` and a plain CSV of the measured curves (millivolts against nm at the reconstruction wavelength) to the chosen folder. **That CSV is not in the adapter's file format and is not installed.** Replacing the adapter's table, or driving the crystals by voltage, is a separate decision. Needs microscope server 1.5.x or later and a matching `polscope_library`; an older server is reported within 30 s.
 
@@ -495,23 +495,23 @@ Standalone stitching utility for tile folders acquired with MicroManager 2.0. Un
 
 ---
 
-## Orientation Colour View
+## Orientation Color View
 
-Colours an LC-PolScope orientation image on screen, with the retardance image from the same acquisition setting the brightness. Change the colour map or the brightness ceiling and the view updates at once. Nothing is re-stitched, re-acquired or written unless you export. It reads the stitched images' tiles for what is on screen, at the current zoom level, so a whole slide costs no more than one screen.
+Colors an LC-PolScope orientation image on screen, with the retardance image from the same acquisition setting the brightness. Change the color map or the brightness ceiling and the view updates at once. Nothing is re-stitched, re-acquired or written unless you export. It reads the stitched images' tiles for what is on screen, at the current zoom level, so a whole slide costs no more than one screen.
 
-**Use:** open an LC-PolScope `..._orientation` or `..._retardance` image from the project, open the tool, and press **Show on viewer**. The other half is found by name: the two names differ only in `orientation` / `retardance`, as one acquisition writes them. While the view is on, every LC-PolScope retardance or orientation image you open is coloured; other images show nothing.
+**Use:** open an LC-PolScope `..._orientation` or `..._retardance` image from the project, open the tool, and press **Show on viewer**. The other half is found by name: the two names differ only in `orientation` / `retardance`, as one acquisition writes them. While the view is on, every LC-PolScope retardance or orientation image you open is colored; other images show nothing.
 
 | Control | What it does |
 |---|---|
-| Colour map | **Uniform lightness** (every orientation equally light at equal retardance), **PPM colours** (listed only when the microscope config has a PPM hue calibration) or **HSV rainbow (OpenPolScope)**. See [CHANNELS.md](CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization). |
+| Color map | **Uniform lightness** (every orientation equally light at equal retardance), **PPM colors** (listed only when the microscope config has a PPM hue calibration) or **HSV rainbow (OpenPolScope)**. See [CHANNELS.md](CHANNELS.md#5-the-lcpolscope-modality-type-liquid-crystal-polarization). |
 | Full brightness at | The retardance, in nm, shown at full brightness; anything above it is at full brightness. Starts at the value set in the LC-PolScope acquisition panel's **Full brightness at** field if one was set, else the config's `display_retardance_ceiling_nm` (20 nm when there is none). |
-| Colour only | Ignore retardance: every pixel at full brightness. Empty background then shows as noisy colour. Also the mode used when no retardance image is found. |
+| Color only | Ignore retardance: every pixel at full brightness. Empty background then shows as noisy color. Also the mode used when no retardance image is found. |
 | Show on viewer / Hide | Turns the view on or off. Closing the window leaves it on. |
-| Export colour image... | Writes the coloured image with the settings above as a pyramidal RGB OME-TIFF, `<name>_orientation_colour_<map>_<ceiling>nm.ome.tif` (or `_hueonly`), beside the stitched images, and adds it to the project. The entry carries the source image's metadata plus `orientation_colour.*` keys (map, brightness, calibration, registration, source images). The file is written tile by tile, so a whole slide takes minutes and little memory; a progress window shows it. A second export with the same settings gets a numbered name. |
+| Export color image... | Writes the colored image with the settings above as a pyramidal RGB OME-TIFF, `<name>_orientation_colour_<map>_<ceiling>nm.ome.tif` (or `_hueonly`), beside the stitched images, and adds it to the project. The entry carries the source image's metadata plus `orientation_colour.*` keys (map, brightness, calibration, registration, source images). The file is written tile by tile, so a whole slide takes minutes and little memory; a progress window shows it. A second export with the same settings gets a numbered name. |
 
 The angle registration (`display_orientation_sign`, `display_orientation_offset_deg`) is read from the microscope config and stated in the window. Settings are remembered across sessions. The view uses QuPath's overlay opacity slider, and it shares the viewer's pixel-overlay slot with a pixel classifier preview: turning one on replaces the other. It is display only. Measure on the retardance and orientation images.
 
-**Access:** Extensions > QP Scope > Utilities > Project Tools > Orientation Colour View...
+**Access:** Extensions > QP Scope > Utilities > Project Tools > Orientation Color View...
 
 ---
 

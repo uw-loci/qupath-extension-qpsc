@@ -154,7 +154,7 @@ public class TestAutofocusWorkflow {
                             return;
                         }
                     } else {
-                        logger.info("Autofocus test cancelled - no connection");
+                        logger.info("Autofocus test canceled - no connection");
                         return;
                     }
                 }
@@ -218,7 +218,7 @@ public class TestAutofocusWorkflow {
                                 algorithmDesc));
 
                 if (!proceed) {
-                    logger.info("{} autofocus test cancelled by user", testType);
+                    logger.info("{} autofocus test canceled by user", testType);
                     return;
                 }
 

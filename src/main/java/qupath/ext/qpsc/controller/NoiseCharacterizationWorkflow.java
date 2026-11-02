@@ -75,7 +75,7 @@ public class NoiseCharacterizationWorkflow {
                                 // Show confirmation and then start
                                 Platform.runLater(() -> showConfirmationAndStart(params));
                             } else {
-                                logger.info("Noise characterization cancelled by user");
+                                logger.info("Noise characterization canceled by user");
                             }
                         })
                         .exceptionally(ex -> {
@@ -125,7 +125,7 @@ public class NoiseCharacterizationWorkflow {
         if (confirmed) {
             startWithProgress(params);
         } else {
-            logger.info("Noise characterization cancelled at confirmation");
+            logger.info("Noise characterization canceled at confirmation");
         }
     }
 
@@ -165,7 +165,7 @@ public class NoiseCharacterizationWorkflow {
         cancelButton.setOnAction(e -> {
             cancelled.set(true);
             progressStage.close();
-            logger.info("Noise characterization cancelled by user");
+            logger.info("Noise characterization canceled by user");
         });
 
         VBox content = new VBox(12);
@@ -247,7 +247,7 @@ public class NoiseCharacterizationWorkflow {
                     progressCallback);
 
             if (cancelled.get()) {
-                logger.info("Noise characterization was cancelled");
+                logger.info("Noise characterization was canceled");
                 return;
             }
 
@@ -293,7 +293,7 @@ public class NoiseCharacterizationWorkflow {
 
         } catch (Exception e) {
             if (cancelled.get()) {
-                logger.info("Noise characterization was cancelled during execution");
+                logger.info("Noise characterization was canceled during execution");
                 return;
             }
 

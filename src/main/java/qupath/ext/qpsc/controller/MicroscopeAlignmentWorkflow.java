@@ -88,7 +88,7 @@ public class MicroscopeAlignmentWorkflow {
         MicroscopeSelectionDialog.showDialog()
                 .thenAccept(microscopeSelection -> {
                     if (microscopeSelection == null) {
-                        logger.info("User cancelled microscope selection");
+                        logger.info("User canceled microscope selection");
                         return;
                     }
 
@@ -149,7 +149,7 @@ public class MicroscopeAlignmentWorkflow {
                     SampleSetupController.showDialog(defaultSampleName)
                             .thenCompose(sampleSetup -> {
                                 if (sampleSetup == null) {
-                                    logger.info("User cancelled at sample setup");
+                                    logger.info("User canceled at sample setup");
                                     return CompletableFuture.<CombinedConfig>completedFuture(null);
                                 }
 
@@ -181,7 +181,7 @@ public class MicroscopeAlignmentWorkflow {
                             })
                             .thenAccept(combinedConfig -> {
                                 if (combinedConfig == null) {
-                                    logger.info("User cancelled alignment workflow");
+                                    logger.info("User canceled alignment workflow");
                                     return;
                                 }
 
@@ -191,7 +191,7 @@ public class MicroscopeAlignmentWorkflow {
                             .exceptionally(ex -> {
                                 // Check if this is a cancellation - if so, handle gracefully
                                 if (ex.getCause() instanceof CancellationException) {
-                                    logger.info("User cancelled the workflow");
+                                    logger.info("User canceled the workflow");
                                     return null;
                                 }
 
@@ -779,10 +779,10 @@ public class MicroscopeAlignmentWorkflow {
 
                 MacroOrientationDialog.show(gui.getStage(), seedFlip, onToggle).thenAccept(finalFlip -> {
                     if (finalFlip == null) {
-                        logger.info("User cancelled at orientation step");
+                        logger.info("User canceled at orientation step");
                         Platform.runLater(() -> {
                             UIFunctions.notifyUserOfError(
-                                    "Alignment cancelled at orientation step.", "Alignment Cancelled");
+                                    "Alignment canceled at orientation step.", "Alignment Canceled");
                         });
                         return;
                     }
@@ -992,7 +992,7 @@ public class MicroscopeAlignmentWorkflow {
                             mainPixelSize, existingTransformEstimate)
                     .thenCompose(fullResToStageTransform -> {
                         if (fullResToStageTransform == null) {
-                            logger.info("Transform setup cancelled");
+                            logger.info("Transform setup canceled");
                             removeAlignmentTiles(gui);
                             return CompletableFuture.completedFuture(null);
                         }
@@ -1014,7 +1014,7 @@ public class MicroscopeAlignmentWorkflow {
                         // Show validation dialog and wait for user decision
                         return showValidationDialog(quality).thenAccept(userAccepted -> {
                             if (!Boolean.TRUE.equals(userAccepted)) {
-                                logger.info("User cancelled alignment after reviewing quality summary");
+                                logger.info("User canceled alignment after reviewing quality summary");
                                 removeAlignmentTiles(gui);
                                 return;
                             }
@@ -1208,11 +1208,11 @@ public class MicroscopeAlignmentWorkflow {
             double configPx = mgr.getPixelSize(sampleSetup.objective(), sampleSetup.detector());
             if (!QPScopeChecks.validateObjectivePixelSize(
                     sampleSetup.objective(), sampleSetup.detector(), sampleSetup.modality(), configPx)) {
-                logger.info("Alignment cancelled by objective pixel-size mismatch");
+                logger.info("Alignment canceled by objective pixel-size mismatch");
                 return false;
             }
             if (!QPScopeChecks.validateCameraRoi(sampleSetup.detector())) {
-                logger.info("Alignment cancelled by camera ROI mismatch");
+                logger.info("Alignment canceled by camera ROI mismatch");
                 return false;
             }
         } catch (Exception ex) {

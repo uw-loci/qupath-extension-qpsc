@@ -31,7 +31,7 @@ custom strategy to a scope-specific modality.
 The Autofocus Configuration Editor can be opened in two ways:
 
 1. **From the menu:** Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor...
-2. **From the Live Viewer:** Right-click the **Autofocus** button in the Live Viewer's focus controls toolbar. This shortcut is useful when you want to switch autofocus methods while the button is greyed out (e.g. during acquisition or between live frames).
+2. **From the Live Viewer:** Right-click the **Autofocus** button in the Live Viewer's focus controls toolbar. This shortcut is useful when you want to switch autofocus methods while the button is grayed out (e.g. during acquisition or between live frames).
 
 ## Options
 
@@ -62,7 +62,7 @@ See [AUTOFOCUS.md](../AUTOFOCUS.md#how-af-position-selection-works) for the full
 
 ### Standard Autofocus (Symmetric Z-Sweep)
 
-This is the step-and-snap autofocus shared by the Live Viewer Sweep button and the acquisition pipeline. (Previously labelled simply "Standard Autofocus".)
+This is the step-and-snap autofocus shared by the Live Viewer Sweep button and the acquisition pipeline. (Previously labeled simply "Standard Autofocus".)
 
 | Parameter | Type | Typical Range | Description |
 |-----------|------|---------------|-------------|
@@ -144,7 +144,7 @@ enough signal to focus on. Each strategy is a collapsible card showing:
 Use **+ Add Strategy** to create a new custom strategy, or **Delete Strategy** inside
 a card to remove one. At minimum, `dense_texture` and `manual_only` should be present.
 
-**Manifest constraint surfacing (`valid_modalities` / `min_magnification`):** the score-metric dropdown and the per-modality override picker both render constraint-aware cells. A metric whose `valid_modalities` list excludes the binding's modality is rendered in red with a `-- not for <modality>` suffix; selecting it surfaces a wrap-text warning label below the picker. Constraints are informational only -- they do not block saving, so operators retain the ability to use a metric outside its declared range when they have a reason. The recognised `valid_modalities` values are `brightfield`, `ppm`, `fluorescence`, `dark_field`, and `other`; modality keys like `bf_dia`, `BF_IF`, or `Brightfield` all canonicalise to the same bucket.
+**Manifest constraint surfacing (`valid_modalities` / `min_magnification`):** the score-metric dropdown and the per-modality override picker both render constraint-aware cells. A metric whose `valid_modalities` list excludes the binding's modality is rendered in red with a `-- not for <modality>` suffix; selecting it surfaces a wrap-text warning label below the picker. Constraints are informational only -- they do not block saving, so operators retain the ability to use a metric outside its declared range when they have a reason. The recognized `valid_modalities` values are `brightfield`, `ppm`, `fluorescence`, `dark_field`, and `other`; modality keys like `bf_dia`, `BF_IF`, or `Brightfield` all canonicalise to the same bucket.
 
 ### Tab 3 -- Modality Bindings (v2)
 

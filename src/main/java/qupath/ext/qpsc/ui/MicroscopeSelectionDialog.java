@@ -265,7 +265,7 @@ public class MicroscopeSelectionDialog {
                             return null;
                         }
                     }
-                    logger.info("Dialog cancelled or no selection");
+                    logger.info("Dialog canceled or no selection");
                     return null;
                 });
 

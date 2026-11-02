@@ -242,7 +242,7 @@ microscope command server*. Step 2 below says what to do.
    one. Set the host back when you return to the real microscope.
 4. Click **Live: OFF** at the top left of the Live Viewer. It turns green, reads **Live: ON**,
    and shows a virtual H&E slide: pink is eosin-stained stroma with darker wavy collagen
-   fibres, the small dark purple spots are nuclei, purple rings around a pale center are
+   fibers, the small dark purple spots are nuclei, purple rings around a pale center are
    glands, red-dotted bands are blood vessels, and near-white is bare glass (or fat, where
    thin pink lines outline the fat cells). No two fields look alike, so you can tell which
    way the stage moved. The stage starts at the slide
@@ -262,7 +262,7 @@ microscope command server*. Step 2 below says what to do.
 Only the hardware is simulated. The connection, autofocus, tiled acquisition and
 stitching run the same code as a real microscope. The demo is a 10x objective looking at a
 40 x 20 mm slide centered on the stage origin; beyond it the camera sees bare glass.
-Brightfield uses a 512 x 512 colour camera (0.65 um/px, a 333 x 333 um field). The
+Brightfield uses a 512 x 512 color camera (0.65 um/px, a 333 x 333 um field). The
 **Modality** list on the Live Viewer's **Camera** tab also offers **Fluorescence** (four
 channels, DAPI to Cy5) and **lcpolscope** (five LC-PolScope states, with retardance and
 orientation reconstructed from them) on a 640 x 512 monochrome camera (0.586 um/px); see

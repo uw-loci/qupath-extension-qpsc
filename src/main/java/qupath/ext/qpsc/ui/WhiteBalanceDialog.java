@@ -625,7 +625,7 @@ public class WhiteBalanceDialog {
                 // Show dialog and complete future
                 DialogOwner.own(dialog);
                 dialog.showAndWait().ifPresentOrElse(future::complete, () -> {
-                    logger.info("White balance dialog cancelled");
+                    logger.info("White balance dialog canceled");
                     future.complete(null);
                 });
 

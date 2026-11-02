@@ -146,12 +146,12 @@ public final class LCPolScopeSlideReminder {
                 return true;
             }
             case OPEN_SETUP -> {
-                logger.warn("LC-PolScope {} cancelled at the per-slide reminder; opening LC-PolScope Setup", what);
+                logger.warn("LC-PolScope {} canceled at the per-slide reminder; opening LC-PolScope Setup", what);
                 Platform.runLater(LCPolScopeSetupWindow::show);
                 return false;
             }
             default -> {
-                logger.warn("LC-PolScope {} cancelled at the per-slide reminder", what);
+                logger.warn("LC-PolScope {} canceled at the per-slide reminder", what);
                 return false;
             }
         }

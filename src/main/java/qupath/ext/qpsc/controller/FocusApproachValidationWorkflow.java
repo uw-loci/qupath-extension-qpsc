@@ -493,7 +493,7 @@ public final class FocusApproachValidationWorkflow {
         cancelButton.setStyle("-fx-base: #c62828; -fx-font-weight: bold;");
         Runnable abort = () -> {
             cancelled[0] = true;
-            status.setText("Cancelling -- sending abort and returning to the safe Z...");
+            status.setText("Canceling -- sending abort and returning to the safe Z...");
             cancelButton.setDisable(true);
             Thread aborter = new Thread(
                     () -> {
@@ -648,12 +648,12 @@ public final class FocusApproachValidationWorkflow {
 
         progress.showAndWait();
         if (cancelled[0]) {
-            logger.info("Focus-approach scan cancelled by the operator");
+            logger.info("Focus-approach scan canceled by the operator");
             return null;
         }
         // center is computed above for symmetry with the server's window maths; the server
         // derives its own window from --range around the current Z, which is the safe Z here.
-        logger.debug("Focus-approach scan window centred near {}", centre);
+        logger.debug("Focus-approach scan window centered near {}", centre);
         return holder[0];
     }
 

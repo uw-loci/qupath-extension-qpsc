@@ -93,7 +93,7 @@ load before tiles-to-pyramid during a mid-session extension-directory change).
 
 ### Offline / Analysis mode
 
-#### Q: I just installed QPSC and the acquisition menu items are greyed out. Is it broken?
+#### Q: I just installed QPSC and the acquisition menu items are grayed out. Is it broken?
 
 **A:** No. On a fresh install -- with no microscope configured -- QPSC selects a
 bundled **Offline / Analysis** placeholder microscope automatically. The
@@ -519,7 +519,7 @@ For multi-channel IF / BF+IF acquisitions where the merge failed and each per-ch
 
 **A:** The most common cause is a bit-depth mismatch between a 16-bit monochrome microscope camera (e.g. OWS3) and an 8-bit reference WSI (typical H&E or PPM scan). Most cameras only use 12-14 of their 16 bits, so the legacy `gray / 256` bit-shift compresses the camera's useful range to a sliver of 8-bit, leaving SIFT with one near-black image and one full-contrast reference. The fix landed 2026-05-06 (Java commit `0f13ca2`, server commit `59c8d41`).
 
-Defaults now handle this correctly: `Bit-depth normalization` = `PERCENTILE` 2/98 with `CLAHE` on (clipLimit 2.0), and `RGB conversion` = `GREEN` (for H&E and colour brightfield references). All knobs live in the SIFT Settings dialog (open via the **Settings...** button next to **Auto-Align (SIFT)**).
+Defaults now handle this correctly: `Bit-depth normalization` = `PERCENTILE` 2/98 with `CLAHE` on (clipLimit 2.0), and `RGB conversion` = `GREEN` (for H&E and color brightfield references). All knobs live in the SIFT Settings dialog (open via the **Settings...** button next to **Auto-Align (SIFT)**).
 
 If matching still fails on a tile that visually overlaps the camera's live view:
 
@@ -579,7 +579,7 @@ before letting it stop a run.
 
 A Prior stage is open-loop: the controller reports the step count it was given,
 so a reported position always agrees with a commanded position whether or not the
-stage actually travelled. On 2026-10-02 a four-slide run showed a provably clean
+stage actually traveled. On 2026-10-02 a four-slide run showed a provably clean
 position counter across 34 hours while three of four slides came out offset in Y,
 the last badly enough to image the slide label for 1,714 tiles. Nothing that asks
 the controller where it is can catch that; only matching against the sample can.
@@ -606,7 +606,7 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
 
 ---
 
-#### Q: "Sub-image Missing Objective -- Workflow Cancelled" error
+#### Q: "Sub-image Missing Objective -- Workflow Canceled" error
 
 **A:** The open sub-image entry has no `objective` metadata, and the workflow cannot safely proceed with acquisition.
 
@@ -636,7 +636,7 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
    - Re-acquire the sub-image at the wizard's desired objective (if you want to keep that objective)
 2. **At your own risk:** Continue anyway (you accept the shift risk)
 
-#### Q: "Camera ROI Mismatch -- Workflow Cancelled" error
+#### Q: "Camera ROI Mismatch -- Workflow Canceled" error
 
 **A:** The live camera frame dimensions do not match the configured sensor dimensions. The camera is cropped to a sub-region of the full sensor — historically left behind by a prior streaming Autofocus call that did not restore the camera ROI on exit. MicroManager remembers the last ROI across sessions, so the cropped state persists.
 
@@ -660,7 +660,7 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
 
 **If the dialog fires after `7f40a47` is on the server:** capture the server log and grep for `STREAM_AF:entry camera ROI` — if the first AF run after MM startup logs a cropped entry, the camera was already cropped before the Live Viewer was opened (operator-set, or an external Python session). If you see a `STREAM_AF:cropped` line without a matching `STREAM_AF:restored ... [full sensor]` line at the end of the same run, file an issue: the absolute anchoring has been defeated.
 
-#### Q: "Source Microscope Missing -- Workflow Cancelled" error
+#### Q: "Source Microscope Missing -- Workflow Canceled" error
 
 **A:** The open entry has no `source_microscope` metadata, and the active microscope requires a "(Camera View)" companion for visual-UX during alignment.
 
@@ -686,7 +686,7 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
 
 **Alternative:** If you don't know the original source microscope, open the parent macro entry (overview image) instead of a sub-image and re-run the workflow on that.
 
-#### Q: "Objective Pixel-Size Mismatch -- Workflow Cancelled" error
+#### Q: "Objective Pixel-Size Mismatch -- Workflow Canceled" error
 
 **A:** The dialog shows that MicroManager's active objective does not match the wizard's selection. The tile grid is planned for the wizard's objective; if the actual objective in MicroManager is different, tiles will be spaced incorrectly and the mosaic will not be usable.
 
@@ -721,7 +721,7 @@ hardware:
     mm_preset: {group: Objective Lens, preset: 20x, motorized: false}
 ```
 
-- `motorized: false` (a labelling device that moves nothing): QPSC applies the preset silently when you choose the objective, and again when it connects.
+- `motorized: false` (a labeling device that moves nothing): QPSC applies the preset silently when you choose the objective, and again when it connects.
 - `motorized: true`, or the key left out (a motorized turret): QPSC asks first in a dialog whose default answer is **Don't move**. It never moves a turret on connect or during an acquisition.
 - If the group or preset name does not exist, QPSC shows a warning listing the groups or presets that do exist. Correct `mm_preset` in the YAML and choose the objective again.
 
@@ -906,7 +906,7 @@ The same dialog now carries an **Open Autofocus Configuration...** button, which
 
 #### Q: Multi-slide batch halted with "Stage position is not trustworthy"
 
-**A:** The stage reported a position well outside the region being acquired, for several samples running. The region's acquisition is cancelled and the rest of the pass is halted.
+**A:** The stage reported a position well outside the region being acquired, for several samples running. The region's acquisition is canceled and the rest of the pass is halted.
 
 **What it means.** A Prior controller has no absolute reference and nothing to home to: it knows only where it is relative to wherever it was zeroed. A controller that restarts resumes with position 0,0 wherever it happens to be standing, and from then on it moves exactly where commanded and reports exactly that -- which is why nothing that compares a commanded position against the position reported after the move can see it. A moved origin is the most likely explanation for this alert, but a stage that physically failed to reach a commanded position looks the same from here, so the alert says the position and the coordinates disagree rather than naming a cause.
 
@@ -917,7 +917,7 @@ The same dialog now carries an **Open Autofocus Configuration...** button, which
 1. Fit the calibration slide, face up, text in the upper right, and select the 40x objective.
 2. Position so the grid inside the circle sits in the upper-right corner of the Micro-Manager viewer.
 3. On the controller itself: **Menu -> XY mode -> Zero**. This is a controller operation, not a Micro-Manager one.
-4. Verify before trusting it. On PPM, slide 2's centre should read about `(10598, -12592)`. If a slide centre reads outside the configured travel limits, the frame is still wrong.
+4. Verify before trusting it. On PPM, slide 2's center should read about `(10598, -12592)`. If a slide center reads outside the configured travel limits, the frame is still wrong.
 5. Run **Set Up All Remaining** to re-measure every alignment against the corrected origin. Do **not** use **Acquire All Set-Up** -- those alignments are the ones measured against the old origin, which is why the pass stopped.
 
 **If it fires again.** The alert is re-armed each time you start a pass, so a second alert is a second detection, not an echo of the first. Check for an intermittent controller fault, and consider capping the XY motion profile (`stage.xy_motion` in `config_<SCOPE>.yml`) if it is not already set -- maximum speed and acceleration on the long slot-to-slot traverses is the suspected trigger.
@@ -1495,7 +1495,7 @@ are skipped as unused.
 
 **Best practice:** Keep same project open to add multiple samples, or close/reopen between completely different experiments
 
-#### Q: "Sub-image Acquired on a Different Microscope -- Workflow Cancelled"
+#### Q: "Sub-image Acquired on a Different Microscope -- Workflow Canceled"
 
 **A:** This error appears when you try to acquire from a sub-image using the Existing Image workflow, but the sub-image was acquired on a different microscope than the one currently active.
 

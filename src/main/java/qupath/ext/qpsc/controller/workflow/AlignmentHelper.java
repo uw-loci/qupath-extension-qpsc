@@ -363,7 +363,7 @@ public class AlignmentHelper {
                         loadedResult.getObjective(),
                         sample.objective());
                 if (!confirmContinueWithObjectiveMismatch(lookupKey, loadedResult.getObjective(), sample.objective())) {
-                    logger.info("User cancelled at objective-mismatch advisory");
+                    logger.info("User canceled at objective-mismatch advisory");
                     future.complete(null);
                     return future;
                 }
@@ -383,7 +383,7 @@ public class AlignmentHelper {
                     "Legacy slide alignment for '{}' has no flipMacroX/Y; active scope is flip-needing -- prompting user",
                     lookupKey);
             if (!confirmContinueWithLegacyFlipFrame(lookupKey)) {
-                logger.info("User cancelled at legacy-flip-frame advisory");
+                logger.info("User canceled at legacy-flip-frame advisory");
                 future.complete(null);
                 return future;
             }
@@ -409,10 +409,10 @@ public class AlignmentHelper {
                 && ImageFlipHelper.isActiveScopeFlipNeeding()) {
             logger.warn(
                     "Slide alignment for '{}' has alignFlip=(false,false) but flipFrameVerified is absent and the "
-                            + "active scope is flip-needing -- prompting user (may be a pre-2026-05-19 mis-labelled JSON)",
+                            + "active scope is flip-needing -- prompting user (may be a mislabeled JSON)",
                     lookupKey);
             if (!confirmContinueWithUnverifiedFlipFrame(lookupKey)) {
-                logger.info("User cancelled at unverified-flip-frame advisory");
+                logger.info("User canceled at unverified-flip-frame advisory");
                 future.complete(null);
                 return future;
             }
@@ -504,7 +504,7 @@ public class AlignmentHelper {
      * {@code QPScopeChecks.showMismatchDialog}: blocking, OK-only, hard-cancel.
      */
     private static void showPixelFrameMismatchDialog(String lookupKey, String actualFrame) {
-        String title = "Slide Alignment Pixel-Frame Mismatch -- Workflow Cancelled";
+        String title = "Slide Alignment Pixel-Frame Mismatch -- Workflow Canceled";
         String header = "The loaded slide alignment is in the wrong pixel frame.";
         StringBuilder body = new StringBuilder();
         body.append(String.format(
@@ -525,7 +525,7 @@ public class AlignmentHelper {
         body.append("  2. Re-run the workflow.\n\n");
         body.append("If the macro entry has no alignment yet, run 3-point Microscope\n");
         body.append("Alignment first to create one.\n\n");
-        body.append("This workflow has been cancelled.");
+        body.append("This workflow has been canceled.");
 
         if (javafx.application.Platform.isFxApplicationThread()) {
             showPixelFrameMismatchDialogOnFx(title, header, body.toString());
@@ -591,7 +591,7 @@ public class AlignmentHelper {
      */
     private static boolean confirmContinueWithUnverifiedFlipFrame(String lookupKey) {
         String title = "Alignment Flip Frame Unverified";
-        String header = "This alignment may have a mis-labelled pixel frame.";
+        String header = "This alignment may have a mislabeled pixel frame.";
         StringBuilder body = new StringBuilder();
         body.append(String.format(
                 "The slide alignment for%n  '%s'%nrecords flipMacroX=false and flipMacroY=false,%n"
@@ -600,11 +600,11 @@ public class AlignmentHelper {
                 lookupKey));
         body.append("The active microscope's saved presets require a flipped sibling\n");
         body.append("for at least one source scanner. If this alignment was actually\n");
-        body.append("built on the flipped sibling entry but mis-labelled as unflipped,\n");
+        body.append("built on the flipped sibling entry but mislabeled as unflipped,\n");
         body.append("downstream workflows will apply an extra flip and send the stage\n");
-        body.append("to the X/Y mirror of the intended target. The 2026-05-18 OWS3\n");
-        body.append("acquisition log shows this exact failure mode: annotation\n");
-        body.append("appearance flipped, only partially overlapped with the slide tissue.\n\n");
+        body.append("to the X/Y mirror of the intended target. The usual sign is an\n");
+        body.append("annotation that appears flipped and only partly overlaps the\n");
+        body.append("slide tissue.\n\n");
         body.append("Recommended: cancel and re-run Microscope Alignment for this\n");
         body.append("slide on the UNFLIPPED BASE entry; the new JSON will record\n");
         body.append("flipFrameVerified=true and downstream workflows will compose\n");

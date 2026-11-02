@@ -180,11 +180,11 @@ ENDOFSTR
 
 `--timepoints` / `--interval` are emitted by `AcquisitionCommandBuilder` only when the user enables the Time-Lapse Options pane in the acquisition dialog (`timepoints > 1`). `--interval` is the seconds between the *start* of consecutive timepoints. Omitting both flags yields a single-timepoint acquisition (byte-identical to pre-time-lapse builds). The server's main multi-tile workflow loops over timepoints with a drift-corrected scheduler; see the `REQTWARN` poll below for the falling-behind warning channel.
 
-`--display-colormap <uniform|ppm|hsv>` (LC-PolScope only) is the acquisition panel's **Orientation colour image** choice. It overrides `reconstruction.display_colormap` for this run and changes only the display-only `orientation_color` tiles. The flag is omitted when the panel says "As in the config", or when it says PPM and the config has no `display_hue_calibration`.
+`--display-colormap <uniform|ppm|hsv>` (LC-PolScope only) is the acquisition panel's **Orientation color image** choice. It overrides `reconstruction.display_colormap` for this run and changes only the display-only `orientation_color` tiles. The flag is omitted when the panel says "As in the config", or when it says PPM and the config has no `display_hue_calibration`.
 
 `--display-ceiling-nm <nm>` (LC-PolScope only) is the panel's **Full brightness at** value: the retardance shown at full brightness in the `orientation_color` tiles. It overrides `reconstruction.display_retardance_ceiling_nm` for this run, display only. Omitted when the panel holds the config's own value. QPSC uses the same value for the display range it gives a stitched retardance image.
 
-`--preferred-af-tile <i>` is the first autofocus tile, chosen by QPSC from the macro image as the first tile in acquisition order whose tissue fraction reaches `wsi_tissue_threshold` (else the most tissue-bearing tile). `--af-tissue-tiles <i,j,k,...>` is the autofocus **allow-list**: every tile (TileConfiguration order) whose tissue fraction reaches the threshold. The server restricts every focus search to it -- planned positions off the list move to the nearest listed tile, the index-gap and spatial-gap safety nets do not fire on an unlisted tile (the search they wanted runs on the next listed one), a rejected tile defers only to a listed one, and the pre-acquisition tissue search walks listed tiles rather than one field toward the centre. `--af-tissue-tiles none` means scoring ran and nothing qualified: the server searches only the preferred tile and logs that the region holds no tissue by the macro. Absent means unscored; the server plans by distance as before. QPSC guarantees the preferred tile is on the list when both are sent. Needs microscope server 1.5.1 or later; an older server ignores the flag.
+`--preferred-af-tile <i>` is the first autofocus tile, chosen by QPSC from the macro image as the first tile in acquisition order whose tissue fraction reaches `wsi_tissue_threshold` (else the most tissue-bearing tile). `--af-tissue-tiles <i,j,k,...>` is the autofocus **allow-list**: every tile (TileConfiguration order) whose tissue fraction reaches the threshold. The server restricts every focus search to it -- planned positions off the list move to the nearest listed tile, the index-gap and spatial-gap safety nets do not fire on an unlisted tile (the search they wanted runs on the next listed one), a rejected tile defers only to a listed one, and the pre-acquisition tissue search walks listed tiles rather than one field toward the center. `--af-tissue-tiles none` means scoring ran and nothing qualified: the server searches only the preferred tile and logs that the region holds no tissue by the macro. Absent means unscored; the server plans by distance as before. QPSC guarantees the preferred tile is on the list when both are sent. Needs microscope server 1.5.1 or later; an older server ignores the flag.
 
 `--af-disabled` is mutually exclusive with the `--af-tiles`/`--af-steps`/`--af-range` triplet. When the Java side's "Disable Autofocus" preference is on, the triplet is omitted and `--af-disabled` is sent in its place. The server short-circuits `_configure_autofocus` (no YAML load required, no AF positions scheduled), so no pre-acquisition AF fires, no per-tile sweep autofocus runs, and no manual-focus prompts appear.
 
@@ -402,7 +402,7 @@ Optional bit-depth / cross-modality preprocessing (defaults shown):
 | `--pct-high <f>` | 98.0 | Upper percentile clip used by `PERCENTILE` mode. |
 | `--clahe true\|false` | `true` | Apply Contrast-Limited Adaptive Histogram Equalisation to both grayscale images before SIFT. Standard cross-modality robustness trick when matching monochrome brightfield against 8-bit H&E. |
 | `--clahe-clip <f>` | 2.0 | CLAHE clipLimit. Higher = more aggressive equalisation. |
-| `--rgb-conv GREEN\|LUMINANCE` | `GREEN` | How a colour (RGB, e.g. H&E) reference image is collapsed to one channel. Only affects colour images -- the monochrome camera snapshot is untouched. `GREEN` (default) takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). Do NOT add an absorbance/OD mode here -- it inverts polarity and its gradients run opposite the intensity microscope image. |
+| `--rgb-conv GREEN\|LUMINANCE` | `GREEN` | How a color (RGB, e.g. H&E) reference image is collapsed to one channel. Only affects color images -- the monochrome camera snapshot is untouched. `GREEN` (default) takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). Do NOT add an absorbance/OD mode here -- it inverts polarity and its gradients run opposite the intensity microscope image. |
 
 Response formats:
 
@@ -472,7 +472,7 @@ Response formats:
   (better than initial_z even without a peak). Caller should
   fall back to stepped Sweep Autofocus. This is informational,
   not an error. Dump path included if dump folder was created.
-- `ABORTED:<reason>[:dump=<path>]` -- the client cancelled the scan
+- `ABORTED:<reason>[:dump=<path>]` -- the client canceled the scan
   via `ABORTAF` (see below). The stage is returned to the pre-scan
   `initial_z`. No new focus committed; not an error.
 - `FAILED:<reason>` -- mid-scan error; stage state has been
@@ -514,7 +514,7 @@ Payload flags (text, terminated by `ENDOFSTR`):
 | `--yaml <path>` | yes | Path to the active `config_<scope>.yml`; the server derives `autofocus_<scope>.yml` from it for the tissue thresholds. |
 | `--modality <name>` | in practice yes | Active modality. Selects the `modalities.<name>` binding in `autofocus_<scope>.yml`, and with it the strategy whose `validity_params` define tissue for this light path. Omitting it drops to the per-objective fallback below, which on PPM and LC-PolScope means applying thresholds their own config says reject valid fields. |
 | `--objective <id>` | no | Fallback only, used when no modality binding matches: the objective's flat `texture_threshold` / `tissue_area_threshold` from `autofocus_settings`. Missing falls back to the shipped defaults. |
-| `--dir <dx>,<dy>` | no | Stage-space hint toward where tissue is believed to be; only its bearing is used. QPSC computes it as the vector from the predicted position to the centre of the tile grid. Unusable input is ignored with a warning -- the search still works without it. |
+| `--dir <dx>,<dy>` | no | Stage-space hint toward where tissue is believed to be; only its bearing is used. QPSC computes it as the vector from the predicted position to the center of the tile grid. Unusable input is ignored with a warning -- the search still works without it. |
 | `--step <um>` | no | Radius increment. Default: one camera FOV diagonal. Deliberately coarse, and it DOES leave gaps -- stepping 446 um along X with a 357 x 267 um field skips 89 um. A step that could not skip anything on any bearing would be the field's short side (267 um), needing far more positions for the same reach. Acceptable because the target is a tissue mass many fields across, not a specific field. |
 | `--max-attempts <n>` | no | Positions to visit **including the starting one**. Default is two complete rings, **17 either way** -- a hint reorders a ring, it does not shrink one. Capped at 33 (four rings, which is what the measured 1507 um worst case needs at a 446 um step). Derived from the bearing count rather than written as a literal, because a budget stopping mid-ring biases the search toward whichever bearings are enumerated first -- and with a hint, that is exactly where the hint is least trustworthy. |
 
@@ -528,12 +528,12 @@ which is how it was sized against the measurement above.
 **A hint orders a ring; it never trims one.** `--dir` sorts the ring's bearings nearest-first
 (down the hint, then +/-45, out to 180) so a good hint returns on the first or second
 position. It does *not* restrict the search to a fan, and the reason is specific to how the
-hint is built: it is the vector from the predicted position to the tile-grid centre,
+hint is built: it is the vector from the predicted position to the tile-grid center,
 measured in the transform's own frame -- and that transform is off by the very offset the
 search exists to defeat, which displaces both ends. Its angular error is therefore about
 `asin(offset / separation)`: negligible when the predicted point is far from the grid
-centre, and **unbounded when it is close**. Close is the common case, because the reference
-tile picker favours interior, high-texture tiles, which on a compact section sit near the
+center, and **unbounded when it is close**. Close is the common case, because the reference
+tile picker favors interior, high-texture tiles, which on a compact section sit near the
 middle. A +/-45 deg fan would march two rings down a bearing that can be 180 deg wrong and
 report `NOTFOUND` with the tissue directly behind it. Ordering costs nothing when the hint
 is good and cannot fail when it is bad, so there is no separation threshold to calibrate.
@@ -571,9 +571,9 @@ Response formats:
   returned to where the search started**, and `(x, y)` is that starting point: a search
   that found nothing has no reason to prefer its last guess over its first, and leaving
   the stage elsewhere would silently invalidate the caller's own prediction.
-- `ABORTED:<x>:<y>:<completed>` -- the operator cancelled via `ABORTAF`. **The stage has
+- `ABORTED:<x>:<y>:<completed>` -- the operator canceled via `ABORTAF`. **The stage has
   been returned to the starting point**, and `completed` is how many positions had been
-  checked. `FINDTISS` honours the same abort signal as `STRMAFZ` on purpose: the Live Viewer
+  checked. `FINDTISS` honors the same abort signal as `STRMAFZ` on purpose: the Live Viewer
   turns its Autofocus button into a Cancel toggle BEFORE the search starts, so from the
   operator's side the search and the scan are one action and one Cancel must stop whichever
   half is running. The signal is polled BETWEEN positions, never mid-move -- a stage move is
@@ -595,7 +595,7 @@ old server for exactly this reason; `FINDTISS` is not.
 `MicroscopeSocketClient.findTissue` therefore treats "no usable reply" as a hard signal:
 it clears a session flag so nothing asks again, drops the primary socket so the next
 command reconnects onto a clean stream, and returns `FAILED`. Autofocus then runs from the
-predicted position -- the behaviour that predates the search. **Any future command that
+predicted position -- the behavior that predates the search. **Any future command that
 sends a payload needs the same treatment.**
 
 #### AFTRACE
@@ -712,7 +712,7 @@ LC-PolScope state signal for the Live Viewer Camera tab. Applies every state of 
 
 #### MMPRESET
 
-Reads or applies one Micro-Manager ConfigGroup preset. QPSC's `ObjectivePresetActuator` uses it to select the objective's preset in Micro-Manager when an objective is chosen, for objectives that declare `mm_preset: {group, preset, motorized}` in the microscope YAML (names are whatever that lab's Micro-Manager config uses, so nothing happens without the entry). A labelling device (`motorized: false`) is applied silently on selection and after every CONFIG; a motorized turret (or `motorized` absent) only after the operator confirms in `ObjectivePresetConfirmDialog`, and never on connect. The server refuses a set while an acquisition thread runs or before CONFIG; a set to the current preset changes nothing. The client allows 30 s, since a turret may be turning.
+Reads or applies one Micro-Manager ConfigGroup preset. QPSC's `ObjectivePresetActuator` uses it to select the objective's preset in Micro-Manager when an objective is chosen, for objectives that declare `mm_preset: {group, preset, motorized}` in the microscope YAML (names are whatever that lab's Micro-Manager config uses, so nothing happens without the entry). A labeling device (`motorized: false`) is applied silently on selection and after every CONFIG; a motorized turret (or `motorized` absent) only after the operator confirms in `ObjectivePresetConfirmDialog`, and never on connect. The server refuses a set while an acquisition thread runs or before CONFIG; a set to the current preset changes nothing. The client allows 30 s, since a turret may be turning.
 
 ## Acquisition Lifecycle
 

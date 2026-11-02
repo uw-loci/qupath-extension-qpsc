@@ -252,8 +252,8 @@ public class UIFunctions {
 
                 // Check if canceled
                 if (handleHolder[0] != null && handleHolder[0].isCancelled()) {
-                    logger.info("Progress bar cancelled by user");
-                    statusLabel.setText("Acquisition cancelled");
+                    logger.info("Progress bar canceled by user");
+                    statusLabel.setText("Acquisition canceled");
                     statusLabel.setTextFill(Color.RED);
                     timeline.stop();
                     // Keep window open for 2 seconds to show canceled status
@@ -1427,7 +1427,7 @@ public class UIFunctions {
             cancelButton.setPrefWidth(440);
             cancelButton.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
             cancelButton.setOnAction(e -> {
-                logger.info("User cancelled workflow from annotation setup dialog");
+                logger.info("User canceled workflow from annotation setup dialog");
                 stage.close();
                 future.complete(AnnotationAction.CANCEL);
             });

@@ -173,7 +173,7 @@ QPSC has **two halves, and acquisition needs both**: the **QuPath extension** (t
 gives you a "QP Scope" menu that cannot move the stage or capture an image.
 
 > **Full step-by-step instructions, with verification commands and per-step troubleshooting, are in
-> the [QPSC Installation Guide](documentation/INSTALLATION.md).** The outline below summarises it.
+> the [QPSC Installation Guide](documentation/INSTALLATION.md).** The outline below summarizes it.
 
 **1. Install [QuPath](https://qupath.github.io/) and [Micro-Manager](https://micro-manager.org/),**
 and confirm Micro-Manager can drive your stage and camera before going further.
