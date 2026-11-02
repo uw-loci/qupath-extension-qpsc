@@ -2,9 +2,10 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: b845a300
+last_synced_commit: 05ee3284
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
+  - src/main/java/qupath/ext/qpsc/ModalityUis.java
   - src/main/java/qupath/ext/qpsc/controller/QPScopeController.java
   - src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
   - src/main/java/qupath/ext/qpsc/controller/BoundedAcquisitionWorkflow.java
@@ -22,9 +23,11 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/controller/AutofocusEditorWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/ProbeStageAfWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/NoiseCharacterizationWorkflow.java
-  - src/main/java/qupath/ext/qpsc/controller/StackTimeLapseWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/TestAutofocusWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/RapidScanWorkflow.java
+  - src/main/java/qupath/ext/qpsc/controller/ExportSpatialSceneWorkflow.java
+  - src/main/java/qupath/ext/qpsc/controller/MicroscopeSwitcher.java
+  - src/main/java/qupath/ext/qpsc/controller/DemoMicroscope.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/AcquisitionManager.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/AlignmentHelper.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/AnnotationHelper.java
@@ -35,10 +38,16 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/controller/workflow/StitchingHelper.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/TileCleanupHelper.java
   - src/main/java/qupath/ext/qpsc/controller/workflow/TileHelper.java
+  - src/main/java/qupath/ext/qpsc/controller/workflow/WorkflowRegistry.java
   - src/main/java/qupath/ext/qpsc/modality/ModalityRegistry.java
   - src/main/java/qupath/ext/qpsc/modality/ModalityHandler.java
+  - src/main/java/qupath/ext/qpsc/modality/ModalityUi.java
   - src/main/java/qupath/ext/qpsc/modality/ppm/PPMModalityHandler.java
+  - src/main/java/qupath/ext/qpsc/modality/ppm/ui/PPMModalityUi.java
   - src/main/java/qupath/ext/qpsc/modality/lcpolscope/LCPolScopeModalityHandler.java
+  - src/main/java/qupath/ext/qpsc/modality/lcpolscope/ui/LCPolScopeModalityUi.java
+  - src/main/java/qupath/ext/qpsc/modality/widefield/ui/WidefieldModalityUi.java
+  - src/main/java/qupath/ext/qpsc/modality/ui/BrightfieldModalityUi.java
   - src/main/java/qupath/ext/qpsc/modality/lcpolscope/workflow/LCCalibrationWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/FocusApproachValidationWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/RegisterObjectiveWorkflow.java
@@ -53,6 +62,8 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/geometry/FlipResolver.java
   - src/main/java/qupath/ext/qpsc/geometry/StageImageTransform.java
   - src/main/java/qupath/ext/qpsc/project/QPProjectFunctions.java
+  - src/main/java/qupath/ext/qpsc/project/ProjectEntryReservation.java
+  - src/main/java/qupath/ext/qpsc/stitching/StitchOutputPlanner.java
   - src/main/java/qupath/ext/qpsc/acquisition/StagePositionManager.java
   - src/main/java/qupath/ext/qpsc/geometry/CrossScopeTransformBuilder.java
   - src/main/java/qupath/ext/qpsc/geometry/TransformationFunctions.java
@@ -62,6 +73,12 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/state/ObjectiveState.java
   - src/main/java/qupath/ext/qpsc/service/microscope/MicroscopeSocketClient.java
   - src/main/java/qupath/ext/qpsc/ui/acquisition/AcquisitionWizardDialog.java
+  - src/main/java/qupath/ext/qpsc/ui/acquisition/AcquisitionDialogBuilder.java
+  - src/main/java/qupath/ext/qpsc/ui/acquisition/ExistingImageAcquisitionController.java
+  - src/main/java/qupath/ext/qpsc/ui/acquisition/UnifiedAcquisitionController.java
+  - src/main/java/qupath/ext/qpsc/ui/acquisition/SinglePointAcquisitionController.java
+  - src/main/java/qupath/ext/qpsc/ui/acquisition/StitchingQueueWindow.java
+  - src/main/java/qupath/ext/qpsc/ui/background/BackgroundProfilesDialog.java
   - src/main/java/qupath/ext/qpsc/ui/liveviewer/LiveViewerWindow.java
   - src/main/java/qupath/ext/qpsc/ui/stagemap/StageMapWindow.java
 watched_symbols:
@@ -99,9 +116,17 @@ watched_symbols:
   - ImageMetadataManager.SLIDE_POSITION
   - ImageMetadataManager.SLIDE_CARRIER
   - ImageMetadataManager.MS_RUN_ID
+  - ImageMetadataManager.WHITE_BALANCE
+  - ImageMetadataManager.BACKGROUND_PROFILE
+  - ImageMetadataManager.FLATFIELD_PROFILE
+  - ImageMetadataManager.CAMERA_VIEW
+  - ImageMetadataManager.LP_BAKED_PARITY_X
+  - ImageMetadataManager.LP_BAKED_PARITY_Y
+  - ImageMetadataManager.LP_ROTATION_DEG
   - ImageMetadataManager.getSiblingsByBaseImage
   - ImageMetadataManager.bakedParity
   - ImageMetadataManager.getLightPath
+  - ImageMetadataManager.getRotationDeg
   - ImageMetadataManager.isCameraView
   - ImageMetadataManager.getBaseImage
   - ImageMetadataManager.getOriginalImageId
@@ -159,6 +184,15 @@ watched_symbols:
   - CrossScopeTransformBuilder.compose
   - StageImageTransform.current
   - StageImageTransform.stitcherFlipFlags
+  - WorkflowRegistry.tryActivate
+  - WorkflowRegistry.isActive
+  - WorkflowRegistry.release
+  - AcquisitionManager.stopActiveAcquisition
+  - ExistingImageAcquisitionController.isDialogOpen
+  - ProjectEntryReservation.STATUS_KEY
+  - ProjectEntryReservation.fill
+  - StitchingQueueWindow.enqueue
+  - StitchingQueueWindow.open
   # Controller / singletons
   - MicroscopeController.getInstance
   - MicroscopeController.setCurrentTransform
@@ -171,13 +205,24 @@ watched_symbols:
   - MicroscopeConfigManager.getMicroscopeName
   - MicroscopeConfigManager.getPixelSize
   - MicroscopeConfigManager.getModalityFOV
+  - MicroscopeConfigManager.getStageZTravelUm
   - ModalityRegistry.getHandler
   - ModalityRegistry.registerHandler
+  - ModalityRegistry.registerUi
+  - ModalityRegistry.getUi
+  - ModalityUis.registerAll
   - ModalityState.getInstance
   - ObjectiveState.getInstance
   - StagePositionManager.getInstance
+  # Modality UI halves (menu contributions, bounding-box panels, Live Viewer controls)
+  - ModalityUi.getMenuContributions
+  - ModalityUi.createBoundingBoxUI
+  - ModalityUi.buildLiveCameraControls
+  - ModalityUi.confirmBeforeAcquiring
+  - ModalityUi.confirmBatch
+  - LCPolScopeModalityUi.getMenuContributions
   # PPM workflow entries
-  - PPMModalityHandler.getMenuContributions
+  - PPMModalityUi.getMenuContributions
   - PolarizerCalibrationWorkflow.run
   - BirefringenceOptimizationWorkflow.run
   - SunburstCalibrationWorkflow.run
@@ -235,20 +280,22 @@ surfaces, and cross-workflow dependencies. It is optimized for LLM agents.
 | I'm changing... | Read these workflows | Read these data surfaces |
 |---|---|---|
 | Alignment save/load (saveSlideAlignment, TransformPreset, checkForSlideAlignment) | W1, W1c, W1d, W3, W14, W18 | DS4, DS5, DS6, DS7, DS17 |
-| Flipped sibling entries / `(flipped X|Y|XY)` naming / mirror annotations | W1, W1d, W17 (FlippedDuplicateMigrator), W3 | DS9 (FLIP_X/Y), DS5, DS17 |
+| Flipped sibling / `(Camera View)` companion entries / mirror annotations | W1, W1b, W1d, W3 | DS9 (light-path snapshot: CAMERA_VIEW, LP_BAKED_PARITY_X/Y), DS5, DS17 |
 | Image metadata fields on ProjectImageEntry | All acquisition workflows (W1, W2, W3, W4, W11..W13) | DS8..DS18 |
 | Source vs acquired microscope (cross-scope gating) | W1, W1a, W1c | DS9 (SOURCE_MICROSCOPE, ACQUIRED_ON_MICROSCOPE), DS5, DS6 |
-| Autofocus parameters / streaming AF | W5, W6, W7, W20 | DS3, DS19 (modality config), DS20 (parfocality YAML) |
+| Autofocus parameters / streaming AF | W5, W6, W8, W20, W34 | DS3, DS19 (modality config), DS20 (parfocality YAML) |
 | White balance modes / per-channel exposures | W9, W10 | DS21 (WB calibration YAML), DS22, DS24 |
-| Background correction / flat-field | W4 | DS23 (background TIFFs), DS3 |
-| Stage polarity / camera orientation | All workflows touching stage motion | DS25 (preferences), DS26 (StageImageTransform) |
-| Stitching pipeline (tiles -> OME-TIFF/ZARR) | W1, W2, W14, W15, W16 | DS28..DS31 |
+| Background correction / flat-field | W4, W39, W40 | DS23 (background TIFFs + profiles), DS24 (activeBackgroundProfile, flatfieldMethod), DS3 |
+| Stage polarity / camera orientation | All workflows touching stage motion | DS3 (`stage.polarity`), DS25 (cameraOrientation), DS26 (StageImageTransform) |
+| Stitching pipeline (tiles -> OME-TIFF/ZARR) | W1, W2, W14, W15, W16, W37 | DS28..DS31, DS48 (reserved entries) |
+| Two runs overlapping (stitching outlives acquisition) / Stop acquisition | W1, W37, W38 | DS17, DS49 (WorkflowRegistry slot) |
 | Cross-scope acquisition (Ocus40 macro -> PPM tiles) | W1, W1c, W3 | DS5, DS6, DS9, DS39 (CrossScopeTransformBuilder) |
 | Sub-image / forward+back propagation | W1, W1a, W12, W13 | DS5, DS6, DS9 (SOURCE_ROI_*), DS40 |
 | Per-acquisition tile generation (TilingUtilities) | W1, W2, W3, W10, W11 | DS28 (tile config files), DS33 (TilingRequest) |
-| Modality dispatch / handler registration | All workflows | DS41 (ModalityRegistry), DS42 (ModalityState) |
+| Modality dispatch / handler registration / modality UI (panels, menu items, Live Viewer controls) | All workflows | DS41 (ModalityRegistry handlers + ModalityUi halves), DS42 (ModalityState) |
+| Acquisition dialogs (Bounded / Existing Image shared code, Z range limit) | W1, W2, W32 | DS3 (`stage.limits.z_um`), DS24, DS25 |
 | Live Viewer / Stage Map UI gates | W19, W21 | DS43 (live viewer state), DS44 (stage map state), DS17 |
-| Z-stack or time-lapse single-point | W7 | DS3, DS19 |
+| Z-stack or time-lapse single-point | W32 (W7 removed) | DS3, DS19 |
 | Socket protocol / new command paths | W1, W2, W19, W21, W6, W8 | DS45 (MicroscopeSocketClient), DS17 |
 | Preferences (QPPreferenceDialog, PersistentPreferences) | All workflows | DS24, DS25 |
 | Project structure (sample dir, tile dir, alignmentFiles/) | W1, W2, W3, W11, W14, W15 | DS27 (project dir), DS32 (sample dir) |
@@ -260,6 +307,9 @@ surfaces, and cross-workflow dependencies. It is optimized for LLM agents.
 | LC-PolScope states / LC calibration | W36 | DS19, DS41 (name `lcpolscope`, type `polarized`) |
 | Approach-from-safe-Z autofocus / focus validation | W34, W5, W6, W1b | DS3 (safe Z), DS19, DS24 (stored verdict) |
 | Adding an objective to the config | W35 | DS3, DS19 |
+| Switching microscope config at runtime / demo microscope | W43, W44 | DS3, DS25 (microscopeConfigFile, server host) |
+| Light-path orientation (scope type, optical flip) | W45 | DS3 (`light_path` block) |
+| Project-wide spatial export (OME-NGFF scene) | W42 | DS5, DS6, DS9 |
 
 ---
 
@@ -276,12 +326,17 @@ shared IDs the helpers actually use.
 id: W1
 class: qupath.ext.qpsc.controller.ExistingImageWorkflowV2
 file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
-entry: start() | startAsync() -> CompletableFuture<WorkflowState> (full run; non-null = acquired, null = short-circuit/cancel/handled-error; never exceptional -- for batch orchestrators) | startSetupAsync() -> CompletableFuture<SetupResult> (setup-only: align + refine + tissue without acquisition, persists per-slide alignment JSON) | startAcquireAsync(SetupResult) -> CompletableFuture<WorkflowState> (acquire-only: replays captured config unattended against persisted alignment JSON)
+entry: start() | startAsync() -> CompletableFuture<WorkflowState> (full run; non-null = acquired, null = short-circuit/cancel/handled-error; never exceptional -- for batch orchestrators) | startSetupAsync() -> CompletableFuture<SetupResult> (setup-only: align + refine + tissue without acquisition, persists per-slide alignment JSON) | startAcquireAsync(SetupResult) -> AcquireHandle (acquire-only: replays captured config unattended against persisted alignment JSON; the handle also carries the stitching-settled future for the pipelined batch)
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquire from Existing Image (SetupScope.java:291, dispatch 'existingImage')"
-  - "Wizard: Acquisition Wizard Start Existing-Image Acquisition (AcquisitionWizardDialog)"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Acquire from Existing Image (SetupScope.java:440, dispatch 'existingImage'; disabled with no open image)"
+  - "Wizard: Acquisition Wizard 'Existing Image Acquisition' button (AcquisitionWizardDialog.onExistingImageAcquisition)"
   - "Per-slot driver: MultiSlideExistingImageWorkflow shepherds one invocation per slide-carrier slot"
+dialogs:
+  - "AnnotationAcquisitionDialog (class selection, only when the image has annotations) then ExistingImageAcquisitionController.showDialog -- the consolidated dialog; shares its fields with Bounded Acquisition's UnifiedAcquisitionController through ui/acquisition/AcquisitionDialogBuilder."
+  - "ExistingImageAcquisitionController opens once: a second start while it is up raises it (isDialogOpen / bringOpenDialogToFront) BEFORE the WorkflowRegistry slot is claimed. Start is disabled if the open project or image changes while the dialog is up."
+  - "Z range maximum in the dialog is the stage's Z travel, MicroscopeConfigManager.getStageZTravelUm() = |stage.limits.z_um.high - low| (DS3)."
+  - "Modality panel inside the dialog comes from ModalityRegistry.getUi(handler).createBoundingBoxUI(modality) (DS41)."
 dispatches_to:
   - "W1a processSubAcquisitionPath WHEN isSubAcquisition() (xy_offset present AND base_image distinct from own name)"
   - "W1c processSlideSpecificAlignment WHEN per-slide alignment JSON exists AND refinement != FULL_MANUAL"
@@ -290,43 +345,51 @@ dispatches_to:
 reads:
   - DS3 (microscope YAML via MicroscopeConfigManager)
   - DS5 (per-slide alignment JSON, macro frame -- via AlignmentHelper.checkForSlideAlignment)
-  - DS9 (open entry: SOURCE_MICROSCOPE, ACQUIRED_ON_MICROSCOPE, BASE_IMAGE, ORIGINAL_IMAGE_ID, MODALITY, OBJECTIVE, DETECTOR_ID, XY_OFFSET_X/Y, FLIP_X/Y, STAGE_BOUNDS_*)
-  - DS17 (MicroscopeController state: isConnected, currentTransform)
-  - DS24 (PersistentPreferences: getLastModality, class list, metadata propagation prefix)
-  - DS25 (QPPreferenceDialog: projectsFolder, tileOverlapPercent, stitching format; stage polarity moved to stage.polarity in the microscope config, 2026-10-27)
+  - DS9 (open entry: SOURCE_MICROSCOPE, ACQUIRED_ON_MICROSCOPE, BASE_IMAGE, ORIGINAL_IMAGE_ID, MODALITY, OBJECTIVE, DETECTOR_ID, XY_OFFSET_X/Y, light-path snapshot via bakedParity / isCameraView, STAGE_BOUNDS_*)
+  - DS17 (MicroscopeController state: isConnected, currentTransform, acquisitionActive)
+  - DS24 (PersistentPreferences: getLastModality, class list, metadata propagation prefix, activeBackgroundProfile, flatfieldMethod)
+  - DS25 (QPPreferenceDialog: projectsFolder, tileOverlapPercent, stitching format)
+  - DS3 (stage.polarity via StagePolarity.current(); stage.limits.z_um for the Z range)
   - DS27 (project image list, sibling resolution)
-  - DS41 (ModalityRegistry -> ModalityHandler for the chosen modality)
+  - DS41 (ModalityRegistry -> ModalityHandler for the chosen modality; ModalityRegistry.getUi -> ModalityUi for its dialog panel and confirmBeforeAcquiring)
   - DS42 (ModalityState)
   - DS43 (live viewer streaming state -- only to suspend during acquisition)
+  - DS49 (WorkflowRegistry active slot)
 writes:
   - DS5 (per-slide alignment JSON refresh, only on refinement accepted -- via saveRefinedAlignment, 7-arg saveSlideAlignment)
   - DS6 (auto-registered sub-frame alignment JSON -- via StitchingHelper.autoRegisterBoundsTransformIfAvailable)
-  - DS17 (MicroscopeController.currentTransform -- set after validateAndFlipIfNeeded, cleared in cleanup())
-  - DS28 (TileConfiguration.txt and _QP.txt under <project>/<sample>/<modality>/<region>/)
+  - DS17 (MicroscopeController.currentTransform -- set after validateAndFlipIfNeeded, cleared in cleanup() only while this run holds the DS49 slot)
+  - DS28 (TileConfiguration.txt and _QP.txt under <project>/<sample>/<acquisitionFolder>/<region>/)
   - DS30 (stitched OME-TIFF or ZARR plus pyramid)
-  - DS9 (new sub-image entry metadata at stitch import: base_image, original_image_id, modality, objective, detector_id, xy_offset, source_microscope, acquired_on_microscope, fov_x_um, fov_y_um, source_roi_*, stage_bounds_* via StitchingHelper)
+  - DS48 (reserved project entries, qpsc_stitch_status=pending, added before each stitch job and filled in place when it lands; OME-TIFF only)
+  - DS9 (new sub-image entry metadata at stitch import or reservation: base_image, original_image_id, modality, objective, detector_id, xy_offset, source_microscope, acquired_on_microscope, fov_x_um, fov_y_um, source_roi_*, stage_bounds_*, white_balance, background_profile, flatfield_profile via StitchingHelper / StitchInfoSupport)
   - DS19 (calls only -- e.g. acquisition command file)
-  - DS27 (project sync; new ProjectImageEntry per acquired sub-image)
+  - DS27 (project sync; new ProjectImageEntry per acquired sub-image; imports never open an image, save the viewer's image data or re-set the project)
+  - DS49 (tryActivate after prerequisites; release in cleanup)
 steps:
-  - { num: 1,  name: validatePrerequisites,                  file_line: "575-589",   reads: ["getImageData", "MicroscopeController.isConnected"], writes: [], gate: "no image OR not connected -> error dialog -> abort" }
-  - { num: 2,  name: checkAndHandleSourceMismatch,           file_line: "378-491",   reads: ["DS9.SOURCE_MICROSCOPE", "DS9.ACQUIRED_ON_MICROSCOPE", "MicroscopeConfigManager.getMicroscopeName"], writes: ["DS9.SOURCE_MICROSCOPE (only if user fixes)"], gate: "see DS39; auto-resolves when acquired_on equals active; dialog when mismatch and no acquired_on" }
-  - { num: 3,  name: checkAndHandleOrphanedFlippedSibling,   file_line: "494-570",   reads: ["DS27.imageList", "DS9.BASE_IMAGE", "DS5"], writes: [], gate: "orphan dialog: re-link or restart" }
-  - { num: 4,  name: showAcquisitionWizard,                  file_line: "~111-200",  reads: ["DS24", "DS25"], writes: ["DS24 (last modality)"], gate: "user cancel -> abort" }
-  - { num: 5,  name: ensureAnnotationsExist / chooseClasses, file_line: "234-376",   reads: ["hierarchy"], writes: ["may run tissue detection"], gate: "no valid annotations -> retry/cancel" }
-  - { num: 6,  name: initializeFromConfig (build WorkflowState), file_line: "606-687", reads: ["DS3", "DS9"], writes: [], gate: "null config -> CancellationException -> handleError" }
-  - { num: 7,  name: checkExistingSlideAlignment,            file_line: "699-753",   reads: ["DS5 (Layer 1) via AlignmentHelper"], writes: [], gate: "if pixelFrame != 'macro' -> Layer 2 gate -> hard-cancel" }
-  - { num: 8,  name: confirmCrossScopeAlignment + tryComposeCrossScopeAlignment, file_line: "754-933", reads: ["DS5 across all scopes (loadAllSlideAlignmentsFromDirectory)", "DS3 across both scopes"], writes: [], gate: "cross-scope dialog: select source scope, modal" }
-  - { num: 9,  name: routeSubWorkflow,                       file_line: "934-976",   reads: ["DS9 (XY_OFFSET, BASE_IMAGE), state.useExistingSlideAlignment, state.alignmentChoice"], writes: [], gate: "selects W1a/W1c/W1d/W1e" }
-  - { num: 10, name: reReadAnnotationsAfterRouting,          file_line: "288",       reads: ["hierarchy on possibly-switched entry"], writes: ["state.annotations (refreshed)"], gate: "after routing may switch open entry" }
-  - { num: 11, name: handleRefinement (orchestrates SingleTileRefinement), file_line: "1476-1556", reads: ["DS17.currentTransform", "DS3"], writes: ["DS28 (refinement tile config)", "DS17 (refined transform on accept)", "DS5 (saveRefinedAlignment ONLY on accept)"], gate: "validateMMAgainstSelection (pixel size / camera ROI 5%) -> hard-cancel on mismatch" }
-  - { num: 12, name: performAcquisition,                     file_line: "1772-1798", reads: ["state.tilesByAnnotation", "DS17.currentTransform"], writes: ["DS17 (acquisitionActive=true)", "DS45 (socket: startAcquisition)"], gate: "validateMMAgainstSelection final backstop" }
-  - { num: 13, name: waitForCompletion / showSuccessNotification, file_line: "1800-1926", reads: ["AcquisitionMonitorService events"], writes: [], gate: "showSuccessNotification short-circuits on null state (Phase 3 H5)" }
-  - { num: 14, name: stitch + autoRegisterBoundsTransformIfAvailable, file_line: "via StitchingHelper", reads: ["DS28"], writes: ["DS30", "DS6 (sub-frame JSON)", "DS9 (full metadata stamp on new entries)"], gate: "stitching errors -> StitchingRecoveryWorkflow path" }
-  - { num: 15, name: cleanup + cleanupTilesAfterStitching,   file_line: "1824-1854", reads: [], writes: ["DS17.currentTransform = null (H6)", "DS17.acquisitionActive=false (Phase 11)", "DS28 (delete tile files)"], gate: "force-delete tile dir even on error (Phase 11)" }
+  - { num: 1,  name: validatePrerequisites,                  file_line: "1428-1466", reads: ["getImageData", "MicroscopeController.isConnected", "DS17.acquisitionActive"], writes: [], gate: "no image OR not connected -> error dialog -> abort; an acquisition already holds the stage -> refuse and offer Stop acquisition (W38)" }
+  - { num: 1.0, name: WorkflowRegistry.tryActivate,          file_line: "385-394",   reads: ["DS49"], writes: ["DS49 (this run takes the active slot; a run that is only stitching yields it)"], gate: "refused while an acquisition is active" }
+  - { num: 2,  name: checkAndHandleSourceMismatch,           file_line: "1188-1333", reads: ["DS9.SOURCE_MICROSCOPE", "DS9.ACQUIRED_ON_MICROSCOPE", "MicroscopeConfigManager.getMicroscopeName"], writes: ["DS9.SOURCE_MICROSCOPE (only if user fixes)"], gate: "see DS39; auto-resolves when acquired_on equals active; dialog when mismatch and no acquired_on" }
+  - { num: 3,  name: checkAndHandleOrphanedFlippedSibling,   file_line: "1335-1426", reads: ["DS27.imageList", "DS9.BASE_IMAGE", "DS5"], writes: [], gate: "orphan dialog: re-link or restart" }
+  - { num: 4,  name: AnnotationAcquisitionDialog + ExistingImageAcquisitionController.showDialog, file_line: "465-525 (execute)", reads: ["DS24", "DS25", "DS3"], writes: ["DS24 (selected classes, last modality)"], gate: "user cancel -> CancellationException; ACQUIRE_ONLY replays the captured config with no dialogs" }
+  - { num: 5,  name: ensureAnnotationsExist / selectClassesAfterDetection, file_line: "1013-1172", reads: ["hierarchy"], writes: ["may run tissue detection"], gate: "no valid annotations -> retry/cancel" }
+  - { num: 6,  name: initializeFromConfig (build WorkflowState), file_line: "1499-1590", reads: ["DS3", "DS9"], writes: [], gate: "null config -> CancellationException -> handleError" }
+  - { num: 7,  name: checkExistingSlideAlignment,            file_line: "1604-1715", reads: ["DS5 (Layer 1) via AlignmentHelper"], writes: [], gate: "if pixelFrame != 'macro' -> Layer 2 gate -> hard-cancel" }
+  - { num: 8,  name: confirmCrossScopeAlignment + tryComposeCrossScopeAlignment, file_line: "1717-1895", reads: ["DS5 across all scopes (loadAllSlideAlignmentsFromDirectory)", "DS3 across both scopes"], writes: [], gate: "cross-scope dialog: select source scope, modal" }
+  - { num: 9,  name: routeSubWorkflow,                       file_line: "1896-1968", reads: ["DS9 (XY_OFFSET, BASE_IMAGE), state.useExistingSlideAlignment, state.alignmentChoice"], writes: [], gate: "selects W1a/W1c/W1d/W1e" }
+  - { num: 10, name: reReadAnnotationsAfterRouting + pinSource, file_line: "834-916", reads: ["hierarchy on possibly-switched entry"], writes: ["state.annotations (refreshed)", "state.sourceEntry (pinned; the flipped sibling when routing switched to it)"], gate: "after routing may switch open entry" }
+  - { num: 10a, name: assertSourceImageOpen,                 file_line: "918-953",   reads: ["state.sourceEntry", "viewer's open entry"], writes: [], gate: "re-opens the pinned entry before refinement and acquisition if the viewer moved" }
+  - { num: 11, name: handleRefinement (orchestrates SingleTileRefinement / MultiTileRefinement), file_line: "2639-2688", reads: ["DS17.currentTransform", "DS3"], writes: ["DS28 (refinement tile config)", "DS17 (refined transform on accept)", "DS5 (saveRefinedAlignment ONLY on accept)"], gate: "validateMMAgainstSelection (pixel size / camera ROI 5%) -> hard-cancel on mismatch; RefinementOutcomePolicy: only SKIPPED proceeds unrefined, the dialog's X cancels" }
+  - { num: 12, name: performAcquisition,                     file_line: "3098-3130", reads: ["state.tilesByAnnotation", "DS17.currentTransform"], writes: ["DS17 (acquisitionActive=true)", "DS45 (socket: ACQUIRE)"], gate: "validateMMAgainstSelection final backstop; CancelGate consulted before each region, before awaitServerIdle and before startAcquisition" }
+  - { num: 13, name: waitForCompletion / showSuccessNotification, file_line: "3131-3252", reads: ["AcquisitionMonitorService events"], writes: [], gate: "showSuccessNotification short-circuits on null state (Phase 3 H5)" }
+  - { num: 14, name: stitch + autoRegisterBoundsTransformIfAvailable, file_line: "via AcquisitionManager.launchStitching -> StitchingHelper", reads: ["DS28"], writes: ["DS48 (reserve, then fill)", "DS30", "DS6 (sub-frame JSON)", "DS9 (full metadata stamp on new entries)"], gate: "job enqueued in StitchingQueueWindow (W37); stitching errors -> StitchingRecoveryWorkflow path" }
+  - { num: 15, name: cleanup + cleanupTilesAfterStitching,   file_line: "3154-3202", reads: ["DS49"], writes: ["DS17.currentTransform = null (H6) and acquisitionActive=false (Phase 11), ONLY while this run holds the DS49 slot", "DS49 (release)", "DS28 (tile handling per preference, success path)"], gate: "force-delete tile dir even on error (Phase 11)" }
 key_invariants:
   - "ImageFlipHelper.validateAndFlipIfNeeded MUST run BEFORE MicroscopeController.setCurrentTransform (M11 deferred install)"
-  - "cleanup() ALWAYS clears MicroscopeController.currentTransform (H6 fix). Stale transform leaks to Live Viewer and next workflow."
-  - "saveSlideAlignment writers MUST read flipMacroX/Y from the open entry, NOT from preset (2026-05-18 stage-mirror bug). All 4 save sites converged on AlignmentHelper.resolveMacroLookupKey + entry-flip-read pattern (Phase 4 M1)."
+  - "cleanup() clears MicroscopeController.currentTransform (H6 fix) only while this run holds the WorkflowRegistry slot (DS49). Run N's stitching outlives its acquisition and run N+1 may already have set its own transform; run N's cleanup nulled run N+1's transform on 2026-10-27 before this guard."
+  - "Stitch imports never touch the viewer: no openImageEntry, no saveImageData of the viewer's image, no setProject (2026-10-27 incident: a stitch landing under the next slide's refinement dialog). Added entries are collected through StitchingHelper.ImportContext and reported in the completion toast and the stitching queue."
+  - "saveSlideAlignment writers MUST read flipMacroX/Y from the open entry (ImageMetadataManager.bakedParity, the light-path snapshot's baked parity), NOT from preset (2026-05-18 stage-mirror bug). All 4 save sites converged on AlignmentHelper.resolveMacroLookupKey + entry-flip-read pattern (Phase 4 M1)."
+  - "A second start while ExistingImageAcquisitionController is open raises that dialog and returns null; it never claims the WorkflowRegistry slot from the run that owns the dialog."
   - "routeSubWorkflow MUST check isSubAcquisition() BEFORE useExistingSlideAlignment branch (2026-05-13 sub-image routing fix)."
   - "Sub-image acquisitions MUST hard-cancel when acquired_on_microscope != active scope (Phase 2 H1/H4)."
   - "Cross-scope alignment requires SOURCE_MICROSCOPE != active microscope name; compose uses source scope's stored offset, not active scope's."
@@ -353,7 +416,7 @@ related_design_reports:
 id: W1a
 class: qupath.ext.qpsc.controller.ExistingImageWorkflowV2
 file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
-entry: processSubAcquisitionPath (line 1213)
+entry: processSubAcquisitionPath (line 2203)
 category: acquisition_subroute
 parent: W1
 reads:
@@ -379,9 +442,10 @@ entry: start() / startAsync()
 category: acquisition_shepherd
 status: experimental
 ui_entries:
-  - "Menu: Extensions > QP Scope > Multi-Slide Acquisition... (shown when the config defines a multi-slide holder; no preference toggle)"
+  - "Menu: Extensions > QP Scope > Multi-Slide Acquisition... (top level, directly under Acquisition Wizard; SetupScope.java:464, dispatch 'multiSlideExistingImage', which also auto-opens the Live Viewer and Stage Map; shown when the config defines a multi-slide holder; no preference toggle; disabled with no open project)"
 dispatches_to:
-  - "W1 (per-slot ExistingImageWorkflowV2.start)"
+  - "W1 (per-slot ExistingImageWorkflowV2.startAsync / startSetupAsync / startAcquireAsync)"
+  - "ModalityRegistry.getUi(modality).confirmBatch(slides) once per modality before a batch (LC-PolScope: the per-slide calibration reminder)"
 reads:
   - DS44 (StageInsertRegistry: multi-slot SLIDE_HOLDER carriers)
   - DS27 (macro entries: those without base_image set)
@@ -398,7 +462,7 @@ key_invariants:
   - "Unattended batches must never wait on advisory dialogs."
   - "Abort All must stop a running autofocus, not just the batch loop -- otherwise the stage keeps being driven after the abort."
   - "Slot-jump autofocus seeds from the slide's saved focus Z and hands the stage back afterwards; both runAfterSlotMove entry points lock on the pending-search holder."
-  - "A rotated slot assigns ONE composed (rotated N)(Camera View) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. Orientation is metadata-driven: MultiSlideAssignmentDialog stamps the light-path snapshot (camera_view flag + baked parity + lp_rotation_deg) on the companion at creation, and code reads rotation from getRotationDegrees / classifies via isCameraView -- the '(rotated N) (Camera View)' name is user-reference only. isCameraView makes validateAndFlipIfNeeded no-op, so both passes open the correct working entry. Base annotations are brought onto the empty companion (AnnotationHelper.bringSourceAnnotationsOntoOpenEntry, rotate+flip) before the acquisition dialogs. Do not reintroduce the intermediate or parse rotation from the name."
+  - "A rotated slot assigns ONE composed (rotated N)(Camera View) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. Orientation is metadata-driven: MultiSlideAssignmentDialog stamps the light-path snapshot (camera_view flag + baked parity + lp_rotation_deg) on the companion at creation, and code reads rotation from getRotationDeg / classifies via isCameraView -- the '(rotated N) (Camera View)' name is user-reference only. isCameraView makes validateAndFlipIfNeeded no-op, so both passes open the correct working entry. Base annotations are brought onto the empty companion (AnnotationHelper.bringSourceAnnotationsOntoOpenEntry, rotate+flip) before the acquisition dialogs. Do not reintroduce the intermediate or parse rotation from the name."
 ```
 
 ### W1c: processSlideSpecificAlignment (sub-route of W1)
@@ -407,7 +471,7 @@ key_invariants:
 id: W1c
 class: qupath.ext.qpsc.controller.ExistingImageWorkflowV2
 file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
-entry: processSlideSpecificAlignment (line 977)
+entry: processSlideSpecificAlignment (line 1970)
 category: acquisition_subroute
 parent: W1
 reads:
@@ -429,7 +493,7 @@ key_invariants:
 id: W1d
 class: qupath.ext.qpsc.controller.ExistingImageWorkflowV2
 file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
-entry: processExistingAlignmentPath (line 1123) -> ExistingAlignmentPath.execute()
+entry: processExistingAlignmentPath (line 2113) -> ExistingAlignmentPath.execute()
 category: acquisition_subroute
 parent: W1
 helper_class: qupath.ext.qpsc.controller.workflow.ExistingAlignmentPath
@@ -448,7 +512,7 @@ writes:
 id: W1e
 class: qupath.ext.qpsc.controller.ExistingImageWorkflowV2
 file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
-entry: processManualAlignmentPath (line 1149) -> ManualAlignmentPath.execute()
+entry: processManualAlignmentPath (line 2139) -> ManualAlignmentPath.execute()
 category: acquisition_subroute
 parent: W1
 helper_class: qupath.ext.qpsc.controller.workflow.ManualAlignmentPath
@@ -469,36 +533,40 @@ file: src/main/java/qupath/ext/qpsc/controller/BoundedAcquisitionWorkflow.java
 entry: run()
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Bounded Acquisition (SetupScope.java:272, dispatch 'boundedAcquisition')"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Bounded Acquisition (SetupScope.java:425, dispatch 'boundedAcquisition')"
+  - "Wizard: Acquisition Wizard 'Bounded Acquisition' button"
 reads:
-  - DS3 (modality FOV, pixel size, detector dimensions)
+  - DS3 (modality FOV, pixel size, detector dimensions; stage.limits.z_um for the dialog's Z range; stage.polarity)
   - DS17 (isConnected; auto-connect if not)
-  - DS24 (projectsFolder pref, tileOverlapPercent, stagePolarity)
-  - DS25
+  - DS25 (projectsFolder, tileOverlapPercent, tileHandling, stitching format)
+  - DS24 (dialog seeds)
   - DS45 (validateCameraRoi: getFrame())
-  - DS41 (ModalityRegistry for enhanced modality)
+  - DS41 (ModalityRegistry handler for the modality; ModalityRegistry.getUi -> createBoundingBoxUI panel and confirmBeforeAcquiring)
 writes:
   - DS27 (project: createAndOpenQuPathProject OR use existing)
   - DS28 (TileConfiguration.txt in stage-micron coords; modality folder includes objective suffix)
+  - DS48 (reserved entries for each stitch job, OME-TIFF only)
   - DS30 (stitched output -- post-acquisition)
   - DS19 (acquisition command file via AcquisitionCommandBuilder)
   - DS9 (new entry metadata after stitching)
 steps:
-  - { num: 1, name: ensure connection, file_line: "76-87", reads: ["DS17"], writes: [], gate: "no connect -> error -> abort" }
-  - { num: 2, name: UnifiedAcquisitionController.showDialog, file_line: "90-103", reads: ["DS25", "DS3"], writes: [], gate: "null result -> abort" }
-  - { num: 3, name: derive enhancedModality (ObjectiveUtils.createEnhancedFolderName), file_line: "120-122", reads: [], writes: [], gate: "" }
-  - { num: 4, name: project setup (createAndOpen OR reuse), file_line: "131-172", reads: ["DS27"], writes: ["DS27"], gate: "" }
-  - { num: 5, name: copyConfigsToProject (provenance), file_line: "195-201", reads: ["DS3"], writes: ["DS27/microscope_configs/"], gate: "best-effort" }
-  - { num: 6, name: getModalityFOV + getPixelSize, file_line: "204-224", reads: ["DS3"], writes: [], gate: "null FOV -> error -> abort" }
-  - { num: 7, name: QPScopeChecks.validateObjectivePixelSize + validateCameraRoi, file_line: "227-233", reads: ["DS3", "DS45"], writes: [], gate: "5% threshold -> hard-cancel on mismatch (single OK button)" }
-  - { num: 8, name: StitchingConfiguration.validateWithRetry, file_line: "236-238", reads: ["DS25"], writes: [], gate: "user cancel -> abort" }
-  - { num: 9, name: TilingUtilities.createTiles (bounding-box request), file_line: "241-256", reads: ["DS33"], writes: ["DS28"], gate: "" }
-  - { num: 10, name: ChannelResolutionService + AngleResolutionService, file_line: "265-296", reads: ["DS3"], writes: [], gate: "empty selection on channel-based modality -> abort" }
-  - { num: 11, name: launch acquisition via socket, file_line: "297+", reads: [], writes: ["DS17", "DS19", "DS45"], gate: "" }
-  - { num: 12, name: stitch + autoRegisterBoundsTransformIfAvailable, file_line: "via STITCH_EXECUTOR", reads: ["DS28"], writes: ["DS30", "DS6", "DS9 (full metadata stamp)"], gate: "" }
-  - { num: 13, name: cleanup tiles per preference, file_line: "via TileCleanupHelper", reads: ["DS25.tileHandlingMethod"], writes: ["DS28"], gate: "" }
+  - { num: 1, name: ensure connection, file_line: "86-99", reads: ["DS17"], writes: [], gate: "no connect -> error -> abort" }
+  - { num: 2, name: UnifiedAcquisitionController.showDialog (extends AcquisitionDialogBuilder), file_line: "101", reads: ["DS25", "DS24", "DS3"], writes: [], gate: "null result -> abort" }
+  - { num: 3, name: derive modalityFolder (ObjectiveUtils.createEnhancedFolderName), file_line: "135-137", reads: [], writes: [], gate: "" }
+  - { num: 4, name: project setup (createAndOpen OR reuse), file_line: "~140-210", reads: ["DS27"], writes: ["DS27"], gate: "" }
+  - { num: 5, name: copyConfigsToProject (provenance), file_line: "212", reads: ["DS3"], writes: ["DS27/microscope_configs/"], gate: "best-effort" }
+  - { num: 6, name: getModalityFOV + getPixelSize, file_line: "220-240", reads: ["DS3"], writes: [], gate: "null FOV -> error -> abort" }
+  - { num: 7, name: QPScopeChecks.validateObjectivePixelSize + validateCameraRoi, file_line: "242-248", reads: ["DS3", "DS45"], writes: [], gate: "5% threshold -> hard-cancel on mismatch (single OK button)" }
+  - { num: 8, name: StitchingConfiguration.validateWithRetry, file_line: "251", reads: ["DS25"], writes: [], gate: "user cancel -> abort" }
+  - { num: 9, name: TilingUtilities.createTiles (bounding-box request), file_line: "~255-270", reads: ["DS33"], writes: ["DS28"], gate: "" }
+  - { num: 10, name: ChannelResolutionService + AngleResolutionService, file_line: "280-310", reads: ["DS3"], writes: [], gate: "empty selection on channel-based modality -> abort" }
+  - { num: 10a, name: ModalityUi.confirmBeforeAcquiring + BackgroundIlluminationCheck, file_line: "354-360", reads: ["DS41", "DS23"], writes: [], gate: "modality confirmation refused -> abort (LC-PolScope per-slide calibration reminder)" }
+  - { num: 11, name: launch acquisition via socket, file_line: "484", reads: [], writes: ["DS17", "DS19", "DS45"], gate: "" }
+  - { num: 12, name: stitch (StitchingHelper.performRegionStitching) + autoRegisterBoundsTransformIfAvailable, file_line: "596-610, via STITCH_EXECUTOR", reads: ["DS28"], writes: ["DS48", "DS30", "DS6", "DS9 (full metadata stamp)"], gate: "" }
+  - { num: 13, name: cleanup tiles per preference, file_line: "670, via TileCleanupHelper", reads: ["DS25.tileHandling"], writes: ["DS28"], gate: "" }
 key_invariants:
   - "Bounded acquisition is stage-frame native -- NO macro flip, NO alignment JSON read. Stitcher flips are stage-polarity-driven only."
+  - "Does not claim the WorkflowRegistry slot (DS49); only W1 uses it."
   - "When project already open, projectsFolder and sampleName MUST be derived from the existing project path, not preference. Otherwise tiles land in wrong directory."
   - "validateObjectivePixelSize fires after dialog returns, before TilingUtilities.createTiles -- earliest gate in this codebase."
 common_failures:
@@ -516,23 +584,24 @@ file: src/main/java/qupath/ext/qpsc/controller/MicroscopeAlignmentWorkflow.java
 entry: run()
 category: alignment
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Alignment (SetupScope.java:342, dispatch 'microscopeAlignment')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Alignment (SetupScope.java:487, dispatch 'microscopeAlignment')"
+  - "Wizard: AcquisitionWizardDialog alignment step (startWorkflow('microscopeAlignment'))"
   - "Disabled unless MacroImageUtility.isMacroImageAvailable(qupath) returns true"
 reads:
-  - DS3
+  - DS3 (incl. stage.polarity)
   - DS4 (existing TransformPresets for current (source, target) pair)
-  - DS9 (open entry: SOURCE_MICROSCOPE, macro pixel size)
-  - DS25 (stagePolarity, cameraOrientation)
+  - DS9 (open entry: SOURCE_MICROSCOPE, macro pixel size, bakedParity, isCameraView)
+  - DS25 (cameraOrientation)
   - DS17
   - DS46 (data bounds classifier .json -- checked up front in run(), before the first dialog; required)
 writes:
   - DS4 (savePreset on success -- new TransformPreset stored in alignment YAML)
-  - DS5 (saveGeneralTransform writes per-slide alignment JSON; line ~1503, commit 5bf0f7bf -- reads open-entry flips for save)
+  - DS5 (saveGeneralTransform writes per-slide alignment JSON; saveSlideAlignment call at line ~1624, commit 5bf0f7bf -- reads open-entry flips for save)
   - DS17 (currentTransform during refinement)
   - DS28 (alignment-tile config under temp dir)
 key_invariants:
   - "savePreset stores flipMacroX/Y, sourceScanner, greenBoxParams, optional 3D Z scale/offset."
-  - "saveGeneralTransform reads ImageMetadataManager.isFlippedX/Y(openEntry) for flipMacroX/Y on the per-slide JSON (matches load-side bake-delta logic, 2026-05-19 fix)."
+  - "saveGeneralTransform reads ImageMetadataManager.bakedParity(openEntry) for flipMacroX/Y on the per-slide JSON (matches load-side logic, 2026-05-19 fix; isFlippedX/Y and the flip_x/flip_y keys were replaced by the light-path snapshot in v0.9.0)."
   - "Refinement-tile cleanup happens explicitly on accept and reject (Phase 11)."
   - "run() refuses to start when DS46 is unset or names a missing file (ImageProcessing.dataBoundsClassifierProblem); the save-time check in saveGeneralTransform still guards the same case."
 common_failures:
@@ -551,10 +620,13 @@ file: src/main/java/qupath/ext/qpsc/controller/BackgroundCollectionWorkflow.java
 entry: run() / executeBackgroundAcquisitionDirect()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Background Collection (dispatch 'backgroundCollection')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Collect Background Images (SetupScope.java:558, dispatch 'backgroundCollection')"
+  - "Wizard: AcquisitionWizardDialog background step"
+  - "Offered after calibrations that invalidate a background set (BackgroundCollectionWorkflow.offerCollection / run(Preselection))"
 reads:
   - DS3 (pixel size, modality FOV)
   - DS22 (WB mode validity via BackgroundValidityChecker)
+  - DS24 (activeBackgroundProfile -- refuses without one)
   - DS45 (validateCameraRoi)
 writes:
   - DS23 (background TIFFs at <base>/profiles/<backgroundProfile>/<detector>/<modality>/<mag>/<wbMode>/; refuses without a background profile)
@@ -572,7 +644,7 @@ file: src/main/java/qupath/ext/qpsc/controller/AutofocusBenchmarkWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Benchmark (dispatch 'autofocusBenchmark')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Parameter Benchmark... (SetupScope.java:665, dispatch 'autofocusBenchmark')"
 reads:
   - DS3 (autofocus YAML section)
   - DS17
@@ -591,7 +663,7 @@ file: src/main/java/qupath/ext/qpsc/controller/AutofocusEditorWorkflow.java
 entry: run() / showValidationResultStatic()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Editor (dispatch 'autofocusEditor')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor... (SetupScope.java:597, dispatch 'autofocusEditor')"
 reads:
   - DS3 (autofocus YAML)
 writes:
@@ -600,24 +672,14 @@ key_invariants:
   - "Config-only -- no microscope motion."
 ```
 
-### W7: StackTimeLapseWorkflow
+### W7: StackTimeLapseWorkflow (REMOVED)
 
 ```yaml
 id: W7
-class: qupath.ext.qpsc.controller.StackTimeLapseWorkflow
-file: src/main/java/qupath/ext/qpsc/controller/StackTimeLapseWorkflow.java
-entry: show(qupath)
-category: acquisition
-ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse (SetupScope.java:520)"
-  - "When QPPreferenceDialog.isSinglePointDialogEnabled(): SinglePointAcquisitionController.show() instead (default)"
-reads:
-  - DS3
-  - DS17 (current stage Z)
-writes:
-  - DS30 (multi-plane OME-TIFF at current stage position)
-key_invariants:
-  - "Single-tile at current position -- NO objective parameter, NO tile grid, NO pixel-size gate."
+status: removed
+removed_in: "dadece3e (2026-06-25): StackTimeLapseWorkflow.java deleted together with the singlePointDialogEnabled preference that chose between it and W32"
+replaced_by: W32 SinglePointAcquisitionController
+note: "ID kept so older references resolve. The Z-Stack / Time-Lapse menu item goes to W32 unconditionally."
 ```
 
 ### W8: TestAutofocusWorkflow
@@ -628,7 +690,9 @@ class: qupath.ext.qpsc.controller.TestAutofocusWorkflow
 file: src/main/java/qupath/ext/qpsc/controller/TestAutofocusWorkflow.java
 entry: runStandard() / runSweep()
 category: test
-ui_entries: []  # invoked programmatically (probe + script usage)
+ui_entries:
+  - "Autofocus Configuration Editor (W6) test buttons: runStandard / runSweep (AutofocusEditorWorkflow.java ~1778, ~1828)"
+  - "Helpers getCurrentObjective / getDefaultOutputPath are also used by the Live Viewer autofocus, SlotJumpAutofocus, SiftCapturePane, AlignmentLivePrep and W34"
 reads:
   - DS3
 writes:
@@ -644,7 +708,8 @@ file: src/main/java/qupath/ext/qpsc/controller/WhiteBalanceWorkflow.java
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI White Balance (when hasJAICamera; dispatch 'whiteBalance')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI White Balance Calibration... (when hasJAICamera; SetupScope.java:880, dispatch 'whiteBalance')"
+  - "Wizard: AcquisitionWizardDialog white-balance step"
 reads:
   - DS3 (pixel size)
   - DS24 (last objective / detector)
@@ -663,7 +728,7 @@ file: src/main/java/qupath/ext/qpsc/controller/WBComparisonWorkflow.java
 entry: run()
 category: comparison
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > WB Comparison (dispatch 'wbComparison')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test... (only when hasJAICamera; SetupScope.java:625, dispatch 'wbComparison')"
 reads:
   - DS3
   - DS21
@@ -682,7 +747,7 @@ class: qupath.ext.qpsc.controller.RapidScanWorkflow
 file: src/main/java/qupath/ext/qpsc/controller/RapidScanWorkflow.java
 entry: show(qupath)
 category: acquisition
-ui_entries: []  # Programmatically reached -- not currently in main menu wiring above
+ui_entries: []  # No caller in src/main at 05ee3284: no menu item, no dispatch case, no other class calls show()
 reads:
   - DS3
 writes:
@@ -701,7 +766,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ForwardPropagationWorkflow.java
 entry: run(qupath)
 category: propagation
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager (SetupScope.java:528)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... (SetupScope.java:751, direct call, not via QPScopeController)"
 reads:
   - DS5 (tier 1 lookup: macro-frame JSON via AlignmentHelper)
   - DS6 (tier 2 lookup: derived/ sub-frame JSON)
@@ -745,18 +810,22 @@ class: qupath.ext.qpsc.controller.workflow.StitchingHelper
 file: src/main/java/qupath/ext/qpsc/controller/workflow/StitchingHelper.java
 entry: performAnnotationStitching / performRegionStitching / autoRegisterBoundsTransformIfAvailable / convertSingleZarrToTiff
 category: helper
+called_from: "AcquisitionManager.launchStitching (W1; also enqueues the job in StitchingQueueWindow, W37), BoundedAcquisitionWorkflow (W2). W16 does not call it; it reports through StitchingQueueWindow.show directly."
 reads:
   - DS28 (tile files + TileConfiguration.txt)
   - DS25 (stitching format/compression)
   - DS3 (microscope name for ACQUIRED_ON_MICROSCOPE stamping)
   - DS26 (StageImageTransform.stitcherFlipFlags)
 writes:
+  - DS48 (reserveOutputs: StitchOutputPlanner predicts each output's key and name; ProjectEntryReservation.reserve adds the entries on the FX thread before the job is queued; fill / fail / dropUnfilled when it ends)
   - DS30 (OME-TIFF/ZARR + pyramid)
   - DS6 (sub-frame alignment JSON via autoRegisterBoundsTransformIfAvailable)
   - DS9 (full metadata stamp on each newly-imported sub-image entry: BASE_IMAGE, ORIGINAL_IMAGE_ID, MODALITY, OBJECTIVE, DETECTOR_ID, XY_OFFSET, SOURCE_MICROSCOPE, ACQUIRED_ON_MICROSCOPE, FOV_X_UM, FOV_Y_UM, SOURCE_ROI_*, STAGE_BOUNDS_*, STITCHER_FLIP_X/Y)
 key_invariants:
   - "autoRegisterBoundsTransformIfAvailable stamps STAGE_BOUNDS_* on the entry alongside the derived/ JSON so Move-to-Centroid works even if JSON lookup fails."
   - "STITCHER_FLIP_X/Y are recorded so Move-to-Centroid can rebuild pixel->stage from scratch."
+  - "Imports only add the entry, stamp metadata and refreshProject(); they never open an entry in the viewer, save the viewer's image data or call setProject (4c841bf5). Added entries are collected through StitchingHelper.ImportContext (by operation id) for the completion toast and StitchingQueueWindow.recordOutput."
+  - "Reservation is OME-TIFF only: a ZARR job gets an empty plan and imports the ordinary way. A wrong prediction costs only a placeholder entry, dropped when the job finishes."
   - "Background ZARR->TIFF escalation was removed in the 2026-06-01 stitching refactor (OmePyramidErrorMonitor / StitchRetryExecutor / OME_TIFF_VIA_ZARR deleted); the direct OME-TIFF writer writes the final path so no escalation is needed. convertSingleZarrToTiff is kept only for W15 MakePortableWorkflow."
 ```
 
@@ -769,7 +838,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MakePortableWorkflow.java
 entry: run(qupath)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable (SetupScope.java:595)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... (SetupScope.java:798, direct call)"
 reads:
   - DS27 (project image list; entries with .zarr backing)
   - DS28 (raw tile folders, when ZARR is absent)
@@ -778,6 +847,7 @@ writes:
   - DS27 (project sync after image swap)
 key_invariants:
   - "Surfaces raw tile folders even when no ZARR remains (commit 7dc4a775)."
+  - "Leaves everything in a _protected folder (TileProcessingUtilities.PROTECTED_FOLDER) alone, as tile cleanup does (ac9a1397)."
   - "Spotless line-wrap + UTILITIES note for tiles-only flow (commit 8d324838 area)."
 ```
 
@@ -790,36 +860,25 @@ file: src/main/java/qupath/ext/qpsc/controller/StitchingRecoveryWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Stitching Recovery (dispatch 'stitchingRecovery')"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... (SetupScope.java:759, dispatch 'stitchingRecovery')"
 reads:
   - DS28 (user-selected tile folder; TileConfiguration.txt)
   - DS25 (compression / output format)
 writes:
   - DS30 (re-stitched image added to current project)
   - DS27 (project sync)
+  - W37 queue rows (progress shown through StitchingQueueWindow.show, not a modal dialog)
 key_invariants:
   - "Project-anchored SlideImages folder; rename-after-stitch naming; typed compression/format (OME_TIFF_VIA_ZARR dropped in the 2026-06-01 refactor; persisted values fall back to OME_TIFF)."
 ```
 
-### W17: FlippedDuplicateMigrator (one-shot utility)
+### W17: FlippedDuplicateMigrator (REMOVED)
 
 ```yaml
 id: W17
-class: qupath.ext.qpsc.utilities.FlippedDuplicateMigrator
-file: src/main/java/qupath/ext/qpsc/utilities/FlippedDuplicateMigrator.java
-entry: migrate(typedProject)
-category: utility
-ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Migrate Flipped Duplicates (SetupScope.java:539)"
-reads:
-  - DS27 (project list)
-  - DS9 (BASE_IMAGE / sibling chains; isFlippedX/Y)
-writes:
-  - DS27 (removes legacy '(flipped X|Y|XY)' entries; transfers annotations to unflipped base)
-  - DS9 (entry metadata only via removal)
-key_invariants:
-  - "Safe to run repeatedly -- no-op when no duplicates remain. Idempotent."
-  - "Companion '(flipped X|Y|XY)' entries are still legitimately created on demand for visual-UX during alignment -- DO NOT strip them in the workflow path. Only legacy duplicates targeted."
+status: removed
+removed_in: "1355d237 (2026-08-11, v0.9.0 orientation refactor): FlippedDuplicateMigrator.java and its menu item deleted together with the flip_x/flip_y metadata keys"
+note: "ID kept so older references resolve. Companion entries (now named '(Camera View)', built by QPProjectFunctions.createFlippedDuplicate / createRotatedFlippedDuplicate) are still created on demand for alignment UX and classified by ImageMetadataManager.isCameraView -- DO NOT strip them in the workflow path."
 ```
 
 ### W18: MicroManagerStitchWorkflow (no project, no microscope)
@@ -831,7 +890,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MicroManagerStitchWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder (dispatch 'stitchMicroManagerFolder')"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... (SetupScope.java:773, dispatch 'stitchMicroManagerFolder')"
 reads:
   - user-selected MicroManager tile folder (OME-TIFF with MMStack sidecars)
 writes:
@@ -849,17 +908,21 @@ file: src/main/java/qupath/ext/qpsc/ui/liveviewer/LiveViewerWindow.java
 entry: show() / hide() / lockControls(reason) / unlockControls() / beginExternalAutofocus(cancel) / endExternalAutofocus()
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Live Viewer (dispatch 'liveViewer')"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Live Viewer (SetupScope.java:520, dispatch 'liveViewer')"
+  - "Auto-opened by Multi-Slide Acquisition (dispatch 'multiSlideExistingImage') and the Acquisition Wizard; reopened by Switch Microscope (W43) if it was open"
   - "Implicit: any workflow with primary-socket activity locks the live viewer (W1 acquisition)"
 reads:
-  - DS17 (currentTransform for Go-To-Centroid path)
+  - DS17 (currentTransform for Go-To-Centroid path; acquisitionActive for the Stop acquisition button)
   - DS45 (auxiliary socket frames; stage polling)
   - DS9 (STAGE_BOUNDS for Go-To-Centroid fallback)
   - DS6 (per-slide sub-frame JSON for click-to-stage)
+  - DS41 (ModalityRegistry.getUi(modality).buildLiveCameraControls -- modality camera panel, e.g. LCLiveCameraControls; built in StageControlPanel)
 writes:
   - DS43 (live viewer streaming state, contrast, histogram)
-  - DS17 (joystick / WASD stage motion via MicroscopeController.moveStage*)
+  - DS17 (joystick / WASD stage motion via MicroscopeController.moveStage*; StageControlPanel set/getCurrentTransform for slide-transform restore and acquired-image alignment)
+  - "W38 (red 'Stop acquisition' button while an acquisition holds the stage -> AcquisitionManager.stopActiveAcquisition)"
 key_invariants:
+  - "Registers its streaming controls with MicroscopeController at startup (f17bd1cd), so MicroscopeController imports nothing from the UI."
   - "Z bar widget + movement gate (commit 8d324838) -- suppresses Z trace during motion."
   - "Lock/unlock controls via static helpers; isLocked() reports global state."
   - "beginExternalAutofocus/endExternalAutofocus: partial lock for scans started OUTSIDE this window (multi-slide slot-jump AF via SlotJumpAutofocus, W-multislide). Disables stage-movement controls but leaves the Autofocus button live as a Cancel toggle (ABORTAF). Distinct from lockControls, which disables the Autofocus button too."
@@ -876,7 +939,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ProbeStageAfWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Re-probe Stage AF (dispatch 'probeStageAf')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Re-probe Stage AF... (SetupScope.java:682, dispatch 'probeStageAf')"
 reads:
   - DS3 (stage YAML)
   - DS17 (live stage probe)
@@ -895,16 +958,19 @@ file: src/main/java/qupath/ext/qpsc/ui/stagemap/StageMapWindow.java
 entry: show() / hide() / setBoundingBoxPreview() / clearBoundingBoxPreview()
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Stage Map (SetupScope.java:355)"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Stage Map (SetupScope.java:511, direct StageMapWindow.show())"
+  - "Auto-opened by Multi-Slide Acquisition; reopened by Switch Microscope (W43) if it was open"
 reads:
   - DS44 (StageInsertRegistry: carrier definitions)
-  - DS9 (entry metadata: BASE_IMAGE chain ancestry walk to macro-owning ancestor; SOURCE_MICROSCOPE)
-  - DS25 (stagePolarity + cameraOrientation composite)
+  - DS9 (entry metadata: BASE_IMAGE chain ancestry walk to macro-owning ancestor; SOURCE_MICROSCOPE; light-path snapshot)
+  - DS3 (stage.polarity, light_path) + DS25 (cameraOrientation), composed through StageImageTransform (DS26)
   - DS4 (active source preset for source dropdown)
-  - DS5 (per-slide alignment JSON)
+  - DS5 (per-slide alignment JSON; the macro is drawn where this slide's own alignment puts it, dea33682)
   - DS17 (current stage position)
 writes:
-  - none (display-only); MAY trigger stage motion via MicroscopeController.moveStageXY
+  - mostly display-only; MAY trigger stage motion via MicroscopeController.moveStageXY
+  - "DS9 slide insertion (PlacementChangeCoordinator: setSlideInsertion on the base, removes the stale (Camera View) companion, clears DS17.currentTransform)"
+  - "DS3 insert reference points (Calibrate... -> stage insert calibration)"
 key_invariants:
   - "Apply Flips source is hardware-only (stage+camera composite XOR active source preset's macro flip). Never read entry.source_microscope to derive display behavior (commit 365045d2)."
   - "Source dropdown is display-only -- walks base_image/original_image_id ancestor chain. NEVER overwrite an existing entry.source_microscope from the dropdown (commit d531d696)."
@@ -921,8 +987,8 @@ file: src/main/java/qupath/ext/qpsc/ui/setupwizard/SetupWizardDialog.java
 entry: show()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard (dispatch 'setupWizard')"
-  - "Top-level when !configValid: 'Setup Wizard (Start Here)' inserted before main wizard (SetupScope.java:729)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... (SetupScope.java:837, dispatch 'setupWizard')"
+  - "Top-level when !configValid: 'Setup Wizard (Start Here)...' inserted before main wizard (SetupScope.java:962)"
 reads:
   - DS3 (loading existing config if any)
   - DS17 (server connection probe)
@@ -939,7 +1005,7 @@ file: src/main/java/qupath/ext/qpsc/modality/ppm/workflow/PolarizerCalibrationWo
 entry: run()
 category: ppm_calibration
 ui_entries:
-  - "Dynamic: PPMModalityHandler.getMenuContributions() -> 'polarizerCalibration' (when PPM modality present)"
+  - "Dynamic: Extensions > QP Scope > <PPM submenu> > Polarizer Calibration (PPM)... -- PPMModalityUi.getMenuContributions() -> 'polarizerCalibration' (when PPM modality present; read via ModalityRegistry.getUi(handler))"
 reads:
   - DS3
   - DS47 (PPM calibration directory: PPMPreferences.activeCalibrationPath)
@@ -958,7 +1024,7 @@ file: src/main/java/qupath/ext/qpsc/modality/ppm/workflow/BirefringenceOptimizat
 entry: run()
 category: ppm_optimization
 ui_entries:
-  - "Dynamic: PPMModalityHandler menu -> 'birefringenceOptimization'"
+  - "Dynamic: <PPM submenu> > PPM Birefringence Optimization... -- PPMModalityUi.getMenuContributions() -> 'birefringenceOptimization'"
 reads:
   - DS3
   - DS47
@@ -975,7 +1041,7 @@ file: src/main/java/qupath/ext/qpsc/modality/ppm/workflow/SunburstCalibrationWor
 entry: run()
 category: ppm_calibration
 ui_entries:
-  - "Dynamic: PPMModalityHandler menu -> 'sunburstCalibration'"
+  - "Dynamic: <PPM submenu> > PPM Reference Slide... -- PPMModalityUi.getMenuContributions() -> 'sunburstCalibration'"
 reads:
   - DS3
   - DS25 (sunburst preferences from QPPreferenceDialog: spokes, saturation, value, inner/outer radius)
@@ -992,7 +1058,7 @@ file: src/main/java/qupath/ext/qpsc/modality/ppm/workflow/PPMSensitivityTestWork
 entry: run()
 category: ppm_test
 ui_entries:
-  - "Dynamic: PPMModalityHandler menu -> 'ppmSensitivityTest'"
+  - "Dynamic: <PPM submenu> > PPM Rotation Sensitivity Test... -- PPMModalityUi.getMenuContributions() -> 'ppmSensitivityTest'"
 reads:
   - DS3
 writes:
@@ -1008,7 +1074,7 @@ file: src/main/java/qupath/ext/qpsc/controller/NoiseCharacterizationWorkflow.jav
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI Noise Characterization (when hasJAICamera; dispatch 'noiseCharacterization')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI Noise Characterization... (when hasJAICamera; SetupScope.java:897, dispatch 'noiseCharacterization')"
 reads:
   - DS3
 writes:
@@ -1024,11 +1090,12 @@ file: src/main/java/qupath/ext/qpsc/ui/acquisition/AcquisitionWizardDialog.java
 entry: show()
 category: ui_router
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition Wizard (SetupScope.java:255, dispatch 'acquisitionWizard')"
+  - "Menu: Extensions > QP Scope > Acquisition Wizard... (top of menu, SetupScope.java:398, dispatch 'acquisitionWizard')"
 dispatches_to:
-  - "W1 'Start Existing-Image Acquisition' button"
-  - "W2 bounded acquisition entry"
-  - "Connection checklist, calibration steps"
+  - "W1 'Existing Image Acquisition' button (onExistingImageAcquisition)"
+  - "W2 'Bounded Acquisition' button (onBoundedAcquisition)"
+  - "W19 Live Viewer (startWorkflow('liveViewer')), W3 / W4 / W9 calibration steps (startWorkflow('microscopeAlignment' / 'backgroundCollection' / 'whiteBalance'))"
+  - "Connection checklist"
 reads:
   - DS3
   - DS17
@@ -1048,7 +1115,7 @@ file: src/main/java/qupath/ext/qpsc/ui/connection/ServerConnectionController.jav
 entry: showDialog()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Server Connection (dispatch 'serverConnection')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Communication Settings... (SetupScope.java:641, dispatch 'serverConnection')"
 reads:
   - DS25 (server host/port preferences)
   - DS17 (connection probe)
@@ -1065,7 +1132,7 @@ file: src/main/java/qupath/ext/qpsc/ui/connection/CameraControlController.java
 entry: showCameraControlDialog()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Camera Control (dispatch 'cameraControl')"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Camera Control... (SetupScope.java:718, dispatch 'cameraControl')"
 reads:
   - DS3 (imaging profiles)
   - DS17 (live exposures/gains)
@@ -1082,7 +1149,7 @@ file: src/main/java/qupath/ext/qpsc/ui/calibration/ParfocalityCalibrationControl
 entry: show()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Parfocality Calibration (dispatch 'parfocalityCalibration')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality... (SetupScope.java:700, dispatch 'parfocalityCalibration')"
 reads:
   - DS3
   - DS17 (current Z under each profile)
@@ -1090,7 +1157,7 @@ writes:
   - DS20 (parfocality_<scope>.yml sidecar next to microscope config)
 ```
 
-### W32: SinglePointAcquisitionController (Z-stack / time-lapse default)
+### W32: SinglePointAcquisitionController (Z-stack / time-lapse)
 
 ```yaml
 id: W32
@@ -1099,9 +1166,9 @@ file: src/main/java/qupath/ext/qpsc/ui/acquisition/SinglePointAcquisitionControl
 entry: show()
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse -- default path (SetupScope.java:520, stackTimeLapseOption -> SinglePointAcquisitionController.show())"
+  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... (SetupScope.java:741, stackTimeLapseOption -> SinglePointAcquisitionController.show(), unconditional since W7 was removed)"
 reads:
-  - DS3
+  - DS3 (incl. stage.limits.z_um: the Z range maximum is getStageZTravelUm, 3074f504)
   - DS17
   - DS41 (current modality handler)
   - DS42, DS43
@@ -1137,7 +1204,7 @@ file: src/main/java/qupath/ext/qpsc/controller/FocusApproachValidationWorkflow.j
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Focus Approach Validation... (disabled when the config is invalid or the scope is offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Focus Approach Validation... (SetupScope.java:614, direct call; disabled when the config is invalid or the scope is offline)"
 reads:
   - DS3 (stage YAML: safe Z per insert)
   - DS19 (modality config: objective, focus channel)
@@ -1160,7 +1227,7 @@ file: src/main/java/qupath/ext/qpsc/controller/RegisterObjectiveWorkflow.java
 entry: run(QuPathGUI)
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... (needs a writable config; disabled offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... (SetupScope.java:815, direct call; needs a writable config; disabled offline)"
 reads:
   - DS17 (MicroManager: pixel size of the objective currently in the light path)
   - DS3 / DS19 (existing config files)
@@ -1180,7 +1247,8 @@ file: src/main/java/qupath/ext/qpsc/modality/lcpolscope/workflow/LCCalibrationWo
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu contribution: LCPolScopeModalityHandler.getMenuContributions() -> 'Calibrate Liquid Crystals...' (appears only on a scope whose config declares the lcpolscope modality). The 'LC-PolScope Setup...' item (LCPolScopeSetupWindow.show()) sits beside it and calls this workflow's run() for step 2 and startBackgroundCollection() for step 3."
+  - "Menu contribution: LCPolScopeModalityUi.getMenuContributions() -> 'Calibrate Liquid Crystals...' (id lcCalibration; appears only on a scope whose config declares the lcpolscope modality; read via ModalityRegistry.getUi(handler)). The 'LC-PolScope Setup...' item (id lcSetup, LCPolScopeSetupWindow.show()) sits beside it and calls this workflow's run() / applySaved() for step 2, startBackgroundCollection() for step 3, and LCVoltageSweepWorkflow.run() ('Measure LC voltage curves...', diagnostic, changes nothing)."
+  - "Per-slide reminder before acquiring: LCPolScopeModalityUi.confirmBeforeAcquiring / confirmBatch -> LCPolScopeSlideReminder (called from AcquisitionManager, W2 and W1b through ModalityRegistry.getUi)."
 reads:
   - DS17 (live camera / LC device)
   - DS19 (modality config)
@@ -1191,6 +1259,206 @@ key_invariants:
   - "Reports an extinction ratio as its quality figure; 100+ is good."
   - "The server's `assessment` of `unreliable` overrides the ratio band: the headline, the dialog's Apply confirmation and the log warning follow it, whatever the ratio. The client does not re-derive reliability; it reads `reliability_issues` from the server result."
   - "Modality NAME vs TYPE: dispatch keys off the NAME (`lcpolscope` / `lcps` prefixes in DS41); the YAML `type:` is `polarized`, deliberately shared with PPM so LC-PolScope inherits the right sample-physics defaults. Writing `type: lcpolscope` in a YAML yields a modality that resolves to nothing."
+```
+
+### W37: StitchingQueueWindow (UI singleton)
+
+```yaml
+id: W37
+class: qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow
+file: src/main/java/qupath/ext/qpsc/ui/acquisition/StitchingQueueWindow.java
+model: qupath.ext.qpsc.stitching.StitchingQueueModel (pure, unit-tested)
+entry: open() / enqueue(...) / show(operationId, label) / recordOutput(operationId, entry)
+category: ui_singleton
+ui_entries:
+  - "Menu: Extensions > QP Scope > Acquisition controls > Stitching queue (SetupScope.java:547, direct StitchingQueueWindow.open())"
+  - "Implicit: AcquisitionManager.launchStitching enqueues each job (W1); StitchingHelper and StitchingRecoveryWorkflow (W16) report progress through show()"
+reads:
+  - StitchingQueueModel (jobs of this QuPath session: QUEUED / RUNNING / DONE / FAILED, status line, elapsed, produced entries)
+writes:
+  - none persistent; 'Open' on a finished row opens that entry -- the only place a stitched image is opened, and only on the operator's click
+key_invariants:
+  - "Non-modal, owned by the QuPath main window, never forces itself to the front. Replaced the window-modal always-on-top StitchingBlockingDialog (a9357ec4)."
+  - "Hides itself about 20 s after the queue drains unless a job failed; reopened by the menu item or the next enqueue."
+  - "DualProgressDialog closes when the acquisition ends, not when stitching ends."
+```
+
+### W38: Stop acquisition
+
+```yaml
+id: W38
+class: qupath.ext.qpsc.controller.workflow.AcquisitionManager
+file: src/main/java/qupath/ext/qpsc/controller/workflow/AcquisitionManager.java
+entry: stopActiveAcquisition() (static)
+category: control
+ui_entries:
+  - "Menu: Extensions > QP Scope > Acquisition controls > Stop acquisition... (SetupScope.java:538 -> SetupScope.confirmAndStopAcquisition)"
+  - "Live Viewer red 'Stop acquisition' button while the stage is held (W19)"
+  - "W1 validatePrerequisites offers it when a new run is refused because an acquisition is running"
+reads:
+  - "AcquisitionManager.ACTIVE (the manager whose acquisition holds the stage)"
+  - DS17 (acquisitionActive, for the no-registered-run fallback)
+writes:
+  - "state.cancelRequested on the active run (read by CancelGate before each stage-driving step)"
+  - DS45 (CANCEL, via the progress dialog's requestCancel or directly on a worker thread)
+key_invariants:
+  - "The current tile finishes, then the microscope stops; already-acquired data is kept."
+  - "Works when the progress dialog has already closed itself; the progress dialog no longer closes on Cancel until the run acknowledges it (60 s fallback, CancelAckState)."
+```
+
+### W39: BackgroundProfilesDialog
+
+```yaml
+id: W39
+class: qupath.ext.qpsc.ui.background.BackgroundProfilesDialog
+file: src/main/java/qupath/ext/qpsc/ui/background/BackgroundProfilesDialog.java
+entry: show(owner, baseFolder, onClosed)
+category: configuration
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Background Profiles... (SetupScope.java:582, dispatch 'backgroundProfiles'; needs a valid config, works offline)"
+reads:
+  - DS23 (<base>/profiles/<id>/profile.yml via BackgroundProfiles.list / find)
+  - DS44 (current Stage Map insert, for the profile's expected setup)
+writes:
+  - DS23 (create / edit / delete profiles; Adopt moves pre-profile background folders into a profile)
+  - DS24 (activeBackgroundProfile via BackgroundProfiles.setActiveId)
+key_invariants:
+  - "Modeless and always on top, one window at a time."
+  - "No active profile -> no backgrounds are applied and W4 refuses to collect."
+```
+
+### W40: FlatfieldFitDialog (BaSiC fit from tiles)
+
+```yaml
+id: W40
+class: qupath.ext.qpsc.ui.background.FlatfieldFitDialog
+file: src/main/java/qupath/ext/qpsc/ui/background/FlatfieldFitDialog.java
+entry: show(ownerStage)
+category: calibration
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)... (SetupScope.java:573, direct call; needs a valid config)"
+reads:
+  - user-selected tile folder (must be visible from the server machine)
+writes:
+  - DS45 (FLATFIT, then FLATPOLL until the fit finishes -- MicroscopeSocketClient.fitFlatfield)
+  - "server-written BaSiC profile folder; selected for acquisitions by DS24 flatfieldMethod=BASIC + flatfieldProfileFolder (sent as --flatfield-folder) and stamped on entries as DS9 FLATFIELD_PROFILE"
+key_invariants:
+  - "For detectors with no background image (PMT, laser scanner). The acquisition-side BaSiC choice is not offered for BF+IF, and --flatfield-folder is never sent together with --bg-correction."
+```
+
+### W41: OrientationColorViewWindow (LC-PolScope display)
+
+```yaml
+id: W41
+class: qupath.ext.qpsc.display.orientation.OrientationColorViewWindow
+file: src/main/java/qupath/ext/qpsc/display/orientation/OrientationColorViewWindow.java
+entry: show(qupath)
+category: ui_singleton
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Orientation Color View... (SetupScope.java:789, direct call; no microscope)"
+reads:
+  - "stitched LC-PolScope orientation + retardance pyramids of the open image (OrientationPairing)"
+writes:
+  - "viewer pixel-layer overlay only (replaces a pixel classifier preview in that slot)"
+  - "DS30-like: 'Export color image...' writes an RGB OME-TIFF and adds it to the project (OrientationColorExport.write / addToProject)"
+key_invariants:
+  - "Display only unless Export is pressed: nothing is re-stitched; tiles are recolored for what is on screen."
+```
+
+### W42: ExportSpatialSceneWorkflow
+
+```yaml
+id: W42
+class: qupath.ext.qpsc.controller.ExportSpatialSceneWorkflow
+file: src/main/java/qupath/ext/qpsc/controller/ExportSpatialSceneWorkflow.java
+entry: run(qupath)
+category: utility
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... (SetupScope.java:806, direct call; offline)"
+reads:
+  - DS5, DS6 (saved alignments), DS9 (XY offsets, stage bounds, light-path snapshot, isCameraView), DS27
+writes:
+  - "<project>/ngff/*.json (OME-NGFF 0.6 scene metadata, one file per connected group)"
+key_invariants:
+  - "No new transform math: every transform comes from the function the rest of QPSC uses for that relationship (ForwardPropagationWorkflow.buildSubToStageTransform, ImageMetadataManager.buildBoundingBoxPixelToStageTransform, ForwardPropagationWorkflow.createFlip, the saved JSON as-is)."
+  - "Nothing in acquisition or propagation reads these files; changes nothing in the project."
+```
+
+### W43: MicroscopeSwitcher (switch config without restart)
+
+```yaml
+id: W43
+class: qupath.ext.qpsc.controller.MicroscopeSwitcher
+file: src/main/java/qupath/ext/qpsc/controller/MicroscopeSwitcher.java
+entry: switchTo(configPath, confirm)
+category: configuration
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope... (SetupScope.java:655; applies the Microscope Config File preference)"
+  - "Called by W44 DemoMicroscope"
+reads:
+  - DS25 (microscopeConfigFile)
+  - DS17 (acquisitionActive; the server's own account)
+writes:
+  - DS3 (reload; rolls the config manager and preference back on an invalid file)
+  - DS44 (drops StageInsertRegistry and holder-tilt registries derived from the config)
+  - DS45 (disconnect, reconnect, CONFIG re-sent on both sockets)
+  - "the QP Scope menu (SetupScope rebuild, which clears and re-adds every item, modality submenus included); reopens W19 / W21 if they were open"
+key_invariants:
+  - "Refused while an acquisition is running. Closes every QP Scope window (QpscWindows) first."
+```
+
+### W44: DemoMicroscope
+
+```yaml
+id: W44
+class: qupath.ext.qpsc.controller.DemoMicroscope
+file: src/main/java/qupath/ext/qpsc/controller/DemoMicroscope.java
+entry: connect()
+category: configuration
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Connect to a Demo Microscope... (SetupScope.java:414; always available)"
+reads:
+  - "bundled demo config (BundledScopeInstaller.Bundle.DEMO)"
+  - DS25 (server host / port, server launcher)
+writes:
+  - "extracts the demo config to disk if missing"
+  - DS25 (server host set to this computer)
+  - "starts microscope-command-server --demo if nothing listens on the port"
+  - "W43 switch to the demo config when it is not already active; opens W19"
+```
+
+### W45: LightPathSetupDialog
+
+```yaml
+id: W45
+class: qupath.ext.qpsc.ui.alignment.LightPathSetupDialog
+file: src/main/java/qupath/ext/qpsc/ui/alignment/LightPathSetupDialog.java
+entry: show()
+category: configuration
+ui_entries:
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Light Path Orientation... (SetupScope.java:826; needs a writable config)"
+reads:
+  - DS3 (light_path block via LightPathModel)
+writes:
+  - DS3 (light_path: scope type, optical flip) and reloads the config
+key_invariants:
+  - "Set once per rig. Optical flip drives the Stage Map Camera View; scope type is recorded but not re-applied by Stage View (stage polarity + alignment already carry it). The run-to-run slide-180 rotation stays on the Stage Map. See ORIENTATION_STACK.md."
+```
+
+### W46: BugReportDialog
+
+```yaml
+id: W46
+class: qupath.ext.qpsc.ui.connection.BugReportDialog
+file: src/main/java/qupath/ext/qpsc/ui/connection/BugReportDialog.java
+entry: show()
+category: service
+ui_entries:
+  - "Menu: Extensions > QP Scope > Report a Bug... (SetupScope.java:1059; always available)"
+writes:
+  - "external: BugReportService -> Cloudflare Worker -> public GitHub issue (the Worker also pushes new issues to ntfy when its NTFY_TOPIC secret is set)"
+key_invariants:
+  - "One of three copies (QPSC, QP-CAT, DL classifier) with no shared code. Read claude-reports/design/2026-08-19_bug-reporter-architecture.md (INV-1..INV-9) before changing the scrubber, payload or artifact set."
 ```
 
 ---
@@ -1216,15 +1484,21 @@ fields:
   hardware.detectors[<id>].width_px / height_px: "int"
   imaging_profiles[<modality>.<objective>.<detector>]: "modality-specific profile (exposures, gains, AF, etc.)"
   stage.streaming_af.*: "stage probe results -- rewritten by W20"
+  stage.polarity: "stage wiring polarity, read through StagePolarity.current() (was two preferences until f326a092, 2026-10-27)"
+  stage.limits.z_um.low / high: "Z travel; MicroscopeConfigManager.getStageZTravelUm() = |high - low| is the Z range maximum in W1, W2 and W32 dialogs (3074f504)"
+  light_path: "scope type, slide insertion, optical flip (LightPathModel) -- written by W45"
   rotation.angles[<modality>]: "rotation stage presets"
 written_by:
   - "W22 ConfigFileWriter"
   - "W20 ProbeStageAfWorkflow (stage.streaming_af.*)"
   - "W6 AutofocusEditorWorkflow"
+  - "W35 RegisterObjectiveWorkflow (objective stubs)"
+  - "W45 LightPathSetupDialog (light_path)"
+  - "W21 Stage Map insert calibration (insert reference points)"
 read_by:
-  - "ALL workflows via MicroscopeConfigManager.getInstance"
+  - "ALL workflows via MicroscopeConfigManager.getInstance / MicroscopeConfigManager.current()"
 invariants:
-  - "Loaded once per process; reload() must be explicitly called after edits."
+  - "Loaded once per process; reload() must be explicitly called after edits. W43 MicroscopeSwitcher reloads and rebuilds everything derived from it at runtime."
   - "Workflows disable themselves on bad config (configValid check at SetupScope startup)."
 gates_at_load:
   - "validateRequiredKeys at startup"
@@ -1282,7 +1556,7 @@ written_by:
   - "W9 WhiteBalanceWorkflow (runSimpleCalibration / runPPMCalibration)"
 read_by:
   - "W1, W2, W10 (consumed by ChannelResolutionService for exposures)"
-  - "W22 (Camera Control dialog displays calibrated values)"
+  - "W30 (Camera Control dialog displays calibrated values)"
 invariants:
   - "validateObjectiveBeforeCalibration MUST fire before write to prevent overwriting wrong YAML key."
 related_surfaces:
@@ -1323,6 +1597,7 @@ fields:
   profile_record: "<base>/profiles/<id>/profile.yml -- BackgroundProfiles.BackgroundProfile: id, name, description, created, expects{insert, slide_insertion}, attributes{}"
 written_by:
   - "W4 BackgroundCollectionWorkflow (server-driven BGACQUIRE)"
+  - "W39 BackgroundProfilesDialog (profile.yml create / edit / delete / adopt)"
 read_by:
   - "Microscope server during ACQUIRE -- AcquisitionCommandBuilder passes --bg-folder and --bg-profile when bgMethod enabled"
   - "BackgroundSettingsReader.findBackgroundSettings / BackgroundValidityChecker (manifest only); BrightfieldModalityHandler.resolveExposureMs (the exposure)"
@@ -1419,16 +1694,18 @@ fields:
   created: "ISO timestamp"
   flipFrameVerified: "bool -- true post-2026-05-19 fix"
 written_by:
-  - "W3 MicroscopeAlignmentWorkflow.saveGeneralTransform (line ~1503, commit 5bf0f7bf)"
+  - "W3 MicroscopeAlignmentWorkflow.saveGeneralTransform (method at line 1300, saveSlideAlignment call ~1624, commit 5bf0f7bf)"
   - "W1e ManualAlignmentPath.createManualAlignment"
   - "W1d ExistingAlignmentPath.saveSlideAlignment"
-  - "W1 ExistingImageWorkflowV2.saveRefinedAlignment (line 1699-1771, ONLY on refinement accepted; short-circuits on sub-acquisition)"
+  - "W1 ExistingImageWorkflowV2.saveRefinedAlignment (line 2943-3097, ONLY on refinement accepted; short-circuits on sub-acquisition)"
 read_by:
   - "W1 via AlignmentHelper.checkForSlideAlignment (tier 1)"
   - "W21 StageMapWindow (source dropdown / Apply Flips)"
   - "W19 LiveViewerWindow Go-To-Centroid"
   - "W12 ForwardPropagationWorkflow.buildGroups (tier 1 of three-tier lookup)"
   - "W1 cross-scope path: AffineTransformManager.loadAllSlideAlignmentsFromDirectory enumerates all scopes"
+  - "W42 ExportSpatialSceneWorkflow"
+  - "All loaders share one scoped-then-unscoped file search, and the transform-only loaders read through the frame-returning loader (d87df372)"
 lifecycle:
   created_when: "any of the 4 save-site workflows succeeds"
   destroyed_when: "manually deleted; not auto-cleaned"
@@ -1491,7 +1768,7 @@ read_by:
 id: DS17
 category: alignment
 storage_kind: in_memory
-location: "MicroscopeController singleton (process-scoped)"
+location: "MicroscopeController singleton (qupath.ext.qpsc.service.microscope; process-scoped; imports nothing from the UI since f17bd1cd)"
 fields:
   currentTransform: AffineTransform
   acquisitionActive: boolean
@@ -1504,15 +1781,17 @@ written_by:
   - "W2 implicitly (stage-frame native; no transform set)"
   - "W3 during refinement and at end of MicroscopeAlignmentWorkflow.saveGeneralTransform"
   - "W19 LiveViewer stage motion (moveStageXY/Z/R)"
-  - "W19 StageControlPanel direct setCurrentTransform calls -- slide-transform restore + acquired-image alignment (StageControlPanel.java:3974, :4319)"
-  - "W1d ManualAlignmentPath after user accepts manual alignment (ManualAlignmentPath.java:209)"
-  - "W14 SingleTileRefinement on refinement-accepted (only)"
+  - "W19 StageControlPanel direct setCurrentTransform calls -- slide-transform restore + acquired-image alignment (StageControlPanel.java:~4654, ~4991)"
+  - "W1d ExistingAlignmentPath (ExistingAlignmentPath.java:~329) and W1e ManualAlignmentPath after user accepts manual alignment (ManualAlignmentPath.java:~393)"
+  - "W21 PlacementChangeCoordinator clears it (null) when the slide placement changes"
+  - "W1 createRefinementTilesAndRunOnSource on refinement-accepted (only), for SingleTileRefinement / MultiTileRefinement"
 read_by:
   - "Every workflow that issues stage commands -- onMoveButtonClicked converts via currentTransform"
-  - "W19 LiveViewerWindow Go-To-Centroid (StageControlPanel:3962,4329)"
+  - "W19 LiveViewerWindow Go-To-Centroid (StageControlPanel:~4642, ~5001)"
+  - "ExistingImageAcquisitionController (dialog preview of the current transform)"
   - "W14 StitchingHelper metadata calc at launchStitching (reads MicroscopeController.getCurrentTransform)"
 invariants:
-  - "currentTransform MUST be cleared in cleanup() (H6 fix). A stale transform leaks to Live Viewer and the next workflow."
+  - "currentTransform MUST be cleared in cleanup() (H6 fix) -- by the run that holds the DS49 WorkflowRegistry slot only. A stale transform leaks to Live Viewer and the next workflow; a cleanup by a run that no longer holds the slot nulls the next run's transform."
   - "validateAndFlipIfNeeded MUST run BEFORE setCurrentTransform (M11 deferred install)."
   - "currentTransformProperty (JavaFX property) emits change events; subscribers update UI."
   - "Both primary and aux socket may be connected independently; isConnected returns true if either is."
@@ -1551,9 +1830,14 @@ fields_xy:
   XY_OFFSET_X = "xy_offset_x_microns": double
   XY_OFFSET_Y = "xy_offset_y_microns": double
   Z_OFFSET = "z_offset_microns": double
-fields_flip:
-  FLIP_X = "flip_x": bool
-  FLIP_Y = "flip_y": bool
+fields_light_path:
+  # flip_x / flip_y were REMOVED in v0.9.0 (1355d237); orientation is the light-path snapshot below.
+  LP_SCOPE_TYPE, LP_SLIDE_INSERTION, LP_OPTICAL_FLIP, LP_CAMERA_ORIENTATION, LP_STAGE_POLARITY = "lp_*": string (snapshot at entry creation; setLightPath / getLightPath)
+  LP_MACRO_FLIP_X, LP_MACRO_FLIP_Y = "lp_macro_flip_x/y": bool
+  LP_BAKED_PARITY_X, LP_BAKED_PARITY_Y = "lp_baked_parity_x/y": bool (net mirror baked into this entry's pixels; read via bakedParity(entry))
+  LP_ROTATION_DEG = "lp_rotation_deg": int (getRotationDeg / setRotationDeg)
+  CAMERA_VIEW = "camera_view": bool (the '(Camera View)' companion; isCameraView / setCameraView)
+  SLIDE_CENTER_STAGE_X_UM, SLIDE_CENTER_STAGE_Y_UM: double
 fields_identity:
   SAMPLE_NAME = "sample_name": string
   ORIGINAL_IMAGE_ID = "original_image_id": string (QuPath entry ID of the original import)
@@ -1565,6 +1849,11 @@ fields_acquisition_params:
   ANGLE = "angle": string (PPM rotation angle name)
   ANNOTATION_NAME = "annotation_name": string
   DETECTOR_ID = "detector_id": string
+  WHITE_BALANCE = "white_balance": string (WB mode of the acquisition, 14b8946e)
+  BACKGROUND_PROFILE = "background_profile": string (active background profile id at acquisition)
+  FLATFIELD_PROFILE = "flatfield_profile": string (BaSiC profile folder when one was used)
+fields_stitch_reservation:
+  "qpsc_stitch_status" (ProjectEntryReservation.STATUS_KEY): "pending" while a reserved entry waits for its stitch; see DS48
 fields_source:
   SOURCE_MICROSCOPE = "source_microscope": string (the SCANNER that produced the original WSI; inherited from parent macro)
   ACQUIRED_ON_MICROSCOPE = "acquired_on_microscope": string (the MICROSCOPE that physically captured this image; absent on macro entries; added 2026-05-14 for cross-scope gating)
@@ -1583,38 +1872,41 @@ fields_multi_slide:
   SLIDE_POSITION = "slide_position": int
   SLIDE_CARRIER = "slide_carrier": string (carrier id like "quad_v")
   MS_RUN_ID = "ms_run_id": string (UUID)
+  MS_ASSIGNED_AT = "ms_assigned_at": long
 written_by:
-  - "W1, W2 stitch-import sites via StitchingHelper -> full bundle stamp on each new sub-image entry"
-  - "W1b setSlideAssignment (SLIDE_POSITION, SLIDE_CARRIER, MS_RUN_ID)"
+  - "W1, W2 stitch-import / reservation sites via StitchingHelper -> full bundle stamp on each new sub-image entry; WHITE_BALANCE / BACKGROUND_PROFILE / FLATFIELD_PROFILE via StitchInfoSupport from the stitch record"
+  - "ModalityHandler.stampImageMetadata (PPM calibration stamp)"
+  - "W1b setSlideAssignment (SLIDE_POSITION, SLIDE_CARRIER, MS_RUN_ID, MS_ASSIGNED_AT); MultiSlideAssignmentDialog stamps the light-path snapshot on rotated companions"
+  - "W21 PlacementChangeCoordinator (slide insertion)"
   - "Project import flow (manual scanner image add): SOURCE_MICROSCOPE via MicroscopeSelectionDialog"
   - "User edits (rare): manual metadata fields"
 read_by:
   - "EVERY workflow -- gating, lookup, propagation, display"
 invariants:
-  - "FLIP_X/Y are the OPTICAL flip of the image. Independent of stage polarity (DS25)."
+  - "The baked parity (LP_BAKED_PARITY_X/Y) is the OPTICAL mirror in the entry's pixels. Independent of stage polarity (DS3 stage.polarity)."
   - "SOURCE_MICROSCOPE is per-import; never overwrite from StageMapWindow dropdown (commit d531d696)."
   - "ACQUIRED_ON_MICROSCOPE is per-import-at-acquisition-time. Macro entries do NOT carry this field."
   - "BASE_IMAGE chain MUST be walked via AlignmentHelper.resolveMacroLookupKey to find macro-owning ancestor."
   - "SOURCE_ROI_* is base-pixel coords on the UNFLIPPED base entry; SOURCE_ROI_FLIP_* records mirror flag relative to the rectangle when derived from a flipped sibling."
   - "STAGE_BOUNDS_* + STITCHER_FLIP_* allow Move-to-Centroid to reconstruct pixel->stage without DS6 (cross-scope guard, restructured directory, legacy file)."
-  - "isFlippedX/Y/isFlipped read FLIP_X/Y; these helpers are the canonical readers (not direct metadata lookup)."
+  - "bakedParity / isCameraView / getRotationDeg are the canonical readers (not direct metadata lookup, and never the entry NAME: '(rotated N) (Camera View)' is for the user only). FlipResolver composes them with the preset for the current flip."
   - "getSiblingsByBaseImage enumerates entries sharing the same BASE_IMAGE -- used for flipped sibling resolution."
 related_surfaces:
   - DS5, DS6 (alignment JSONs cross-reference via lookupKey from getSampleName / BASE_IMAGE)
-  - DS10 (legacy single-image metadata; superseded by this bundle)
+  - DS10 (former flip flags; replaced by the light-path snapshot above)
+  - DS48 (reserved entries carry this bundle before their image exists)
 ```
 
-#### DS10: Image flip flags (legacy alias for DS9 FLIP_X/Y)
+#### DS10: Image flip flags (REMOVED; see DS9 light-path snapshot)
 
 ```yaml
 id: DS10
 category: metadata
-storage_kind: project_entry_metadata
-fields:
-  FLIP_X, FLIP_Y (see DS9)
-note: "Maintained as a separate ID for cross-reference. All accesses MUST go through ImageMetadataManager.isFlippedX/Y. Per CLAUDE.md: optical flip is independent of stage wiring polarity. Do NOT XOR with stage polarity."
+status: removed
+note: "flip_x / flip_y and ImageMetadataManager.isFlippedX/Y were removed in v0.9.0 (1355d237). Read ImageMetadataManager.bakedParity(entry) and isCameraView(entry) instead. Per CLAUDE.md: optical flip is independent of stage wiring polarity. Do NOT XOR with stage polarity."
 related_surfaces:
-  - DS25 (stage polarity, now stage.polarity in the microscope config -- distinct concept)
+  - DS9 (fields_light_path)
+  - DS3 (stage.polarity -- distinct concept)
 ```
 
 ### Preferences
@@ -1635,7 +1927,8 @@ fields_examples:
   macroImagePixelSizeInMicrons, restitchPixelSize, restitchParallelAngles
   mmStitchOutputDir, mmStitchInputDir
   metadataPropagationPrefix, classList, modalityForAutomation
-  (235 accessors total -- see PersistentPreferences.java)
+  activeBackgroundProfile (BackgroundProfiles.activeId), flatfieldMethod (NONE / BACKGROUND / BASIC), flatfieldProfileFolder
+  (about 300 public static accessors -- see PersistentPreferences.java; Java names use unit suffixes such as getMacroImagePixelSizeUm, the stored keys did not change)
 written_by:
   - "Various UI dialogs (SampleSetupController, AcquisitionWizardDialog, BackgroundCollectionController, etc.)"
 read_by:
@@ -1651,15 +1944,17 @@ id: DS25
 category: preferences
 storage_kind: qupath_preferences
 fields_examples:
-  stageInvertedX, stageInvertedY (StagePolarity composite)
+  # Stage polarity is NOT here: stage.polarity in the microscope config (DS3) since f326a092.
   cameraOrientation
   microscopeServerHost, microscopeServerPort, autoConnectToServer
-  microscopeConfigFile (path to YAML)
+  microscopeConfigFile (path to YAML; applied at runtime by W43 Switch Microscope)
   projectsFolder
   tissueDetectionScript, dataBoundsClassifier
-  saveRawTiles, tileHandlingMethod, tileOverlapPercent
+  saveRawTiles, tileHandling (getTileHandlingMethodProperty), tileOverlapPercent
+  stitchingConcurrency, tileRegistrationEnabled
+  multiSlideAcquisitionMode, multiSlideReuseAlignment, focusSurfaceMode, alignmentCheckMode, focusSurveyPoints, inheritHolderTilt
   compressionType (OMEPyramidWriter.CompressionType)
-  stitchingOutputFormat (StitchingConfig.OutputFormat)
+  stitching output format (StitchingConfig.OutputFormat)
   includeObjective/Modality/Annotation/Angle InFilename
   metadataPropagationPrefix
   skipManualAutofocus, disableAllAutofocus
@@ -1672,17 +1967,17 @@ fields_examples:
   lastCalibrationFolder
   sunburstLastModality, sunburstExpectedSpokes, sunburstSaturationThreshold, sunburstValueThreshold
   sunburstRadiusInner, sunburstRadiusOuter
-  singlePointDialogEnabled (W7 vs W32 routing)
+  (singlePointDialogEnabled was removed with W7 in dadece3e)
 written_by:
   - "QuPath Preferences dialog (shown via installPreferences())"
   - "Various code paths via static setters"
 read_by:
   - "Every workflow"
 invariants:
-  - "stageInvertedX/Y read via StagePolarity composite enum -- do NOT read individual booleans directly in new code (use StageImageTransform.current() -- see DS26)."
-  - "cameraOrientation composes with stageInvertedX/Y through StageImageTransform; never read polarity booleans directly for live-view sign conventions."
+  - "Stage polarity is read via StagePolarity.current() (DS3 stage.polarity) -- do NOT read polarity directly in new code for sign conventions (use StageImageTransform.current() -- see DS26)."
+  - "cameraOrientation composes with stage polarity through StageImageTransform; never read polarity booleans directly for live-view sign conventions."
 related_surfaces:
-  - DS26 (StageImageTransform composes DS25 fields)
+  - DS26 (StageImageTransform composes DS3 stage.polarity + DS25 cameraOrientation)
 ```
 
 #### DS25a: Dialog position storage (JSON file)
@@ -1722,17 +2017,28 @@ default_registrations:
   - "fl / fluorescence / widefield / epi -> WidefieldFluorescenceModalityHandler"
   - "lcpolscope / lcps -> LCPolScopeModalityHandler"
   - "bf_if -> BfIfModalityHandler"
+  handler class -> ModalityUi map (the UI half; ModalityUi.NONE when a handler has none)
+ui_registrations:
+  - "PPMModalityHandler -> modality/ppm/ui/PPMModalityUi (menu items, PPMBoundingBoxUI)"
+  - "BrightfieldModalityHandler -> modality/ui/BrightfieldModalityUi (BrightfieldExposureBoundingBoxUI)"
+  - "WidefieldFluorescenceModalityHandler (and its subclass BfIfModalityHandler) -> modality/widefield/ui/WidefieldModalityUi (WidefieldChannelBoundingBoxUI)"
+  - "LCPolScopeModalityHandler -> modality/lcpolscope/ui/LCPolScopeModalityUi (menu items, bounding-box panel, LCLiveCameraControls, per-slide reminder)"
 written_by:
-  - "Static initializer block in ModalityRegistry"
+  - "Static initializer block in ModalityRegistry (handlers)"
   - "registerHandler(prefix, handler) -- runtime extension"
+  - "qupath.ext.qpsc.ModalityUis.registerAll() -> ModalityRegistry.registerUi(handlerClass, ui); called first in SetupScope.installExtension, and by harnesses that build QPSC dialogs without the extension"
 read_by:
   - "getHandler(modality) -- longest registered prefix the name starts with; returns NoOpModalityHandler if unmatched"
+  - "getUi(modalityName) / getUi(handler) -- the UI registered for the handler's class or its nearest superclass, else ModalityUi.NONE"
   - "Every acquisition workflow"
+  - "SetupScope menu build (getMenuContributions), AcquisitionDialogBuilder (createBoundingBoxUI), StageControlPanel (buildLiveCameraControls), AcquisitionManager and W2 (confirmBeforeAcquiring), W1b (confirmBatch)"
 invariants:
   - "Prefix matching is startsWith. Longer prefixes should register before shorter ones to avoid unintended matches."
-  - "Returns NoOpModalityHandler for unknown -- never null."
-  - "PPMModalityHandler.getMenuContributions() provides dynamic menu items (polarizerCalibration, ppmSensitivityTest, birefringenceOptimization, sunburstCalibration) -- not in QPScopeController.startWorkflow switch."
-  - "LCPolScopeModalityHandler.getMenuContributions() likewise provides 'LC-PolScope Setup...' (a window, LCPolScopeSetupWindow) and 'Calibrate Liquid Crystals...' (W36) -- also outside the startWorkflow switch, so it appears only on a scope whose config declares the modality."
+  - "Returns NoOpModalityHandler for unknown -- never null. getUi never returns null either (ModalityUi.NONE)."
+  - "Handlers hold no UI (ba56f743): the modality package may not import dialogs or workflows. Anything that shows a panel, a menu item, a Live Viewer control or a confirmation goes on the modality's ModalityUi, registered from the top-level ModalityUis. Shared code asks the handler hooks (reconstructsFromBackground, usesRotationStage, stampImageMetadata, retardanceCeilingNm, ...) instead of testing the modality name (7c145c1d)."
+  - "PPMModalityUi.getMenuContributions() provides dynamic menu items (polarizerCalibration, ppmSensitivityTest, birefringenceOptimization, sunburstCalibration) -- not in QPScopeController.startWorkflow switch."
+  - "LCPolScopeModalityUi.getMenuContributions() likewise provides 'LC-PolScope Setup...' (a window, LCPolScopeSetupWindow) and 'Calibrate Liquid Crystals...' (W36) -- also outside the startWorkflow switch, so it appears only on a scope whose config declares the modality."
+  - "SetupScope builds one submenu per handler (identity set), so a handler registered under several prefixes (lcpolscope + lcps) appears once; the submenu is named by handler.getDisplayName()."
   - "A handler's registered PREFIX is the modality NAME, not its YAML `type:`. LC-PolScope registers `lcpolscope`/`lcps` but its type is `polarized` (shared with PPM). Do not conflate them."
 related_surfaces:
   - DS42 (ModalityState active modality)
@@ -1778,14 +2084,15 @@ read_by:
 id: DS26
 category: in_memory
 storage_kind: derived
-location: "StageImageTransform.current() -- composes stagePolarity + cameraOrientation"
+location: "StageImageTransform.current() -- composes StagePolarity.current() (DS3 stage.polarity) + cameraOrientation (DS25)"
 fields:
   stagePolarity, cameraOrientation
   screenPanDeltaToMmDelta: function
   clickOffsetToMmTarget: function
   stitcherFlipFlags: bool[]
+  cameraFlipFlags: bool[] (Stage Map Apply Flips; NOT stitcherFlipFlags)
 written_by:
-  - "Implicit via DS25 setters"
+  - "Implicit via DS3 stage.polarity and the DS25 cameraOrientation setter"
 read_by:
   - "Live Viewer joystick / WASD / click-to-center"
   - "Stitcher flip flag derivation"
@@ -1834,8 +2141,30 @@ written_by:
 read_by:
   - "W1b MultiSlideExistingImageWorkflow (carrier dropdown)"
   - "W21 itself"
+  - "W39 / BackgroundProfiles.currentInsert (profile setup check)"
 invariants:
   - "Bounding-box preview cleared on close (commit d553535)."
+  - "W43 MicroscopeSwitcher drops StageInsertRegistry (and holder tilts) so they rebuild from the new config."
+```
+
+#### DS49: WorkflowRegistry active slot (singleton)
+
+```yaml
+id: DS49
+category: in_memory
+storage_kind: singleton
+location: "qupath.ext.qpsc.controller.workflow.WorkflowRegistry.get()"
+fields:
+  activeId, activeKind, activeSource: "the run that owns MicroscopeController's currentTransform and acquisitionActive flag"
+written_by:
+  - "W1 execute(): tryActivate('existing-image', entryName) after validatePrerequisites"
+  - "W1 cleanup(): release(registryId)"
+read_by:
+  - "W1 cleanup(): isActive(registryId) decides whether to clear DS17"
+invariants:
+  - "tryActivate is refused while an acquisition holds the stage (MicroscopeController.isAcquisitionActive); the refusal names Stop acquisition (W38)."
+  - "A new run takes over the slot from a run that is only stitching; that older run's cleanup then leaves DS17 alone."
+  - "Only W1 uses it at 05ee3284; W2 does not claim the slot."
 ```
 
 #### DS45: MicroscopeSocketClient (singleton, two sockets)
@@ -1844,17 +2173,19 @@ invariants:
 id: DS45
 category: service
 storage_kind: singleton
-location: "MicroscopeController owns; two TCP sockets to Python command server"
+location: "qupath.ext.qpsc.service.microscope.MicroscopeSocketClient; MicroscopeController (same package) owns it; two TCP sockets to Python command server"
 fields:
   primary socket: acquisition / CONFIG / long-running ops
   aux socket: Live Viewer frames, stage polling
-  Command enum (GET_XY, GET_Z, MOVE, START_ACQ, etc.)
+  Command enum (8-byte verbs: CONFIG, GETXY, GETZ, MOVE, MOVEZ, ACQUIRE, BGACQUIRE, CANCEL, STATUS, PROGRESS, FLATFIT, FLATPOLL, LCCALIB, LCSWEEP, STRMAFZ, FINDTISS, ABORTAF, ...)
   AcquisitionState, AcquisitionProgress
 written_by:
   - "MicroscopeController commands"
 read_by:
   - "Every workflow with hardware interaction"
 invariants:
+  - "One exchange path (12e0f614): commands go through exchange / withReadTimeout / send / readReply / readStartedThenResult, which hold the socket lock, set the read timeout, send and read. A new command uses these, not its own lock-send-read code. A FAILED reply is an answer (ServerAnswerException), not a connection error, so it does not count toward 'Microscope Connection Unstable'."
+  - "The client announces a loaded config through addConfiguredListener; it does not call up into controllers or dialogs (1ac7e68a)."
   - "Either-connected counts as connected for UI purposes."
   - "Route long-running ops to primary; anything that must not block Live Viewer to aux."
   - "Read timeouts and same-IP takeover guard prevent reconnect storms during long captures."
@@ -1899,7 +2230,9 @@ structure:
   alignmentFiles/: "DS5, DS6, DS7"
   microscope_configs/: "DS3 copies (provenance)"
   SlideImages/: "DS30 stitched outputs"
-  <modalityWithIndex>/: "DS28 per-acquisition tile dirs"
+  <acquisitionFolder>/: "DS28 per-acquisition tile dirs (modality folder + run index, e.g. ppm_20x_1; ProjectInfo.getAcquisitionFolder)"
+  qpsc/stitching-pending.tif: "DS48 placeholder image shared by reserved entries"
+  ngff/: "W42 OME-NGFF scene JSON"
 written_by:
   - "W1, W2, W10 (createAndOpenQuPathProject)"
   - "QPProjectFunctions.addImageToProjectWithMetadata"
@@ -1915,7 +2248,7 @@ invariants:
 id: DS28
 category: file
 storage_kind: directory
-location: "<projectDir>/<sampleName>/<modalityWithIndex>/<annotation>/"
+location: "<projectDir>/<sampleName>/<acquisitionFolder>/<annotation>/"
 files:
   TileConfiguration.txt: "ImageJ-style tile positions (microns)"
   TileConfiguration_QP.txt: "QuPath-pixel-coord positions"
@@ -1930,9 +2263,9 @@ read_by:
   - "W16 StitchingRecoveryWorkflow"
 lifecycle:
   created_when: "before acquisition launches"
-  destroyed_when: "TileCleanupHelper.performCleanup per QPPreferenceDialog.tileHandlingMethod; force-delete on workflow error (Phase 11)"
+  destroyed_when: "TileCleanupHelper.performCleanup per QPPreferenceDialog.getTileHandlingMethodProperty (Delete / Zip / Keep; _protected folders are kept); force-delete on workflow error (Phase 11)"
 invariants:
-  - "Modality folder includes objective suffix (e.g. 'Fluorescence_10x') via ObjectiveUtils.createEnhancedFolderName."
+  - "The modality folder includes the objective suffix (e.g. 'Fluorescence_10x') via ObjectiveUtils.createEnhancedFolderName; the acquisition folder adds the run index (GLOSSARY.md)."
   - "TileConfiguration.txt is in MICRONS (stage); _QP.txt is in QuPath full-res PIXELS."
 related_surfaces:
   - DS33 (TilingRequest input)
@@ -1977,6 +2310,31 @@ location: "<projectsFolder>/<sampleName>/"
 note: "Parent of DS27. Owned by project setup; tile dirs and SlideImages live within."
 ```
 
+#### DS48: Reserved stitch entries (ProjectEntryReservation)
+
+```yaml
+id: DS48
+category: file
+storage_kind: project_entry + file
+location: "real ProjectImageEntry objects in the project; image = <project>/qpsc/stitching-pending.tif (StitchPlaceholderImage, written once per project)"
+fields:
+  qpsc_stitch_status: "pending while waiting (ProjectEntryReservation.STATUS_KEY); a failed job keeps its entries with the reason"
+  metadata: "the full DS9 bundle the ordinary import would stamp (parent, offsets, sample, modality, objective, angle, annotation, index, acquiring microscope)"
+written_by:
+  - "StitchingHelper.reserveOutputs (W14) for W1 and W2: StitchOutputPlanner predicts one entry per output (angles plus biref/sum, LC-PolScope merge plus retardance / orientation / orientation_color, split IF channels plus the merge, the single brightfield file); ProjectEntryReservation.reserve runs synchronously on the FX thread before the job is queued; the reservation rides in stitchParams"
+  - "ProjectEntryReservation.fill when the OME-TIFF lands (updateURIs -- no new entry, no reordering; sets image type, channel names, display ranges, saves image data and thumbnail; closes the Bio-Formats reader, 532e509d)"
+  - "ProjectEntryReservation.fail / dropUnfilled when the job ends"
+read_by:
+  - "TileProcessingUtilities, StitchingHelper.importMergedImageOnly / importPerChannelFallback (fill when they hold a reservation for their key)"
+  - "QuPath project browser (puzzle thumbnail from the moment the region is handed to the stitching queue)"
+lifecycle:
+  created_when: "a stitch job is queued (OME-TIFF output only; a ZARR job reserves nothing)"
+  destroyed_when: "dropUnfilled for outputs that never arrived (the real file, if any, is imported the ordinary way)"
+invariants:
+  - "Never opened in the viewer, filled or not."
+  - "A wrong name prediction costs one placeholder entry; never rename a filled entry to match a prediction."
+```
+
 ### Derived / Service
 
 #### DS33: TilingRequest (per-workflow build)
@@ -1987,7 +2345,7 @@ category: derived
 storage_kind: in_memory
 fields:
   outputFolder, modalityName, frameSize, overlapPercent, boundingBox OR annotations
-  stageInvertedAxes (read from DS25)
+  stageInvertedX, stageInvertedY (from StagePolarity.current(), DS3 stage.polarity)
   createDetections flag
 written_by:
   - "W1, W2, W3 (Builder pattern)"
@@ -2073,7 +2431,7 @@ writes DS Y consumed by Consumer Z."
 | W1, W1c, W1d, W1e, W3 | DS5 (per-slide JSON macro) | W1, W12, W13, W19, W21 | Tier 1 of three-tier alignment lookup |
 | W14 (StitchingHelper.autoRegisterBoundsTransformIfAvailable) | DS6 (per-slide JSON sub) | W12, W13, W19, W1a (legacy fallback) | Tier 2; only StitchingHelper writes 'sub' |
 | W3 | DS7 (saved macro raw) | W12, W13, W21 | Optional macro snapshot |
-| W1, W2, W3, W19 | DS17 (currentTransform) | W19 Live Viewer, next workflow on cleanup | MUST be cleared in cleanup() (H6) |
+| W1, W2, W3, W19, W21 (PlacementChangeCoordinator clears) | DS17 (currentTransform) | W19 Live Viewer, next workflow on cleanup | MUST be cleared in cleanup() (H6), only by the run holding DS49 |
 | W1, W2, W14 (StitchingHelper stamp) | DS9 (metadata bundle) | EVERY workflow | The single biggest cross-cutting surface |
 | W1b | DS9 (SLIDE_POSITION/CARRIER/MS_RUN_ID) | W21 StageMapWindow, W1 per-slot | Multi-slide carrier tracking |
 | (User dialog) | DS9 (SOURCE_MICROSCOPE) | W1 source-mismatch gate, W21 source dropdown | Set at scanner import; NEVER overwrite from StageMapWindow (commit d531d696) |
@@ -2092,13 +2450,12 @@ writes DS Y consumed by Consumer Z."
 | W1, W2, W14, W16, W18 | DS30 (stitched OME-TIFF / ZARR) | QuPath project (new ProjectImageEntry) | Compression/format from DS25 |
 | W15 MakePortableWorkflow | DS30 (OME-TIFF replacements) | QuPath project | Surfaces tile folders when no ZARR remains |
 | Any dialog | DS24 (PersistentPreferences) | Workflow on next dialog open | Lightweight per-user prefs |
-| Any dialog | DS25 (QPPreferenceDialog) | EVERY workflow | Stage polarity, server settings, stitching format |
-| DS25 (stagePolarity + cameraOrientation) | DS26 (StageImageTransform) | W19 LiveViewer (joystick/WASD/click), stitcher flip flags, W21 Apply Flips | Composes the two -- don't read polarity booleans directly |
-| Setup / startup | DS41 (ModalityRegistry) | EVERY acquisition workflow via getHandler | Prefix match; NoOpModalityHandler if unmatched |
+| Any dialog | DS25 (QPPreferenceDialog) | EVERY workflow | Camera orientation, server settings, stitching format (stage polarity is DS3 stage.polarity) |
+| DS3 (stage.polarity) + DS25 (cameraOrientation) | DS26 (StageImageTransform) | W19 LiveViewer (joystick/WASD/click), stitcher flip flags, W21 Apply Flips (cameraFlipFlags) | Composes the two -- don't read polarity booleans directly |
+| Setup / startup (ModalityRegistry static block; ModalityUis.registerAll for the UI halves) | DS41 (ModalityRegistry) | EVERY acquisition workflow via getHandler; menu, dialogs, Live Viewer via getUi | Prefix match; NoOpModalityHandler / ModalityUi.NONE if unmatched |
 | User selection | DS42 (ModalityState) / DS42a (ObjectiveState) | EVERY workflow needing active modality / objective | Singleton |
 | W1c cross-scope | DS39 (CrossScopeTransformBuilder output) | W1 acquisition path | Uses source scope's stored offset |
 | W12, W13 | DS40 (propagation builder output) | W12, W13 execute | Tile-detection path bypasses |
-| W17 FlippedDuplicateMigrator | DS27 (project), DS9 (entries removed) | All workflows that enumerate project entries | Idempotent one-shot |
 | W19 LiveViewerWindow | DS43 (live viewer state), DS17 (stage motion) | Any workflow that takes/releases lock | Locked during primary-socket work |
 | W21 StageMapWindow | DS44 (stage map state) | -- (display-only) | Reads DS9 ancestry; never overwrites SOURCE_MICROSCOPE |
 | W14 (StitchingHelper) | DS6 (sub-frame JSON) | W19 Go-To-Centroid, W12/W13 tier 2 | Filename encodes scope (parsed by getDerivedAlignmentMicroscope) |
@@ -2114,7 +2471,7 @@ writes DS Y consumed by Consumer Z."
 | W1 checkAndHandleOrphanedFlippedSibling | (no DS write; just guards) | W1 abort or continue | Dialog forces restart with valid base |
 | W1c (slide-specific alignment save) | DS5 (entry-flip-read) | W1 next launch | Uses AlignmentHelper.resolveMacroLookupKey |
 | W1e ManualAlignmentPath | DS5 (createManualAlignment writes) | W1, W21 | Reads slide calibration, NOT scanner macro pixel size |
-| ImageFlipHelper.validateAndFlipIfNeeded | DS9 (FLIP_X/Y consistency), DS17 | W1 acquisition | MUST run before setCurrentTransform |
+| ImageFlipHelper.validateAndFlipIfNeeded | DS9 (light-path snapshot / Camera View companion), DS17 | W1 acquisition | MUST run before setCurrentTransform; no-op on an isCameraView entry |
 | ImageFlipHelper.mirrorAnnotationsToSibling | DS27 (sibling entry annotations) | W1, W3 | Single annotation mirror (replace, not append; commit 4515a2f) |
 | FlipResolver.resolveFlipX/Y | (composes DS9 + DS5 + DS4) | W1, W3, W12, W13 | Canonical reader for current flip semantics |
 | StageImageTransform.stitcherFlipFlags | (composes DS25) | W14 stitcher | Drives stitcher flip flags |
@@ -2127,6 +2484,15 @@ writes DS Y consumed by Consumer Z."
 | W33 NotificationService | external (ntfy.sh) | -- | Best-effort; failures not workflow-fatal |
 | Setup time | DS3 (microscope.name) | DS9 (SOURCE_MICROSCOPE / ACQUIRED_ON_MICROSCOPE stamping) | Source-of-truth for both fields at stamping time |
 | W28 AcquisitionWizardDialog | (calls W1) | W1 | The entry point for guided existing-image acquisition |
+| W14 StitchingHelper.reserveOutputs (W1, W2) | DS48 (reserved entries) | Project browser; filled by TileProcessingUtilities / importMergedImageOnly / importPerChannelFallback | OME-TIFF only; never opened in the viewer |
+| W1 execute / cleanup | DS49 (WorkflowRegistry slot) | W1 cleanup of the older run | Guards DS17 against an overlapping run's cleanup |
+| AcquisitionManager.launchStitching | W37 StitchingQueueWindow rows | Operator (Open on finished rows) | Non-modal; the only place a stitched image is opened |
+| W38 stopActiveAcquisition | DS45 (CANCEL), active run's cancelRequested | W1 / W2 CancelGate | Reachable from the menu, the Live Viewer and W1's refusal |
+| W39 BackgroundProfilesDialog | DS23 (profile.yml), DS24 (activeBackgroundProfile) | W4, every acquisition (--bg-folder resolution) | No active profile -> no backgrounds |
+| W40 FlatfieldFitDialog | server-side BaSiC profile folder (via FLATFIT / FLATPOLL) | Acquisitions with flatfieldMethod=BASIC (--flatfield-folder), Tiles to Pyramid | Never sent with --bg-correction |
+| W43 MicroscopeSwitcher | DS3 (reload), DS44 (registries dropped), DS45 (reconnect + CONFIG), QP Scope menu | EVERY workflow | Refused while acquiring |
+| W45 LightPathSetupDialog | DS3 (light_path) | W21 Stage Map Camera View, LightPathModel readers | Set once per rig |
+| W42 ExportSpatialSceneWorkflow | <project>/ngff/*.json | External tools only | Reuses existing transform functions; writes nothing else |
 
 ---
 
@@ -2179,14 +2545,16 @@ real outages. Each item names the surface(s) and workflow(s) it applies to.
    transform. Affects: DS5, DS6. Watched: `AlignmentHelper.checkForSlideAlignment`.
 
 10. **PPM workflows are NOT in `QPScopeController.startWorkflow` switch.** They
-    are registered dynamically via `PPMModalityHandler.getMenuContributions()`.
-    Adding a new PPM workflow requires extending the menu contributions list,
-    not the switch. Affects: W23-W26. Watched: PPMModalityHandler.
+    are registered dynamically via `PPMModalityUi.getMenuContributions()`
+    (the handler's UI half, read through `ModalityRegistry.getUi`). Adding a
+    new PPM workflow requires extending the menu contributions list, not the
+    switch. Same for LC-PolScope (`LCPolScopeModalityUi`). Affects: W23-W26,
+    W36. Watched: PPMModalityUi, LCPolScopeModalityUi.
 
 11. **Stage polarity and camera orientation are INDEPENDENT.** Six pre-2026
     call sites read `StagePolarity` directly without composing with
     `CameraOrientation`; treat as a bug class. All new code MUST go through
-    `StageImageTransform.current()`. Affects: DS25, DS26. Watched: every live-view
+    `StageImageTransform.current()`. Affects: DS3, DS25, DS26. Watched: every live-view
     sign-convention call site.
 
 12. **Bounded acquisition is stage-frame native -- NO macro flip, NO alignment
@@ -2205,10 +2573,12 @@ real outages. Each item names the surface(s) and workflow(s) it applies to.
     existing `entry.source_microscope` from the dropdown. (Commit d531d696.)
     Affects: W21, DS9.
 
-16. **`(flipped X|Y|XY)` companion entries are still legitimately created on
-    demand for visual-UX during alignment.** Do NOT strip them in the workflow
-    path. Only `FlippedDuplicateMigrator` (W17) targets legacy duplicates.
-    Affects: W17, DS27.
+16. **`(Camera View)` companion entries (formerly `(flipped X|Y|XY)`) are
+    still legitimately created on demand for visual-UX during alignment.** Do
+    NOT strip them in the workflow path. The one-shot `FlippedDuplicateMigrator`
+    (W17) was removed in v0.9.0; nothing deletes companions except a slide
+    placement change (W21 PlacementChangeCoordinator, stale companion only).
+    Affects: DS27, DS9.
 
 17. **Streaming AF is INCOMPATIBLE with OWS3.** Prior ZDrive ignores Speed on
     non-blocking moves; rapid jumps wedge CONFIG. Keep
@@ -2314,7 +2684,31 @@ real outages. Each item names the surface(s) and workflow(s) it applies to.
 
 38. **`ChannelResolutionService.isEmptySelectionForChannelBasedModality` fires
     early** to refuse channel-based modalities with no channels selected.
-    Don't move into async chain. Affects: W2 (line 265-273).
+    Don't move into async chain. Affects: W2 (line ~280).
+
+39. **Only the run that holds the `WorkflowRegistry` slot may clear
+    `MicroscopeController`'s transform and acquisition flag.** Run N's
+    stitching outlives its acquisition and run N+1 starts meanwhile; on
+    2026-10-27 run N's cleanup nulled run N+1's transform. Affects: DS17,
+    DS49, W1.
+
+40. **Stitch imports never touch the viewer.** No `openImageEntry`, no
+    `saveImageData` of the viewer's image, no `setProject` from a stitch
+    callback; reserved entries (DS48) are filled in place. A stitch landing
+    under the next slide's refinement dialog re-set the project under it on
+    2026-10-27. Affects: W14, DS48, DS27.
+
+41. **Modality handlers hold no UI.** Panels, menu items, Live Viewer controls
+    and pre-acquisition confirmations live on the modality's `ModalityUi`
+    (registered by `ModalityUis.registerAll()`); the `modality` package may not
+    import dialogs or workflows. Shared code asks a handler hook rather than
+    testing the modality name. Affects: DS41, every modality.
+
+42. **Socket commands share one exchange path** in `MicroscopeSocketClient`
+    (`exchange`, `withReadTimeout`, `send`, `readReply`,
+    `readStartedThenResult`). Do not add a command with its own
+    lock-send-read code. A FAILED reply is a `ServerAnswerException`, not a
+    connection failure. Affects: DS45.
 
 ---
 
@@ -2334,8 +2728,9 @@ two lines.
   for sub-images.
 
 - **sibling** -- Two entries with the same `BASE_IMAGE`. Enumerated via
-  `ImageMetadataManager.getSiblingsByBaseImage`. Flipped siblings have
-  `FLIP_X/Y` true relative to the base.
+  `ImageMetadataManager.getSiblingsByBaseImage`. A flipped sibling is a
+  `(Camera View)` companion: `isCameraView` true, its mirror in
+  `bakedParity` (the `flip_x`/`flip_y` keys were removed in v0.9.0).
 
 - **sub-acquisition** -- An acquisition whose target is a previously-acquired
   sub-image (has `xy_offset` and `base_image` distinct from its own name).
@@ -2384,8 +2779,12 @@ two lines.
   TransformPreset (DS4). Survives across sessions.
 
 - **dispatcher (QPScopeController)** -- The central switch that menu items
-  call via `startWorkflow(mode)`. PPM workflows bypass this and are
-  registered via `ModalityHandler.getMenuContributions()`.
+  call via `startWorkflow(mode)`. PPM and LC-PolScope workflows bypass this
+  and are registered via `ModalityUi.getMenuContributions()`; several
+  utilities (Stage Map, Propagation Manager, Make Portable, Export Spatial
+  Relationships, Focus Approach Validation, Register Objective, Light Path,
+  Switch Microscope, demo, flat-field fit, Orientation Color View, Stitching
+  queue, Stop acquisition, Report a Bug) are wired directly in `SetupScope`.
 
 - **preset vs per-slide JSON** -- TransformPreset (DS4) is the per-scope-pair
   template stored in alignment YAML. Per-slide JSON (DS5/DS6) is the snapshot
@@ -2398,9 +2797,10 @@ two lines.
   stored under `alignmentFiles/derived/`. Filename encodes the acquiring scope.
   Pixel frame is `"sub"`.
 
-- **flipped sibling** -- A `(flipped X|Y|XY)` companion entry created on
-  demand for visual-UX during alignment. NOT the same as a legacy duplicate
-  (which `W17 FlippedDuplicateMigrator` removes).
+- **flipped sibling** -- A `(Camera View)` companion entry (formerly named
+  `(flipped X|Y|XY)`) created on demand for visual-UX during alignment;
+  `ImageMetadataManager.isCameraView` is true on it. Classify by metadata,
+  never by name.
 
 - **half-FOV correction** -- The offset that accounts for tile centers vs
   tile corners. Missing it shifts propagated annotations by half a field of
@@ -2409,11 +2809,25 @@ two lines.
 
 - **modality handler** -- A class implementing `ModalityHandler` registered
   with a string prefix in `ModalityRegistry`. Provides modality-specific
-  acquisition parameters, validation, and menu contributions. Lookup is
-  `startsWith` on the modality name.
+  acquisition parameters, validation and hooks. Lookup is `startsWith` on the
+  modality name (longest prefix wins).
+
+- **modality UI (ModalityUi)** -- The UI half of a handler: bounding-box panel
+  (`createBoundingBoxUI`), Live Viewer camera controls
+  (`buildLiveCameraControls`), `confirmBeforeAcquiring`, `confirmBatch`,
+  `getMenuContributions`. Lives in each modality's `ui` package, registered by
+  handler class in `ModalityUis.registerAll()`, read with
+  `ModalityRegistry.getUi(...)`; `ModalityUi.NONE` when a handler has none.
+
+- **WorkflowRegistry** -- DS49. Owner of the active-workflow slot that decides
+  which run may clear `MicroscopeController`'s transform and acquisition flag.
+
+- **reserved entry** -- DS48. A project entry added before its stitch runs,
+  pointing at a placeholder image with `qpsc_stitch_status=pending`, filled
+  in place when the OME-TIFF lands.
 
 - **StageImageTransform** -- Composite of stage polarity and camera
-  orientation (DS25 + DS25 -> DS26). Single source of truth for all
+  orientation (DS3 `stage.polarity` + DS25 cameraOrientation -> DS26). Single source of truth for all
   live-view sign conventions. Do not read polarity booleans directly.
 
 - **validateMMAgainstSelection** -- Wrapper around `QPScopeChecks.
