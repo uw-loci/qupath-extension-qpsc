@@ -343,6 +343,8 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | FLATPOLL | `flatpoll` | none | `RUNNING\n`, `SUCCESS:{"profiles": [...]}\n` with `channel`, `flatfield_min`, `flatfield_max`, `offset`, `images_used`, `images_read` for each, or `FAILED:<reason>\n`. | 
 | PPMBIREF | `ppmbiref` | params + ENDOFSTR | optimization result |
 | SBCALIB | `sbcalib_` | params + ENDOFSTR | calibration result |
+| PPMSENS | `ppmsens_` | `--yaml <path> --output <path> --test-type <t> --base-angle <f> --repeats <n>` + ENDOFSTR | `STARTED:`, then `SUCCESS:<output dir>` or `FAILED:<reason>`. Sends no progress; the client allows one hour |
+| POLCAL | `polcal__` | `--yaml <path> --output <path> --start <deg> --end <deg> --step <deg> --exposure <ms>` + ENDOFSTR | `STARTED:`, then `SUCCESS:<report path>` or `FAILED:<reason>`. Sends no progress; the client allows one hour |
 | WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
 | WBPPM | `wbppm___` | params + ENDOFSTR | WB result |
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
