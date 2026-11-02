@@ -16,9 +16,9 @@ import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.acquisition.AcquisitionSpaceCheck;
 import qupath.ext.qpsc.acquisition.TilingRequest;
 import qupath.ext.qpsc.acquisition.TilingUtilities;
-import qupath.ext.qpsc.background.BackgroundIlluminationCheck;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.config.ObjectiveUtils;
+import qupath.ext.qpsc.controller.workflow.AcquisitionMonitorService;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.controller.workflow.TileCleanupHelper;
 import qupath.ext.qpsc.geometry.StagePolarity;
@@ -28,7 +28,6 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
-import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.ManualFocusHandler;
@@ -39,6 +38,8 @@ import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.stitching.StitchingConfiguration;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.acquisition.UnifiedAcquisitionController;
+import qupath.ext.qpsc.ui.background.BackgroundIlluminationCheck;
+import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.utilities.*;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
@@ -506,17 +507,17 @@ public class BoundedAcquisitionWorkflow {
 
                                 AtomicInteger progressCounter = new AtomicInteger(0);
 
-                                UIFunctions.ProgressHandle progressHandle = null;
+                                WorkflowDialogs.ProgressHandle progressHandle = null;
                                 if (expectedFiles > 0) {
                                     // Pass expectedFilesPerTile as the steps-per-position
                                     // so the progress dialog displays physical XY
                                     // positions, not raw image file counts. For 4-channel
                                     // widefield IF with 10 tiles this shows "10 of 10
                                     // positions", not "40 of 40".
-                                    progressHandle = UIFunctions.showProgressBarAsync(
+                                    progressHandle = WorkflowDialogs.showProgressBarAsync(
                                             progressCounter, expectedFiles, 300000, true, expectedFilesPerTile);
 
-                                    final UIFunctions.ProgressHandle finalHandle = progressHandle;
+                                    final WorkflowDialogs.ProgressHandle finalHandle = progressHandle;
                                     progressHandle.setCancelCallback(v -> {
                                         logger.info("User requested acquisition cancellation");
                                         // Off-EDT: CANC can block for tens of seconds waiting on
@@ -562,7 +563,7 @@ public class BoundedAcquisitionWorkflow {
                                                         retriesRemaining,
                                                         null,
                                                         null,
-                                                        UIFunctions::showManualFocusDialog))
+                                                        WorkflowDialogs::showManualFocusDialog))
                                                 .tileDir(tileDirPath)
                                                 .modality(enhancedModality)
                                                 .pollInterval(500)
@@ -629,7 +630,7 @@ public class BoundedAcquisitionWorkflow {
                                                                             .channelId()
                                                                     : result.focusChannelId()))
                                             .thenRun(() -> {
-                                                UIFunctions.playWorkflowCompletionBeep();
+                                                WorkflowDialogs.playWorkflowCompletionBeep();
 
                                                 String msg = angleExposures.size() > 1
                                                         ? "All angles stitched successfully"

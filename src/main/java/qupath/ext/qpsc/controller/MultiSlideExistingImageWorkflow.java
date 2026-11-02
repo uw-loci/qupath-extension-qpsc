@@ -55,11 +55,11 @@ import qupath.ext.qpsc.ui.DialogPlacement;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.SectionBuilder;
 import qupath.ext.qpsc.ui.ThemeColors;
-import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.acquisition.AutoAdvanceController;
 import qupath.ext.qpsc.ui.acquisition.MultiSlideAssignmentDialog;
 import qupath.ext.qpsc.ui.acquisition.SaturationSummaryDialog;
+import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -1747,7 +1747,7 @@ public final class MultiSlideExistingImageWorkflow {
     private static void notifySlideAcquired(SlotState s) {
         String slot = s.assignment.slotLabel();
         String name = s.assignment.entry().getImageName();
-        UIFunctions.playWorkflowCompletionBeep();
+        WorkflowDialogs.playWorkflowCompletionBeep();
         Dialogs.showInfoNotification("Slide Acquired", slot + " (" + name + ") acquired.");
         NotificationService.getInstance()
                 .notify(

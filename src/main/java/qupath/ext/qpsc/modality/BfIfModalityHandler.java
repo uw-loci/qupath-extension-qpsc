@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.modality;
 
+import qupath.ext.qpsc.modality.widefield.WidefieldFluorescenceModalityHandler;
+
 /**
  * Modality handler for combined brightfield + widefield immunofluorescence
  * acquisition on instruments with a shared camera (e.g. OWS3).

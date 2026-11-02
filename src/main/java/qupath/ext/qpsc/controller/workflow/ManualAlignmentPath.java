@@ -11,8 +11,8 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.geometry.ImageFlipHelper;
 import qupath.ext.qpsc.geometry.MacroImageUtility;
 import qupath.ext.qpsc.project.QPProjectFunctions;
-import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.alignment.AffineTransformationController;
+import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.lib.gui.QuPathGUI;
@@ -223,8 +223,8 @@ public class ManualAlignmentPath {
         // No annotations on the displayed entry -- show the per-slide annotation
         // dialog (Run Tissue Detection / draw manually / review / confirm).
         logger.info("No annotations on the alignment entry; showing per-slide annotation dialog");
-        return UIFunctions.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
-            if (action != UIFunctions.AnnotationAction.ANNOTATIONS_CONFIRMED) {
+        return WorkflowDialogs.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
+            if (action != WorkflowDialogs.AnnotationAction.ANNOTATIONS_CONFIRMED) {
                 throw new CancellationException("No annotations for manual alignment");
             }
             state.annotations = AnnotationHelper.getCurrentValidAnnotations(gui, null);

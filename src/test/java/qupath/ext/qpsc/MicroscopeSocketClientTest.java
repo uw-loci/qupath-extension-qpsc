@@ -239,11 +239,20 @@ class MicroscopeSocketClientTest {
         mockServer = new MockMicroscopeServer(serverPort);
         mockServer.start();
 
-        // Wait for automatic reconnection
-        Thread.sleep(1500);
-
-        // Should work again
-        assertDoesNotThrow(() -> client.getStageXY());
+        // Reconnection runs on a backoff with a cooldown, so under a loaded test run it can take
+        // longer than one interval: allow ten seconds.
+        long deadline = System.currentTimeMillis() + 10_000;
+        IOException last = null;
+        while (System.currentTimeMillis() < deadline) {
+            try {
+                client.getStageXY();
+                return;
+            } catch (IOException e) {
+                last = e;
+                Thread.sleep(200);
+            }
+        }
+        fail("No reconnection within 10 s: " + last);
     }
 
     @Test

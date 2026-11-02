@@ -33,6 +33,7 @@ import qupath.ext.qpsc.ui.acquisition.ExistingImageAcquisitionController.Existin
 import qupath.ext.qpsc.ui.acquisition.ExistingImageAcquisitionController.RefinementChoice;
 import qupath.ext.qpsc.ui.alignment.AlignmentSelectionController;
 import qupath.ext.qpsc.ui.alignment.RefinementSelectionController;
+import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.utilities.*;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
@@ -1084,7 +1085,7 @@ public class ExistingImageWorkflowV2 {
             // among the pre-selected classes. Filtering by validClasses here would
             // leave the user stuck whenever "Tissue" was not pre-selected, with no way to
             // pick it.
-            return UIFunctions.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
+            return WorkflowDialogs.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
                 switch (action) {
                     case ANNOTATIONS_CONFIRMED:
                         return selectClassesAfterDetection(state);
@@ -3195,7 +3196,7 @@ public class ExistingImageWorkflowV2 {
          * Shows success notification and plays completion beep.
          */
         private void showSuccessNotification() {
-            UIFunctions.playWorkflowCompletionBeep();
+            WorkflowDialogs.playWorkflowCompletionBeep();
 
             // The stitched images were added to the project but never opened: the viewer
             // belongs to whatever the operator is doing by now. Say what landed and where.

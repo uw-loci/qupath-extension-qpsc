@@ -17,6 +17,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.ConfigSchema;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 
 /**

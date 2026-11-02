@@ -5,6 +5,7 @@ import java.util.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.config.ConfigSchema;
 
 /**
  * Reads the bundled resources_LOCI.yml catalog to populate wizard dropdowns

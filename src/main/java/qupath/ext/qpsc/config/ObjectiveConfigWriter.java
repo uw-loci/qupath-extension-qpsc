@@ -7,7 +7,6 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.ui.setupwizard.ConfigSchema;
 
 /**
  * Registers a new objective across the microscope config files, writing

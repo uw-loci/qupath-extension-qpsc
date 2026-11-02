@@ -3034,7 +3034,7 @@ public class MicroscopeConfigManager {
      * Returns list of missing sections.
      *
      * <p>SYNC: The required keys checked here must match the structure defined in
-     * {@link qupath.ext.qpsc.ui.setupwizard.ConfigSchema}. When adding new required
+     * {@link qupath.ext.qpsc.config.ConfigSchema}. When adding new required
      * keys, also update ConfigSchema, the Setup Wizard steps, and the bundled
      * YAML templates in resources/qupath/ext/qpsc/templates/.
      */

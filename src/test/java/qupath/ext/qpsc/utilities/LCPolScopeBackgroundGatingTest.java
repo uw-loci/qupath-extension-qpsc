@@ -10,11 +10,11 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
-import qupath.ext.qpsc.background.BackgroundIlluminationCheck;
 import qupath.ext.qpsc.background.BackgroundProfiles;
 import qupath.ext.qpsc.background.FlatfieldMethod;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.ui.background.BackgroundIlluminationCheck;
 
 /**
  * An LC-PolScope background is part of the reconstruction, not a flat-field divide, so it is sent

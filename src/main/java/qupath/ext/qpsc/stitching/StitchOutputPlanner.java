@@ -91,8 +91,7 @@ public final class StitchOutputPlanner {
         String modality = parts[0];
         String objective = parts[1];
         int startIndex = ImageNameGenerator.extractImageIndex(in.modeWithIndex());
-        String annotation = ImageNameGenerator.sanitizeForFilename(
-                TileProcessingUtilities.extractOriginalRegionName(in.annotationName()));
+        String annotation = ImageNameGenerator.sanitizeForFilename(extractOriginalRegionName(in.annotationName()));
 
         // Plan once at the acquisition's index; if any name is taken, bump the index for the
         // whole job (the files of one job share the index) and plan again.
@@ -221,5 +220,25 @@ public final class StitchOutputPlanner {
             }
         }
         return dir;
+    }
+
+    public static String extractOriginalRegionName(String annotationName) {
+        if (annotationName == null) {
+            return "";
+        }
+
+        // Handle both path separators and the specific temporary directory pattern
+        String[] parts = annotationName.split("[/\\\\]");
+
+        for (String part : parts) {
+            // Return the first part that doesn't start with "_temp_"
+            if (!part.startsWith("_temp_")) {
+                return part;
+            }
+        }
+
+        // If all parts start with "_temp_", return the original string
+        // This shouldn't happen in normal operation but provides a fallback
+        return annotationName;
     }
 }

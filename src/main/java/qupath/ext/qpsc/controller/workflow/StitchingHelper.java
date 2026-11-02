@@ -37,7 +37,6 @@ import qupath.ext.qpsc.project.ProjectEntryReservation;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.stitching.StitchOutputPlanner;
 import qupath.ext.qpsc.stitching.StitchingConfiguration;
-import qupath.ext.qpsc.stitching.TileProcessingUtilities;
 import qupath.ext.qpsc.stitching.TileRegistrationSupport;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.acquisition.DualProgressDialog;

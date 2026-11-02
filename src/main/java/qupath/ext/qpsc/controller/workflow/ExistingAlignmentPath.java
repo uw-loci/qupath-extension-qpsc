@@ -26,6 +26,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.alignment.GreenBoxPreviewController;
+import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.utilities.*;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -984,7 +985,7 @@ public class ExistingAlignmentPath {
      */
     private CompletableFuture<java.util.List<PathObject>> handleNoAnnotationsForTransform() {
         // null validClasses = no class filter for alignment
-        return UIFunctions.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
+        return WorkflowDialogs.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
             switch (action) {
                 case ANNOTATIONS_CONFIRMED:
                     java.util.List<PathObject> annotations = getAnnotationsFromCorrectSource();

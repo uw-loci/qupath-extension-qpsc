@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.stitching;
+package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.image.BufferedImage;
 import java.io.*;
@@ -22,6 +22,9 @@ import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.project.ImageNameGenerator;
 import qupath.ext.qpsc.project.ProjectEntryReservation;
 import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.stitching.StitchInfoSupport;
+import qupath.ext.qpsc.stitching.StitchOutputPlanner;
+import qupath.ext.qpsc.stitching.TileRegistrationSupport;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.lib.gui.QuPathGUI;
@@ -534,7 +537,7 @@ public class TileProcessingUtilities {
             int imageIndex = ImageNameGenerator.extractImageIndex(imagingModeWithIndex);
 
             // Extract and sanitize annotation name
-            String originalRegionName = extractOriginalRegionName(annotationName);
+            String originalRegionName = StitchOutputPlanner.extractOriginalRegionName(annotationName);
             String sanitizedAnnotationName = ImageNameGenerator.sanitizeForFilename(originalRegionName);
 
             // Determine if this is angle-based stitching
@@ -916,26 +919,6 @@ public class TileProcessingUtilities {
             return metadata.sampleName;
         }
         return sampleLabel;
-    }
-
-    static String extractOriginalRegionName(String annotationName) {
-        if (annotationName == null) {
-            return "";
-        }
-
-        // Handle both path separators and the specific temporary directory pattern
-        String[] parts = annotationName.split("[/\\\\]");
-
-        for (String part : parts) {
-            // Return the first part that doesn't start with "_temp_"
-            if (!part.startsWith("_temp_")) {
-                return part;
-            }
-        }
-
-        // If all parts start with "_temp_", return the original string
-        // This shouldn't happen in normal operation but provides a fallback
-        return annotationName;
     }
 
     /**

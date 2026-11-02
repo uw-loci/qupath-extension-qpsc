@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.background;
+package qupath.ext.qpsc.ui.background;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -13,6 +13,8 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityRegistry;

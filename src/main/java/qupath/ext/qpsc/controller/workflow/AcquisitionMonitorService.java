@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.service;
+package qupath.ext.qpsc.controller.workflow;
 
 import java.io.IOException;
 import java.util.concurrent.CancellationException;

@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.modality;
+package qupath.ext.qpsc.modality.widefield;
 
 import java.util.List;
 import java.util.Optional;
@@ -6,6 +6,10 @@ import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.modality.AngleExposure;
+import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.modality.ModalityHandler;
+import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;

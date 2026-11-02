@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.service;
+package qupath.ext.qpsc.controller;
 
 import com.google.gson.JsonElement;
 import com.google.gson.JsonObject;
@@ -12,7 +12,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.config.MicroscopeConfigManager.ObjectiveMmPreset;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.state.ObjectiveState;
 import qupath.ext.qpsc.ui.connection.ObjectivePresetConfirmDialog;
 import qupath.fx.dialogs.Dialogs;
@@ -65,6 +64,8 @@ public final class ObjectivePresetActuator {
         ObjectiveState.getInstance()
                 .objectiveProperty()
                 .addListener((obs, oldV, newV) -> onObjectiveSelected(newV, true));
+        qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.addConfiguredListener(
+                ObjectivePresetActuator::onServerConfigured);
     }
 
     /**

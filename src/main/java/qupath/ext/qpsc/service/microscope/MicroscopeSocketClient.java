@@ -63,6 +63,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /** End marker expected by Python server to indicate message completion */
     private static final String END_MARKER = "ENDOFSTR";
 
+    /** Run after the server has loaded the configuration; see {@link #addConfiguredListener}. */
+    private static final List<Runnable> CONFIGURED_LISTENERS = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     private static final String SUCCESS_PREFIX = "SUCCESS:";
     private static final String FAILED_PREFIX = "FAILED:";
     private static final String CANCELLED_PREFIX = "CANCELLED:";
@@ -1005,10 +1008,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                     logger.info("Server config loaded successfully");
                     lastConfigRefusal = null;
-                    // Bring a hand-turned nosepiece's Micro-Manager label in line with the
-                    // objective selected in QPSC (opt-in per objective; never moves a turret).
-                    // It talks to the server itself, so it runs after this lock is released.
-                    qupath.ext.qpsc.service.ObjectivePresetActuator.onServerConfigured();
+                    // Listeners run inside the socket lock: one that talks to the server must do it on
+                    // another thread, as the objective preset check does.
+                    CONFIGURED_LISTENERS.forEach(Runnable::run);
                     logger.info("=== Python Server Versions ===");
                     logger.info("  {}", verJson);
                     logger.info("==============================");
@@ -3598,6 +3600,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         logger.warn("Unexpected response: {}", response);
         throw new IOException("Unexpected server response: " + response);
+    }
+
+    /**
+     * Runs {@code listener} each time the server accepts the configuration on the primary socket.
+     * It runs on the connecting thread, inside the socket lock, so it must return quickly and do
+     * any server work on another thread.
+     */
+    public static void addConfiguredListener(Runnable listener) {
+        CONFIGURED_LISTENERS.add(listener);
     }
 
     /** One step of an exchange on the primary socket. */

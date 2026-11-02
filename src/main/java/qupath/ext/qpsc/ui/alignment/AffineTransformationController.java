@@ -16,6 +16,7 @@ import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -272,7 +273,7 @@ public class AffineTransformationController {
                                                     + " then click Auto-Align (SIFT) to snap to it. Click Current"
                                                     + " Position is Accurate once the live view matches the tile.",
                                             qupath.ext.qpsc.preferences.PersistentPreferences.getSiftSearchMarginUm());
-                            return afGate.thenCompose(ignored -> UIFunctions.stageAlignmentConfirmAsync(
+                            return afGate.thenCompose(ignored -> WorkflowDialogs.stageAlignmentConfirmAsync(
                                             gui, refTile, "Reference tile alignment", confirmInstruction)
                                     .thenCompose(aligned -> {
                                         if (!aligned) {
@@ -395,7 +396,7 @@ public class AffineTransformationController {
                 String refineInstruction = "Refining with tile '"
                         + (tile.getName() != null ? tile.getName() : "tile")
                         + "'. Use the joystick or Auto-Align (SIFT) to fine-tune, then click Confirm.";
-                UIFunctions.stageAlignmentConfirmAsync(gui, tile, "Refinement tile alignment", refineInstruction)
+                WorkflowDialogs.stageAlignmentConfirmAsync(gui, tile, "Refinement tile alignment", refineInstruction)
                         .thenAccept(ok -> {
                             if (!ok) {
                                 logger.info("User canceled during secondary alignment at tile '{}'.", tile.getName());

@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.ui.setupwizard;
+package qupath.ext.qpsc.config;
 
 import java.util.*;
 

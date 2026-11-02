@@ -11,7 +11,6 @@ import javafx.beans.value.ChangeListener;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.geometry.lightpath.LightPath;
 import qupath.ext.qpsc.geometry.lightpath.LightPathSnapshot;
 import qupath.ext.qpsc.geometry.lightpath.Parity;
@@ -465,7 +464,7 @@ public final class ImageFlipHelper {
 
             // Transfer flip-transformed copies of the base's annotations only
             // (detections / tiles are workflow scratch, not part of the mirror).
-            AffineTransform flip = ForwardPropagationWorkflow.createFlip(flipX, flipY, baseWidth, baseHeight);
+            AffineTransform flip = TransformationFunctions.createFlipTransform(flipX, flipY, baseWidth, baseHeight);
             List<PathObject> mirrored = new ArrayList<>();
             for (PathObject ann : baseHierarchy.getAnnotationObjects()) {
                 if (ann.getROI() == null) {

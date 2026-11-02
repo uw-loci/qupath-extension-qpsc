@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.stitching;
+package qupath.ext.qpsc.controller.workflow;
 
 import static org.assertj.core.api.Assertions.assertThat;
 

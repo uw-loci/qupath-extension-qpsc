@@ -665,7 +665,7 @@ public final class FocusApproachValidationWorkflow {
      * Viewer. An application-modal dialog blocks precisely those controls, so {@code showAndWait}
      * would sit waiting for an action it had made impossible. {@link Modality#NONE} still lets
      * {@code showAndWait} block this workflow's own flow while leaving the rest of the UI live,
-     * which is the same pattern {@code UIFunctions.stageAlignmentConfirmAsync} uses.
+     * which is the same pattern {@code WorkflowDialogs.stageAlignmentConfirmAsync} uses.
      *
      * <p>The scan progress window is deliberately NOT made non-blocking: nothing should be
      * driving the stage while a scan is traversing toward the sample.

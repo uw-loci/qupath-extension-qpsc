@@ -8,6 +8,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.laserscan.LaserScanningModalityHandler;
 import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.ppm.PPMModalityHandler;
+import qupath.ext.qpsc.modality.widefield.WidefieldFluorescenceModalityHandler;
 
 /**
  * Thread-safe static registry for mapping modality name prefixes to {@link ModalityHandler} implementations.

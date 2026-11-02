@@ -28,11 +28,9 @@ import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.acquisition.AcquisitionSpaceCheck;
 import qupath.ext.qpsc.acquisition.StageFrameWatchdog;
 import qupath.ext.qpsc.acquisition.TilingUtilities;
-import qupath.ext.qpsc.background.BackgroundIlluminationCheck;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.focus.LiveTileMeasurementPoller;
 import qupath.ext.qpsc.focus.ZFocusPredictionModel;
 import qupath.ext.qpsc.geometry.FlipResolver;
 import qupath.ext.qpsc.geometry.TransformationFunctions;
@@ -64,6 +62,8 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.acquisition.AnnotationAcquisitionDialog;
 import qupath.ext.qpsc.ui.acquisition.DualProgressDialog;
 import qupath.ext.qpsc.ui.acquisition.SaturationSummaryDialog;
+import qupath.ext.qpsc.ui.background.BackgroundIlluminationCheck;
+import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.fx.dialogs.Dialogs;
@@ -1733,7 +1733,7 @@ public class AcquisitionManager {
                                 retriesRemaining,
                                 handlingManualFocus,
                                 timing,
-                                UIFunctions::showManualFocusDialog);
+                                WorkflowDialogs::showManualFocusDialog);
                     },
                     // Hardware error callback - shows dialog with error details
                     errorMessage -> {
@@ -2382,7 +2382,7 @@ public class AcquisitionManager {
             // Never let the alert channel swallow the error it is reporting.
             logger.warn("Could not send acquisition-failure notification: {}", e.getMessage());
         }
-        UIFunctions.playWorkflowCompletionBeep();
+        WorkflowDialogs.playWorkflowCompletionBeep();
         Platform.runLater(() -> UIFunctions.notifyUserOfError(
                 "Acquisition failed for " + annotationName + ":\n\n" + detail, "Acquisition"));
     }

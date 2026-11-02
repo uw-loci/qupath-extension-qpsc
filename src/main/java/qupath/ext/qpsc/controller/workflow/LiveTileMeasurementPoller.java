@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.focus;
+package qupath.ext.qpsc.controller.workflow;
 
 import java.io.IOException;
 import java.io.RandomAccessFile;
@@ -13,7 +13,6 @@ import java.util.concurrent.TimeUnit;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.controller.workflow.AcquisitionManager;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
