@@ -176,7 +176,7 @@ Real-time preview showing calculated acquisition details:
 | Tile Grid | Number of tiles (X x Y) and overlap percentage |
 | Angles | Number of angles for the modality |
 | Total Images | Total images to be acquired |
-| Est. Time | Rough time estimate (displayed in bold for emphasis) |
+| Est. Time | Rough time estimate (displayed in bold for emphasis), marked "(based on previous acquisitions)" once this install has timed an acquisition, or "(estimate)" until then |
 | Est. Completion | Estimated completion date and time in local format (e.g., "Tue May 20, 14:30") |
 | Est. Storage | Rough storage estimate |
 
