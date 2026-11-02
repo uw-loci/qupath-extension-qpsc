@@ -53,11 +53,15 @@ public final class SweepAutofocusRunner {
      * @param configPath path to the microscope YAML config
      * @param outputPath path the server writes its per-sweep output to
      * @param objective the current objective id
+     * @param wideSearch true when the current Z may be far from focus, such as on a new slide; false
+     *     for a drift check around a Z that is already close
      * @return a {@link SweepResult} with the raw Z strings and the cancelled flag
+     * @throws qupath.ext.qpsc.service.microscope.AutofocusFailedException if the server found no
+     *     focus; Z is back where it started and nothing was recorded
      * @throws IOException if the socket call fails (propagated unchanged for the caller to handle)
      */
     public static SweepResult run(
-            MicroscopeController controller, String configPath, String outputPath, String objective)
+            MicroscopeController controller, String configPath, String outputPath, String objective, boolean wideSearch)
             throws IOException {
         // Holders carry the server result out of the withAllLiveViewingOff lambda boundary.
         boolean[] cancelledHolder = {false};
@@ -67,7 +71,7 @@ public final class SweepAutofocusRunner {
         // live viewer open (it stops nothing and restores nothing).
         controller.withAllLiveViewingOff(() -> {
             Map<String, String> result =
-                    controller.getSocketClient().testAdaptiveAutofocus(configPath, outputPath, objective);
+                    controller.getSocketClient().testAdaptiveAutofocus(configPath, outputPath, objective, wideSearch);
             if ("true".equals(result.get("cancelled"))) {
                 cancelledHolder[0] = true;
                 return;

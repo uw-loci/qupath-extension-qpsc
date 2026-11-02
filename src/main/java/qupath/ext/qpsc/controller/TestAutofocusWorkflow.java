@@ -279,7 +279,7 @@ public class TestAutofocusWorkflow {
 
                 Map<String, String> result;
                 if (isAdaptive) {
-                    result = socketClient.testAdaptiveAutofocus(configPath, outputPath, objective);
+                    result = socketClient.testAdaptiveAutofocus(configPath, outputPath, objective, false);
                 } else {
                     result = socketClient.testAutofocus(configPath, outputPath, objective);
                 }

@@ -3056,15 +3056,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param yamlPath Path to microscope configuration YAML file
      * @param outputPath Output directory for diagnostic data
      * @param objective Objective identifier (e.g., "LOCI_OBJECTIVE_OLYMPUS_20X_POL_001")
+     * @param wideSearch true when the current Z may be far from focus, such as on a new slide: the
+     *     server runs the wide search an acquisition uses at its first tissue tile, not a drift
+     *     check
      * @return Map with keys: "message", "initial_z", "final_z", "z_shift"
-     * @throws IOException if communication fails or autofocus test fails
+     * @throws AutofocusFailedException if the server found no focus; Z is back where it started
+     * @throws IOException if communication fails
      */
-    public Map<String, String> testAdaptiveAutofocus(String yamlPath, String outputPath, String objective)
-            throws IOException {
+    public Map<String, String> testAdaptiveAutofocus(
+            String yamlPath, String outputPath, String objective, boolean wideSearch) throws IOException {
 
         // Build TESTADAF-specific command message
-        String message =
-                String.format("--yaml %s --output %s --objective %s %s", yamlPath, outputPath, objective, END_MARKER);
+        String message = String.format(
+                "--yaml %s --output %s --objective %s%s %s",
+                yamlPath, outputPath, objective, wideSearch ? " --wide-search" : "", END_MARKER);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending adaptive autofocus test command:");
@@ -3075,12 +3080,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
             ensureConnected();
 
             // Temporarily increase socket timeout for adaptive autofocus test
-            // Adaptive can take varying time depending on how quickly it converges
+            // Adaptive can take varying time depending on how quickly it converges. The server
+            // holds a wide search under 270 s, edge retries included.
             int originalTimeout = readTimeout;
+            int autofocusTimeout = wideSearch ? 300000 : 120000;
             try {
                 if (socket != null) {
-                    socket.setSoTimeout(120000); // 2 minutes for adaptive autofocus test
-                    logger.debug("Increased socket timeout to 120s for adaptive autofocus test");
+                    socket.setSoTimeout(autofocusTimeout);
+                    logger.debug("Increased socket timeout to {} ms for adaptive autofocus test", autofocusTimeout);
                 }
 
                 // Send TESTADAF command (8 bytes)
@@ -3124,7 +3131,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     logger.info("Received final server response: {}", finalResponse);
 
                     if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("Adaptive autofocus test failed: " + finalResponse.substring(7));
+                        throw new AutofocusFailedException(
+                                finalResponse.substring("FAILED:".length()).trim());
                     } else if (finalResponse.startsWith("CANCELLED:")) {
                         // User cancelled the sweep (ABORTAF). Not an error: the
                         // server restored Z. Return a flagged result so the
@@ -3179,6 +3187,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 lastActivityTime.set(System.currentTimeMillis());
                 return new java.util.HashMap<>();
 
+            } catch (AutofocusFailedException e) {
+                // The server answered, so the connection is fine.
+                lastActivityTime.set(System.currentTimeMillis());
+                throw e;
             } catch (IOException | InterruptedException e) {
                 handleIOException(new IOException("Adaptive autofocus test error", e));
                 throw new IOException("Adaptive autofocus test error: " + e.getMessage(), e);

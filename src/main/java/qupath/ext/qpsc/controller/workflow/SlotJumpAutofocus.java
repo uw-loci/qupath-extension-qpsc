@@ -28,10 +28,10 @@ import qupath.lib.gui.QuPathGUI;
  * preference the Live Viewer button reads: when it is STREAMING and a Live Viewer stream is open,
  * it runs the STREAMING focus scan ({@code streamingFocus} / STRMAFZ) -- a full focus SEARCH,
  * which is what a slot jump needs since each slide can be at a very different Z. When the
- * preference is SWEEP, or no stream is open, it falls back to the SWEEP call
- * ({@code testAdaptiveAutofocus} / TESTADAF), which is only a narrow-range DRIFT CHECK and will
- * report success without finding focus if the current Z is far off. Neither path changes the
- * command server.
+ * preference is SWEEP, or no stream is open, it runs the stepped wide search
+ * ({@code testAdaptiveAutofocus} with {@code wideSearch} / TESTADAF {@code --wide-search}), the
+ * search an acquisition runs at its first tissue tile. It never runs a drift check here: on
+ * 2026-11-01 one refused a 20 um move on a new slide and reported that as focused.
  *
  * <p><b>Settle-gate.</b> The caller ({@code AffineTransformationController}) issues the slot
  * auto-move via {@link MicroscopeController#moveStageXY} immediately before calling
@@ -46,7 +46,7 @@ import qupath.lib.gui.QuPathGUI;
  * so the alignment step proceeds to tile selection regardless.
  *
  * <p>Streaming path keeps the live stream RUNNING (the server-side scan analyzes streamed frames),
- * unlike the SWEEP path which stops all live viewing for exclusive camera access. Both run on the
+ * unlike the stepped search, which stops all live viewing for exclusive camera access. Both run on the
  * same {@code MultiSlide-SlotJumpAF} daemon thread and complete the returned future when done.
  */
 public final class SlotJumpAutofocus {
@@ -867,13 +867,9 @@ public final class SlotJumpAutofocus {
 
         String method = PersistentPreferences.getLiveViewerAutofocusMethod();
         // A slot jump can land far from the previous slide's focus, so a full focus SEARCH is
-        // needed -- not a drift check. STREAMING autofocus (STRMAFZ) does a real scan; SWEEP
-        // (TESTADAF) is only a narrow-range drift check that reports success WITHOUT finding focus
-        // when the current Z is far off (observed on slot jumps: SWEEP landing ~8 um off, or
-        // reporting 0.00 um shift on a fresh slide). So when the configured method is STREAMING
-        // AND a Live Viewer stream is open, run the streaming scan -- which needs the stream
-        // RUNNING, so it must NOT stop live viewing. Fall back to SWEEP only when the method is
-        // SWEEP or no stream is open (streaming AF has no frames to analyze without a stream).
+        // needed. When the configured method is STREAMING and a Live Viewer stream is open, run
+        // the streaming scan, which needs the stream RUNNING, so it must NOT stop live viewing.
+        // Otherwise run the stepped wide search, which needs no stream.
         boolean useStreaming = "STREAMING".equals(method) && LiveViewerWindow.isStreamingActive();
 
         // Resolve the active modality ONCE for both consumers below. It has to come from
@@ -919,22 +915,8 @@ public final class SlotJumpAutofocus {
             }
         }
         if (!useStreaming && !"SWEEP".equals(method)) {
-            // This is a DOWNGRADE, not a fallback: SWEEP is a narrow drift check that reports
-            // success without finding focus when Z is far off (measured on slot jumps at ~8 um
-            // error, and 0.00 um "shift" on a fresh slide). Reporting it at INFO meant a slide
-            // could be aligned out of focus with nothing on screen to say so.
-            logger.warn(
-                    "Slot-jump AF DOWNGRADED: method is {} but no Live Viewer stream is open; "
-                            + "using the SWEEP drift check, which cannot find focus if Z is far off",
-                    method);
-            publish("Focus limited -- no live stream, drift check only", true);
-            if (statusSink == null) {
-                Platform.runLater(() -> Dialogs.showWarningNotification(
-                        "Autofocus limited",
-                        "Streaming autofocus needs the Live Viewer running. Without it only a narrow "
-                                + "drift check ran, which cannot recover focus on a fresh slide. Open the "
-                                + "Live Viewer and re-focus before aligning."));
-            }
+            logger.info(
+                    "Slot-jump AF: method is {} but no Live Viewer stream is open; using the stepped search", method);
         }
 
         // Seed Z from THIS slide's saved focus before scanning. Without it the scan starts
@@ -1073,16 +1055,16 @@ public final class SlotJumpAutofocus {
                                 focused = true;
                             }
                         } else {
-                            // Shared sweep run + parse + AF-history core (identical to the Live Viewer
-                            // SWEEP autofocus button). Narrow-range drift check -- used only as the
-                            // no-stream / SWEEP-pref fallback. The runner itself records the
-                            // measured focus for this slide and for the clearance monitor.
+                            // The wide search through the shared run + parse + AF-history core. It
+                            // records the measured focus for this slide and for the clearance
+                            // monitor. Finding no focus throws, so a Z that was only held is
+                            // never reported as focused or kept as this slide's focus.
                             SweepAutofocusRunner.SweepResult result =
-                                    SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
+                                    SweepAutofocusRunner.run(controller, configPath, outputPath, objective, true);
                             cancelled = result.cancelled();
                             if (!cancelled) {
                                 logger.info(
-                                        "Slot-jump AF (SWEEP) complete: z_shift={} um ({} -> {})",
+                                        "Slot-jump AF (stepped search) complete: z_shift={} um ({} -> {})",
                                         result.zShift(),
                                         result.initialZ(),
                                         result.finalZ());

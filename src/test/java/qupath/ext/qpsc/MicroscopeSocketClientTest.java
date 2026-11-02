@@ -9,6 +9,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.*;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
+import qupath.ext.qpsc.service.microscope.AutofocusFailedException;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 
 /**
@@ -77,6 +78,36 @@ class MicroscopeSocketClientTest {
         // Disconnect again (should be no-op)
         client.disconnect();
         assertFalse(client.isConnected());
+    }
+
+    @Test
+    @DisplayName("A slide change asks for the wide search; other callers do not")
+    void testWideSearchFlag() throws IOException {
+        client.connect();
+
+        client.testAdaptiveAutofocus("c.yml", "out", "OBJ", false);
+        assertFalse(mockServer.getLastAutofocusMessage().contains("--wide-search"));
+
+        var found = client.testAdaptiveAutofocus("c.yml", "out", "OBJ", true);
+        assertTrue(mockServer.getLastAutofocusMessage().contains("--objective OBJ --wide-search ENDOFSTR"));
+        assertEquals("33.10", found.get("final_z"));
+    }
+
+    @Test
+    @DisplayName("Finding no focus is an answer: the connection is untouched")
+    void testNoFocusFoundIsNotAConnectionError() throws Exception {
+        client.connect();
+        mockServer.setAutofocusReply("FAILED:No focus found, Z left at 53.40 um: no peak");
+
+        var failure = assertThrows(
+                AutofocusFailedException.class, () -> client.testAdaptiveAutofocus("c.yml", "out", "OBJ", true));
+
+        assertEquals("No focus found, Z left at 53.40 um: no peak", failure.getMessage());
+        var errors = MicroscopeSocketClient.class.getDeclaredField("consecutiveErrors");
+        errors.setAccessible(true);
+        assertEquals(0, ((AtomicInteger) errors.get(client)).get());
+        assertTrue(client.isConnected());
+        assertNotNull(client.getStageXY());
     }
 
     @Test

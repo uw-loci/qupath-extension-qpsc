@@ -456,7 +456,7 @@ class SiftCapturePane extends VBox {
             String objective = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getCurrentObjective(mgr);
             String outputPath = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getDefaultOutputPath();
             SweepAutofocusRunner.SweepResult sweep =
-                    SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
+                    SweepAutofocusRunner.run(controller, configPath, outputPath, objective, false);
             if (sweep.cancelled()) {
                 logger.info("Post-SIFT refocus cancelled by the operator");
             } else {

@@ -72,6 +72,20 @@ public class MockMicroscopeServer implements AutoCloseable {
      *
      * @param port Port to listen on
      */
+    private volatile String autofocusReply = "SUCCESS:done|53.40:33.10:-20.30";
+
+    private volatile String lastAutofocusMessage;
+
+    /** Sets the final reply to TESTADAF, after its STARTED. */
+    public void setAutofocusReply(String reply) {
+        autofocusReply = reply;
+    }
+
+    /** The last TESTADAF message received, or null. */
+    public String getLastAutofocusMessage() {
+        return lastAutofocusMessage;
+    }
+
     public MockMicroscopeServer(int port) {
         this.port = port;
     }
@@ -177,6 +191,7 @@ public class MockMicroscopeServer implements AutoCloseable {
                             return;
                         }
                         case "acquire" -> handleAcquire();
+                        case "testadaf" -> handleTestAdaptiveAutofocus();
                         default -> logger.warn("Unknown command '{}' from {}", command, clientId);
                     }
                 }
@@ -300,6 +315,31 @@ public class MockMicroscopeServer implements AutoCloseable {
             currentPosition.updateAndGet(pos -> new StagePosition(pos.x, pos.y, pos.z, r));
 
             logger.info("Rotated to tick {} for client {}", r, clientId);
+        }
+
+        private void handleTestAdaptiveAutofocus() throws IOException {
+            StringBuilder message = new StringBuilder();
+            byte[] buffer = new byte[1024];
+            while (message.indexOf("ENDOFSTR") < 0) {
+                int bytesRead = input.read(buffer);
+                if (bytesRead < 0) {
+                    return;
+                }
+                message.append(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
+            }
+            lastAutofocusMessage = message.toString();
+            output.write("STARTED:out".getBytes(StandardCharsets.UTF_8));
+            output.flush();
+            try {
+                // The client reads STARTED and the final reply separately, as the two
+                // are minutes apart on a real server.
+                Thread.sleep(100);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                return;
+            }
+            output.write(autofocusReply.getBytes(StandardCharsets.UTF_8));
+            output.flush();
         }
 
         private void handleAcquire() throws IOException {

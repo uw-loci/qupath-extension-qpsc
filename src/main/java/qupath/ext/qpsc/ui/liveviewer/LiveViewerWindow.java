@@ -1889,7 +1889,7 @@ public class LiveViewerWindow {
                 // Shared sweep run + parse + AF-history core. The button-state management, cancel
                 // path, and status text below are the only Live-Viewer-specific shell.
                 SweepAutofocusRunner.SweepResult result =
-                        SweepAutofocusRunner.run(controller, configPath, outputPath, objective);
+                        SweepAutofocusRunner.run(controller, configPath, outputPath, objective, false);
                 if (result.cancelled()) {
                     // User cancelled; server restored Z. Not a failure.
                     Platform.runLater(() -> updateStatusHeld("Sweep Autofocus cancelled (Z restored)"));

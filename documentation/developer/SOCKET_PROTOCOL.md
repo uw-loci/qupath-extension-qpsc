@@ -332,7 +332,7 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | Command | Wire Format | Payload | Response |
 |---------|------------|---------|----------|
 | TESTAF | `testaf__` | params + ENDOFSTR | AF result |
-| TESTADAF | `testadaf` | params + ENDOFSTR | adaptive AF result |
+| TESTADAF | `testadaf` | `--yaml <path> --output <path> --objective <id> [--wide-search]` + ENDOFSTR | `STARTED:<output>`, then `SUCCESS:<message>\|<initial_z>:<final_z>:<z_shift>`, `CANCELLED:<message>` or `FAILED:<reason>`. Without the flag it is a drift check; with it, the wide search of a first tissue tile. `FAILED` includes finding no focus: Z is back at its start, and the client raises `AutofocusFailedException`, not a connection error |
 | AFBENCH | `afbench_` | params + ENDOFSTR | benchmark results |
 | SIFTAL | `siftal__` | `--wsi-region <path> --micro-px <f> --wsi-px <f> --min-px <f> --ratio <f> --min-matches <n> --contrast <f> [--nfeatures <n>] [--mono-norm PERCENTILE\|MIN_MAX\|BIT_SHIFT] [--pct-low <f>] [--pct-high <f>] [--clahe true\|false] [--clahe-clip <f>] [--rgb-conv GREEN\|LUMINANCE] [--flip-x] [--flip-y] ENDOFSTR` | `SUCCESS:x,y\|inliers:N\|confidence:C` or `FAILED:<reason>` |
 | FLATFIT | `flatfit_` | JSON `{"tiles", "profile", "channel", "offset", "label"}` + ENDOFSTR (JSON because a folder path can hold spaces) | `STARTED\n` or `FAILED:<reason>\n`. The fit runs on its own server thread, so it never holds the command socket. With no channel and channel folders under `tiles`, each is fitted and saved to `<profile>/<channel id>/`. Reads files only. |

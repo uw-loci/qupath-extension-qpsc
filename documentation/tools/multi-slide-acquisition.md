@@ -216,9 +216,8 @@ mis-aligned slides is a worse outcome than a batch that refuses to start.
 
 **Autofocus skips are now visible.** Autofocus before an alignment step used to be
 skipped silently in several cases -- not connected, no objective resolvable, or the
-Live Viewer not streaming. That last one is the important one: without a live stream,
-streaming autofocus downgrades to a narrow drift check that cannot recover focus on a
-fresh slide, and can report success without having found it. All of these now warn.
+Live Viewer not streaming. All of these now warn. Without a live stream, the stepped wide
+search runs instead of the streaming scan, so focus on a fresh slide can still be found.
 
 **Green box detection counts down like the rest.** Until now it did not, and that was
 a hard stall: the "Use This Detection" button is created disabled and only enables once
@@ -410,9 +409,10 @@ for unattended acquisition:
 
 - **Autofocus on slot jump** (Advanced / SIFT settings, default on) autofocuses
   after the stage jumps to each refinement tile, before the capture pane
-  appears. Keep a Live Viewer stream open during multi-slide alignment so the
-  streaming full-search AF is used (slot jumps can land far from the previous
-  slide's focus). While slot-jump autofocus is running, the Live Viewer's
+  appears. This is a full focus search, not a drift check, because a slot jump can
+  land far from the previous slide's focus. If it finds no focus, the status
+  reads "Focus failed -- align manually", Z goes back to where the search started,
+  and that Z is not kept as this slide's focus. While slot-jump autofocus is running, the Live Viewer's
   stage-movement controls (arrows, joystick, go-to-centroid) are locked to
   prevent accidental stage bumps mid-scan; the Autofocus button becomes a
   "Cancel Autofocus" toggle (red background) so you can abort the scan if needed
