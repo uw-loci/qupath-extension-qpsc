@@ -9,7 +9,7 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
   - src/main/java/qupath/ext/qpsc/controller/BoundedAcquisitionWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/MicroscopeAlignmentWorkflow.java
-  - src/main/java/qupath/ext/qpsc/controller/MicroscopeController.java
+  - src/main/java/qupath/ext/qpsc/service/microscope/MicroscopeController.java
   - src/main/java/qupath/ext/qpsc/controller/MultiSlideExistingImageWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/ForwardPropagationWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/BackgroundCollectionWorkflow.java

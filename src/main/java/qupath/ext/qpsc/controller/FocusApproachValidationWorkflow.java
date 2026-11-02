@@ -26,6 +26,7 @@ import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.focus.FocusApproachValidationStore;
 import qupath.ext.qpsc.focus.FocusProfileAnalysis;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;

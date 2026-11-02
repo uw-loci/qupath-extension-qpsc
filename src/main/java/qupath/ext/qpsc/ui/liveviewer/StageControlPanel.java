@@ -60,13 +60,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.acquisition.StagePositionManager;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.modality.LiveCameraHost;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -976,7 +976,8 @@ public class StageControlPanel extends VBox {
     /** The "(None -- deactivate all)" radio of the current Camera tab, for state sync. */
     private RadioButton cameraNoneRadio;
     /** Listener keeping the preview radios honest about the hardware; re-registered per rebuild. */
-    private javafx.beans.value.ChangeListener<qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState>
+    private javafx.beans.value.ChangeListener<
+                    qupath.ext.qpsc.service.microscope.MicroscopeController.ChannelHardwareState>
             channelStateListener;
 
     private final Map<String, Spinner<Double>> cameraChannelExpSpinners = new HashMap<>();
@@ -2964,7 +2965,8 @@ public class StageControlPanel extends VBox {
         applyChannelStateToRadios(mc.channelHardwareStateProperty().get());
     }
 
-    private void applyChannelStateToRadios(qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState state) {
+    private void applyChannelStateToRadios(
+            qupath.ext.qpsc.service.microscope.MicroscopeController.ChannelHardwareState state) {
         if (state == null || cameraChannelRadios.isEmpty()) return;
         if (state.hasChannel()) {
             RadioButton radio = cameraChannelRadios.get(state.channelId());
@@ -3064,9 +3066,10 @@ public class StageControlPanel extends VBox {
                         // infer it from its own last click.
                         mc.setChannelHardwareState(
                                 (channelId == null || channelId.isEmpty())
-                                        ? qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.none()
-                                        : qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.active(
-                                                channelId));
+                                        ? qupath.ext.qpsc.service.microscope.MicroscopeController.ChannelHardwareState
+                                                .none()
+                                        : qupath.ext.qpsc.service.microscope.MicroscopeController.ChannelHardwareState
+                                                .active(channelId));
                         // No status text written here: setChannelHardwareState above drives
                         // the status line, so it describes the reported hardware state rather
                         // than what this call hoped to achieve. One writer, one truth.

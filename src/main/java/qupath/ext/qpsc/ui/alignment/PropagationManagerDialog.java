@@ -1314,7 +1314,7 @@ public final class PropagationManagerDialog {
 
         appendStatus(results, "  --- SIFT refinement (forward) ---\n");
 
-        var mc = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        var mc = qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance();
         if (!mc.isConnected()) {
             try {
                 mc.userTriggeredConnect();
@@ -1627,7 +1627,7 @@ public final class PropagationManagerDialog {
 
         appendStatus(results, "  --- SIFT refinement (back) ---\n");
 
-        var mc = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        var mc = qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance();
         if (!mc.isConnected()) {
             try {
                 mc.userTriggeredConnect();

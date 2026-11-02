@@ -50,8 +50,8 @@ import qupath.ext.qpsc.acquisition.StagePositionManager;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.config.ObjectiveUtils;
 import qupath.ext.qpsc.controller.AutofocusEditorWorkflow;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
+import qupath.ext.qpsc.controller.workflow.AcquisitionManager;
 import qupath.ext.qpsc.controller.workflow.SweepAutofocusRunner;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -59,6 +59,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.autofocus.AutofocusEvent;
 import qupath.ext.qpsc.service.autofocus.AutofocusFeed;
 import qupath.ext.qpsc.service.microscope.FrameData;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -1168,7 +1169,7 @@ public class LiveViewerWindow {
             stopAcquisitionButton.setDisable(true);
             new Thread(
                             () -> {
-                                MicroscopeController.getInstance().stopActiveAcquisition();
+                                AcquisitionManager.stopActiveAcquisition();
                                 Platform.runLater(() ->
                                         updateStatus("Stop requested; the microscope stops after the current tile"));
                             },

@@ -331,7 +331,8 @@ public final class StitchingQueueWindow {
             Dialogs.showWarningNotification("Stitching queue", "'" + name + "' is not in the current project.");
             return;
         }
-        if (qupath.ext.qpsc.controller.MicroscopeController.getInstance().isAcquisitionActive()) {
+        if (qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance()
+                .isAcquisitionActive()) {
             Dialogs.showWarningNotification(
                     "Stitching queue", "An acquisition is running; open the image when it has finished.");
             return;

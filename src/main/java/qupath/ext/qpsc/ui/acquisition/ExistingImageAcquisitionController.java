@@ -939,7 +939,7 @@ public class ExistingImageAcquisitionController {
             //      matches the full-res pixel size), applied directly.
             // A macro -> stage preset alone cannot be applied to image pixels without the
             // green-box/data-bounds alignment context, so we refuse rather than emit garbage.
-            AffineTransform transform = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
+            AffineTransform transform = qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance()
                     .getCurrentTransform();
             if (transform == null) {
                 AffineTransformManager.TransformPreset preset =

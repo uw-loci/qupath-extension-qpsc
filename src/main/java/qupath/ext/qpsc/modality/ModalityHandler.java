@@ -734,7 +734,7 @@ public interface ModalityHandler {
         if (profileName == null) {
             return Optional.empty();
         }
-        var controller = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        var controller = qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance();
         controller.withLiveModeHandling(() -> controller.getSocketClient().applyChannel(profileName, channelId));
         return Optional.of("channel " + channelId);
     }

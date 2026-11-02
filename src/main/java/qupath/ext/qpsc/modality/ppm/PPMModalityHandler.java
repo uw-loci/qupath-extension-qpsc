@@ -240,7 +240,7 @@ public class PPMModalityHandler implements ModalityHandler {
         }
         float[] gainArray = parseGainEntry(mgr.getModalityGains(modality, objective, detector));
 
-        var controller = qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+        var controller = qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance();
         final double deg = uncrossedDeg;
         // Name the objective and the numbers being applied. Without this line, applying the
         // wrong objective's exposures is invisible here and surfaces three steps later as

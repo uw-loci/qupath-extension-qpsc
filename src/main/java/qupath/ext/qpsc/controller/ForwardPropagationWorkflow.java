@@ -8,6 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.alignment.PropagationGroupItem;
 import qupath.ext.qpsc.ui.alignment.PropagationManagerDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;

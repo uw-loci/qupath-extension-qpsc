@@ -247,6 +247,23 @@ See [PPM_MODALITY.md](PPM_MODALITY.md) for the full PPM implementation.
 `utilities/` keeps the classes that `qupath-extension-ppm` imports, so that extension builds
 unchanged. Check its imports before moving anything else out of it.
 
+### Layering
+
+Lower packages (`config`, `geometry`, `acquisition`, `stitching`, `background`, `focus`,
+`project`, `service`, `modality`, `preferences`, `state`, `utilities`) do not depend on
+`controller` or on any `ui` subpackage. They may use the `ui` package root, which depends on no
+other QPSC package. Where a lower class needs something from above, the upper side registers
+it at startup instead:
+
+- `MicroscopeController.registerLiveStream`: the Live Viewer's streaming, paused around camera
+  operations. `MicroscopeController` lives in `service/microscope`, beside the socket client.
+- `MicroscopeSocketClient.addConfiguredListener`: work to run once the server has loaded the
+  config, such as the objective preset check.
+
+One link still crosses the layers: each modality handler builds its own panels and workflows
+(`modality/ppm/ui`, `modality/lcpolscope/workflow` and so on), and those use the upper layers.
+Splitting each handler into a lower part and a UI part would remove the last package cycle.
+
 ### Coordinate, configuration and tiling details
 
 #### Coordinate Transformation Pipeline

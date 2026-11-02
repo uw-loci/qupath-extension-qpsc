@@ -3,7 +3,7 @@ package qupath.ext.qpsc.controller;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState;
+import qupath.ext.qpsc.service.microscope.MicroscopeController.ChannelHardwareState;
 
 /**
  * The Camera tab decides what to display from this state, so the property that matters is

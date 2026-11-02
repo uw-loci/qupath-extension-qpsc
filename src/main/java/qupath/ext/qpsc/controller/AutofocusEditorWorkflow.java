@@ -27,6 +27,7 @@ import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.focus.FocusMetricsManifest;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
@@ -674,8 +675,8 @@ public class AutofocusEditorWorkflow {
         Thread t = new Thread(
                 () -> {
                     try {
-                        qupath.ext.qpsc.controller.MicroscopeController mc =
-                                qupath.ext.qpsc.controller.MicroscopeController.getInstance();
+                        qupath.ext.qpsc.service.microscope.MicroscopeController mc =
+                                qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance();
                         qupath.ext.qpsc.service.microscope.MicroscopeSocketClient sc = mc.getSocketClient();
 
                         // Query the active modality via GETCAP so the test

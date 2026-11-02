@@ -10,9 +10,9 @@ import qupath.ext.qpsc.background.BackgroundValidityChecker;
 import qupath.ext.qpsc.background.FlatfieldMethod;
 import qupath.ext.qpsc.background.FlatfieldProfiles;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 
 /**

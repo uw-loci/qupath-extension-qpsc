@@ -24,11 +24,11 @@ import qupath.ext.qpsc.controller.ExportSpatialSceneWorkflow;
 import qupath.ext.qpsc.controller.FocusApproachValidationWorkflow;
 import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
 import qupath.ext.qpsc.controller.MakePortableWorkflow;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MicroscopeSwitcher;
 import qupath.ext.qpsc.controller.ObjectivePresetActuator;
 import qupath.ext.qpsc.controller.QPScopeController;
 import qupath.ext.qpsc.controller.RegisterObjectiveWorkflow;
+import qupath.ext.qpsc.controller.workflow.AcquisitionManager;
 import qupath.ext.qpsc.display.orientation.OrientationColorViewWindow;
 import qupath.ext.qpsc.geometry.LightPathModel;
 import qupath.ext.qpsc.geometry.MacroImageUtility;
@@ -38,11 +38,13 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.ProjectLogger;
 import qupath.ext.qpsc.service.SessionLogBuffer;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.acquisition.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow;
 import qupath.ext.qpsc.ui.alignment.LightPathSetupDialog;
 import qupath.ext.qpsc.ui.background.FlatfieldFitDialog;
 import qupath.ext.qpsc.ui.connection.BugReportDialog;
+import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
@@ -133,6 +135,24 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // Keep Micro-Manager's objective preset in step with the objective chosen in QPSC
         // (only objectives that declare mm_preset in the microscope YAML).
         ObjectivePresetActuator.ensureRegistered();
+
+        // Let the hardware facade pause and resume the Live Viewer around camera operations.
+        MicroscopeController.registerLiveStream(new MicroscopeController.LiveStream() {
+            @Override
+            public boolean isActive() {
+                return LiveViewerWindow.isStreamingActive();
+            }
+
+            @Override
+            public boolean stop() {
+                return LiveViewerWindow.stopStreaming();
+            }
+
+            @Override
+            public void restart() {
+                LiveViewerWindow.restartStreaming();
+            }
+        });
 
         // Log the current stage / camera transform so any later "arrows move
         // the wrong way" report can be correlated with what the user had
@@ -341,7 +361,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         logger.warn("Stop acquisition chosen from the QP Scope menu");
         new Thread(
                         () -> {
-                            boolean stopped = MicroscopeController.getInstance().stopActiveAcquisition();
+                            boolean stopped = AcquisitionManager.stopActiveAcquisition();
                             Platform.runLater(() -> Dialogs.showInfoNotification(
                                     "Stop acquisition",
                                     stopped

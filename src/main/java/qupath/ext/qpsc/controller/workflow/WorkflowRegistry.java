@@ -31,8 +31,9 @@ public final class WorkflowRegistry {
         }
     }
 
-    private static final WorkflowRegistry INSTANCE = new WorkflowRegistry(
-            () -> qupath.ext.qpsc.controller.MicroscopeController.getInstance().isAcquisitionActive());
+    private static final WorkflowRegistry INSTANCE =
+            new WorkflowRegistry(() -> qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance()
+                    .isAcquisitionActive());
 
     /** The registry every workflow uses. */
     public static WorkflowRegistry get() {

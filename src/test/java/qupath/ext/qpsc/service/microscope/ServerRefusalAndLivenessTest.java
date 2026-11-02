@@ -22,7 +22,7 @@ class ServerRefusalAndLivenessTest {
     private static final Path WORKFLOW =
             Path.of("src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java");
     private static final Path CONTROLLER =
-            Path.of("src/main/java/qupath/ext/qpsc/controller/MicroscopeController.java");
+            Path.of("src/main/java/qupath/ext/qpsc/service/microscope/MicroscopeController.java");
 
     private static String method(Path file, String signatureFragment) throws Exception {
         String src = Files.readString(file);

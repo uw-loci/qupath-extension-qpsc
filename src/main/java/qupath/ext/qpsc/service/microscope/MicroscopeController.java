@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.controller;
+package qupath.ext.qpsc.service.microscope;
 
 import java.awt.geom.AffineTransform;
 import java.io.IOException;
@@ -16,10 +16,8 @@ import qupath.ext.qpsc.model.StagePositionProvider;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.state.ObjectiveState;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.lib.objects.PathObject;
 
 /**
@@ -41,6 +39,42 @@ import qupath.lib.objects.PathObject;
  * @since 2.0
  */
 public class MicroscopeController implements StagePositionProvider {
+
+    /**
+     * The Live Viewer's streaming, as this class needs it around camera operations. The Live
+     * Viewer registers it at startup, so this class does not depend on the UI.
+     */
+    public interface LiveStream {
+        boolean isActive();
+
+        /** @return true if streaming was running and is now stopped */
+        boolean stop();
+
+        void restart();
+    }
+
+    private static final LiveStream NO_LIVE_STREAM = new LiveStream() {
+        @Override
+        public boolean isActive() {
+            return false;
+        }
+
+        @Override
+        public boolean stop() {
+            return false;
+        }
+
+        @Override
+        public void restart() {}
+    };
+
+    private static volatile LiveStream liveStream = NO_LIVE_STREAM;
+
+    /** Registers the Live Viewer's streaming controls; called once at startup. */
+    public static void registerLiveStream(LiveStream stream) {
+        liveStream = stream == null ? NO_LIVE_STREAM : stream;
+    }
+
     private static final Logger logger = LoggerFactory.getLogger(MicroscopeController.class);
 
     /** Singleton instance */
@@ -243,18 +277,6 @@ public class MicroscopeController implements StagePositionProvider {
      */
     public boolean isAcquisitionActive() {
         return acquisitionActive;
-    }
-
-    /**
-     * Stops the running acquisition from outside its progress dialog (QP Scope > Stop
-     * acquisition, the Live Viewer's Stop button). Delegates to the registered
-     * {@link qupath.ext.qpsc.controller.workflow.AcquisitionManager}; when the lock is engaged
-     * with no run registered, CANCEL goes straight to the server.
-     *
-     * @return true when something was told to stop
-     */
-    public boolean stopActiveAcquisition() {
-        return qupath.ext.qpsc.controller.workflow.AcquisitionManager.stopActiveAcquisition();
     }
 
     /**
@@ -1158,8 +1180,8 @@ public class MicroscopeController implements StagePositionProvider {
 
         // --- Stop all live sources before the operation ---
         // 1. QPSC Live Viewer (core-level continuous acquisition)
-        if (LiveViewerWindow.isStreamingActive()) {
-            qpscWasStreaming = LiveViewerWindow.stopStreaming();
+        if (liveStream.isActive()) {
+            qpscWasStreaming = liveStream.stop();
             logger.info("QPSC Live Viewer streaming stopped for camera operation");
         }
 
@@ -1217,7 +1239,7 @@ public class MicroscopeController implements StagePositionProvider {
                 } catch (InterruptedException e) {
                     Thread.currentThread().interrupt();
                 }
-                LiveViewerWindow.restartStreaming();
+                liveStream.restart();
                 logger.info("QPSC Live Viewer streaming restored after camera operation");
             }
         }
@@ -1255,8 +1277,8 @@ public class MicroscopeController implements StagePositionProvider {
         boolean mmLiveModeWasRunning = false;
 
         // Stop QPSC Live Viewer streaming (window stays open)
-        if (LiveViewerWindow.isStreamingActive()) {
-            qpscLiveViewerWasStreaming = LiveViewerWindow.stopStreaming();
+        if (liveStream.isActive()) {
+            qpscLiveViewerWasStreaming = liveStream.stop();
             logger.info("Stopped QPSC Live Viewer streaming for exclusive camera access");
             // Give it a moment to fully stop
             try {
@@ -1311,7 +1333,7 @@ public class MicroscopeController implements StagePositionProvider {
         // Restart QPSC Live Viewer streaming (window was kept open)
         if (state.qpscLiveViewerWasStreaming()) {
             logger.info("Restarting QPSC Live Viewer streaming");
-            LiveViewerWindow.restartStreaming();
+            liveStream.restart();
         }
     }
 

@@ -7,12 +7,12 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.focus.SafeZClearanceMonitor;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.focus.AutofocusCancelWindow;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
@@ -351,7 +351,7 @@ public final class SlotJumpAutofocus {
             // the scan continues 330 um further, far from any focus.
             double currentZ;
             try {
-                currentZ = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
+                currentZ = qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance()
                         .getStagePositionZ();
             } catch (Exception e) {
                 logger.warn("Slot-jump AF: stage Z unreadable ({}); using the standard scan", e.getMessage());

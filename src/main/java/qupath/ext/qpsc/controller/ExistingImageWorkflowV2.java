@@ -22,6 +22,7 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
@@ -1446,10 +1447,7 @@ public class ExistingImageWorkflowV2 {
                     UserErrors.logAlert(logger, ask);
                     if (ask.showAndWait().orElse(javafx.scene.control.ButtonType.NO)
                             == javafx.scene.control.ButtonType.YES) {
-                        new Thread(
-                                        () -> MicroscopeController.getInstance().stopActiveAcquisition(),
-                                        "StopAcquisitionFromStart")
-                                .start();
+                        new Thread(AcquisitionManager::stopActiveAcquisition, "StopAcquisitionFromStart").start();
                     }
                 });
                 return false;

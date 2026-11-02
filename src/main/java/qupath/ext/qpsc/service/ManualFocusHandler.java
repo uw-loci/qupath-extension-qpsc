@@ -112,7 +112,8 @@ public final class ManualFocusHandler {
                 // active, which normally locks all stage movement -- but this dialog asks the
                 // user to focus by hand, so Z has to be reachable for "Use current focus" to
                 // mean anything.
-                qupath.ext.qpsc.controller.MicroscopeController.getInstance().setManualFocusPending(true);
+                qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance()
+                        .setManualFocusPending(true);
                 // The operator may also move XY to find tissue, which the frame watchdog
                 // would otherwise read as the stage frame moving.
                 StageFrameWatchdog.getInstance().pauseForOperator();
@@ -173,7 +174,8 @@ public final class ManualFocusHandler {
             }
         } finally {
             try {
-                qupath.ext.qpsc.controller.MicroscopeController.getInstance().setManualFocusPending(false);
+                qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance()
+                        .setManualFocusPending(false);
             } catch (Exception e) {
                 logger.debug("Could not clear manual-focus-pending flag: {}", e.getMessage());
             }

@@ -12,6 +12,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.config.MicroscopeConfigManager.ObjectiveMmPreset;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.state.ObjectiveState;
 import qupath.ext.qpsc.ui.connection.ObjectivePresetConfirmDialog;
 import qupath.fx.dialogs.Dialogs;

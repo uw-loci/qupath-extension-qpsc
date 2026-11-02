@@ -31,7 +31,6 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
@@ -44,6 +43,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -860,7 +860,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                             }
                         });
                         mc.setChannelHardwareState(
-                                qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.active(channelId));
+                                qupath.ext.qpsc.service.microscope.MicroscopeController.ChannelHardwareState.active(
+                                        channelId));
                         setStatus(
                                 "Live Viewer is showing what autofocus will see on " + channelId
                                         + ". Focus with the Z controls, then adjust the spinners and test again.",
@@ -1230,7 +1231,8 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                         // Report the applied channel so the Live Viewer's Camera tab shows
                         // the channel the hardware is actually on, not its own last click.
                         mc.setChannelHardwareState(
-                                qupath.ext.qpsc.controller.MicroscopeController.ChannelHardwareState.active(channelId));
+                                qupath.ext.qpsc.service.microscope.MicroscopeController.ChannelHardwareState.active(
+                                        channelId));
                         setStatus(
                                 "Live Viewer streaming " + channelId
                                         + " -- adjust spinners and click Test again to re-apply.",

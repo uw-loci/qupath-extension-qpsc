@@ -31,6 +31,7 @@ import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.*;
 import qupath.ext.qpsc.ui.acquisition.SampleSetupController;
 import qupath.ext.qpsc.ui.alignment.AffineTransformationController;
