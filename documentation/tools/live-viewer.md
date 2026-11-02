@@ -117,7 +117,9 @@ When you select Streaming in the Autofocus Configuration, the server checks thre
 
 #### Slope without peak
 
-If either Autofocus or Sweep Autofocus detects a focus slope (monotonic profile) but cannot find a true peak even after edge retries, the stage is left at the best Z found rather than returning to the starting position.
+If Autofocus detects a focus slope (monotonic profile) but cannot find a true peak even after edge retries, the stage is left at the best Z found rather than returning to the starting position.
+
+Sweep Autofocus does not do this. When it finds no focus (for example, the peak is past the drift cap, at the edge of its range, or too flat to trust), Z goes back to where the sweep started, nothing is recorded as a focus measurement, and the failure reason is reported.
 
 See [AUTOFOCUS.md](../AUTOFOCUS.md#autofocus-live-viewer) for the full design story and [developer/PROBEZ.md](../developer/PROBEZ.md) for how to characterize the envelope on a new rig.
 
