@@ -1362,7 +1362,7 @@ Prior controller reports the step count it was given, so a commanded position an
 position read back agree whether or not the stage followed, and a slip during a move leaves
 no discontinuity to find. On the four-slide run of 2026-10-02 the Micro-Manager log showed
 293,227 position reads across 34 hours with no unexplained change, no device
-re-initialisation and no serial fault -- a provably clean counter -- while three of the four
+re-initialization and no serial fault -- a provably clean counter -- while three of the four
 slides came out offset in Y, the last imaging its own label for 1,714 tiles. Nothing that
 asks the controller where it is can see that; only matching against the sample can.
 
@@ -1701,8 +1701,8 @@ Preferences controlling the SIFT feature matching used for automated alignment r
 | SIFT mono normalization | Enum | `PERCENTILE` | Mode used when converting >8-bit grayscale to 8-bit before SIFT. `PERCENTILE` stretches between the configured low/high percentiles (recommended). `MIN_MAX` stretches across the full per-image min/max range. `BIT_SHIFT` reproduces the legacy `>>8` behavior for back-compat. |
 | SIFT percentile low | Double | 2.0 | Lower clip percentile (0-100) used by `PERCENTILE` mode. Pixels below this map to 0. |
 | SIFT percentile high | Double | 98.0 | Upper clip percentile (0-100) used by `PERCENTILE` mode. Pixels above this map to 255. |
-| SIFT CLAHE enabled | Boolean | ON | Apply Contrast-Limited Adaptive Histogram Equalisation to both microscope and WSI grayscale images before SIFT. Standard cross-modality robustness trick; dramatically improves matching of monochrome brightfield against H&E references. |
-| SIFT CLAHE clip limit | Double | 2.0 | CLAHE `clipLimit`. Higher values produce more aggressive equalisation. |
+| SIFT CLAHE enabled | Boolean | ON | Apply Contrast-Limited Adaptive Histogram Equalization to both microscope and WSI grayscale images before SIFT. Standard cross-modality robustness trick; dramatically improves matching of monochrome brightfield against H&E references. |
+| SIFT CLAHE clip limit | Double | 2.0 | CLAHE `clipLimit`. Higher values produce more aggressive equalization. |
 | SIFT RGB conversion | Enum | `GREEN` | How a color (RGB, e.g. H&E) reference image is collapsed to one channel before SIFT. Only affects color images -- the monochrome camera snapshot is untouched. `GREEN` takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). |
 
 **When to adjust these:**

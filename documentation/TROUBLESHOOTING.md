@@ -441,7 +441,7 @@ Observe which direction the physical stage actually moves. If it moves in the la
    - Arrow right button (with "Sample Movement" checked)
    - Arrow up button
    - Joystick drag upward
-   - Double-click on a feature that's currently visible but off-centre
+   - Double-click on a feature that's currently visible but off-center
 
 3. Each gesture should produce the "obvious" visual direction. If they don't:
    - **Only Live Viewer X gesture is wrong** → flip X in `stage.polarity` (e.g. `NORMAL` to `INVERT_X`)
@@ -556,7 +556,7 @@ are suspect.
   too large to be noise. The sample is not where this alignment says it is. Set
   the slides up again before acquiring.
 - **"The camera could not be matched to the macro image at any of ... points on
-  this slide"** — Nothing recognisable is under the objective (consistent with a
+  this slide"** — Nothing recognizable is under the objective (consistent with a
   slide displaced by more than a field, but also with a blank or badly defocused
   field). Check the live image first: if it is in focus and on tissue, the stage
   is not where it reports. If it is blank or defocused, check the stage and

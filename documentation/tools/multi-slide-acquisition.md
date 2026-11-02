@@ -504,7 +504,7 @@ matching against the sample can.
 |---------|---------|--------|
 | **Confirmed** | Matched within one camera field diagonal | Acquire normally |
 | **Misaligned** | Matched, but further than one field diagonal away | Stop the batch; the sample is not where this alignment says it is |
-| **Unconfirmed** | Could not match at any of three points | Stop the batch; nothing recognisable is under the objective (consistent with a large displacement, but also with a blank or badly defocused field) |
+| **Unconfirmed** | Could not match at any of three points | Stop the batch; nothing recognizable is under the objective (consistent with a large displacement, but also with a blank or badly defocused field) |
 
 The tolerance is one camera field diagonal, computed from the FOV the microscope
 config declares for the objective in use -- about 446 µm at 20x on PPM. Beyond one

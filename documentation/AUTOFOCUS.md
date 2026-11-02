@@ -665,9 +665,9 @@ When a tile scheduled for AF lands at the end of the position list (e.g. spatial
 
 ## Why a slide change sometimes uses the slow scan
 
-Approach-from-safe-Z (one retract, one traverse toward the sample) is **licensed per scope / modality / objective by a Focus Approach Validation run**, not enabled by a setting. When no licence applies, slot-jump autofocus falls back to the standard edge-retry scan, which starts at the current Z and widens and shifts its window -- the "jump toward the sample, then back off through Z it has already covered" pattern.
+Approach-from-safe-Z (one retract, one traverse toward the sample) is **licensed per scope / modality / objective by a Focus Approach Validation run**, not enabled by a setting. When no license applies, slot-jump autofocus falls back to the standard edge-retry scan, which starts at the current Z and widens and shifts its window -- the "jump toward the sample, then back off through Z it has already covered" pattern.
 
-The licence lapses when:
+The license lapses when:
 
 - **No validation exists** for that scope / modality / objective. *(Appears in status line.)*
 - **The validation failed** when it was measured (no usable peak, or the peak was on glass). *(Appears in status line.)*
@@ -675,7 +675,7 @@ The licence lapses when:
 - **A focus measured on this carrier in this run disagrees with the record.** Each focus measured this run implies its own safe-Z-to-focus distance; if one differs from the record's by more than 250 um, the record was measured on other glass, in another holder or in another Z frame, and the approach is refused. *(Appears in status line.)*
 - **Focus is already established on this slide.** Deliberate: later points on the same glass are microns from the number already measured, and a full retract-and-traverse would spend ~40 s rediscovering it. Any successful focus on the slide counts -- the slot-jump scan, Live Viewer autofocus, the post-SIFT refocus or a sweep -- not only the slot-jump scan. Autofocus still runs -- as the standard scan, starting from the Z already measured, which is a short search. *(Server log only, no status line.)*
 
-When the licence is missing or lapsed (first four reasons), the Live Viewer status line shows "Focusing (standard scan: <reason>)" and the server log carries the same detail. The fifth case is logged only, since it is the expected path for every point after the first on a slide.
+When the license is missing or lapsed (first four reasons), the Live Viewer status line shows "Focusing (standard scan: <reason>)" and the server log carries the same detail. The fifth case is logged only, since it is the expected path for every point after the first on a slide.
 
 Note that the standard scan centers on the **current Z**, so where it searches depends on where the stage was left. A search running hundreds of micrometres from the sample means the starting Z was wrong, not the search width.
 

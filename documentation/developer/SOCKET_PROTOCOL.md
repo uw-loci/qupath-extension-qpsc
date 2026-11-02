@@ -400,8 +400,8 @@ Optional bit-depth / cross-modality preprocessing (defaults shown):
 | `--mono-norm PERCENTILE\|MIN_MAX\|BIT_SHIFT` | `PERCENTILE` | How >8-bit grayscale (typical 16-bit camera capture) is compressed to 8-bit. The legacy `BIT_SHIFT` mode (raw `/256`) collapses dynamic range when the camera doesn't span the full bit depth -- which is most cameras. `PERCENTILE` is the right default; `MIN_MAX` uses the actual data extremes. |
 | `--pct-low <f>` | 2.0 | Lower percentile clip used by `PERCENTILE` mode. |
 | `--pct-high <f>` | 98.0 | Upper percentile clip used by `PERCENTILE` mode. |
-| `--clahe true\|false` | `true` | Apply Contrast-Limited Adaptive Histogram Equalisation to both grayscale images before SIFT. Standard cross-modality robustness trick when matching monochrome brightfield against 8-bit H&E. |
-| `--clahe-clip <f>` | 2.0 | CLAHE clipLimit. Higher = more aggressive equalisation. |
+| `--clahe true\|false` | `true` | Apply Contrast-Limited Adaptive Histogram Equalization to both grayscale images before SIFT. Standard cross-modality robustness trick when matching monochrome brightfield against 8-bit H&E. |
+| `--clahe-clip <f>` | 2.0 | CLAHE clipLimit. Higher = more aggressive equalization. |
 | `--rgb-conv GREEN\|LUMINANCE` | `GREEN` | How a color (RGB, e.g. H&E) reference image is collapsed to one channel. Only affects color images -- the monochrome camera snapshot is untouched. `GREEN` (default) takes the green channel: both H&E stains absorb green, so it carries the most tissue structure and keeps the tissue-dark intensity polarity of a brightfield mono camera. `LUMINANCE` is the legacy `BGR2GRAY` weighting, whose red term brightens eosin and washes out cytoplasm contrast (worse against a mono camera). Do NOT add an absorbance/OD mode here -- it inverts polarity and its gradients run opposite the intensity microscope image. |
 
 Response formats:
