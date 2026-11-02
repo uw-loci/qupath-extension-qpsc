@@ -134,7 +134,7 @@ class ServerRefusalAndLivenessTest {
         assertThat(src).contains("lastAnnotationFailure = e;");
         String tail = method(MANAGER, "Throwable failure = lastAnnotationFailure;");
         int asFailure = tail.indexOf("throw new RuntimeException(\"Acquisition failed: \"");
-        int asCancel = tail.indexOf("throw new CancellationException(\"Acquisition cancelled by user\")");
+        int asCancel = tail.indexOf("throw new CancellationException(\"Acquisition canceled by user\")");
         assertThat(asFailure).isGreaterThan(0);
         assertThat(asFailure).isLessThan(asCancel);
     }
