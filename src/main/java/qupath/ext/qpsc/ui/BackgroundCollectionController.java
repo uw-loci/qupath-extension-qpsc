@@ -25,7 +25,6 @@ import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
-import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.ppm.RotationManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -1237,7 +1236,7 @@ public class BackgroundCollectionController {
             if (channels.isEmpty()) {
                 return false;
             }
-            if (isLcPolScopeSelected()) {
+            if (selectedModalityReconstructsFromBackground()) {
                 renderLcPolScopeStateTable(mgr, channels);
                 return true;
             }
@@ -1593,14 +1592,15 @@ public class BackgroundCollectionController {
         // Hide for RGB cameras (WB calibration determines background exposure), and for
         // LC-PolScope, whose background must be taken at the acquisition exposure: the server
         // collects every state at the profile exposure and never adapts it.
-        boolean show = !isRgb && !isLcPolScopeSelected();
+        boolean show = !isRgb && !selectedModalityReconstructsFromBackground();
         targetIntensityRow.setVisible(show);
         targetIntensityRow.setManaged(show);
     }
 
-    private boolean isLcPolScopeSelected() {
+    /** True when the selected modality reconstructs from its background (LC-PolScope). */
+    private boolean selectedModalityReconstructsFromBackground() {
         String modality = modalityComboBox != null ? modalityComboBox.getValue() : null;
-        return modality != null && LCPolScopeModalityHandler.isLcPolScope(modality);
+        return modality != null && ModalityRegistry.getHandler(modality).reconstructsFromBackground();
     }
 
     /**
@@ -1821,8 +1821,9 @@ public class BackgroundCollectionController {
 
             // Parse target intensity (0 = use server default)
             double targetIntensity = 0;
-            String targetStr =
-                    isLcPolScopeSelected() ? "" : targetIntensityField.getText().trim();
+            String targetStr = selectedModalityReconstructsFromBackground()
+                    ? ""
+                    : targetIntensityField.getText().trim();
             if (!targetStr.isEmpty()) {
                 try {
                     targetIntensity = Double.parseDouble(targetStr);

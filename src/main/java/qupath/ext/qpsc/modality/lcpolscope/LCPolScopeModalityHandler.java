@@ -8,9 +8,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
+import qupath.ext.qpsc.modality.LiveCameraHost;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.lcpolscope.ui.LCLiveCameraControls;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
@@ -301,6 +303,12 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
 
     @Override
     public boolean reconstructsFromBackground() {
+        return true;
+    }
+
+    @Override
+    public boolean buildLiveCameraControls(String modality, LiveCameraHost host) {
+        new LCLiveCameraControls(host).build(modality);
         return true;
     }
 

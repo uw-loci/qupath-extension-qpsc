@@ -235,6 +235,16 @@ public interface ModalityHandler {
     }
 
     /**
+     * Builds this modality's controls in the Live Viewer camera tab, into
+     * {@link LiveCameraHost#content()}. Runs on the FX thread.
+     *
+     * @return true when the controls are built; false leaves the panel to build its own
+     */
+    default boolean buildLiveCameraControls(String modality, LiveCameraHost host) {
+        return false;
+    }
+
+    /**
      * Last check before a single acquisition, for anything the operator must confirm in person.
      *
      * @param modality the modality name
