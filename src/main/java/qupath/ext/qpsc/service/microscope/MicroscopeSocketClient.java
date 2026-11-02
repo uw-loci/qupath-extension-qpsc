@@ -63,6 +63,15 @@ public class MicroscopeSocketClient implements AutoCloseable {
     /** End marker expected by Python server to indicate message completion */
     private static final String END_MARKER = "ENDOFSTR";
 
+    private static final String SUCCESS_PREFIX = "SUCCESS:";
+    private static final String FAILED_PREFIX = "FAILED:";
+    private static final String CANCELLED_PREFIX = "CANCELLED:";
+
+    private static final int REPLY_BUFFER_BYTES = 65536;
+
+    /** Silence that marks the end of a reply. Long enough for the next segment on a LAN. */
+    private static final int REPLY_QUIET_GAP_MS = 50;
+
     // Connection parameters
     private final String host;
     private final int port;
@@ -228,6 +237,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
         BGACQUIRE("bgacquir"),
         /** Test standard autofocus at current position */
         TESTAF("testaf__"),
+        /** PPM rotation sensitivity test. */
+        PPMSENS("ppmsens_"),
+        /** PPM polarizer calibration sweep. */
+        POLCAL("polcal__"),
         /** Test adaptive autofocus at current position */
         TESTADAF("testadaf"),
         /** Test autofocus validation (sweep + recovery) */
@@ -1829,65 +1842,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
         logger.info("Sending background acquisition command ({} bytes): {}", messageBytes.length, message);
 
-        synchronized (socketLock) {
-            ensureConnected();
-
-            // Adaptive exposure runs several iterations per angle/channel; allow 3 minutes.
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    socket.setSoTimeout(180000);
-                }
-
-                output.write(Command.BGACQUIRE.getValue());
-                output.flush();
-                Thread.sleep(50);
-                output.write(messageBytes);
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-                logger.info("Background acquisition command sent successfully");
-
-                byte[] buffer = new byte[1024];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected background acquisition: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
-                }
-
-                logger.info("Waiting for background acquisition to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead <= 0) {
-                    throw new IOException("No final response received from background acquisition");
-                }
-                String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                logger.info("Received final server response: {}", finalResponse);
-                if (finalResponse.startsWith("FAILED:")) {
-                    throw new IOException("Background acquisition failed: " + finalResponse.substring(7));
-                }
-                if (!finalResponse.startsWith("SUCCESS:")) {
-                    throw new IOException("Unexpected final background response: " + finalResponse);
-                }
-                lastActivityTime.set(System.currentTimeMillis());
-                return finalResponse;
-
-            } catch (IOException | InterruptedException e) {
-                handleIOException(new IOException("Background acquisition error", e));
-                throw new IOException("Background acquisition error: " + e.getMessage(), e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
-                    }
-                }
-            }
+        // Adaptive exposure runs several iterations per angle/channel; allow 3 minutes.
+        String finalResponse = exchange("Background acquisition", 180000, () -> {
+            send(Command.BGACQUIRE, messageBytes);
+            return readStartedThenResult("Background acquisition");
+        });
+        logger.info("Received final server response: {}", finalResponse);
+        if (!finalResponse.startsWith("SUCCESS:")) {
+            throw new IOException("Unexpected final background response: " + finalResponse);
         }
+        return finalResponse;
     }
 
     /**
@@ -1917,118 +1881,40 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Message length: {} bytes", messageBytes.length);
         logger.info("  Message content: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // Autofocus scan can take 30-60 seconds depending on n_steps.
+        String reply = exchange("Autofocus test", 120000, () -> {
+            send(Command.TESTAF, messageBytes);
+            return readStartedThenResult("Autofocus test");
+        });
+        logger.info("Received final server response: {}", reply);
 
-            // Temporarily increase socket timeout for autofocus test
-            // Autofocus scan can take 30-60 seconds depending on n_steps
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    socket.setSoTimeout(120000); // 2 minutes for autofocus test
-                    logger.debug("Increased socket timeout to 120s for autofocus test");
-                }
+        Map<String, String> result = new java.util.HashMap<>();
+        if (!reply.startsWith("SUCCESS:")) {
+            logger.warn("Unexpected final response: {}", reply);
+            return result;
+        }
 
-                // Send TESTAF command (8 bytes)
-                output.write(Command.TESTAF.getValue());
-                output.flush();
-                logger.debug("Sent TESTAF command (8 bytes)");
+        // Format: SUCCESS:plot_path|initial_z:final_z:z_shift
+        String[] parts = reply.substring(8).split("\\|");
+        if (parts.length > 0) {
+            result.put("plot_path", parts[0].trim());
+        }
+        if (parts.length > 1 && !parts[1].trim().isEmpty()) {
+            String zData = parts[1].trim();
+            logger.info("Parsing Z position data from response: {}", zData);
 
-                // Small delay to ensure command is processed
-                Thread.sleep(50);
+            String[] zValues = zData.split(":");
+            if (zValues.length == 3) {
+                result.put("initial_z", zValues[0].trim());
+                result.put("final_z", zValues[1].trim());
+                result.put("z_shift", zValues[2].trim());
 
-                // Send message
-                output.write(messageBytes);
-                output.flush();
-                logger.debug("Sent autofocus test message ({} bytes)", messageBytes.length);
-
-                // Ensure all data is sent
-                output.flush();
-
-                lastActivityTime.set(System.currentTimeMillis());
-                logger.info("Autofocus test command sent successfully");
-
-                // Read the STARTED acknowledgment
-                byte[] buffer = new byte[1024];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected autofocus test: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
-                }
-
-                // Now wait for the final SUCCESS/FAILED response
-                logger.info("Waiting for autofocus test to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final server response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("Autofocus test failed: " + finalResponse.substring(7));
-                    } else if (!finalResponse.startsWith("SUCCESS:")) {
-                        logger.warn("Unexpected final response: {}", finalResponse);
-                    }
-
-                    // Parse result from SUCCESS response
-                    // Format: SUCCESS:plot_path|initial_z:final_z:z_shift
-                    Map<String, String> result = new java.util.HashMap<>();
-                    if (finalResponse.startsWith("SUCCESS:")) {
-                        String data = finalResponse.substring(8); // Remove "SUCCESS:"
-                        String[] parts = data.split("\\|");
-
-                        if (parts.length > 0) {
-                            result.put("plot_path", parts[0].trim());
-                        }
-
-                        // Parse Z position data if available
-                        if (parts.length > 1 && !parts[1].trim().isEmpty()) {
-                            String zData = parts[1].trim();
-                            logger.info("Parsing Z position data from response: {}", zData);
-
-                            String[] zValues = zData.split(":");
-                            if (zValues.length == 3) {
-                                result.put("initial_z", zValues[0].trim());
-                                result.put("final_z", zValues[1].trim());
-                                result.put("z_shift", zValues[2].trim());
-
-                                logger.info("  Initial Z: {} um", zValues[0]);
-                                logger.info("  Final Z: {} um", zValues[1]);
-                                logger.info("  Z shift: {} um", zValues[2]);
-                            }
-                        }
-
-                        lastActivityTime.set(System.currentTimeMillis());
-                        return result;
-                    }
-                } else {
-                    throw new IOException("No final response received from autofocus test");
-                }
-
-                // Fallback - shouldn't reach here
-                lastActivityTime.set(System.currentTimeMillis());
-                return new java.util.HashMap<>();
-
-            } catch (IOException | InterruptedException e) {
-                handleIOException(new IOException("Autofocus test error", e));
-                throw new IOException("Autofocus test error: " + e.getMessage(), e);
-            } finally {
-                // Restore original timeout
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
-                    }
-                }
+                logger.info("  Initial Z: {} um", zValues[0]);
+                logger.info("  Final Z: {} um", zValues[1]);
+                logger.info("  Z shift: {} um", zValues[2]);
             }
         }
+        return result;
     }
 
     /**
@@ -2347,106 +2233,64 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         logger.info("Sending STRMAFZ command: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // Worst-case AF time: 3 attempts (MAX_EDGE_RETRIES=2 + initial), each scan window ~8-12s
+        // at slow stage speeds, plus per-attempt fit/retry overhead. On sparse fluorescence
+        // samples the full 3-attempt sequence has been observed at ~70s. 180s gives headroom for
+        // slower stages and longer sweep ranges without surfacing the false-positive
+        // "MicroManager likely crashed" reconnect path that fires when the client abandons the
+        // primary socket mid-command.
+        String response = withReadTimeout("STRMAFZ", 180000, () -> {
+                    send(Command.STRMAFZ, messageBytes);
+                    return readReply("STRMAFZ");
+                })
+                .trim();
+        logger.info("STRMAFZ response: {}", response);
 
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    // Worst-case AF time: 3 attempts (MAX_EDGE_RETRIES=2 +
-                    // initial), each scan window ~8-12s at slow stage speeds,
-                    // plus per-attempt fit/retry overhead. On sparse fluorescence
-                    // samples the full 3-attempt sequence has been observed at
-                    // ~70s. 180s gives headroom for slower stages and longer
-                    // sweep ranges without surfacing the false-positive
-                    // "MicroManager likely crashed" reconnect path that fires
-                    // when the client abandons the primary socket mid-command.
-                    socket.setSoTimeout(180000);
-                }
+        // Extract optional ":dump=<path>" suffix and strip it before
+        // parsing the SUCCESS / UNAVAILABLE bodies.
+        String dumpPath = null;
+        int dumpIdx = response.indexOf(":dump=");
+        if (dumpIdx >= 0) {
+            dumpPath = response.substring(dumpIdx + ":dump=".length()).trim();
+            response = response.substring(0, dumpIdx);
+        }
 
-                output.write(Command.STRMAFZ.getValue());
-                output.flush();
-                Thread.sleep(50);
-                output.write(messageBytes);
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                byte[] buffer = new byte[1024];
-                int bytesRead = input.read(buffer);
-                if (bytesRead <= 0) {
-                    throw new IOException("STRMAFZ: no response from server");
-                }
-                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
-                logger.info("STRMAFZ response: {}", response);
-                lastActivityTime.set(System.currentTimeMillis());
-
-                // Extract optional ":dump=<path>" suffix and strip it before
-                // parsing the SUCCESS / UNAVAILABLE bodies.
-                String dumpPath = null;
-                int dumpIdx = response.indexOf(":dump=");
-                if (dumpIdx >= 0) {
-                    dumpPath = response.substring(dumpIdx + ":dump=".length()).trim();
-                    response = response.substring(0, dumpIdx);
-                }
-
-                if (response.startsWith("SUCCESS:")) {
-                    // SUCCESS:<initial>:<final>:<shift>:<n_samples>:<span>
-                    String body = response.substring("SUCCESS:".length());
-                    String[] parts = body.split(":");
-                    if (parts.length < 5) {
-                        throw new IOException("STRMAFZ: malformed SUCCESS payload: " + response);
-                    }
-                    try {
-                        double initialZ = Double.parseDouble(parts[0].trim());
-                        double finalZ = Double.parseDouble(parts[1].trim());
-                        String shiftStr = parts[2].trim();
-                        if (shiftStr.startsWith("+")) {
-                            shiftStr = shiftStr.substring(1);
-                        }
-                        double zShift = Double.parseDouble(shiftStr);
-                        int nSamples = Integer.parseInt(parts[3].trim());
-                        double zSpan = Double.parseDouble(parts[4].trim());
-                        return new StreamingFocusResult(
-                                StreamingFocusResult.Status.SUCCESS,
-                                initialZ,
-                                finalZ,
-                                zShift,
-                                nSamples,
-                                zSpan,
-                                null,
-                                dumpPath);
-                    } catch (NumberFormatException e) {
-                        throw new IOException("STRMAFZ: could not parse SUCCESS payload: " + response, e);
-                    }
-                } else if (response.startsWith("UNAVAILABLE:")) {
-                    String reason = response.substring("UNAVAILABLE:".length());
-                    logger.info("STRMAFZ UNAVAILABLE: {}", reason);
-                    return new StreamingFocusResult(
-                            StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason, dumpPath);
-                } else if (response.startsWith("ABORTED:")) {
-                    String reason = response.substring("ABORTED:".length());
-                    logger.info("STRMAFZ ABORTED: {}", reason);
-                    return new StreamingFocusResult(
-                            StreamingFocusResult.Status.ABORTED, 0, 0, 0, 0, 0, reason, dumpPath);
-                } else if (response.startsWith("FAILED:")) {
-                    String reason = response.substring("FAILED:".length());
-                    logger.warn("STRMAFZ FAILED: {}", reason);
-                    return new StreamingFocusResult(StreamingFocusResult.Status.FAILED, 0, 0, 0, 0, 0, reason);
-                } else {
-                    throw new IOException("STRMAFZ: unknown response prefix: " + response);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("STRMAFZ interrupted", e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout after STRMAFZ", e);
-                    }
-                }
+        if (response.startsWith("SUCCESS:")) {
+            // SUCCESS:<initial>:<final>:<shift>:<n_samples>:<span>
+            String body = response.substring("SUCCESS:".length());
+            String[] parts = body.split(":");
+            if (parts.length < 5) {
+                throw new IOException("STRMAFZ: malformed SUCCESS payload: " + response);
             }
+            try {
+                double initialZ = Double.parseDouble(parts[0].trim());
+                double finalZ = Double.parseDouble(parts[1].trim());
+                String shiftStr = parts[2].trim();
+                if (shiftStr.startsWith("+")) {
+                    shiftStr = shiftStr.substring(1);
+                }
+                double zShift = Double.parseDouble(shiftStr);
+                int nSamples = Integer.parseInt(parts[3].trim());
+                double zSpan = Double.parseDouble(parts[4].trim());
+                return new StreamingFocusResult(
+                        StreamingFocusResult.Status.SUCCESS, initialZ, finalZ, zShift, nSamples, zSpan, null, dumpPath);
+            } catch (NumberFormatException e) {
+                throw new IOException("STRMAFZ: could not parse SUCCESS payload: " + response, e);
+            }
+        } else if (response.startsWith("UNAVAILABLE:")) {
+            String reason = response.substring("UNAVAILABLE:".length());
+            logger.info("STRMAFZ UNAVAILABLE: {}", reason);
+            return new StreamingFocusResult(StreamingFocusResult.Status.UNAVAILABLE, 0, 0, 0, 0, 0, reason, dumpPath);
+        } else if (response.startsWith("ABORTED:")) {
+            String reason = response.substring("ABORTED:".length());
+            logger.info("STRMAFZ ABORTED: {}", reason);
+            return new StreamingFocusResult(StreamingFocusResult.Status.ABORTED, 0, 0, 0, 0, 0, reason, dumpPath);
+        } else if (response.startsWith("FAILED:")) {
+            String reason = response.substring("FAILED:".length());
+            logger.warn("STRMAFZ FAILED: {}", reason);
+            return new StreamingFocusResult(StreamingFocusResult.Status.FAILED, 0, 0, 0, 0, 0, reason);
+        } else {
+            throw new IOException("STRMAFZ: unknown response prefix: " + response);
         }
     }
 
@@ -2550,69 +2394,45 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         logger.info("Sending FINDTISS command: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    // Each attempt is one stage move plus one snap -- a couple of seconds.
-                    // The server caps the budget at 33 (four complete rings, which is what
-                    // the measured 1507 um worst-case landing error needs), so ~100s of
-                    // stage time at the cap; 180s covers it with headroom without leaving a
-                    // wedged search holding the primary socket for long. Keep this above
-                    // MAX_ATTEMPTS_CEILING * per-attempt time -- a timeout here is read as
-                    // "server too old" and permanently disables FINDTISS for the session.
-                    socket.setSoTimeout(180000);
-                }
-                output.write(Command.FINDTISS.getValue());
-                output.flush();
-                Thread.sleep(50);
-                output.write(messageBytes);
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                byte[] buffer = new byte[512];
-                int bytesRead = input.read(buffer);
-                if (bytesRead <= 0) {
-                    throw new IOException("FINDTISS: no response from server");
-                }
-                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
-                logger.info("FINDTISS response: {}", response);
-                lastActivityTime.set(System.currentTimeMillis());
-                return parseFindTissueResponse(response);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("FINDTISS interrupted", e);
-            } catch (IOException e) {
-                // A server that does not know FINDTISS is NOT a benign no-op. Its dispatch loop
-                // reads 8 bytes, finds no handler, logs "Unknown command" and CONTINUES -- with
-                // our text payload still in the stream. It then consumes that payload eight
-                // bytes at a time as if each were a command, and any bytes left over when the
-                // payload does not divide by eight stay buffered and shift every LATER command
-                // on this socket. That is silent corruption of the primary connection, not a
-                // missing feature.
-                //
-                // So: stop asking for the rest of the session, and drop the primary socket so
-                // the next command reconnects onto a clean stream. Autofocus then runs from the
-                // predicted position, which is exactly what happened before this existed.
-                findTissueSupported = false;
-                logger.warn(
-                        "FINDTISS got no usable reply ({}). Disabling it for this session and reconnecting the "
-                                + "primary socket -- an older server consumes the payload as commands and would "
-                                + "desynchronise every later command.",
-                        e.getMessage());
-                disconnectPrimary();
-                return new FindTissueResult(
-                        FindTissueResult.Status.FAILED, 0, 0, 0, 0, "no reply (server too old?): " + e.getMessage());
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout after FINDTISS", e);
-                    }
-                }
+        // Each attempt is one stage move plus one snap -- a couple of seconds. The server caps the
+        // budget at 33 (four complete rings, which is what the measured 1507 um worst-case landing
+        // error needs), so ~100s of stage time at the cap; 180s covers it with headroom without
+        // leaving a wedged search holding the primary socket for long. Keep this above
+        // MAX_ATTEMPTS_CEILING * per-attempt time -- a timeout here is read as "server too old"
+        // and permanently disables FINDTISS for the session.
+        ensureConnected();
+        try {
+            String response = withReadTimeout("FINDTISS", 180000, () -> {
+                        send(Command.FINDTISS, messageBytes);
+                        return readReply("FINDTISS");
+                    })
+                    .trim();
+            logger.info("FINDTISS response: {}", response);
+            return parseFindTissueResponse(response);
+        } catch (IOException e) {
+            if (e.getCause() instanceof InterruptedException) {
+                throw e;
             }
+            // A server that does not know FINDTISS is NOT a benign no-op. Its dispatch loop
+            // reads 8 bytes, finds no handler, logs "Unknown command" and CONTINUES -- with
+            // our text payload still in the stream. It then consumes that payload eight
+            // bytes at a time as if each were a command, and any bytes left over when the
+            // payload does not divide by eight stay buffered and shift every LATER command
+            // on this socket. That is silent corruption of the primary connection, not a
+            // missing feature.
+            //
+            // So: stop asking for the rest of the session, and drop the primary socket so
+            // the next command reconnects onto a clean stream. Autofocus then runs from the
+            // predicted position, which is exactly what happened before this existed.
+            findTissueSupported = false;
+            logger.warn(
+                    "FINDTISS got no usable reply ({}). Disabling it for this session and reconnecting the "
+                            + "primary socket -- an older server consumes the payload as commands and would "
+                            + "desynchronize every later command.",
+                    e.getMessage());
+            disconnectPrimary();
+            return new FindTissueResult(
+                    FindTissueResult.Status.FAILED, 0, 0, 0, 0, "no reply (server too old?): " + e.getMessage());
         }
     }
 
@@ -2831,67 +2651,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         logger.info("Sending PRBSAFZ command: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // The probe runs a round-trip stage move plus property queries; budget generously for slow
+        // stages. The JSON payload can exceed 1 KiB on stages with many allowed values.
+        String response = withReadTimeout("PRBSAFZ", 60000, () -> {
+                    send(Command.PRBSAFZ, messageBytes);
+                    return readReply("PRBSAFZ");
+                })
+                .trim();
+        logger.info(
+                "PRBSAFZ response ({} bytes): {}",
+                response.length(),
+                response.length() > 200 ? response.substring(0, 200) + "..." : response);
 
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    // Probe runs a round-trip stage move + property
-                    // queries; budget generously for slow stages.
-                    socket.setSoTimeout(60000);
-                }
-
-                output.write(Command.PRBSAFZ.getValue());
-                output.flush();
-                Thread.sleep(50);
-                output.write(messageBytes);
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                // The JSON payload can be larger than 1KiB on stages
-                // with many allowed values; read until we have a full
-                // response or the stream ends.
-                ByteArrayOutputStream baos = new ByteArrayOutputStream();
-                byte[] buffer = new byte[4096];
-                int bytesRead;
-                while ((bytesRead = input.read(buffer)) > 0) {
-                    baos.write(buffer, 0, bytesRead);
-                    // Server sends one response and pauses; treat any
-                    // pause >0 as "we have the whole reply".
-                    if (input.available() == 0) break;
-                }
-                if (baos.size() == 0) {
-                    throw new IOException("PRBSAFZ: no response from server");
-                }
-                String response = baos.toString(StandardCharsets.UTF_8).trim();
-                logger.info(
-                        "PRBSAFZ response ({} bytes): {}",
-                        response.length(),
-                        response.length() > 200 ? response.substring(0, 200) + "..." : response);
-                lastActivityTime.set(System.currentTimeMillis());
-
-                if (response.startsWith("SUCCESS:")) {
-                    String json = response.substring("SUCCESS:".length());
-                    return parseProbeStageAfJson(json);
-                } else if (response.startsWith("FAILED:")) {
-                    String reason = response.substring("FAILED:".length());
-                    throw new IOException("PRBSAFZ FAILED: " + reason);
-                } else {
-                    throw new IOException("PRBSAFZ: unknown response prefix: " + response);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("PRBSAFZ interrupted", e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout after PRBSAFZ", e);
-                    }
-                }
-            }
+        if (response.startsWith("SUCCESS:")) {
+            return parseProbeStageAfJson(response.substring("SUCCESS:".length()));
+        } else if (response.startsWith("FAILED:")) {
+            throw new IOException("PRBSAFZ FAILED: " + response.substring("FAILED:".length()));
+        } else {
+            throw new IOException("PRBSAFZ: unknown response prefix: " + response);
         }
     }
 
@@ -2992,52 +2769,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         logger.info("Sending RPDSCAN command: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // Rapid scan can take up to 5 minutes for large areas.
+        String response = withReadTimeout("RPDSCAN", 300000, () -> {
+                    send(Command.RPDSCAN, messageBytes);
+                    return readReply("RPDSCAN");
+                })
+                .trim();
+        logger.info("RPDSCAN response: {}", response);
 
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    // Rapid scan can take up to 5 minutes for large areas
-                    socket.setSoTimeout(300000);
-                }
-
-                output.write(Command.RPDSCAN.getValue());
-                output.flush();
-                Thread.sleep(50);
-                output.write(messageBytes);
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                byte[] buffer = new byte[1024];
-                int bytesRead = input.read(buffer);
-                if (bytesRead <= 0) {
-                    throw new IOException("RPDSCAN: no response from server");
-                }
-                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8).trim();
-                logger.info("RPDSCAN response: {}", response);
-                lastActivityTime.set(System.currentTimeMillis());
-
-                if (response.startsWith("SUCCESS:")) {
-                    return response;
-                } else if (response.startsWith("FAILED:")) {
-                    String reason = response.substring("FAILED:".length());
-                    throw new IOException("Rapid scan failed: " + reason);
-                } else {
-                    throw new IOException("RPDSCAN: unexpected response: " + response);
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                throw new IOException("RPDSCAN interrupted", e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout after RPDSCAN", e);
-                    }
-                }
-            }
+        if (response.startsWith("SUCCESS:")) {
+            return response;
+        } else if (response.startsWith("FAILED:")) {
+            throw new IOException("Rapid scan failed: " + response.substring("FAILED:".length()));
+        } else {
+            throw new IOException("RPDSCAN: unexpected response: " + response);
         }
     }
 
@@ -3076,136 +2821,55 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Message length: {} bytes", messageBytes.length);
         logger.info("  Message content: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // Adaptive can take varying time depending on how quickly it converges. The server holds
+        // a wide search under 270 s, edge retries included.
+        int autofocusTimeout = wideSearch ? 300000 : 120000;
+        String finalResponse;
+        try {
+            finalResponse = exchange("Adaptive autofocus test", autofocusTimeout, () -> {
+                send(Command.TESTADAF, messageBytes);
+                return readStartedThenResult("Adaptive autofocus test");
+            });
+        } catch (ServerAnswerException answer) {
+            // The server answered, so the connection is fine.
+            throw new AutofocusFailedException(answer.reason());
+        }
+        logger.info("Received final server response: {}", finalResponse);
 
-            // Temporarily increase socket timeout for adaptive autofocus test
-            // Adaptive can take varying time depending on how quickly it converges. The server
-            // holds a wide search under 270 s, edge retries included.
-            int originalTimeout = readTimeout;
-            int autofocusTimeout = wideSearch ? 300000 : 120000;
-            try {
-                if (socket != null) {
-                    socket.setSoTimeout(autofocusTimeout);
-                    logger.debug("Increased socket timeout to {} ms for adaptive autofocus test", autofocusTimeout);
-                }
+        Map<String, String> result = new java.util.HashMap<>();
+        if (finalResponse.startsWith("CANCELLED:")) {
+            // User canceled the sweep (ABORTAF). Not an error: the server restored Z. Return a
+            // flagged result so the caller skips the "autofocus failed" dialog.
+            result.put("cancelled", "true");
+            result.put("message", finalResponse.substring("CANCELLED:".length()).trim());
+            return result;
+        }
+        if (!finalResponse.startsWith("SUCCESS:")) {
+            logger.warn("Unexpected final response: {}", finalResponse);
+            return result;
+        }
 
-                // Send TESTADAF command (8 bytes)
-                output.write(Command.TESTADAF.getValue());
-                output.flush();
-                logger.debug("Sent TESTADAF command (8 bytes)");
+        // Format: SUCCESS:message|initial_z:final_z:z_shift
+        String[] parts = finalResponse.substring(8).split("\\|");
+        if (parts.length > 0) {
+            result.put("message", parts[0].trim());
+        }
+        if (parts.length > 1 && !parts[1].trim().isEmpty()) {
+            String zData = parts[1].trim();
+            logger.info("Parsing Z position data from response: {}", zData);
 
-                // Small delay to ensure command is processed
-                Thread.sleep(50);
+            String[] zValues = zData.split(":");
+            if (zValues.length == 3) {
+                result.put("initial_z", zValues[0].trim());
+                result.put("final_z", zValues[1].trim());
+                result.put("z_shift", zValues[2].trim());
 
-                // Send message
-                output.write(messageBytes);
-                output.flush();
-                logger.debug("Sent adaptive autofocus test message ({} bytes)", messageBytes.length);
-
-                // Ensure all data is sent
-                output.flush();
-
-                lastActivityTime.set(System.currentTimeMillis());
-                logger.info("Adaptive autofocus test command sent successfully");
-
-                // Read the STARTED acknowledgment
-                byte[] buffer = new byte[1024];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected adaptive autofocus test: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
-                }
-
-                // Now wait for the final SUCCESS/FAILED response
-                logger.info("Waiting for adaptive autofocus test to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final server response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new AutofocusFailedException(
-                                finalResponse.substring("FAILED:".length()).trim());
-                    } else if (finalResponse.startsWith("CANCELLED:")) {
-                        // User canceled the sweep (ABORTAF). Not an error: the
-                        // server restored Z. Return a flagged result so the
-                        // caller skips the "autofocus failed" dialog.
-                        Map<String, String> result = new java.util.HashMap<>();
-                        result.put("cancelled", "true");
-                        result.put(
-                                "message",
-                                finalResponse.substring("CANCELLED:".length()).trim());
-                        lastActivityTime.set(System.currentTimeMillis());
-                        return result;
-                    } else if (!finalResponse.startsWith("SUCCESS:")) {
-                        logger.warn("Unexpected final response: {}", finalResponse);
-                    }
-
-                    // Parse result from SUCCESS response
-                    // Format: SUCCESS:message|initial_z:final_z:z_shift
-                    Map<String, String> result = new java.util.HashMap<>();
-                    if (finalResponse.startsWith("SUCCESS:")) {
-                        String data = finalResponse.substring(8); // Remove "SUCCESS:"
-                        String[] parts = data.split("\\|");
-
-                        if (parts.length > 0) {
-                            result.put("message", parts[0].trim());
-                        }
-
-                        // Parse Z position data if available
-                        if (parts.length > 1 && !parts[1].trim().isEmpty()) {
-                            String zData = parts[1].trim();
-                            logger.info("Parsing Z position data from response: {}", zData);
-
-                            String[] zValues = zData.split(":");
-                            if (zValues.length == 3) {
-                                result.put("initial_z", zValues[0].trim());
-                                result.put("final_z", zValues[1].trim());
-                                result.put("z_shift", zValues[2].trim());
-
-                                logger.info("  Initial Z: {} um", zValues[0]);
-                                logger.info("  Final Z: {} um", zValues[1]);
-                                logger.info("  Z shift: {} um", zValues[2]);
-                            }
-                        }
-
-                        lastActivityTime.set(System.currentTimeMillis());
-                        return result;
-                    }
-                } else {
-                    throw new IOException("No final response received from adaptive autofocus test");
-                }
-
-                // Fallback - shouldn't reach here
-                lastActivityTime.set(System.currentTimeMillis());
-                return new java.util.HashMap<>();
-
-            } catch (AutofocusFailedException e) {
-                // The server answered, so the connection is fine.
-                lastActivityTime.set(System.currentTimeMillis());
-                throw e;
-            } catch (IOException | InterruptedException e) {
-                handleIOException(new IOException("Adaptive autofocus test error", e));
-                throw new IOException("Adaptive autofocus test error: " + e.getMessage(), e);
-            } finally {
-                // Restore original timeout
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
-                    }
-                }
+                logger.info("  Initial Z: {} um", zValues[0]);
+                logger.info("  Final Z: {} um", zValues[1]);
+                logger.info("  Z shift: {} um", zValues[2]);
             }
         }
+        return result;
     }
 
     /**
@@ -3221,92 +2885,39 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
         logger.info("Sending autofocus validation test command");
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // Both phases are stop-and-snap scans whose length is the config's step count times the
+        // stage's settle time, not a constant: on OWS3 (ZDrive, 100 steps) phase 2 alone took
+        // 132 s and the whole test 183 s. The test is cancellable (ABORTAF), so a long ceiling
+        // costs nothing.
+        String finalResponse = exchange("Autofocus validation test", AF_VALIDATION_TIMEOUT_MS, () -> {
+            send(Command.TESTAFV, messageBytes);
+            return readStartedThenResult("Autofocus validation test");
+        });
+        logger.info("Validation test response: {}", finalResponse);
 
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    // Both phases are stop-and-snap scans whose length is the config's step count
-                    // times the stage's settle time, not a constant: on OWS3 (ZDrive, 100 steps)
-                    // phase 2 alone took 132 s and the whole test 183 s, so a fixed 180 s timeout
-                    // reports "Read timed out" just before the server's answer. The test is
-                    // cancellable (ABORTAF), so a long ceiling costs nothing.
-                    socket.setSoTimeout(AF_VALIDATION_TIMEOUT_MS);
-                }
-
-                output.write(Command.TESTAFV.getValue());
-                output.flush();
-                Thread.sleep(50);
-                output.write(messageBytes);
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                // Read STARTED acknowledgment
-                byte[] buffer = new byte[4096];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected validation test: " + response);
-                    }
-                }
-
-                // Wait for final result (JSON)
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Validation test response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("Validation test failed: " + finalResponse.substring(7));
-                    }
-
-                    Map<String, String> result = new java.util.HashMap<>();
-                    if (finalResponse.startsWith("CANCELLED:")) {
-                        // The operator canceled (ABORTAF). Not an error: the server put Z
-                        // back where it started. Flag it so the caller skips the result dialog.
-                        result.put("cancelled", "true");
-                        result.put(
-                                "message",
-                                finalResponse.substring("CANCELLED:".length()).trim());
-                        lastActivityTime.set(System.currentTimeMillis());
-                        return result;
-                    }
-                    if (finalResponse.startsWith("SUCCESS:")) {
-                        String json = finalResponse.substring(8);
-                        // Simple JSON parsing -- extract key-value pairs
-                        json = json.trim();
-                        if (json.startsWith("{")) json = json.substring(1);
-                        if (json.endsWith("}")) json = json.substring(0, json.length() - 1);
-                        for (String pair : json.split(",")) {
-                            String[] kv = pair.split(":", 2);
-                            if (kv.length == 2) {
-                                String key = kv[0].trim().replace("\"", "");
-                                String value = kv[1].trim().replace("\"", "");
-                                result.put(key, value);
-                            }
-                        }
-                    }
-                    lastActivityTime.set(System.currentTimeMillis());
-                    return result;
-                }
-
-                throw new IOException("No response from autofocus validation test");
-
-            } catch (IOException | InterruptedException e) {
-                handleIOException(new IOException("Autofocus validation test error", e));
-                throw new IOException("Autofocus validation test error: " + e.getMessage(), e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException ex) {
-                        logger.warn("Failed to restore socket timeout", ex);
-                    }
+        Map<String, String> result = new java.util.HashMap<>();
+        if (finalResponse.startsWith("CANCELLED:")) {
+            // The operator canceled (ABORTAF). Not an error: the server put Z back where it
+            // started. Flag it so the caller skips the result dialog.
+            result.put("cancelled", "true");
+            result.put("message", finalResponse.substring("CANCELLED:".length()).trim());
+            return result;
+        }
+        if (finalResponse.startsWith("SUCCESS:")) {
+            // Simple JSON parsing -- extract key-value pairs
+            String json = finalResponse.substring(8).trim();
+            if (json.startsWith("{")) json = json.substring(1);
+            if (json.endsWith("}")) json = json.substring(0, json.length() - 1);
+            for (String pair : json.split(",")) {
+                String[] kv = pair.split(":", 2);
+                if (kv.length == 2) {
+                    String key = kv[0].trim().replace("\"", "");
+                    String value = kv[1].trim().replace("\"", "");
+                    result.put(key, value);
                 }
             }
         }
+        return result;
     }
 
     /**
@@ -3328,90 +2939,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
         messageBuilder.append(" --repeats ").append(params.nRepeats());
         messageBuilder.append(" ").append(END_MARKER);
 
-        String message = messageBuilder.toString();
-        byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
+        byte[] messageBytes = messageBuilder.toString().getBytes(StandardCharsets.UTF_8);
+        logger.info("Sending PPM sensitivity test command: {}", messageBuilder);
 
-        logger.info("Sending PPM sensitivity test command:");
-        logger.info("  Message length: {} bytes", messageBytes.length);
-        logger.info("  Message content: {}", message);
-
-        synchronized (socketLock) {
-            ensureConnected();
-
-            // Store original timeout
-            int originalTimeout = 0;
-            try {
-                originalTimeout = socket.getSoTimeout();
-                // Increase timeout for sensitivity test (can take 10-60 minutes depending on test type)
-                // Note: PPMSENS does not send progress updates, so use generous total timeout
-                socket.setSoTimeout(3600000); // 60 minutes
-                logger.debug("Increased socket timeout to 60 minutes for PPM sensitivity test");
-            } catch (IOException e) {
-                logger.warn("Failed to adjust socket timeout", e);
-            }
-
-            try {
-                OutputStream output = socket.getOutputStream();
-                InputStream input = socket.getInputStream();
-
-                // Send command (8 bytes: "ppmsens_")
-                output.write("ppmsens_".getBytes(StandardCharsets.UTF_8));
-                output.write(messageBytes);
-                output.flush();
-
-                logger.info("Command sent, waiting for server response...");
-
-                // Read initial response (STARTED or FAILED)
-                byte[] buffer = new byte[8192];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected PPM sensitivity test: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
-                }
-
-                // Wait for final SUCCESS/FAILED response
-                logger.info("Waiting for PPM sensitivity test to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final server response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("PPM sensitivity test failed: " + finalResponse.substring(7));
-                    } else if (finalResponse.startsWith("SUCCESS:")) {
-                        // Extract output directory path from SUCCESS response
-                        String outputDir = finalResponse.substring(8).trim();
-                        logger.info("PPM sensitivity test successful. Output: {}", outputDir);
-                        return outputDir;
-                    } else {
-                        throw new IOException("Unexpected final response: " + finalResponse);
-                    }
-                }
-
-                throw new IOException("No response received from server");
-
-            } catch (IOException e) {
-                logger.error("Error during PPM sensitivity test", e);
-                handleIOException(new IOException("PPM sensitivity test error", e));
-                throw new IOException("PPM sensitivity test error: " + e.getMessage(), e);
-            } finally {
-                // Restore original timeout
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
-                    }
-                }
-            }
+        // PPMSENS sends no progress and can take an hour, so the timeout covers the whole run.
+        String reply = exchange("PPM sensitivity test", 3600000, () -> {
+            send(Command.PPMSENS, messageBytes);
+            return readStartedThenResult("PPM sensitivity test");
+        });
+        if (!reply.startsWith(SUCCESS_PREFIX)) {
+            throw new IOException("Unexpected final response: " + reply);
         }
+        return reply.substring(SUCCESS_PREFIX.length()).trim();
     }
 
     /**
@@ -3527,150 +3066,109 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Quick mode: {}", quickMode);
         logger.info("  Objective: {}", objective);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // Per-read timeout: 10 minutes between progress updates is enough, since even slow trials
+        // complete within a few minutes.
+        return exchange("Autofocus benchmark", 600000, () -> {
+            send(Command.AFBENCH, messageBytes);
+            logger.info("Autofocus benchmark command sent successfully");
 
-            // Per-read timeout: 10 minutes between progress updates should be sufficient
-            // Even slow trials complete within a few minutes
-            int perReadTimeout = 600000; // 10 minutes between messages
-            int originalTimeout = readTimeout;
-            try {
-                if (socket != null) {
-                    socket.setSoTimeout(perReadTimeout);
-                    logger.debug("Set socket timeout to {} minutes for benchmark reads", perReadTimeout / 60000);
-                }
+            // Read the STARTED acknowledgment
+            byte[] buffer = new byte[8192];
+            int bytesRead = input.read(buffer);
+            if (bytesRead > 0) {
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                logger.info("Received initial server response: {}", response);
 
-                // Send AFBENCH command (8 bytes)
-                output.write(Command.AFBENCH.getValue());
-                output.flush();
-                logger.debug("Sent AFBENCH command (8 bytes)");
-
-                // Small delay to ensure command is processed
-                Thread.sleep(50);
-
-                // Send message
-                output.write(messageBytes);
-                output.flush();
-                logger.debug("Sent benchmark message ({} bytes)", messageBytes.length);
-
-                // Ensure all data is sent
-                output.flush();
-
-                lastActivityTime.set(System.currentTimeMillis());
-                logger.info("Autofocus benchmark command sent successfully");
-
-                // Read the STARTED acknowledgment
-                byte[] buffer = new byte[8192];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected autofocus benchmark: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
-                }
-
-                // Read responses in a loop until SUCCESS/FAILED
-                // Server sends PROGRESS messages after each trial to keep connection alive
-                logger.info("Waiting for autofocus benchmark to complete...");
-                logger.info("Progress updates will be received after each trial...");
-
-                while (true) {
-                    bytesRead = input.read(buffer);
-                    if (bytesRead <= 0) {
-                        throw new IOException("Connection closed while waiting for benchmark response");
-                    }
-
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    lastActivityTime.set(System.currentTimeMillis());
-
-                    // Handle progress updates
-                    if (response.startsWith("PROGRESS:")) {
-                        // Format: PROGRESS:current:total:status_message (consistent with PPMBIREF)
-                        try {
-                            String progressData = response.substring(9); // Remove "PROGRESS:"
-                            String[] parts = progressData.split(":", 3); // Split into at most 3 parts
-
-                            if (parts.length >= 2) {
-                                int current = Integer.parseInt(parts[0].trim());
-                                int total = Integer.parseInt(parts[1].trim());
-                                String statusMsg = parts.length > 2 ? parts[2] : "";
-
-                                // Log progress periodically (every 50 trials or at key percentages)
-                                double percentComplete = (current * 100.0 / total);
-                                if (current % 50 == 0 || current == 1 || current == total) {
-                                    logger.info(
-                                            "Benchmark progress: {}/{} ({} %)",
-                                            current, total, String.format("%.1f", percentComplete));
-                                }
-
-                                // Notify listener if provided
-                                if (progressListener != null) {
-                                    try {
-                                        progressListener.onProgress(current, total, statusMsg);
-                                    } catch (Exception e) {
-                                        logger.warn("Progress listener threw exception: {}", e.getMessage());
-                                    }
-                                }
-                            }
-                        } catch (Exception e) {
-                            logger.debug("Could not parse progress message: {}", response);
-                        }
-                        continue; // Keep reading for more messages
-                    }
-
-                    // Check for safety violation
-                    if (response.startsWith("FAILED:SAFETY:")) {
-                        String safetyMsg = response.substring("FAILED:SAFETY:".length());
-                        throw new IOException("SAFETY VIOLATION: " + safetyMsg);
-                    }
-
-                    // Check for other failures
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Benchmark failed: " + response.substring(7));
-                    }
-
-                    // Check for success
-                    if (response.startsWith("SUCCESS:")) {
-                        String jsonData = response.substring(8).trim();
-                        logger.info("Benchmark completed successfully");
-                        logger.info("Parsing benchmark results...");
-
-                        Map<String, Object> results = new HashMap<>();
-                        try {
-                            results = parseSimpleJson(jsonData);
-                            logger.info("Parsed {} result keys", results.size());
-                        } catch (Exception e) {
-                            logger.warn("Could not parse JSON results: {}", e.getMessage());
-                            results.put("raw_response", jsonData);
-                        }
-
-                        lastActivityTime.set(System.currentTimeMillis());
-                        return results;
-                    }
-
-                    // Unknown response type - log and continue
-                    logger.warn("Unexpected response during benchmark: {}", response);
-                }
-
-            } catch (IOException | InterruptedException e) {
-                handleIOException(new IOException("Autofocus benchmark error", e));
-                throw new IOException("Autofocus benchmark error: " + e.getMessage(), e);
-            } finally {
-                // Restore original timeout
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
-                    }
+                if (response.startsWith("FAILED:")) {
+                    String reason = response.substring(7).trim();
+                    throw new ServerAnswerException("Server rejected autofocus benchmark: " + reason, reason);
+                } else if (!response.startsWith("STARTED:")) {
+                    logger.warn("Unexpected initial server response: {}", response);
                 }
             }
-        }
+
+            // Read responses in a loop until SUCCESS/FAILED. The server sends PROGRESS messages
+            // after each trial to keep the connection alive.
+            logger.info("Waiting for autofocus benchmark to complete...");
+            logger.info("Progress updates will be received after each trial...");
+
+            while (true) {
+                bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("Connection closed while waiting for benchmark response");
+                }
+
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                lastActivityTime.set(System.currentTimeMillis());
+
+                // Handle progress updates
+                if (response.startsWith("PROGRESS:")) {
+                    // Format: PROGRESS:current:total:status_message (consistent with PPMBIREF)
+                    try {
+                        String progressData = response.substring(9); // Remove "PROGRESS:"
+                        String[] parts = progressData.split(":", 3); // Split into at most 3 parts
+
+                        if (parts.length >= 2) {
+                            int current = Integer.parseInt(parts[0].trim());
+                            int total = Integer.parseInt(parts[1].trim());
+                            String statusMsg = parts.length > 2 ? parts[2] : "";
+
+                            // Log progress periodically (every 50 trials or at key percentages)
+                            double percentComplete = (current * 100.0 / total);
+                            if (current % 50 == 0 || current == 1 || current == total) {
+                                logger.info(
+                                        "Benchmark progress: {}/{} ({} %)",
+                                        current, total, String.format("%.1f", percentComplete));
+                            }
+
+                            // Notify listener if provided
+                            if (progressListener != null) {
+                                try {
+                                    progressListener.onProgress(current, total, statusMsg);
+                                } catch (Exception e) {
+                                    logger.warn("Progress listener threw exception: {}", e.getMessage());
+                                }
+                            }
+                        }
+                    } catch (Exception e) {
+                        logger.debug("Could not parse progress message: {}", response);
+                    }
+                    continue; // Keep reading for more messages
+                }
+
+                // Check for safety violation
+                if (response.startsWith("FAILED:SAFETY:")) {
+                    String safetyMsg = response.substring("FAILED:SAFETY:".length());
+                    throw new ServerAnswerException("SAFETY VIOLATION: " + safetyMsg, safetyMsg);
+                }
+
+                // Check for other failures
+                if (response.startsWith("FAILED:")) {
+                    String reason = response.substring(7);
+                    throw new ServerAnswerException("Benchmark failed: " + reason, reason);
+                }
+
+                // Check for success
+                if (response.startsWith("SUCCESS:")) {
+                    String jsonData = response.substring(8).trim();
+                    logger.info("Benchmark completed successfully");
+                    logger.info("Parsing benchmark results...");
+
+                    Map<String, Object> results = new HashMap<>();
+                    try {
+                        results = parseSimpleJson(jsonData);
+                        logger.info("Parsed {} result keys", results.size());
+                    } catch (Exception e) {
+                        logger.warn("Could not parse JSON results: {}", e.getMessage());
+                        results.put("raw_response", jsonData);
+                    }
+                    return results;
+                }
+
+                // Unknown response type - log and continue
+                logger.warn("Unexpected response during benchmark: {}", response);
+            }
+        });
     }
 
     /**
@@ -3749,84 +3247,19 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Message length: {} bytes", messageBytes.length);
         logger.info("  Message content: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
-
-            // Store original timeout
-            int originalTimeout = 0;
-            try {
-                originalTimeout = socket.getSoTimeout();
-                // Increase timeout for calibration (can take several minutes)
-                // With stability check (3 runs) and fine steps, allow plenty of time
-                // Note: POLCAL does not send progress updates, so use generous total timeout
-                socket.setSoTimeout(3600000); // 60 minutes
-                logger.debug("Increased socket timeout to 60 minutes for calibration");
-            } catch (IOException e) {
-                logger.warn("Failed to adjust socket timeout", e);
-            }
-
-            try {
-                OutputStream output = socket.getOutputStream();
-                InputStream input = socket.getInputStream();
-
-                // Send command
-                output.write("polcal__".getBytes(StandardCharsets.UTF_8));
-                output.write(messageBytes);
-                output.flush();
-
-                logger.info("Command sent, waiting for server response...");
-
-                // Read initial response (STARTED or FAILED)
-                byte[] buffer = new byte[8192];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected polarizer calibration: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
-                }
-
-                // Wait for final SUCCESS/FAILED response
-                logger.info("Waiting for polarizer calibration to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final server response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("Polarizer calibration failed: " + finalResponse.substring(7));
-                    } else if (finalResponse.startsWith("SUCCESS:")) {
-                        // Extract report path from SUCCESS response
-                        String reportPath = finalResponse.substring(8).trim();
-                        logger.info("Polarizer calibration successful. Report: {}", reportPath);
-                        return reportPath;
-                    } else {
-                        throw new IOException("Unexpected final response: " + finalResponse);
-                    }
-                }
-
-                throw new IOException("No response received from server");
-
-            } catch (IOException e) {
-                logger.error("Error during polarizer calibration", e);
-                handleIOException(new IOException("Polarizer calibration error", e));
-                throw new IOException("Polarizer calibration error: " + e.getMessage(), e);
-            } finally {
-                // Restore original timeout
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
-                    }
-                }
-            }
+        // POLCAL does not send progress updates, so the timeout covers the whole run: with the
+        // stability check (3 runs) and fine steps it can take many minutes.
+        String finalResponse = exchange("Polarizer calibration", 3600000, () -> {
+            send(Command.POLCAL, messageBytes);
+            return readStartedThenResult("Polarizer calibration");
+        });
+        logger.info("Received final server response: {}", finalResponse);
+        if (finalResponse.startsWith("SUCCESS:")) {
+            String reportPath = finalResponse.substring(8).trim();
+            logger.info("Polarizer calibration successful. Report: {}", reportPath);
+            return reportPath;
         }
+        throw new IOException("Unexpected final response: " + finalResponse);
     }
 
     /**
@@ -3973,138 +3406,104 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Message length: {} bytes", messageBytes.length);
         logger.info("  Message content: {}", message);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // In calibrate mode the first phase iterates all angles with adaptive exposure
+        // optimization (~12 iterations per angle x 201 angles = potentially 45+ minutes), and the
+        // second phase then runs paired acquisition. Allow 90 minutes between server messages.
+        return exchange("Birefringence optimization", 5400000, () -> {
+            send(Command.PPMBIREF, messageBytes);
+            logger.info("Command sent, waiting for server response...");
 
-            // Store original timeout
-            int originalTimeout = 0;
-            try {
-                originalTimeout = socket.getSoTimeout();
-                // Increase timeout for birefringence test (can take many minutes)
-                // In calibrate mode, the first phase iterates all angles with adaptive exposure
-                // optimization (~12 iterations per angle x 201 angles = potentially 45+ minutes)
-                // The second phase then runs paired acquisition. Allow 90 minutes total.
-                socket.setSoTimeout(5400000); // 90 minutes
-                logger.debug("Increased socket timeout to 90 minutes for birefringence optimization");
-            } catch (IOException e) {
-                logger.warn("Failed to adjust socket timeout", e);
+            // Read initial response (STARTED or FAILED)
+            byte[] buffer = new byte[8192];
+            int bytesRead = input.read(buffer);
+            if (bytesRead > 0) {
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                logger.info("Received initial server response: {}", response);
+
+                if (response.startsWith("FAILED:")) {
+                    String reason = response.substring(7).trim();
+                    throw new ServerAnswerException("Server rejected birefringence optimization: " + reason, reason);
+                } else if (!response.startsWith("STARTED:")) {
+                    logger.warn("Unexpected initial server response: {}", response);
+                }
             }
 
-            try {
-                OutputStream output = socket.getOutputStream();
-                InputStream input = socket.getInputStream();
-
-                // Send command
-                output.write(Command.PPMBIREF.getValue());
-                output.write(messageBytes);
-                output.flush();
-
-                logger.info("Command sent, waiting for server response...");
-
-                // Read initial response (STARTED or FAILED)
-                byte[] buffer = new byte[8192];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected birefringence optimization: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
+            // Read responses in a loop until SUCCESS or FAILED
+            // Handles PROGRESS:current:total messages in between
+            logger.info("Waiting for birefringence optimization to complete...");
+            while (true) {
+                bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("No response received from server");
                 }
 
-                // Read responses in a loop until SUCCESS or FAILED
-                // Handles PROGRESS:current:total messages in between
-                logger.info("Waiting for birefringence optimization to complete...");
-                while (true) {
-                    bytesRead = input.read(buffer);
-                    if (bytesRead <= 0) {
-                        throw new IOException("No response received from server");
-                    }
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                lastActivityTime.set(System.currentTimeMillis());
 
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    lastActivityTime.set(System.currentTimeMillis());
-
-                    // Handle PROGRESS updates
-                    if (response.startsWith("PROGRESS:")) {
-                        // Parse "PROGRESS:current:total"
-                        try {
-                            String[] parts = response.substring(9).split(":");
-                            if (parts.length >= 2) {
-                                int current = Integer.parseInt(parts[0].trim());
-                                int total = Integer.parseInt(parts[1].trim());
-                                logger.debug("Progress update: {}/{}", current, total);
-
-                                if (progressCallback != null) {
-                                    progressCallback.accept(current, total);
-                                }
-                            }
-                        } catch (NumberFormatException e) {
-                            logger.warn("Failed to parse progress message: {}", response);
-                        }
-                        continue; // Keep reading for next message
-                    }
-
-                    // Handle STAGEMOVE request (calibrate mode - background calibration complete)
-                    if (response.startsWith("STAGEMOVE:")) {
-                        String stageMessage = response.substring(10);
-                        logger.info("Stage move requested: {}", stageMessage);
-
-                        // Update status if callback provided
-                        if (statusCallback != null) {
-                            statusCallback.accept("Background calibration complete - move stage to tissue");
-                        }
-
-                        // Call stage move callback to show dialog and wait for user
-                        boolean shouldContinue = true;
-                        if (stageMoveCallback != null) {
-                            shouldContinue = stageMoveCallback.get();
-                        }
-
-                        // Send response back to server
-                        String responseMsg = shouldContinue ? "CONTINUE" : "ABORT";
-                        output.write(responseMsg.getBytes(StandardCharsets.UTF_8));
-                        output.flush();
-                        logger.info("Sent {} response for stage move", responseMsg);
-
-                        if (!shouldContinue) {
-                            throw new IOException("Birefringence optimization aborted by user");
-                        }
-                        continue; // Keep reading for next message
-                    }
-
-                    // Handle final responses
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Birefringence optimization failed: " + response.substring(7));
-                    } else if (response.startsWith("SUCCESS:")) {
-                        // Extract results directory path from SUCCESS response
-                        String resultPath = response.substring(8).trim();
-                        logger.info("Birefringence optimization successful. Results: {}", resultPath);
-                        return resultPath;
-                    } else {
-                        logger.warn("Unexpected response during optimization: {}", response);
-                        // Continue reading - might be a partial message
-                    }
-                }
-
-            } catch (IOException e) {
-                logger.error("Error during birefringence optimization", e);
-                handleIOException(new IOException("Birefringence optimization error", e));
-                throw new IOException("Birefringence optimization error: " + e.getMessage(), e);
-            } finally {
-                // Restore original timeout
-                if (socket != null) {
+                // Handle PROGRESS updates
+                if (response.startsWith("PROGRESS:")) {
+                    // Parse "PROGRESS:current:total"
                     try {
-                        socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
+                        String[] parts = response.substring(9).split(":");
+                        if (parts.length >= 2) {
+                            int current = Integer.parseInt(parts[0].trim());
+                            int total = Integer.parseInt(parts[1].trim());
+                            logger.debug("Progress update: {}/{}", current, total);
+
+                            if (progressCallback != null) {
+                                progressCallback.accept(current, total);
+                            }
+                        }
+                    } catch (NumberFormatException e) {
+                        logger.warn("Failed to parse progress message: {}", response);
                     }
+                    continue; // Keep reading for next message
+                }
+
+                // Handle STAGEMOVE request (calibrate mode - background calibration complete)
+                if (response.startsWith("STAGEMOVE:")) {
+                    String stageMessage = response.substring(10);
+                    logger.info("Stage move requested: {}", stageMessage);
+
+                    // Update status if callback provided
+                    if (statusCallback != null) {
+                        statusCallback.accept("Background calibration complete - move stage to tissue");
+                    }
+
+                    // Call stage move callback to show dialog and wait for user
+                    boolean shouldContinue = true;
+                    if (stageMoveCallback != null) {
+                        shouldContinue = stageMoveCallback.get();
+                    }
+
+                    // Send response back to server
+                    String responseMsg = shouldContinue ? "CONTINUE" : "ABORT";
+                    output.write(responseMsg.getBytes(StandardCharsets.UTF_8));
+                    output.flush();
+                    logger.info("Sent {} response for stage move", responseMsg);
+
+                    if (!shouldContinue) {
+                        throw new ServerAnswerException(
+                                "Birefringence optimization aborted by user", "aborted by user");
+                    }
+                    continue; // Keep reading for next message
+                }
+
+                // Handle final responses
+                if (response.startsWith("FAILED:")) {
+                    String reason = response.substring(7);
+                    throw new ServerAnswerException("Birefringence optimization failed: " + reason, reason);
+                } else if (response.startsWith("SUCCESS:")) {
+                    // Extract results directory path from SUCCESS response
+                    String resultPath = response.substring(8).trim();
+                    logger.info("Birefringence optimization successful. Results: {}", resultPath);
+                    return resultPath;
+                } else {
+                    logger.warn("Unexpected response during optimization: {}", response);
+                    // Continue reading - might be a partial message
                 }
             }
-        }
+        });
     }
 
     /**
@@ -4188,82 +3587,153 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("  Message length: {} bytes", messageBytes.length);
         logger.info("  Message content: {}", message);
 
+        // Calibration should be quick (single image), but allow 5 minutes for processing.
+        String response = exchange("Sunburst calibration", 300000, () -> {
+            send(Command.SBCALIB, messageBytes);
+            return readStartedThenResult("Sunburst calibration");
+        });
+        if (response.startsWith("SUCCESS:")) {
+            logger.info("Sunburst calibration successful");
+            return response.substring(8).trim();
+        }
+        logger.warn("Unexpected response: {}", response);
+        throw new IOException("Unexpected server response: " + response);
+    }
+
+    /** One step of an exchange on the primary socket. */
+    @FunctionalInterface
+    private interface SocketStep<T> {
+        T run() throws IOException, InterruptedException;
+    }
+
+    /**
+     * Runs an exchange holding the primary socket, at a read timeout of its own, and puts the
+     * timeout back afterwards. A failure here is not counted against the connection; use
+     * {@link #exchange} for that.
+     *
+     * @param what the operation, for the interrupted message
+     * @param readTimeoutMs the longest silence to accept from the server
+     * @param step what to send and read
+     */
+    private <T> T withReadTimeout(String what, int readTimeoutMs, SocketStep<T> step) throws IOException {
         synchronized (socketLock) {
             ensureConnected();
-
-            // Store original timeout
-            int originalTimeout = 0;
+            int originalTimeout = socket.getSoTimeout();
             try {
-                originalTimeout = socket.getSoTimeout();
-                // Calibration should be quick (single image), but allow 5 minutes for processing
-                socket.setSoTimeout(300000); // 5 minutes
-                logger.debug("Increased socket timeout to 5 minutes for sunburst calibration");
-            } catch (IOException e) {
-                logger.warn("Failed to adjust socket timeout", e);
-            }
-
-            try {
-                OutputStream output = socket.getOutputStream();
-                InputStream input = socket.getInputStream();
-
-                // Send command
-                output.write(Command.SBCALIB.getValue());
-                output.write(messageBytes);
-                output.flush();
-
-                logger.info("Command sent, waiting for server response...");
-
-                // Read initial response (STARTED or FAILED)
-                byte[] buffer = new byte[8192];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected sunburst calibration: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
-                }
-
-                // Wait for final response (SUCCESS with JSON or FAILED)
-                logger.info("Waiting for sunburst calibration to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead <= 0) {
-                    throw new IOException("No response received from server");
-                }
-
-                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-
-                if (response.startsWith("FAILED:")) {
-                    throw new IOException("Sunburst calibration failed: " + response.substring(7));
-                } else if (response.startsWith("SUCCESS:")) {
-                    // Extract JSON result
-                    String resultJson = response.substring(8).trim();
-                    logger.info("Sunburst calibration successful");
-                    return resultJson;
-                } else {
-                    logger.warn("Unexpected response: {}", response);
-                    throw new IOException("Unexpected server response: " + response);
-                }
-
-            } catch (IOException e) {
-                logger.error("Error during sunburst calibration", e);
-                handleIOException(new IOException("Sunburst calibration error", e));
-                throw new IOException("Sunburst calibration error: " + e.getMessage(), e);
+                socket.setSoTimeout(readTimeoutMs);
+                return step.run();
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+                throw new IOException(what + " interrupted", e);
             } finally {
-                // Restore original timeout
                 if (socket != null) {
                     try {
                         socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
                     } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
+                        logger.debug("Could not restore the socket timeout: {}", e.getMessage());
                     }
                 }
             }
         }
+    }
+
+    /**
+     * {@link #withReadTimeout} for a command whose I/O failures count against the connection.
+     * An answer from the server does not count: see {@link ServerAnswerException}.
+     */
+    private <T> T exchange(String what, int readTimeoutMs, SocketStep<T> step) throws IOException {
+        try {
+            return withReadTimeout(what, readTimeoutMs, step);
+        } catch (ServerAnswerException answer) {
+            throw answer;
+        } catch (IOException e) {
+            logger.error("Error during {}", what, e);
+            handleIOException(new IOException(what + " error", e));
+            throw new IOException(what + " error: " + e.getMessage(), e);
+        }
+    }
+
+    /** Sends a command name and its message as one write. */
+    private void send(Command command, byte[] message) throws IOException {
+        output.write(command.getValue());
+        output.write(message);
+        output.flush();
+        lastActivityTime.set(System.currentTimeMillis());
+    }
+
+    /**
+     * Reads one reply. Replies have no delimiter and a long one can cross TCP segments, so after
+     * the first bytes this keeps reading until the server has been quiet for
+     * {@link #REPLY_QUIET_GAP_MS}.
+     *
+     * @throws IOException if the connection closed
+     */
+    private String readReply(String what) throws IOException {
+        byte[] buffer = new byte[REPLY_BUFFER_BYTES];
+        int bytesRead = input.read(buffer);
+        if (bytesRead <= 0) {
+            throw new IOException("No response from server during " + what);
+        }
+        StringBuilder reply = new StringBuilder(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
+        int waitTimeout = socket.getSoTimeout();
+        socket.setSoTimeout(REPLY_QUIET_GAP_MS);
+        try {
+            while ((bytesRead = input.read(buffer)) > 0) {
+                reply.append(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
+            }
+        } catch (SocketTimeoutException quiet) {
+            // The expected way out: the reply is complete.
+        } finally {
+            socket.setSoTimeout(waitTimeout);
+        }
+        lastActivityTime.set(System.currentTimeMillis());
+        return reply.toString();
+    }
+
+    /**
+     * Reads the reply to a command the server acknowledges with {@code STARTED:} before it works,
+     * and answers with {@code SUCCESS:}, {@code CANCELLED:} or {@code FAILED:} when done.
+     *
+     * <p>The server writes these with no delimiter, so the two can arrive in one read, or a
+     * {@code FAILED:} can arrive in place of the acknowledgment. Any {@code PROGRESS:} before the
+     * result is skipped.
+     *
+     * @return the final reply, from its prefix on
+     * @throws ServerAnswerException if the server rejected the command or reports failure
+     */
+    private String readStartedThenResult(String what) throws IOException {
+        String reply = readReply(what);
+        if (reply.startsWith(FAILED_PREFIX)) {
+            String reason = reply.substring(FAILED_PREFIX.length()).trim();
+            throw new ServerAnswerException("Server rejected " + what + ": " + reason, reason);
+        }
+        String result = finalReplyIn(reply);
+        while (result == null) {
+            result = finalReplyIn(readReply(what));
+        }
+        if (result.startsWith(FAILED_PREFIX)) {
+            String reason = result.substring(FAILED_PREFIX.length()).trim();
+            throw new ServerAnswerException(what + " failed: " + reason, reason);
+        }
+        return result;
+    }
+
+    /**
+     * Where the final reply starts in text from the server, or null if it holds only the
+     * acknowledgment and progress.
+     */
+    public static String finalReplyIn(String text) {
+        if (!text.startsWith("STARTED:") && !text.startsWith("PROGRESS:")) {
+            return text;
+        }
+        int at = -1;
+        for (String prefix : List.of(SUCCESS_PREFIX, FAILED_PREFIX, CANCELLED_PREFIX)) {
+            int found = text.indexOf(prefix);
+            if (found >= 0 && (at < 0 || found < at)) {
+                at = found;
+            }
+        }
+        return at < 0 ? null : text.substring(at);
     }
 
     /**
@@ -5241,165 +4711,48 @@ public class MicroscopeSocketClient implements AutoCloseable {
         return acknowledged;
     }
 
-    // Tracks whether the server supports the REQHWER command.
-    // Defaults to true (try once). On first failure, permanently disabled.
-    // The Python server's command loop ignores unknown 8-byte commands (they fall
-    // through all if-blocks and loop back), so sending REQHWER to an older server
-    // is harmless -- it just never responds, causing a one-time read timeout.
-    private volatile boolean hwErrorCheckSupported = true;
-
     /**
-     * Checks if a hardware error recovery is requested by the server.
-     * <p>
-     * This is a best-effort, non-critical check. If the server does not support
-     * the REQHWER command (older versions), the first timeout auto-disables
-     * future checks to avoid reconnection loops. Does NOT call handleIOException
-     * on failure -- the connection stays intact.
-     *
-     * @return the error message if recovery is requested, or null if no error or unsupported
+     * One best-effort poll of the server for a pending message (hardware error, time-lapse
+     * warning, saturation prompt). Each is a payload-free 8-byte command. An old server ignores
+     * the unknown command, so the first read times out and the check disables itself for good
+     * without disturbing the connection.
      */
-    public String checkHardwareError() {
-        if (!hwErrorCheckSupported) {
-            return null;
-        }
+    private static final class PendingMessageCheck {
+        final Command command;
+        final String statusPrefix;
+        final String what;
+        volatile boolean supported = true;
 
-        try {
-            synchronized (socketLock) {
-                ensureConnected();
-
-                output.write(Command.REQHWER.getValue());
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                // Read 8-byte status
-                byte[] statusBytes = new byte[8];
-                input.readFully(statusBytes);
-                String status = new String(statusBytes, StandardCharsets.UTF_8).trim();
-
-                if ("IDLE____".equals(status)) {
-                    return null;
-                } else if (status.startsWith("HWERR")) {
-                    // Read 4-byte message length (big-endian), then message body
-                    byte[] lenBytes = new byte[4];
-                    input.readFully(lenBytes);
-                    int msgLen = ((lenBytes[0] & 0xFF) << 24)
-                            | ((lenBytes[1] & 0xFF) << 16)
-                            | ((lenBytes[2] & 0xFF) << 8)
-                            | (lenBytes[3] & 0xFF);
-                    byte[] msgBytes = new byte[msgLen];
-                    input.readFully(msgBytes);
-                    lastActivityTime.set(System.currentTimeMillis());
-                    return new String(msgBytes, StandardCharsets.UTF_8);
-                } else {
-                    logger.warn("Unknown hardware error status: {}", status);
-                    return null;
-                }
-            }
-        } catch (Exception e) {
-            // Server doesn't support REQHWER -- permanently disable.
-            // Do NOT call handleIOException: that tears down the connection
-            // and disrupts ongoing acquisition/alignment monitoring.
-            hwErrorCheckSupported = false;
-            logger.debug("Hardware error check disabled (server does not support REQHWER)");
-            return null;
+        PendingMessageCheck(Command command, String statusPrefix, String what) {
+            this.command = command;
+            this.statusPrefix = statusPrefix;
+            this.what = what;
         }
     }
 
-    // Tracks whether the server supports the REQTWARN command.
-    // Same auto-disable contract as hwErrorCheckSupported: an old server
-    // ignores the unknown 8-byte command, the first read times out, and the
-    // check disables itself permanently without disturbing the connection.
-    private volatile boolean timeLapseWarningCheckSupported = true;
-
-    /**
-     * Checks if the server has a pending time-lapse falling-behind warning.
-     * <p>
-     * This is a best-effort, non-critical check modeled on
-     * {@link #checkHardwareError()}. The server keeps returning the same
-     * warning on every poll until acquisition ends -- callers must de-dupe and
-     * show it once. If the server does not support the REQTWARN command, the
-     * first timeout auto-disables future checks. Does NOT call
-     * handleIOException on failure -- the connection stays intact.
-     *
-     * @return the warning message if one is pending, or null if none or unsupported
-     */
-    public String checkTimeLapseWarning() {
-        if (!timeLapseWarningCheckSupported) {
-            return null;
-        }
-
-        try {
-            synchronized (socketLock) {
-                ensureConnected();
-
-                output.write(Command.REQTWARN.getValue());
-                output.flush();
-                lastActivityTime.set(System.currentTimeMillis());
-
-                // Read 8-byte status
-                byte[] statusBytes = new byte[8];
-                input.readFully(statusBytes);
-                String status = new String(statusBytes, StandardCharsets.UTF_8).trim();
-
-                if ("IDLE____".equals(status)) {
-                    return null;
-                } else if (status.startsWith("TWARN")) {
-                    // Read 4-byte message length (big-endian), then message body
-                    byte[] lenBytes = new byte[4];
-                    input.readFully(lenBytes);
-                    int msgLen = ((lenBytes[0] & 0xFF) << 24)
-                            | ((lenBytes[1] & 0xFF) << 16)
-                            | ((lenBytes[2] & 0xFF) << 8)
-                            | (lenBytes[3] & 0xFF);
-                    byte[] msgBytes = new byte[msgLen];
-                    input.readFully(msgBytes);
-                    lastActivityTime.set(System.currentTimeMillis());
-                    return new String(msgBytes, StandardCharsets.UTF_8);
-                } else {
-                    logger.warn("Unknown time-lapse warning status: {}", status);
-                    return null;
-                }
-            }
-        } catch (Exception e) {
-            // Server doesn't support REQTWARN -- permanently disable.
-            // Do NOT call handleIOException: that tears down the connection
-            // and disrupts ongoing acquisition monitoring.
-            timeLapseWarningCheckSupported = false;
-            logger.debug("Time-lapse warning check disabled (server does not support REQTWARN)");
-            return null;
-        }
-    }
-
-    // Tracks whether the server supports the REQSAT command. Same auto-disable
-    // contract as hwErrorCheckSupported -- an old server ignores the unknown
-    // 8-byte command, the first read times out, and the check disables itself
-    // permanently without disturbing the connection. The server then falls
-    // back to a hard abort on saturation, matching pre-feature behavior.
-    private volatile boolean saturationCheckSupported = true;
+    private final PendingMessageCheck hardwareErrorCheck =
+            new PendingMessageCheck(Command.REQHWER, "HWERR", "hardware error");
+    private final PendingMessageCheck timeLapseWarningCheck =
+            new PendingMessageCheck(Command.REQTWARN, "TWARN", "time-lapse warning");
+    private final PendingMessageCheck saturationCheck =
+            new PendingMessageCheck(Command.REQSAT, "SATWARN", "saturation");
 
     /**
      * Cleared the first time FINDTISS gets no usable reply, so a batch does not pay the
      * read timeout once per slide against a server that does not have the command.
-     * Same idea as {@code hwErrorCheckSupported} / {@code saturationCheckSupported}, but it
-     * matters more here: those are payload-free commands, and this one is not (see
-     * {@link #findTissue}).
+     * Same idea as the pending-message checks, but it matters more here: those are
+     * payload-free commands, and this one is not (see {@link #findTissue}).
      */
     private volatile boolean findTissueSupported = true;
 
     /**
-     * Checks if the server has a pending saturation continue/cancel decision.
-     * <p>
-     * This is a best-effort, non-critical check modeled on
-     * {@link #checkHardwareError()}. The server keeps returning the same
-     * prompt on every poll until the user answers -- callers must de-dupe and
-     * show the dialog once. If the server does not support the REQSAT command
-     * (older versions), the first timeout auto-disables future checks. Does
-     * NOT call handleIOException on failure -- the connection stays intact.
+     * Asks the server whether a message is pending. Does NOT call handleIOException on failure:
+     * that tears down the connection and disrupts ongoing acquisition monitoring.
      *
-     * @return the saturation message if a decision is pending, or null if none or unsupported
+     * @return the message, or null if none is pending or the server does not support the command
      */
-    public String checkSaturationDecision() {
-        if (!saturationCheckSupported) {
+    private String pollPendingMessage(PendingMessageCheck check) {
+        if (!check.supported) {
             return null;
         }
 
@@ -5407,7 +4760,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             synchronized (socketLock) {
                 ensureConnected();
 
-                output.write(Command.REQSAT.getValue());
+                output.write(check.command.getValue());
                 output.flush();
                 lastActivityTime.set(System.currentTimeMillis());
 
@@ -5418,7 +4771,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 if ("IDLE____".equals(status)) {
                     return null;
-                } else if (status.startsWith("SATWARN")) {
+                } else if (status.startsWith(check.statusPrefix)) {
                     // Read 4-byte message length (big-endian), then message body
                     byte[] lenBytes = new byte[4];
                     input.readFully(lenBytes);
@@ -5431,18 +4784,47 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     lastActivityTime.set(System.currentTimeMillis());
                     return new String(msgBytes, StandardCharsets.UTF_8);
                 } else {
-                    logger.warn("Unknown saturation status: {}", status);
+                    logger.warn("Unknown {} status: {}", check.what, status);
                     return null;
                 }
             }
         } catch (Exception e) {
-            // Server doesn't support REQSAT -- permanently disable.
-            // Do NOT call handleIOException: that tears down the connection
-            // and disrupts ongoing acquisition monitoring.
-            saturationCheckSupported = false;
-            logger.debug("Saturation decision check disabled (server does not support REQSAT)");
+            check.supported = false;
+            logger.debug("The {} check is disabled (server does not support {})", check.what, check.command);
             return null;
         }
+    }
+
+    /**
+     * Checks if a hardware error recovery is requested by the server (REQHWER). The first
+     * failure disables the check.
+     *
+     * @return the error message if recovery is requested, or null if no error or unsupported
+     */
+    public String checkHardwareError() {
+        return pollPendingMessage(hardwareErrorCheck);
+    }
+
+    /**
+     * Checks if the server has a pending time-lapse falling-behind warning (REQTWARN). The server
+     * keeps returning the same warning on every poll until acquisition ends -- callers must
+     * de-dupe and show it once.
+     *
+     * @return the warning message if one is pending, or null if none or unsupported
+     */
+    public String checkTimeLapseWarning() {
+        return pollPendingMessage(timeLapseWarningCheck);
+    }
+
+    /**
+     * Checks if the server has a pending saturation continue/cancel decision (REQSAT). The server
+     * keeps returning the same prompt on every poll until the user answers -- callers must de-dupe
+     * and show the dialog once. An old server falls back to a hard abort on saturation.
+     *
+     * @return the saturation message if a decision is pending, or null if none or unsupported
+     */
+    public String checkSaturationDecision() {
+        return pollPendingMessage(saturationCheck);
     }
 
     /**
@@ -5965,77 +5347,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 boostedMaxGainDb,
                 gainAnalogRbMax);
 
-        synchronized (socketLock) {
-            ensureConnected();
-
-            int originalTimeout = readTimeout;
-            try {
-                // White balance can take 2-3 minutes for full calibration
-                if (socket != null) {
-                    socket.setSoTimeout(180000); // 3 minutes
-                    logger.debug("Set socket timeout to 3 minutes for white balance");
-                }
-
-                // Send WBSIMPLE command (8 bytes)
-                output.write(Command.WBSIMPLE.getValue());
-                output.flush();
-                logger.debug("Sent WBSIMPLE command (8 bytes)");
-
-                Thread.sleep(50);
-
-                // Send message
-                output.write(messageBytes);
-                output.flush();
-                logger.debug("Sent white balance message ({} bytes)", messageBytes.length);
-
-                lastActivityTime.set(System.currentTimeMillis());
-                logger.info("Simple white balance command sent successfully");
-
-                // Read the STARTED acknowledgment
-                byte[] buffer = new byte[2048];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("White balance failed: " + response.substring(7));
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial response: {}", response);
-                    }
-                }
-
-                // Wait for final SUCCESS/FAILED response
-                logger.info("Waiting for white balance calibration to complete...");
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("White balance failed: " + finalResponse.substring(7));
-                    }
-
-                    if (finalResponse.startsWith("SUCCESS:")) {
-                        return parseSimpleWBResponse(finalResponse);
-                    }
-                }
-
-                throw new IOException("No valid response received from white balance calibration");
-
-            } catch (IOException | InterruptedException e) {
-                handleIOException(new IOException("White balance error", e));
-                throw new IOException("White balance error: " + e.getMessage(), e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout", e);
-                    }
-                }
-            }
+        // White balance can take 2-3 minutes for full calibration.
+        String finalResponse = exchange("White balance", 180000, () -> {
+            send(Command.WBSIMPLE, messageBytes);
+            return readStartedThenResult("White balance");
+        });
+        logger.info("Received final response: {}", finalResponse);
+        if (finalResponse.startsWith("SUCCESS:")) {
+            return parseSimpleWBResponse(finalResponse);
         }
+        throw new IOException("No valid response received from white balance calibration");
     }
 
     /**
@@ -6150,77 +5471,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 boostedMaxGainDb,
                 gainAnalogRbMax);
 
-        synchronized (socketLock) {
-            ensureConnected();
-
-            int originalTimeout = readTimeout;
-            try {
-                // PPM calibration involves 4 angles, can take 10-15 minutes
-                if (socket != null) {
-                    socket.setSoTimeout(900000); // 15 minutes
-                    logger.debug("Set socket timeout to 15 minutes for PPM white balance");
-                }
-
-                // Send WBPPM command (8 bytes)
-                output.write(Command.WBPPM.getValue());
-                output.flush();
-                logger.debug("Sent WBPPM command (8 bytes)");
-
-                Thread.sleep(50);
-
-                // Send message
-                output.write(messageBytes);
-                output.flush();
-                logger.debug("Sent PPM white balance message ({} bytes)", messageBytes.length);
-
-                lastActivityTime.set(System.currentTimeMillis());
-                logger.info("PPM white balance command sent successfully");
-
-                // Read the STARTED acknowledgment
-                byte[] buffer = new byte[4096];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("PPM white balance failed: " + response.substring(7));
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial response: {}", response);
-                    }
-                }
-
-                // Wait for final SUCCESS/FAILED response
-                logger.info("Waiting for PPM white balance calibration to complete (4 angles)...");
-                bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String finalResponse = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received final response: {}", finalResponse);
-
-                    if (finalResponse.startsWith("FAILED:")) {
-                        throw new IOException("PPM white balance failed: " + finalResponse.substring(7));
-                    }
-
-                    if (finalResponse.startsWith("SUCCESS:")) {
-                        return parsePPMWBResponse(finalResponse);
-                    }
-                }
-
-                throw new IOException("No valid response received from PPM white balance calibration");
-
-            } catch (IOException | InterruptedException e) {
-                handleIOException(new IOException("PPM white balance error", e));
-                throw new IOException("PPM white balance error: " + e.getMessage(), e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore socket timeout", e);
-                    }
-                }
-            }
+        // PPM calibration involves 4 angles and can take 10-15 minutes.
+        String finalResponse = exchange("PPM white balance", 900000, () -> {
+            send(Command.WBPPM, messageBytes);
+            return readStartedThenResult("PPM white balance");
+        });
+        logger.info("Received final response: {}", finalResponse);
+        if (finalResponse.startsWith("SUCCESS:")) {
+            return parsePPMWBResponse(finalResponse);
         }
+        throw new IOException("No valid response received from PPM white balance calibration");
     }
 
     /**
@@ -6411,138 +5671,106 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (gains != null) logger.info("  Custom gains: {}", gains);
         if (exposures != null) logger.info("  Custom exposures: {}", exposures);
 
-        synchronized (socketLock) {
-            ensureConnected();
+        // Noise characterization can take up to 20 minutes for the full grid.
+        return exchange("Noise characterization", 1200000, () -> {
+            send(Command.NOISCHAR, messageBytes);
+            logger.info("Noise characterization command sent, waiting for server response...");
 
-            int originalTimeout = 0;
-            try {
-                originalTimeout = socket.getSoTimeout();
-                // Noise characterization can take up to 20 minutes for full grid
-                socket.setSoTimeout(1200000); // 20 minutes
-                logger.debug("Increased socket timeout to 20 minutes for noise characterization");
-            } catch (IOException e) {
-                logger.warn("Failed to adjust socket timeout", e);
+            // Read initial response (STARTED or FAILED)
+            byte[] buffer = new byte[8192];
+            int bytesRead = input.read(buffer);
+            if (bytesRead > 0) {
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                logger.info("Received initial server response: {}", response);
+
+                if (response.startsWith("FAILED:")) {
+                    String reason = response.substring(7).trim();
+                    throw new ServerAnswerException("Server rejected noise characterization: " + reason, reason);
+                } else if (!response.startsWith("STARTED:")) {
+                    logger.warn("Unexpected initial server response: {}", response);
+                }
             }
 
-            try {
-                OutputStream output = socket.getOutputStream();
-                InputStream input = socket.getInputStream();
-
-                // Send NOISCHAR command (8 bytes) + message
-                output.write(Command.NOISCHAR.getValue());
-                output.write(messageBytes);
-                output.flush();
-
-                logger.info("Noise characterization command sent, waiting for server response...");
-
-                // Read initial response (STARTED or FAILED)
-                byte[] buffer = new byte[8192];
-                int bytesRead = input.read(buffer);
-                if (bytesRead > 0) {
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    logger.info("Received initial server response: {}", response);
-
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Server rejected noise characterization: " + response);
-                    } else if (!response.startsWith("STARTED:")) {
-                        logger.warn("Unexpected initial server response: {}", response);
-                    }
+            // Read responses in a loop until SUCCESS or FAILED
+            logger.info("Waiting for noise characterization to complete...");
+            while (true) {
+                bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("Connection closed during noise characterization");
                 }
 
-                // Read responses in a loop until SUCCESS or FAILED
-                logger.info("Waiting for noise characterization to complete...");
-                while (true) {
-                    bytesRead = input.read(buffer);
-                    if (bytesRead <= 0) {
-                        throw new IOException("Connection closed during noise characterization");
-                    }
+                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+                lastActivityTime.set(System.currentTimeMillis());
 
-                    String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                    lastActivityTime.set(System.currentTimeMillis());
+                // Handle PROGRESS updates
+                if (response.startsWith("PROGRESS:")) {
+                    try {
+                        String[] parts = response.substring(9).split(":");
+                        if (parts.length >= 2) {
+                            int current = Integer.parseInt(parts[0].trim());
+                            int total = Integer.parseInt(parts[1].trim());
+                            logger.debug("Noise characterization progress: {}/{}", current, total);
 
-                    // Handle PROGRESS updates
-                    if (response.startsWith("PROGRESS:")) {
-                        try {
-                            String[] parts = response.substring(9).split(":");
-                            if (parts.length >= 2) {
-                                int current = Integer.parseInt(parts[0].trim());
-                                int total = Integer.parseInt(parts[1].trim());
-                                logger.debug("Noise characterization progress: {}/{}", current, total);
-
-                                if (progressCallback != null) {
-                                    progressCallback.accept(current, total);
-                                }
+                            if (progressCallback != null) {
+                                progressCallback.accept(current, total);
                             }
-                        } catch (NumberFormatException e) {
-                            logger.warn("Failed to parse progress message: {}", response);
                         }
-                        continue;
+                    } catch (NumberFormatException e) {
+                        logger.warn("Failed to parse progress message: {}", response);
                     }
+                    continue;
+                }
 
-                    // Handle FAILED
-                    if (response.startsWith("FAILED:")) {
-                        throw new IOException("Noise characterization failed: " + response.substring(7));
+                // Handle FAILED
+                if (response.startsWith("FAILED:")) {
+                    String reason = response.substring(7).trim();
+                    throw new ServerAnswerException("Noise characterization failed: " + reason, reason);
+                }
+
+                // Handle SUCCESS
+                // Format: SUCCESS:{path}|{totalConfigs}|{plots}|{bestGain},{bestExp}
+                if (response.startsWith("SUCCESS:")) {
+                    String data = response.substring(8);
+                    String[] parts = data.split("\\|");
+
+                    String resultPath = parts.length > 0 ? parts[0].trim() : outputPath;
+                    int totalConfigs = 0;
+                    boolean plots = false;
+                    double bestGain = 0;
+                    double bestExp = 0;
+
+                    if (parts.length > 1) {
+                        try {
+                            totalConfigs = Integer.parseInt(parts[1].trim());
+                        } catch (NumberFormatException ignored) {
+                        }
                     }
-
-                    // Handle SUCCESS
-                    // Format: SUCCESS:{path}|{totalConfigs}|{plots}|{bestGain},{bestExp}
-                    if (response.startsWith("SUCCESS:")) {
-                        String data = response.substring(8);
-                        String[] parts = data.split("\\|");
-
-                        String resultPath = parts.length > 0 ? parts[0].trim() : outputPath;
-                        int totalConfigs = 0;
-                        boolean plots = false;
-                        double bestGain = 0;
-                        double bestExp = 0;
-
-                        if (parts.length > 1) {
+                    if (parts.length > 2) {
+                        plots = "true".equals(parts[2].trim());
+                    }
+                    if (parts.length > 3) {
+                        String[] bestParts = parts[3].trim().split(",");
+                        if (bestParts.length >= 2) {
                             try {
-                                totalConfigs = Integer.parseInt(parts[1].trim());
+                                bestGain = Double.parseDouble(bestParts[0].trim());
+                                bestExp = Double.parseDouble(bestParts[1].trim());
                             } catch (NumberFormatException ignored) {
                             }
                         }
-                        if (parts.length > 2) {
-                            plots = "true".equals(parts[2].trim());
-                        }
-                        if (parts.length > 3) {
-                            String[] bestParts = parts[3].trim().split(",");
-                            if (bestParts.length >= 2) {
-                                try {
-                                    bestGain = Double.parseDouble(bestParts[0].trim());
-                                    bestExp = Double.parseDouble(bestParts[1].trim());
-                                } catch (NumberFormatException ignored) {
-                                }
-                            }
-                        }
-
-                        logger.info(
-                                "Noise characterization complete: {} configs, best at gain={}, exp={}ms",
-                                totalConfigs,
-                                bestGain,
-                                bestExp);
-                        return new NoiseCharacterizationResult(totalConfigs, plots, bestGain, bestExp, resultPath);
                     }
 
-                    // Unknown response - log and continue
-                    logger.warn("Unexpected response during noise characterization: {}", response);
+                    logger.info(
+                            "Noise characterization complete: {} configs, best at gain={}, exp={}ms",
+                            totalConfigs,
+                            bestGain,
+                            bestExp);
+                    return new NoiseCharacterizationResult(totalConfigs, plots, bestGain, bestExp, resultPath);
                 }
 
-            } catch (IOException e) {
-                logger.error("Error during noise characterization", e);
-                handleIOException(new IOException("Noise characterization error", e));
-                throw new IOException("Noise characterization error: " + e.getMessage(), e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                        logger.debug("Restored socket timeout to {}ms", originalTimeout);
-                    } catch (IOException e) {
-                        logger.warn("Failed to restore original socket timeout", e);
-                    }
-                }
+                // Unknown response - log and continue
+                logger.warn("Unexpected response during noise characterization: {}", response);
             }
-        }
+        });
     }
 
     // ==================== Camera Control Methods ====================
@@ -6810,24 +6038,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IllegalArgumentException("Exposures must have length 1 (unified) or 3 (R, G, B)");
         }
 
-        // Build payload: 1 byte count + N floats
-        ByteBuffer buffer = ByteBuffer.allocate(1 + exposures.length * 4);
-        buffer.order(ByteOrder.BIG_ENDIAN);
-        buffer.put((byte) exposures.length);
-        for (float exp : exposures) {
-            buffer.putFloat(exp);
-        }
-
-        byte[] response = executeCommand(Command.SETEXP, buffer.array(), 8);
-        String responseStr = new String(response, StandardCharsets.UTF_8).trim();
-
-        if (!responseStr.startsWith("ACK")) {
-            if (responseStr.startsWith("ERR_NJAI")) {
-                throw new IOException("Per-channel exposure requires JAI camera");
-            }
-            throw new IOException("Failed to set exposure: " + responseStr);
-        }
-
+        setCameraFloats(Command.SETEXP, exposures, "Per-channel exposure requires JAI camera", "set exposure");
         logger.info("Exposure set successfully: {}", java.util.Arrays.toString(exposures));
     }
 
@@ -6870,25 +6081,34 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     "Gains must have length 1 (unified only) or 3 (unified, analog_red, analog_blue)");
         }
 
-        // Build payload: 1 byte count + N floats
-        ByteBuffer buffer = ByteBuffer.allocate(1 + gains.length * 4);
+        setCameraFloats(Command.SETGAIN, gains, "Gain control requires JAI camera", "set gain");
+        logger.info("Gain set successfully: {}", java.util.Arrays.toString(gains));
+    }
+
+    /**
+     * Sends a camera setting as one count byte followed by that many floats, and checks for ACK.
+     *
+     * @param notJaiMessage the error when the camera is not a JAI
+     * @param action what failed, for "Failed to ..."
+     */
+    private void setCameraFloats(Command command, float[] values, String notJaiMessage, String action)
+            throws IOException {
+        ByteBuffer buffer = ByteBuffer.allocate(1 + values.length * 4);
         buffer.order(ByteOrder.BIG_ENDIAN);
-        buffer.put((byte) gains.length);
-        for (float gain : gains) {
-            buffer.putFloat(gain);
+        buffer.put((byte) values.length);
+        for (float value : values) {
+            buffer.putFloat(value);
         }
 
-        byte[] response = executeCommand(Command.SETGAIN, buffer.array(), 8);
+        byte[] response = executeCommand(command, buffer.array(), 8);
         String responseStr = new String(response, StandardCharsets.UTF_8).trim();
 
         if (!responseStr.startsWith("ACK")) {
             if (responseStr.startsWith("ERR_NJAI")) {
-                throw new IOException("Gain control requires JAI camera");
+                throw new IOException(notJaiMessage);
             }
-            throw new IOException("Failed to set gain: " + responseStr);
+            throw new IOException("Failed to " + action + ": " + responseStr);
         }
-
-        logger.info("Gain set successfully: {}", java.util.Arrays.toString(gains));
     }
 
     /**
@@ -8212,29 +7432,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
         msg.append(" ENDOFSTR");
 
         // SIFT uses a simple request/response (no STARTED/final pattern)
-        synchronized (socketLock) {
-            output.write(Command.SIFTAL.getValue());
-            output.write(msg.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            output.flush();
-
+        String response = withReadTimeout("SIFTAL", 30_000, () -> {
+            send(Command.SIFTAL, msg.toString().getBytes(StandardCharsets.UTF_8));
             logger.info("SIFTAL command sent");
+            return readReply("SIFTAL");
+        });
+        logger.info("SIFTAL response: {}", response);
 
-            socket.setSoTimeout(30_000); // 30 second timeout for SIFT
-            try {
-                byte[] buf = new byte[4096];
-                int n = input.read(buf);
-                if (n <= 0) throw new IOException("SIFTAL: no response");
-                String response = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
-                logger.info("SIFTAL response: {}", response);
-
-                if (response.startsWith("FAILED")) {
-                    throw new IOException("SIFT matching failed: " + response.substring(7));
-                }
-                return response;
-            } finally {
-                socket.setSoTimeout(readTimeout);
-            }
+        if (response.startsWith("FAILED")) {
+            throw new IOException("SIFT matching failed: " + response.substring(7));
         }
+        return response;
     }
 
     /**
@@ -8403,29 +7611,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (flipY) msg.append(" --flip-y");
         msg.append(" ENDOFSTR");
 
-        synchronized (socketLock) {
-            output.write(Command.SIFTIM.getValue());
-            output.write(msg.toString().getBytes(java.nio.charset.StandardCharsets.UTF_8));
-            output.flush();
-
+        String response = withReadTimeout("SIFTIM", 60_000, () -> {
+            send(Command.SIFTIM, msg.toString().getBytes(StandardCharsets.UTF_8));
             logger.info("SIFTIM command sent");
+            return readReply("SIFTIM");
+        });
+        logger.info("SIFTIM response: {}", response);
 
-            socket.setSoTimeout(60_000); // 60s for image-vs-image SIFT
-            try {
-                byte[] buf = new byte[4096];
-                int n = input.read(buf);
-                if (n <= 0) throw new IOException("SIFTIM: no response");
-                String response = new String(buf, 0, n, java.nio.charset.StandardCharsets.UTF_8);
-                logger.info("SIFTIM response: {}", response);
-
-                if (response.startsWith("FAILED")) {
-                    throw new IOException("SIFT image-vs-image matching failed: " + response.substring(7));
-                }
-                return response;
-            } finally {
-                socket.setSoTimeout(readTimeout);
-            }
+        if (response.startsWith("FAILED")) {
+            throw new IOException("SIFT image-vs-image matching failed: " + response.substring(7));
         }
+        return response;
     }
 
     /**
@@ -8596,87 +7792,67 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     private String runLcLongCommand(Command command, String message, String what, Consumer<String> statusCallback)
             throws IOException {
-        synchronized (socketLock) {
-            ensureConnected();
-            int originalTimeout = socket.getSoTimeout();
+        // The server acknowledges at once. A server older than the command sends nothing, so the
+        // acknowledgment gets a short wait of its own.
+        return exchange("LC " + what, 30000, () -> {
+            send(command, message.getBytes(StandardCharsets.UTF_8));
+
+            byte[] buffer = new byte[65536];
+            int bytesRead;
             try {
-                // The server acknowledges at once. A server older than the command sends
-                // nothing, so the acknowledgement gets a short wait of its own.
-                socket.setSoTimeout(30000);
-
-                output.write(command.getValue());
-                output.write(message.getBytes(StandardCharsets.UTF_8));
-                output.flush();
-
-                byte[] buffer = new byte[65536];
-                int bytesRead;
-                try {
-                    bytesRead = input.read(buffer);
-                } catch (java.net.SocketTimeoutException e) {
-                    throw new IOException("the microscope server did not acknowledge " + command
-                            + " within 30 s; it may be older than this command. Update the microscope server.");
-                }
-                // A calibration is a few hundred exposures and a sweep a few thousand; the
-                // default read timeout is nowhere near long enough. Progress arrives far
-                // more often than this.
-                socket.setSoTimeout(600000);
-                if (bytesRead <= 0) {
-                    throw new IOException("No acknowledgment from server");
-                }
-                String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
-                if (response.startsWith("FAILED:")) {
-                    throw new IOException("Server rejected the " + what + ": " + response.substring(7));
-                }
-                if (!response.startsWith("STARTED:")) {
-                    logger.warn("Unexpected initial response to {}: {}", command, response);
-                }
-
-                // The acknowledgement can arrive in the same read as the first progress
-                // message (or more); the buffer keeps whatever followed STARTED.
-                ProgressReplyBuffer replies = new ProgressReplyBuffer();
-                int ack = response.indexOf("STARTED:");
-                int afterAck = response.indexOf("PROGRESS:", Math.max(ack, 0));
-                if (afterAck < 0) {
-                    afterAck = Math.max(response.indexOf("SUCCESS:"), response.indexOf("FAILED:"));
-                }
-                if (afterAck > 0) {
-                    replies.append(response.substring(afterAck));
-                }
-                while (true) {
-                    String json = replies.success();
-                    if (json != null) {
-                        return json;
-                    }
-                    String failure = replies.failure();
-                    if (failure != null) {
-                        throw new IOException("LC " + what + " failed: " + failure);
-                    }
-                    // PROGRESS:current:total:message -- only the message is useful here,
-                    // since the state count is not known ahead.
-                    String progressMessage = replies.latestProgressMessage();
-                    if (progressMessage != null && statusCallback != null) {
-                        statusCallback.accept(progressMessage);
-                    }
-                    bytesRead = input.read(buffer);
-                    if (bytesRead <= 0) {
-                        throw new IOException("Connection closed during the LC " + what);
-                    }
-                    replies.append(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
-                    lastActivityTime.set(System.currentTimeMillis());
-                }
-            } catch (IOException e) {
-                logger.error("Error during LC-PolScope {}", what, e);
-                handleIOException(new IOException("LC " + what + " error", e));
-                throw new IOException("LC " + what + " error: " + e.getMessage(), e);
-            } finally {
-                if (socket != null) {
-                    try {
-                        socket.setSoTimeout(originalTimeout);
-                    } catch (Exception e) {
-                        logger.debug("Could not restore socket timeout: {}", e.getMessage());
-                    }
-                }
+                bytesRead = input.read(buffer);
+            } catch (java.net.SocketTimeoutException e) {
+                throw new IOException("the microscope server did not acknowledge " + command
+                        + " within 30 s; it may be older than this command. Update the microscope server.");
             }
-        }
+            // A calibration is a few hundred exposures and a sweep a few thousand; the default
+            // read timeout is nowhere near long enough. Progress arrives far more often than this.
+            socket.setSoTimeout(600000);
+            if (bytesRead <= 0) {
+                throw new IOException("No acknowledgment from server");
+            }
+            String response = new String(buffer, 0, bytesRead, StandardCharsets.UTF_8);
+            if (response.startsWith("FAILED:")) {
+                String reason = response.substring(7);
+                throw new ServerAnswerException("Server rejected the " + what + ": " + reason, reason);
+            }
+            if (!response.startsWith("STARTED:")) {
+                logger.warn("Unexpected initial response to {}: {}", command, response);
+            }
+
+            // The acknowledgment can arrive in the same read as the first progress message (or
+            // more); the buffer keeps whatever followed STARTED.
+            ProgressReplyBuffer replies = new ProgressReplyBuffer();
+            int ack = response.indexOf("STARTED:");
+            int afterAck = response.indexOf("PROGRESS:", Math.max(ack, 0));
+            if (afterAck < 0) {
+                afterAck = Math.max(response.indexOf("SUCCESS:"), response.indexOf("FAILED:"));
+            }
+            if (afterAck > 0) {
+                replies.append(response.substring(afterAck));
+            }
+            while (true) {
+                String json = replies.success();
+                if (json != null) {
+                    return json;
+                }
+                String failure = replies.failure();
+                if (failure != null) {
+                    throw new ServerAnswerException("LC " + what + " failed: " + failure, failure);
+                }
+                // PROGRESS:current:total:message -- only the message is useful here, since the
+                // state count is not known ahead.
+                String progressMessage = replies.latestProgressMessage();
+                if (progressMessage != null && statusCallback != null) {
+                    statusCallback.accept(progressMessage);
+                }
+                bytesRead = input.read(buffer);
+                if (bytesRead <= 0) {
+                    throw new IOException("Connection closed during the LC " + what);
+                }
+                replies.append(new String(buffer, 0, bytesRead, StandardCharsets.UTF_8));
+                lastActivityTime.set(System.currentTimeMillis());
+            }
+        });
     }
 }
