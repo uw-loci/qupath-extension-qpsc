@@ -2,7 +2,7 @@
 title: QPSC Workflow Map
 purpose: Machine-readable single source of truth for workflow dispatch, data surfaces, and cross-workflow dependencies. Optimized for LLM agents, not human reading.
 maintenance: Update alongside any code change that affects a watched_file or renames a watched_symbol. Verified by tools/check_workflow_map.py at pre-push time (Phase 5 of tools/pre-push-checks.sh). Missing symbols BLOCK; watched-file drift WARNS with the offending commits.
-last_synced_commit: 05ee3284
+last_synced_commit: 122f31fe
 watched_files:
   - src/main/java/qupath/ext/qpsc/SetupScope.java
   - src/main/java/qupath/ext/qpsc/ModalityUis.java
@@ -707,7 +707,7 @@ file: src/main/java/qupath/ext/qpsc/controller/WhiteBalanceWorkflow.java
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI White Balance Calibration... (when hasJAICamera; SetupScope.java:880, dispatch 'whiteBalance')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI White Balance Calibration... (when hasJAICamera; SetupScope.java:864, dispatch 'whiteBalance')"
   - "Wizard: AcquisitionWizardDialog white-balance step"
 reads:
   - DS3 (pixel size)
@@ -837,7 +837,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MakePortableWorkflow.java
 entry: run(qupath)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... (SetupScope.java:798, direct call)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... (SetupScope.java:782, direct call)"
 reads:
   - DS27 (project image list; entries with .zarr backing)
   - DS28 (raw tile folders, when ZARR is absent)
@@ -978,8 +978,8 @@ file: src/main/java/qupath/ext/qpsc/ui/setupwizard/SetupWizardDialog.java
 entry: show()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... (SetupScope.java:837, dispatch 'setupWizard')"
-  - "Top-level when !configValid: 'Setup Wizard (Start Here)...' inserted before main wizard (SetupScope.java:962)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... (SetupScope.java:821, dispatch 'setupWizard')"
+  - "Top-level when !configValid: 'Setup Wizard (Start Here)...' inserted before main wizard (SetupScope.java:945)"
 reads:
   - DS3 (loading existing config if any)
   - DS17 (server connection probe)
@@ -1065,7 +1065,7 @@ file: src/main/java/qupath/ext/qpsc/controller/NoiseCharacterizationWorkflow.jav
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI Noise Characterization... (when hasJAICamera; SetupScope.java:897, dispatch 'noiseCharacterization')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI Noise Characterization... (when hasJAICamera; SetupScope.java:881, dispatch 'noiseCharacterization')"
 reads:
   - DS3
 writes:
@@ -1218,7 +1218,7 @@ file: src/main/java/qupath/ext/qpsc/controller/RegisterObjectiveWorkflow.java
 entry: run(QuPathGUI)
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... (SetupScope.java:815, direct call; needs a writable config; disabled offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... (SetupScope.java:799, direct call; needs a writable config; disabled offline)"
 reads:
   - DS17 (MicroManager: pixel size of the objective currently in the light path)
   - DS3 / DS19 (existing config files)
@@ -1346,7 +1346,7 @@ file: src/main/java/qupath/ext/qpsc/display/orientation/OrientationColorViewWind
 entry: show(qupath)
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Orientation Color View... (SetupScope.java:789, direct call; no microscope)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Orientation Color View... (SetupScope.java:773, direct call; no microscope)"
 reads:
   - "stitched LC-PolScope orientation + retardance pyramids of the open image (OrientationPairing)"
 writes:
@@ -1365,7 +1365,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ExportSpatialSceneWorkflow.java
 entry: run(qupath)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... (SetupScope.java:806, direct call; offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... (SetupScope.java:790, direct call; offline)"
 reads:
   - DS5, DS6 (saved alignments), DS9 (XY offsets, stage bounds, light-path snapshot, isCameraView), DS27
 writes:
@@ -1427,7 +1427,7 @@ file: src/main/java/qupath/ext/qpsc/ui/alignment/LightPathSetupDialog.java
 entry: show()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Light Path Orientation... (SetupScope.java:826; needs a writable config)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Light Path Orientation... (SetupScope.java:810; needs a writable config)"
 reads:
   - DS3 (light_path block via LightPathModel)
 writes:
@@ -1445,7 +1445,7 @@ file: src/main/java/qupath/ext/qpsc/ui/connection/BugReportDialog.java
 entry: show()
 category: service
 ui_entries:
-  - "Menu: Extensions > QP Scope > Report a Bug... (SetupScope.java:1059; always available)"
+  - "Menu: Extensions > QP Scope > Report a Bug... (SetupScope.java:1042; always available)"
 writes:
   - "external: BugReportService -> Cloudflare Worker -> public GitHub issue (the Worker also pushes new issues to ntfy when its NTFY_TOPIC secret is set)"
 key_invariants:
