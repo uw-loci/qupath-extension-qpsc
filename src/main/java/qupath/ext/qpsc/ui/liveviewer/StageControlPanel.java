@@ -68,6 +68,7 @@ import qupath.ext.qpsc.ui.VirtualJoystick;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
@@ -1716,7 +1717,7 @@ public class StageControlPanel extends VBox {
                                 try {
                                     MicroscopeController mc = MicroscopeController.getInstance();
                                     if (mc == null || !mc.isConnected()) return;
-                                    String valueStr = formatIntensityValue(v);
+                                    String valueStr = MinorFunctions.formatTrimmed(v);
                                     mc.getSocketClient().setProperty(pr.device(), pr.property(), valueStr);
                                     Platform.runLater(() -> {
                                         cameraStatusLabel.setText("Channel " + ch.id() + " intensity -> " + v);
@@ -3323,7 +3324,7 @@ public class StageControlPanel extends VBox {
                                 mc.getSocketClient().setExposures(new float[] {exposureOverride.floatValue()});
                             }
                             if (intensityProperty != null && intensityOverride != null) {
-                                String valueStr = formatIntensityValue(intensityOverride);
+                                String valueStr = MinorFunctions.formatTrimmed(intensityOverride);
                                 mc.getSocketClient()
                                         .setProperty(
                                                 intensityProperty.device(), intensityProperty.property(), valueStr);
@@ -3351,19 +3352,6 @@ public class StageControlPanel extends VBox {
                 "Channel-Apply");
         t.setDaemon(true);
         t.start();
-    }
-
-    /**
-     * Format an intensity spinner value as a Micro-Manager property string.
-     * Integer-valued doubles drop the trailing ".0" so DLED.Intensity-475nm
-     * receives "30" rather than "30.0" -- some MM drivers reject the latter
-     * with "Invalid property value".
-     */
-    private static String formatIntensityValue(double v) {
-        if (v == Math.floor(v) && !Double.isInfinite(v)) {
-            return Integer.toString((int) v);
-        }
-        return Double.toString(v);
     }
 
     /**

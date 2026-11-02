@@ -213,7 +213,7 @@ public class TestAutofocusWorkflow {
                                         + "%s",
                                 testType,
                                 objective,
-                                extractMicroscopeName(configFile.getName()),
+                                MicroscopeConfigManager.extractMicroscopeName(configFile.getName()),
                                 outputPath,
                                 algorithmDesc));
 
@@ -600,21 +600,5 @@ public class TestAutofocusWorkflow {
             logger.error("Failed to open autofocus {}", label, e);
             UserErrors.show(logger, "Error", "Could not open the " + label + ": " + e.getMessage());
         }
-    }
-
-    /**
-     * Extract microscope name from config filename.
-     * E.g., "config_PPM.yml" -> "PPM"
-     */
-    private static String extractMicroscopeName(String configFilename) {
-        // Remove extension
-        String nameWithoutExt = configFilename.replaceFirst("\\.[^.]+$", "");
-
-        // Remove "config_" prefix if present
-        if (nameWithoutExt.startsWith("config_")) {
-            return nameWithoutExt.substring(7);
-        }
-
-        return nameWithoutExt;
     }
 }

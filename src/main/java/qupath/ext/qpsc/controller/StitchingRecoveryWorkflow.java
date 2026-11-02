@@ -36,6 +36,7 @@ import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.TileFolderInspector;
 import qupath.fx.dialogs.Dialogs;
@@ -1019,7 +1020,7 @@ public class StitchingRecoveryWorkflow {
         if (initial.getAbsolutePath().equals(desired.getAbsolutePath())) {
             return stitchedPath;
         }
-        File target = uniqueWithExtension(desired, extension);
+        File target = MinorFunctions.uniqueWithExtension(desired, extension);
         if (initial.renameTo(target)) {
             logger.info("Renamed stitched output to configured pattern: {} -> {}", initial.getName(), target.getName());
             qupath.ext.qpsc.utilities.StitchInfoSupport.moveWith(initial, target);
@@ -1030,22 +1031,5 @@ public class StitchingRecoveryWorkflow {
                 initial.getName(),
                 target.getName());
         return stitchedPath;
-    }
-
-    /**
-     * Append {@code _2}, {@code _3}, ... before the extension until the
-     * candidate path does not exist. If {@code file} already doesn't exist,
-     * returns it unchanged.
-     */
-    private static File uniqueWithExtension(File file, String extension) {
-        if (!file.exists()) return file;
-        String name = file.getName();
-        String stem = name.endsWith(extension) ? name.substring(0, name.length() - extension.length()) : name;
-        int n = 2;
-        while (true) {
-            File candidate = new File(file.getParent(), stem + "_" + n + extension);
-            if (!candidate.exists()) return candidate;
-            n++;
-        }
     }
 }

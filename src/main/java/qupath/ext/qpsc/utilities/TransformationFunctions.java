@@ -278,8 +278,7 @@ public class TransformationFunctions {
      * Creates a flip transform following QuPath coordinate system conventions.
      * Origin (0,0) is at top-left corner of full-resolution image.
      */
-    private static AffineTransform createFlipTransform(
-            boolean flipX, boolean flipY, double imageWidth, double imageHeight) {
+    static AffineTransform createFlipTransform(boolean flipX, boolean flipY, double imageWidth, double imageHeight) {
         AffineTransform transform = new AffineTransform();
 
         if (flipX && flipY) {

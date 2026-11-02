@@ -176,7 +176,7 @@ public class AnnotationPreservationService {
         // Create flip transform if needed
         AffineTransform flipTransform = null;
         if (flipX || flipY) {
-            flipTransform = createFlipTransform(flipX, flipY, targetWidth, targetHeight);
+            flipTransform = TransformationFunctions.createFlipTransform(flipX, flipY, targetWidth, targetHeight);
             logger.debug("Created flip transform: {}", flipTransform);
         }
 
@@ -275,39 +275,5 @@ public class AnnotationPreservationService {
      */
     public int getSourceImageHeight() {
         return sourceImageHeight;
-    }
-
-    /**
-     * Creates a flip transform following QuPath coordinate system conventions.
-     *
-     * <p>Origin (0,0) is at top-left corner of the image.
-     * This method creates the same transform used by TransformationFunctions.
-     *
-     * @param flipX Whether to flip horizontally
-     * @param flipY Whether to flip vertically
-     * @param imageWidth Image width in pixels
-     * @param imageHeight Image height in pixels
-     * @return AffineTransform for the specified flip operation
-     */
-    private static AffineTransform createFlipTransform(
-            boolean flipX, boolean flipY, double imageWidth, double imageHeight) {
-        AffineTransform transform = new AffineTransform();
-
-        if (flipX && flipY) {
-            // Combined X and Y flip: scale by -1,-1 then translate by width,height
-            transform.scale(-1.0, -1.0);
-            transform.translate(-imageWidth, -imageHeight);
-        } else if (flipX) {
-            // Horizontal flip: scale by -1,1 then translate by width,0
-            transform.scale(-1.0, 1.0);
-            transform.translate(-imageWidth, 0.0);
-        } else if (flipY) {
-            // Vertical flip: scale by 1,-1 then translate by 0,height
-            transform.scale(1.0, -1.0);
-            transform.translate(0.0, -imageHeight);
-        }
-        // If no flips, return identity transform
-
-        return transform;
     }
 }

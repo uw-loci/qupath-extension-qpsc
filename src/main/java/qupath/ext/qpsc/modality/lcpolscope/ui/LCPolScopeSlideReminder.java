@@ -18,7 +18,6 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Check;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
@@ -60,7 +59,7 @@ public final class LCPolScopeSlideReminder {
         if (!shouldAsk(modality, SaturationSummaryDialog.isBatchActive())) {
             return true;
         }
-        List<String> state = currentState(configManager(), LocalDateTime.now());
+        List<String> state = currentState(MicroscopeConfigManager.current(), LocalDateTime.now());
         Choice choice = onFxThread(
                 () -> ask("Calibrate and collect a background on this slide first", singleBody(state), "Acquire"));
         return settle(choice, "acquisition");
@@ -74,7 +73,7 @@ public final class LCPolScopeSlideReminder {
         if (lcSlides <= 0) {
             return true;
         }
-        List<String> state = currentState(configManager(), LocalDateTime.now());
+        List<String> state = currentState(MicroscopeConfigManager.current(), LocalDateTime.now());
         Choice choice = onFxThread(() -> ask(
                 "This batch uses one calibration and one background for every slide",
                 batchBody(lcSlides, state),
@@ -205,16 +204,5 @@ public final class LCPolScopeSlideReminder {
             return Choice.CANCEL;
         }
         return choice.get();
-    }
-
-    private static MicroscopeConfigManager configManager() {
-        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-        if (mgr == null) {
-            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (path != null && !path.isBlank()) {
-                mgr = MicroscopeConfigManager.getInstance(path);
-            }
-        }
-        return mgr;
     }
 }

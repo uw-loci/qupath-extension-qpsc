@@ -15,6 +15,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.UIFunctions;
 
 /**
  * Step 5: Modality Setup.
@@ -250,7 +251,7 @@ public class ModalityStep implements WizardStep {
                 String newName = String.valueOf(mod.get("name"));
                 boolean dup = modalityItems.stream().anyMatch(m -> newName.equals(m.get("name")));
                 if (dup) {
-                    showAlert("Duplicate", "A modality named '" + newName + "' already exists.");
+                    UIFunctions.showWarning("Duplicate", "A modality named '" + newName + "' already exists.");
                     return null;
                 }
                 modalityItems.add(mod);
@@ -851,14 +852,6 @@ public class ModalityStep implements WizardStep {
             return "Multiphoton modality '" + modalityName + "' requires a " + fieldLabel + ".";
         }
         return null;
-    }
-
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        DialogOwner.own(alert);
-        alert.showAndWait();
     }
 
     // ---- WizardStep interface ----

@@ -13,7 +13,6 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
@@ -50,7 +49,7 @@ public final class LCColormapPane extends VBox {
 
     public LCColormapPane() {
         super(2);
-        MicroscopeConfigManager mgr = configManager();
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.current();
         String ppmSource = ppmCalibrationSource(mgr);
         String configured = configuredColormap(mgr);
 
@@ -138,7 +137,7 @@ public final class LCColormapPane extends VBox {
      * send nothing: when the pane was never changed from the config's value.
      */
     public static Double sendableCeilingNm() {
-        return sendableCeiling(CEILING.get(), configuredCeilingNm(configManager()));
+        return sendableCeiling(CEILING.get(), configuredCeilingNm(MicroscopeConfigManager.current()));
     }
 
     /**
@@ -147,7 +146,7 @@ public final class LCColormapPane extends VBox {
      */
     public static double effectiveCeilingNm() {
         double saved = CEILING.get();
-        return saved > 0 && Double.isFinite(saved) ? saved : configuredCeilingNm(configManager());
+        return saved > 0 && Double.isFinite(saved) ? saved : configuredCeilingNm(MicroscopeConfigManager.current());
     }
 
     /** The saved ceiling if it is a usable number that differs from the config's; else null. */
@@ -181,7 +180,7 @@ public final class LCColormapPane extends VBox {
      * own setting applies).
      */
     public static String selectedColormap() {
-        return effectiveChoice(CHOICE.get(), ppmCalibrationSource(configManager()) != null);
+        return effectiveChoice(CHOICE.get(), ppmCalibrationSource(MicroscopeConfigManager.current()) != null);
     }
 
     /**
@@ -218,16 +217,5 @@ public final class LCColormapPane extends VBox {
         Object source =
                 mgr.getConfigItem("modalities", "lcpolscope", "reconstruction", "display_hue_calibration", "source");
         return source == null ? "calibration" : source.toString();
-    }
-
-    private static MicroscopeConfigManager configManager() {
-        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-        if (mgr == null) {
-            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (path != null && !path.isBlank()) {
-                mgr = MicroscopeConfigManager.getInstance(path);
-            }
-        }
-        return mgr;
     }
 }

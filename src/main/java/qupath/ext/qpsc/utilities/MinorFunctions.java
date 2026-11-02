@@ -116,6 +116,46 @@ public class MinorFunctions {
     }
 
     /**
+     * A file that does not exist yet: the given one, or the same name with {@code _2}, {@code _3}
+     * and so on before the extension.
+     *
+     * @param file the wanted file
+     * @param extension its extension, which may have several parts, such as {@code .ome.tif}
+     * @return a free file in the same folder
+     */
+    public static File uniqueWithExtension(File file, String extension) {
+        if (!file.exists()) {
+            return file;
+        }
+        String name = file.getName();
+        String stem = name.endsWith(extension) ? name.substring(0, name.length() - extension.length()) : name;
+        int n = 2;
+        while (true) {
+            File candidate = new File(file.getParent(), stem + "_" + n + extension);
+            if (!candidate.exists()) {
+                return candidate;
+            }
+            n++;
+        }
+    }
+
+    /** A whole number without its decimal point; anything else exactly as Java prints it. */
+    public static String formatTrimmed(double v) {
+        if (v == Math.floor(v) && !Double.isInfinite(v)) {
+            return Long.toString((long) v);
+        }
+        return Double.toString(v);
+    }
+
+    /** A whole number without its decimal point; anything else to one decimal place. */
+    public static String formatOneDecimal(double v) {
+        if (v == Math.floor(v) && !Double.isInfinite(v)) {
+            return Long.toString((long) v);
+        }
+        return String.format("%.1f", v);
+    }
+
+    /**
      * Appends _1, _2, ... to the original folder name until it's unique.
      * Returns only the new folder name (not full path).
      */

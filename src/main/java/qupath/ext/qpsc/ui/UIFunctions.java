@@ -668,6 +668,15 @@ public class UIFunctions {
         return future;
     }
 
+    /** Shows a warning with an OK button and waits for it. Call on the FX thread. */
+    public static void showWarning(String title, String message) {
+        Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
+        alert.setTitle(title);
+        alert.setHeaderText(null);
+        DialogOwner.own(alert);
+        alert.showAndWait();
+    }
+
     /** Pops up a modal warning dialog. */
     public static void showAlertDialog(String message) {
         Alert alert = new Alert(Alert.AlertType.WARNING);

@@ -15,6 +15,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.UIFunctions;
 
 /**
  * Step 2: Objectives and Detectors configuration.
@@ -156,7 +157,7 @@ public class HardwareStep implements WizardStep {
 
         // Check for duplicate
         if (objectiveItems.stream().anyMatch(m -> selected.equals(m.get("id")))) {
-            showAlert("Duplicate", "Objective '" + selected + "' is already added.");
+            UIFunctions.showWarning("Duplicate", "Objective '" + selected + "' is already added.");
             return;
         }
 
@@ -177,7 +178,7 @@ public class HardwareStep implements WizardStep {
         if (selected == null) return;
 
         if (detectorItems.stream().anyMatch(m -> selected.equals(m.get("id")))) {
-            showAlert("Duplicate", "Detector '" + selected + "' is already added.");
+            UIFunctions.showWarning("Duplicate", "Detector '" + selected + "' is already added.");
             return;
         }
 
@@ -277,7 +278,7 @@ public class HardwareStep implements WizardStep {
         dialog.showAndWait().ifPresent(entry -> {
             String id = (String) entry.get("id");
             if (objectiveItems.stream().anyMatch(m -> id.equals(m.get("id")))) {
-                showAlert("Duplicate", "Objective '" + id + "' is already added.");
+                UIFunctions.showWarning("Duplicate", "Objective '" + id + "' is already added.");
                 return;
             }
             objectiveItems.add(entry);
@@ -359,7 +360,7 @@ public class HardwareStep implements WizardStep {
         dialog.showAndWait().ifPresent(entry -> {
             String id = (String) entry.get("id");
             if (detectorItems.stream().anyMatch(m -> id.equals(m.get("id")))) {
-                showAlert("Duplicate", "Detector '" + id + "' is already added.");
+                UIFunctions.showWarning("Duplicate", "Detector '" + id + "' is already added.");
                 return;
             }
             detectorItems.add(entry);
@@ -378,14 +379,6 @@ public class HardwareStep implements WizardStep {
     }
 
     // ---- Utility ----
-
-    private void showAlert(String title, String message) {
-        Alert alert = new Alert(Alert.AlertType.WARNING, message, ButtonType.OK);
-        alert.setTitle(title);
-        alert.setHeaderText(null);
-        DialogOwner.own(alert);
-        alert.showAndWait();
-    }
 
     // ---- WizardStep interface ----
 

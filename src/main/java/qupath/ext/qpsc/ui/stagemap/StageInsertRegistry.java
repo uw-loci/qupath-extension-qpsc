@@ -112,7 +112,8 @@ public class StageInsertRegistry {
             }
 
             // Read shared parameters
-            double slideMarginUm = getDoubleValue(insertsConfig, "slide_margin_um", DEFAULT_SLIDE_MARGIN_UM);
+            double slideMarginUm =
+                    StageInsert.getDoubleValue(insertsConfig, "slide_margin_um", DEFAULT_SLIDE_MARGIN_UM);
             defaultInsertId = (String) insertsConfig.getOrDefault("default", "single_h");
 
             // Load individual configurations (each has its own aperture size and origin)
@@ -395,14 +396,6 @@ public class StageInsertRegistry {
 
         defaultInsertId = "single_h";
         logger.info("Loaded default insert configurations");
-    }
-
-    private static double getDoubleValue(Map<String, Object> map, String key, double defaultValue) {
-        Object value = map.get(key);
-        if (value instanceof Number) {
-            return ((Number) value).doubleValue();
-        }
-        return defaultValue;
     }
 
     /**

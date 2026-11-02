@@ -36,6 +36,7 @@ import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageNameGenerator;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.StageImageTransform;
 import qupath.ext.qpsc.utilities.TileFolderInspector;
 import qupath.fx.dialogs.Dialogs;
@@ -436,7 +437,7 @@ public class MicroManagerStitchWorkflow {
         // so the user-typed filename is the actual output name.
         String extension = stitchedOutPath.endsWith(".ome.zarr") ? ".ome.zarr" : ".ome.tif";
         File initial = new File(stitchedOutPath);
-        File desired = uniqueWithExtension(new File(outDir, baseName + extension), extension);
+        File desired = MinorFunctions.uniqueWithExtension(new File(outDir, baseName + extension), extension);
         String finalOutPath = stitchedOutPath;
         if (!initial.getAbsolutePath().equals(desired.getAbsolutePath())) {
             if (initial.renameTo(desired)) {
@@ -677,22 +678,6 @@ public class MicroManagerStitchWorkflow {
             } catch (Exception e) {
                 logger.warn("Could not delete {}: {}", f.getName(), e.getMessage());
             }
-        }
-    }
-
-    /**
-     * Append {@code _2}, {@code _3}, ... before the extension until the
-     * candidate path does not exist.
-     */
-    private static File uniqueWithExtension(File file, String extension) {
-        if (!file.exists()) return file;
-        String name = file.getName();
-        String stem = name.endsWith(extension) ? name.substring(0, name.length() - extension.length()) : name;
-        int n = 2;
-        while (true) {
-            File candidate = new File(file.getParent(), stem + "_" + n + extension);
-            if (!candidate.exists()) return candidate;
-            n++;
         }
     }
 }

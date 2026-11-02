@@ -34,6 +34,7 @@ import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.BackgroundProfiles;
 import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -1042,14 +1043,6 @@ public class BackgroundCollectionWorkflow {
         logger.info("Background collection settings saved successfully with {} angles: {}", angles.size(), angles);
     }
 
-    /** Formats a value without a trailing ".0" for whole numbers (e.g. 603, 3.1). */
-    private static String fmtNum(double v) {
-        if (v == Math.floor(v) && !Double.isInfinite(v)) {
-            return Long.toString((long) v);
-        }
-        return String.format("%.1f", v);
-    }
-
     /**
      * Builds a human-readable summary of the settings a (non-channel) background
      * was captured at -- count, lamp device + intensity, final exposure(s), and the
@@ -1067,21 +1060,22 @@ public class BackgroundCollectionWorkflow {
         sb.append(String.format("Acquired %d background image%s for %s.", n, n == 1 ? "" : "s", modality));
         if (lampIntensity != null) {
             String label = (lampDeviceLabel != null && !lampDeviceLabel.isBlank()) ? lampDeviceLabel : "Lamp";
-            sb.append("\n").append(label).append(": ").append(fmtNum(lampIntensity));
+            sb.append("\n").append(label).append(": ").append(MinorFunctions.formatOneDecimal(lampIntensity));
         }
         if (finalExposures != null && !finalExposures.isEmpty()) {
             if (finalExposures.size() == 1) {
                 sb.append("\nExposure: ")
-                        .append(fmtNum(finalExposures.values().iterator().next()))
+                        .append(MinorFunctions.formatOneDecimal(
+                                finalExposures.values().iterator().next()))
                         .append(" ms");
             } else {
                 sb.append("\nExposures (ms):");
                 finalExposures.entrySet().stream()
                         .sorted(Map.Entry.comparingByKey())
                         .forEach(e -> sb.append("\n  ")
-                                .append(fmtNum(e.getKey()))
+                                .append(MinorFunctions.formatOneDecimal(e.getKey()))
                                 .append(" deg: ")
-                                .append(fmtNum(e.getValue())));
+                                .append(MinorFunctions.formatOneDecimal(e.getValue())));
             }
         }
         if (folder != null && !folder.isBlank()) {
@@ -1125,10 +1119,10 @@ public class BackgroundCollectionWorkflow {
                 sb.append("\n  ")
                         .append(ch.displayName())
                         .append(": ")
-                        .append(fmtNum(resolvedExp))
+                        .append(MinorFunctions.formatOneDecimal(resolvedExp))
                         .append(" ms");
                 if (resolvedIntensity != null) {
-                    sb.append(", intensity ").append(fmtNum(resolvedIntensity));
+                    sb.append(", intensity ").append(MinorFunctions.formatOneDecimal(resolvedIntensity));
                 }
             }
         }

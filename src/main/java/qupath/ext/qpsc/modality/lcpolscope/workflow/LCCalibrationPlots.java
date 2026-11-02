@@ -446,7 +446,7 @@ public final class LCCalibrationPlots {
         return sb.toString().trim();
     }
 
-    private static Label note(String text) {
+    static Label note(String text) {
         Label label = new Label(text);
         label.setWrapText(true);
         label.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 11px;");
@@ -457,7 +457,7 @@ public final class LCCalibrationPlots {
         return parent != null && parent.has(key) && parent.get(key).isJsonObject() ? parent.getAsJsonObject(key) : null;
     }
 
-    private static boolean number(JsonObject o, String key) {
+    static boolean number(JsonObject o, String key) {
         return o != null
                 && o.has(key)
                 && o.get(key).isJsonPrimitive()

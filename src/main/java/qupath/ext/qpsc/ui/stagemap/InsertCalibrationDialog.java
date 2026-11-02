@@ -29,6 +29,7 @@ import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.utilities.ConfigYamlEditor;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 
 /**
  * Non-modal calibration window for a single stage insert. Lets the user set the
@@ -196,8 +197,8 @@ public final class InsertCalibrationDialog {
             for (int i = 0; i < corners.size(); i++) {
                 CalCorner c = corners.get(i);
                 Label nameLabel = new Label(c.label());
-                TextField xField = new TextField(formatUm(numberOr(insertConfig, c.xKey(), 0)));
-                TextField yField = new TextField(formatUm(numberOr(insertConfig, c.yKey(), 0)));
+                TextField xField = new TextField(MinorFunctions.formatOneDecimal(numberOr(insertConfig, c.xKey(), 0)));
+                TextField yField = new TextField(MinorFunctions.formatOneDecimal(numberOr(insertConfig, c.yKey(), 0)));
                 xField.setPrefWidth(100);
                 yField.setPrefWidth(100);
                 Button capture = new Button("Capture corner");
@@ -243,7 +244,8 @@ public final class InsertCalibrationDialog {
             }
             for (CalField f : fields) {
                 Label nameLabel = new Label(f.label() + "  (" + f.axis() + ")");
-                TextField valueField = new TextField(formatUm(numberOr(insertConfig, f.key(), 0)));
+                TextField valueField =
+                        new TextField(MinorFunctions.formatOneDecimal(numberOr(insertConfig, f.key(), 0)));
                 valueField.setPrefWidth(110);
                 Button useCurrent = new Button("Use current " + f.axis());
                 useCurrent.setTooltip(new Tooltip("Capture the live stage " + f.axis()
@@ -291,7 +293,7 @@ public final class InsertCalibrationDialog {
             sharedCenterY.textProperty().addListener((o, was, is) -> {
                 Double v = parseOrNull(is);
                 if (v == null) return;
-                String text = formatUm(v);
+                String text = MinorFunctions.formatOneDecimal(v);
                 for (TextField f : slotCenterYFields) {
                     f.setText(text);
                 }
@@ -315,9 +317,13 @@ public final class InsertCalibrationDialog {
                 TextField cAx = new TextField();
                 TextField cBx = new TextField();
                 TextField centerX = new TextField(
-                        isNumber(insertConfig, centerXKey) ? formatUm(numberOr(insertConfig, centerXKey, 0)) : "");
+                        isNumber(insertConfig, centerXKey)
+                                ? MinorFunctions.formatOneDecimal(numberOr(insertConfig, centerXKey, 0))
+                                : "");
                 TextField centerY = new TextField(
-                        isNumber(insertConfig, centerYKey) ? formatUm(numberOr(insertConfig, centerYKey, 0)) : "");
+                        isNumber(insertConfig, centerYKey)
+                                ? MinorFunctions.formatOneDecimal(numberOr(insertConfig, centerYKey, 0))
+                                : "");
                 for (TextField tf : new TextField[] {cAx, cBx, centerX, centerY}) {
                     tf.setPrefWidth(100);
                 }
@@ -332,7 +338,7 @@ public final class InsertCalibrationDialog {
                     Double left = parseOrNull(cAx.getText());
                     Double right = parseOrNull(cBx.getText());
                     if (left != null && right != null) {
-                        centerX.setText(formatUm((left + right) / 2.0));
+                        centerX.setText(MinorFunctions.formatOneDecimal((left + right) / 2.0));
                     }
                 };
                 cAx.textProperty().addListener((obs, o, v) -> recomputeX.run());
@@ -473,8 +479,8 @@ public final class InsertCalibrationDialog {
                     try {
                         double[] xy = MicroscopeController.getInstance().getStagePositionXY();
                         Platform.runLater(() -> {
-                            xField.setText(formatUm(xy[0]));
-                            yField.setText(formatUm(xy[1]));
+                            xField.setText(MinorFunctions.formatOneDecimal(xy[0]));
+                            yField.setText(MinorFunctions.formatOneDecimal(xy[1]));
                             currentPosLabel.setText(String.format("Current stage: X=%.1f  Y=%.1f um", xy[0], xy[1]));
                             button.setDisable(false);
                         });
@@ -506,7 +512,7 @@ public final class InsertCalibrationDialog {
                         }
                         final double captured = value;
                         Platform.runLater(() -> {
-                            target.setText(formatUm(captured));
+                            target.setText(MinorFunctions.formatOneDecimal(captured));
                             currentPosLabel.setText(String.format("Current stage: X=%.1f  Y=%.1f um", xy[0], xy[1]));
                             button.setDisable(false);
                         });
@@ -681,12 +687,5 @@ public final class InsertCalibrationDialog {
         Label l = new Label(text);
         l.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
         return l;
-    }
-
-    private static String formatUm(double v) {
-        if (v == Math.floor(v) && !Double.isInfinite(v)) {
-            return Long.toString((long) v);
-        }
-        return String.format("%.1f", v);
     }
 }

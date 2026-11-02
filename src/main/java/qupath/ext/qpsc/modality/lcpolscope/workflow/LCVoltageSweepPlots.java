@@ -18,7 +18,6 @@ import javafx.scene.control.ToggleGroup;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.VBox;
-import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * The pictures of an LC voltage sweep (LCSWEEP): for each crystal, the retardance it really has
@@ -66,14 +65,14 @@ final class LCVoltageSweepPlots {
         for (Map.Entry<String, JsonElement> e : palette.entrySet()) {
             if (!e.getValue().isJsonObject()) continue;
             JsonObject row = e.getValue().getAsJsonObject();
-            if (!number(row, key + "_volts")) continue;
+            if (!LCCalibrationPlots.number(row, key + "_volts")) continue;
             out.add(new StatePoint(
                     e.getKey(),
                     row.get(key + "_volts").getAsDouble(),
-                    number(row, key + "_waves_measured")
+                    LCCalibrationPlots.number(row, key + "_waves_measured")
                             ? row.get(key + "_waves_measured").getAsDouble()
                             : Double.NaN,
-                    number(row, key + "_waves_commanded")
+                    LCCalibrationPlots.number(row, key + "_waves_commanded")
                             ? row.get(key + "_waves_commanded").getAsDouble()
                             : Double.NaN));
         }
@@ -100,14 +99,16 @@ final class LCVoltageSweepPlots {
                 if (a.has("landmarks") && a.get("landmarks").isJsonArray()) {
                     sb.append(": ").append(a.getAsJsonArray("landmarks").size()).append(" fringes");
                 }
-                if (number(a, "exposure_ms")) {
+                if (LCCalibrationPlots.number(a, "exposure_ms")) {
                     sb.append(String.format(
                             Locale.ROOT,
                             ", exposure %.2f ms",
                             a.get("exposure_ms").getAsDouble()));
                 }
                 JsonObject gap = object(a, "table_minus_measured_waves");
-                if (gap != null && number(gap, "max_abs") && number(gap, "at_volts")) {
+                if (gap != null
+                        && LCCalibrationPlots.number(gap, "max_abs")
+                        && LCCalibrationPlots.number(gap, "at_volts")) {
                     sb.append(String.format(
                             Locale.ROOT,
                             "; the adapter's table is off by up to %.4f waves (at %.2f V)",
@@ -134,7 +135,7 @@ final class LCVoltageSweepPlots {
     static Node axisPane(JsonObject record, String axis) {
         List<Point> measured = measured(record, axis);
         if (measured.size() < 2) {
-            return note("No measured curve for this crystal; see the Summary tab for why.");
+            return LCCalibrationPlots.note("No measured curve for this crystal; see the Summary tab for why.");
         }
         List<Point> table = table(record, axis);
         List<StatePoint> states = palette(record, axis);
@@ -145,10 +146,11 @@ final class LCVoltageSweepPlots {
             lo = Math.min(lo, s.volts());
             hi = Math.max(hi, s.volts());
         }
-        Label caption = note("Blue is the retardance this crystal really has at each voltage, from its own "
-                + "fringes; gray is what the Meadowlark adapter's table assumes. Orange marks the palette's "
-                + "states at the volts the adapter drives them. Where blue and gray part, every palette number "
-                + "in waves is off by the gap.");
+        Label caption =
+                LCCalibrationPlots.note("Blue is the retardance this crystal really has at each voltage, from its own "
+                        + "fringes; gray is what the Meadowlark adapter's table assumes. Orange marks the palette's "
+                        + "states at the volts the adapter drives them. Where blue and gray part, every palette number "
+                        + "in waves is off by the gap.");
         if (!(hi >= lo)) {
             VBox box = new VBox(6, full, caption);
             box.setPadding(new Insets(8));
@@ -271,21 +273,7 @@ final class LCVoltageSweepPlots {
         return out;
     }
 
-    private static Label note(String text) {
-        Label label = new Label(text);
-        label.setWrapText(true);
-        label.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-size: 11px;");
-        return label;
-    }
-
     private static JsonObject object(JsonObject parent, String key) {
         return parent != null && parent.has(key) && parent.get(key).isJsonObject() ? parent.getAsJsonObject(key) : null;
-    }
-
-    private static boolean number(JsonObject o, String key) {
-        return o != null
-                && o.has(key)
-                && o.get(key).isJsonPrimitive()
-                && o.get(key).getAsJsonPrimitive().isNumber();
     }
 }

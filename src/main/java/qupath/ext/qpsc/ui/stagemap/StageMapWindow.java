@@ -2966,7 +2966,7 @@ public class StageMapWindow {
             logger.info("Macro overlay: tracing original_image_id='{}' for current entry", originalId);
             for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
                 if (originalId.equals(entry.getID())) {
-                    BufferedImage macro = readMacroFromEntry(entry);
+                    BufferedImage macro = MacroImageUtility.readMacroFromEntry(entry);
                     if (macro != null) {
                         return macro;
                     }
@@ -2995,7 +2995,7 @@ public class StageMapWindow {
             String entryName = entry.getImageName();
             String strippedName = qupath.lib.common.GeneralTools.stripExtension(entryName);
             if (targetName.equals(entryName) || targetName.equals(strippedName)) {
-                BufferedImage macro = readMacroFromEntry(entry);
+                BufferedImage macro = MacroImageUtility.readMacroFromEntry(entry);
                 if (macro != null) {
                     logger.info(
                             "Macro overlay: loaded raw macro ({}x{}) from entry '{}'",
@@ -3005,32 +3005,6 @@ public class StageMapWindow {
                     return macro;
                 }
             }
-        }
-        return null;
-    }
-
-    /**
-     * Reads the macro associated image from a project entry.
-     */
-    private BufferedImage readMacroFromEntry(ProjectImageEntry<BufferedImage> entry) {
-        try {
-            ImageData<BufferedImage> data = entry.readImageData();
-            var server = data.getServer();
-            var associatedList = server.getAssociatedImageList();
-            if (associatedList == null) {
-                return null;
-            }
-            for (String name : associatedList) {
-                if (name.toLowerCase().contains("macro")) {
-                    Object image = server.getAssociatedImage(name);
-                    if (image instanceof BufferedImage macro) {
-                        return macro;
-                    }
-                }
-            }
-        } catch (Exception e) {
-            logger.warn(
-                    "Macro overlay: failed to read macro from entry '{}': {}", entry.getImageName(), e.getMessage());
         }
         return null;
     }

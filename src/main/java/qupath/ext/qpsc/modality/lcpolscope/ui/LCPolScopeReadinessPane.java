@@ -45,7 +45,7 @@ public final class LCPolScopeReadinessPane extends VBox {
 
     /** Runs the configuration and live checks again. */
     public void refresh() {
-        List<Check> config = LCPolScopeReadiness.configChecks(configManager(), LocalDateTime.now());
+        List<Check> config = LCPolScopeReadiness.configChecks(MicroscopeConfigManager.current(), LocalDateTime.now());
         show(config, List.of(new Check(Level.INFO, "Checking the camera...")));
         CompletableFuture.supplyAsync(() -> {
                     try {
@@ -107,16 +107,5 @@ public final class LCPolScopeReadinessPane extends VBox {
             case FAIL -> ThemeColors.ERROR;
             case INFO -> ThemeColors.MUTED;
         };
-    }
-
-    private static MicroscopeConfigManager configManager() {
-        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
-        if (mgr == null) {
-            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-            if (path != null && !path.isBlank()) {
-                mgr = MicroscopeConfigManager.getInstance(path);
-            }
-        }
-        return mgr;
     }
 }

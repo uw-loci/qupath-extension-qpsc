@@ -16,6 +16,7 @@ import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.PresetRef;
 import qupath.ext.qpsc.modality.PropertyRef;
 import qupath.ext.qpsc.modality.PropertyWrite;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.mda.MmStageDevices;
 
 /**
@@ -141,6 +142,21 @@ public class MicroscopeConfigManager {
      * @return the existing instance, or null
      */
     public static synchronized MicroscopeConfigManager getInstanceIfAvailable() {
+        return instance;
+    }
+
+    /**
+     * The loaded config, or the one the preference names if none is loaded yet.
+     *
+     * @return the config manager, or null if none is loaded and the preference is empty
+     */
+    public static synchronized MicroscopeConfigManager current() {
+        if (instance == null) {
+            String path = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (path != null && !path.isBlank()) {
+                return getInstance(path);
+            }
+        }
         return instance;
     }
 
@@ -626,7 +642,7 @@ public class MicroscopeConfigManager {
      * @param configFilename The config filename
      * @return Microscope name extracted from filename
      */
-    private static String extractMicroscopeName(String configFilename) {
+    public static String extractMicroscopeName(String configFilename) {
         // Remove extension
         String nameWithoutExt = configFilename.replaceFirst("\\.[^.]+$", "");
 

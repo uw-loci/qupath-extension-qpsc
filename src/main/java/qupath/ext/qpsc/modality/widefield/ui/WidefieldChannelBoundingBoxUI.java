@@ -49,6 +49,7 @@ import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.utilities.MinorFunctions;
 
 /**
  * Generic channel selection UI for multi-channel widefield modalities
@@ -855,7 +856,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                                         .setProperty(
                                                 intensityProp.device(),
                                                 intensityProp.property(),
-                                                formatIntensityValue(intensity));
+                                                MinorFunctions.formatTrimmed(intensity));
                             }
                         });
                         mc.setChannelHardwareState(
@@ -1223,7 +1224,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
                                         .setProperty(
                                                 intensityProp.device(),
                                                 intensityProp.property(),
-                                                formatIntensityValue(intensity));
+                                                MinorFunctions.formatTrimmed(intensity));
                             }
                         });
                         // Report the applied channel so the Live Viewer's Camera tab shows
@@ -1275,19 +1276,6 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
             logger.debug("findFirstMatchingProfile({}) failed: {}", loadedModality, e.getMessage());
         }
         return null;
-    }
-
-    /**
-     * Format an intensity value as a Micro-Manager property string. Integer-
-     * valued doubles drop the trailing ".0" so DLED.Intensity-475nm receives
-     * "30" rather than "30.0" (some MM drivers reject the latter).
-     * Mirrors {@code StageControlPanel.formatIntensityValue}.
-     */
-    private static String formatIntensityValue(double v) {
-        if (v == Math.floor(v) && !Double.isInfinite(v)) {
-            return Integer.toString((int) v);
-        }
-        return Double.toString(v);
     }
 
     private static void commitOnFocusLost(Spinner<Double> spinner) {

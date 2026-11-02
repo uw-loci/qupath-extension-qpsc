@@ -537,7 +537,7 @@ public class StageInsert {
         };
     }
 
-    private static double getDoubleValue(Map<String, Object> map, String key, double defaultValue) {
+    static double getDoubleValue(Map<String, Object> map, String key, double defaultValue) {
         Object value = map.get(key);
         if (value instanceof Number) {
             return ((Number) value).doubleValue();
@@ -1025,14 +1025,6 @@ public class StageInsert {
             double rotationDeg = getDoubleValue(configMap, "rotation_deg", 0.0);
 
             return new SlidePosition(name, xOffsetMm, yOffsetMm, widthMm, heightMm, rotationDeg);
-        }
-
-        private static double getDoubleValue(Map<String, Object> map, String key, double defaultValue) {
-            Object value = map.get(key);
-            if (value instanceof Number) {
-                return ((Number) value).doubleValue();
-            }
-            return defaultValue;
         }
 
         // ========== Getters ==========

@@ -1050,7 +1050,7 @@ public class AutofocusEditorWorkflow {
 
         // Extract microscope name from config filename (e.g., "config_PPM.yml" -> "PPM")
         String configFilename = configFile.getName();
-        String microscopeName = extractMicroscopeName(configFilename);
+        String microscopeName = MicroscopeConfigManager.extractMicroscopeName(configFilename);
 
         // Construct autofocus config path
         File configDir = configFile.getParentFile();
@@ -2050,22 +2050,6 @@ public class AutofocusEditorWorkflow {
         });
 
         dialog.showAndWait();
-    }
-
-    /**
-     * Extract microscope name from config filename
-     * E.g., "config_PPM.yml" -> "PPM"
-     */
-    private static String extractMicroscopeName(String configFilename) {
-        // Remove extension
-        String nameWithoutExt = configFilename.replaceFirst("\\.[^.]+$", "");
-
-        // Remove "config_" prefix if present
-        if (nameWithoutExt.startsWith("config_")) {
-            return nameWithoutExt.substring(7);
-        }
-
-        return nameWithoutExt;
     }
 
     /**
