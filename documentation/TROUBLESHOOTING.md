@@ -102,8 +102,9 @@ that it is in Offline / Analysis mode. In this mode the hardware/acquisition
 workflows (Acquisition Wizard, Bounded/Existing Image, alignment, calibration
 utilities) are intentionally disabled, while analysis and project utilities --
 PPM analysis (via the PPM extension), Propagation Manager, Stitching Recovery,
-Make Project Portable, Stage Map, Live Viewer, Report a Bug -- remain available. To enable acquisition, run the **Setup Wizard**
-to configure a real microscope.
+Make Project Portable, Stage Map, Live Viewer, Report a Bug -- remain
+available. To enable acquisition, run the **Setup Wizard** to configure a real
+microscope.
 
 #### Q: Where does the offline placeholder config live?
 
@@ -1100,7 +1101,7 @@ Every stitched image in `SlideImages/` has a plain-text `<image name>.stitch-inf
 - `[stitching]`: method, pixel size, downsample, stage-axis negation, overlap blending, format, compression.
 - `[registration]`: whether tile positions were corrected from image content and how. The possible results are off, solved, reused from a sibling channel/angle, refused, or failed. It also records which channel(s) were aligned on, how many overlaps were accepted, the settings, and, for a merged alignment, each channel's scale. It includes a copy of the header of `TileRegistration.txt`.
 - `[software]`: tiles-to-pyramid, QuPath, Java and OS versions, and the computer.
-- `[acquisition]` (added by QPSC): sample, modality, objective, detector, microscope, region, parent image and offset, stage bounds, field of view, the white balance mode, the stage/camera transform, the QPSC version, the acquisition folder and its record files (`acquisition_command_*.txt`, `acquisition_metadata.*`, `MMproperties.txt`, autofocus diagnostics, tile manifests), and the full acquisition command. Stitching Recovery and the MicroManager folder stitch note that they produced the image.
+- `[acquisition]` (added by QPSC): sample, modality, objective, detector, microscope, region, parent image and offset, stage bounds, field of view, the white balance mode, the stage/camera transform, the QPSC version, the acquisition folder and its record files (`acquisition_command_*.txt`, `acquisition_metadata.*`, `MMproperties.txt`, autofocus diagnostics, tile manifests), and the full acquisition command. Stitching Recovery notes that it produced the image.
 
 **Which white balance was used?** Look for the `white balance:` line in `[acquisition]`, for example `white balance: Per-angle (PPM) (per_angle)` or `white balance: Off (off)`. It is read from `--wb-mode` in the acquisition command. `not recorded` means the command had no `--wb-mode` (or the acquisition folder is gone); that is not an error. The same mode is saved on the image's project entry as `white_balance` (protocol name: `off`, `camera_awb`, `simple`, `per_angle`), so it shows in QuPath's image metadata. Entries imported before this was added do not have it; their stitch record's acquisition command still shows `--wb-mode`.
 
