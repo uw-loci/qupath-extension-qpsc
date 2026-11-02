@@ -43,7 +43,7 @@ public class SampleSetupController {
      * All fields are populated with last used values from persistent preferences.
      *
      * @return a CompletableFuture that completes with the user's entries,
-     *         or is cancelled if the user hits "Cancel."
+     *         or is canceled if the user hits "Cancel."
      */
     public static CompletableFuture<SampleSetupResult> showDialog() {
         return showDialog(null); // No default sample name
@@ -55,7 +55,7 @@ public class SampleSetupController {
      *
      * @param defaultSampleName Optional default value for sample name field (e.g., current image name without extension)
      * @return a CompletableFuture that completes with the user's entries,
-     *         or is cancelled if the user hits "Cancel."
+     *         or is canceled if the user hits "Cancel."
      */
     public static CompletableFuture<SampleSetupResult> showDialog(String defaultSampleName) {
         CompletableFuture<SampleSetupResult> future = new CompletableFuture<>();

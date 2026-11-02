@@ -792,7 +792,7 @@ public class StageControlPanel extends VBox {
         //  1. Banner (visible only when Live View is off)
         //  2. Step controls (FoV combo + Refresh + help)
         //  3. Sample Movement row
-        //  4. Go to Centroid section -- moved up so users see it first; greyed
+        //  4. Go to Centroid section -- moved up so users see it first; grayed
         //     out when no legal annotation is selected.
         //  5. FoV info text -- pushed below centroidSection so the FoV combo
         //     dropdown (which expands downward) does not obstruct it.
@@ -1902,7 +1902,7 @@ public class StageControlPanel extends VBox {
     }
 
     /**
-     * LC-PolScope: brightfield optics with polarisation states for channels. The five states share
+     * LC-PolScope: brightfield optics with polarization states for channels. The five states share
      * ONE exposure (per-state differences bias retardance and orientation) and one lamp, so this is
      * a state selector for looking at each state live, one exposure for all of them, a measurement
      * of every state at that exposure against the camera's range (with an exposure suggestion for

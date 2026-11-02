@@ -178,7 +178,7 @@ public class ExistingImageAcquisitionController {
      *
      * @param defaultSampleName Default sample name (typically from current image)
      * @param annotations List of annotations to acquire (used for tile calculation)
-     * @return CompletableFuture containing the result, or cancelled if user cancels
+     * @return CompletableFuture containing the result, or canceled if user cancels
      */
     public static CompletableFuture<ExistingImageAcquisitionConfig> showDialog(
             String defaultSampleName, List<PathObject> annotations) {
@@ -1147,7 +1147,7 @@ public class ExistingImageAcquisitionController {
             // EDF is the only projection with settings, so the button appears
             // beside the dropdown and enables only for it -- the alternative was
             // three more controls on a dialog that is already dense, permanently
-            // greyed out for everyone using max intensity.
+            // grayed out for everyone using max intensity.
             Button edfSettingsButton = new Button("EDF settings...");
             edfSettingsButton.setTooltip(
                     new Tooltip("Sharpness metric, averaging window and focal-surface smoothing for the "

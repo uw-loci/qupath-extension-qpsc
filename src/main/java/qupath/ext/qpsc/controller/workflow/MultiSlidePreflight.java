@@ -17,7 +17,7 @@ import qupath.lib.projects.ProjectImageEntry;
  * <h2>Why this exists</h2>
  * The setup pass stops on a slide with no annotations: {@code ManualAlignmentPath} shows the
  * per-slide annotation dialog and waits for a human to run detection or draw a region. That is
- * correct behaviour -- the software must not invent a region to image -- but in an automatic
+ * correct behavior -- the software must not invent a region to image -- but in an automatic
  * batch it means the operator walks away, and the run stops on slide 3 with nobody there. The
  * cost of learning that is an hour of wall clock; the cost of learning it up front is one
  * dialog before the batch starts.

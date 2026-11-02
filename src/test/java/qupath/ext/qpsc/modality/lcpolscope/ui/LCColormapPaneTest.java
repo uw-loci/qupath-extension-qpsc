@@ -8,7 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import org.junit.jupiter.api.Test;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 
-/** The acquisition panel's colour-map choice and the flag it puts on the command. */
+/** The acquisition panel's color-map choice and the flag it puts on the command. */
 class LCColormapPaneTest {
 
     @Test

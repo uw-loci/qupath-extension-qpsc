@@ -130,7 +130,7 @@ class LCPolScopeModalityHandlerTest {
     @Test
     @DisplayName("Other modalities keep library order as their default focus channel")
     void otherModalitiesUnaffected() {
-        // The hook added to ModalityHandler must not change behaviour anywhere else:
+        // The hook added to ModalityHandler must not change behavior anywhere else:
         // for fluorescence any channel with signal is a usable focus target, and library
         // order has been the default all along.
         List<Channel> fl = List.of(state("DAPI", 100), state("FITC", 80), state("Cy5", 200));

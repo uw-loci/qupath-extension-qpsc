@@ -60,7 +60,7 @@ import qupath.lib.projects.Project;
  *       and save as 8-bit.</li>
  *   <li><b>Apply background correction</b> (default OFF) -- request a corrected
  *       frame from the server via {@code CORRECTFRAME}. The menu item is
- *       greyed out unless the configured background settings (modality,
+ *       grayed out unless the configured background settings (modality,
  *       objective, detector, WB mode, current angle) match the live state --
  *       same compatibility check the ACQUIRE workflow runs in
  *       {@code AcquisitionConfigurationBuilder}.</li>

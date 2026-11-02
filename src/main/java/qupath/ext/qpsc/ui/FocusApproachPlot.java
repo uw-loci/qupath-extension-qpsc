@@ -19,7 +19,7 @@ import javafx.scene.text.TextAlignment;
  * same way the motion does. Reading it against the Live Viewer's Z bars needs no mental
  * transposition.
  *
- * <h2>Two traces, and why they are labelled separately</h2>
+ * <h2>Two traces, and why they are labeled separately</h2>
  * During the traverse the only metric available client-side is the one the Live Viewer computes
  * per frame -- currently Brenner gradient -- because the server's own per-sample metrics do not
  * come back until the scan returns. That is genuinely useful as live feedback but it is NOT
@@ -40,7 +40,7 @@ public final class FocusApproachPlot extends Pane {
     /** Z at the bottom -- the far end of the traverse, nearest the sample. */
     private final double zEnd;
 
-    /** The operator's focus, drawn as a labelled reference line. May be NaN. */
+    /** The operator's focus, drawn as a labeled reference line. May be NaN. */
     private final double sampleFocusZ;
 
     private final List<double[]> samples = new ArrayList<>();
@@ -72,7 +72,7 @@ public final class FocusApproachPlot extends Pane {
      * @param zAndMetric   samples as {@code {z, metric}} pairs
      * @param metricName   the metric these came from, shown to the operator
      * @param fromServer   true when this is the server's own profile rather than the live
-     *                     client-side approximation; changes the label and the colour
+     *                     client-side approximation; changes the label and the color
      */
     public void setSamples(List<double[]> zAndMetric, String metricName, boolean fromServer) {
         samples.clear();

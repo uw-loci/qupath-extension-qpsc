@@ -1550,8 +1550,8 @@ public class PersistentPreferences {
             PathPrefs.createPersistentPreference("siftRgbConversion", "GREEN");
 
     /**
-     * How a colour (RGB, e.g. H&E) reference image is collapsed to one channel
-     * before SIFT matching. Only affects colour images -- the monochrome camera
+     * How a color (RGB, e.g. H&E) reference image is collapsed to one channel
+     * before SIFT matching. Only affects color images -- the monochrome camera
      * snapshot is untouched. Valid values: "GREEN" (default; best H&E structure
      * and keeps intensity polarity commensurate with a brightfield mono camera),
      * "LUMINANCE" (legacy BGR2GRAY weighting).

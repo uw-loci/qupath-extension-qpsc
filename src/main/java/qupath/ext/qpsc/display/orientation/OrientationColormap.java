@@ -1,9 +1,9 @@
 package qupath.ext.qpsc.display.orientation;
 
 /**
- * Colour maps for axial orientation images: hue = orientation over 0..180 deg, brightness =
+ * Color maps for axial orientation images: hue = orientation over 0..180 deg, brightness =
  * magnitude / ceiling. A Java port of the microscope server's
- * {@code modality/orientation_colormap.py}; the two must give the same colours, and
+ * {@code modality/orientation_colormap.py}; the two must give the same colors, and
  * {@code OrientationColormapTest} checks this class against the server's reference values.
  * Constants and rationale: claude-reports/design/2026-10-22_orientation-colormaps.md.
  */

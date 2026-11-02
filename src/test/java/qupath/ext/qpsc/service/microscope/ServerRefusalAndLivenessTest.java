@@ -8,7 +8,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The client's side of the 2026-10-12 failure: a 318 s autofocus start declared the server dead
- * at 300 s, the abandoned acquisition was never cancelled, the next ACQUIRE was refused with
+ * at 300 s, the abandoned acquisition was never canceled, the next ACQUIRE was refused with
  * BUSY, and the refusal was handled as a broken socket and reported as a user cancellation.
  *
  * <p>Each test pins one link of that chain so it cannot quietly come back.

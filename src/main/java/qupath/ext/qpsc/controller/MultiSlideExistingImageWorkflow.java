@@ -501,7 +501,7 @@ public final class MultiSlideExistingImageWorkflow {
         abortBtn.setStyle("-fx-base: #b00020; -fx-text-fill: white;");
         // Always clickable: never added to the disabled-during-run set, so the operator can
         // halt the whole batch at any point. The Abort All handler is wired below (after the
-        // driver buttons exist), since a mid-acquire abort disables them while cancelling.
+        // driver buttons exist), since a mid-acquire abort disables them while canceling.
 
         // Sequential auto-run across every not-yet-terminal slot. Each driver opens the
         // entry and runs a single-slide operation through its completion future, advancing
@@ -727,7 +727,7 @@ public final class MultiSlideExistingImageWorkflow {
         //   Idle "ABORT ALL" -> (confirm iff acquiring) -> "Cancelling..." (disabled) -> "Aborted".
         // When no acquisition is in flight, Abort All is the immediate driver halt it always was
         // (set the aborted flag + close). When an acquisition IS running, it trips the shared
-        // cancel token -- which flips the active DualProgressDialog's cancelled flag AND sends
+        // cancel token -- which flips the active DualProgressDialog's canceled flag AND sends
         // CANCEL, so the acquire loop scores a clean cancel, not an error -- then waits for the
         // acquisition to settle before showing the terminal state and the run summary.
         abortBtn.setOnAction(e -> {
@@ -762,7 +762,7 @@ public final class MultiSlideExistingImageWorkflow {
             abortBtn.setDisable(true);
             abortBtn.setTooltip(new Tooltip("Cancelling the running acquisition and landing the stage safely..."));
             setPanelBusy(states, driverButtons, finishBtn, true);
-            // Trip the token: flips the active DualProgressDialog's cancelled flag + sends CANCEL.
+            // Trip the token: flips the active DualProgressDialog's canceled flag + sends CANCEL.
             cancelToken.cancel();
             // Wait off-thread for the acquisition to settle (setAcquisitionActive(false) fires
             // when the acquire loop unwinds), then show the terminal state + summary on the FX
@@ -1485,7 +1485,7 @@ public final class MultiSlideExistingImageWorkflow {
      * that do not match (already terminal, or not in the pass's target state) are stepped
      * over. Halts early when {@code stopRequested} is true (checked between slides, so an
      * in-flight run always finishes cleanly). Calls {@code onDone} on the FX thread when
-     * there is nothing left to run or a stop was honoured.
+     * there is nothing left to run or a stop was honored.
      *
      * <p>Implemented as an FX-thread recursion over each op's completion future rather
      * than a blocking loop, so the UI stays responsive and any interactive dialogs run

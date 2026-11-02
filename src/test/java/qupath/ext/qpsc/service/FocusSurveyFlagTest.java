@@ -71,7 +71,7 @@ class FocusSurveyFlagTest {
     void anEmptyTileListIsOmittedSoTheServerPicksItsOwn() {
         // Scoring the macro image can fail -- no tile config, no pixel size, an
         // unreadable region. The survey should still run, with the server spreading
-        // its own points, rather than being cancelled by a bookkeeping failure.
+        // its own points, rather than being canceled by a bookkeeping failure.
         String message = base().focusSurvey(9).focusSurveyTiles(List.of()).buildSocketMessage();
         assertThat(message).contains("--focus-survey 9");
         assertThat(message).doesNotContain("--focus-survey-tiles");

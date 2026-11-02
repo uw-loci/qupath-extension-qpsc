@@ -250,13 +250,13 @@ public class UIFunctions {
                     }
                 }
 
-                // Check if cancelled
+                // Check if canceled
                 if (handleHolder[0] != null && handleHolder[0].isCancelled()) {
                     logger.info("Progress bar cancelled by user");
                     statusLabel.setText("Acquisition cancelled");
                     statusLabel.setTextFill(Color.RED);
                     timeline.stop();
-                    // Keep window open for 2 seconds to show cancelled status
+                    // Keep window open for 2 seconds to show canceled status
                     PauseTransition pause = new PauseTransition(Duration.seconds(2));
                     pause.setOnFinished(e -> stage.close());
                     pause.play();
@@ -535,7 +535,7 @@ public class UIFunctions {
      * Shows a non-modal, always-on-top dialog and completes the returned future
      * when the user confirms or cancels. Safe to call from the FX thread.
      *
-     * @return CompletableFuture that completes with true if confirmed, false if cancelled
+     * @return CompletableFuture that completes with true if confirmed, false if canceled
      */
     public static CompletableFuture<Boolean> stageAlignmentConfirmAsync() {
         return stageAlignmentConfirmAsync(null, null, null, null);
@@ -878,7 +878,7 @@ public class UIFunctions {
      * Shows a non-modal dialog that allows the user to interact with QuPath while open.
      *
      * @param message The instruction message to display to the user
-     * @return CompletableFuture that completes with the selected PathObject or null if cancelled
+     * @return CompletableFuture that completes with the selected PathObject or null if canceled
      */
     public static CompletableFuture<PathObject> promptTileSelectionDialogAsync(String message) {
         CompletableFuture<PathObject> future = new CompletableFuture<>();
@@ -1497,7 +1497,7 @@ public class UIFunctions {
      * @param alert  the alert or dialog to display (already configured with
      *               title, header, content, buttons). Typed as {@link Dialog}
      *               rather than {@link Alert} so custom-content dialogs (e.g.
-     *               the EDF settings pane) get the same co-floating behaviour
+     *               the EDF settings pane) get the same co-floating behavior
      *               instead of growing a second copy of it
      * @param parent the parent window (typically the always-on-top stage);
      *               may be null (e.g. a panel not yet in a scene), in which

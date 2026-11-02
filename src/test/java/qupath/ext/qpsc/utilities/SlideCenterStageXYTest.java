@@ -17,7 +17,7 @@ import org.junit.jupiter.api.Test;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
- * The measured slide centre the Stage Map draws slot previews at.
+ * The measured slide center the Stage Map draws slot previews at.
  *
  * <p>A slide sits where it was dropped, not where its holder slot nominally is -- the measured
  * landing error on the first alignment point of a multi-slide run was a median 613 um, worst
@@ -55,8 +55,8 @@ class SlideCenterStageXYTest {
     @DisplayName("The image centre is flip-invariant, so a flip disagreement cannot corrupt it")
     void flipInvariant() {
         // Same physical mapping expressed two ways: unflipped, and mirrored in both axes about
-        // the image centre. (W/2, H/2) is the same point in either pixel space, so the stamped
-        // stage centre must be identical -- which is why the centre is what gets stored rather
+        // the image center. (W/2, H/2) is the same point in either pixel space, so the stamped
+        // stage center must be identical -- which is why the center is what gets stored rather
         // than a corner or an origin.
         int w = 4000;
         int h = 2000;

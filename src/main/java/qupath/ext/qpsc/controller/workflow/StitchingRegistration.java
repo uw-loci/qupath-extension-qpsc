@@ -25,7 +25,7 @@ import qupath.ext.qpsc.utilities.TileRegistrationSupport;
  * "MicroManager folder stitch" utilities silently stitched at nominal positions -- a disconnect
  * that stayed invisible until a re-stitch looked wrong. Routing every path through here means a
  * stitch path cannot skip registration by omission: multi-subdir paths call {@link #stitchTargets}
- * and single-grid paths call {@link #modeForReuse}, and both honour the one "Register tiles on image
+ * and single-grid paths call {@link #modeForReuse}, and both honor the one "Register tiles on image
  * content" preference and the version-support probe (via {@link #enabled()}).
  *
  * <p><b>That claim was false for six weeks and is worth stating plainly.</b> The single-acquisition

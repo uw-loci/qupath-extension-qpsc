@@ -13,14 +13,14 @@ import org.slf4j.LoggerFactory;
  * <p>The multi-slide orchestrator holds ONE token for the whole batch and threads it into
  * every slot's workflow via {@code WorkflowState.cancellationToken}. The active
  * {@link AcquisitionManager} registers a cancel action -- a callback that flips its
- * {@code DualProgressDialog}'s cancelled flag AND sends the {@code CANCEL} socket command
+ * {@code DualProgressDialog}'s canceled flag AND sends the {@code CANCEL} socket command
  * -- while its acquisition is running, and clears it once the slot settles. At any moment
  * at most one slot's acquisition is registered. {@link #cancel()} trips the flag and runs
  * whichever action is currently registered; when no acquisition is running it is a no-op on
  * the acquire side (the batch driver's own {@code aborted} flag still stops further slots).
  *
  * <p>Registering an action that does BOTH (a) sends CANCEL and (b) flips the dialog's
- * cancelled flag is the critical detail. The acquire loop discriminates cancel-vs-error by
+ * canceled flag is the critical detail. The acquire loop discriminates cancel-vs-error by
  * reading {@code progressDialog.isCancelled()} (AcquisitionManager, the
  * {@code !result && !progressDialog.isCancelled()} branch). A raw CANCEL that did not also
  * flip that flag would be scored as an unexpected error, not a clean cancel.
@@ -43,8 +43,8 @@ public final class CancellationToken {
 
     /**
      * Registers the action {@link #cancel()} should run to stop an in-flight acquisition
-     * (typically: flip the active {@code DualProgressDialog}'s cancelled flag and send
-     * CANCEL). If the token was already cancelled when this is called, the action runs
+     * (typically: flip the active {@code DualProgressDialog}'s canceled flag and send
+     * CANCEL). If the token was already canceled when this is called, the action runs
      * immediately so a slot that begins acquiring after an abort is stopped at once.
      *
      * @param action the cancel action, or {@code null} to clear (see
@@ -64,7 +64,7 @@ public final class CancellationToken {
     }
 
     /**
-     * Trips the token: marks it cancelled and runs the currently-registered cancel action
+     * Trips the token: marks it canceled and runs the currently-registered cancel action
      * (if any). Idempotent -- a second call is a no-op. Safe to call when no acquisition is
      * running (no action registered), in which case only the flag is set.
      */

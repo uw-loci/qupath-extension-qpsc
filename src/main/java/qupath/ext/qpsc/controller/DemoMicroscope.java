@@ -179,7 +179,7 @@ public final class DemoMicroscope {
         Runnable onConnected = () -> {
             adoptProfileExposure();
             // The Live Viewer reopens on the remembered modality; put the simulated hardware
-            // there too (camera, lamp, LED), or e.g. LC-PolScope states land on the colour camera.
+            // there too (camera, lamp, LED), or e.g. LC-PolScope states land on the color camera.
             qupath.ext.qpsc.service.ModalityActuator.getInstance().reapplyCurrent();
             LiveViewerWindow.show();
             Dialogs.showInfoNotification(

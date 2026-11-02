@@ -191,7 +191,7 @@ public final class AutofocusYamlUpdater {
         }
     }
 
-    /** Set or insert each modelled scalar inside one list item. Unmodelled keys are untouched. */
+    /** Set or insert each modeled scalar inside one list item. Unmodelled keys are untouched. */
     private static int editItemScalars(
             List<String> body, int[] span, Map<String, Object> item, String objective, List<String> edits) {
         int itemIndent = leadingSpaces(body.get(span[0])).length();

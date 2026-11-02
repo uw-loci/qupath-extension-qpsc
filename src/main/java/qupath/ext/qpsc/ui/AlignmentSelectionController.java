@@ -117,7 +117,7 @@ public class AlignmentSelectionController {
      *
      * @param gui The QuPath GUI instance
      * @param modality The current imaging modality (e.g., "BF_10x")
-     * @return CompletableFuture with the user's choice, or null if cancelled
+     * @return CompletableFuture with the user's choice, or null if canceled
      */
     public static CompletableFuture<AlignmentChoice> showDialog(QuPathGUI gui, String modality) {
         logger.info("Starting alignment selection dialog for modality: {}", modality);

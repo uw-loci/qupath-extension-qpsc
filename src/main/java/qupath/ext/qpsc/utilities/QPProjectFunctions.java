@@ -1241,7 +1241,7 @@ public class QPProjectFunctions {
         }
 
         // Safety check: non-RGB images cannot be BRIGHTFIELD_H_E.
-        // This can happen when birefringence (greyscale) images have PPM-related filenames.
+        // This can happen when birefringence (grayscale) images have PPM-related filenames.
         boolean isRgb = server.nChannels() >= 3;
 
         // First check if modality handler specifies a preferred image type

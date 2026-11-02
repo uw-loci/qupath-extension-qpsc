@@ -20,16 +20,16 @@ import org.junit.jupiter.api.Test;
 /**
  * Every {@link ThemeColors} constant stays legible on BOTH of QuPath's themes.
  *
- * <p>This is the check that a hardcoded colour cannot pass, and the reason the constants exist.
- * A colour picked while looking at one theme is chosen against one background; nothing in the
+ * <p>This is the check that a hardcoded color cannot pass, and the reason the constants exist.
+ * A color picked while looking at one theme is chosen against one background; nothing in the
  * source shows what it does against the other, so the mistake is invisible until someone
- * switches themes and reports it. Both directions have happened in this codebase -- dark greys
- * that vanish on the dark theme, and light greys added to fix that, which then vanish on the
+ * switches themes and reports it. Both directions have happened in this codebase -- dark grays
+ * that vanish on the dark theme, and light grays added to fix that, which then vanish on the
  * light one.
  *
  * <p>So rather than assert the constants equal particular hex values -- which would only pin
  * today's palette -- these resolve each one through real JavaFX CSS under each theme and measure
- * the WCAG contrast ratio against that theme's actual background. Retuning a colour is then free
+ * the WCAG contrast ratio against that theme's actual background. Retuning a color is then free
  * as long as it stays readable, and impossible if it does not.
  */
 class ThemeColorsContrastTest {
@@ -97,8 +97,8 @@ class ThemeColorsContrastTest {
                 }
                 Map<String, Color> resolved = new LinkedHashMap<>();
 
-                // The background these colours are read against: a Label filled with
-                // -fx-background reports the very colour the theme would paint behind it.
+                // The background these colors are read against: a Label filled with
+                // -fx-background reports the very color the theme would paint behind it.
                 Label bg = new Label("x");
                 bg.setStyle((dark ? QUPATH_DARK_ROOT : "") + " -fx-text-fill: -fx-background;");
                 root.getChildren().setAll(bg);
@@ -190,7 +190,7 @@ class ThemeColorsContrastTest {
     void aSubtreeCanDeclareItsOwnGroundAndTheLaddersFollow() throws Exception {
         // The Stage Map is a viewer: its canvas stays dark in BOTH themes so it reads like an
         // image rather than a form. That makes it the one place where keying off the
-        // application background is wrong -- on the light theme the ladders would put dark grey
+        // application background is wrong -- on the light theme the ladders would put dark gray
         // text on a near-black panel. Redefining -fx-background for that subtree tells the
         // ladders what ground they are actually on. This test exists because that is a
         // load-bearing one-liner in StageMapWindow whose effect is invisible from its source.
@@ -232,7 +232,7 @@ class ThemeColorsContrastTest {
 
     @Test
     void theHardcodedGreyThatStartedThisIsStillUnreadableOnDark() throws Exception {
-        // Negative control: #666 is the single most common hardcoded colour in this codebase.
+        // Negative control: #666 is the single most common hardcoded color in this codebase.
         // If it ever passed the contrast check, the check would be meaningless.
         Map<String, Color> resolved = resolveUnder(true);
         Color background = resolved.get("__background__");

@@ -113,7 +113,7 @@ public final class StitchPlaceholderImage {
      */
     private static Path2D.Double piece(double x, double y, double s, boolean leftColumn, boolean topRow) {
         double r = s * 0.14; // tab radius
-        double n = s * 0.5; // tab centre along the edge
+        double n = s * 0.5; // tab center along the edge
         Path2D.Double p = new Path2D.Double();
         p.moveTo(x, y);
         // top edge (left to right)

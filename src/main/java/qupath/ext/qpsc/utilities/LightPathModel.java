@@ -44,7 +44,7 @@ import qupath.lib.projects.ProjectImageEntry;
  *   <li><b>Stage polarity</b> -- which way the stage physically moves for a {@code +X/+Y} command,
  *       {@link StagePolarity} via {@link StagePolarity#current()} (stage.polarity in the microscope config). This is the
  *       <em>net</em> of any MicroManager-level axis inversion (e.g. OWS3 inverts X in MM) plus the
- *       physical wiring: it is detected from observed behaviour, so never add a QPSC flip to
+ *       physical wiring: it is detected from observed behavior, so never add a QPSC flip to
  *       "compensate" for the MM invert -- polarity already contains it.</li>
  * </ol>
  *

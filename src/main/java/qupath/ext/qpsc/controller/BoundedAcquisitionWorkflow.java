@@ -231,15 +231,15 @@ public class BoundedAcquisitionWorkflow {
             // Validate pixel size against MicroManager's active calibration
             if (!QPScopeChecks.validateObjectivePixelSize(
                     result.objective(), result.detector(), result.modality(), WSI_pixelSize_um)) {
-                return; // user cancelled
+                return; // user canceled
             }
             if (!QPScopeChecks.validateCameraRoi(result.detector())) {
-                return; // ROI mismatch -- user cancelled
+                return; // ROI mismatch -- user canceled
             }
 
             // Validate stitching settings -- loop to let user fix preferences if needed
             if (!StitchingConfiguration.validateWithRetry()) {
-                return; // user cancelled
+                return; // user canceled
             }
 
             // Create tile configuration

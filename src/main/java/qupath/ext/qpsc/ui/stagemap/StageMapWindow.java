@@ -132,9 +132,9 @@ public class StageMapWindow {
      * The overlay is placed from the scanner preset, which knows nothing of this slide; this is
      * what lines it up with where the slide was measured to be.
      */
-    /** Where this slide's own alignment puts its image centre, stage um; null without one. */
+    /** Where this slide's own alignment puts its image center, stage um; null without one. */
     private double[] currentMacroSlideCentreUm = null;
-    /** Centre of this slide's green box on the displayed macro, macro px; null if not found. */
+    /** Center of this slide's green box on the displayed macro, macro px; null if not found. */
     private double[] currentMacroGreenBoxCentre = null;
 
     private String currentMacroSampleName = null;
@@ -191,7 +191,7 @@ public class StageMapWindow {
      * Multi-slide orientation check: show the Stage Map (opening/focusing it) and render the
      * given macros over their slots at the chosen rotations, driven by the Multi-Slide dialog.
      * This is a passive VIEWER call -- the controls live in the MS dialog. While a preview is
-     * active, Apply Flips is forced OFF and greyed so the displayed macro is in its raw
+     * active, Apply Flips is forced OFF and grayed so the displayed macro is in its raw
      * orientation (what the software will store), and restored on {@link #clearSlotMacroPreviews}.
      */
     public static void previewSlotMacros(
@@ -212,10 +212,10 @@ public class StageMapWindow {
     }
 
     /**
-     * Re-reads each previewed slide's measured stage centre and redraws.
+     * Re-reads each previewed slide's measured stage center and redraws.
      *
      * <p>Call after a per-slide alignment is saved. Slot previews are drawn on the holder's
-     * nominal slot centres until an alignment measures where a slide actually is, and a slide
+     * nominal slot centers until an alignment measures where a slide actually is, and a slide
      * sits where it was dropped rather than where the slot is -- the measured landing error on
      * the first alignment point of a multi-slide run was a median 613 um. Without this the map
      * would keep showing every slide at its nominal position for the whole run, which is
@@ -343,7 +343,7 @@ public class StageMapWindow {
                 canvas.setInsert(carrier);
             }
         }
-        // Save + force the view toggle to Stage View (greyed) once, on entering the orientation
+        // Save + force the view toggle to Stage View (grayed) once, on entering the orientation
         // check. Previews are authored in their own frame, so the whole-canvas flip must be
         // identity while they are shown -- resolveViewFlipAxes() short-circuits to (false,false)
         // whenever savedApplyFlipsState is non-null, which is set here.
@@ -578,10 +578,10 @@ public class StageMapWindow {
         root.setPadding(new Insets(10));
         // This window is a viewer: its canvas is deliberately dark in BOTH themes so the stage
         // map reads like an image rather than a form. Redefining -fx-background (the looked-up
-        // colour, not the paint) for this subtree tells every ThemeColors ladder underneath it
+        // color, not the paint) for this subtree tells every ThemeColors ladder underneath it
         // that the ground here is dark, so the labels pick their light-on-dark variants even
         // while the rest of QuPath is in the light theme. Without it the ladders would key off
-        // the application background and render dark grey text on this dark panel.
+        // the application background and render dark gray text on this dark panel.
         root.setStyle("-fx-background-color: #2b2b2b; -fx-background: #2b2b2b;");
 
         // Top controls: Insert selector
@@ -1489,7 +1489,7 @@ public class StageMapWindow {
 
     /**
      * Rebuild the per-image visibility menu from the freshly-loaded thumbnails.
-     * Defaults all entries to selected so existing behaviour (everything visible)
+     * Defaults all entries to selected so existing behavior (everything visible)
      * is preserved on first load.
      */
     private void populateAcquisitionVisibilityMenu(List<StageMapCanvas.AcquisitionThumbnail> thumbnails) {
@@ -3046,7 +3046,7 @@ public class StageMapWindow {
      */
     /**
      * The stage shift that moves the preset-placed macro onto this slide's measured position, or
-     * null when there is nothing to move it by: no alignment has recorded the slide's centre, its
+     * null when there is nothing to move it by: no alignment has recorded the slide's center, its
      * green box was not found on the macro, or the preset is a legacy one with no anchor (the
      * 4-corner placement has no single macro pixel to pin).
      */
@@ -3088,7 +3088,7 @@ public class StageMapWindow {
     }
 
     /**
-     * Centre of this slide's green box (the scanned area) on the displayed macro, in its pixels,
+     * Center of this slide's green box (the scanned area) on the displayed macro, in its pixels,
      * or null when it is not found. Uses the preset's detection settings, as the alignment that
      * built the slide's transform did. Same frame as the preset's anchor: both are on the macro
      * cropped to the slide and flipped by the preset.
@@ -3188,7 +3188,7 @@ public class StageMapWindow {
                 : pixelSizeUm;
 
         // Draw the slide where its own alignment says it is, not where the preset's slide lay:
-        // move the overlay by the difference at the green-box centre (see
+        // move the overlay by the difference at the green-box center (see
         // MacroOverlayPlacement). Applied to both the anchor and the transform, as the canvas
         // uses the anchor and matches the slot with the transform.
         AffineTransform macroTransform = currentMacroTransform;

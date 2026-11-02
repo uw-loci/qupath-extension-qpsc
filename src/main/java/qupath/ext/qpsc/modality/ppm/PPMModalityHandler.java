@@ -54,8 +54,8 @@ public class PPMModalityHandler implements ModalityHandler {
     /**
      * PPM uncrossed (~90 deg) is intentionally bright, often acting as
      * background reference -- saturation there is normal/expected. Small
-     * polarisation angles (+/-7) and crossed (0) are low-signal where
-     * saturation indicates a real defect (sample artefact, calibration
+     * polarization angles (+/-7) and crossed (0) are low-signal where
+     * saturation indicates a real defect (sample artifact, calibration
      * drift). Stays in lock-step with the Python helper
      * {@code _saturation_role_for(modality, angle)} which uses the same
      * 2-degree tolerance for uncrossed detection.
@@ -73,7 +73,7 @@ public class PPMModalityHandler implements ModalityHandler {
      *
      * <p>The crossed angles sit near extinction: dark, low-contrast images of tissue that is
      * perfectly well textured. Registration correlates overlap content, so solving there measures
-     * the polariser setting as much as the tissue and yields low-confidence or rejected edges on
+     * the polarizer setting as much as the tissue and yields low-confidence or rejected edges on
      * material that would match easily at 90 degrees. The size of the effect is measurable rather
      * than theoretical -- on the 2026-08-05 whole-slide run the identical 2175 tiles wrote 6 GB
      * losslessly at 7 degrees against 10.5 GB at 90 degrees.

@@ -49,12 +49,12 @@ public class ThresholdPreviewDialog {
      *
      * <p>The dialog is non-modal and owned by the QuPath main window.
      * The returned future completes with the tuned thresholds when the user
-     * clicks "Run Calibration", or with null if cancelled.
+     * clicks "Run Calibration", or with null if canceled.
      *
      * @param imagePath Path to the acquired calibration image (TIFF or other format)
      * @param initialSaturation Starting saturation threshold (0.0-1.0)
      * @param initialValue Starting value threshold (0.0-1.0)
-     * @return CompletableFuture with tuned thresholds, or null if cancelled
+     * @return CompletableFuture with tuned thresholds, or null if canceled
      */
     public static CompletableFuture<ThresholdResult> showDialog(
             String imagePath, double initialSaturation, double initialValue) {

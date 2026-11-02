@@ -11,7 +11,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * {@code stage.focus.retract_sign} and the wrong-side check it enables.
  *
- * <p>The value being modelled is the objective-sample SEPARATION, not which element moves. PPM
+ * <p>The value being modeled is the objective-sample SEPARATION, not which element moves. PPM
  * drives the stage; the Nikon Eclipse on LC-PolScope drives the objective; in an
  * infinity-corrected system those are optically equivalent, and only the gap is real. So one
  * declared sign covers both, and no test here knows or cares about the mechanism.

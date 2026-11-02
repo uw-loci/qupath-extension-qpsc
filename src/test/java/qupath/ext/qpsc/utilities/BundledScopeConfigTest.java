@@ -245,7 +245,7 @@ class BundledScopeConfigTest {
         assertTrue(BundledScopeInstaller.isBundleConfigPath(
                 Bundle.OFFLINE, "/x/qpsc-offline-microscope/config_Offline.yml"));
         assertTrue(BundledScopeInstaller.isBundleConfigPath(Bundle.DEMO, "/x/qpsc-demo-microscope/config_Demo.yml"));
-        // Each bundle recognises only its own folder and filename.
+        // Each bundle recognizes only its own folder and filename.
         assertFalse(
                 BundledScopeInstaller.isBundleConfigPath(Bundle.DEMO, "/x/qpsc-offline-microscope/config_Offline.yml"));
         assertFalse(

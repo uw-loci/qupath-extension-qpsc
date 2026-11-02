@@ -70,7 +70,7 @@ public class NoiseCharacterizationDialog {
     /**
      * Shows the noise characterization dialog.
      *
-     * @return CompletableFuture with configured parameters, or null if cancelled
+     * @return CompletableFuture with configured parameters, or null if canceled
      */
     public static CompletableFuture<NoiseCharParams> showDialog() {
         CompletableFuture<NoiseCharParams> future = new CompletableFuture<>();

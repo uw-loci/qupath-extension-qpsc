@@ -15,7 +15,7 @@ import qupath.lib.projects.ProjectImageEntry;
  * alignment, Microscope Alignment and refinement -- so none can leave the Stage Map on the
  * preset's assumption or on an older alignment of the same slide.
  *
- * <p>Writes the slide's image centre in stage um twice, for the two readers: on the open entry
+ * <p>Writes the slide's image center in stage um twice, for the two readers: on the open entry
  * ({@link ImageMetadataManager#setSlideCenterStageXY}, the multi-slide slot previews) and on the
  * alignment record ({@link AffineTransformManager#saveSlideCentre}, the single-slide macro
  * overlay, which finds a slide by its alignment key).

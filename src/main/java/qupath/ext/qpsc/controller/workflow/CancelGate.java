@@ -18,7 +18,7 @@ public final class CancelGate {
     private final BooleanSupplier batchCancelled;
 
     /**
-     * @param dialogCancelled the progress dialog's cancelled flag; may return false when no dialog
+     * @param dialogCancelled the progress dialog's canceled flag; may return false when no dialog
      * @param stopRequested the workflow's own stop flag
      * @param batchCancelled the batch token; may return false when there is no batch
      */

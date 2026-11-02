@@ -111,7 +111,7 @@ public class WBComparisonDialog {
     /**
      * Shows the WB Comparison configuration dialog.
      *
-     * @return CompletableFuture with dialog parameters, or null if cancelled
+     * @return CompletableFuture with dialog parameters, or null if canceled
      */
     public static CompletableFuture<WBComparisonParams> showDialog() {
         CompletableFuture<WBComparisonParams> future = new CompletableFuture<>();

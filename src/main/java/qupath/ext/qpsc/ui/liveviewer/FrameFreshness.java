@@ -48,7 +48,7 @@ final class FrameFreshness {
     /**
      * Cheap content fingerprint of the raw pixel buffer. Samples 4 disjoint
      * 32-byte blocks at 20%/40%/60%/80% through the buffer; at least one
-     * block lands in the well-exposed image centre even when corners sit
+     * block lands in the well-exposed image center even when corners sit
      * in vignette darkness whose bytes do not change frame-to-frame.
      */
     static int pixelContentHash(FrameData frame) {

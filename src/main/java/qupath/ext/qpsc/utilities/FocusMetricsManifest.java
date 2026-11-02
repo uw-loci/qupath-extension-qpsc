@@ -111,7 +111,7 @@ public final class FocusMetricsManifest {
          * (e.g. ["brightfield","ppm"]). Empty list = "any modality" --
          * the manifest treats absence of the field as unrestricted.
          * Lowercase canonical names; the matcher in
-         * {@link #isValidForModality} normalises casing and accepts
+         * {@link #isValidForModality} normalizes casing and accepts
          * common aliases (bf, fl, polarized, ...).
          */
         public final List<String> validModalities;
@@ -206,7 +206,7 @@ public final class FocusMetricsManifest {
      * Reduce a modality string (or alias) to one of the canonical
      * buckets {@code brightfield}, {@code ppm}, {@code fluorescence},
      * {@code dark_field}, {@code other}. Lowercase, prefix-aware. The
-     * manifest's {@code valid_modalities} entries are normalised
+     * manifest's {@code valid_modalities} entries are normalized
      * through this same function so that
      * {@code valid_modalities: [brightfield]} matches a binding key
      * like {@code bf_dia}, {@code BF_IF}, {@code Brightfield}, etc.

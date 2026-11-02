@@ -54,7 +54,7 @@ public record MdaExportContext(
     }
 
     /**
-     * Sentinel error message flagging that the user cancelled the export flow (e.g. dismissed
+     * Sentinel error message flagging that the user canceled the export flow (e.g. dismissed
      * the tile-FoV prompt). Callers should skip SILENTLY on {@link #isCancelled()} -- no alert.
      */
     public static final String CANCELLED_MARKER = "mda-export-cancelled";
@@ -64,7 +64,7 @@ public record MdaExportContext(
         return notReady(CANCELLED_MARKER);
     }
 
-    /** True when the user cancelled the export flow; handlers should return silently (no alert). */
+    /** True when the user canceled the export flow; handlers should return silently (no alert). */
     public boolean isCancelled() {
         return CANCELLED_MARKER.equals(errorMessage);
     }

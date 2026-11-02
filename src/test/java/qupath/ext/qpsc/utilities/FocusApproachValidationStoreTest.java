@@ -12,7 +12,7 @@ import org.junit.jupiter.api.io.TempDir;
 /**
  * Parsing and staleness for {@link FocusApproachValidationStore}.
  *
- * <p>The store licenses an unattended Z approach toward the sample, so the two behaviours that
+ * <p>The store licenses an unattended Z approach toward the sample, so the two behaviors that
  * matter are that a profile is read faithfully and that a record stops applying when what it was
  * measured against changes. A stale pass is worse than no pass.
  *

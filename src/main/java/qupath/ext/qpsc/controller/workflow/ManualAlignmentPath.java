@@ -337,7 +337,7 @@ public class ManualAlignmentPath {
      * image's CENTER pixel to the holder slot center (from {@code state
      * .slotCenterStageXY}). Returns {@code null} when no slot center is known
      * (non-multi-slide runs, or a holder without per-slot calibration), in which
-     * case the alignment UI keeps its no-estimate behaviour.
+     * case the alignment UI keeps its no-estimate behavior.
      *
      * <p>The estimate assumes the slide sits roughly centered in its slot -- good
      * enough to auto-move the stage near the tissue; the operator then fine-tunes.
@@ -475,7 +475,7 @@ public class ManualAlignmentPath {
                 state.sample.detector());
 
         // Record where this slide actually is, so the Stage Map can draw it there instead
-        // of on its holder slot's nominal centre. Same frame as the green-box path: this
+        // of on its holder slot's nominal center. Same frame as the green-box path: this
         // transform maps the OPEN ENTRY's full-resolution pixels to stage microns, so the
         // dimensions are the entry server's.
         SlidePlacementRecorder.record(project, imageName, gui.getImageData(), transform);

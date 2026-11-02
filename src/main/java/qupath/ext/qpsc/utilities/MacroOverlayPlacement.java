@@ -5,14 +5,14 @@ package qupath.ext.qpsc.utilities;
  * this slide's own alignment says it is.
  *
  * <p>The preset places the macro by an anchor: a pixel of the displayed macro (its green-box
- * centre when the preset was made) at a stage point, with the macro pixel size and the preset's
+ * center when the preset was made) at a stage point, with the macro pixel size and the preset's
  * axis signs carrying every other pixel. That is right only for a slide lying where the preset's
- * slide lay. This slide's alignment knows where its image centre is on the stage, and the image
- * centre is the centre of the green box on the macro -- the same physical point, in a frame
+ * slide lay. This slide's alignment knows where its image center is on the stage, and the image
+ * center is the center of the green box on the macro -- the same physical point, in a frame
  * where no flip or rotation can disagree. The overlay is moved by the difference between the two.
  *
  * <p>Pure: the caller detects the green box on the macro it displays and reads the slide
- * centre from the alignment record ({@link AffineTransformManager#loadSlideCentre}).
+ * center from the alignment record ({@link AffineTransformManager#loadSlideCentre}).
  */
 public final class MacroOverlayPlacement {
 
@@ -47,8 +47,8 @@ public final class MacroOverlayPlacement {
     }
 
     /**
-     * The stage shift that puts the macro's green-box centre on the slide's measured image
-     * centre: {@code slideCentre - presetStageOf(greenBoxCentre)}.
+     * The stage shift that puts the macro's green-box center on the slide's measured image
+     * center: {@code slideCentre - presetStageOf(greenBoxCentre)}.
      */
     public static double[] shiftOntoSlide(double[] slideCentreStage, double[] presetGreenBoxCentreStage) {
         return new double[] {

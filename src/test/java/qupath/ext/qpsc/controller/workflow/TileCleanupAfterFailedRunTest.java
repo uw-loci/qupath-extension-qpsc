@@ -14,7 +14,7 @@ import org.junit.jupiter.api.io.TempDir;
  * A cancel or failure late in a run must not delete regions that already finished.
  *
  * <p>2026-10-19, JOVE_PPM: region 27688_18635 finished and started stitching; region 27699_34794
- * was then cancelled, and the error path force-deleted the whole run folder, region 1's tiles
+ * was then canceled, and the error path force-deleted the whole run folder, region 1's tiles
  * with it. The stitch failed every read for seven minutes and three of region 1's four images
  * were never written.
  */

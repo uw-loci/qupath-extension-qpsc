@@ -229,7 +229,7 @@ public class AnnotationPreservationService {
      * <p>This should be called:
      * <ul>
      *   <li>After annotations are successfully restored</li>
-     *   <li>When the workflow is cancelled</li>
+     *   <li>When the workflow is canceled</li>
      *   <li>When an error occurs during the workflow</li>
      * </ul>
      */

@@ -2042,7 +2042,7 @@ public class AutofocusEditorWorkflow {
         // OK button behavior - save if changed.
         // Rename to "Save and Close" so novices stop reading "OK" as
         // dismiss-without-saving (recurring confusion in usability
-        // sessions). Functional behaviour unchanged.
+        // sessions). Functional behavior unchanged.
         Button okButton = (Button) dialog.getDialogPane().lookupButton(ButtonType.OK);
         okButton.setText("Save and Close");
         okButton.setOnAction(e -> {
@@ -2481,7 +2481,7 @@ public class AutofocusEditorWorkflow {
      */
     private static javafx.scene.Node buildParamEditor(
             String key, Object initialValue, FocusMetricsManifest.ParamSpec spec, Map<String, Object> targetMap) {
-        // No spec -> fall back to the legacy TextField behaviour so an
+        // No spec -> fall back to the legacy TextField behavior so an
         // unknown YAML key still appears editable.
         if (spec == null || spec.type == null) {
             return _legacyTextEditor(key, initialValue, targetMap);
@@ -3089,7 +3089,7 @@ public class AutofocusEditorWorkflow {
                                 ? ((Number) entry.get("gap_spatial_multiplier")).doubleValue()
                                 : 2.0;
 
-                        // Additive opt-out: missing key = legacy behaviour = enabled.
+                        // Additive opt-out: missing key = legacy behavior = enabled.
                         boolean p98Fallback = !entry.containsKey("p98_p2_fallback_enabled")
                                 || Boolean.TRUE.equals(entry.get("p98_p2_fallback_enabled"));
 

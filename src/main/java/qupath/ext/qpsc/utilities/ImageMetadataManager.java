@@ -775,7 +775,7 @@ public class ImageMetadataManager {
     }
 
     /**
-     * Record where this slide's macro centre actually sits in stage microns.
+     * Record where this slide's macro center actually sits in stage microns.
      *
      * <p>Call this from a per-slide alignment save site, passing that alignment's own
      * transform together with the dimensions of the pixel frame it maps FROM. See
@@ -806,7 +806,7 @@ public class ImageMetadataManager {
     }
 
     /**
-     * Where this slide's macro centre sits in stage microns, or null when no alignment
+     * Where this slide's macro center sits in stage microns, or null when no alignment
      * has measured it yet.
      *
      * @return {@code [stageXUm, stageYUm]}, or null

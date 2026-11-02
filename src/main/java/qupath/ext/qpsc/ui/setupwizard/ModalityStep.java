@@ -148,7 +148,7 @@ public class ModalityStep implements WizardStep {
      * Show a dialog to add or edit a modality.
      *
      * @param existing the existing modality map to edit, or null for a new one
-     * @return the new/edited modality map, or null if cancelled
+     * @return the new/edited modality map, or null if canceled
      */
     @SuppressWarnings("unchecked")
     private Map<String, Object> showModalityDialog(Map<String, Object> existing) {

@@ -93,7 +93,7 @@ public class BackgroundCollectionController {
     /**
      * Shows the background collection dialog and returns the result.
      *
-     * @return CompletableFuture with BackgroundCollectionResult, or null if cancelled
+     * @return CompletableFuture with BackgroundCollectionResult, or null if canceled
      */
     public static CompletableFuture<BackgroundCollectionResult> showDialog() {
         var controller = new BackgroundCollectionController();
@@ -380,7 +380,7 @@ public class BackgroundCollectionController {
                 // Show dialog
                 DialogOwner.own(dialog);
                 dialog.showAndWait().ifPresent(result -> {});
-                // If future wasn't completed by the OK handler (user cancelled), complete with null
+                // If future wasn't completed by the OK handler (user canceled), complete with null
                 if (!future.isDone()) {
                     future.complete(null);
                 }
@@ -1227,7 +1227,7 @@ public class BackgroundCollectionController {
     /**
      * If the given profile is channel-based (fluorescence), render a read-only
      * per-channel summary table into the exposure pane and return true. Channels
-     * failing the unused-channel rule are shown greyed as "Skipped (unused)".
+     * failing the unused-channel rule are shown grayed as "Skipped (unused)".
      * Returns false for angle-based profiles so the caller renders normally.
      */
     private boolean renderChannelTableIfChannelProfile(String profileKey) {
@@ -1668,7 +1668,7 @@ public class BackgroundCollectionController {
 
     /**
      * Selects the detector a profile names. On a scope with one camera per modality (the
-     * demo's colour camera for brightfield, its mono camera for fluorescence and
+     * demo's color camera for brightfield, its mono camera for fluorescence and
      * LC-PolScope) the last-used detector is often the other modality's, and a background
      * filed under the wrong detector is one the acquisition never finds.
      */

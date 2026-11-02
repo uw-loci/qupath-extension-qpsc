@@ -105,7 +105,7 @@ public class RefinementSelectionController {
      *
      * @param gui The QuPath GUI instance
      * @param alignmentInfo Information about the current alignment
-     * @return CompletableFuture with the user's choice, or null if cancelled
+     * @return CompletableFuture with the user's choice, or null if canceled
      */
     public static CompletableFuture<RefinementResult> showDialog(QuPathGUI gui, AlignmentInfo alignmentInfo) {
 

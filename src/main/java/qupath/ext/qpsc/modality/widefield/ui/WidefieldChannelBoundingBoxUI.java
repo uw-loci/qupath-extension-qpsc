@@ -878,7 +878,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      * {@inheritDoc}
      *
      * <p>Returns null unless the operator ticked "Focus on a dedicated channel", so the
-     * default remains the server's existing autofocus behaviour.
+     * default remains the server's existing autofocus behavior.
      */
     @Override
     public qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride getDedicatedFocusChannel() {

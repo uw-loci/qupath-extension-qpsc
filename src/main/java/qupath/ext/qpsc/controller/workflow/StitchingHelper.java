@@ -373,7 +373,7 @@ public class StitchingHelper {
      * via {@link AffineTransformManager#saveSlideAlignment} so that Live
      * Viewer Move-to-centroid / click-to-center works without a separate
      * alignment step. Pass nulls for all four bounds to get the legacy
-     * behaviour (no auto-registration).
+     * behavior (no auto-registration).
      */
     public static CompletableFuture<Void> performRegionStitching(
             String regionName,
@@ -2006,7 +2006,7 @@ public class StitchingHelper {
             // can do when metadata.fovXUm/fovYUm are known) and derive
             // BOTTOM/RIGHT from the actual stitched image extent. Fallback:
             // when FOV is unknown (legacy metadata), average symmetrically;
-            // this matches the prior behaviour and is byte-identical when the
+            // this matches the prior behavior and is byte-identical when the
             // tile grid happens to fit exactly.
             double imageExtentX = widthPx * pixelSizeUm;
             double imageExtentY = heightPx * pixelSizeUm;

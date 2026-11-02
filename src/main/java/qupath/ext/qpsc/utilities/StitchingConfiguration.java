@@ -156,7 +156,7 @@ public class StitchingConfiguration {
      * a background/workflow thread). UI dialogs are dispatched on the FX thread
      * and the caller waits via {@link CountDownLatch}.</p>
      *
-     * @return {@code true} if settings are now valid, {@code false} if the user cancelled
+     * @return {@code true} if settings are now valid, {@code false} if the user canceled
      */
     public static boolean validateWithRetry() {
         while (true) {

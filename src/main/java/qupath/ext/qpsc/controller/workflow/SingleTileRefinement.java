@@ -75,7 +75,7 @@ public class SingleTileRefinement {
             ACCEPTED,
             /** The operator pressed Skip: acquire with the prior alignment. */
             SKIPPED,
-            /** The operator closed or cancelled the dialog, or cancelled the tile pick: no acquisition. */
+            /** The operator closed or canceled the dialog, or canceled the tile pick: no acquisition. */
             CANCELLED,
             /** The operator asked for a new manual alignment instead. */
             NEW_ALIGNMENT,
@@ -205,7 +205,7 @@ public class SingleTileRefinement {
 
     /**
      * The tile to refine against: auto-picked during an automatic multi-slide batch, otherwise
-     * chosen by the operator. The auto-picked tile is centred and selected in the viewer by
+     * chosen by the operator. The auto-picked tile is centered and selected in the viewer by
      * {@code performTileRefinement}, so both paths reach the refinement identically.
      */
     private static CompletableFuture<PathObject> resolveRefinementTile(
@@ -634,7 +634,7 @@ public class SingleTileRefinement {
                 () -> future.complete(RefinementResult.blocked(initialTransform, selectedTile)));
 
         // Handle window close (X button): the operator did not choose to proceed, so the
-        // workflow is cancelled. "Skip" on the capture pane is the explicit way to acquire
+        // workflow is canceled. "Skip" on the capture pane is the explicit way to acquire
         // with the prior alignment.
         dialogStage.setOnCloseRequest(e -> {
             logger.info("Refinement dialog closed with the window's X; refinement cancelled");

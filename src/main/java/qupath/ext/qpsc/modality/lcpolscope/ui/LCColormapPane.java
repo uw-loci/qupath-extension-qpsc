@@ -18,14 +18,14 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
- * The orientation colour image settings in the LC-PolScope acquisition panel: which colour map
- * the server uses for the display-only orientation colour image of the next runs, and the
+ * The orientation color image settings in the LC-PolScope acquisition panel: which color map
+ * the server uses for the display-only orientation color image of the next runs, and the
  * retardance shown at full brightness (the display ceiling). Both are remembered across
  * sessions. "As in the config" sends nothing, so {@code reconstruction.display_colormap} applies;
  * a ceiling left at the config's value sends nothing either. The LC-PolScope handler's
  * {@code configureCommandBuilder} sends them as {@code --display-colormap} and
  * {@code --display-ceiling-nm}. The ceiling also sets the display range QPSC gives a stitched
- * retardance image and the starting ceiling of the Orientation Colour View. It depends on the
+ * retardance image and the starting ceiling of the Orientation Color View. It depends on the
  * sample: a mounting medium or a thick section can need a higher one. Maps:
  * claude-reports/design/2026-10-22_orientation-colormaps.md.
  */
@@ -177,7 +177,7 @@ public final class LCColormapPane extends VBox {
     }
 
     /**
-     * The colour map to send with the next acquisition, or null to send nothing (the config's
+     * The color map to send with the next acquisition, or null to send nothing (the config's
      * own setting applies).
      */
     public static String selectedColormap() {

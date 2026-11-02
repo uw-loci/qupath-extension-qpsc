@@ -58,7 +58,7 @@ public final class AutofocusEvent {
         return "end".equals(type);
     }
 
-    /** "Tile 12 of 80" when labelled, else the method as a person would say it. */
+    /** "Tile 12 of 80" when labeled, else the method as a person would say it. */
     public String describe() {
         String what = methodName(method);
         return context != null && !context.isBlank() ? context + " (" + what + ")" : what;
@@ -66,7 +66,7 @@ public final class AutofocusEvent {
 
     /**
      * How a search ended, for a status line: "Tile 3 of 10 (drift check): focus at Z -310.90
-     * (+1.50 um), 21.4 s", "...: no focus found: peak at the edge, 40.2 s", "...: cancelled".
+     * (+1.50 um), 21.4 s", "...: no focus found: peak at the edge, 40.2 s", "...: canceled".
      *
      * @param start the search's start event, or null when it was not seen
      * @param end its end event

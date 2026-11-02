@@ -13,7 +13,7 @@ import qupath.ext.qpsc.display.orientation.OrientationColormap.Kind;
 import qupath.ext.qpsc.display.orientation.OrientationColormap.PpmHue;
 
 /**
- * The Java colour maps match the microscope server's (design doc section 6 reference values),
+ * The Java color maps match the microscope server's (design doc section 6 reference values),
  * the renderer reads stored counts, and image pairing finds the other half of a result.
  */
 class OrientationColormapTest {

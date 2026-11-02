@@ -57,7 +57,7 @@ public final class SlotJumpAutofocus {
      * Edge-retry attempt budget for the slot-jump streaming scan, passed as {@code --max-attempts}.
      *
      * <p>This is deliberately higher than the server default (MAX_EDGE_RETRIES + 1 = 3) BECAUSE this
-     * is the slide-change case: we have just travelled to a fresh slide whose true focus depends on
+     * is the slide-change case: we have just traveled to a fresh slide whose true focus depends on
      * its mounting-media thickness and can sit well beyond one narrow sweep from the previous slide's
      * Z. Rather than widen the per-scan {@code sweep_range_um} (which the config intentionally keeps
      * small, and which the operator is warned against enlarging globally), we let the designed
@@ -336,7 +336,7 @@ public final class SlotJumpAutofocus {
             // headroom then becomes the travel the scan spends PAST the sample. On PPM
             // (2026-10-26) the record said 443 um while the slide was in focus 121 um from safe
             // Z: the approach drove through the sample plane and 450 um beyond it before the
-            // operator cancelled.
+            // operator canceled.
             String disagreement = approachDistanceProblem(
                     currentSafeZ,
                     record.approachDistanceUm(),
@@ -349,7 +349,7 @@ public final class SlotJumpAutofocus {
             // Where the stage is NOW must agree with the record: safe Z has to be a retraction
             // from here. On PPM (2026-10-22) the record said focus lies below safe Z 0, while the
             // slide was in focus at +258; "retract to safe Z" then drove 258 um the other way and
-            // the scan continued 330 um further before it was cancelled, far from any focus.
+            // the scan continued 330 um further before it was canceled, far from any focus.
             double currentZ;
             try {
                 currentZ = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
@@ -522,10 +522,10 @@ public final class SlotJumpAutofocus {
     public record TissueSearchHint(double dirX, double dirY) {}
 
     /**
-     * A stage-space vector from {@code fromStageXY} toward the centre of the tile grid.
+     * A stage-space vector from {@code fromStageXY} toward the center of the tile grid.
      *
      * <p>The tile grid is where the tissue is -- tiles are only generated over annotations --
-     * so its centre is the best cheap answer to "which way should I look". This is the same
+     * so its center is the best cheap answer to "which way should I look". This is the same
      * heuristic the command server's own first-tile search uses, computed here instead
      * because the caller is the only side that holds the tile geometry and the transform.
      *
@@ -534,14 +534,14 @@ public final class SlotJumpAutofocus {
      * @param estimate    the QuPath-full-res to stage transform used to predict it
      * <p><b>Why this needs no flip or polarity reasoning.</b> Both ends of the vector are put
      * through the SAME transform into the SAME stage frame -- the predicted position the
-     * caller has already driven to, and the grid centre -- so the subtraction is taken
+     * caller has already driven to, and the grid center -- so the subtraction is taken
      * entirely within that frame and any orientation error common to both cancels. The
      * server then adds the offsets to a position it read from the stage itself. Nothing here
      * asserts which way is right or up, which is what {@code ORIENTATION_STACK.md} asks of
      * new directional code.
      *
      * @return {@code {dx, dy}}, or {@code null} when there is no usable direction -- no tiles,
-     *         or a start point already at the grid centre, where no bearing is better than
+     *         or a start point already at the grid center, where no bearing is better than
      *         any other and the caller should let the server sweep the compass
      */
     public static double[] tissueDirectionHint(
@@ -557,7 +557,7 @@ public final class SlotJumpAutofocus {
         for (qupath.lib.objects.PathObject tile : tiles) {
             var roi = tile.getROI();
             // An EMPTY roi is not a null one: its centroid reads (0, 0), which would drag the
-            // grid centre toward the image origin and send the search off in a direction
+            // grid center toward the image origin and send the search off in a direction
             // nothing measured.
             if (roi == null || roi.isEmpty()) {
                 continue;
@@ -574,7 +574,7 @@ public final class SlotJumpAutofocus {
         double dx = centreStage[0] - fromStageXY[0];
         double dy = centreStage[1] - fromStageXY[1];
         // Below a micrometre the two points are the same place as far as the stage is
-        // concerned, and normalising would amplify rounding noise into a confident bearing.
+        // concerned, and normalizing would amplify rounding noise into a confident bearing.
         if (Math.hypot(dx, dy) < 1.0) {
             return null;
         }
@@ -618,7 +618,7 @@ public final class SlotJumpAutofocus {
         }
         double[] hint = tissueDirectionHint(tiles, predictedStageXY, estimate);
         if (hint == null) {
-            // No usable bearing (no tiles, or already at the grid centre). Still search --
+            // No usable bearing (no tiles, or already at the grid center). Still search --
             // the server sweeps the compass, which is the honest answer when nothing says
             // which way tissue lies.
             logger.info("Tissue search: no direction hint available; the server will sweep the compass");
@@ -670,7 +670,7 @@ public final class SlotJumpAutofocus {
      * 2026-10-26 that was the gap: the first point's scan failed, the operator focused by hand,
      * and the second point -- 12 um away in Z on the same slide -- still ran the full approach
      * from the safe Z toward a 693 um bound, through the focus plane and 450 um past it before
-     * it was cancelled.
+     * it was canceled.
      *
      * <p>Cleared by {@link #beginSlide()}, because the next slide's focus genuinely is unknown
      * again -- the measured spread across one carrier was 180 um.
@@ -759,7 +759,7 @@ public final class SlotJumpAutofocus {
                     return beforeSearch;
                 }
                 case ABORTED -> {
-                    // The operator cancelled. Say nothing alarming and do not hand the slide
+                    // The operator canceled. Say nothing alarming and do not hand the slide
                     // back for "no tissue" -- they stopped it on purpose, and the AF path
                     // below reports the cancel itself.
                     logger.info("Slot-jump tissue search cancelled by the operator");
@@ -830,7 +830,7 @@ public final class SlotJumpAutofocus {
      * alignment step.
      *
      * @return a future that completes once AF settles or is skipped, with true when a focus was
-     *         actually measured and false when the scan was skipped, failed or was cancelled
+     *         actually measured and false when the scan was skipped, failed or was canceled
      */
     public static synchronized CompletableFuture<Boolean> runAfterSlotMove() {
         // Consume the hint here, once, so every early return below leaves it cleared and a
@@ -1079,11 +1079,11 @@ public final class SlotJumpAutofocus {
                         logger.error("Slot-jump AF failed: {}", errorMsg, ex);
                     }
                     // Hand the stage back before anything else looks at it -- including on a
-                    // failed or cancelled scan, where the caller's predicted position is the
+                    // failed or canceled scan, where the caller's predicted position is the
                     // only sane place to leave it.
                     returnFromTissueSearch(controller, returnToAfterFocus);
                     // Release the Live Viewer stage-movement lock and restore the Autofocus
-                    // button (whether AF succeeded, failed, or was cancelled).
+                    // button (whether AF succeeded, failed, or was canceled).
                     LiveViewerWindow.endExternalAutofocus();
                     cancelWindow.close();
                     if (errorMsg != null || cancelled) {

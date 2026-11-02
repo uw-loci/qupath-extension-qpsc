@@ -45,7 +45,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
  * controllers, use the same pan semantics when the "Sample Movement"
  * checkbox is checked (the more intuitive default). When the checkbox is
  * unchecked, the arrow handler flips the X sign itself (the historical
- * MicroManager behaviour for the "default" mode). This small UI-layer
+ * MicroManager behavior for the "default" mode). This small UI-layer
  * flip is out-of-scope for this class -- callers handle it themselves.
  *
  * <h2>Transform chain</h2>
@@ -250,7 +250,7 @@ public class StageImageTransform {
     /**
      * Produce a longer, human-readable description of what this transform
      * actually does, for logging during debugging. Shows the effective sign
-     * behaviour of the four compass directions plus the stitcher flags.
+     * behavior of the four compass directions plus the stitcher flags.
      *
      * <p>Example output:
      * <pre>

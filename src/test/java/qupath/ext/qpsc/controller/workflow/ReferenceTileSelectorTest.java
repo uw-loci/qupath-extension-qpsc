@@ -20,7 +20,7 @@ import qupath.lib.roi.interfaces.ROI;
  *
  * <p>The failure this guards against is subtle: a selection that looks fine (three tiles,
  * all inside the annotation) but puts the camera half on background or fits a rotation from
- * three nearly-collinear neighbours. Every test below states the physical consequence it is
+ * three nearly-collinear neighbors. Every test below states the physical consequence it is
  * protecting, not just the arithmetic.
  *
  * <p>All geometry here is synthetic, so this runs with no image, no hierarchy, and no
@@ -82,7 +82,7 @@ class ReferenceTileSelectorTest {
 
     @Test
     void gridsAreScopedPerAnnotation() {
-        // Row/Column restart at 0 for every annotation. If the neighbour test pooled all tiles,
+        // Row/Column restart at 0 for every annotation. If the neighbor test pooled all tiles,
         // annotation "b"'s lone tile would borrow annotation "a"'s ring and be called interior.
         List<PathObject> tiles = new ArrayList<>(grid("a", 3, 3));
         tiles.add(tile("b", 1, 1, 10_000, 10_000));
@@ -94,7 +94,7 @@ class ReferenceTileSelectorTest {
 
     @Test
     void aTileWhoseCentroidIsOutsideTheTissueIsRejected() {
-        // Tiling keeps edge tiles that merely INTERSECT the annotation, so a full neighbour ring
+        // Tiling keeps edge tiles that merely INTERSECT the annotation, so a full neighbor ring
         // is not on its own proof the tile is on tissue.
         List<PathObject> tiles = grid("a", 5, 5);
         // Tissue covers only the left half of the 5x5 lattice (columns 0-1).

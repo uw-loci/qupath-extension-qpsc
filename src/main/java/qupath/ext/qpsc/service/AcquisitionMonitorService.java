@@ -42,7 +42,7 @@ public final class AcquisitionMonitorService {
      * @return the terminal state (COMPLETED, CANCELLED, FAILED)
      * @throws IOException if communication fails
      * @throws InterruptedException if monitoring thread is interrupted
-     * @throws CancellationException if acquisition was cancelled
+     * @throws CancellationException if acquisition was canceled
      * @throws RuntimeException if acquisition failed on the server
      */
     public static MicroscopeSocketClient.AcquisitionState monitorAndHandle(

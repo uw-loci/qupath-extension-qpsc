@@ -39,11 +39,11 @@ public class CalibrationChecker {
     public record StepStatus(Status status, String message) {}
 
     /**
-     * One white-balance mode's status, so a caller can colour each mode on its own.
+     * One white-balance mode's status, so a caller can color each mode on its own.
      *
      * <p>Exists because collapsing the modes into a single {@link StepStatus} makes a display
      * that is actively misleading: with per-angle backgrounds valid and simple-WB backgrounds
-     * stale, the one row goes amber and the operator cannot see from the colour that the mode
+     * stale, the one row goes amber and the operator cannot see from the color that the mode
      * they are about to acquire with is fine. Rolling up is still right for the pre-acquisition
      * warning list -- there the question really is "is anything wrong" -- so the aggregate
      * checks stay; this is the breakdown behind them.
@@ -143,7 +143,7 @@ public class CalibrationChecker {
             // turned this step amber, which made the white-balance row amber because
             // BACKGROUNDS were out of date -- a different step, already reported by
             // checkBackgroundCorrection, and reported there per mode. Saying it twice, once
-            // rolled up, is what made a single stale mode colour two rows at once.
+            // rolled up, is what made a single stale mode color two rows at once.
             return new StepStatus(Status.READY, msg);
 
         } catch (Exception e) {
@@ -294,7 +294,7 @@ public class CalibrationChecker {
     /**
      * Per-white-balance-mode CALIBRATION status: is each mode itself calibrated.
      *
-     * <p>The breakdown behind {@link #checkWhiteBalance}, so each mode gets its own colour.
+     * <p>The breakdown behind {@link #checkWhiteBalance}, so each mode gets its own color.
      * Distinct from {@link #checkBackgroundsByMode}, which asks whether that mode's
      * BACKGROUNDS are still valid -- a mode can be calibrated and its backgrounds stale, and
      * those are two different things to fix.
@@ -403,7 +403,7 @@ public class CalibrationChecker {
      * Per-white-balance-mode background status, one entry per mode that applies.
      *
      * <p>The breakdown behind {@link #checkBackgroundCorrection}: same data, not rolled up, so
-     * a display can give each mode its own colour instead of painting a whole row amber
+     * a display can give each mode its own color instead of painting a whole row amber
      * because one of two modes went stale.
      *
      * <p>Returns an EMPTY list whenever the per-mode split does not apply -- a monochrome

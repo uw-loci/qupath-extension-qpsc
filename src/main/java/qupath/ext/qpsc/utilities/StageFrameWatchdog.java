@@ -45,7 +45,7 @@ public final class StageFrameWatchdog {
     /**
      * How far outside its own bounding box a region's stage positions may stray.
      *
-     * <p>Sized by the autofocus tissue search, which steps one FOV diagonal toward the centre on
+     * <p>Sized by the autofocus tissue search, which steps one FOV diagonal toward the center on
      * each of up to three attempts (about 1.3 mm at 20x on PPM) and may start from a corner. Two
      * millimetres covers that with room to spare while staying far smaller than any frame shift
      * worth catching -- the 2026-10-02 run was off by more than the 11 mm height of a region.
@@ -55,7 +55,7 @@ public final class StageFrameWatchdog {
     /**
      * Quiet period after arming, during which positions outside the envelope are expected.
      *
-     * <p>An acquisition opens by travelling to its first autofocus position, which on a slot
+     * <p>An acquisition opens by traveling to its first autofocus position, which on a slot
      * change is a traverse across the holder. Every reading during it is legitimately outside the
      * region, and the slowest such move plus the initial autofocus search is well under this.
      */
@@ -63,7 +63,7 @@ public final class StageFrameWatchdog {
 
     /**
      * The grace period actually in force. Only the tests change it, so that they can assert the
-     * behaviour after arming without waiting half a minute per case.
+     * behavior after arming without waiting half a minute per case.
      */
     private volatile long graceMs = ARM_GRACE_MS;
 

@@ -20,7 +20,7 @@ import org.yaml.snakeyaml.Yaml;
  * force the user to re-input everything (stage limits, objectives,
  * detectors, modalities, streaming-AF probe results, ...). When the
  * config file does not exist, this no-ops and {@code WizardData} stays
- * at its constructor defaults -- the same behaviour as a fresh install.
+ * at its constructor defaults -- the same behavior as a fresh install.
  *
  * <p>Drift between this loader and {@link ConfigFileWriter} is caught
  * by {@code WizardDataLoaderTest}'s round-trip: writer -> loader ->

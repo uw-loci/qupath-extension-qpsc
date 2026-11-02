@@ -7,7 +7,7 @@ import qupath.ext.qpsc.controller.workflow.SingleTileRefinement.RefinementResult
  *
  * <p>Pure: the decision is a function of the result alone, so it is unit-tested without a GUI.
  * Before 2026-10-27 every non-accepted result proceeded to acquisition, so closing the
- * refinement dialog with the window's X (or cancelling the tile pick) started a run the
+ * refinement dialog with the window's X (or canceling the tile pick) started a run the
  * operator had not asked for.
  */
 public final class RefinementOutcomePolicy {
@@ -18,7 +18,7 @@ public final class RefinementOutcomePolicy {
     public enum Decision {
         /** Stop: the microscope could not be put into a usable state (hard block). */
         BLOCK,
-        /** Stop: the operator cancelled. No acquisition. */
+        /** Stop: the operator canceled. No acquisition. */
         CANCEL,
         /** Acquire with the prior alignment (explicit Skip). */
         PROCEED,

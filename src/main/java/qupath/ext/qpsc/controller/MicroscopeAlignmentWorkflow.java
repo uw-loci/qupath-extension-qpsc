@@ -933,7 +933,7 @@ public class MicroscopeAlignmentWorkflow {
             String modeWithIndex = (String) projectDetails.get("imagingModeWithIndex");
 
             // Create tiles for alignment (in full resolution coordinates).
-            // If no annotation matched (or tile creation was cancelled/failed),
+            // If no annotation matched (or tile creation was canceled/failed),
             // abort here with a single actionable message rather than advancing
             // to tile selection with an empty grid.
             boolean tilesCreated = createAlignmentTiles(
@@ -1057,7 +1057,7 @@ public class MicroscopeAlignmentWorkflow {
     /**
      * @return {@code true} when alignment tiles were created for at least one
      *         annotation; {@code false} when the image has no area annotation at
-     *         all, or tile creation was cancelled/failed. Annotations of the
+     *         all, or tile creation was canceled/failed. Annotations of the
      *         configured collection classes are preferred, then Tissue, then the
      *         other valid classes, then any area annotation. On {@code false} the caller must abort rather
      *         than advance to tile selection with an empty grid.
@@ -1187,7 +1187,7 @@ public class MicroscopeAlignmentWorkflow {
 
     /**
      * @return {@code true} only when detection tiles were actually created;
-     *         {@code false} when the operator cancelled a validation dialog or
+     *         {@code false} when the operator canceled a validation dialog or
      *         tile creation failed. The caller must not proceed to the
      *         tile-selection step on {@code false}.
      */

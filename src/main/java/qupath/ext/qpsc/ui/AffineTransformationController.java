@@ -81,7 +81,7 @@ public class AffineTransformationController {
      * The reference tile for the first alignment landmark: auto-picked during an automatic
      * multi-slide batch, otherwise chosen by the operator in the selection dialog.
      *
-     * <p>The auto-picked tile is centred and selected in the viewer exactly as a manual pick
+     * <p>The auto-picked tile is centered and selected in the viewer exactly as a manual pick
      * would be, so everything downstream -- the predicted-position move, SIFT against the
      * tile, the Stage Map search-range overlay -- sees the same state either way.
      */
@@ -130,7 +130,7 @@ public class AffineTransformationController {
      *    stage/camera transform ({@link StageImageTransform#current()})
      *  - Guides the user to align the microscope stage to selected tiles
      *  - Refines the affine transform using measured stage coordinates
-     *  - Returns the final AffineTransform (or null if cancelled)
+     *  - Returns the final AffineTransform (or null if canceled)
      *
      * <p>When {@code existingTransformEstimate} is provided, the stage will automatically
      * move to the estimated position after the user selects a reference tile. Otherwise,
@@ -142,7 +142,7 @@ public class AffineTransformationController {
      *                                 assists: force Camera View + zoom-to-tissue at alignment start
      *                                 and autofocus-on-slot-jump after the (blocking) auto-move.
      *                                 Standalone alignment passes false so those never fire there.
-     * @return CompletableFuture with the user's validated affine transform, or null if cancelled.
+     * @return CompletableFuture with the user's validated affine transform, or null if canceled.
      */
     public static CompletableFuture<AffineTransform> setupAffineTransformationAndValidationGUI(
             double macroPixelSizeMicrons, AffineTransform existingTransformEstimate, boolean slotJumpAssist) {

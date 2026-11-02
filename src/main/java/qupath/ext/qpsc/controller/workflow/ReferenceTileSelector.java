@@ -28,7 +28,7 @@ import qupath.lib.roi.interfaces.ROI;
  *
  * <h2>The three filters, in order</h2>
  * <ol>
- *   <li><b>Interior</b> -- keep a tile only if its full ring of 8 grid neighbours exists and
+ *   <li><b>Interior</b> -- keep a tile only if its full ring of 8 grid neighbors exists and
  *       its own centroid is inside the tissue annotation. Tiling deliberately keeps edge tiles
  *       that merely <i>intersect</i> the annotation ({@code TilingUtilities}: {@code contains ||
  *       intersects}), so an un-filtered pick can put the camera half on background. Requiring
@@ -48,7 +48,7 @@ import qupath.lib.roi.interfaces.ROI;
  * is still a valid 2-point solve, without a round trip to the operator.
  *
  * <h2>Grouping</h2>
- * {@code Row}/{@code Column} restart at 0 for every annotation, so the neighbour test is run
+ * {@code Row}/{@code Column} restart at 0 for every annotation, so the neighbor test is run
  * per annotation. Tiles are grouped by the annotation-name suffix that
  * {@code TilingUtilities} bakes into the tile name ({@code "<index>_<annotationName>"}), which
  * needs no hierarchy and survives being read back from a saved project.
@@ -173,7 +173,7 @@ public final class ReferenceTileSelector {
         }
         // Tiles are matched to their annotation by NAME (the suffix TilingUtilities bakes into
         // the tile name), so an unnamed annotation contributes nothing here and its tiles get
-        // no containment test -- silently leaving only the neighbour-ring filter. That is still
+        // no containment test -- silently leaving only the neighbor-ring filter. That is still
         // a real filter, but it is half the protection, and the difference shows up as a
         // reference tile sitting on the tissue boundary. Say so rather than degrade quietly.
         if (tissueByName.isEmpty() && !tissue.isEmpty()) {
@@ -206,7 +206,7 @@ public final class ReferenceTileSelector {
      *
      * @param tiles              candidate tile detections (those carrying {@code TileNumber})
      * @param tissueRoiByName    annotation name to its ROI; a name absent from the map skips
-     *                           the containment test but still requires the full neighbour ring
+     *                           the containment test but still requires the full neighbor ring
      * @return interior tiles, in no particular order
      */
     public static List<PathObject> interiorTiles(Collection<PathObject> tiles, Map<String, ROI> tissueRoiByName) {
@@ -429,7 +429,7 @@ public final class ReferenceTileSelector {
             return rankAndSpread(interior, t -> 0.0, k);
         }
 
-        // COVERAGE FIRST, then texture. "Interior" only means the tile has all 8 grid neighbours
+        // COVERAGE FIRST, then texture. "Interior" only means the tile has all 8 grid neighbors
         // inside the ANNOTATION -- and an annotation drawn loosely around a whole specimen
         // contains large empty gaps, so an interior tile can sit over nothing at all. That is how
         // a tile in a thin lobe at the tissue edge got picked and the camera saw blank field.

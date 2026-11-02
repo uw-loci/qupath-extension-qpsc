@@ -11,7 +11,7 @@ import qupath.lib.gui.images.stores.ImageRenderer;
 
 /**
  * Turns orientation (band 0) and retardance (band 1, optional) tiles into the orientation
- * colour image, for the live overlay. Values are the LC-PolScope stored counts: orientation in
+ * color image, for the live overlay. Values are the LC-PolScope stored counts: orientation in
  * deg x 100 (0..18000), retardance in nm x 100. With one band, or with "colour only", every
  * pixel is at full brightness.
  *
@@ -23,7 +23,7 @@ public final class OrientationColorRenderer implements ImageRenderer {
     /** LC-PolScope stored counts per degree (orientation) and per nm (retardance). */
     static final double COUNTS_PER_UNIT = 100.0;
 
-    /** Everything the colours depend on. */
+    /** Everything the colors depend on. */
     public record Settings(Kind kind, PpmHue ppm, double ceilingNm, boolean colourOnly, int sign, double offsetDeg) {
         public Settings {
             if (kind == Kind.PPM && ppm == null) {

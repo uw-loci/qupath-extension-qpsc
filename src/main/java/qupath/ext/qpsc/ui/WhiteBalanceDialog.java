@@ -238,7 +238,7 @@ public class WhiteBalanceDialog {
     /**
      * Shows the white balance calibration dialog.
      *
-     * @return CompletableFuture with configured parameters, or null if cancelled
+     * @return CompletableFuture with configured parameters, or null if canceled
      */
     public static CompletableFuture<WBDialogResult> showDialog() {
         CompletableFuture<WBDialogResult> future = new CompletableFuture<>();

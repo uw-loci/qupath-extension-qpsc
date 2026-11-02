@@ -43,7 +43,7 @@ public class BirefringenceOptimizationDialog {
     /**
      * Shows the birefringence optimization dialog.
      *
-     * @return CompletableFuture with test parameters or null if cancelled
+     * @return CompletableFuture with test parameters or null if canceled
      */
     public static CompletableFuture<BirefringenceParams> showDialog() {
         CompletableFuture<BirefringenceParams> future = new CompletableFuture<>();

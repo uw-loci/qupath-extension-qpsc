@@ -707,7 +707,7 @@ public class AffineTransformManager {
      * <p>Intended for BoundingBox acquisitions (and any flow where the stage
      * coverage of the stitched output is known up front). The math assumes
      * the stitched image is already in the canonical (non-flipped) orientation
-     * -- which it is, because the stitcher honours
+     * -- which it is, because the stitcher honors
      * {@link StageImageTransform#stitcherFlipFlags()} when writing the output.
      * The resulting transform therefore has positive scale components and a
      * translation equal to the (x1, y1) corner of the acquisition region.
@@ -722,7 +722,7 @@ public class AffineTransformManager {
      * @param imageWidthPx width of the stitched output in pixels (must be &gt; 0)
      * @param imageHeightPx height of the stitched output in pixels (must be &gt; 0)
      * @return pixel -> stage AffineTransform, or {@code null} if the inputs are
-     *     degenerate (caller falls back to "no alignment" behaviour).
+     *     degenerate (caller falls back to "no alignment" behavior).
      */
     public static AffineTransform buildTransformFromStageBounds(
             double stageX1Um,
@@ -1280,7 +1280,7 @@ public class AffineTransformManager {
      * points has no residual by construction, so a consumer has to be able to tell a
      * measured surface from an exactly-determined guess.
      *
-     * @param z0Um focus Z (um) at the centre point
+     * @param z0Um focus Z (um) at the center point
      * @param tiltXUmPerMm focus change per mm of stage X
      * @param tiltYUmPerMm focus change per mm of stage Y
      * @param centreXUm stage X the plane is expressed about
@@ -1289,7 +1289,7 @@ public class AffineTransformManager {
      * @param rmsUm residual RMS, or NaN when the fit was exactly determined
      * @param objective objective in use when it was measured; tilt is geometric and
      *     carries across objectives, but z0 does not
-     * @param measuredAt ISO-8601 instant, so a stale surface can be recognised
+     * @param measuredAt ISO-8601 instant, so a stale surface can be recognized
      */
     public record SlideFocusSurface(
             double z0Um,
@@ -1544,11 +1544,11 @@ public class AffineTransformManager {
         }
     }
 
-    /** Alignment-JSON key: where this slide's image centre sits on the stage, um. */
+    /** Alignment-JSON key: where this slide's image center sits on the stage, um. */
     static final String SLIDE_CENTRE_STAGE_KEY = "slideCentreStageUm";
 
     /**
-     * Where this slide's alignment puts the centre of its image, in stage um, or null when no
+     * Where this slide's alignment puts the center of its image, in stage um, or null when no
      * alignment has recorded it.
      *
      * <p>The Stage Map draws the macro overlay from the scanner preset, which places every slide
@@ -1562,13 +1562,13 @@ public class AffineTransformManager {
     }
 
     /**
-     * Records where the alignment just saved puts the centre of the image it maps. Writes onto
+     * Records where the alignment just saved puts the center of the image it maps. Writes onto
      * the alignment record, so call it right after {@code saveSlideAlignment}; every per-slide
      * save site does, because a save rewrites the record without it.
      *
      * <p>{@code imageWidth}/{@code imageHeight} are those of the pixel frame the transform maps
      * FROM: for {@code pixelFrame="macro"} that is the entry's FULL-RESOLUTION image, not the
-     * macro thumbnail (which would be wrong by the pyramid's downsample). The centre because
+     * macro thumbnail (which would be wrong by the pyramid's downsample). The center because
      * it is the same point whichever way the entry is flipped or rotated.
      *
      * @return true when it was written
@@ -1601,7 +1601,7 @@ public class AffineTransformManager {
         }
     }
 
-    /** Stage position of the image centre under {@code imageToStage}, or null. */
+    /** Stage position of the image center under {@code imageToStage}, or null. */
     static double[] imageCentreOnStage(AffineTransform imageToStage, int imageWidth, int imageHeight) {
         if (imageToStage == null || imageWidth <= 0 || imageHeight <= 0) {
             return null;
@@ -2254,7 +2254,7 @@ public class AffineTransformManager {
         // Resolve the same file loadSlideAlignmentFromDirectory would load: the
         // scope-namespaced <sample>_<scope>_alignment.json is preferred, the
         // legacy unscoped <sample>_alignment.json is the fallback. Reading only
-        // the legacy name here (the prior behaviour) meant any modern scoped
+        // the legacy name here (the prior behavior) meant any modern scoped
         // alignment always reported "Last refined: Unknown" and the age-based
         // outdated warning never fired.
         String activeMicroscope = null;

@@ -46,13 +46,13 @@ import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
- * Utilities > Project Tools > Orientation Colour View: colours an LC-PolScope orientation image
+ * Utilities > Project Tools > Orientation Color View: colors an LC-PolScope orientation image
  * live, as an overlay, with the retardance image of the same acquisition setting the brightness.
  * Nothing is written and nothing is re-stitched: the overlay reads the stitched pyramids' tiles
  * for what is on screen, at the current level, and recolours them when a setting changes.
  *
  * <p>The overlay follows the viewer: any LC-PolScope retardance or orientation image opened while
- * it is on is coloured, and other images show nothing. It uses the viewer's pixel-layer overlay
+ * it is on is colored, and other images show nothing. It uses the viewer's pixel-layer overlay
  * slot, which a pixel classifier preview also uses; turning one on replaces the other. Settings
  * are remembered across sessions. Design: claude-reports/design/2026-10-22_orientation-colormaps.md
  * section 7.
@@ -280,7 +280,7 @@ public final class OrientationColorViewWindow {
     }
 
     /**
-     * Writes the current image's colour view to a file beside the stitched images and adds it
+     * Writes the current image's color view to a file beside the stitched images and adds it
      * to the project. The pairing is built afresh so hiding the overlay meanwhile cannot close
      * the partner image under the writer.
      */

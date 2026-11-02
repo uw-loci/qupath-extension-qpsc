@@ -35,11 +35,11 @@ import qupath.lib.images.ImageData;
  * five intensities as samples of a single radiometric scale: it multiplies them by an
  * instrument matrix built from the calibration swing. A per-state exposure difference
  * rescales one row of that vector and biases retardance and orientation, with no visible
- * symptom -- the images look entirely normal. This is the single most important behavioural
+ * symptom -- the images look entirely normal. This is the single most important behavioral
  * difference from the fluorescence channel path, where per-channel exposure is not only
  * allowed but expected.
  *
- * <p>{@link #getChannels} therefore normalises every channel to one exposure and logs when
+ * <p>{@link #getChannels} therefore normalizes every channel to one exposure and logs when
  * the configuration disagreed, rather than trusting the YAML to be internally consistent.
  *
  * <h3>Autofocus</h3>
@@ -248,7 +248,7 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     public void configureCommandBuilder(AcquisitionCommandBuilder builder) {
         // Oryx ORX-10G-51S5M is the monochrome variant -- no Bayer mosaic.
         builder.enableDebayer(false);
-        // The orientation colour map and brightness ceiling chosen in the acquisition panel;
+        // The orientation color map and brightness ceiling chosen in the acquisition panel;
         // null = the config's own.
         builder.displayColormap(qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane.selectedColormap());
         builder.displayCeilingNm(qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane.sendableCeilingNm());
@@ -271,7 +271,7 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
     public List<String> getPostProcessingDirectorySuffixes() {
         // orientation_color: the display-only RGB image, hue = orientation (cyclic over 0..180
         // deg), brightness = retardance up to the display ceiling. QuPath cannot put a cyclic
-        // colour map on an image channel, so the server renders it.
+        // color map on an image channel, so the server renders it.
         return List.of("retardance", "orientation", "orientation_color");
     }
 

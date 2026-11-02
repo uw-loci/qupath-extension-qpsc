@@ -763,7 +763,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
         });
 
-        // Orientation Colour View (display only; no microscope, no files written)
+        // Orientation Color View (display only; no microscope, no files written)
         MenuItem orientationColourViewOption = new MenuItem(res.getString("menu.orientationColourView"));
         setMenuItemTooltip(
                 orientationColourViewOption,

@@ -310,7 +310,7 @@ public final class LCCalibrationPlots {
         chart.getData().add(origin);
         chart.getData().add(ideal);
         chart.getData().add(measured);
-        // Series colours through modena's looked-up colours, so the legend matches the points.
+        // Series colors through modena's looked-up colors, so the legend matches the points.
         chart.setStyle(seriesColors(EXT_COLOR, IDEAL_COLOR, LCB_COLOR));
         for (XYChart.Data<Number, Number> d : measured.getData()) {
             if (d.getExtraValue() instanceof StateOffset s && d.getNode() != null) {
@@ -433,7 +433,7 @@ public final class LCCalibrationPlots {
         return s;
     }
 
-    /** Modena colours its series from CHART_COLOR_1..8; set the first few, in series order. */
+    /** Modena colors its series from CHART_COLOR_1..8; set the first few, in series order. */
     static String seriesColors(String... colors) {
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < colors.length; i++) {

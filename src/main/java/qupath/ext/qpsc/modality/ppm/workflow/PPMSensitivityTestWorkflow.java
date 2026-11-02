@@ -90,7 +90,7 @@ public class PPMSensitivityTestWorkflow {
     /**
      * Shows dialog to collect test parameters.
      *
-     * @return CompletableFuture with test parameters or null if cancelled
+     * @return CompletableFuture with test parameters or null if canceled
      */
     private static CompletableFuture<TestParams> showTestDialog() {
         CompletableFuture<TestParams> future = new CompletableFuture<>();

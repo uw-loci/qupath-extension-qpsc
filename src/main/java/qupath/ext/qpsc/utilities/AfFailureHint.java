@@ -27,7 +27,7 @@ public final class AfFailureHint {
      *                 null/empty if unknown. Used to suggest the right
      *                 alternative strategy (sparse_signal vs dense_texture vs
      *                 dark_field).
-     * @param reason   the server-supplied failure reason. Recognised
+     * @param reason   the server-supplied failure reason. Recognized
      *                 substrings (case-insensitive): "metric_flat" / "within
      *                 noise", "no peak found" / "could not find peak" /
      *                 "edge", "saturation", "exposure" / "blur", "no_slow_speed".

@@ -240,7 +240,7 @@ public final class ImageFlipHelper {
         if (sibling != null && !new Parity(flipX, flipY).equals(builtParity(sibling))) {
             // There is one companion per base, and its pixels are flipped once, when it is
             // built. Reusing it for a different flip only re-stamped its metadata, so ticking Y
-            // and then X as well left a Y-only image labelled X+Y (2026-10-19). The companion is
+            // and then X as well left a Y-only image labeled X+Y (2026-10-19). The companion is
             // a viewing copy (annotations are mirrored from the base), so replace it.
             //
             // A companion that acquisitions were made from used to be kept as it was, so it
@@ -777,7 +777,7 @@ public final class ImageFlipHelper {
      * {@code gui.getImageData()} and see the OLD entry's hierarchy.
      * The change listener waits for the install to commit to the
      * viewer before signalling. A 5-second timeout fallback prevents
-     * deadlock if the install never fires (e.g. user cancelled a
+     * deadlock if the install never fires (e.g. user canceled a
      * checkSaveChanges dialog).
      */
     private static void switchOpenEntry(
@@ -825,7 +825,7 @@ public final class ImageFlipHelper {
                 future.completeExceptionally(e);
                 return;
             }
-            // Timeout fallback. If the install never fires (e.g. user cancelled
+            // Timeout fallback. If the install never fires (e.g. user canceled
             // the checkSaveChanges dialog), the workflow chain would deadlock
             // waiting on this future. After 5 seconds, remove the listener and
             // resolve based on whether the open eventually succeeded.

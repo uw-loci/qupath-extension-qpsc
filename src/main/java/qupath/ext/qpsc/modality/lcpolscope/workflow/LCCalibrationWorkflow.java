@@ -913,7 +913,7 @@ public class LCCalibrationWorkflow {
      * level (measured by the calibration's exposure series), each offered only when the calibration
      * measured something to go on and each a tick box.
      *
-     * @return what to write, or {@code null} if the operator cancelled the Apply
+     * @return what to write, or {@code null} if the operator canceled the Apply
      */
     private static ApplySettings chooseApplySettings(JsonObject result) {
         JsonObject signal =

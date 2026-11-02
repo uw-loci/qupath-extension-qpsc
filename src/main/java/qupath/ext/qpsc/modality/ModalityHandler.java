@@ -249,7 +249,7 @@ public interface ModalityHandler {
     /**
      * Per-modality classification of how to interpret saturation at a given
      * acquisition angle. PPM uncrossed (~90 deg) tiles are intentionally
-     * bright and saturation there is normal/expected; the small polarisation
+     * bright and saturation there is normal/expected; the small polarization
      * angles (+/-7) and crossed (0) angle are low-signal and saturation is a
      * real defect. Other modalities collapse to {@link SaturationRole#SIGNAL_NORMAL}.
      *
@@ -408,7 +408,7 @@ public interface ModalityHandler {
      *
      * <p>Used by {@code QPProjectFunctions.addImageToProject} immediately after a
      * stitched image is imported, so callers see a consistent, descriptive channel
-     * name (e.g. "PPM Subtracted") regardless of how BioFormats labelled the
+     * name (e.g. "PPM Subtracted") regardless of how BioFormats labeled the
      * source TIFF. Without this, repeated PPM runs in the same project end up with
      * channel names like "Channel 0" and "Channel 1" depending on whichever tile
      * happened to be read first, which makes uniform display settings impossible.</p>
@@ -468,7 +468,7 @@ public interface ModalityHandler {
      * registration should be SOLVED on. Every other target then reuses that solve, so this picks
      * the one image whose content decides where all of them are placed.
      *
-     * <p>It matters more than it looks. Registration correlates the overlap between neighbouring
+     * <p>It matters more than it looks. Registration correlates the overlap between neighboring
      * tiles, so it can only work as well as the contrast in that overlap -- and sibling targets of
      * the same tiles can differ enormously in contrast. On a PPM acquisition the near-extinction
      * angles are dark and low-contrast while the open one is bright and detailed; measured on a
@@ -478,7 +478,7 @@ public interface ModalityHandler {
      * low-confidence or rejected edges on tissue that is not remotely featureless.
      *
      * <p>The default returns empty, meaning "no preference" -- the caller falls back to the first
-     * target, which is the historical behaviour and is correct for single-target modalities.
+     * target, which is the historical behavior and is correct for single-target modalities.
      *
      * <p>Channel acquisitions do not use this. Their reference is the operator's choice in the
      * channel picker (one channel, or a normalized merge of several), defaulting to the focus
@@ -825,7 +825,7 @@ public interface ModalityHandler {
 
         /**
          * @return the dedicated focus channel settings, or {@code null} when the operator
-         *     has not opted in (the default: autofocus behaviour is unchanged).
+         *     has not opted in (the default: autofocus behavior is unchanged).
          */
         default FocusChannelOverride getDedicatedFocusChannel() {
             return null;

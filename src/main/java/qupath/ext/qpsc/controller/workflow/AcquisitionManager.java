@@ -364,7 +364,7 @@ public class AcquisitionManager {
      *   <li>Processes each annotation sequentially</li>
      * </ol>
      *
-     * @return CompletableFuture containing the updated workflow state, or null if cancelled/failed
+     * @return CompletableFuture containing the updated workflow state, or null if canceled/failed
      */
     public CompletableFuture<WorkflowState> execute() {
         logger.info("Starting acquisition phase");
@@ -400,7 +400,7 @@ public class AcquisitionManager {
                         // Something broke or the server refused; say that, not "cancelled".
                         throw new RuntimeException("Acquisition failed: " + failure.getMessage(), failure);
                     }
-                    // User cancelled (e.g. dismissed annotation dialog) - not an error
+                    // User canceled (e.g. dismissed annotation dialog) - not an error
                     throw new CancellationException("Acquisition cancelled by user");
                 });
     }
@@ -443,7 +443,7 @@ public class AcquisitionManager {
      * earlier in the workflow (e.g., by ExistingImageWorkflowV2), this method skips
      * the dialog and uses the pre-selected classes.
      *
-     * @return CompletableFuture with true if user confirms, false if cancelled
+     * @return CompletableFuture with true if user confirms, false if canceled
      */
     private CompletableFuture<Boolean> validateAnnotations() {
         // If classes were already selected earlier in the workflow, skip the dialog
@@ -523,7 +523,7 @@ public class AcquisitionManager {
     private CompletableFuture<List<AngleExposure>> prepareForAcquisition(List<AngleExposure> angleExposures) {
 
         return CompletableFuture.supplyAsync(() -> {
-            // Check for cancellation (null angleExposures indicates cancelled/failed)
+            // Check for cancellation (null angleExposures indicates canceled/failed)
             if (angleExposures == null) {
                 logger.info("Skipping acquisition preparation - workflow was cancelled");
                 return null;
@@ -654,7 +654,7 @@ public class AcquisitionManager {
      */
     private CompletableFuture<List<AngleExposure>> checkBackgroundIllumination(List<AngleExposure> angleExposures) {
         if (angleExposures == null) {
-            // Upstream step already cancelled -- pass the signal through.
+            // Upstream step already canceled -- pass the signal through.
             return CompletableFuture.completedFuture(null);
         }
         return CompletableFuture.supplyAsync(() -> {
@@ -706,7 +706,7 @@ public class AcquisitionManager {
      */
     private CompletableFuture<Boolean> processAnnotations(List<AngleExposure> angleExposures) {
 
-        // Check for cancellation (null angleExposures indicates cancelled/failed)
+        // Check for cancellation (null angleExposures indicates canceled/failed)
         if (angleExposures == null) {
             logger.info("Skipping annotation processing - workflow was cancelled");
             return CompletableFuture.completedFuture(false);
@@ -801,7 +801,7 @@ public class AcquisitionManager {
                 dualProgressDialog = dialog; // Set field for other method access
                 // Multi-slide "Abort All": register this dialog with the batch cancel token
                 // so a batch-level abort cancels THIS in-flight acquisition. requestCancel()
-                // both sends CANCEL and flips the dialog's cancelled flag, so the acquire
+                // both sends CANCEL and flips the dialog's canceled flag, so the acquire
                 // loop's !result && !isCancelled() branch scores a clean cancel, not an
                 // error. Null token in the single-slide menu path -- no registration.
                 if (state.cancellationToken != null) {
@@ -1551,7 +1551,7 @@ public class AcquisitionManager {
      * @param channelExposures Channel list (for widefield IF); may be null or empty
      * @param acquisitionPlan Pre-built per-annotation plan for the live dimension panel; may be null when MDA export failed
      * @param mdaSettingsPath Path to the MDA settings file just written, or null when MDA export failed
-     * @return true if completed successfully, false if cancelled/failed
+     * @return true if completed successfully, false if canceled/failed
      * @throws IOException if communication with microscope fails
      */
     private boolean monitorAcquisition(
@@ -2394,7 +2394,7 @@ public class AcquisitionManager {
     }
 
     /**
-     * Shows notification that acquisition was cancelled.
+     * Shows notification that acquisition was canceled.
      * Note: This method is kept for potential future use but is no longer called
      * for user-initiated cancellations since the dialog already shows cancellation state.
      */
@@ -2954,8 +2954,8 @@ public class AcquisitionManager {
      * One tile's position in the macro image, for tissue scoring.
      *
      * @param index tile index as the acquisition numbers it, which is what the server expects
-     * @param cx tile centre X in macro-image pixels
-     * @param cy tile centre Y in macro-image pixels
+     * @param cx tile center X in macro-image pixels
+     * @param cy tile center Y in macro-image pixels
      */
     private record TileSite(int index, double cx, double cy) {}
 

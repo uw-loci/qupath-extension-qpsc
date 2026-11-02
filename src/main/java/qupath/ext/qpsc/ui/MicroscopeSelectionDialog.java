@@ -30,7 +30,7 @@ public class MicroscopeSelectionDialog {
     /**
      * Shows the microscope selection dialog.
      *
-     * @return CompletableFuture with the selected microscope, or null if cancelled
+     * @return CompletableFuture with the selected microscope, or null if canceled
      */
     public static CompletableFuture<MicroscopeSelection> showDialog() {
         CompletableFuture<MicroscopeSelection> future = new CompletableFuture<>();

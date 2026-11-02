@@ -7,7 +7,7 @@ import org.junit.jupiter.api.Test;
 
 /**
  * The Stage Map moves the preset-placed macro onto where the slide's own alignment puts it
- * ({@link MacroOverlayPlacement}), using the slide centre each alignment records
+ * ({@link MacroOverlayPlacement}), using the slide center each alignment records
  * ({@link AffineTransformManager#imageCentreOnStage}).
  */
 class MacroOverlayPlacementTest {
@@ -32,8 +32,8 @@ class MacroOverlayPlacementTest {
 
     @Test
     void aSlideWhereThePresetsSlideLayNeedsNoShift() {
-        // The preset's own slide: its green-box centre is the anchor, and its alignment puts its
-        // image centre exactly at the anchor's stage point.
+        // The preset's own slide: its green-box center is the anchor, and its alignment puts its
+        // image center exactly at the anchor's stage point.
         double[] presetAt = MacroOverlayPlacement.presetStageOf(400, 150, 400, 150, 5000, -2000, PX, 81, 81);
         double[] shift = MacroOverlayPlacement.shiftOntoSlide(new double[] {5000, -2000}, presetAt);
         assertArrayEquals(new double[] {0, 0}, shift, 1e-9);
@@ -42,13 +42,13 @@ class MacroOverlayPlacementTest {
     @Test
     void aSlideDroppedElsewhereIsMovedOntoItsMeasuredCentre() {
         // This slide's green box sits 6 px right of the preset's on the macro, so the preset
-        // draws its scan centre 486 um right of the anchor; its alignment measured it 1.2 mm
+        // draws its scan center 486 um right of the anchor; its alignment measured it 1.2 mm
         // right and 0.3 mm up of that.
         double[] presetAt = MacroOverlayPlacement.presetStageOf(406, 150, 400, 150, 5000, -2000, PX, 81, 81);
         double[] measured = {presetAt[0] + 1200, presetAt[1] - 300};
         double[] shift = MacroOverlayPlacement.shiftOntoSlide(measured, presetAt);
         assertArrayEquals(new double[] {1200, -300}, shift, 1e-9);
-        // After the shift the green-box centre lands on the measured centre.
+        // After the shift the green-box center lands on the measured center.
         assertEquals(measured[0], presetAt[0] + shift[0], 1e-9);
         assertEquals(measured[1], presetAt[1] + shift[1], 1e-9);
     }

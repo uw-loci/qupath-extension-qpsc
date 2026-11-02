@@ -17,12 +17,12 @@ import qupath.lib.gui.QuPathGUI;
 
 /**
  * A small window that stays up while an autofocus started by a workflow runs, so it can always be
- * cancelled: the autofocus after a slot jump and the one before single-tile refinement had a
+ * canceled: the autofocus after a slot jump and the one before single-tile refinement had a
  * Cancel only on the Live Viewer's Autofocus button, and with the Live Viewer closed there was
  * none anywhere (the refinement dialog opens only once the focus is done).
  *
  * <p>Shows what the search is for, its live curve ({@link AutofocusCurvePane}), and
- * <b>Cancel autofocus</b>; the window's X does the same. Cancelling stops the search, the
+ * <b>Cancel autofocus</b>; the window's X does the same. Canceling stops the search, the
  * microscope returns Z to where it started, and the workflow carries on as after a failed focus.
  * Show and close from any thread.
  */

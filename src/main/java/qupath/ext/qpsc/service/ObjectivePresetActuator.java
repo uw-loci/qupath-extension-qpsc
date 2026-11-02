@@ -22,7 +22,7 @@ import qupath.fx.dialogs.Dialogs;
  *
  * <p>Micro-Manager picks its pixel size from the pixel-size preset that matches the current
  * hardware state, and that state includes the objective. On a scope whose nosepiece is turned
- * by hand, the objective is a labelling device (the LC-PolScope's DemoCamera "DObjective") that
+ * by hand, the objective is a labeling device (the LC-PolScope's DemoCamera "DObjective") that
  * only changes when someone selects its preset, so choosing 20x in QPSC left Micro-Manager on
  * another label, reporting pixel size 0 and blocking SIFT (2026-10-19).
  *
@@ -30,7 +30,7 @@ import qupath.fx.dialogs.Dialogs;
  * in the microscope YAML is acted on, because group and preset names are whatever each lab's
  * Micro-Manager configuration calls them. Then:
  * <ul>
- *   <li>{@code motorized: false} (a labelling device, which moves nothing): applied silently,
+ *   <li>{@code motorized: false} (a labeling device, which moves nothing): applied silently,
  *       on selection and whenever the server connects;</li>
  *   <li>{@code motorized: true}, or the key missing: applied only after the operator confirms
  *       in {@link ObjectivePresetConfirmDialog}, and only on selection, never on connect;</li>
@@ -68,7 +68,7 @@ public final class ObjectivePresetActuator {
     }
 
     /**
-     * After the server has loaded the configuration: bring a labelling-device preset in line
+     * After the server has loaded the configuration: bring a labeling-device preset in line
      * with the objective QPSC has selected. Never prompts; a motorized mismatch is only logged.
      */
     public static void onServerConfigured() {

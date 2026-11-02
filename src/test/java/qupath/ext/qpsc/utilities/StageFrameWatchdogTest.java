@@ -9,7 +9,7 @@ import org.junit.jupiter.api.Test;
 import qupath.ext.qpsc.model.StagePositionProvider;
 
 /**
- * Behaviour of the stage frame watchdog over a sequence of position readings.
+ * Behavior of the stage frame watchdog over a sequence of position readings.
  *
  * <p>Driven through the real {@link StagePositionManager} with a scripted position provider,
  * because the thing being tested is what the watchdog makes of a STREAM of samples: a single

@@ -324,7 +324,7 @@ public final class InsertCalibrationDialog {
                 slotCenterYFields.add(centerY);
                 // Editable: on a holder whose slide corners sit under the rails there is no
                 // two-corner capture to derive them from, and the read-only field left the
-                // operator unable to enter a centre at all.
+                // operator unable to enter a center at all.
                 centerX.setEditable(true);
                 centerY.setEditable(true);
 

@@ -639,7 +639,7 @@ public final class SiftAutoAlignHelper {
     /**
      * Re-draws the currently-shown search-range box using the persisted Search
      * margin preference. Called after the SIFT Settings dialog closes so the box
-     * reflects the saved value (and reverts a cancelled live preview). No-op if
+     * reflects the saved value (and reverts a canceled live preview). No-op if
      * no box is currently shown.
      */
     public static void refreshSearchRangePreview() {
@@ -1215,7 +1215,7 @@ public final class SiftAutoAlignHelper {
         confHelp.setWrapText(true);
         grid.add(confHelp, 0, ++row, 2, 1);
 
-        // ---- Colour (H&E) conversion ----
+        // ---- Color (H&E) conversion ----
         Label rgbHeader = new Label("Colour reference conversion");
         rgbHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
         grid.add(rgbHeader, 0, ++row, 2, 1);
@@ -1346,7 +1346,7 @@ public final class SiftAutoAlignHelper {
         });
 
         // On close (OK persisted the new margin; Cancel discarded it), re-draw the
-        // live search box from the persisted value so a cancelled preview reverts.
+        // live search box from the persisted value so a canceled preview reverts.
         dialog.setOnHidden(evt -> refreshSearchRangePreview());
 
         dialog.show();

@@ -16,7 +16,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  * <p>
  * Thread model: {@link #execute(StatusCallback)} runs on the caller's thread
  * (expected to be a background daemon thread). All UI updates go through the
- * {@link StatusCallback}. The algorithm can be cancelled via {@link #cancel()}.
+ * {@link StatusCallback}. The algorithm can be canceled via {@link #cancel()}.
  */
 public class RefineFocusController {
 
@@ -42,7 +42,7 @@ public class RefineFocusController {
         SUCCESS,
         FAILED,
         ERROR,
-        /** The user cancelled the operation; not a failure. Treated as a
+        /** The user canceled the operation; not a failure. Treated as a
          * terminal outcome that resets the controls without error styling. */
         CANCELLED
     }
@@ -81,7 +81,7 @@ public class RefineFocusController {
 
     /**
      * Runs the hill-climbing focus refinement algorithm.
-     * Blocks the calling thread until complete or cancelled.
+     * Blocks the calling thread until complete or canceled.
      */
     public void execute(StatusCallback callback) {
         if (running) {

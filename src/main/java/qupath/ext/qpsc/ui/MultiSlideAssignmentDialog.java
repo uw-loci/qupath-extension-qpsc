@@ -268,8 +268,8 @@ public final class MultiSlideAssignmentDialog {
         try {
             // Backgrounds are checked per white-balance mode, and the modes disagree in exactly
             // the case that matters: per-angle valid, simple stale. Give each mode its own
-            // colour instead of painting the whole block red because one of two went stale --
-            // the operator could not otherwise tell from the colour that the mode they are
+            // color instead of painting the whole block red because one of two went stale --
+            // the operator could not otherwise tell from the color that the mode they are
             // about to acquire with is fine. An empty breakdown means the per-mode split does
             // not apply (monochrome camera, per-channel modality), so fall back to the
             // aggregate rather than showing nothing.
@@ -334,7 +334,7 @@ public final class MultiSlideAssignmentDialog {
         flow.getChildren().addAll(lines);
     }
 
-    /** One readiness line, coloured for its own status and terminated so the flow wraps per line. */
+    /** One readiness line, colored for its own status and terminated so the flow wraps per line. */
     private static Text line(String text, String cssColor) {
         Text node = new Text(text + "\n");
         node.setStyle("-fx-font-size: 11px; -fx-fill: " + cssColor + ";");
@@ -529,7 +529,7 @@ public final class MultiSlideAssignmentDialog {
         ComboBox<String> modalityBox = new ComboBox<>();
         ComboBox<String> objectiveBox = new ComboBox<>();
         ComboBox<String> detectorBox = new ComboBox<>();
-        // A TextFlow, not a Label: each readiness line carries its own colour, because a
+        // A TextFlow, not a Label: each readiness line carries its own color, because a
         // single stale white-balance mode must not repaint the lines about the modes that
         // are fine.
         TextFlow readiness = new TextFlow();

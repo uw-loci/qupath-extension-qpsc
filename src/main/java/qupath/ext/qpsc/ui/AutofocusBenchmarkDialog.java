@@ -69,7 +69,7 @@ public class AutofocusBenchmarkDialog {
      *
      * @param currentZ Current Z stage position, used as default for reference_z
      * @param defaultObjective Default objective identifier (e.g., "20X")
-     * @return CompletableFuture with configured parameters, or null if cancelled
+     * @return CompletableFuture with configured parameters, or null if canceled
      */
     public static CompletableFuture<BenchmarkParams> showDialog(Double currentZ, String defaultObjective) {
 
@@ -633,7 +633,7 @@ public class AutofocusBenchmarkDialog {
      *
      * @param currentZ Current Z stage position
      * @param defaultObjective Default objective identifier
-     * @return CompletableFuture with configured parameters, or null if cancelled
+     * @return CompletableFuture with configured parameters, or null if canceled
      */
     public static CompletableFuture<BenchmarkParams> showQuickDialog(Double currentZ, String defaultObjective) {
 

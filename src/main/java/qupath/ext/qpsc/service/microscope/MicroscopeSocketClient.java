@@ -1536,7 +1536,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                     if (ackStr.startsWith("BUSY")) {
                         // The server refused because it is already acquiring. Say so in the
-                        // terms the user will recognise, because the alternative -- two
+                        // terms the user will recognize, because the alternative -- two
                         // acquisitions driving one stage -- corrupts the tiles silently and
                         // is only visible as a scrambled mosaic hours later. Its own type,
                         // because the catch below must NOT treat it as a broken socket.
@@ -2054,7 +2054,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             SUCCESS,
             UNAVAILABLE,
             FAILED,
-            /** The scan was cancelled by the client via {@link #abortStreamingFocus()};
+            /** The scan was canceled by the client via {@link #abortStreamingFocus()};
              * the server restored Z to the pre-scan position. */
             ABORTED
         }
@@ -2459,7 +2459,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             /** Every searched position was background; the stage is back where it started. */
             NOT_FOUND,
             /**
-             * The operator cancelled (the same ABORTAF the focus scan honours -- from their
+             * The operator canceled (the same ABORTAF the focus scan honors -- from their
              * side the search and the scan are one action). The stage is back where it
              * started. Not an error.
              */
@@ -3134,7 +3134,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         throw new AutofocusFailedException(
                                 finalResponse.substring("FAILED:".length()).trim());
                     } else if (finalResponse.startsWith("CANCELLED:")) {
-                        // User cancelled the sweep (ABORTAF). Not an error: the
+                        // User canceled the sweep (ABORTAF). Not an error: the
                         // server restored Z. Return a flagged result so the
                         // caller skips the "autofocus failed" dialog.
                         Map<String, String> result = new java.util.HashMap<>();
@@ -3265,7 +3265,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                     Map<String, String> result = new java.util.HashMap<>();
                     if (finalResponse.startsWith("CANCELLED:")) {
-                        // The operator cancelled (ABORTAF). Not an error: the server put Z
+                        // The operator canceled (ABORTAF). Not an error: the server put Z
                         // back where it started. Flag it so the caller skips the result dialog.
                         result.put("cancelled", "true");
                         result.put(
@@ -5601,7 +5601,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     return currentState;
                 }
 
-                // Check for manual focus request - skip if cancelling (server may still report NEEDED)
+                // Check for manual focus request - skip if canceling (server may still report NEEDED)
                 if (currentState != AcquisitionState.CANCELLING)
                     try {
                         int manualFocusRetries = isManualFocusRequested();

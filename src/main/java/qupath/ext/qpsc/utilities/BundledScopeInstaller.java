@@ -193,7 +193,7 @@ public final class BundledScopeInstaller {
     /**
      * Whether {@code path} is where this installer puts {@code bundle}'s config (the right
      * filename inside the right folder). Used to detect a stale selection whose backing file
-     * has gone missing so it can be re-created, and to recognise the demo config.
+     * has gone missing so it can be re-created, and to recognize the demo config.
      *
      * @param bundle the bundle to test against
      * @param path a configured microscope-config path (may be null/blank)

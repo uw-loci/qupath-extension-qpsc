@@ -293,7 +293,7 @@ public class AcquisitionCommandBuilder {
      * channels), this channel does NOT have to be one of the acquired channels: focusing
      * on a bright, well-covered stain while imaging dim ones is the main use.
      *
-     * @param channelId channel to focus on, or {@code null} to leave AF behaviour alone
+     * @param channelId channel to focus on, or {@code null} to leave AF behavior alone
      * @param exposureMs focus exposure in ms, or {@code null} for the channel's own
      * @param intensity focus illumination intensity, or {@code null} for the channel's own
      * @return this builder instance for method chaining
@@ -666,7 +666,7 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
-     * LC-PolScope: the colour map of the display-only orientation colour image for this run
+     * LC-PolScope: the color map of the display-only orientation color image for this run
      * ({@code uniform}, {@code ppm} or {@code hsv}), sent as {@code --display-colormap}; it
      * overrides {@code reconstruction.display_colormap}. Null or blank sends nothing.
      */
@@ -676,7 +676,7 @@ public class AcquisitionCommandBuilder {
     }
 
     /**
-     * LC-PolScope: the retardance shown at full brightness in the orientation colour image for
+     * LC-PolScope: the retardance shown at full brightness in the orientation color image for
      * this run, sent as {@code --display-ceiling-nm}; it overrides
      * {@code reconstruction.display_retardance_ceiling_nm}. Null, or anything not above 0,
      * sends nothing.

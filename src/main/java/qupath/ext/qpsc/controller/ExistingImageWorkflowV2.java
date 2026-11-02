@@ -70,7 +70,7 @@ public class ExistingImageWorkflowV2 {
 
     /**
      * Starts the workflow and returns a future that completes when the run has
-     * fully settled (acquisition + stitching finished, cancelled, or errored).
+     * fully settled (acquisition + stitching finished, canceled, or errored).
      *
      * <p>Intended for orchestrators that drive the single-slide workflow across
      * several entries in turn (e.g. the multi-slide batch pass): await this future
@@ -643,7 +643,7 @@ public class ExistingImageWorkflowV2 {
          * cancel/short-circuit) means we can reach the accept branch after the
          * pixel-size gate, the camera-ROI gate, or any internal cancel -- without
          * distinguishing them from real success. Without the null gate the operator
-         * could hear the success beep + see ACQUISITION_COMPLETE after cancelling at a
+         * could hear the success beep + see ACQUISITION_COMPLETE after canceling at a
          * gate. {@code cleanup()} must still run on both paths so resource leaks
          * (preserved annotations, currentTransform singleton) are cleared either way.
          *
@@ -2109,7 +2109,7 @@ public class ExistingImageWorkflowV2 {
             // Delegate to the existing working implementation
             return new ExistingAlignmentPath(gui, state).execute().thenApply(legacyState -> {
                 if (legacyState == null) {
-                    // ExistingAlignmentPath returned null (e.g. no macro image, user cancelled).
+                    // ExistingAlignmentPath returned null (e.g. no macro image, user canceled).
                     // Phase 12: explicit cancellation routes through handleError instead of
                     // propagating null through the chain.
                     throw new CancellationException("ExistingAlignmentPath cancelled (no macro / user cancel)");
@@ -2465,7 +2465,7 @@ public class ExistingImageWorkflowV2 {
          * driver refuses to start another slide while that is set -- every remaining slide's
          * alignment was measured in the same frame, so they would be wrong the same way.
          *
-         * <p>Honours the {@code alignmentCheckMode} preference. {@code warn} measures and
+         * <p>Honors the {@code alignmentCheckMode} preference. {@code warn} measures and
          * reports but acquires anyway, which is the setting to use while learning what the
          * numbers look like on a given rig.
          */
@@ -2876,7 +2876,7 @@ public class ExistingImageWorkflowV2 {
                                                 + "into a state alignment can use (see the preceding warning); "
                                                 + "the prior alignment is preserved");
                             case CANCEL:
-                                // X-close, Cancel, or a cancelled tile pick. The prior alignment
+                                // X-close, Cancel, or a canceled tile pick. The prior alignment
                                 // is untouched and nothing is acquired. handleError logs this as
                                 // an operator cancel and cleanup() runs.
                                 throw new CancellationException("Refinement cancelled by the operator; no acquisition");
@@ -3142,7 +3142,7 @@ public class ExistingImageWorkflowV2 {
          * three-tier fallback (derived/, flat per-slide JSON, then in-session
          * {@code currentTransform}); clearing the singleton just pushes it to load
          * from disk on the next centroid click -- a net improvement over the
-         * residue class of bug (cancelling a sub-image run, then clicking on the
+         * residue class of bug (canceling a sub-image run, then clicking on the
          * macro, would otherwise drive the stage with the sub-image transform).
          * Review finding H6.
          */
@@ -3235,7 +3235,7 @@ public class ExistingImageWorkflowV2 {
          */
         /**
          * The workflow stopping ITSELF because it cannot proceed, as opposed to the operator
-         * cancelling. Both unwind the same chain, so both were CancellationException and both
+         * canceling. Both unwind the same chain, so both were CancellationException and both
          * logged "Workflow cancelled by user" -- which is a false statement about a run nobody
          * touched, and the only trace a hard block left in the log.
          */
@@ -3287,7 +3287,7 @@ public class ExistingImageWorkflowV2 {
             // Phase 11: force-delete temporary tiles on error so a failed run does not
             // leave them on disk even when the user's preference is "Keep" (Keep is for
             // diagnostics on success; on error the tiles are usually incomplete /
-            // corrupt). cleanupTilesAfterStitching honours the preference and runs only
+            // corrupt). cleanupTilesAfterStitching honors the preference and runs only
             // on the success branch; this is the error-path equivalent. Regions that
             // finished earlier in the run are kept: their tiles are complete and may be
             // stitching right now.

@@ -136,7 +136,7 @@ public final class ManualFocusHandler {
                                     // focus-complete event and the cancel
                                     // event, so CANC alone transitions the
                                     // autofocus wait directly to user_choice
-                                    // ="cancel" (which raises the cancelled
+                                    // ="cancel" (which raises the canceled
                                     // sentinel and sets state=CANCELLED).
                                     // Previously we sent SKPAF first, which
                                     // won the race and made the server treat

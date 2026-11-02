@@ -11,7 +11,7 @@ import org.junit.jupiter.api.Test;
  * slide ran before.
  *
  * <p>The flag must be absent by default. A single-slide run that emitted it would stop
- * returning the stage to where the operator left it, which is behaviour they rely on
+ * returning the stage to where the operator left it, which is behavior they rely on
  * and would notice immediately.
  */
 class BatchAcquireFlagTest {

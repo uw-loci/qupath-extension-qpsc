@@ -301,7 +301,7 @@ public final class FocusProfileAnalysis {
         // Passing that record is worse than failing it. approachDistanceUm is measured to the
         // STRONGEST peak, so a peak 207 um short of the sample also writes a travel bound 207 um
         // short -- and the licensed approach then scans a range that never reaches the sample at
-        // all. The previous, unlicensed behaviour at least scanned past it.
+        // all. The previous, unlicensed behavior at least scanned past it.
         //
         // NaN means no manual focus was supplied to check against, which is not evidence of a
         // problem, so it does not fail here.
@@ -443,7 +443,7 @@ public final class FocusProfileAnalysis {
         return (w % 2 == 0) ? w + 1 : w;
     }
 
-    /** Centred moving average; edges shrink the window rather than padding. */
+    /** Centered moving average; edges shrink the window rather than padding. */
     static double[] smooth(double[] v, int window) {
         if (window <= 1) {
             return v.clone();

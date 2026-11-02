@@ -186,7 +186,7 @@ public class QPPreferenceDialog {
     private static final StringProperty alignmentCheckModeProperty =
             PathPrefs.createPersistentPreference("alignmentCheckMode", "halt");
 
-    // Focus points to measure before the tile loop. 0 = no survey (today's behaviour).
+    // Focus points to measure before the tile loop. 0 = no survey (today's behavior).
     private static final IntegerProperty focusSurveyPointsProperty =
             PathPrefs.createPersistentPreference("focusSurveyPoints", 0);
 
@@ -959,7 +959,7 @@ public class QPPreferenceDialog {
      * Focus-surface mode for acquisition: {@code off}, {@code observe} or {@code enforce}.
      *
      * <p>Sent to the server as {@code --focus-surface}. The server treats anything it does not
-     * recognise as {@code off}, so a stale preference degrades to today's behaviour rather than
+     * recognize as {@code off}, so a stale preference degrades to today's behavior rather than
      * to a guess.
      */
     /**

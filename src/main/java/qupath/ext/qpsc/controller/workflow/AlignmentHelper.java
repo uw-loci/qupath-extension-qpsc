@@ -548,7 +548,7 @@ public class AlignmentHelper {
     /**
      * Advisory dialog for the objective-mismatch case (review finding H8). Modal, blocking,
      * Continue / Cancel buttons. Returns {@code true} when the user chose to continue with the
-     * loaded alignment, {@code false} when they cancelled (or the dialog failed to show, which
+     * loaded alignment, {@code false} when they canceled (or the dialog failed to show, which
      * also short-circuits the workflow conservatively).
      */
     /**
@@ -685,7 +685,7 @@ public class AlignmentHelper {
 
     /**
      * FX-safe modal Continue / Cancel dialog. Returns {@code true} when the user
-     * chose Continue, {@code false} when they cancelled (or the dialog failed to
+     * chose Continue, {@code false} when they canceled (or the dialog failed to
      * show, which also short-circuits the workflow conservatively).
      *
      * <p>Extracted from the H8 objective-mismatch dialog so other advisories

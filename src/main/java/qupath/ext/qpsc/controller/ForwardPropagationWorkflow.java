@@ -761,7 +761,7 @@ public class ForwardPropagationWorkflow {
      * so the back-propagated annotations always land in the unflipped-base
      * pixel frame regardless of which microscope captured the alignment.
      *
-     * <p>The previous "fan out across every flipped sibling" behaviour is gone:
+     * <p>The previous "fan out across every flipped sibling" behavior is gone:
      * since the project no longer carries flipped duplicates, there is nothing
      * to fan to. The {@link FanOutResult} return type is preserved as a thin
      * legacy wrapper around the single-target write so existing callers

@@ -286,7 +286,7 @@ public class BugReportDialog {
                 return;
             }
             if (!confirmScreenshotPreview(snapshot)) {
-                return; // user cancelled at preview -- keep the form open
+                return; // user canceled at preview -- keep the form open
             }
             screenshotBase64 = encodePng(snapshot);
             if (screenshotBase64 == null) {

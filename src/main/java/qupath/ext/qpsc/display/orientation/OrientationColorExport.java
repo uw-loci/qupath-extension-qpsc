@@ -23,9 +23,9 @@ import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 
 /**
- * Writes the orientation colour image (what {@link OrientationColorViewWindow} shows) to a
+ * Writes the orientation color image (what {@link OrientationColorViewWindow} shows) to a
  * pyramidal RGB OME-TIFF beside the stitched images, and adds it to the project with the
- * colour settings as entry metadata.
+ * color settings as entry metadata.
  *
  * <p>The file is written tile by tile through tiles-to-pyramid's {@link DirectTiffOutputWriter},
  * the same writer the stitcher uses, so a whole slide costs minutes and little memory. The
@@ -36,7 +36,7 @@ public final class OrientationColorExport {
 
     private static final Logger logger = LoggerFactory.getLogger(OrientationColorExport.class);
 
-    /** Entry metadata key prefix for the settings the file was coloured with. */
+    /** Entry metadata key prefix for the settings the file was colored with. */
     public static final String METADATA_PREFIX = "orientation_colour.";
 
     static final int TILE_SIZE = 512;
@@ -89,7 +89,7 @@ public final class OrientationColorExport {
     }
 
     /**
-     * Writes the colour image for {@code pair} (an orientation + retardance server, or
+     * Writes the color image for {@code pair} (an orientation + retardance server, or
      * orientation alone) to {@code directory/stem.ome.tif}, choosing a fresh name if that
      * file exists. Blocking; call off the FX thread.
      *
@@ -127,8 +127,8 @@ public final class OrientationColorExport {
     }
 
     /**
-     * Adds a written colour image to the project. It inherits the source entry's metadata
-     * (same acquisition, same frame) and gains the colour settings under
+     * Adds a written color image to the project. It inherits the source entry's metadata
+     * (same acquisition, same frame) and gains the color settings under
      * {@link #METADATA_PREFIX}.
      *
      * @param source the entry the export was made from (orientation or retardance)
@@ -168,7 +168,7 @@ public final class OrientationColorExport {
         return entry;
     }
 
-    /** The colour settings as entry metadata. */
+    /** The color settings as entry metadata. */
     static Map<String, String> metadata(OrientationColorRenderer.Settings settings, String pairDescription) {
         Map<String, String> m = new LinkedHashMap<>();
         m.put(METADATA_PREFIX + "display_only", "true; measure on the retardance and orientation images");

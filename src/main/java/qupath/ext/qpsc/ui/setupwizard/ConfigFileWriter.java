@@ -200,7 +200,7 @@ public final class ConfigFileWriter {
         // contract stated in the comment above. PPM has already shipped a
         // stale slow_speed_um_per_s once (1.422 against a real ~10.85), so
         // a plausible-looking placeholder here is exactly the failure mode.
-        // The Python side already initialises all three to None in
+        // The Python side already initializes all three to None in
         // handlers/probe_stage_af.py, so null is the expected "not probed".
         streamingAf.put("enabled", data.streamingAfEnabled != null ? data.streamingAfEnabled : true);
         streamingAf.put("speed_property", data.streamingAfSpeedProperty);

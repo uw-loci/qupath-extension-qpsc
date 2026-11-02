@@ -153,7 +153,7 @@ public class MicroscopeConfigManager {
      * (notably the menu builder) run in analysis-only mode: PPM analysis and
      * project utilities stay available while hardware/acquisition workflows are
      * disabled. Keyed on the {@code placeholder} flag rather than the name so a
-     * renamed scope cannot accidentally flip the behaviour. Missing or false
+     * renamed scope cannot accidentally flip the behavior. Missing or false
      * flag means a real scope.
      *
      * @return true only when the active config explicitly declares
@@ -972,7 +972,7 @@ public class MicroscopeConfigManager {
      *
      * <p>Every question that matters -- is this position clear, which way do I approach, is
      * focus drifting toward the retraction point -- is about the objective-sample GAP. The
-     * mechanism is deliberately not modelled: some scopes drive the stage, others (the Nikon
+     * mechanism is deliberately not modeled: some scopes drive the stage, others (the Nikon
      * Eclipse on LC-PolScope) drive the objective, and in an infinity-corrected system the two
      * are optically equivalent. Only the separation is real.
      *
@@ -3528,7 +3528,7 @@ public class MicroscopeConfigManager {
      * @param group the Micro-Manager ConfigGroup, exactly as named in that lab's configuration
      * @param preset the preset within it
      * @param motorized true when applying the preset moves hardware (a motorized turret), which
-     *     QPSC confirms first; false for a labelling device that moves nothing. An entry that
+     *     QPSC confirms first; false for a labeling device that moves nothing. An entry that
      *     does not say is treated as motorized.
      */
     public record ObjectiveMmPreset(String group, String preset, boolean motorized) {}

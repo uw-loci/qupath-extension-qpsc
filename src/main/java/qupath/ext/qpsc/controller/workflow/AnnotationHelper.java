@@ -308,7 +308,7 @@ public class AnnotationHelper {
      *
      * @param gui QuPath GUI instance
      * @param validClasses List of class names to consider valid
-     * @return List of annotations created by tissue detection (may be empty if detection fails or is cancelled)
+     * @return List of annotations created by tissue detection (may be empty if detection fails or is canceled)
      */
     public static List<PathObject> runTissueDetection(QuPathGUI gui, List<String> validClasses) {
         logger.info("Running tissue detection");
@@ -383,7 +383,7 @@ public class AnnotationHelper {
      * <p>Shows a dialog asking if the user wants to run automatic tissue detection,
      * and if so, allows them to select a Groovy script file.
      *
-     * @return Path to selected script or null if cancelled
+     * @return Path to selected script or null if canceled
      */
     private static String promptForTissueDetectionScript() {
         CompletableFuture<String> future = new CompletableFuture<>();

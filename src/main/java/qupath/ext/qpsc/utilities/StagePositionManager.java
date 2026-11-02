@@ -212,7 +212,7 @@ public class StagePositionManager {
         // fires a change event, which is what re-seeds every listener. Without
         // this, a listener that missed the transition waits for the stage to move
         // before it learns where it is. That is what left the Z Focus bars blank
-        // and centred on the coarse-range midpoint after a run returned Z to 0.
+        // and centered on the coarse-range midpoint after a run returned Z to 0.
         posX = Double.NaN;
         posY = Double.NaN;
         posZ = Double.NaN;

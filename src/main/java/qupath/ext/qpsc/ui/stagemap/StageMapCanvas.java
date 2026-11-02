@@ -153,13 +153,13 @@ public class StageMapCanvas extends StackPane {
      * @param slotIndex    which slot of the current insert this belongs in
      * @param macro        the slide macro, drawn to fill the slot
      * @param rotationDeg  how the slide sits in the holder
-     * @param stageCentreXUm measured stage X of the slide's centre, or NaN when no
+     * @param stageCentreXUm measured stage X of the slide's center, or NaN when no
      *                       alignment has measured it. When present the macro is drawn
-     *                       centred HERE instead of on the slot's nominal centre -- a
+     *                       centered HERE instead of on the slot's nominal center -- a
      *                       slide sits where it was dropped, not where the slot is.
      * @param stageCentreYUm measured stage Y, or NaN
      * @param entry        the slide's project entry, or null. Not used for drawing -- it
-     *                     lets the map re-read the measured centre when an alignment
+     *                     lets the map re-read the measured center when an alignment
      *                     lands, without rebuilding the macro rasters.
      */
     public record SlotMacroPreview(
@@ -170,13 +170,13 @@ public class StageMapCanvas extends StackPane {
             double stageCentreYUm,
             qupath.lib.projects.ProjectImageEntry<java.awt.image.BufferedImage> entry) {
 
-        /** A preview with no measured position: drawn on the slot's nominal centre. */
+        /** A preview with no measured position: drawn on the slot's nominal center. */
         public SlotMacroPreview(int slotIndex, java.awt.image.BufferedImage macro, int rotationDeg) {
             this(slotIndex, macro, rotationDeg, Double.NaN, Double.NaN, null);
         }
 
         /**
-         * Same preview with the centre re-read from {@link #entry}, or {@code this} when
+         * Same preview with the center re-read from {@link #entry}, or {@code this} when
          * there is no entry to re-read from. Lets the map pick up a slide's measured
          * position the moment its alignment is saved, without rebuilding the macros.
          */
@@ -1569,7 +1569,7 @@ public class StageMapCanvas extends StackPane {
     /**
      * Renders each supplied macro over its slot at the given rotation, for the multi-slide
      * orientation check. Each macro is scaled to fill its slot rectangle and rotated
-     * clockwise by 0/90/180/270 degrees about the slot centre (a 90/270 rotation swaps the
+     * clockwise by 0/90/180/270 degrees about the slot center (a 90/270 rotation swaps the
      * fit dimensions so the rotated image still fills the slot). Positions come from the
      * current insert's slot geometry, NOT from any alignment transform -- this is a visual
      * "does this macro, rotated this way, match how I mounted the slide" check, done before
@@ -1625,8 +1625,8 @@ public class StageMapCanvas extends StackPane {
             StageInsert.SlidePosition slot = slides.get(p.slotIndex());
             double sw = slot.getWidthUm() * scale;
             double sh = slot.getHeightUm() * scale;
-            // Draw centre relative to the composite origin -- the slide's MEASURED centre
-            // when an alignment has established one, else the slot's nominal centre.
+            // Draw center relative to the composite origin -- the slide's MEASURED center
+            // when an alignment has established one, else the slot's nominal center.
             double[] drawCentre = slotPreviewCentreScreen(p, slot);
             double cx = drawCentre[0] - minX;
             double cy = drawCentre[1] - minY;
@@ -1668,11 +1668,11 @@ public class StageMapCanvas extends StackPane {
     }
 
     /**
-     * Screen centre to draw a slot's macro at.
+     * Screen center to draw a slot's macro at.
      *
      * <p>A slide sits where it was dropped, not where its holder slot nominally is: the
      * measured landing error on the first alignment point of a multi-slide run was a
-     * median 613 um. So once an alignment has measured a slide's centre, that is drawn
+     * median 613 um. So once an alignment has measured a slide's center, that is drawn
      * instead of the slot geometry, and the map improves as a run collects alignments.
      *
      * <p>The measured value is in stage microns and goes through {@link #stageToScreen},

@@ -20,7 +20,7 @@ import qupath.ext.qpsc.service.autofocus.AutofocusEvent;
  *
  * <p>Feed it {@link AutofocusEvent}s on the FX thread with {@link #accept}; it keeps showing the
  * last search's result until the next one starts. Drawn with shapes rather than a canvas so the
- * colours follow the QuPath theme.
+ * colors follow the QuPath theme.
  */
 public class AutofocusCurvePane extends VBox {
 

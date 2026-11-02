@@ -162,7 +162,7 @@ class FocusProfilePairAnalysisTest {
     @Test
     void judgingThatSameBlankScanAgainstItselfIsWhatWentWrong() {
         // Negative control for the test above: with no reference amplitude the staircase does
-        // produce peaks, which is precisely the behaviour that needed changing.
+        // produce peaks, which is precisely the behavior that needed changing.
         int n = 300;
         double[] z = new double[n];
         double[] blank = new double[n];

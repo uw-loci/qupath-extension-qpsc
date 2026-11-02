@@ -44,7 +44,7 @@ class StageDirectionBackSolveTest {
 
     @Test
     void theSolvedOrientationMakesDoubleClickCentreTheClickedTissue() {
-        // Click right of centre: the stage must move so that tissue comes to the centre, i.e.
+        // Click right of center: the stage must move so that tissue comes to the center, i.e.
         // the tissue must then slide LEFT -- which is what a +X answer of LEFT means.
         for (StagePolarity polarity : StagePolarity.values()) {
             for (CameraOrientation truth : CameraOrientation.values()) {

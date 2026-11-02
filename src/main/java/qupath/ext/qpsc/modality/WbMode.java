@@ -68,7 +68,7 @@ public enum WbMode {
         return requiresBackgrounds;
     }
 
-    /** Theme-aware CSS colour expression distinguishing this mode in the UI. */
+    /** Theme-aware CSS color expression distinguishing this mode in the UI. */
     public String getColor() {
         return color;
     }

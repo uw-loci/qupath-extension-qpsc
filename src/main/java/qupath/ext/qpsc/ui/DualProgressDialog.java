@@ -974,7 +974,7 @@ public class DualProgressDialog {
     }
 
     /**
-     * Returns true if the user has cancelled the workflow.
+     * Returns true if the user has canceled the workflow.
      */
     public boolean isCancelled() {
         return cancelled.get();
@@ -982,7 +982,7 @@ public class DualProgressDialog {
 
     /**
      * Externally requests cancellation, exactly as if the operator clicked the dialog's
-     * Cancel button: flips the cancelled flag, fires the cancel callback (which sends the
+     * Cancel button: flips the canceled flag, fires the cancel callback (which sends the
      * CANCEL socket command), and closes the dialog after a brief status display. Marshals
      * to the JavaFX thread and is idempotent.
      *

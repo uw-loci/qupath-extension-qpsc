@@ -13,10 +13,10 @@ import qupath.lib.images.servers.PixelType;
 import qupath.lib.images.servers.TileRequest;
 
 /**
- * The orientation colour image as an RGB server, for writing to a file: every tile of the
- * {@link OrientationPairServer} coloured with one fixed set of renderer settings.
+ * The orientation color image as an RGB server, for writing to a file: every tile of the
+ * {@link OrientationPairServer} colored with one fixed set of renderer settings.
  *
- * <p>It declares the orientation image's own pyramid levels, so each level is coloured from
+ * <p>It declares the orientation image's own pyramid levels, so each level is colored from
  * that level's angles (which the stitcher averaged axially). A writer asking for a downsample
  * between two levels gets the finer level's RGB tile scaled, never interpolated angles.
  */

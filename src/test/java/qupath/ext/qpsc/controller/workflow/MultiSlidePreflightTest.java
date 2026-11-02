@@ -17,7 +17,7 @@ import qupath.lib.roi.ROIs;
 /**
  * The multi-slide annotation pre-flight: which slots get reported as having nothing to acquire.
  *
- * <p>The behaviour that matters most here is what it does NOT report. A false "slide 3 has no
+ * <p>The behavior that matters most here is what it does NOT report. A false "slide 3 has no
  * regions" sends the operator to fix something that is not broken, and an unreadable
  * {@code .qpdata} is not evidence of an empty slide -- so both the unreadable case and the
  * "annotations live on the base entry" case must come back clean.

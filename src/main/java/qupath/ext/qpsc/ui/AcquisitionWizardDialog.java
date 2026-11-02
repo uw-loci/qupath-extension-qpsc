@@ -749,9 +749,9 @@ public class AcquisitionWizardDialog {
      *
      * <p>The dot and the text are PLURAL because some steps report several independent things.
      * Background correction is checked per white-balance mode, and with per-angle valid and
-     * simple stale, a single dot has to pick one colour for two different answers -- it went
-     * amber, and the operator could not tell from the colour that the mode they were about to
-     * use was fine. So the row carries one dot and one coloured text run per reported status,
+     * simple stale, a single dot has to pick one color for two different answers -- it went
+     * amber, and the operator could not tell from the color that the mode they were about to
+     * use was fine. So the row carries one dot and one colored text run per reported status,
      * and steps that report a single status simply get one of each.
      */
     private static class StepRow {
@@ -764,7 +764,7 @@ public class AcquisitionWizardDialog {
          * The roll-up of this row's statuses, for the questions that are genuinely
          * single-valued. Held as the status itself rather than recovered by comparing a dot's
          * Paint to a hex literal, which is how "is the server connected" used to be answered --
-         * a boolean round-tripped through a colour, silently wrong the moment a shade changed.
+         * a boolean round-tripped through a color, silently wrong the moment a shade changed.
          */
         Status worstStatus = Status.NOT_APPLICABLE;
 
@@ -834,7 +834,7 @@ public class AcquisitionWizardDialog {
         return row;
     }
 
-    /** Dot colour for one status. */
+    /** Dot color for one status. */
     private static Color dotColorFor(Status status) {
         return switch (status) {
             case READY -> Color.web("#4CAF50");
@@ -844,7 +844,7 @@ public class AcquisitionWizardDialog {
         };
     }
 
-    /** Text colour for one status, as a CSS colour string. */
+    /** Text color for one status, as a CSS color string. */
     private String textColorFor(Status status) {
         return switch (status) {
             case READY -> ThemeColors.SUCCESS;
@@ -862,11 +862,11 @@ public class AcquisitionWizardDialog {
 
     /**
      * Renders one step row from a list of INDEPENDENT statuses, each with its own dot and its
-     * own text colour.
+     * own text color.
      *
      * <p>The list is what a step actually reports. Background correction reports one entry per
      * white-balance mode, and those entries disagree in the case that matters: per-angle valid,
-     * simple stale. Rolling that into one colour hides the half the operator needs -- so each
+     * simple stale. Rolling that into one color hides the half the operator needs -- so each
      * gets its own dot, and the text names the mode ("Per-angle: valid") rather than describing
      * a combined state that is true of neither.
      *
@@ -1396,7 +1396,7 @@ public class AcquisitionWizardDialog {
             }
             // Background correction is checked per white-balance mode, and the modes disagree
             // in exactly the case that matters -- per-angle valid, simple stale. Show each mode
-            // its own dot and colour rather than one amber row that is true of neither. An
+            // its own dot and color rather than one amber row that is true of neither. An
             // empty breakdown means the split does not apply here (monochrome camera,
             // per-channel modality); the aggregate is the honest answer then.
             var byMode = CalibrationChecker.checkBackgroundsByMode(modality, objective, detector);

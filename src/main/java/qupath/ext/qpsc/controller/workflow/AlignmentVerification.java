@@ -22,7 +22,7 @@ import qupath.lib.roi.interfaces.ROI;
  * <h2>Why nothing cheaper will do</h2>
  * The Prior XY stage is open loop. It reports the step count it was given, so a commanded
  * position and the position it reports back agree whether or not the stage actually
- * travelled that far, and a slip during a move leaves no discontinuity for a position
+ * traveled that far, and a slip during a move leaves no discontinuity for a position
  * monitor to find. The 2026-10-02 four-slide run is the proof: the Micro-Manager CoreLog
  * shows 293,227 position reads across the acquire pass with no unexplained change, no
  * device re-initialisation and no serial fault -- a provably clean counter -- while three
@@ -355,7 +355,7 @@ public final class AlignmentVerification {
     }
 
     /**
-     * Points to try, in order: the region's centroid first, then pulled toward its centre.
+     * Points to try, in order: the region's centroid first, then pulled toward its center.
      *
      * <p>The centroid is where an operator drew the region, so it is the likeliest tissue.
      * The fallbacks exist because a bounding box's centroid can land in a gap, and a point

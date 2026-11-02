@@ -13,7 +13,7 @@ import org.junit.jupiter.api.Test;
  * <p>PPM, 2026-10-26: the record said focus lies 443 um from safe Z 0 (bound -693 with the 250 um
  * headroom) while the slide in the holder focused at -121. The record was keyed by scope,
  * modality and objective, not by insert or Z frame, so nothing refused it: the approach drove
- * through the focus plane and about 450 um past it before the operator cancelled.
+ * through the focus plane and about 450 um past it before the operator canceled.
  */
 class SlotJumpApproachDistanceTest {
 

@@ -573,7 +573,7 @@ public class ExistingAlignmentPath {
                 state.sample.objective(),
                 state.sample.detector());
 
-        // Record where this slide's macro centre actually sits in stage microns, now that
+        // Record where this slide's macro center actually sits in stage microns, now that
         // an alignment has measured it. This is the only point in the run where the
         // transform and the macro it maps are both in hand and their frames are certain,
         // so the frame reasoning happens HERE and consumers get two plain stage-um

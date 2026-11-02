@@ -1036,7 +1036,7 @@ public class LiveViewerWindow {
         // disturbing the current focus state. Uses MOUSE_CLICKED rather than
         // contextMenuRequested so the editor opens even when the button is
         // disabled (e.g. between live frames or during cancel pending) -- the
-        // user often wants to switch methods exactly when the button is greyed
+        // user often wants to switch methods exactly when the button is grayed
         // out for an unrelated reason.
         autofocusButton.addEventFilter(javafx.scene.input.MouseEvent.MOUSE_CLICKED, e -> {
             if (e.getButton() == javafx.scene.input.MouseButton.SECONDARY) {
@@ -1891,7 +1891,7 @@ public class LiveViewerWindow {
                 SweepAutofocusRunner.SweepResult result =
                         SweepAutofocusRunner.run(controller, configPath, outputPath, objective, false);
                 if (result.cancelled()) {
-                    // User cancelled; server restored Z. Not a failure.
+                    // User canceled; server restored Z. Not a failure.
                     Platform.runLater(() -> updateStatusHeld("Sweep Autofocus cancelled (Z restored)"));
                 } else {
                     String z0 = result.initialZ();
@@ -2440,7 +2440,7 @@ public class LiveViewerWindow {
 
         // Capture the stage/image transform. Double-click-to-center is
         // semantically unambiguous ("put the clicked point at the new
-        // centre"), so unlike the arrow/joystick controls it does NOT
+        // center"), so unlike the arrow/joystick controls it does NOT
         // apply the sample-movement inversion -- the sample must always
         // move toward the clicked point.
         qupath.ext.qpsc.utilities.StageImageTransform transform =

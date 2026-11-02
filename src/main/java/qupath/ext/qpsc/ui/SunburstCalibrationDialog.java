@@ -79,7 +79,7 @@ public class SunburstCalibrationDialog {
      * <p>The window stays on top of QuPath's main window but does not block
      * interaction with QuPath or the Camera Control dialog.
      *
-     * @return CompletableFuture with calibration parameters or null if cancelled
+     * @return CompletableFuture with calibration parameters or null if canceled
      */
     public static CompletableFuture<SunburstCalibrationParams> showDialog() {
         CompletableFuture<SunburstCalibrationParams> future = new CompletableFuture<>();

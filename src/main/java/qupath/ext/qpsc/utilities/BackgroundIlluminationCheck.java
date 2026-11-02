@@ -66,7 +66,7 @@ public final class BackgroundIlluminationCheck {
      * <p>Returns {@code true} silently when there is nothing to compare (no
      * background found, missing fields) or when everything matches. Only a genuine
      * mismatch (intensity, profile key, or per-angle exposure) prompts the user;
-     * cancelling returns {@code false}.
+     * canceling returns {@code false}.
      *
      * @param cfg                  config manager for the active microscope
      * @param baseModality         base modality name (e.g. {@code "Brightfield"}, {@code "PPM"})
@@ -78,7 +78,7 @@ public final class BackgroundIlluminationCheck {
      * @param currentAngleExposures the per-angle exposures the acquisition will use
      *                             (after any operator overrides); may be null/empty
      *                             to skip the exposure comparison
-     * @return true to proceed (match, nothing to compare, or user confirmed); false if cancelled
+     * @return true to proceed (match, nothing to compare, or user confirmed); false if canceled
      */
     public static boolean checkAndWarn(
             MicroscopeConfigManager cfg,
@@ -261,7 +261,7 @@ public final class BackgroundIlluminationCheck {
      * and nothing else (see {@link qupath.ext.qpsc.ui.CalibrationChecker#problemsForChosenWbMode}).
      * During an armed automatic batch it logs and proceeds, since nobody is there to answer.
      *
-     * @return true to proceed, false when the operator cancelled
+     * @return true to proceed, false when the operator canceled
      */
     public static boolean checkChosenWbModeAndWarn(String modality, String objective, String detector, String wbMode) {
         List<String> problems;

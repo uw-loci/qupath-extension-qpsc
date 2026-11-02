@@ -59,7 +59,7 @@ public class TileProcessingUtilities {
      * {@code stitchParams} key carrying an optional
      * {@link qupath.ext.basicstitching.registration.RegistrationMode} for this stitch.
      *
-     * <p>Absent, tiles are placed at nominal stage positions -- the historical behaviour.
+     * <p>Absent, tiles are placed at nominal stage positions -- the historical behavior.
      * {@link qupath.ext.qpsc.controller.workflow.StitchingHelper} sets it so the first target of an
      * annotation solves the grid and the rest reuse that solve, which is what keeps every
      * angle/channel of a co-captured set registered to each other.

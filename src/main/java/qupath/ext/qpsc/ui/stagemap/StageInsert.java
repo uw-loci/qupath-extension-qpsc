@@ -935,7 +935,7 @@ public class StageInsert {
         private final double heightUm;
         private final double rotationDeg;
 
-        // New fields (defaults preserve legacy rectangle behaviour)
+        // New fields (defaults preserve legacy rectangle behavior)
         private final String id;
         private final Kind kind;
         private final Shape shape;

@@ -175,7 +175,7 @@ public class BirefringenceOptimizationWorkflow {
      * @param progressStage Progress window to close when done (created on FX thread)
      * @param progressLabel Label to update with progress (created on FX thread)
      * @param statusLabel Label to update with status messages (created on FX thread)
-     * @param cancelled AtomicBoolean flag that is set to true if user cancels
+     * @param canceled AtomicBoolean flag that is set to true if user cancels
      */
     private static void executeOptimization(
             BirefringenceOptimizationDialog.BirefringenceParams params,

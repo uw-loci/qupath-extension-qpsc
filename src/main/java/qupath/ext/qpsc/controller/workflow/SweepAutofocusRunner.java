@@ -40,13 +40,13 @@ public final class SweepAutofocusRunner {
     /**
      * Result of a completed sweep run. The three Z fields are the raw server strings (may be
      * {@code null} if the server omitted them); {@code cancelled} is {@code true} when the server
-     * reported the sweep was cancelled (Z restored), in which case the Z fields are {@code null}.
+     * reported the sweep was canceled (Z restored), in which case the Z fields are {@code null}.
      */
     public record SweepResult(String initialZ, String finalZ, String zShift, boolean cancelled) {}
 
     /**
      * Runs the sweep autofocus, blocking until the server responds. Records {@code final_z} on the
-     * AF history when the run completes (not cancelled). Must be called off the FX thread (it makes
+     * AF history when the run completes (not canceled). Must be called off the FX thread (it makes
      * a blocking socket round-trip).
      *
      * @param controller the microscope controller (provides the socket client + live-viewing gate)
@@ -55,7 +55,7 @@ public final class SweepAutofocusRunner {
      * @param objective the current objective id
      * @param wideSearch true when the current Z may be far from focus, such as on a new slide; false
      *     for a drift check around a Z that is already close
-     * @return a {@link SweepResult} with the raw Z strings and the cancelled flag
+     * @return a {@link SweepResult} with the raw Z strings and the canceled flag
      * @throws qupath.ext.qpsc.service.microscope.AutofocusFailedException if the server found no
      *     focus; Z is back where it started and nothing was recorded
      * @throws IOException if the socket call fails (propagated unchanged for the caller to handle)

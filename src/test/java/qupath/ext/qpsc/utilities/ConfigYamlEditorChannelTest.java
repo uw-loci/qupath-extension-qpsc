@@ -214,7 +214,7 @@ public class ConfigYamlEditorChannelTest {
         ConfigYamlEditor.setNestedChildScalar(f, block, "lc_extinction_ratio", "267.3");
         assertEquals(267.3, ((Number) reconstruction(f).get("lc_extinction_ratio")).doubleValue(), 1e-9);
 
-        // Neighbours and comments survive; a missing block is reported, not created.
+        // Neighbors and comments survive; a missing block is reported, not created.
         assertEquals(0.03, ((Number) reconstruction(f).get("swing_waves")).doubleValue(), 1e-12);
         assertEquals(549, reconstruction(f).get("wavelength_nm"));
         assertTrue(Files.readString(f).contains("# swing comment survives"));

@@ -39,7 +39,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
  * <p>Per-modality column visibility is driven by
  * {@link ModalityHandler#channelDisplay(boolean)}: AGGREGATE collapses R/G/B
  * into the worst column (PPM channel identity is noise), PER_CHANNEL keeps
- * individual columns labelled via {@link ModalityHandler#channelLabel(int, boolean)}
+ * individual columns labeled via {@link ModalityHandler#channelLabel(int, boolean)}
  * (fluorescence: DAPI/FITC etc.), MONOCHROME shows a single column.
  *
  * @author Mike Nelson

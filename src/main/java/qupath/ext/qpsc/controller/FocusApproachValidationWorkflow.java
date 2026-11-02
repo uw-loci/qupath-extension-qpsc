@@ -270,7 +270,7 @@ public final class FocusApproachValidationWorkflow {
     /**
      * Explains what is about to happen, and lets the operator confirm or correct the objective.
      *
-     * @return the chosen objective ID, or null if cancelled
+     * @return the chosen objective ID, or null if canceled
      */
     private static Plan confirmPlan(
             MicroscopeConfigManager mgr, String modality, String resolvedObjective, double safeZ) {
@@ -420,7 +420,7 @@ public final class FocusApproachValidationWorkflow {
         return alert.showAndWait().filter(b -> b == proceed).isPresent();
     }
 
-    /** Prompts, then reads the stage Z the operator settled on. Null when cancelled. */
+    /** Prompts, then reads the stage Z the operator settled on. Null when canceled. */
     private static Double promptAndReadZ(MicroscopeController controller, String header, String instruction) {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Focus Approach Validation - Set Position");
@@ -652,7 +652,7 @@ public final class FocusApproachValidationWorkflow {
             logger.info("Focus-approach scan cancelled by the operator");
             return null;
         }
-        // centre is computed above for symmetry with the server's window maths; the server
+        // center is computed above for symmetry with the server's window maths; the server
         // derives its own window from --range around the current Z, which is the safe Z here.
         logger.debug("Focus-approach scan window centred near {}", centre);
         return holder[0];

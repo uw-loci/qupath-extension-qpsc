@@ -137,7 +137,7 @@ public class UnifiedAcquisitionController {
     /**
      * Shows the unified acquisition dialog.
      *
-     * @return CompletableFuture containing the result, or cancelled if user cancels
+     * @return CompletableFuture containing the result, or canceled if user cancels
      */
     /** The dialog currently on screen, or null. Only touched on the FX thread. */
     private static Dialog<UnifiedAcquisitionResult> activeDialog;
@@ -149,7 +149,7 @@ public class UnifiedAcquisitionController {
             try {
                 // Modality had been the only thing preventing a second copy being opened off
                 // the menu while one is up -- showAndWait runs a nested event loop, so the menu
-                // stays live. Cancelling the new future matches what Cancel already does.
+                // stays live. Canceling the new future matches what Cancel already does.
                 if (activeDialog != null
                         && activeDialog.getDialogPane().getScene() != null
                         && activeDialog.getDialogPane().getScene().getWindow() != null
@@ -352,7 +352,7 @@ public class UnifiedAcquisitionController {
             dialog = new Dialog<>();
             // Non-modal so the operator can use the Live Viewer while this is open: the
             // "Use Current Position as Center" and "Get Stage Position" buttons refer to the
-            // centre of the Live Viewer field of view, which modality locked out.
+            // center of the Live Viewer field of view, which modality locked out.
             // showAndWait() still holds the workflow until they answer.
             //
             // Being non-modal, a project can be opened or closed while the dialog is up: the
@@ -1211,7 +1211,7 @@ public class UnifiedAcquisitionController {
             // EDF is the only projection with settings, so the button appears
             // beside the dropdown and enables only for it -- the alternative was
             // three more controls on a dialog that is already dense, permanently
-            // greyed out for everyone using max intensity.
+            // grayed out for everyone using max intensity.
             Button edfSettingsButton = new Button("EDF settings...");
             edfSettingsButton.setTooltip(
                     new Tooltip("Sharpness metric, averaging window and focal-surface smoothing for the "

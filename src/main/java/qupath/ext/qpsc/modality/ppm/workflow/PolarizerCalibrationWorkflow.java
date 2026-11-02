@@ -94,7 +94,7 @@ public class PolarizerCalibrationWorkflow {
     /**
      * Shows dialog to collect calibration parameters.
      *
-     * @return CompletableFuture with calibration parameters or null if cancelled
+     * @return CompletableFuture with calibration parameters or null if canceled
      */
     private static CompletableFuture<CalibrationParams> showCalibrationDialog() {
         CompletableFuture<CalibrationParams> future = new CompletableFuture<>();
