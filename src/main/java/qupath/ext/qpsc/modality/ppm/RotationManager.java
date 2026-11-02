@@ -65,7 +65,7 @@ public class RotationManager {
                 logger.warn("No rotation angles found for modality {} - using defaults", modality);
             }
 
-            // Get exposure times using priority order - no longer hardcoded from PPMPreferences
+            // Get exposure times using priority order
             // These will be determined by the PPMAngleSelectionController using the proper priority
             double plusExposure = PPMPreferences.getPlusExposureMs();
             double minusExposure = PPMPreferences.getMinusExposureMs();

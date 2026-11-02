@@ -183,7 +183,7 @@ public class AlignmentHelper {
 
     /**
      * The text of the "saved transform" label in the alignment dialogs: when the preset was saved
-     * and how long ago, e.g. "Saved transform: saved 2026-10-21 (today)".
+     * and how long ago, e.g. "Saved transform: saved <date> (today)".
      *
      * @param preset the selected preset; may be null
      * @return the label text, or an empty string for a null preset
@@ -267,7 +267,7 @@ public class AlignmentHelper {
         }
 
         // Resolve the lookup key to the parent macro entry name via base_image metadata.
-        // When the open entry is a sub-image (a previously-stitched acquisition output),
+        // When the open entry is a sub-image (a stitched acquisition output),
         // its auto-registered alignment JSON describes the sub-image's own pixel frame
         // (scale = camera pixel size). Annotations in this workflow are in the macro
         // pixel frame, so we must load the macro alignment, not the sub-image's. Mirrors
@@ -284,9 +284,9 @@ public class AlignmentHelper {
         Boolean alignFlipY = null;
 
         // First try from current project. Prefer the with-frame loader so the
-        // alignment-time macro flip is captured -- Step B of the flip-relocation
-        // refactor bakes this flip into the returned transform so all downstream
-        // callers operate on unflipped-base pixel coords.
+        // alignment-time macro flip is captured -- this flip is baked into the
+        // returned transform so all downstream callers operate on unflipped-base
+        // pixel coords.
         AffineTransformManager.SlideAlignmentResult loadedResult = null;
         if (project != null) {
             loadedResult = AffineTransformManager.loadSlideAlignmentWithFrame(project, lookupKey);
@@ -330,7 +330,7 @@ public class AlignmentHelper {
             return future;
         }
 
-        // Objective-context advisory (review finding H8, 2026-05-14). When the saved
+        // Objective-context advisory. When the saved
         // alignment records the objective it was built against, compare against the
         // wizard's choice now. The pixel-size gate catches mismatches between MM live
         // and the wizard, but cannot catch "transform refined at 10x reused with the
@@ -370,7 +370,7 @@ public class AlignmentHelper {
             }
         }
 
-        // Legacy-JSON flip-frame advisory (review finding M6). Pre-Phase-3 JSONs do not
+        // Legacy-JSON flip-frame advisory. Older JSONs do not
         // record flipMacroX / flipMacroY. We cannot tell which frame the transform was
         // built in. When the active scope's saved presets require a flip (i.e. flipping
         // matters for some scanner-on-this-scope pairing), reusing a legacy alignment
@@ -389,16 +389,15 @@ public class AlignmentHelper {
             }
         }
 
-        // Suspect-mis-labelled-frame advisory (2026-05-19). Pre-fix save sites
+        // Suspect-mis-labelled-frame advisory. Older save sites
         // (saveRefinedAlignment, ManualAlignmentPath, ExistingAlignmentPath)
         // hardcoded flipMacroX/Y=false regardless of whether the transform was
         // actually built on the flipped sibling. Such a JSON loads with
         // alignFlip=(false,false) but the transform inside consumes flipped-
         // frame pixel coords, and the bake-delta downstream then sends the
-        // stage to the X/Y mirror (the symptom from the 2026-05-18 acquisition
-        // log: "the run collected an unflipped XY set of coordinate positions,
-        // annotation appearance flipped, only partially overlapped with the
-        // selected tissue"). New saves stamp flipFrameVerified=true so we can
+        // stage to the X/Y mirror (the acquisition collects an unflipped XY set of
+        // coordinate positions that only partially overlaps the selected tissue).
+        // New saves stamp flipFrameVerified=true so we can
         // tell legitimate "built on unflipped base" alignments from pre-fix
         // mis-labelled ones; without that stamp, alignFlip=(false,false) on a
         // flip-needing scope is suspicious and worth a Continue/Cancel prompt.
@@ -424,10 +423,9 @@ public class AlignmentHelper {
         // workflow runs on -- the flipped sibling for flip-needing scopes
         // (saveRefinedAlignment / ManualAlignmentPath / ExistingAlignmentPath all
         // write it back from that entry). validateAndFlipIfNeeded puts the workflow
-        // on that same entry, so the transform is used as-is. An earlier
-        // checkForSlideAlignment baked a flip here and a later attempt baked it
-        // post-flip-switch; both double-flipped a correct transform and drove the
-        // stage to the X/Y mirror (PPM 2026-05-19). The Stage Map / Go-to-Centroid
+        // on that same entry, so the transform is used as-is: baking a flip here or
+        // after the flip switch would double-flip a correct transform and drive the
+        // stage to the X/Y mirror. The Stage Map / Go-to-Centroid
         // path likewise uses these JSONs' transforms raw.
 
         // Fallback when no JSON exists: derive a pixel-to-stage transform from
@@ -546,14 +544,14 @@ public class AlignmentHelper {
     }
 
     /**
-     * Advisory dialog for the objective-mismatch case (review finding H8). Modal, blocking,
+     * Advisory dialog for the objective-mismatch case. Modal, blocking,
      * Continue / Cancel buttons. Returns {@code true} when the user chose to continue with the
      * loaded alignment, {@code false} when they canceled (or the dialog failed to show, which
      * also short-circuits the workflow conservatively).
      */
     /**
-     * Continue / Cancel advisory for a legacy alignment JSON (review finding M6).
-     * Pre-Phase-3 JSONs do not record {@code flipMacroX} / {@code flipMacroY}; when the
+     * Continue / Cancel advisory for a legacy alignment JSON.
+     * Older JSONs do not record {@code flipMacroX} / {@code flipMacroY}; when the
      * active scope requires a flip for some saved preset, reusing such an alignment
      * risks applying a flipped-frame transform to unflipped pixel coords or vice versa.
      */
@@ -578,17 +576,17 @@ public class AlignmentHelper {
     }
 
     /**
-     * Continue / Cancel advisory for a pre-2026-05-19 alignment JSON whose
+     * Continue / Cancel advisory for an alignment JSON from older save sites whose
      * {@code flipMacroX}/{@code flipMacroY} fields are present but were hardcoded
-     * to {@code false} by the buggy save sites. Pre-fix save sites recorded
+     * to {@code false} by those save sites, which recorded
      * {@code (false, false)} regardless of whether the transform was actually
      * built on the flipped sibling, so the bake-delta on load can over-flip
      * and send the stage to the X/Y mirror.
      *
-     * <p>Post-fix saves stamp {@code flipFrameVerified = true}; absence of that
+     * <p>Current saves stamp {@code flipFrameVerified = true}; absence of that
      * stamp combined with {@code alignFlip = (false, false)} on a flip-needing
      * scope is the signature of a mis-labelled JSON. Continue / Cancel only --
-     * pre-fix data may still be correct if the alignment was genuinely built
+     * older data may still be correct if the alignment was genuinely built
      * on the unflipped base entry.
      */
     private static boolean confirmContinueWithUnverifiedFlipFrame(String lookupKey) {
@@ -616,7 +614,7 @@ public class AlignmentHelper {
     }
 
     /**
-     * Suppress the H8 objective-mismatch advisory when the wizard objective is
+     * Suppress the objective-mismatch advisory when the wizard objective is
      * at the same or lower magnification (>= saved pixel size, within the same
      * 5% tolerance the live pixel-size gate uses). Going from a finer alignment
      * to a coarser acquisition leaves the linear transform valid and shrinks
@@ -688,9 +686,9 @@ public class AlignmentHelper {
      * chose Continue, {@code false} when they canceled (or the dialog failed to
      * show, which also short-circuits the workflow conservatively).
      *
-     * <p>Extracted from the H8 objective-mismatch dialog so other advisories
-     * (M8 cross-scope, M4 sub-image objective, M5 missing objective, M6 legacy
-     * JSON) share the same FX-safe pattern.
+     * <p>Shared by the objective-mismatch dialog and the other advisories
+     * (cross-scope, sub-image objective, missing objective, legacy
+     * JSON) so they share the same FX-safe pattern.
      */
     public static boolean confirmContinueDialog(String title, String header, String body) {
         // Unattended: refuse rather than wait. "Continue anyway" is a judgement about an

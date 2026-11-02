@@ -153,7 +153,7 @@ public class MacroImageUtility {
 
         // Guard against double-cropping: if the image already matches the expected
         // crop dimensions (within 2px tolerance), return it unchanged. This happens
-        // when a previously-cropped alignment image is passed through the same pipeline.
+        // when an already-cropped alignment image is passed through the same pipeline.
         if (Math.abs(originalWidth - cropWidth) <= 2 && Math.abs(originalHeight - cropHeight) <= 2) {
             logger.info(
                     "Image ({}x{}) already matches crop dimensions ({}x{}) - skipping crop",

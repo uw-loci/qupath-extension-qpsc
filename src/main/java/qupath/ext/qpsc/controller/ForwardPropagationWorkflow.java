@@ -203,9 +203,7 @@ public class ForwardPropagationWorkflow {
      * Show the propagation manager dialog.
      */
     public static void showManager(QuPathGUI qupath, Direction defaultDirection) {
-        // Legacy entry point retained for compatibility; the dialog itself now lives in
-        // ui.PropagationManagerDialog. Existing callers route through this method, which
-        // simply delegates.
+        // The dialog itself lives in ui.PropagationManagerDialog; this simply delegates.
         PropagationManagerDialog.show(qupath, defaultDirection);
     }
 
@@ -236,7 +234,7 @@ public class ForwardPropagationWorkflow {
      * <p>Convenience overload assuming the alignment was built in the
      * unflipped frame ({@code alignFlipX = alignFlipY = false}); use the
      * explicit-flip overload when the alignment frame differs from the base
-     * entry's pixel frame (Step B of the flip-relocation refactor).
+     * entry's pixel frame.
      */
     public static int propagateForward(
             AffineTransform baseToStage, List<PathObject> sourceObjects, ProjectImageEntry<BufferedImage> subEntry)
@@ -327,10 +325,9 @@ public class ForwardPropagationWorkflow {
         // Build combined transform: unflipped_base_pixels -> [optional flip into
         // alignment frame] -> stage_microns -> sub_pixels.
         //
-        // Sub-acquisition pixels are stage-canonical -- we no longer flip
-        // them based on the sub entry's FLIP_X/Y metadata (which is always 0
-        // for sub-acquisitions and is being deprecated as a per-entry concept;
-        // see Step B of the flip-relocation refactor).
+        // Sub-acquisition pixels are stage-canonical -- they are not flipped
+        // based on the sub entry's FLIP_X/Y metadata (which is always 0
+        // for sub-acquisitions; flip is not a per-entry concept).
         AffineTransform stageToSub = new AffineTransform();
         stageToSub.scale(1.0 / subPixelSize, 1.0 / subPixelSize);
         stageToSub.translate(-correctedOffsetX, -correctedOffsetY);
@@ -593,9 +590,7 @@ public class ForwardPropagationWorkflow {
         logger.info("  alignFlip = (X={}, Y={})", alignFlipX, alignFlipY);
 
         // Build inverse: sub_pixels -> stage_microns -> alignment_pixels -> [unflip]
-        // Sub-acquisitions are stage-canonical; the previous "if (subFlipX || subFlipY)"
-        // branch never fired for them and is removed as part of the per-entry FLIP
-        // metadata deprecation (Step B).
+        // Sub-acquisitions are stage-canonical, so no per-entry flip branch applies.
         AffineTransform subToStage = new AffineTransform();
         subToStage.translate(correctedOffsetX, correctedOffsetY);
         subToStage.scale(subPixelSize, subPixelSize);
@@ -705,8 +700,8 @@ public class ForwardPropagationWorkflow {
     }
 
     /**
-     * Legacy zero-flip overload for callers not yet aware of the alignment-frame
-     * flip pair. New callers should use the explicit-flip variant so back-prop
+     * Zero-flip overload for callers without an alignment-frame
+     * flip pair. Prefer the explicit-flip variant so back-prop
      * lands on the unflipped base regardless of how the alignment was saved.
      */
     private static int propagateBack(
@@ -729,7 +724,7 @@ public class ForwardPropagationWorkflow {
          * Per-target-entry list of just-written objects, keyed by entry.
          * Used by post-prop SIFT refinement to translate the freshly-added
          * objects without scanning the whole hierarchy. Includes both the
-         * unflipped base and any legacy flipped siblings that received
+         * unflipped base and any flipped siblings that received
          * mirror copies. Empty if no objects were written.
          */
         public final java.util.Map<ProjectImageEntry<BufferedImage>, List<PathObject>> writtenByEntry;
@@ -755,24 +750,23 @@ public class ForwardPropagationWorkflow {
     /**
      * Back-propagation onto the unflipped base entry.
      *
-     * <p>Step B of the flip-relocation refactor: there is now exactly one base
+     * <p>There is exactly one base
      * entry per slide (the unflipped original SVS). The flip required by the
      * saved alignment is applied as a transform step inside {@link #propagateBack},
      * so the back-propagated annotations always land in the unflipped-base
      * pixel frame regardless of which microscope captured the alignment.
      *
-     * <p>The previous "fan out across every flipped sibling" behavior is gone:
-     * since the project no longer carries flipped duplicates, there is nothing
-     * to fan to. The {@link FanOutResult} return type is preserved as a thin
-     * legacy wrapper around the single-target write so existing callers
-     * (PropagationManagerDialog) keep compiling unchanged.
+     * <p>There is no fan-out across flipped siblings: the project does not
+     * carry flipped duplicates, so there is nothing to fan to. The
+     * {@link FanOutResult} return type is a thin wrapper around the
+     * single-target write, used by PropagationManagerDialog.
      *
      * @param project the QuPath project (must contain the unflipped base entry)
      * @param baseName the base image name (without extension)
      * @param baseToStage the per-slide alignment for the active microscope
      * @param sourceObjects sub-image-frame objects to back-propagate
      * @param subEntry the sub-acquisition entry these objects came from
-     * @param allowAutoCreate ignored under Step B (no siblings to create)
+     * @param allowAutoCreate ignored (no siblings to create)
      * @return result with siblingsAutoCreated always 0
      */
     public static FanOutResult propagateBackFanOut(
@@ -884,7 +878,7 @@ public class ForwardPropagationWorkflow {
             }
         }
 
-        // Find the unflipped base entry. The project must contain it -- with Step B
+        // Find the unflipped base entry. The project must contain it --
         // there are no flipped duplicates to auto-create as a substitute.
         ProjectImageEntry<BufferedImage> base = findUnflippedBase(project, baseName);
         if (base == null) {
@@ -931,7 +925,7 @@ public class ForwardPropagationWorkflow {
         java.util.Map<ProjectImageEntry<BufferedImage>, List<PathObject>> writtenByEntry =
                 new java.util.LinkedHashMap<>();
         if (afterCount > beforeCount) {
-            // Capture the freshly-added objects so we can fan them out to legacy
+            // Capture the freshly-added objects so we can fan them out to
             // flipped siblings without re-running the math.
             List<PathObject> all = new ArrayList<>(baseHierarchy.getAllObjects(false));
             writtenObjects = all.subList(beforeCount, all.size());
@@ -948,10 +942,10 @@ public class ForwardPropagationWorkflow {
                     String.format("  %s -> %s: 0 objects (no overlap)", subEntry.getImageName(), base.getImageName()));
         }
 
-        // Fan-out to legacy flipped sibling entries (e.g. "(flipped X)",
-        // "(flipped Y)", "(flipped XY)") that may still exist in pre-Step-B
-        // projects. Step B prefers a single unflipped base entry, but until
-        // every project is migrated the duplicates remain and the user
+        // Fan-out to flipped sibling entries (e.g. "(flipped X)",
+        // "(flipped Y)", "(flipped XY)") that may exist in older
+        // projects. A single unflipped base entry is preferred, but where
+        // the duplicates remain the user
         // expects the back-propagated annotation to appear on them too.
         // Each duplicate is the same image content with axis flips, so the
         // transform is a simple per-axis mirror around base width/height.
@@ -1015,7 +1009,7 @@ public class ForwardPropagationWorkflow {
             logger.debug("project.syncChanges after sibling fan-out: {}", e.getMessage());
         }
 
-        // allowAutoCreate is preserved in the signature for back-compat but is no longer used.
+        // allowAutoCreate is kept in the signature but unused.
         if (allowAutoCreate) {
             logger.debug("propagateBackFanOut: allowAutoCreate is now a no-op under Step B (no flipped siblings).");
         }

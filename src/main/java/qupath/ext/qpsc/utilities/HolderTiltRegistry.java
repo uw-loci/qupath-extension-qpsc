@@ -13,8 +13,8 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Why a holder-level idea exists at all: measured across ten regions, a slide's focus
  * plane tilts anywhere from 1.2 to 10.8 um/mm, so tilt cannot be calibrated once and
- * reused. But within one loading it looks close to reproducible between slots -- the
- * 2026-08-12 session measured (-7.67, -4.78) and (-7.65, -5.59) um/mm on two different
+ * reused. But within one loading it looks close to reproducible between slots -- one
+ * session measured (-7.67, -4.78) and (-7.65, -5.59) um/mm on two different
  * slides -- while the intercepts moved freely, from -157 to -379 um. The reading is that
  * the tilt is mostly the holder's and the height is the slide's. If that holds, a slide
  * needs one focus measurement rather than three, because the tilt can be inherited and
@@ -39,7 +39,7 @@ public final class HolderTiltRegistry {
      * How closely two slides' tilts must agree, um per mm, before either is treated as
      * telling us about the holder.
      *
-     * <p>2.0 is wider than the 0.1 um/mm spread the two 2026-08-12 slides showed and far
+     * <p>2.0 is wider than the 0.1 um/mm spread two slides in one loading showed and far
      * narrower than the 12 um/mm range across sessions, so it separates "same holder" from
      * "different seating" without being a coin flip. At a 14 mm region, 2 um/mm of tilt
      * error is 28 um of focus error at the far corner -- which is why an inherited tilt is

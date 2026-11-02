@@ -79,8 +79,8 @@ public enum StagePolarity {
     /**
      * The active microscope's stage polarity, {@code stage.polarity} in its config
      * ({@code NORMAL | INVERT_X | INVERT_Y | INVERT_XY}). A property of the stage, so it lives
-     * with the stage: it was a QuPath preference, one value per install, which a QuPath that
-     * switches between microscopes carried from one to the next (2026-10-27).
+     * with the stage, not in a QuPath preference (one value per install would carry over when QuPath
+     * switches between microscopes).
      *
      * <p>{@link #NORMAL} when no config is loaded, and when the key is missing or unreadable;
      * the latter is logged once per config, since every tiling, stage-map and live-viewer

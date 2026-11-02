@@ -28,7 +28,7 @@ import qupath.ext.qpsc.ui.ThemeColors;
  *
  * <p>The question it answers: does the adapter's waves-to-volts table fit these crystals? On the
  * LC-PolScope its LC-B column is kinked across 4.1-4.6 V, the working range, which would make an
- * LC-B palette lopsided in waves while the crystal itself is symmetric (2026-10-28).
+ * LC-B palette lopsided in waves while the crystal itself is symmetric.
  */
 final class LCVoltageSweepPlots {
 

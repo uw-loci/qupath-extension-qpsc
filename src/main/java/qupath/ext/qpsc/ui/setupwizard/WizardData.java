@@ -60,7 +60,7 @@ public class WizardData {
     // stage.streaming_af.* in config_<scope>.yml. The streaming-AF
     // handler reads these instead of hardcoded constants. enabled=null
     // means "not yet probed"; auto-migration in MicroscopeConfigManager
-    // fills in legacy defaults so old v2 configs still validate at v3.
+    // fills in defaults so v2 configs still validate at v3.
     public Boolean streamingAfEnabled = null;
     public String streamingAfSpeedProperty = null; // null = no writable speed prop
     public String streamingAfSlowSpeedValue = null; // raw stage value (e.g. "1" or "0.50mm/sec")

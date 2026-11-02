@@ -226,9 +226,8 @@ public interface ModalityHandler {
      * Returns true if this modality expects every tile to fill the dynamic
      * range of the detector. When true, the acquisition server may flag
      * suspiciously dim tiles (median far below the calibration target) as
-     * a likely sign of stale calibration / wrong detector profile -- the
-     * 2026-04-27 silent-first-detector incident produced exactly this
-     * pattern and would have been caught by such a check.
+     * a likely sign of stale calibration / wrong detector profile (a silently
+     * chosen first detector produces exactly this pattern).
      *
      * <p>When false, dim tiles are normal and expected: a fluorescence
      * channel imaging rare cell types is supposed to be mostly dark, a
@@ -346,7 +345,7 @@ public interface ModalityHandler {
     }
 
     // ========================================================================
-    // New extensibility methods (Phase 1 - PPM extraction)
+    // Extensibility methods
     // All have default implementations so existing handlers are unaffected.
     // ========================================================================
 
@@ -472,7 +471,7 @@ public interface ModalityHandler {
      * tiles, so it can only work as well as the contrast in that overlap -- and sibling targets of
      * the same tiles can differ enormously in contrast. On a PPM acquisition the near-extinction
      * angles are dark and low-contrast while the open one is bright and detailed; measured on a
-     * 2026-08-05 whole-slide run, the same 2175 tiles compressed losslessly to 6 GB at 7 degrees
+     * whole-slide run, the same 2175 tiles compressed losslessly to 6 GB at 7 degrees
      * and 10.5 GB at 90 degrees, i.e. the open angle carries roughly 75% more information for
      * exactly the same tissue. Solving on the dark angle throws that away and produces
      * low-confidence or rejected edges on tissue that is not remotely featureless.

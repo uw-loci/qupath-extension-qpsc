@@ -28,7 +28,7 @@ import qupath.fx.dialogs.Dialogs;
  * <p><b>What each does:</b>
  * <ul>
  *   <li><b>Scope type</b> is recorded for the per-microscope orientation model and the setup wizard
- *       preview; the Stage Map's Stage View no longer re-applies it (the physical inversion is
+ *       preview; the Stage Map's Stage View does not re-apply it (the physical inversion is
  *       already carried by the stage polarity + alignment transform, so re-applying double-counts).
  *   <li><b>Optical flip</b> drives the Stage Map's <b>Camera View</b> so the map matches the Live
  *       Viewer -- e.g. PPM's objective inversion is {@code xy}. Set it by matching the camera, not by

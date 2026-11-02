@@ -5,10 +5,10 @@ import java.util.function.LongSupplier;
 /**
  * What the progress dialog shows after Cancel is pressed, and when it may close.
  *
- * <p>The dialog used to close itself two seconds after Cancel regardless of whether the
- * microscope had stopped, which on 2026-10-27 left an acquisition running with no Cancel
- * control anywhere. Now it stays open, saying it is waiting, until the run acknowledges the
- * cancel; after {@link #timeoutMs} without acknowledgement it closes and tells the operator
+ * <p>The dialog does not close itself on Cancel while the microscope may still be
+ * running, which would leave an acquisition running with no Cancel control anywhere. It
+ * stays open, saying it is waiting, until the run acknowledges the cancel; after
+ * {@link #timeoutMs} without acknowledgement it closes and tells the operator
  * where the stop control is.
  */
 public final class CancelAckState {

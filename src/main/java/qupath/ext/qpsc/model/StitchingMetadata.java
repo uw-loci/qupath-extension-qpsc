@@ -25,7 +25,7 @@ public class StitchingMetadata {
 
     // Detector that captured this stitched image (e.g. "LOCI_DETECTOR_JAI_001").
     // Per-detector flip / WB / future re-processing all key off this. May be
-    // null for legacy callers; downstream code should fall back to the
+    // null for callers that do not supply it; downstream code should fall back to the
     // QuPath project entry's existing DETECTOR_ID metadata when null.
     public final String detector;
 
@@ -111,8 +111,8 @@ public class StitchingMetadata {
     }
 
     /**
-     * Convenience constructor that omits {@link #baseImageOverride}; legacy
-     * call sites which don't group angle entries pass through here.
+     * Convenience constructor that omits {@link #baseImageOverride}, for
+     * call sites which don't group angle entries.
      */
     public StitchingMetadata(
             ProjectImageEntry<BufferedImage> parentEntry,
@@ -201,7 +201,7 @@ public class StitchingMetadata {
     }
 
     /**
-     * Full constructor without stage bounds (legacy identification-field flow).
+     * Full constructor without stage bounds (identification-field flow).
      */
     public StitchingMetadata(
             ProjectImageEntry<BufferedImage> parentEntry,

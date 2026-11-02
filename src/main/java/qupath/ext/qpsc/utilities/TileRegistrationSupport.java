@@ -86,7 +86,7 @@ public final class TileRegistrationSupport {
      * Attach a registration mode to a stitching configuration.
      *
      * @param config the configuration being built
-     * @param mode a value previously produced by {@link #solveMode} or {@link #applyMode}
+     * @param mode a value produced by {@link #solveMode} or {@link #applyMode}
      * @param label identifier for the log line, e.g. the angle or channel being stitched
      */
     public static void apply(StitchingConfig config, Object mode, String label) {

@@ -139,11 +139,9 @@ public class CalibrationChecker {
                 msg = "Simple WB calibrated";
             }
 
-            // Deliberately does NOT report background staleness. It used to: any stale mode
-            // turned this step amber, which made the white-balance row amber because
-            // BACKGROUNDS were out of date -- a different step, already reported by
-            // checkBackgroundCorrection, and reported there per mode. Saying it twice, once
-            // rolled up, is what made a single stale mode color two rows at once.
+            // Deliberately does NOT report background staleness: that is a different step, already
+            // reported per mode by checkBackgroundCorrection. Reporting it here too would color two
+            // rows for a single stale mode.
             return new StepStatus(Status.READY, msg);
 
         } catch (Exception e) {
@@ -469,7 +467,7 @@ public class CalibrationChecker {
     }
 
     /**
-     * If the collected backgrounds record a lamp intensity that no longer matches
+     * If the collected backgrounds record a lamp intensity that differs from
      * the active acquisition profile's {@code illumination_intensity}, downgrade a
      * READY status to a non-blocking WARNING. Returns {@code base} unchanged when
      * there is no lamp control, no recorded intensity, or no mismatch -- so scopes

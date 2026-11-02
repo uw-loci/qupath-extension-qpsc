@@ -251,7 +251,7 @@ public class ExistingAlignmentPath {
         // never opened (or created) the flipped duplicate even when the saved preset says it
         // should -- the green box and data bounds were then detected against the unflipped
         // base, but composed with the preset's macro->stage which expects flipped-frame input,
-        // producing an X-mirrored fullRes->stage transform. Same defect ecc67ab fixed in
+        // producing an X-mirrored fullRes->stage transform. The same applies in
         // ExistingImageWorkflowV2.processSlideSpecificAlignment; this is the rebuild path.
         AffineTransformManager.TransformPreset presetForFlip =
                 state.alignmentChoice != null ? state.alignmentChoice.selectedTransform() : null;
@@ -397,9 +397,9 @@ public class ExistingAlignmentPath {
         //
         // BUT the holder rotation still does real POSITIONAL work. The slide's tissue sits away
         // from the macro center, and the R270 rotation is what places that off-center content
-        // near its true stage position (the ef9926e5 anchor landed within ~mm). The earlier fix
-        // stripped the R270 to kill the axis swap, but that also removed the positioning: the
-        // image landed ~22 mm off in X, out of stage bounds -> validation crash.
+        // near its true stage position (the anchor lands within ~mm). Stripping the R270 to kill
+        // the axis swap would also remove the positioning: the image lands ~22 mm off in X,
+        // out of stage bounds -> validation crash.
         //
         // Do the two jobs SEPARATELY:
         //   (1) use the R270 anchor ONLY to find where the full-res image CENTER lands -- a good
@@ -547,8 +547,7 @@ public class ExistingAlignmentPath {
         // under-flips. Using preset-driven flip here (FlipResolver) can diverge
         // from the entry's actual flip metadata -- e.g. when source_microscope
         // is missing the resolver returns (false, false) even when the open
-        // entry is the flipped sibling -- and was the cause of the 2026-05-18
-        // stage-mirror bug.
+        // entry is the flipped sibling -- giving a stage mirror.
         ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
         boolean[] openParity = ImageMetadataManager.bakedParity(openEntry);
         boolean flipMacroX = openEntry != null && openParity[0];

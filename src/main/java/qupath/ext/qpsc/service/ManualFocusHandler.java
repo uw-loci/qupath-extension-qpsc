@@ -138,9 +138,8 @@ public final class ManualFocusHandler {
                                     // autofocus wait directly to user_choice
                                     // ="cancel" (which raises the canceled
                                     // sentinel and sets state=CANCELLED).
-                                    // Previously we sent SKPAF first, which
-                                    // won the race and made the server treat
-                                    // the cancel as "use current focus".
+                                    // Sending SKPAF first would win the race and make the
+                                    // server treat the cancel as "use current focus".
                                     socketClient.cancelAcquisition();
                                     logger.info("User chose to cancel acquisition");
                                     break;

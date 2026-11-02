@@ -450,7 +450,7 @@ public class ManualAlignmentPath {
 
         // Read the OPEN ENTRY's flip metadata (must match what
         // AlignmentHelper.checkForSlideAlignment reads on the next load; preset-driven
-        // flip can diverge -- the 2026-05-18 stage-mirror bug).
+        // flip can diverge, giving a stage mirror).
         ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
         boolean[] openParity = ImageMetadataManager.bakedParity(openEntry);
         boolean flipMacroX = openEntry != null && openParity[0];

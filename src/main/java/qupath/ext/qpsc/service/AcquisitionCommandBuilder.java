@@ -142,13 +142,12 @@ public class AcquisitionCommandBuilder {
 
     // Optional parameters for time-lapse.
     // Defaults: timepoints=1, intervalSec=0 (single snap, no interval).
-    // Signatures only at Task #1 -- buildSocketMessage does NOT emit these yet.
+    // buildSocketMessage emits --timepoints when > 1 and --interval when > 0.
     private int timepoints = 1;
     private double intervalSec = 0.0;
 
     // Optional output format selector for the Z/T/single-point refactor.
-    // Null = unset; buildSocketMessage does NOT emit this yet (Task #1 is
-    // signature-only). Downstream teams will wire emission in later tasks.
+    // Null = unset; buildSocketMessage emits --output-format only when set.
     private OutputFormat outputFormat = null;
 
     // Z-focus hint from prediction model (tilt correction)
@@ -159,7 +158,7 @@ public class AcquisitionCommandBuilder {
 
     // Opt-in: capture PPM angle frames at the camera's higher-bit PixelFormat so
     // the birefringence is computed from high-precision inputs (null/false = the
-    // legacy 8-bit path, no flag emitted).
+    // 8-bit path, no flag emitted).
     private Boolean ppmHighBitDepth;
     private String displayColormap;
     private Double displayCeilingNm;
@@ -569,9 +568,8 @@ public class AcquisitionCommandBuilder {
      * acquisition takes longer than the interval, a warning is emitted and
      * the next timepoint starts after the previous completes.
      *
-     * <p>Task #1 scope: this setter stores the values but
-     * {@link #buildSocketMessage()} does NOT yet emit them on the wire.
-     * Socket emission lands in a later task in the refactor rollout.
+     * <p>{@link #buildSocketMessage()} emits {@code --timepoints} only when above 1 and
+     * {@code --interval} only when above 0.
      *
      * @param timepoints number of timepoints (must be >= 1; 1 disables time-lapse)
      * @param intervalSec interval between timepoint starts, in seconds
@@ -590,9 +588,7 @@ public class AcquisitionCommandBuilder {
      * <p>See {@link OutputFormat} for the available layouts. Null is a valid
      * value meaning "let the server pick a modality-appropriate default".
      *
-     * <p>Task #1 scope: this setter stores the value but
-     * {@link #buildSocketMessage()} does NOT yet emit it on the wire. Socket
-     * emission lands in a later task in the refactor rollout.
+     * <p>{@link #buildSocketMessage()} emits {@code --output-format} only when a format is set.
      *
      * @param fmt the desired output format, or {@code null} to use the default
      * @return this builder instance for method chaining
@@ -655,7 +651,7 @@ public class AcquisitionCommandBuilder {
      * PixelFormat for the PPM angle snaps so the (already 16-bit) birefringence
      * image is computed from genuinely high-precision inputs instead of 8-bit.
      * When not set (or false), no flag is emitted and the acquisition follows the
-     * legacy 8-bit path.</p>
+     * 8-bit path.</p>
      *
      * @param enabled whether to request high-bit-depth PPM capture
      * @return this builder for method chaining
@@ -727,10 +723,9 @@ public class AcquisitionCommandBuilder {
      * tile. Do not call this when scoring did not run: an absent flag leaves the server on its
      * distance-only planning, exactly as before.
      *
-     * <p>On 2026-10-27 the server ran 28 searches in a sparse LC-PolScope region, most on bare
-     * glass, because nothing told it which tiles were glass; its own texture gate reads glass and
-     * tissue alike on the Flash4. Each search on glass found a noise peak 44-63 um away and the
-     * nearest-seed logic spread those Zs across the mosaic.
+     * <p>Without it the server cannot tell glass from tissue (its own texture gate reads both
+     * alike on the Flash4), so a sparse region gets many searches on bare glass. Each finds a
+     * noise peak 44-63 um away and the nearest-seed logic spreads those Zs across the mosaic.
      */
     public AcquisitionCommandBuilder afTissueTiles(List<Integer> tileIndices) {
         this.afTissueTiles = tileIndices == null ? List.of() : List.copyOf(tileIndices);
@@ -885,9 +880,8 @@ public class AcquisitionCommandBuilder {
         // Defensive: catch upstream regressions where both resolution paths return
         // empty. A channel-based modality whose channel library failed to load would
         // otherwise silently fall through to the angle branch, emit a bogus single
-        // "(0.0)" exposure, and the server would run the legacy single-snap path.
-        // That's how the OWS3 LappMainBranch1 failure got reached before the
-        // resolution plumbing was fixed. Surface it as a clear build failure.
+        // "(0.0)" exposure, and the server would run the single-snap path.
+        // Surface it as a clear build failure.
         boolean hasChannels = channelExposures != null && !channelExposures.isEmpty();
         boolean hasAngles = angleExposures != null && !angleExposures.isEmpty();
         if (!hasChannels && !hasAngles) {

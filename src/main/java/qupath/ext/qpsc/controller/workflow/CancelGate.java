@@ -7,9 +7,9 @@ import java.util.function.BooleanSupplier;
  *
  * <p>Three signals can cancel a run: the progress dialog's Cancel button, a stop request from
  * outside the dialog (the QP Scope menu, the Live Viewer, the workflow registry), and the
- * multi-slide batch token. On 2026-10-27 a Cancel pressed between the dialog opening and the
- * ACQUIRE command being sent was lost, because only the monitor loop read the dialog's flag.
- * The loop now consults this gate before every stage-driving step.
+ * multi-slide batch token. A Cancel pressed between the dialog opening and the
+ * ACQUIRE command being sent would be lost if only the monitor loop read the dialog's flag,
+ * so the loop consults this gate before every stage-driving step.
  */
 public final class CancelGate {
 

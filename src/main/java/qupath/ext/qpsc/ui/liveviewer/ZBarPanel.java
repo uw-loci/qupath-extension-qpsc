@@ -510,8 +510,8 @@ public class ZBarPanel extends HBox {
             List<double[]> samples = focusTrace.snapshot();
             // P98 - P2 first, on its own scale: it still peaks at focus on bright,
             // low-texture fields where the Brenner curve on top reads flat. A light fill under
-            // a solid dashed outline: at 40% opacity and 1 px the outline vanished on the dark
-            // panel (PPM, 2026-10-22), and the dash keeps it apart from the solid orange curve.
+            // a solid dashed outline: at 40% opacity and 1 px the outline vanishes on the dark
+            // panel, and the dash keeps it apart from the solid orange curve.
             drawTraceCurve(
                     g,
                     tx,

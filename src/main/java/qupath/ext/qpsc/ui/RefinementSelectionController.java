@@ -250,7 +250,7 @@ public class RefinementSelectionController {
 
                 dialog.getDialogPane().setContent(content);
 
-                // Track if user changes selection (no longer auto-selected)
+                // Track if user changes selection away from the auto-selected one
                 final boolean[] wasAutoSelected = {autoSelected};
                 toggleGroup.selectedToggleProperty().addListener((obs, old, newVal) -> {
                     wasAutoSelected[0] = false;

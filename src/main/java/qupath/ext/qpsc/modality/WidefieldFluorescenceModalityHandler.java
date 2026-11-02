@@ -51,7 +51,7 @@ public class WidefieldFluorescenceModalityHandler implements ModalityHandler {
         if (!resolveChannels(modalityName).isEmpty()) {
             return CompletableFuture.completedFuture(List.of());
         }
-        // Legacy single-channel fallback: one snap with last-used exposure.
+        // Single-channel fallback: one snap with last-used exposure.
         double exposureMs = PersistentPreferences.getLastUnifiedExposureMs();
         return CompletableFuture.completedFuture(List.of(new AngleExposure(0.0, exposureMs)));
     }

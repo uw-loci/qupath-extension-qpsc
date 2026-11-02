@@ -83,14 +83,11 @@ public class DualProgressDialog {
     // by z-plane count. Callers compute the product and call
     // setStepsPerPosition() with the result.
     //
-    // Was previously named "angleCount" when only PPM needed the
-    // division. Renamed 2026-04-15 when widefield IF surfaced the
-    // same pattern for channels and we realized multi-Z modalities
-    // would need it too.
+    // The factor covers angles (PPM), channels (widefield IF) and z-planes.
     private final AtomicInteger stepsPerPosition = new AtomicInteger(1);
 
     // Last tile count we logged the time-estimate line for. updateTimeEstimate()
-    // is driven by a 500ms Timeline tick (and historically by other paths too),
+    // is driven by a 500ms Timeline tick (and possibly other paths),
     // so the same totalCompleted value can hit the "% 25 == 0" gate many times
     // before the next tile lands. Dedupe by tile count so the log line fires
     // at most once per milestone.
@@ -701,7 +698,7 @@ public class DualProgressDialog {
     }
 
     /**
-     * Enlarges the stage if its current height no longer fits the laid-out
+     * Enlarges the stage if its current height does not fit the laid-out
      * content. Grow-only: never shrinks, so a manual resize larger is kept.
      */
     private void growStageToFitContent() {
@@ -1024,9 +1021,9 @@ public class DualProgressDialog {
         }
 
         // The dialog stays open until the run acknowledges the cancel (acknowledgeCancelled),
-        // so there is always a window saying what is going on while the microscope stops. It
-        // used to close itself after two seconds, which on 2026-10-27 left an acquisition
-        // running with no Cancel control anywhere. If no acknowledgement arrives, close after
+        // so there is always a window saying what is going on while the microscope stops
+        // (closing early would leave an acquisition running with no Cancel control).
+        // If no acknowledgement arrives, close after
         // the timeout and say where the stop control is.
         cancelAckWatch = new Timeline(new KeyFrame(Duration.seconds(1), e -> {
             if (cancelAck != null

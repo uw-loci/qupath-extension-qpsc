@@ -135,9 +135,9 @@ public final class InsertCalibrationDialog {
             // it is only shown once it already exists.
             //
             // The Z limit is offered for the same reason. It is the bound on the SAMPLE side,
-            // which the stage's travel envelope does not supply: on 2026-10-26 an approach scan
-            // ran 450 um past the focus plane toward the objective with nothing to stop it but
-            // the operator, because the only floor was the hardware's -720.
+            // which the stage's travel envelope does not supply: without it an approach scan
+            // can run far past the focus plane toward the objective, stopped only by the
+            // operator, because the only floor is the hardware's.
             if ("safe_z_um".equals(f.key()) || "z_limit_um".equals(f.key()) || isNumber(insertConfig, f.key())) {
                 fields.add(f);
             }

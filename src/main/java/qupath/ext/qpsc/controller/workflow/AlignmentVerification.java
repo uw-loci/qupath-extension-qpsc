@@ -23,11 +23,10 @@ import qupath.lib.roi.interfaces.ROI;
  * The Prior XY stage is open loop. It reports the step count it was given, so a commanded
  * position and the position it reports back agree whether or not the stage actually
  * traveled that far, and a slip during a move leaves no discontinuity for a position
- * monitor to find. The 2026-10-02 four-slide run is the proof: the Micro-Manager CoreLog
- * shows 293,227 position reads across the acquire pass with no unexplained change, no
- * device re-initialisation and no serial fault -- a provably clean counter -- while three
- * of the four slides came out offset in Y, the last badly enough to image the slide label
- * for 1,714 tiles.
+ * monitor to find. A four-slide run can show a provably clean counter (hundreds of
+ * thousands of position reads with no unexplained change, no device re-initialization and
+ * no serial fault) while three of the four slides come out offset in Y, the last badly
+ * enough to image the slide label.
  *
  * <p>So the only instrument that can see this is an EXTERNAL reference. Matching the live
  * camera against the macro image is the one we have: it asks "is the sample where the
@@ -64,8 +63,8 @@ public final class AlignmentVerification {
      * tissue is simply not there. It also scales with the objective for free, where a constant
      * tuned at 20x would be wrong at 10x and wrong again at 40x.
      *
-     * <p>Comfortably clear of both things it must separate: the refined alignments on the
-     * 2026-10-02 run sat 20-40 um out, and the failure being caught was millimetres. At 20x on
+     * <p>Comfortably clear of both things it must separate: refined alignments
+     * typically sit 20-40 um out, and the failure being caught was millimetres. At 20x on
      * PPM (357.5 x 267.4 um) this works out near 446 um.
      *
      * @param fovWidthUm  camera field width (um), from the microscope config

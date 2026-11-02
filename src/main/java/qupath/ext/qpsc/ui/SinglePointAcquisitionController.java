@@ -94,7 +94,7 @@ public class SinglePointAcquisitionController {
             }
             final double fCurrentZ = currentZ;
 
-            // --- Sample & Modality section (fixes #1, #4) ---
+            // --- Sample & Modality section ---
             TextField sampleNameField = new TextField();
             sampleNameField.setPromptText("Sample name");
             // Pre-populate from open project or last used
@@ -254,7 +254,7 @@ public class SinglePointAcquisitionController {
             TitledPane tPane = new TitledPane("Time-lapse", new VBox(6, tEnableCheckbox, tGrid));
             tPane.setCollapsible(false);
 
-            // --- Output section (fix #2: full-width folder field) ---
+            // --- Output section ---
             ComboBox<OutputFormat> outputFormatCombo = new ComboBox<>();
             outputFormatCombo.getItems().addAll(OutputFormat.values());
             outputFormatCombo.setValue(OutputFormat.OME_PER_T);
@@ -433,7 +433,7 @@ public class SinglePointAcquisitionController {
     /**
      * Dispatch acquisition on a background thread.
      *
-     * <p>Fix #5: Stops live camera streaming before acquisition (JAI camera
+     * <p>Stops live camera streaming before acquisition (JAI camera
      * properties cannot be changed during streaming) and logs completion.
      */
     private static void dispatch(

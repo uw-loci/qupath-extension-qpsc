@@ -12,7 +12,7 @@ import qupath.ext.qpsc.ui.liveviewer.AfHistoryService;
  * TESTADAF).
  *
  * <p>This is the single home for the run + result-parse + {@link AfHistoryService} bookkeeping
- * core that was previously copied between the Live Viewer autofocus button
+ * core shared by the Live Viewer autofocus button
  * ({@code LiveViewerWindow.handleSweepFocus}) and the multi-slide slot-jump autofocus
  * ({@code SlotJumpAutofocus.runAfterSlotMove}). It runs the sweep with all live viewing off (so the
  * server has exclusive camera access), parses the {@code cancelled}/{@code initial_z}/

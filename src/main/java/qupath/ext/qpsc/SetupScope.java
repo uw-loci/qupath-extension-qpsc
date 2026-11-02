@@ -231,9 +231,9 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // this must fire once, on the path the user finished typing or picked.
         PauseTransition settle = new PauseTransition(Duration.millis(1500));
         // runLater: onFinished runs inside an animation pulse, where the confirmation dialog's
-        // showAndWait throws ("not allowed during animation or layout processing"). That threw
-        // on every preference change until 2026-10-21, so no switch was ever offered and the
-        // preference was left naming a file QPSC had not loaded.
+        // showAndWait throws ("not allowed during animation or layout processing"). Without the
+        // deferral no switch is ever offered and the preference is left naming a file QPSC has
+        // not loaded.
         settle.setOnFinished(e -> Platform.runLater(
                 () -> MicroscopeSwitcher.offerSwitch(QPPreferenceDialog.getMicroscopeConfigFileProperty())));
         QPPreferenceDialog.microscopeConfigFileProperty().addListener((obs, was, now) -> settle.playFromStart());
@@ -387,8 +387,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         });
 
         // === DEMO MICROSCOPE (always available, like Micro-Manager's demo configuration) ===
-        // Lives in Utilities > Microscope Configuration beside Switch Microscope (moved off the
-        // top level 2026-10-19, at the user's request).
+        // Lives in Utilities > Microscope Configuration beside Switch Microscope.
         MenuItem demoOption = new MenuItem(res.getString("menu.connectDemoMicroscope"));
         setMenuItemTooltip(
                 demoOption,
@@ -511,8 +510,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         });
 
         // 6) Stop acquisition: the one control that reaches a running acquisition from
-        // outside its progress dialog. Added after 2026-10-27, when a run whose dialog had
-        // closed itself could only be stopped by killing the server.
+        // outside its progress dialog (a run whose dialog has closed itself can otherwise only be
+        // stopped by killing the server).
         MenuItem stopAcquisitionOption = new MenuItem(res.getString("menu.stopAcquisition"));
         setMenuItemTooltip(
                 stopAcquisitionOption,

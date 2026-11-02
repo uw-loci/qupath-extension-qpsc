@@ -518,9 +518,9 @@ public final class MultiSlideAssignmentDialog {
 
         // Hardware for the whole batch. Chosen HERE rather than per slide because background
         // and white-balance calibration are keyed on (modality, objective, detector): until
-        // those are fixed there is nothing to check them against, and previously the first
-        // point at which they were known was slide 1's acquisition dialog -- after the operator
-        // had already committed to a carrier and assignments. The selection is published to the
+        // those are fixed there is nothing to check them against, and deferring the choice to
+        // slide 1's acquisition dialog would come after the operator had already committed to a
+        // carrier and assignments. The selection is published to the
         // shared modality/objective state, which every later dialog reads on open, so it also
         // stops the operator re-picking the same hardware once per slide.
         MicroscopeConfigManager hwConfig =
@@ -1196,8 +1196,8 @@ public final class MultiSlideAssignmentDialog {
                 // does NOT stamp -- that is the single-slide path's job via
                 // validateAndFlipIfNeeded, which the multi-slide path bypasses. Without this,
                 // the companion's bakedParity is (false,false) and isCameraView is false, so the
-                // annotation-transfer + FlipResolver treat it as an unflipped base (the observed
-                // "annotations not copied" regression).
+                // annotation-transfer + FlipResolver treat it as an unflipped base (annotations
+                // would not be copied).
                 if (flipX || flipY) {
                     ImageFlipHelper.stampCameraViewMetadata(base, rotated, flipX, flipY);
                     try {

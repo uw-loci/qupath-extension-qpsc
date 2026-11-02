@@ -265,9 +265,9 @@ public class ExistingImageAcquisitionController {
         private ToggleGroup refinementGroup;
         /**
          * Set by a click on a refinement radio. The recommendation ({@link #updateRefinementRecommendation})
-         * re-runs when the transform combo changes and used to re-select its default over the
-         * operator's choice, which is one way a run could start with NONE while the dialog had
-         * shown Single-tile (LC-PolScope, 2026-10-27). Once the operator has clicked, the
+         * re-runs when the transform combo changes and must not re-select its default over the
+         * operator's choice (a run could otherwise start with NONE while the dialog showed
+         * Single-tile). Once the operator has clicked, the
          * recommendation only updates its text.
          */
         private boolean refinementChosenByOperator = false;
@@ -478,9 +478,8 @@ public class ExistingImageAcquisitionController {
 
         Optional<ExistingImageAcquisitionConfig> buildAndShow() {
             dialog = new Dialog<>();
-            // Modality downgraded from APPLICATION_MODAL to NONE so this data-entry
-            // step no longer grabs app-wide input and occludes the multi-slide panel's
-            // Abort All. showAndWait() below still blocks synchronously (nested event
+            // Modality NONE so this data-entry step does not grab app-wide input and
+            // occlude the multi-slide panel's Abort All. showAndWait() below still blocks synchronously (nested event
             // loop), so the workflow future completes on the same button action; NONE
             // only lets the other windows (panel, Stage Map) stay interactive.
             dialog.initModality(Modality.NONE);
@@ -1067,8 +1066,8 @@ public class ExistingImageAcquisitionController {
 
             // WB combo already created in createWbModeCombo()
 
-            // Autofocus strategy override dropdown (Mike's decision #2: give
-            // users a GUI entry point to pick the strategy without editing YAML).
+            // Autofocus strategy override dropdown (a GUI entry point to pick the strategy
+            // without editing YAML).
             afStrategyCombo = new ComboBox<>();
             afStrategyCombo.getItems().addAll(AfStrategyChoice.displayOrder());
             afStrategyCombo.setValue(AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
@@ -2266,7 +2265,7 @@ public class ExistingImageAcquisitionController {
 
         /**
          * Check if the current alignment is a slide-specific refined alignment.
-         * @return true if using a previously refined alignment
+         * @return true if using a refined alignment
          */
         private boolean isUsingRefinedAlignment() {
             AffineTransformManager.TransformPreset preset = transformCombo.getValue();
@@ -2334,8 +2333,8 @@ public class ExistingImageAcquisitionController {
          * Parses an alignment-JSON {@code timestamp} string into a {@link Date}.
          *
          * <p>Save sites write the timestamp with {@code new Date().toString()}
-         * ({@code "EEE MMM d HH:mm:ss zzz yyyy"}, US locale), but some legacy /
-         * external files use ISO-like {@code "yyyy-MM-dd HH:mm:ss"}. Try both so
+         * ({@code "EEE MMM d HH:mm:ss zzz yyyy"}, US locale), but some external
+         * files use ISO-like {@code "yyyy-MM-dd HH:mm:ss"}. Try both so
          * the "Last refined" banner and the age-based outdated warning work for
          * either. Returns {@code null} when neither format matches.
          */
@@ -2388,7 +2387,7 @@ public class ExistingImageAcquisitionController {
         }
 
         /**
-         * Create an informational banner indicating that a previously refined alignment is being used.
+         * Create an informational banner indicating that a refined alignment is being used.
          * @param date Date the alignment was refined
          * @param ageInDays Age of the alignment in days
          * @return HBox containing the banner

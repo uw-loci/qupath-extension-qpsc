@@ -48,7 +48,7 @@ public final class StageFrameWatchdog {
      * <p>Sized by the autofocus tissue search, which steps one FOV diagonal toward the center on
      * each of up to three attempts (about 1.3 mm at 20x on PPM) and may start from a corner. Two
      * millimetres covers that with room to spare while staying far smaller than any frame shift
-     * worth catching -- the 2026-10-02 run was off by more than the 11 mm height of a region.
+     * worth catching -- a real frame shift exceeded the 11 mm height of a region.
      */
     private static final double ENVELOPE_MARGIN_UM = 2000.0;
 

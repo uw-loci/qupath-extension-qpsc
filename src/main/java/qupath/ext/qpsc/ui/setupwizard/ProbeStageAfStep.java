@@ -241,7 +241,7 @@ public class ProbeStageAfStep implements WizardStep {
     }
 
     private void applyDefaultsAndContinue() {
-        // Mirrors the legacy hardcoded values (Prior 1-100 percent scale).
+        // Mirrors the hardcoded defaults (Prior 1-100 percent scale).
         // Auto-migration in MicroscopeConfigManager would write the same
         // values; doing it here makes the YAML correct from the first
         // wizard write so re-runs see populated fields.

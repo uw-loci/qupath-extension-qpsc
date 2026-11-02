@@ -59,10 +59,10 @@ public final class MicroscopeSwitcher {
      * The YAML the menu, viewers and server connection were last built against: set at install
      * and after every completed switch. Kept apart from the config manager's own path because
      * the manager reloads itself the moment any caller reads the changed preference (the Stage
-     * Map's position poller does, within a second), which on 2026-10-26 made the switch offer
-     * compare the new file with itself and do nothing: QPSC moved to the Hamamatsu config while
-     * the server stayed on the Oryx one, and the calibration, the background and the acquisition
-     * each read a different file.
+     * Map's position poller does, within a second), which would make the switch offer
+     * compare the new file with itself and do nothing: QPSC would move to the new config while
+     * the server stayed on the old one, and the calibration, the background and the acquisition
+     * would each read a different file.
      */
     private static volatile String builtAgainst;
 
@@ -332,9 +332,8 @@ public final class MicroscopeSwitcher {
      * Points the config-file preference back at the config in use, after a switch that did not
      * happen. The preference must always name the config QPSC is running: every CONFIG sent to
      * the server reads it, and so does each MicroscopeController call that loads the config
-     * manager by path, which would load the new file without the switch's validation. On
-     * 2026-10-21 a preference left on autofocus_LCPolScope_Hamamatsu.yml had the server refuse
-     * CONFIG once a second.
+     * manager by path, which would load the new file without the switch's validation. A
+     * preference left on a config the server cannot load makes it refuse CONFIG once a second.
      */
     static void restorePreference(String previous) {
         if (previous == null || previous.isBlank()) {

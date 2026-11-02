@@ -949,9 +949,7 @@ public class AcquisitionWizardDialog {
 
         // Read-only autofocus status. Toggling autofocus on/off is done in
         // Preferences > QuPath SCope > "Disable All Autofocus (Danger)" -- the
-        // single source of truth. (Previously a duplicate "Disable Autofocus"
-        // checkbox here wrote the same preference, which made operators think
-        // there were two independent settings.) The label tracks the preference
+        // single source of truth. The label tracks the preference
         // live so it reflects changes made in the Preferences pane while the
         // wizard is open.
         autofocusStatusLabel = new Label();
@@ -1445,11 +1443,8 @@ public class AcquisitionWizardDialog {
      * what the downstream dialog sees. This is the single load-bearing line
      * that keeps the Wizard -> WB -> Background -> Acquire chain consistent.
      *
-     * Root cause for this defence: the 2026-04-15 incident where WB
-     * calibration saved exposures under a 20X_POL slot while the user was
-     * physically on 10X and the Wizard correctly knew 10X -- a stale shadow
-     * preference in WhiteBalanceDialog had silently overridden the Wizard's
-     * selection.
+     * This defends against a stale shadow preference in WhiteBalanceDialog silently overriding the
+     * Wizard's selection, which would save calibration exposures under the wrong objective slot.
      */
     private void syncWizardSelectionToPreferences() {
         String modality = getSelectedModality();

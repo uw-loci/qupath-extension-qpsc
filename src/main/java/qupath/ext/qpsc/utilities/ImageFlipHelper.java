@@ -36,13 +36,12 @@ import qupath.lib.projects.ProjectImageEntry;
  * with an optical flip (e.g. PPM) the unflipped Ocus40 H&E and the live
  * camera view disagree by a mirror -- impossible to align by eye.
  *
- * <p>Step B (2026-05-04) moved the **source of truth** for flip state
- * from per-entry `FLIP_X`/`FLIP_Y` metadata to
+ * <p>The **source of truth** for flip state is
  * `TransformPreset.flipMacroX/Y` (per `(source_scanner, target_microscope)`
- * preset) and the per-slide alignment JSON. This class respects that:
- * we resolve flip from the preset, not from per-entry metadata. The
- * `(flipped XY)` sibling is created for visual UX only -- it is no
- * longer authoritative for flip state.
+ * preset) and the per-slide alignment JSON, not per-entry `FLIP_X`/`FLIP_Y`
+ * metadata. This class resolves flip from the preset. The
+ * `(flipped XY)` sibling is created for visual UX only -- it is not
+ * authoritative for flip state.
  */
 public final class ImageFlipHelper {
 
@@ -126,7 +125,7 @@ public final class ImageFlipHelper {
         // sub-image and the macro's (flipped XY) companion appear as siblings;
         // without this guard, the helper switches the open entry from the
         // sub-image to the macro's flipped companion, dropping all sub-image
-        // annotations and producing the broken-sub-image-acquisition regression.
+        // annotations.
         if (isSubAcquisitionEntry(openEntry)) {
             logger.info(
                     "validateAndFlipIfNeeded: open entry '{}' is a sub-acquisition -- no-op", openEntry.getImageName());
@@ -183,8 +182,8 @@ public final class ImageFlipHelper {
             // Missing source_microscope on a flip-needing scope: hard-cancel.
             // Otherwise resolveFlipFromPreset silently returns (false, false) and
             // the workflow runs against the unflipped macro on a scope that
-            // requires a flip -- the exact failure 9f4fb96 fixed for entries
-            // that DO carry source_microscope. Review finding H1.
+            // requires a flip -- the same failure as for entries
+            // that DO carry source_microscope.
             String src = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
             if ((src == null || src.isBlank()) && isActiveScopeFlipNeeding()) {
                 logger.error(
@@ -239,14 +238,12 @@ public final class ImageFlipHelper {
         List<ProjectImageEntry<BufferedImage>> children = List.of();
         if (sibling != null && !new Parity(flipX, flipY).equals(builtParity(sibling))) {
             // There is one companion per base, and its pixels are flipped once, when it is
-            // built. Reusing it for a different flip only re-stamped its metadata, so ticking Y
-            // and then X as well left a Y-only image labeled X+Y (2026-10-19). The companion is
-            // a viewing copy (annotations are mirrored from the base), so replace it.
-            //
-            // A companion that acquisitions were made from used to be kept as it was, so it
-            // could never change: in a project shared by the PPM (companion built X+Y) and the
-            // LC-PolScope (needs Y), the orientation dialog then reloaded the same image on every
-            // toggle, and a toggle matching the stale build did nothing at all (2026-10-27).
+            // built. Reusing it for a different flip would only re-stamp its metadata, leaving a
+            // Y-only image labeled X+Y after ticking Y and then X. The companion is
+            // a viewing copy (annotations are mirrored from the base), so replace it, even when
+            // acquisitions were made from it (keeping it would make the orientation dialog reload
+            // the same image on every toggle in a project shared by scopes needing different
+            // flips).
             // original_image_id is the only reference to a companion by ID, so the children are
             // repointed to the rebuilt one instead.
             children = childrenOf(project, sibling);
@@ -295,7 +292,7 @@ public final class ImageFlipHelper {
                 return future;
             }
             // Populate the freshly-created (annotation-free) sibling from the base's
-            // live hierarchy. createFlippedDuplicate no longer transfers annotations.
+            // live hierarchy. createFlippedDuplicate does not transfer annotations.
             mirrorAnnotationsToSibling(gui, created, flipX, flipY);
             stampCameraViewMetadata(openEntry, created, flipX, flipY);
             repointChildren(children, created);
@@ -320,8 +317,8 @@ public final class ImageFlipHelper {
 
     /**
      * Save the camera-view stamp now. The companion entry itself is already in the project
-     * file; if QuPath then closed without saving, the stamp was lost, the next run could not
-     * recognize the companion, and it built another one (2026-10-19).
+     * file; if QuPath then closed without saving, the stamp would be lost, the next run could
+     * not recognize the companion, and it would build another one.
      */
     private static void syncStamp(Project<BufferedImage> project) {
         try {
@@ -357,7 +354,7 @@ public final class ImageFlipHelper {
      * The flip actually built into a companion's pixels, read from its server builder (the
      * outermost affine transform), falling back to the stamped {@code bakedParity} when the
      * builder does not expose an axis-aligned transform. The metadata alone is not trusted:
-     * before 2026-10-19 a reused companion was re-stamped without being rebuilt.
+     * a reused companion can be re-stamped without being rebuilt.
      */
     public static Parity builtParity(ProjectImageEntry<BufferedImage> companion) {
         try {
@@ -515,8 +512,8 @@ public final class ImageFlipHelper {
     }
 
     /**
-     * Hard-cancel dialog for the missing-{@code source_microscope} gate
-     * (review finding H1). FX-safe, blocking, OK-only.
+     * Hard-cancel dialog for the missing-{@code source_microscope} gate.
+     * FX-safe, blocking, OK-only.
      */
     private static void showMissingSourceMicroscopeDialog(String entryName) {
         String title = "Source Microscope Missing -- Workflow Cancelled";
@@ -588,8 +585,7 @@ public final class ImageFlipHelper {
      *     {@code flipMacroX} or {@code flipMacroY} set to true -- i.e. operating
      *     on a macro from some scanner on this scope requires building a flipped
      *     sibling for visual UX. Used as the "is the active scope flip-needing"
-     *     predicate in the missing-{@code source_microscope} hard-cancel gate
-     *     (review finding H1).
+     *     predicate in the missing-{@code source_microscope} hard-cancel gate.
      */
     public static boolean isActiveScopeFlipNeeding() {
         try {
@@ -769,7 +765,7 @@ public final class ImageFlipHelper {
      * null, causing an NPE in {@code Optional.orElse}. Deferring puts
      * the open on the next pulse where modal dialogs are legal.
      *
-     * <p>Why subscribe to {@code imageDataProperty} (review finding M10):
+     * <p>Why subscribe to {@code imageDataProperty}:
      * {@code openImageEntry} kicks off image loading on a background
      * thread and returns before the new {@code ImageData} is installed.
      * Completing the future immediately after the call returns lets
@@ -808,9 +804,9 @@ public final class ImageFlipHelper {
                 logger.info("Switched open entry to '{}' (ImageData installed)", targetName);
                 // Complete on a later pulse. The viewer fires this while openImageEntry is still
                 // running and before gui.getImageData() reports the new entry, so a continuation
-                // run here saw the PREVIOUS entry: the orientation dialog's OK returned to the
-                // original scan, the flip step saw Camera View still open and skipped, and Select
-                // Tile came up on the original (2026-10-19).
+                // run here sees the PREVIOUS entry: the orientation dialog's OK returns to the
+                // original scan, the flip step sees Camera View still open and skips, and Select
+                // Tile comes up on the original.
                 Platform.runLater(() -> future.complete(true));
             };
             listenerRef.set(listener);

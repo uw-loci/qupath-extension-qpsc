@@ -94,7 +94,7 @@ public class StageMapCanvas extends StackPane {
     /**
      * Shown over the map when the open slide has a macro image but no alignment resolves for the
      * selected source. Without it the map is simply empty and nothing says an alignment is what
-     * is missing (2026-10-19).
+     * is missing.
      */
     private final javafx.scene.control.Label noAlignmentLabel = buildNoAlignmentLabel();
 
@@ -1877,7 +1877,7 @@ public class StageMapCanvas extends StackPane {
         this.setScaleX(effX ? -1 : 1);
         this.setScaleY(effY ? -1 : 1);
         // The message is text, not map: undo the canvas mirror on it so it reads the same in
-        // every orientation (it was mirrored and unreadable in Camera View, 2026-10-19).
+        // every orientation (otherwise it is mirrored and unreadable in Camera View).
         noAlignmentLabel.setScaleX(effX ? -1 : 1);
         noAlignmentLabel.setScaleY(effY ? -1 : 1);
         logger.info("Stage Map flips applied: {} (flipX={}, flipY={})", applied, effX, effY);
@@ -2018,11 +2018,9 @@ public class StageMapCanvas extends StackPane {
             //
             // The 4-corner path (below) is more sensitive: corners are far
             // from the build anchor and any small scale-direction error
-            // amplifies. The user reported (2026-04-30) that the cursor
-            // landed outside the green box on the macro overlay even though
-            // the stage was inside the alignment annotation -- exactly the
-            // failure mode that 4-corner extrapolation produces when the
-            // transform isn't perfect everywhere.
+            // amplifies: the cursor can land outside the green box on the
+            // macro overlay even though the stage is inside the alignment
+            // annotation, when the transform isn't perfect everywhere.
             double[] anchorScreen = stageToScreen(anchorStageX, anchorStageY);
             if (anchorScreen == null) {
                 logger.warn(
@@ -2043,10 +2041,10 @@ public class StageMapCanvas extends StackPane {
                 // setScaleY(-1)) mirrors the rendered content around the
                 // ImageView's center, which combined with the shifted
                 // overlayX/Y below puts displayed pixels in the right screen
-                // direction. Without this we observed (OWS3, 2026-05-01) the
-                // macro reflected through the anchor: cursor appeared
-                // diagonally mirrored from physical position at any
-                // non-anchor point, even though the anchor itself coincided.
+                // direction. Without this the macro is
+                // reflected through the anchor: the cursor appears diagonally
+                // mirrored from its physical position at any non-anchor point,
+                // even though the anchor itself coincides.
                 double dirX = currentInsert != null && currentInsert.isXAxisInverted() ? -1.0 : 1.0;
                 double dirY = currentInsert != null && currentInsert.isYAxisInverted() ? -1.0 : 1.0;
                 double m00 = macroTransform.getScaleX();
@@ -2104,13 +2102,11 @@ public class StageMapCanvas extends StackPane {
         // (flipped) macro pixels to stage micrometers, so this is the
         // single source of truth for "where is each macro pixel in stage".
         //
-        // Previously the overlay was placed using slide_rect_left + a
-        // scanner-config offset, which on rigs whose slide_size_um is
-        // smaller than the cropped macro extent (e.g. OWS3: 40x20 mm slide
-        // rect vs 76x25 mm macro) caused the macro's label/holder portion
-        // to fall inside the slide rectangle. Using the transform makes
-        // the macro overlay coincide with the actual physical stage
-        // region the alignment maps to, regardless of slide_size_um.
+        // Using the transform (rather than slide_rect_left + a scanner-config
+        // offset, which on rigs whose slide_size_um is smaller than the cropped
+        // macro extent puts the macro's label/holder portion inside the slide
+        // rectangle) makes the macro overlay coincide with the actual physical
+        // stage region the alignment maps to, regardless of slide_size_um.
         //
         // Transform is purely scale+translate (no rotation/shear), so the
         // macro bounding box in stage is the AABB of the four corners. We
@@ -2121,10 +2117,8 @@ public class StageMapCanvas extends StackPane {
         // -- we take min/max in SCREEN space directly.
         //
         // macroTransform is guaranteed non-null here by the early return
-        // at the top of this method, so the legacy "no-transform" fallbacks
-        // (config-driven, fit-to-slide) are dead branches and have been
-        // removed. If a no-transform path is ever needed again, gate it
-        // earlier rather than re-introducing dead branches here.
+        // at the top of this method, so there is no "no-transform" fallback here.
+        // If one is ever needed, gate it earlier.
         double[][] corners = {
             {0, 0},
             {macroWidth, 0},
@@ -2223,7 +2217,6 @@ public class StageMapCanvas extends StackPane {
     }
 
     /**
-     * Convenience method for API compatibility with legacy canvas.
      * Triggers a full re-render.
      */
     public void render() {

@@ -178,7 +178,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * Set when the user dismisses the unresponsive modal: no further re-shows until the latch
      * is cleared by a reconnect. The 30 s debounce alone brought the modal back every 30 s for
      * as long as anything polled the stage, so after an operator shut the server down for the
-     * night it could not be got rid of (2026-10-19).
+     * night it could not be got rid of.
      */
     private volatile boolean unresponsiveModalDismissed = false;
 
@@ -696,7 +696,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 // (~10-15s) can block any aux query queued behind it.
                 // executeCommandOnAux tears down the aux on IOException to
                 // preserve protocol sync, which would trigger a poller
-                // reconnect storm (observed on PPM 2026-04-26: StageMap,
+                // reconnect storm (seen on PPM: StageMap,
                 // LiveViewer-FramePoller, StagePositionManager-Poller all
                 // cycling reconnects during a 203s pyramid write). 30s
                 // reliably distinguishes hardware-lock contention from a
@@ -720,7 +720,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 // Reset the backoff only once the server has ACCEPTED the config. Reset on the
                 // TCP connect, a refused CONFIG retried every second forever, because each
-                // attempt connected (resetting to 1 s) before failing (2026-10-21).
+                // attempt connected (resetting to 1 s) before failing.
                 auxReconnectBackoffMs = AUX_RECONNECT_BACKOFF_INITIAL_MS;
                 auxReconnectCooldownUntil = 0;
 
@@ -1558,7 +1558,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 // An answer, not a fault. The socket is fine and the server did its job;
                 // routing this through handleIOException counted it as a connection error,
                 // dropped a healthy socket and reconnected -- which the still-running
-                // acquisition then blocked for fifteen seconds (2026-10-12).
+                // acquisition then blocks for fifteen seconds.
                 throw refused;
             } catch (IOException | InterruptedException e) {
                 handleIOException(new IOException("Failed to send acquisition command", e));
@@ -2256,7 +2256,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *
      * <p>For characterisation rather than focusing. The ordinary scan derives its window from
      * the CURRENT Z, so asking for a range and hoping it lands on the sample does not work when
-     * the sample is not near the current position -- on 2026-08-26 that put a 265 um window at
+     * the sample is not near the current position -- that once put a 265 um window at
      * [-133, +133] while the sample sat at -235. Naming both endpoints removes the guess, and
      * {@code profileZStartUm} may be greater OR less than {@code profileZEndUm}: the traverse
      * runs from greater objective-sample separation to lesser, and which Z direction that is
@@ -2484,7 +2484,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * {@code moveStageXY} then {@code findTissue} then {@code streamingFocus}.
      *
      * <p>Why it exists: a multi-slide batch's FIRST predicted landmark per slide lands a
-     * median 613 um from its target (worst 1507 um, measured over 8 slides on 2026-08-24),
+     * median 613 um from its target (worst 1507 um, measured over 8 slides),
      * which frequently puts the camera on blank glass. Autofocus there finds coverslip
      * contrast or nothing at all. All this has to achieve is tissue -- ANY tissue -- in view
      * long enough to measure a focus, not the intended tile: the caller returns the stage to
@@ -3229,10 +3229,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 if (socket != null) {
                     // Both phases are stop-and-snap scans whose length is the config's step count
                     // times the stage's settle time, not a constant: on OWS3 (ZDrive, 100 steps)
-                    // phase 2 alone took 132 s and the whole test 183 s, three seconds past the
-                    // old fixed 180 s, so the client reported "Read timed out" just before the
-                    // server's answer (2026-10-27). The test is cancellable (ABORTAF), so a long
-                    // ceiling costs nothing.
+                    // phase 2 alone took 132 s and the whole test 183 s, so a fixed 180 s timeout
+                    // reports "Read timed out" just before the server's answer. The test is
+                    // cancellable (ABORTAF), so a long ceiling costs nothing.
                     socket.setSoTimeout(AF_VALIDATION_TIMEOUT_MS);
                 }
 
@@ -3982,9 +3981,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
             try {
                 originalTimeout = socket.getSoTimeout();
                 // Increase timeout for birefringence test (can take many minutes)
-                // In calibrate mode, Phase 1 iterates all angles with adaptive exposure
+                // In calibrate mode, the first phase iterates all angles with adaptive exposure
                 // optimization (~12 iterations per angle x 201 angles = potentially 45+ minutes)
-                // Phase 2 then runs paired acquisition. Allow 90 minutes total.
+                // The second phase then runs paired acquisition. Allow 90 minutes total.
                 socket.setSoTimeout(5400000); // 90 minutes
                 logger.debug("Increased socket timeout to 90 minutes for birefringence optimization");
             } catch (IOException e) {
@@ -4900,7 +4899,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         // 5s readTimeout is too aggressive for that case -- a timeout here
         // triggers handleIOException, which marks the connection dead and
         // schedules a reconnect that re-sends CONFIG. That reconnect storm
-        // is what surfaced the server's same-IP takeover bug on 2026-04-26.
+        // is what surfaces the server's same-IP takeover bug.
         // Bump per-call to 30s: the server's STAT path is genuinely fast,
         // so a 30s wait reliably indicates a real failure (server died,
         // network broken) rather than legitimate busy.
@@ -5584,13 +5583,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 retryCount = 0;
                 transientFailureCount = 0;
 
-                // A STATUS reply IS the liveness signal. The timer below used to run from the
-                // last change in the saved-file count, so a server that was answering every
-                // poll while its acquisition thread ran two 100-step autofocus sweeps in a row
-                // -- 318 s with zero files, a normal start for a region whose first tile is far
-                // from the AF tile -- was declared dead at 300 s (2026-10-12). Liveness is now
-                // "the server answered"; a server that stops answering still trips this via
-                // the read-failure path, which never reaches here.
+                // A STATUS reply IS the liveness signal, not the saved-file count: a server that
+                // answers every poll while its acquisition thread runs two 100-step autofocus
+                // sweeps in a row (318 s with zero files, a normal start for a region whose first
+                // tile is far from the AF tile) is alive. A server that stops answering still
+                // trips this via the read-failure path, which never reaches here.
                 lastProgressUpdateTime.set(System.currentTimeMillis());
 
                 // Check if terminal state reached
@@ -7021,7 +7018,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         logger.info("Camera binning set to {}", value);
     }
 
-    // ==================== Capability query (Camera Control v2 phase 2) ====================
+    // ==================== Capability query (Camera Control v2) ====================
 
     /**
      * Typed view of the GETCAP JSON. All fields are optional in the wire
@@ -7481,7 +7478,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         // Override per-call to 30 s. The default 5 s primary timeout is too tight for this
         // call when the server is mid-cleanup (e.g. tearing down a continuous-acquisition
         // session before transitioning to acquisition mode); a transient 5+ s delay is normal
-        // there. Witnessed on 2026-05-02 OWS3 acquisition: stopAllLiveViewing -> isLiveModeRunning
+        // there. Seen on OWS3: stopAllLiveViewing -> isLiveModeRunning
         // timed out at 5 s, triggering a reconnection storm that the server's same-IP takeover
         // path could not recover from. Matches the per-call override on getAcquisitionStatus.
         synchronized (socketLock) {
@@ -7865,7 +7862,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                         new String(body, StandardCharsets.UTF_8));
             } catch (SocketTimeoutException e) {
                 if (replyStarted) {
-                    // Cut off mid-reply: the stream is no longer aligned to a command boundary.
+                    // Cut off mid-reply: the stream is not aligned to a command boundary.
                     cleanupAuxiliary();
                     throw e;
                 }

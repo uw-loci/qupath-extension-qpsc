@@ -134,9 +134,9 @@ public class LiveViewerWindow {
     private javafx.scene.layout.HBox rightArea;
     private javafx.scene.layout.VBox bottomPane;
     /**
-     * The image and, in the bottom dock, the histogram under it. The bottom dock used to be
-     * the window's full-width bottom region, which cut the tab column short; the histogram
-     * needs height less than the movement controls do (2026-10-19).
+     * The image and, in the bottom dock, the histogram under it. The bottom dock sits
+     * under the image rather than spanning the window, which would cut the tab column short;
+     * the histogram needs less height than the movement controls do.
      */
     private javafx.scene.layout.VBox imageColumn;
 
@@ -656,11 +656,9 @@ public class LiveViewerWindow {
      * The UI state always reflects the actual outcome: on success the focus
      * buttons re-enable and the status reads "Live ON"; on failure liveActive
      * stays false, the status reads "Live OFF (restart failed)" and the user
-     * can retry via the Live toggle. The previous version skipped the UI
-     * update when {@link MicroscopeController#startContinuousAcquisition()}
-     * threw, leaving the focus buttons stuck disabled with no feedback --
-     * observed after the Editor's Test Sweep Autofocus on PPM 40x
-     * 2026-05-04.
+     * can retry via the Live toggle. The UI is updated even when
+     * {@link MicroscopeController#startContinuousAcquisition()} throws, so the
+     * focus buttons are not left stuck disabled with no feedback.
      */
     public static void restartStreaming() {
         if (instance == null) {
@@ -673,7 +671,7 @@ public class LiveViewerWindow {
             if (controller != null) {
                 // Force a clean restart: stop any stale sequence, then start fresh.
                 // This handles cases where the camera mode was changed during WB/BG
-                // and the old sequence is no longer producing valid frames.
+                // and the old sequence does not produce valid frames.
                 try {
                     controller.stopContinuousAcquisition();
                     Thread.sleep(200); // Let camera fully release
@@ -926,7 +924,7 @@ public class LiveViewerWindow {
             // subdirs for LC-PolScope. Computed outputs are skipped: they are written
             // last (newest), are not camera frames, and have their own value scales --
             // PPM's 7.0.biref/, LC-PolScope's retardance/ and its 8-bit RGB
-            // orientation_color/, which used to replace the camera tile every time.
+            // orientation_color/, which would replace the camera tile every time.
             File[] subdirs = rootDir.listFiles(f -> f.isDirectory() && !isComputedOutputDirectory(f.getName()));
             if (subdirs != null) {
                 for (File subdir : subdirs) {
@@ -1667,8 +1665,6 @@ public class LiveViewerWindow {
         focusRangeCombo.setDisable(!enabled);
     }
 
-    // handleRefineFocus removed -- Sweep Focus includes Refine as Phase 5
-
     /**
      * Autofocus button handler. Dispatches to streaming or sweep based on the
      * method selected in the Autofocus Configuration dialog. While a scan is
@@ -2396,8 +2392,8 @@ public class LiveViewerWindow {
     private void handleDoubleClickToCenter(javafx.scene.input.MouseEvent event) {
         // The same two gates as every other movement control. The arrows, joystick, Z bars
         // and Go to Centroid are bound to Live being on, and a lock disables the stage panel;
-        // this handler sits on the image instead, so it checked neither and moved the stage
-        // with Live off (and during a locked calibration) -- reported 2026-10-19.
+        // this handler sits on the image instead, so it checked neither and would move the stage
+        // with Live off (and during a locked calibration).
         if (lockManager != null && lockManager.isLocked()) {
             updateStatus("LOCKED: " + lockManager.getLockHolder());
             return;
@@ -2529,7 +2525,7 @@ public class LiveViewerWindow {
      * <p>"Config" always remains as the first option and defers to the per-objective
      * {@code sweep_range_um} field in {@code autofocus_<scope>.yml}. Sweep Autofocus
      * always reads from the YAML regardless of dropdown selection; only Streaming AF
-     * honors the explicit um overrides. The previously selected value is preserved
+     * honors the explicit um overrides. The selected value is preserved
      * when still valid; otherwise the dropdown falls back to "Config".
      */
     private void updateFocusRangeOptions() {

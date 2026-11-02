@@ -25,11 +25,9 @@ import qupath.lib.objects.hierarchy.PathObjectHierarchy;
  *   <li>Restores annotations to the new project with optional coordinate transformation</li>
  * </ol>
  *
- * <p>This was originally implemented with static state. Phase 10 of the
- * 2026-05-13 review remediation (M12) converted it to a per-instance service
- * so concurrent / restarted workflows cannot leak preserved annotations
- * across runs. One instance per workflow run; the owning {@code WorkflowState}
- * holds it.
+ * <p>It is a per-instance service so concurrent / restarted workflows cannot leak
+ * preserved annotations across runs. One instance per workflow run; the owning
+ * {@code WorkflowState} holds it.
  *
  * <p>Usage pattern:
  * <pre>
@@ -52,8 +50,7 @@ import qupath.lib.objects.hierarchy.PathObjectHierarchy;
 public class AnnotationPreservationService {
     private static final Logger logger = LoggerFactory.getLogger(AnnotationPreservationService.class);
 
-    // Per-instance state. Phase 10 (M12) removed the static fields that
-    // backed this service so distinct workflow runs cannot leak preserved
+    // Per-instance state, so distinct workflow runs cannot leak preserved
     // annotations into one another.
     private List<PathObject> preservedAnnotations = null;
     private int sourceImageWidth = 0;
@@ -131,7 +128,7 @@ public class AnnotationPreservationService {
     }
 
     /**
-     * Restores previously captured annotations to the current image hierarchy.
+     * Restores captured annotations to the current image hierarchy.
      *
      * <p>Handles coordinate transformation if the image was flipped during import.
      * The flip transformation uses the same logic as QuPath's coordinate system.

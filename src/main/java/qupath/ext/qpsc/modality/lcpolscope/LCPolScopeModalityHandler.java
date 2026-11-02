@@ -156,8 +156,8 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         if (!ui.hasChannels()) {
             return Optional.empty();
         }
-        // All five states, one exposure: the picker no longer offers per-state exposures,
-        // include boxes or split, so the notice that used to ask for equal exposures is gone.
+        // All five states, one exposure: the picker offers no per-state exposures, include boxes
+        // or split, so no notice asking for equal exposures is needed.
         ui.useEqualExposureStates("LC-PolScope states");
         // Calibration, background, camera and adapter status before the stage moves; each used
         // to appear only as a log line at the first tile.

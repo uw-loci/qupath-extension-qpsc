@@ -37,7 +37,7 @@ public final class SafeZClearanceMonitor {
 
     /**
      * Clearance below which the declared retraction is reported as too tight. Chosen against the
-     * measured slide-to-slide focus spread (236 um across one carrier, 2026-08-14): a margin
+     * measured slide-to-slide focus spread (236 um across one carrier): a margin
      * much smaller than that would be silent right up to the run that crosses over.
      */
     public static final double MIN_CLEARANCE_UM = 50.0;

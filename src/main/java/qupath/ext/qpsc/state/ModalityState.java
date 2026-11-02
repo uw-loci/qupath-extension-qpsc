@@ -39,7 +39,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  *
  * <h2>Validate-on-read clamping</h2>
  * When the microscope config changes (e.g. user picks a different scope in
- * Preferences), the persisted modality may no longer be valid for the new
+ * Preferences), the persisted modality may not be valid for the new
  * config. {@link #getModality()} validates against {@link #getValidModalities()}
  * and, on mismatch, replaces the current value with the first valid modality
  * (also persisting). This avoids a separate config-reload callback (none

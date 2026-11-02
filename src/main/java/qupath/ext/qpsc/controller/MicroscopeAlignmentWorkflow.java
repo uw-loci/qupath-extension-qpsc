@@ -814,7 +814,7 @@ public class MicroscopeAlignmentWorkflow {
      * <p>{@link ImageFlipHelper#validateAndFlipIfNeeded} does nothing when a camera-view entry is
      * already open, and nothing for {@code (false, false)}, so with "(Camera View)" open the
      * orientation dialog could neither switch flips nor return to the original: the answer it
-     * recorded could differ from the image on screen (2026-10-19). Return to the original first,
+     * recorded could differ from the image on screen. Return to the original first,
      * then apply the flip from there.
      */
     private static CompletableFuture<Boolean> showOrientation(
@@ -826,8 +826,8 @@ public class MicroscopeAlignmentWorkflow {
             String baseName = ImageMetadataManager.getBaseImage(open);
             ProjectImageEntry<BufferedImage> original =
                     baseName != null ? ImageMetadataManager.findSiblingWithFlip(project, baseName, false, false) : null;
-            // Already showing the right Camera View: nothing to do. Without this, OK went back
-            // to the original and flipped again, a needless second load (2026-10-19).
+            // Already showing the right Camera View: nothing to do. Without this, OK would go back
+            // to the original and flip again, a needless second load.
             if (original != null
                     && ImageFlipHelper.builtParity(open)
                             .equals(ImageFlipHelper.cameraViewBake(original, flipX, flipY))) {
@@ -1161,8 +1161,8 @@ public class MicroscopeAlignmentWorkflow {
         // Finally, any area annotation, classified or not. Microscope Alignment only needs
         // somewhere to put reference tiles; requiring a particular class stopped it on slides
         // whose annotations were unclassified or used other names ("Error during Alignment:
-        // no annotations", 2026-10-19). The class-based passes above still win when they
-        // match, so a slide with a Tissue annotation tiles only that, as before.
+        // no annotations"). The class-based passes above still win when they
+        // match, so a slide with a Tissue annotation tiles only that.
         var anyArea = allAnnotations.stream()
                 .filter(a -> a.getROI() != null && a.getROI().isArea())
                 .toList();
@@ -1176,11 +1176,10 @@ public class MicroscopeAlignmentWorkflow {
 
         // No matching annotation of any accepted class. Return false so the caller
         // aborts cleanly and shows a single, actionable message. Deliberately do
-        // NOT notify here: this method used to raise an APPLICATION_MODAL error
-        // that fired AFTER the workflow had already opened the always-on-top
-        // tile-selection stage, so it sank behind that stage while the caller
-        // pressed on with an empty tile grid. Messaging now lives at the call
-        // site, before any tile-selection window exists.
+        // NOT notify here: an APPLICATION_MODAL error would fire AFTER the workflow
+        // had already opened the always-on-top tile-selection stage, so it would sink
+        // behind that stage while the caller pressed on with an empty tile grid.
+        // Messaging lives at the call site, before any tile-selection window exists.
         logger.warn("The image has no area annotations; alignment tiles not created");
         return false;
     }
@@ -1522,8 +1521,7 @@ public class MicroscopeAlignmentWorkflow {
             Boolean flipMacroYAtSave = macroFlip != null ? macroFlip.flipY() : null;
 
             // Anchor metadata for transform-frame-immune Stage Map overlay
-            // placement. greenBoxCenterX/Y here are post-mirror values from the
-            // 565bcc4 reconciliation, so they live in the orientation-dialog
+            // placement. greenBoxCenterX/Y here are post-mirror values, so they live in the orientation-dialog
             // flipped frame (the same frame the user sees when the Stage Map
             // displays the macro). stageCenter is fullResToStage applied to
             // the data-region center -- the alignment build anchor. Persisting

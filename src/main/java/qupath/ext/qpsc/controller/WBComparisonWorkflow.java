@@ -839,7 +839,7 @@ public class WBComparisonWorkflow {
         // detector profile the WB / BG dialogs persist. Returns null when
         // multiple detectors exist and the user has not picked one --
         // throw rather than guess (the silent-first iterator.next() pattern
-        // is what produced the 2026-04-27 dim-images incident).
+        // produces dim images).
         String detector = configManager.getActiveDetector();
         if (detector != null) return detector;
         Set<String> detectors = configManager.getAvailableDetectors();

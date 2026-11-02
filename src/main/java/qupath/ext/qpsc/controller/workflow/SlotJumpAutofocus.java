@@ -30,8 +30,8 @@ import qupath.lib.gui.QuPathGUI;
  * which is what a slot jump needs since each slide can be at a very different Z. When the
  * preference is SWEEP, or no stream is open, it runs the stepped wide search
  * ({@code testAdaptiveAutofocus} with {@code wideSearch} / TESTADAF {@code --wide-search}), the
- * search an acquisition runs at its first tissue tile. It never runs a drift check here: on
- * 2026-11-01 one refused a 20 um move on a new slide and reported that as focused.
+ * search an acquisition runs at its first tissue tile. It never runs a drift check here: a drift check can
+ * refuse a 20 um move on a new slide and report that as focused.
  *
  * <p><b>Settle-gate.</b> The caller ({@code AffineTransformationController}) issues the slot
  * auto-move via {@link MicroscopeController#moveStageXY} immediately before calling
@@ -93,9 +93,9 @@ public final class SlotJumpAutofocus {
     /**
      * Announces that autofocus did NOT run, and why.
      *
-     * <p>Every skip path used to be {@code logger.info} only, and {@link #publish} reaches a
-     * sink that ONLY the multi-slide panel registers -- so in a single-slide refinement the
-     * message went nowhere at all. An operator then aligned against an out-of-focus tile with
+     * <p>A {@code logger.info} alone would not do, since {@link #publish} reaches a
+     * sink that ONLY the multi-slide panel registers -- in a single-slide refinement the
+     * message would go nowhere, and an operator could align against an out-of-focus tile with
      * no indication that focusing had been skipped. This always surfaces: to the panel when
      * there is one, and as a notification when there is not.
      *
@@ -108,14 +108,14 @@ public final class SlotJumpAutofocus {
      * total travel accumulates across up to six re-centred attempts. Two shapes are worth
      * saying out loud, because both look identical to a good result in the log otherwise:
      * <ul>
-     *   <li><b>Too few samples.</b> A peak cannot be validated from a handful of points. On
-     *       2026-08-14 a slot jump returned SUCCESS on {@code n=3} while moving 194.7 um.</li>
+     *   <li><b>Too few samples.</b> A peak cannot be validated from a handful of points. A
+     *       slot jump has returned SUCCESS on {@code n=3} while moving 194.7 um.</li>
      *   <li><b>Travel far exceeding the sampled span.</b> Legitimate after several attempts,
      *       but it also means the final scan never saw the starting position, so nothing
      *       cross-checks the direction it walked.</li>
      * </ul>
      *
-     * <p>This does not reject the result -- the same 2026-08-14 scan did land near true focus.
+     * <p>This does not reject the result -- such a scan can still land near true focus.
      * It makes a marginal success visible instead of indistinguishable from a clean one.
      */
     private static void warnIfImplausible(MicroscopeSocketClient.StreamingFocusResult result) {
@@ -333,10 +333,9 @@ public final class SlotJumpAutofocus {
             // record is keyed by scope, modality and objective only -- not by insert, and not by
             // the Z frame a Prior stage loses at every power cycle -- so its distance can be
             // hundreds of micrometres wrong for the carrier that is actually mounted, and the
-            // headroom then becomes the travel the scan spends PAST the sample. On PPM
-            // (2026-10-26) the record said 443 um while the slide was in focus 121 um from safe
-            // Z: the approach drove through the sample plane and 450 um beyond it before the
-            // operator canceled.
+            // headroom then becomes the travel the scan spends PAST the sample. E.g. a
+            // record saying 443 um while the slide is in focus 121 um from safe
+            // Z: the approach drives through the sample plane and 450 um beyond it.
             String disagreement = approachDistanceProblem(
                     currentSafeZ,
                     record.approachDistanceUm(),
@@ -347,9 +346,9 @@ public final class SlotJumpAutofocus {
                 return ApproachPlan.disabled(disagreement);
             }
             // Where the stage is NOW must agree with the record: safe Z has to be a retraction
-            // from here. On PPM (2026-10-22) the record said focus lies below safe Z 0, while the
-            // slide was in focus at +258; "retract to safe Z" then drove 258 um the other way and
-            // the scan continued 330 um further before it was canceled, far from any focus.
+            // from here. E.g. a record saying focus lies below safe Z 0 while the
+            // slide is in focus at +258: "retract to safe Z" then drives 258 um the other way and
+            // the scan continues 330 um further, far from any focus.
             double currentZ;
             try {
                 currentZ = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
@@ -458,7 +457,7 @@ public final class SlotJumpAutofocus {
      * approach: the scan stopped short of the sample and could not have found it however good
      * the metric was.
      *
-     * <p>Measured on one 4-slide carrier, 2026-08-28: focus at -212.7, -230, -320, -324 and
+     * <p>Measured on one 4-slide carrier: focus at -212.7, -230, -320, -324 and
      * -392. That is 180 um of spread from the validated slide, so 250 um covers it with about
      * 70 um to spare. It is also the TRAVEL CAP, so it is not free -- the objective is driven
      * this much further toward the slide before the scan gives up, and the scan always
@@ -506,7 +505,7 @@ public final class SlotJumpAutofocus {
     /**
      * A request to look for tissue before focusing, for the ONE case that needs it.
      *
-     * <p>Measured over 8 slides on 2026-08-24: a slide's FIRST predicted landmark lands a
+     * <p>Measured over 8 slides: a slide's FIRST predicted landmark lands a
      * median 613 um from its target (worst 1507 um), which often puts the camera on blank
      * glass where a focus scan has nothing to find. The SECOND landmark, corrected by the
      * first's translation, lands within 26 um -- so the base transform's error is very nearly
@@ -666,11 +665,10 @@ public final class SlotJumpAutofocus {
      * already in hand.
      *
      * <p>Set by whichever focus succeeds on the slide: this scan, the Live Viewer's autofocus
-     * button, the post-SIFT refocus, a sweep. Only the slot-jump scan used to set it, and on
-     * 2026-10-26 that was the gap: the first point's scan failed, the operator focused by hand,
-     * and the second point -- 12 um away in Z on the same slide -- still ran the full approach
-     * from the safe Z toward a 693 um bound, through the focus plane and 450 um past it before
-     * it was canceled.
+     * button, the post-SIFT refocus, a sweep. Every focus source must set it: if the first point's scan fails and the
+     * operator focuses by hand, the second point -- 12 um away in Z on the same slide -- would
+     * otherwise run the full approach from the safe Z toward a 693 um bound, through the focus
+     * plane and 450 um past it.
      *
      * <p>Cleared by {@link #beginSlide()}, because the next slide's focus genuinely is unknown
      * again -- the measured spread across one carrier was 180 um.
@@ -921,7 +919,7 @@ public final class SlotJumpAutofocus {
 
         // Seed Z from THIS slide's saved focus before scanning. Without it the scan starts
         // wherever the previous slide left the stage, and slide-to-slide focus variation is
-        // large and normal: across 8 slides in one carrier on 2026-08-14 the focus Z spread was
+        // large and normal: across 8 slides in one carrier the focus Z spread was
         // 236 um. One slot jump there had to hunt 195 um, exhausted all six 30 um attempts (every
         // one classifying edge_high, i.e. "the peak is above this window"), fell through to a
         // Brent bracket that never bracketed, and committed the top edge on 3 samples.

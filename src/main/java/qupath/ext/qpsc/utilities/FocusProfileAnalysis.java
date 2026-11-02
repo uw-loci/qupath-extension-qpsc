@@ -391,7 +391,7 @@ public final class FocusProfileAnalysis {
         // difference of integer percentiles averaged over three channels, so it moves in steps
         // of 1/3 and the curve is a visible staircase. Against a range that IS three steps, one
         // step clears 15% comfortably and every step edge is reported as a surface peak. Judged
-        // against a tissue peak of 86 counts (PPM 20x, 2026-08-26) the same step is 0.4% and
+        // against a tissue peak of 86 counts (PPM 20x) the same step is 0.4% and
         // correctly reads as nothing.
         //
         // This is also the right comparison physically. Both scans run at identical exposure and

@@ -33,8 +33,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
  * sections by {@link ModalityHandler.SaturationRole}: a top "Concerning
  * saturation" table for low-signal / normal-signal tiles (where saturation
  * is a real defect), and a collapsible "Expected bright tiles" section for
- * SIGNAL_HIGH tiles (PPM uncrossed, intentionally bright -- saturation OK
- * and previously dominated the dialog).
+ * SIGNAL_HIGH tiles (PPM uncrossed, intentionally bright -- saturation OK).
  *
  * <p>Per-modality column visibility is driven by
  * {@link ModalityHandler#channelDisplay(boolean)}: AGGREGATE collapses R/G/B
@@ -54,7 +53,7 @@ public class SaturationSummaryDialog {
     private static final double AF_SATURATION_WARN_PCT = 10.0;
 
     // ---- Batch (multi-run) collection ---------------------------------------------------------
-    // A single multi-slide run acquires many samples; each one previously popped its own saturation
+    // A single multi-slide run acquires many samples; each would otherwise pop its own saturation
     // dialog. When a batch is active, per-acquisition reports are COLLECTED here instead and shown
     // as one combined, scrollable summary at the end (with the worst samples flagged at the top).
 
@@ -70,7 +69,7 @@ public class SaturationSummaryDialog {
      * <p>Kept separately from {@link #batchEntries} because only saturating acquisitions are
      * collected: using the entry count as the denominator made the summary read "3 of 3
      * acquisition(s) had concerning saturation" for a run where 3 of 23 acquisitions across 4
-     * slides saturated (observed 2026-08-14). N-of-N is unfalsifiable -- it can only ever say
+     * slides saturated. N-of-N is unfalsifiable -- it can only ever say
      * that everything it knows about was bad.
      */
     private static final java.util.concurrent.atomic.AtomicInteger batchAcquisitionCount =

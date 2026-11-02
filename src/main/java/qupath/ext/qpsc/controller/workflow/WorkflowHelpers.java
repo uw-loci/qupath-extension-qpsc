@@ -13,9 +13,8 @@ import qupath.lib.projects.ProjectImageEntry;
 
 /**
  * Small, stateless helpers shared across the single-slide, multi-slide, and refinement
- * workflow paths. Consolidates logic that was duplicated verbatim across those paths so
- * there is one home and one behavior (project no-legacy policy: all callers refactored, no
- * parallel copies).
+ * workflow paths. Holds logic shared by those paths so
+ * there is one home and one behavior.
  *
  * <p>Coordinate-transform math is intentionally NOT collapsed here: the slot-center estimate
  * differs meaningfully between the manual and existing-alignment paths (diagonal vs R270
@@ -120,7 +119,7 @@ public final class WorkflowHelpers {
 
     /**
      * Centers the viewer on the tile and selects it. Shared by single-tile and multi-tile
-     * refinement (previously duplicated as {@code centerViewerOnTile} in each).
+     * refinement.
      *
      * @param gui  the QuPath GUI instance
      * @param tile the tile to center on and select

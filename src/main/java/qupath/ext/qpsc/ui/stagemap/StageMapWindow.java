@@ -143,7 +143,7 @@ public class StageMapWindow {
     private boolean macroLabelOnRight = false;
     /** The macro's baseline sign {sX, sY} the last time the overlay was placed; null before that. */
     private double[] lastMacroSign = null;
-    // Anchor metadata from the active preset (NaN for legacy presets, in which
+    // Anchor metadata from the active preset (NaN for presets without anchors, in which
     // case StageMapCanvas falls back to its 4-corner / config-offset paths).
     private double currentMacroAnchorMacroX = Double.NaN;
     private double currentMacroAnchorMacroY = Double.NaN;
@@ -218,9 +218,7 @@ public class StageMapWindow {
      * nominal slot centers until an alignment measures where a slide actually is, and a slide
      * sits where it was dropped rather than where the slot is -- the measured landing error on
      * the first alignment point of a multi-slide run was a median 613 um. Without this the map
-     * would keep showing every slide at its nominal position for the whole run, which is
-     * exactly the "kind of close, but not quite on, and doesn't adjust as we collect alignment
-     * data" the rig reported on 2026-08-28.
+     * would keep showing every slide at its nominal position for the whole run.
      *
      * <p>Only the placement changes; the macro rasters are reused, so this is cheap enough to
      * call on every alignment.
@@ -683,8 +681,8 @@ public class StageMapWindow {
             // Multi-slide slot previews (rotated macros over a specific carrier's slots) are
             // meaningless on another insert, so HIDE them when the user switches the Stage Map to
             // a different carrier -- but RETAIN the data so switching back to the preview carrier
-            // RESTORES the macro layout (previously they were fully cleared on switch-away, so
-            // e.g. single-slide -> back-to-quad_v-vertical mid-run left the macro gone). A true
+            // RESTORES the macro layout (clearing them on switch-away would leave the macro gone
+            // after e.g. single-slide -> back-to-quad_v-vertical mid-run). A true
             // discard only happens via clearSlotMacroPreviews() (run end). (applySlotPreviews sets
             // slotPreviewCarrierId + retainedSlotPreviews before it selects the carrier, so the
             // re-draw branch below does not fight it.)
@@ -890,7 +888,7 @@ public class StageMapWindow {
         // Configuration -> Light Path Orientation, so it is deliberately NOT surfaced here. Stage View is
         // driven by this rotation only (LightPathModel.slideRotationFlipFlags); the physical scope
         // inversion is already carried by the stage polarity + alignment transform (the macro overlay's
-        // baseline), so re-applying it here would double-count it (OWS3 2026-08-09).
+        // baseline), so re-applying it here would double-count it.
         svSlideInsertion = currentSlidePlacement(); // PER-SLIDE placement of the open entry
         svOpticalFlip = LightPathModel.opticalFlip(); // read-only here; feeds Camera View
 
@@ -1654,12 +1652,11 @@ public class StageMapWindow {
      *   <li>First entry in {@code sources}</li>
      * </ol>
      *
-     * <p>Reading the persistent default for display is safe; the
-     * Ocus40-stamp-on-OWS3-slide bug was about <i>stamping</i> the
-     * persistent default onto an entry, not about reading it. That stamp
-     * path is now gated on "entry has no existing source_microscope" in
+     * <p>Reading the persistent default for display is safe; the hazard is
+     * <i>stamping</i> the persistent default onto an entry. That stamp
+     * path is gated on "entry has no existing source_microscope" in
      * {@link #applySourceSelection}, and {@link #onOpenedImageChanged}
-     * no longer auto-modifies the dropdown at all.
+     * does not auto-modify the dropdown.
      */
     private String pickInitialSource(List<String> sources) {
         String fromPref = PersistentPreferences.getSelectedScanner();
@@ -1892,9 +1889,9 @@ public class StageMapWindow {
      */
     private void syncApplyFlipsFromHardware(String reason) {
         // Preserve the operator's chosen view (Camera vs Stage) across hardware/source changes and
-        // just recompute the canvas flip for that view. Previously this forced the checkbox to
-        // match the camera-flip magnitude, which yanked the user out of Stage View on every source
-        // change; the Stage View orientation now carries the bench flip, so the view is sticky.
+        // just recompute the canvas flip for that view. Forcing the checkbox to match the camera-flip
+        // magnitude would yank the user out of Stage View on every source change; the Stage View
+        // orientation carries the bench flip, so the view is sticky.
         boolean cameraView = applyFlipsCheckbox != null && applyFlipsCheckbox.isSelected();
         boolean[] axes = resolveViewFlipAxes(cameraView);
         boolean apply = axes[0] || axes[1];
@@ -1948,7 +1945,7 @@ public class StageMapWindow {
      * <p>Deliberately independent of scope type: on an inverted scope the physical inversion is
      * already carried by the stage polarity and the per-slide alignment transform, so the macro
      * overlay is already drawn in that inverted baseline. Re-applying the scope-face flip here would
-     * double-count it and mirror an already-correct macro (OWS3 2026-08-09). The only run-to-run
+     * double-count it and mirror an already-correct macro. The only run-to-run
      * variable -- which way the slide was dropped in (label left vs right, an in-plane 180) -- is the
      * one thing this reflects. Way A reduces to identity.
      *
@@ -1972,12 +1969,12 @@ public class StageMapWindow {
         // The overlay is the raw macro with the active preset's macro flip applied
         // (prepareMacroOverlayImage), so the label has already changed sides when that flip
         // mirrors X. Both OWS3 presets record flipMacroX=true, and without this term
-        // "Label on your right" drew the label on the left there (2026-10-27). The Y term
+        // "Label on your right" would draw the label on the left there. The Y term
         // never moves a label that sits at an end of the raw macro.
         boolean[] presetFlip = activePresetMacroFlip();
         // A vertical slot takes the scan a quarter-turn (the companion's rotation), which moves
         // the scanner's label from a side to an end: the four-slide carrier's slides are placed
-        // label away from you or toward you, not left or right (2026-10-27). The flip is in the
+        // label away from you or toward you, not left or right. The flip is in the
         // raw frame, before the rotation, which is the order the overlay is built in.
         boolean[] side = LightPathModel.rotatedLabelSide(macroLabelOnRight ^ presetFlip[0], currentSlideRotation());
         boolean[] viewMirror = LightPathModel.currentStageViewFlip(LightPathModel.INSERT_A);
@@ -2683,7 +2680,7 @@ public class StageMapWindow {
             // singleton, so the saved-transforms file can change underneath us
             // (e.g. after a Microscope Alignment run wrote a new preset with
             // anchor metadata). Reading the cached activePreset would otherwise
-            // serve the pre-save copy and force the legacy 4-corner placement
+            // serve the pre-save copy and force the 4-corner placement
             // path even though the new preset has anchor data.
             try {
                 String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -2745,7 +2742,7 @@ public class StageMapWindow {
                 currentMacroTransform = overlayTransform;
                 currentMacroSampleName = sampleName;
                 currentMacroScannerName = scannerName;
-                // Pull the anchor metadata if the preset has it; legacy presets
+                // Pull the anchor metadata if the preset has it; presets without it
                 // return NaN here, which causes StageMapCanvas to fall back to
                 // the 4-corner placement path.
                 if (activePreset != null && activePreset.hasOverlayAnchor()) {
@@ -2903,13 +2900,11 @@ public class StageMapWindow {
         // Optical flip (preset.flipMacroX/Y) and stage axis inversion are INDEPENDENT --
         // see qupath-extension-qpsc/CLAUDE.md "Coordinate system terminology". Optical
         // flip changes which way the macro pixels render; stage axis inversion changes
-        // which way stage commands move. Conflating them via XOR (the previous
-        // implementation) was a coincidence-correct hack on PPM (where both axes are
-        // inverted AND both optical flips are set, so XOR cancels) that broke as soon
-        // as the same preset was used in a project where the entry's metadata didn't
-        // happen to line up with the inversion booleans (today on PPM, where opening
-        // the unflipped MetroHealth_142.svs base produced an unflipped macro overlay
-        // even though Ocus40_PPM correctly says flipMacroX=Y=true).
+        // which way stage commands move. Conflating them via XOR is only coincidence-correct on PPM (where both axes
+        // are inverted AND both optical flips are set, so XOR cancels) and breaks as soon
+        // as the entry's metadata doesn't line up with the inversion booleans (e.g. opening
+        // an unflipped base would produce an unflipped macro overlay even though the preset
+        // says flipMacroX=Y=true).
         // Macro IMAGE optical flip = the source preset's flipMacroX/Y ONLY (not
         // the camera flip). This orients the raw macro pixels into the stage
         // frame; the whole-canvas camera mirror (resolveCurrentFlipAxes) then
@@ -3047,7 +3042,7 @@ public class StageMapWindow {
     /**
      * The stage shift that moves the preset-placed macro onto this slide's measured position, or
      * null when there is nothing to move it by: no alignment has recorded the slide's center, its
-     * green box was not found on the macro, or the preset is a legacy one with no anchor (the
+     * green box was not found on the macro, or the preset has no anchor (the
      * 4-corner placement has no single macro pixel to pin).
      */
     private double[] slideShift(double macroPixelSizeUm) {
@@ -3239,7 +3234,7 @@ public class StageMapWindow {
         logger.info("  Sample name lookup: image file name = '{}'", imageName);
 
         if (imageName != null && !imageName.isEmpty()) {
-            // Check if alignment exists for this name (with extension - legacy format)
+            // Check if alignment exists for this name (with extension)
             logger.info("  Trying alignment lookup with full name: '{}'", imageName);
             if (AffineTransformManager.loadSlideAlignment(project, imageName) != null) {
                 logger.info("  -> Found alignment using image name: '{}'", imageName);

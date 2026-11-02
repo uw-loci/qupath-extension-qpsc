@@ -10,9 +10,8 @@ import org.slf4j.LoggerFactory;
  * <p>Separate from the stage-position watchdog on purpose, because the two say different
  * things and the operator needs to know which happened. The watchdog says the stage is not
  * where it claims to be; this says the sample is not where the alignment says it is. The
- * second can be true with a perfectly behaved controller -- which is exactly the 2026-10-02
- * case, where the position counter was provably clean across 34 hours while three slides
- * came out offset.
+ * second can be true with a perfectly behaved controller -- as when the position counter
+ * is provably clean across a whole run while slides come out offset.
  *
  * <p>Sticky for the same reason: every slide in a batch was aligned in the same frame, so
  * one slide failing to confirm means the others are suspect too. Cleared only when the

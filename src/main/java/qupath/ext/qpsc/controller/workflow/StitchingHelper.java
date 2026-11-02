@@ -372,8 +372,8 @@ public class StitchingHelper {
      * stitched image(s) get an automatic pixel->stage alignment registered
      * via {@link AffineTransformManager#saveSlideAlignment} so that Live
      * Viewer Move-to-centroid / click-to-center works without a separate
-     * alignment step. Pass nulls for all four bounds to get the legacy
-     * behavior (no auto-registration).
+     * alignment step. Pass nulls for all four bounds to skip
+     * auto-registration.
      */
     public static CompletableFuture<Void> performRegionStitching(
             String regionName,
@@ -556,7 +556,7 @@ public class StitchingHelper {
      *       {@link StitchingRegistration#modeForReuse(java.nio.file.Path)} attached to
      *       {@code stitchParams}. Attaching it is not optional: a missing mode is
      *       indistinguishable from registration being switched off, so omitting it stitches at
-     *       nominal positions and logs nothing (the OWS3 2026-08-05 bug).</li>
+     *       nominal positions and logs nothing.</li>
      * </ol>
      *
      * <p>Callers pre-compute {@link StitchingMetadata} and pass it in along with an
@@ -570,13 +570,11 @@ public class StitchingHelper {
      *
      * <p>Each target is fully independent -- its own per-target tile subdirectory,
      * its own {@code DirectTiffOutputWriter} invocation, its own output file -- so
-     * they can stitch concurrently. The former "OME-TIFF must be sequential" guard
-     * existed only because QuPath's shared {@code OMEPyramidWriter} NPE'd under
-     * concurrency; that writer was replaced by the per-call
-     * {@code DirectTiffOutputWriter}, so the guard no longer applies. The OME-ZARR
-     * path already dispatched targets concurrently through this same
-     * {@code processAngleWithIsolation} call, so this unifies both formats on one
-     * bounded pool rather than the old ZARR-parallel / TIFF-sequential split.
+     * they can stitch concurrently. OME-TIFF needs no sequential guard because
+     * the per-call {@code DirectTiffOutputWriter} has no shared state (QuPath's shared
+     * {@code OMEPyramidWriter} was not safe under concurrency). Both OME-ZARR and OME-TIFF
+     * dispatch targets concurrently through the same {@code processAngleWithIsolation}
+     * call on one bounded pool.
      *
      * <p>Within a single annotation's batch all targets share identical flip
      * metadata, so the {@code volatile} static flip flags set inside
@@ -1159,7 +1157,7 @@ public class StitchingHelper {
         // stitched image carries enough metadata for cross-system alignment
         // and per-detector flip / WB lookup. Detector follows the user's
         // most-recent dropdown choice (the same source the WB and BG
-        // dialogs use post-2026-04-27 fix).
+        // dialogs use).
         String sourceMicroscope = resolveSourceMicroscope();
         String detector = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
         if (detector != null && detector.isEmpty()) detector = null;
@@ -1172,8 +1170,8 @@ public class StitchingHelper {
         // bottom/right extension can be more (ceiling rounding adds extra
         // tiles to cover the far edge). Without FOV, the auto-register
         // code's symmetric-halfFOV assumption put pixel(0,0) at the wrong
-        // stage corner, which manifested 2026-05-15 as a half-FOV Y-axis
-        // error on the OWS3 Move-to-Centroid path.
+        // stage corner, giving a half-FOV Y-axis
+        // error on the Move-to-Centroid path.
         Double fovXUm = null;
         Double fovYUm = null;
         try {
@@ -1328,9 +1326,9 @@ public class StitchingHelper {
         // auto-register falls back to a symmetric-halfFOV assumption that is
         // wrong whenever the tile grid overshoots the annotation, putting the
         // image origin off by the rounding asymmetry -- the half-FOV-Y
-        // Move-to-Centroid error reproduced on PPM 2026-06-01. The
-        // BoundingBox-path builder already resolves this; the sub-image /
-        // annotation path (this method) was missing it and shipped null.
+        // Move-to-Centroid error. The
+        // BoundingBox-path builder resolves this too; this sub-image /
+        // annotation path must not ship null.
         Double fovXUm = null;
         Double fovYUm = null;
         try {
@@ -1785,8 +1783,8 @@ public class StitchingHelper {
 
                         // Outputs the acquisition computed from the channels and wrote to folders of
                         // their own (LC-PolScope retardance/ and orientation/). They are the result
-                        // of such a run, not an extra; until 2026-10-16 the channel path never looked
-                        // for them, so the first LC-PolScope stitch produced only the raw states.
+                        // of such a run, not an extra; without looking for them the stitch would produce
+                        // only the raw states.
                         List<String> derivedImages = new ArrayList<>();
                         processPostProcessingDirectories(
                                 handler,
@@ -1848,8 +1846,8 @@ public class StitchingHelper {
      *
      * <p>The merged file holds every channel, so the per-channel files beside it are duplicates
      * that also look like separate images in the folder. Only the exact paths passed to
-     * {@code ChannelMerger.merge} are touched -- never a directory scan, after the 2026-09-27
-     * cleanup that emptied a sample's SlideImages folder -- and only once the merged output exists
+     * {@code ChannelMerger.merge} are touched -- never a directory scan, which could empty a sample's
+     * SlideImages folder -- and only once the merged output exists
      * and is not empty. Channels the user chose to split out are not in {@code consumed} and are
      * kept. Each file's {@code .stitch-info.txt} goes with it; the merged image has its own record.
      * A file that cannot be deleted is logged and left, never a reason to fail the stitch.
@@ -1997,10 +1995,9 @@ public class StitchingHelper {
             //     to: ceil(width / xStep) (+1 for exact divisions) rows /
             //     columns, with each tile's frame extending one full FOV from
             //     its center. For non-exact fits the bottom/right side gets
-            //     MORE than half a FOV. Verified 2026-05-15 against OWS3
-            //     bounded-acquisition output (the annotation was offset half a
-            //     FOV from the image's geometric center in Y but not X,
-            //     producing a half-FOV Y error in Move-to-Centroid).
+            //     MORE than half a FOV. Bounded-acquisition output confirms it (the
+            //     annotation is offset half a FOV from the image's geometric center
+            //     in Y but not X, producing a half-FOV Y error in Move-to-Centroid).
             //
             // Preferred path: anchor TOP/LEFT at exactly half FOV (which we
             // can do when metadata.fovXUm/fovYUm are known) and derive
@@ -2105,7 +2102,7 @@ public class StitchingHelper {
             // pixel coords. Without this, PPM auto-registered alignments load as if
             // unflipped and SingleTileRefinement targets the XY-mirrored stage point.
             // Stamp pixelFrame="sub": this transform is in the sub-image's own pixel frame,
-            // not the macro frame. Layer 2 of the 2026-05-11 alignment-lookup restructure.
+            // not the macro frame.
             // Workflows operating on macro-frame annotations refuse to load this; only the
             // Live Viewer's sub-image Go-To-Centroid path (which renders this sub-image) opts in.
             AffineTransformManager.saveSlideAlignment(
@@ -2136,9 +2133,9 @@ public class StitchingHelper {
             // renames / cross-scope opens / alignment-directory restructures, and
             // lets Live Viewer Move-to-Centroid rebuild the transform on the fly
             // without depending on the alignment-JSON lookup chain (which has
-            // historically been the weak link -- see the 2026-05-15 regression
-            // where the cross-scope guard / derived-directory restructure caused
-            // loadDerivedAlignment to return null for valid bounded acquisitions).
+            // the weak link: the cross-scope guard and the derived
+            // directory can make loadDerivedAlignment return null for valid bounded
+            // acquisitions).
             try {
                 ProjectImageEntry<BufferedImage> boundsEntry = project.getImageList().stream()
                         .filter(e -> {
@@ -2248,7 +2245,7 @@ public class StitchingHelper {
                         QPProjectFunctions.addImageToProject(f, project, false, false, handler);
                     }
                     // Stamp the acquiring scope so cross-scope sub-image
-                    // acquisition can be refused later (review finding H3).
+                    // acquisition can be refused later.
                     if (imported != null) {
                         ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
                         qupath.ext.qpsc.utilities.StitchInfoSupport.stampEntry(imported, tileFolder);
@@ -2330,7 +2327,7 @@ public class StitchingHelper {
                     QPProjectFunctions.addImageToProject(mergedFile, project, false, false, handler);
                 }
                 // Stamp the acquiring scope so cross-scope sub-image
-                // acquisition can be refused later (review finding H3).
+                // acquisition can be refused later.
                 if (imported != null) {
                     ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
                     qupath.ext.qpsc.utilities.StitchInfoSupport.stampEntry(imported, tileFolder);
@@ -2543,8 +2540,8 @@ public class StitchingHelper {
         // The channel path stitches its per-channel pyramids with skipProjectImport, so that
         // only the merged file becomes an entry, and hands the same parameters on to here.
         // The derived outputs are results in their own right and must be imported: with the
-        // flag inherited, an LC-PolScope run added its five-state merge to the project and
-        // left retardance and orientation on disk only (seen on the demo, 2026-10-19).
+        // flag inherited, an LC-PolScope run would add its five-state merge to the project and
+        // leave retardance and orientation on disk only.
         if (stitchParams != null && stitchParams.containsKey("skipProjectImport")) {
             stitchParams = new java.util.HashMap<>(stitchParams);
             stitchParams.remove("skipProjectImport");

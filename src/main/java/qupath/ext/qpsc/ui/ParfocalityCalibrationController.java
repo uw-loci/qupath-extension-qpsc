@@ -380,7 +380,7 @@ public class ParfocalityCalibrationController {
             // Aggregate offsets from the table; only save rows with a value.
             Map<String, Double> offsets = new LinkedHashMap<>();
             // Merge with existing sidecar values for objectives the user did NOT touch
-            // this session (they may have calibrated other objectives previously).
+            // this session (calibrated in earlier sessions).
             offsets.putAll(mgr.getCalibratedParfocalOffsets());
             for (ProfileRow row : rows) {
                 if (row.getOffsetUm() != null) {

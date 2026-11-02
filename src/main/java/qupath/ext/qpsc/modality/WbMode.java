@@ -12,9 +12,9 @@ import qupath.ext.qpsc.ui.ThemeColors;
  * (sent over the socket protocol and stored in YAML configuration files),
  * and a UI color used to visually distinguish single-angle vs per-angle modes.
  *
- * <p>This enum is the single source of truth for WB mode names, replacing the
- * duplicated switch expressions previously in BackgroundCollectionController,
- * UnifiedAcquisitionController, and ExistingImageAcquisitionController.
+ * <p>This enum is the single source of truth for WB mode names, shared by
+ * BackgroundCollectionController, UnifiedAcquisitionController, and
+ * ExistingImageAcquisitionController.
  *
  * @author Mike Nelson
  * @since 4.1

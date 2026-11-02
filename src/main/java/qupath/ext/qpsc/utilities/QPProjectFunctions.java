@@ -789,7 +789,7 @@ public class QPProjectFunctions {
         ProjectImageEntry<BufferedImage> flippedEntry = project.addImage(flippedServer.getBuilder());
 
         // Single uniform companion name -- the flip axes are recorded in metadata
-        // (light-path baked parity), so the name no longer encodes them.
+        // (light-path baked parity), so the name does not encode them.
         String baseName = originalEntry.getImageName();
         String flippedName = baseName + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
         flippedEntry.setImageName(flippedName);
@@ -1152,11 +1152,10 @@ public class QPProjectFunctions {
      * {@code close()} call by an arbitrary interval. Opening the file in that window fails with
      * "The process cannot access the file because it is being used by another process".
      *
-     * <p>Observed on a 2026-08-05 whole-slide run: the -7.0 angle finished stitching and tried to
-     * import its own 6 GB output 8 ms later, while a second angle was still stitching in parallel,
-     * and the import failed. The other two angles happened to wait ~25 ms and succeeded. Nothing
-     * was wrong with the file -- it imported by hand afterwards -- so this is purely a race against
-     * the OS releasing the handle, and waiting is the correct response.
+     * <p>On a whole-slide run, an angle that finished stitching and tried to import its own 6 GB
+     * output 8 ms later, while a second angle was still stitching in parallel, failed this way,
+     * while angles that waited ~25 ms succeeded. Nothing is wrong with the file, so this is purely
+     * a race against the OS releasing the handle, and waiting is the correct response.
      *
      * <p>Attempts back off geometrically so a genuinely bad file fails in bounded time rather than
      * spinning.

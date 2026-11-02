@@ -75,7 +75,7 @@ public class PPMModalityHandler implements ModalityHandler {
      * perfectly well textured. Registration correlates overlap content, so solving there measures
      * the polarizer setting as much as the tissue and yields low-confidence or rejected edges on
      * material that would match easily at 90 degrees. The size of the effect is measurable rather
-     * than theoretical -- on the 2026-08-05 whole-slide run the identical 2175 tiles wrote 6 GB
+     * than theoretical -- on a whole-slide run the identical 2175 tiles wrote 6 GB
      * losslessly at 7 degrees against 10.5 GB at 90 degrees.
      *
      * <p>{@link #classifyAngleSaturation} already encodes "near 90 is the high-signal angle"; this
@@ -195,7 +195,7 @@ public class PPMModalityHandler implements ModalityHandler {
     }
 
     // ========================================================================
-    // New ModalityHandler methods (Phase 2 - PPM extraction)
+    // ModalityHandler overrides
     // ========================================================================
 
     /**
@@ -331,7 +331,7 @@ public class PPMModalityHandler implements ModalityHandler {
                     selected.add(new AngleExposure(tick, ae.exposureMs()));
                 }
             }
-            // If the selection map matched nothing (e.g. legacy override map), fall back to all.
+            // If the selection map matched nothing (e.g. a stale override map), fall back to all.
             return selected.isEmpty() ? allAngles : selected;
         });
     }

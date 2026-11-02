@@ -358,8 +358,8 @@ public class UIFunctions {
      * Shows an error dialog on the JavaFX thread with proper text wrapping.
      *
      * @param heading shown as the dialog's heading, as given. Callers pass a label such as
-     *     "Stitching Error" or "No Image"; prefixing "Error during " produced headings like
-     *     "Error during Save Error" (2026-10-19).
+     *     "Stitching Error" or "No Image"; no "Error during " prefix is added, which
+     *     would give headings like "Error during Save Error".
      */
     public static void notifyUserOfError(String message, String heading) {
         Platform.runLater(() -> {
@@ -549,7 +549,7 @@ public class UIFunctions {
      * Clicking SIFT runs {@link SiftAutoAlignHelper#autoAlign} against the
      * given tile and moves the stage to the matched position; the user
      * still clicks Confirm to commit. When {@code siftTargetTile} is null,
-     * the dialog renders identically to the legacy form.
+     * the dialog renders as a plain tile-selection dialog.
      *
      * @param gui              QuPath GUI (for image access). May be null
      *                         if {@code siftTargetTile} is null.
@@ -637,8 +637,8 @@ public class UIFunctions {
                 layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
             }
 
-            // Sized to its content: the old fixed 460x320 cut the focus warning, the
-            // instructions and a SIFT error to one ellipsized line each (2026-10-19).
+            // Sized to its content: a fixed size would cut the focus warning, the
+            // instructions and a SIFT error to one ellipsized line each.
             layout.setPrefWidth(siftTargetTile != null ? 480 : 380);
             Scene scene = new Scene(layout);
             stage.setScene(scene);
@@ -907,8 +907,8 @@ public class UIFunctions {
             layout.setStyle("-fx-font-size: 16px;");
 
             // The messages carry their own line breaks. Wrapping each line again at a fixed
-            // 520 px left one or two words alone on a line at 16 px ("the" on its own,
-            // 2026-10-19), so the width follows the longest line, within limits.
+            // 520 px would leave one or two words alone on a line at 16 px, so the width
+            // follows the longest line, within limits.
             double textWidth = tileDialogTextWidth(message, TILE_SELECTION_HOW);
             Label instructionLabel = new Label(message);
             instructionLabel.setWrapText(true);

@@ -427,9 +427,9 @@ public class StitchingRecoveryWorkflow {
         // line 131 builds <projectsFolder>/<sampleLabel>/SlideImages).
         // project.getPath() is .../<sampleName>/<sampleName>.qpproj, so
         // project.getPath().getParent() resolves to the sample folder.
-        // Previously this used tileFolder.getParent()/SlideImages, which placed
-        // output under the imaging-mode folder (or the annotation folder for
-        // legacy _temp_* selections) instead of alongside the project.
+        // Not tileFolder.getParent()/SlideImages: that would place output under the
+        // imaging-mode folder (or the annotation folder for _temp_* selections)
+        // instead of alongside the project.
         final String outputFolder = resolveSlideImagesFolder(project, tileFolderFile);
 
         File outputDir = new File(outputFolder);

@@ -8,10 +8,8 @@ import java.io.IOException;
  * <p>This is an answer, not a fault: the socket is healthy and the server is doing exactly what
  * it should. It gets its own type because the generic I/O catch in the socket client treats every
  * {@link IOException} as a broken connection -- it counts an error, and after enough of them drops
- * the socket and reconnects. On 2026-10-12 a {@code BUSY:ACQUIRING} reply did precisely that: a
- * working socket was torn down, the reconnect was then blocked for fifteen seconds by the very
- * acquisition the reply had named, and the batch ended with the words "cancelled by user" over a
- * run nobody had touched.
+ * the socket and reconnects. A {@code BUSY:ACQUIRING} reply would then tear down a
+ * working socket, and the reconnect would be blocked by the very acquisition the reply named.
  *
  * @since 0.9.3
  */

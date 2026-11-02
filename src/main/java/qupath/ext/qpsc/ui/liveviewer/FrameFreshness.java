@@ -8,8 +8,7 @@ package qupath.ext.qpsc.ui.liveviewer;
  * viewer can serve back the same physical frame with a fresh receive
  * timestamp, so a timestamp-only freshness check passes immediately and the
  * focus probe ends up reading metrics from a pre-move pixel buffer. The
- * symptom is identical metric values at base/plus/minus probes (PPM 40x,
- * 2026-05-04: metric=37 at all three).
+ * symptom is identical metric values at base/plus/minus probes.
  *
  * <p>{@link Snapshot} pairs the receive timestamp with a cheap content hash
  * sampled from the raw pixel buffer, and {@link #isFresh(FrameData, Snapshot)}

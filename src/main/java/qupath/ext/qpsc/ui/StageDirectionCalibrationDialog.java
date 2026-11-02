@@ -176,14 +176,14 @@ public final class StageDirectionCalibrationDialog {
         stage.setScene(new Scene(root));
         // Not resizable on purpose: every phase sizes itself (below), and the Dialog Manager
         // restores a remembered size for RESIZABLE windows only. One title spans phases of
-        // different heights, so a remembered size from one phase clipped the next (2026-10-19).
+        // different heights, so a remembered size from one phase would clip the next.
         // Position is still remembered.
         stage.setResizable(false);
 
         // Fill the first phase BEFORE showing, and resize whenever a phase swaps its content
-        // or text. The window used to be shown empty, before its content existed, so it was sized for
-        // nothing (500x126): the instructions sat on one truncated line and the buttons were
-        // below the window, with no way to reach them (reported 2026-10-19).
+        // or text. Showing the window empty would size it for
+        // nothing: the instructions would sit on one truncated line and the buttons fall below
+        // the window.
         showIntroPhase(future);
         phaseContent.getChildren().addListener((javafx.collections.ListChangeListener<javafx.scene.Node>)
                 c -> Platform.runLater(stage::sizeToScene));
@@ -528,9 +528,8 @@ public final class StageDirectionCalibrationDialog {
      * Truthful answers solve to the same orientation every run, so a change means the
      * microscope changed or an answer did not describe the tissue. A result turned 180
      * degrees from the current one is the typical sign of answers given as the way the VIEW
-     * moved: on OWS3 on 2026-10-27 two runs two minutes apart applied ROT_180 and then
-     * NORMAL, and every direction (arrows, double-click, the alignment's second tile)
-     * reversed with it.
+     * moved: such an answer applies ROT_180 where NORMAL is right, and every direction
+     * (arrows, double-click, the alignment's second tile) reverses with it.
      *
      * <p>Visible for unit testing.
      */
@@ -615,8 +614,8 @@ public final class StageDirectionCalibrationDialog {
      * Which way the tissue moves across the screen for an mm-command delta: opposite to the
      * view's pan. The question asks about the tissue, which is what a person watching reports;
      * comparing the answer with the PAN direction instead solved every truthful answer 180
-     * degrees off, so double-click-to-center then went the wrong way on both axes (LC-PolScope,
-     * 2026-10-19). On a standard stage +X pans the view right and the tissue slides left.
+     * degrees off, so double-click-to-center then went the wrong way on both axes.
+     * On a standard stage +X pans the view right and the tissue slides left.
      */
     private static double[] predictedContentMotion(StagePolarity sp, CameraOrientation co, double mmDx, double mmDy) {
         double[] pan = predictedImagePan(sp, co, mmDx, mmDy);

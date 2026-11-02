@@ -8,7 +8,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>A SIFT match says where the camera is relative to the tile. Which way the stage must travel to
  * close that gap depends on the rig: {@code -offset} lands on the PPM and the LC-PolScope, but on
- * OWS3 on 2026-10-27 X needed the opposite sign (SIFT moved +174 um where -163 um was right, and +312
+ * OWS3 X needs the opposite sign (SIFT moved +174 um where -163 um was right, and +312
  * where -302 was right), which doubles the error on that axis at 100% match confidence. So the first
  * move uses {@code -offset} and a second match measures what it did: the change in offset against
  * the distance moved gives each axis's real response, and any remaining correction uses that.

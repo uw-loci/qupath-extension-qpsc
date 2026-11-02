@@ -39,7 +39,7 @@ public final class AngleResolutionService {
      *                       dialog. Threaded to the modality handler so that
      *                       background-aware angle dialogs (PPM) validate
      *                       against the correct per-mode subfolder instead of
-     *                       the legacy flat path.
+     *                       the flat path.
      * @return future containing the resolved angle-exposure list
      */
     public static CompletableFuture<List<AngleExposure>> resolve(

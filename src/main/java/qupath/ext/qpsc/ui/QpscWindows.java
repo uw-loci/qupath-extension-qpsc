@@ -17,7 +17,7 @@ import org.slf4j.LoggerFactory;
  *
  * <p>Exists for one operation: switching microscopes while QuPath stays open. A camera-control
  * panel, an autofocus editor or a progress window built against one scope describes hardware
- * that is no longer connected the moment the config changes, and the only honest thing to do
+ * that is not connected once the config changes, and the only honest thing to do
  * with it is close it. JavaFX offers no way to tell our windows from QuPath's own (script editor,
  * log viewer, measurement tables) once they are on screen, so each one is registered where it is
  * created -- a single call after {@code new Stage()}, or {@link #track(Dialog)} for a

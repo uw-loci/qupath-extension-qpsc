@@ -21,10 +21,8 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  *
  * <p>Unlike fluorescence (per-channel exposures) or PPM (per-angle exposures),
  * brightfield uses a single exposure resolved at acquisition time by
- * {@link BrightfieldModalityHandler}. Previously the Bounded Acquisition dialog
- * showed nothing for brightfield, so the operator had no indication of which
- * exposure would be used and no way to correct an over-exposed ("blinding")
- * acquisition without leaving the dialog.
+ * {@link BrightfieldModalityHandler}. It shows which exposure will be used and lets the
+ * operator correct an over-exposed ("blinding") acquisition without leaving the dialog.
  *
  * <p>This panel:
  * <ul>

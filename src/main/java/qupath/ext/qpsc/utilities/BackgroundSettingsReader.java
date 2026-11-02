@@ -257,8 +257,8 @@ public class BackgroundSettingsReader {
      * <p>There is no fallback between these paths: a stale top-level file left
      * over from a pre-per-mode-split setup will not be read for a color mode
      * lookup, and a per-mode subfolder file will not be read for an "off" lookup.
-     * This prevents the 2026-04-15 class of bug where a legacy flat file
-     * silently shadowed fresh per-mode backgrounds.</p>
+     * This prevents a legacy flat file from silently shadowing fresh per-mode
+     * backgrounds.</p>
      *
      * @param baseBackgroundFolder The base background correction folder from config
      * @param modality The modality name (e.g., "ppm")
@@ -456,7 +456,7 @@ public class BackgroundSettingsReader {
      * <p>Stale top-level files whose recorded {@code wbMode} is neither
      * {@code off} nor a valid subdirectory name are ignored with a warning --
      * they are most likely pre-per-mode-split legacy artifacts that would
-     * otherwise pollute validity checks (2026-04-15 incident).
+     * otherwise pollute validity checks.
      *
      * @param baseBackgroundFolder The base background correction folder from config
      * @param modality The modality name (e.g., "ppm")

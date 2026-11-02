@@ -465,9 +465,8 @@ public class BackgroundCollectionController {
         modalityPane.add(objectiveComboBox, 1, 1);
 
         // Detector selection -- background storage path + WB lookup are detector-specific.
-        // Without this dropdown the dialog used to silently pick whichever detector
-        // iterator() returned first, which on the PPM scope was masking JAI vs
-        // Teledyne mistakes (2026-04-27 incident).
+        // Without this dropdown the dialog would silently pick whichever detector
+        // iterator() returned first, masking JAI vs Teledyne mistakes on the PPM scope.
         Label detectorLabel = new Label("Detector:");
         detectorLabel.setTooltip(new Tooltip("Select the detector for background collection.\n"
                 + "Backgrounds are stored under <output>/<detector>/<modality>/<objective>/<wbMode>/, "
@@ -967,7 +966,7 @@ public class BackgroundCollectionController {
 
             if (baseBackgroundFolder != null) {
                 // Detector comes from the user's dropdown selection so the
-                // dialog targets the correct detector profile (Issue 2 / 2026-04-27).
+                // dialog targets the correct detector profile.
                 String detector = detectorComboBox != null ? detectorComboBox.getValue() : null;
                 if (detector != null && !detector.isEmpty()) {
                     // Look up backgrounds for the currently selected WB mode
@@ -1421,8 +1420,7 @@ public class BackgroundCollectionController {
                 // Prefer the objective actually mounted right now (matched against the live
                 // MicroManager pixel size) over the wizard's last-selected pref. The pref
                 // goes stale whenever the user swaps objectives without going through the
-                // Acquisition Wizard, which previously caused calibrations to be saved into
-                // the wrong YAML slot (2026-05-04 incident).
+                // Acquisition Wizard, and a stale pref saves calibrations into the wrong YAML slot.
                 Optional<MicroscopeConfigManager.HardwareSelection> liveMatch = detectMountedHardware(configManager);
                 String defaultObjective = liveMatch
                         .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
@@ -1754,8 +1752,7 @@ public class BackgroundCollectionController {
             // Drift guard: if the global objective state has moved since this dialog
             // opened (e.g. Live Viewer "Refresh from MM", another dialog's submit),
             // surface it and keep the global in sync with what we're about to send.
-            // Root cause of the 2026-04-15 WB/Background mislabel was exactly this
-            // class of silent drift between dialog caches and global preferences.
+            // Silent drift between dialog caches and global preferences mislabels WB/Background.
             String globalObjective =
                     qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
             if (globalObjective != null && !globalObjective.isEmpty() && !globalObjective.equals(objective)) {
@@ -1895,7 +1892,7 @@ public class BackgroundCollectionController {
                         }
                     }
                     default -> {
-                        // Unknown mode -- preserve legacy behavior.
+                        // Unknown mode -- leave the result unchanged.
                     }
                 }
             }

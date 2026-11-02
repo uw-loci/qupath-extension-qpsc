@@ -10,8 +10,8 @@ import org.slf4j.LoggerFactory;
  * transform and its acquisition-active flag.
  *
  * <p>Two Existing Image runs overlap routinely, because run N's stitching outlives its
- * acquisition and run N+1 starts while it finishes. On 2026-10-27 run N's {@code cleanup()}
- * nulled the current transform that run N+1 had just set. Now each run activates here when it
+ * acquisition and run N+1 starts while it finishes. Run N's {@code cleanup()} must not
+ * null the current transform that run N+1 has just set, so each run activates here when it
  * starts; a new run takes over the active slot (which is fine while the old one is only
  * stitching), and {@code cleanup()} clears the globals only when the run still holds the slot.
  *

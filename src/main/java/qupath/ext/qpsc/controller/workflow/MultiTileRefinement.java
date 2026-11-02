@@ -94,7 +94,7 @@ public class MultiTileRefinement {
      * go except rotation and scale, so one mis-measured point does not look like error -- it
      * looks like a rotated, rescaled slide.
      *
-     * <p>Measured on the 4-slide run of 2026-09-17, where three slides fitted at 0.111-0.255 deg
+     * <p>Measured on a 4-slide run, where three slides fitted at 0.111-0.255 deg
      * with scale inside 0.13%, and the fourth returned 1.418 deg at scale 0.99367 from two points
      * that disagreed by ~198 um over a 7.7 mm baseline. That fit reported RMS 0.00 um and nothing
      * questioned it. These thresholds sit between the two populations: past them, a third point
@@ -148,9 +148,8 @@ public class MultiTileRefinement {
      * <p>Taken when the point is CAPTURED, not when its autofocus returns. The capture is
      * where the operator (or SIFT) has looked at the field, and anything that happened in
      * between -- a failed scan followed by a manual focus, the post-SIFT refocus -- is in
-     * the Z by then. Recording after the scan put +169.6 into one slide's surface on
-     * 2026-10-26, the Z of a scan that had found nothing; the point was captured ten
-     * minutes later at -121.
+     * the Z by then. Recording after the scan can put the Z of a scan that found nothing
+     * into a slide's surface (+169.6 where the point was captured ten minutes later at -121).
      *
      * <p>Static for the same reason {@code SlotJumpAutofocus.focusZThisSlide} is:
      * refinement is one interactive flow at a time, and threading a collector through
@@ -370,7 +369,7 @@ public class MultiTileRefinement {
         solveButton.setDisable(true);
 
         // Skip = acquire with the prior alignment; Cancel (and the window's X) = no
-        // acquisition. They used to be the same thing, and closing the window started a run.
+        // acquisition: closing the window must not start a run.
         Button skipButton = new Button("Skip refinement");
         skipButton.setTooltip(new Tooltip("Acquire with the prior alignment, without refining it."));
         Button cancelButton = new Button("Cancel workflow");
@@ -559,8 +558,8 @@ public class MultiTileRefinement {
         };
 
         // Enabled only when the operator has actually selected a usable tile: one tile, and not
-        // one already captured. Both used to be discovered AFTER clicking -- the picker opened
-        // with Confirm dead, or the click was accepted and then rejected with "tile already
+        // one already captured. Discovering either AFTER clicking would leave the picker open
+        // with Confirm dead, or accept the click and then reject it with "tile already
         // used" once the stage had already been asked to move.
         java.util.function.Supplier<PathObject> selectedTile = () -> {
             try {
@@ -634,7 +633,7 @@ public class MultiTileRefinement {
                         // in capturePoint rejects re-picking an already-used tile).
                         addButton.setText(points.isEmpty() ? "Select tile" : "Select a new tile");
                         // Re-gate rather than blanket-enable: the tile just captured is usually
-                        // still selected, and it is no longer a legal pick.
+                        // still selected, and it is not a legal pick.
                         selectionWatch.play();
                         refreshAddButton.run();
                         skipButton.setDisable(false);
@@ -651,8 +650,8 @@ public class MultiTileRefinement {
             AffineTransform refined = new AffineTransform(fit.correction());
             refined.concatenate(initialTransform);
             // The RMS of an exactly-determined fit is zero by construction. Logging "RMS=0.00"
-            // put a false quality signal in the run record, which is how a 1.418 deg correction
-            // from two disagreeing points went unquestioned on 2026-09-17.
+            // put a false quality signal in the run record, which lets a 1.418 deg correction
+            // from two disagreeing points go unquestioned.
             logger.info(
                     "Multi-tile refinement accepted: {} points, rotation={} deg, scale={}, RMS={}",
                     fit.pointCount(),
@@ -777,9 +776,9 @@ public class MultiTileRefinement {
             }
             double[] tileCoords = {tile.getROI().getCentroidX(), tile.getROI().getCentroidY()};
             double[] predictedStage = TransformationFunctions.transformQuPathFullResToStage(tileCoords, estimate);
-            // DIAGNOSTIC (2026-07-12 diagonal-transform test): the actual QuPath->stage
-            // mapping for a real tile, using the running estimate. With the diagonal fix,
-            // QuPath-X should drive stage-X (not stage-Y). The first point's move (raw
+            // DIAGNOSTIC: the actual QuPath->stage
+            // mapping for a real tile, using the running estimate. QuPath-X
+            // should drive stage-X (not stage-Y). The first point's move (raw
             // initial transform) should land near the picked tile; 90-deg-off means the
             // transform is still axis-swapped -- stop and re-check.
             logger.info(

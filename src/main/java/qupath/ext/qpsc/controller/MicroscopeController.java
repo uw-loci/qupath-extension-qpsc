@@ -326,7 +326,7 @@ public class MicroscopeController implements StagePositionProvider {
      * that acquisition's thread finishes -- including the retract and return move after the last
      * tile. A client that sends the next ACQUIRE, or moves the stage for an alignment check,
      * before then is either refused or is driving the stage under a thread still entitled to it.
-     * Both happened on 2026-10-12. This asks first.
+     * This asks first.
      *
      * <p>Blocking socket calls -- never from the JavaFX thread.
      *
@@ -1289,7 +1289,7 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
-     * Restores live viewing modes to a previously saved state.
+     * Restores live viewing modes to a saved state.
      *
      * @param state The state returned by {@link #stopAllLiveViewing()}
      */

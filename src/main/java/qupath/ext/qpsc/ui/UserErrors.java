@@ -16,9 +16,8 @@ import qupath.fx.dialogs.Dialogs;
 /**
  * Every error QPSC shows the user, written to the log first.
  *
- * <p>Rule (2026-10-12): an error shown in a dialog must also be logged at ERROR, so a bug
- * report or a log review finds what the operator saw. A scan that day found 86 of 175 error
- * dialogs with no log line near them. Logging at each call site drifts back; routing every
+ * <p>Rule: an error shown in a dialog must also be logged at ERROR, so a bug
+ * report or a log review finds what the operator saw. Logging at each call site drifts back; routing every
  * error dialog through here makes the unlogged form the odd one out.
  *
  * <p>Each method mirrors a {@link Dialogs} error method of the same shape and logs with the

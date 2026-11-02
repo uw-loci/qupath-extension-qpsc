@@ -222,16 +222,13 @@ public class TileProcessingUtilities {
         //
         // UNCONDITIONAL, and it has to stay that way. The batch branch below uses it to pick
         // out the files this run produced, but cleanupCorruptStitchingOutput uses it as the
-        // KEEP list on the failure path -- and that failure path runs in every mode. When this
-        // scan was gated on batch mode, a per-angle stitch (matchingString "90.0", "7.0", ...)
-        // reached the catch block with an empty set, every file in the folder therefore counted
-        // as "not pre-existing", and the cleanup deleted the lot.
+        // KEEP list on the failure path -- and that failure path runs in every mode. If this
+        // scan were gated on batch mode, a per-angle stitch (matchingString "90.0", "7.0", ...)
+        // would reach the catch block with an empty set, every file in the folder would count
+        // as "not pre-existing", and the cleanup would delete the lot.
         //
         // outputDir is <projects>/<sample>/SlideImages, shared by every region and every run of
-        // that sample, so the blast radius was the sample's entire stitched history. That is what
-        // happened on 2026-09-27: a ZStage fault failed one acquisition, its stitch threw, and
-        // the cleanup took out PDAC_2 through PDAC_5 across run indices 007-015. The only
-        // survivors were the files QuPath happened to hold open, which Windows refused to delete.
+        // that sample, so the blast radius is the sample's entire stitched history.
         Set<String> existingFiles = new HashSet<>();
         if (outputDir.exists()) {
             File[] existing =
@@ -243,7 +240,7 @@ public class TileProcessingUtilities {
             }
         }
         // Second, independent bound on the cleanup: anything it deletes must ALSO have been
-        // written after this point. Either check alone would have prevented the 2026-09-27 loss.
+        // written after this point.
         final long stitchStartMillis = System.currentTimeMillis();
         logger.info(
                 "Found {} existing stitched file(s) in {} before stitching; only files created after now "
@@ -451,7 +448,7 @@ public class TileProcessingUtilities {
                             }
                             // Stamp the acquiring scope so the Existing Image
                             // workflow can refuse cross-scope sub-image
-                            // acquisition (review finding H3).
+                            // acquisition.
                             if (imported != null) {
                                 ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
                                 StitchInfoSupport.stampEntry(imported, new File(tileFolder));
@@ -690,8 +687,7 @@ public class TileProcessingUtilities {
                                 new File(lastProcessedPath), project, false, false, modalityHandler);
                     }
                     // Stamp the acquiring scope so the Existing Image
-                    // workflow can refuse cross-scope sub-image acquisition
-                    // (review finding H3).
+                    // workflow can refuse cross-scope sub-image acquisition.
                     if (imported != null) {
                         ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveActiveMicroscopeName());
                         StitchInfoSupport.stampEntry(imported, new File(tileFolder));
@@ -715,8 +711,8 @@ public class TileProcessingUtilities {
                     // Refresh the project browser only. A stitch import never opens the new
                     // image, saves the viewer's image data or re-sets the project: stitching runs
                     // in the background and the viewer may belong to the next workflow by now
-                    // (an open refinement dialog was switched to a freshly stitched image on
-                    // 2026-10-27). The entry is already persisted (addImageToProject* syncs).
+                    // (an open refinement dialog would be switched to a freshly stitched image).
+                    // The entry is already persisted (addImageToProject* syncs).
                     // Suppressed in the pipelined batch acquire pass, where the driver refreshes
                     // the view when the batch settles.
                     if (!pipelinedBatchAcquire) {
@@ -780,7 +776,7 @@ public class TileProcessingUtilities {
      * {@code null} when none is set or the config reports "Unknown". Mirrors the
      * private resolver in {@code StitchingHelper}; used at sub-image stitch-import
      * time to stamp the entry's {@code acquired_on_microscope} so the Existing
-     * Image workflow can refuse cross-scope sub-image acquisition (finding H3).
+     * Image workflow can refuse cross-scope sub-image acquisition.
      */
     /**
      * Key in {@code stitchParams} under which a workflow passes a thread-safe
@@ -837,18 +833,16 @@ public class TileProcessingUtilities {
      * taken immediately before this stitch started) AND it was written at or after
      * {@code stitchStartMillis}.
      *
-     * <p>The redundancy is deliberate. This method previously trusted the snapshot alone, the
-     * snapshot was only populated in batch mode, and on 2026-09-27 a per-angle stitch failure
-     * deleted a sample's entire stitched history. A cleanup routine that can empty a directory
-     * when its keep-list arrives empty is one refactor away from doing it again, so each file
-     * now has to clear two independent tests to be considered this run's garbage.
+     * <p>The redundancy is deliberate. Trusting the snapshot alone is not enough: a cleanup
+     * routine that can empty a directory when its keep-list arrives empty is one refactor away
+     * from deleting a sample's entire stitched history, so each file has to clear two
+     * independent tests to be considered this run's garbage.
      *
      * @param outputDir         the shared stitched-output folder
      * @param existingFiles     names present before this stitch began
      * @param stitchStartMillis wall-clock time this stitch began
      */
-    // Package-private rather than private so the regression test can drive it directly;
-    // the 2026-09-27 data loss is worth a test that exercises the real method.
+    // Package-private rather than private so the test can drive it directly.
     static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles, long stitchStartMillis) {
         File[] candidates = outputDir.listFiles((dir, name) ->
                 (name.endsWith(".ome.tif") || name.endsWith(".ome.zarr")) && !existingFiles.contains(name));
@@ -902,11 +896,9 @@ public class TileProcessingUtilities {
      * time) and falls back to {@code sampleLabel} (the project's folder name)
      * when no metadata is available.
      *
-     * <p>This is the single source of truth for that decision. Previously the
-     * same logic lived in three slightly different inline expressions in
-     * {@link #stitchImagesAndUpdateProject}; the duplication was a real
-     * drift hazard (the conditions diverged in casing and null-handling
-     * across the three call sites). Always go through this helper.
+     * <p>This is the single source of truth for that decision; the call sites in
+     * {@link #stitchImagesAndUpdateProject} must all go through this helper so the
+     * casing and null-handling conditions cannot diverge.
      *
      * @param metadata    optional metadata bundle pulled from {@code stitchParams.get("metadata")}; may be {@code null}
      * @param sampleLabel project folder name; the final fallback when metadata is absent or sampleName is blank
@@ -1138,7 +1130,7 @@ public class TileProcessingUtilities {
             }
 
             // Count files to zip. try-with-resources: Files.walk holds an open directory stream
-            // until the stream is closed, and this used to leak one per call.
+            // until the stream is closed.
             long fileCount;
             try (java.util.stream.Stream<Path> walk = Files.walk(dir)) {
                 fileCount = walk.filter(Files::isRegularFile).count();

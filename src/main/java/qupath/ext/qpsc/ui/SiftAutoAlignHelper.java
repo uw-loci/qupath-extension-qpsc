@@ -90,9 +90,6 @@ public final class SiftAutoAlignHelper {
     /**
      * The margin for a "Search wider" retry after {@code currentUm} found nothing:
      * {@link #MAX_SEARCH_MARGIN_UM}, or {@code currentUm} when it is already that wide.
-     *
-     * <p>2026-10-19: a slide's alignment was 2.5 mm out, the default 1 mm search failed five
-     * times with "insufficient features", and each refinement went on with the wrong alignment.
      */
     public static double widerSearchMarginUm(double currentUm) {
         return currentUm >= MAX_SEARCH_MARGIN_UM ? currentUm : MAX_SEARCH_MARGIN_UM;
@@ -111,7 +108,7 @@ public final class SiftAutoAlignHelper {
      * <p>For checking an alignment rather than applying one. The caller gets the same
      * numbers {@link #autoAlign} would act on and decides what they mean -- which is the
      * point: a tile that matched during setup and cannot be matched now, or matches at a
-     * large offset, says the coordinates no longer describe the sample.
+     * large offset, says the coordinates do not describe the sample.
      *
      * <p>This is the only check that can see a stage that did not travel as far as it was
      * told. An open-loop controller reports the count it was given, so the reported
@@ -159,9 +156,9 @@ public final class SiftAutoAlignHelper {
             // ratio 0 -- collapsing it to 1x1 px, which yields zero SIFT
             // keypoints and a misleading "insufficient features" failure. Fail
             // fast with an actionable message instead.
-            // Two causes, and the old message named only the first. A preset can exist and still
-            // not apply: Micro-Manager returns 0 when no pixel-size preset MATCHES the current
-            // hardware state (2026-10-19, LC-PolScope: "20x 0.4 ORYX" = 0.1725 defined, 0 read).
+            // Two causes. A preset can exist and still not apply: Micro-Manager returns 0 when no
+            // pixel-size preset MATCHES the current hardware state (e.g. a preset is defined but
+            // its defining properties differ from what is set now).
             throw new IllegalStateException("The microscope server reported a pixel size of 0 um/px, so SIFT cannot "
                     + "scale the camera image against the slide. Either no Micro-Manager pixel-size preset "
                     + "matches the current hardware state (a preset can exist and still not apply: check that "
@@ -238,11 +235,9 @@ public final class SiftAutoAlignHelper {
         // and the residual is ZERO. This holds even when the preset cannot be
         // resolved (e.g. the sibling has no SOURCE_MICROSCOPE metadata): the
         // sibling's own baked-in flip is authoritative, so we must NOT try to
-        // re-derive a "required" flip and XOR it back in. Doing so re-introduced the
-        // mirror on exactly that no-source case (OWS3 2026-08-05:
-        // 'MetroHealth_393.svs (flipped X)', no source -> preset unresolved -> net
-        // (true,false) -> 37k keypoints, 5 inliers -> FAILED, because SIFT
-        // descriptors are not mirror-invariant). Only the unflipped BASE needs the
+        // re-derive a "required" flip and XOR it back in. Doing so would re-introduce the
+        // mirror on that no-source case (preset unresolved -> net (true,false) -> SIFT fails,
+        // because SIFT descriptors are not mirror-invariant). Only the unflipped BASE needs the
         // preset's base->camera flip.
         boolean[] applied = ImageMetadataManager.bakedParity(entry);
         boolean appliedX = applied[0];
@@ -488,7 +483,7 @@ public final class SiftAutoAlignHelper {
      * transform.</b>
      *
      * <p>This is the first move only. {@link SiftMoveLoop} checks it against the sample, because
-     * on OWS3 on 2026-10-27 X went the wrong way, at the same magnitude, with Y right. Neither this
+     * on some rigs (OWS3) X goes the wrong way, at the same magnitude, with Y right. Neither this
      * negation nor the alignment transform fitted both axes, so the loop measures the response
      * instead of assuming one.
      *
@@ -498,7 +493,7 @@ public final class SiftAutoAlignHelper {
      * is. So the stage must travel the OPPOSITE way: {@code target - current =
      * -offset}. Confirmed on PPM (predicted P; SIFT landing {@code P + offset}; true
      * tile {@code P - offset}; "Go to centroid" = P sat at their midpoint) and on
-     * OWS3 (ground truth 2026-08-09).
+     * OWS3 (ground truth).
      *
      * <p><b>No light-path transform.</b> SIFT computes the offset by matching the
      * WSI region against the <em>live camera image</em>; that match only succeeds
@@ -508,10 +503,10 @@ public final class SiftAutoAlignHelper {
      * frame -- {@code -offset} is correct on every rig. This is measured, not
      * assumed: {@code -offset} lands correctly on both PPM (composite identity) and
      * OWS3 (composite INVERT_XY), and the only operation consistent with both is the
-     * plain negation. An earlier version mapped the offset through the per-slide
-     * alignment transform; that transform's flip lives in the sibling pixels on PPM
+     * plain negation. Mapping the offset through the per-slide
+     * alignment transform is wrong: that transform's flip lives in the sibling pixels on PPM
      * (linear part identity, harmless) but in the transform on OWS3 (XY-flip), which
-     * turned {@code -offset} into {@code +offset} and mirrored the move. (A future
+     * would turn {@code -offset} into {@code +offset} and mirror the move. (A future
      * scope with a genuine camera <em>rotation</em> -- not just a flip -- is the one
      * case that could need more; catch it by matching there.)
      *

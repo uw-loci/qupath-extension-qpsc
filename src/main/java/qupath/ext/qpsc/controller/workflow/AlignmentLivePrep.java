@@ -27,8 +27,8 @@ import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
  *       -- it depended entirely on the operator having set it by hand. On PPM, aligning at a
  *       near-extinction angle (dark by design) leaves SIFT nothing to match, and it reports
  *       low confidence with no indication that the angle was the cause. This removes the
- *       dependence on remembering; it is NOT a fix for a measured defect. Log analysis of the
- *       2026-08-14 runs found setup-pass focus curves at 38-59% amplitude with R^2 ~ 0.99,
+ *       dependence on remembering; it is NOT a fix for a measured defect. Log analysis of
+ *       multi-slide runs found setup-pass focus curves at 38-59% amplitude with R^2 ~ 0.99,
  *       i.e. the operator HAD set the angle correctly. Do not cite this class as evidence
  *       that setup focus was systematically wrong -- that hypothesis was tested and refuted
  *       (see claude-reports/2026-08-24_multislide-log-analysis.md).</li>

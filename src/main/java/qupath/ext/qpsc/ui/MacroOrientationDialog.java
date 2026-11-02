@@ -90,7 +90,7 @@ public final class MacroOrientationDialog {
                 Button okButton = new Button("OK");
 
                 // Switching images loads a whole scan, which can take several seconds with no
-                // other sign of life (2026-10-19): say so, and lock the controls so a second
+                // other sign of life: say so, and lock the controls so a second
                 // click cannot start another switch while the first is still loading.
                 ProgressIndicator spinner = new ProgressIndicator();
                 spinner.setPrefSize(18, 18);
@@ -169,10 +169,9 @@ public final class MacroOrientationDialog {
                 stage.setResizable(false);
                 stage.show();
                 // Show the image the boxes describe from the start. The boxes are flips relative
-                // to the ORIGINAL scan, seeded from the saved preset, and the image only switched
-                // on a toggle -- so with a (Camera View) entry already open and the boxes
-                // unticked, the view matched the Live View, OK recorded "no flip", and the
-                // workflow then switched to the unflipped original (2026-10-19).
+                // to the ORIGINAL scan, seeded from the saved preset; the image must match them from
+                // the start, or with a (Camera View) entry already open and the boxes unticked OK
+                // would record "no flip" and the workflow would switch to the unflipped original.
                 fireToggle.run();
             } catch (Exception e) {
                 logger.error("Macro orientation dialog failed", e);

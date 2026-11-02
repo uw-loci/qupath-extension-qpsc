@@ -123,7 +123,7 @@ public class ProjectHelper {
      * @param gui QuPath GUI instance
      * @param sample Sample setup information
      * @param preservation the workflow's per-instance annotation-preservation service
-     *     (review finding M12; the static singleton was retired in Phase 10). When the
+     *     When the
      *     service has captured annotations from a standalone image, this method restores
      *     them into the freshly-created project entry.
      * @return CompletableFuture containing project information
@@ -266,7 +266,7 @@ public class ProjectHelper {
                     handleExistingProjectImageImport(gui, flippedX, flippedY);
 
                     // handleExistingProjectImageImport may kick off an async flip-reopen with no
-                    // awaited install signal; keep the legacy 500ms settle for this path.
+                    // awaited install signal; keep a 500ms settle for this path.
                     // TODO(existing-project-reopen): thread that reopen through openEntryAndAwaitInstall
                     // like the new-project path, then drop this settle.
                     finalizeAndComplete(gui, projectDetails, actualSampleName, future, 500);

@@ -44,7 +44,7 @@ public class TileHelper {
      * @param sample Sample setup information
      * @param tempTileDirectory Directory for tile configuration files
      * @param modeWithIndex Imaging mode identifier
-     * @param macroPixelSize Macro image pixel size (no longer used)
+     * @param macroPixelSize Macro image pixel size (unused)
      */
     public static void createTilesForAnnotations(
             List<PathObject> annotations,
@@ -79,7 +79,7 @@ public class TileHelper {
      * @param sample Sample setup information
      * @param tempTileDirectory Directory for tile configuration files
      * @param modeWithIndex Imaging mode identifier
-     * @param macroPixelSize Macro image pixel size (no longer used)
+     * @param macroPixelSize Macro image pixel size (unused)
      * @param stageInvertedX Whether the stage X axis is inverted
      * @param stageInvertedY Whether the stage Y axis is inverted
      */

@@ -243,7 +243,7 @@ public class MinorFunctions {
     }
 
     /**
-     * Reads the previously written _StageCoordinates.txt file for an image and parses out
+     * Reads the written _StageCoordinates.txt file for an image and parses out
      * the minimum and maximum stage coordinate extremes.
      * <p>
      * The file is expected to live alongside the image (same base name with "_StageCoordinates.txt")

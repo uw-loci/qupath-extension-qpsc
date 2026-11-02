@@ -16,7 +16,7 @@ import org.yaml.snakeyaml.Yaml;
  * {@code config_<name>.yml} on disk.
  *
  * <p>Reads the inverse of {@link ConfigFileWriter#writeMainConfig} so a
- * re-run of the Setup Wizard on a previously-configured rig does not
+ * re-run of the Setup Wizard on an already-configured rig does not
  * force the user to re-input everything (stage limits, objectives,
  * detectors, modalities, streaming-AF probe results, ...). When the
  * config file does not exist, this no-ops and {@code WizardData} stays

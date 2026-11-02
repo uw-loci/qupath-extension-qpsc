@@ -638,7 +638,7 @@ public class ExistingImageWorkflowV2 {
          * non-null result, runs {@link #cleanup()} on every path, routes exceptions
          * through {@link #handleError(Throwable)}, and settles {@code done}.
          *
-         * <p>Gate rationale (review finding H5): the chain's null-state-propagation
+         * <p>Gate rationale: the chain's null-state-propagation
          * pattern (every internal method returns {@code completedFuture(null)} on
          * cancel/short-circuit) means we can reach the accept branch after the
          * pixel-size gate, the camera-ROI gate, or any internal cancel -- without
@@ -795,13 +795,13 @@ public class ExistingImageWorkflowV2 {
          * Shows a user-friendly dialog with options when no annotations are detected.
          */
         /**
-         * Centralized post-routing annotation re-read (review finding M9). Sits after
+         * Centralized post-routing annotation re-read. Sits after
          * {@code routeSubWorkflow} returns and before {@code handleRefinement}: nulls
          * {@code state.annotations} and re-reads against the current open entry's
          * hierarchy. The slide-specific routing branch already nulled + re-read
-         * internally; the other branches relied on inner helpers
+         * internally; the other branches rely on inner helpers
          * ({@code ExistingAlignmentPath.ensureAnnotationsForTransform},
-         * {@code AnnotationHelper.ensureAnnotationsExist}). This consolidates the
+         * {@code AnnotationHelper.ensureAnnotationsExist}). This holds the
          * invariant -- "after routing, annotations are always read against the
          * post-flip hierarchy" -- in one place.
          *
@@ -1070,9 +1070,9 @@ public class ExistingImageWorkflowV2 {
             // Continue" gate counts ANY annotation, not only the pre-selected classes.
             // The class choice happens AFTER detection (selectClassesAfterDetection),
             // because the class tissue detection produces (e.g. "Tissue") may not be
-            // among the pre-selected classes. Previously the gate filtered by
-            // validClasses, so running tissue detection that created "Tissue" left the
-            // user stuck whenever "Tissue" was not pre-selected, with no way to pick it.
+            // among the pre-selected classes. Filtering by validClasses here would
+            // leave the user stuck whenever "Tissue" was not pre-selected, with no way to
+            // pick it.
             return UIFunctions.showAnnotationWarningDialog(gui, null).thenCompose(action -> {
                 switch (action) {
                     case ANNOTATIONS_CONFIRMED:
@@ -1480,7 +1480,7 @@ public class ExistingImageWorkflowV2 {
          */
         private CompletableFuture<WorkflowState> initializeFromConfig(ExistingImageAcquisitionConfig config) {
             if (config == null) {
-                // Phase 12: explicit cancellation so handleError is the single
+                // Explicit cancellation so handleError is the single
                 // workflow terminal, not the null-state propagation pattern. The
                 // .exceptionally chain treats CancellationException as user cancel
                 // (logs "Workflow cancelled by user" without an error dialog).
@@ -1641,10 +1641,9 @@ public class ExistingImageWorkflowV2 {
                 // No per-slide alignment for the active scope. A scanner preset for THIS
                 // microscope chosen in the dialog is the direct route (green box on the macro,
                 // then the operator's refinement); composing another microscope's per-slide
-                // file through the macro frame is only the fallback when there is none. The
-                // composition used to run first and win: Liver_L004 on the LC-PolScope, with
-                // Ocus40_to_LCPolScope_Hamamatsu selected, was acquired through the PPM file and
-                // its Single-tile refinement switched off (2026-10-27).
+                // file through the macro frame is only the fallback when there is none. Composing
+                // first would acquire through another scope's file and switch off the
+                // Single-tile refinement.
                 AffineTransformManager.TransformPreset chosen =
                         state.alignmentChoice != null && state.alignmentChoice.useExistingAlignment()
                                 ? state.alignmentChoice.selectedTransform()
@@ -1664,14 +1663,14 @@ public class ExistingImageWorkflowV2 {
                 // the macro frame to here.
                 tryComposeCrossScopeAlignment(state);
                 if (state.crossScope) {
-                    // Review finding M8: surface the cross-scope decision so the operator
+                    // Surface the cross-scope decision so the operator
                     // can opt out before tiles get created against an approximate transform.
                     if (!confirmCrossScopeAlignment(state)) {
-                        // Phase 12: throw rather than return null so handleError is the
+                        // Throw rather than return null so handleError is the
                         // single workflow terminal.
                         throw new CancellationException("User cancelled cross-scope alignment");
                     }
-                    // Review finding M2: refinement on the *target* scope mis-frames the
+                    // Refinement on the *target* scope mis-frames the
                     // composed transform's expected pixel input (the source per-slide
                     // alignment was built in the source scope's frame, not this one).
                     // Auto-downgrade so single-tile / full-manual can't silently corrupt
@@ -1693,7 +1692,7 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Modal Continue / Cancel confirmation for a freshly composed cross-scope
-         * alignment (review finding M8). Returns {@code true} when the user chose to
+         * alignment. Returns {@code true} when the user chose to
          * proceed, {@code false} on cancel. Delegates to the shared
          * {@link AlignmentHelper#confirmContinueDialog(String, String, String)}.
          */
@@ -1756,11 +1755,10 @@ public class ExistingImageWorkflowV2 {
                     return;
                 }
 
-                // Deterministic candidate order: newest file wins on ties (review finding M7).
-                // The original code iterated whatever order the filesystem returned, so two
-                // operators on the same project could see different cross-scope compositions
-                // chosen. Sort by lastModified desc and log the sorted list so field
-                // diagnostics can confirm which candidate won.
+                // Deterministic candidate order: newest file wins on ties.
+                // Filesystem order would let two operators on the same project see different
+                // cross-scope compositions chosen. Sort by lastModified desc and log the
+                // sorted list so field diagnostics can confirm which candidate won.
                 records = new ArrayList<>(records);
                 records.sort((a, b) ->
                         Long.compare(b.getFile().lastModified(), a.getFile().lastModified()));
@@ -1782,9 +1780,9 @@ public class ExistingImageWorkflowV2 {
 
                 AffineTransformManager mgr = new AffineTransformManager(new java.io.File(configPath).getParent());
 
-                // Phase 11: count cross-scope candidates considered so we can surface a
+                // Count cross-scope candidates considered so we can surface a
                 // non-modal info dialog when records existed but none could compose to
-                // the active scope. Pairs with Phase 6's M8 success dialog.
+                // the active scope. Pairs with the cross-scope confirmation dialog.
                 int crossScopeCandidatesConsidered = 0;
                 for (AffineTransformManager.SlideAlignmentRecord record : records) {
                     String sourceMicroscope = record.getMicroscope();
@@ -1794,10 +1792,10 @@ public class ExistingImageWorkflowV2 {
                     crossScopeCandidatesConsidered++;
                     // Cross-scope composition assumes the source record is in macro pixel
                     // coords -- composing a sub-frame transform with a macro-frame preset
-                    // produces the 2026-05-10 MH_Colon shrunk-grid class. The directory
+                    // produces a shrunk tile grid. The directory
                     // scanner already separates derived/ from flat alignmentFiles/, so
                     // this gate is defense-in-depth against hand-edited or hand-placed
-                    // sub-frame files in the flat directory (review finding H4).
+                    // sub-frame files in the flat directory.
                     if (!AffineTransformManager.PIXEL_FRAME_MACRO.equals(record.getPixelFrame())) {
                         logger.warn(
                                 "Skipping cross-scope candidate {}: pixelFrame={} (need 'macro')",
@@ -1848,8 +1846,8 @@ public class ExistingImageWorkflowV2 {
                         }
                     }
                 }
-                // Phase 11: non-modal info dialog when records existed for other scopes but
-                // none could compose. Pairs with Phase 6's M8 success dialog. Skipped when
+                // Non-modal info dialog when records existed for other scopes but
+                // none could compose. Pairs with the cross-scope confirmation dialog. Skipped when
                 // there were zero cross-scope candidates -- silence is correct there
                 // (this is the common "fresh project on this scope" case).
                 if (crossScopeCandidatesConsidered > 0 && !state.crossScope) {
@@ -1871,7 +1869,7 @@ public class ExistingImageWorkflowV2 {
          * Routes to the appropriate sub-workflow based on selections.
          * All paths delegate to the existing working implementations.
          *
-         * <p>When a slide-specific alignment exists (including previously refined
+         * <p>When a slide-specific alignment exists (including refined
          * alignments), we always use it as the starting point -- unless the user
          * explicitly requested a full manual re-alignment. This ensures that
          * single-tile refinement builds on top of the saved refined transform
@@ -1882,11 +1880,10 @@ public class ExistingImageWorkflowV2 {
 
             // Sub-acquisitions take priority over slide-specific alignment. Their
             // pixel coords are in the camera's pixel frame, while the slide-specific
-            // alignment (resolved via base_image since 18a800d) is the parent
+            // alignment (resolved via base_image) is the parent
             // macro's transform in macro pixel coords. Applying the macro transform
             // to sub-image annotation coords shrinks every stage move by
-            // camera_px / macro_px (the symptom class of the 2026-05-10 MH_Colon
-            // incident). Sub-image annotations always go through offset-based
+            // camera_px / macro_px. Sub-image annotations always go through offset-based
             // targeting, which builds a fresh sub-image-pixel -> stage transform
             // from xy_offset + pixel size.
             if (isSubAcquisition()) {
@@ -1926,7 +1923,7 @@ public class ExistingImageWorkflowV2 {
                 return processManualAlignmentPath(state);
             }
 
-            // If we have a slide-specific alignment (including previously refined ones),
+            // If we have a slide-specific alignment (including refined ones),
             // use it directly -- unless the user wants a full manual re-alignment.
             // SINGLE_TILE and MULTI_TILE refinement are handled later in handleRefinement()
             // and need the saved transform as their starting point.
@@ -1957,13 +1954,11 @@ public class ExistingImageWorkflowV2 {
 
             logger.info("Processing slide-specific alignment with existing transform");
 
-            // M11 -- setCurrentTransform is intentionally deferred until after
-            // validateAndFlipIfNeeded succeeds (see the .thenApply below). The previous
-            // location installed it before project setup / flip validation, leaving a
-            // window in which a Live Viewer click could read an unvalidated transform.
-            // Phase 2 H6 clears the singleton on cleanup, but H6 + M11 together close
-            // both ends of the window (install only after validation passes; clear on
-            // any cleanup or error).
+            // setCurrentTransform is intentionally deferred until after
+            // validateAndFlipIfNeeded succeeds (see the .thenApply below): installing it
+            // earlier would let a Live Viewer click read an unvalidated transform.
+            // Cleanup clears the singleton, so the window is closed at both ends
+            // (install only after validation passes; clear on any cleanup or error).
 
             // Delegate to ProjectHelper for proper project setup
             return ProjectHelper.setupProject(gui, state.sample, state.annotationPreservation)
@@ -1977,10 +1972,9 @@ public class ExistingImageWorkflowV2 {
                         // Pass the active preset's flip state explicitly -- the 3-arg overload
                         // calls FlipResolver(null,null,null) which defaults to (false,false), so
                         // the workflow would never auto-open or create the flipped duplicate even
-                        // when the saved alignment was built in a flipped frame. Observed on OWS3
-                        // 2026-05-01: acquisition ran on the unflipped base while the saved
-                        // transform was built in the flipped-X frame, sending the stage to the
-                        // X-mirror of the intended location.
+                        // when the saved alignment was built in a flipped frame, and a transform
+                        // built in the flipped-X frame would send the stage to the X-mirror of
+                        // the intended location.
                         @SuppressWarnings("unchecked")
                         Project<BufferedImage> project = (Project<BufferedImage>) projectInfo.getCurrentProject();
                         if (state.crossScope) {
@@ -2006,7 +2000,7 @@ public class ExistingImageWorkflowV2 {
                                     // per-slide fullRes->stage transform was built in the flip frame
                                     // of whatever entry was open at save time; running acquisition
                                     // from a mismatched frame produces an X-mirrored stage target
-                                    // (verified 2026-05-02: Go-to-Centroid on the unflipped entry
+                                    // (Go-to-Centroid on the unflipped entry
                                     // lands at the X-mirror of where the same annotation lands on
                                     // the flipped duplicate, and acquisition follows the same wrong
                                     // path). validateAndFlipIfNeeded is supposed to swap to the
@@ -2020,12 +2014,12 @@ public class ExistingImageWorkflowV2 {
                                         // ManualAlignmentPath / ExistingAlignmentPath all write it
                                         // back from that same entry. validateAndFlipIfNeeded has
                                         // just put us on that entry, so the loaded transform is
-                                        // used as-is. Baking a flip delta here double-flipped a
-                                        // correct transform and drove the stage to the X/Y mirror
-                                        // (PPM 2026-05-19: tile selected lower-left, stage jumped
-                                        // upper-right). The Stage Map / Go-to-Centroid path also
+                                        // used as-is. Baking a flip delta here would double-flip a
+                                        // correct transform and drive the stage to the X/Y mirror
+                                        // (tile selected lower-left, stage jumps upper-right). The Stage Map /
+                                        // Go-to-Centroid path also
                                         // uses this transform raw for these JSONs.
-                                        // M11 -- install the transform only after validation passes.
+                                        // Install the transform only after validation passes.
                                         MicroscopeController.getInstance().setCurrentTransform(state.transform);
                                     }
                                     return validated;
@@ -2040,8 +2034,7 @@ public class ExistingImageWorkflowV2 {
                         // already has a fullRes->stage transform, and tiling uses the camera FOV +
                         // the open image's own calibration (createTilesForAnnotations ignores this
                         // value). Resolve from the image so a missing legacy preference cannot crash
-                        // acquisition. (Root cause of the multi-slide "Macro image pixel size is not
-                        // set" failure, 2026-08-08.)
+                        // acquisition ("Macro image pixel size is not set" in multi-slide runs).
                         state.pixelSize = resolveTilingPixelSize();
 
                         // Use selected classes or preferences
@@ -2077,15 +2070,13 @@ public class ExistingImageWorkflowV2 {
         /**
          * Resolves a pixel size for the acquire / tiling path from the open image itself.
          *
-         * <p>This used to read the legacy "Macro image pixel size in microns" preference and throw
-         * when it was unset. That preference is dead code: once a {@code fullRes->stage} alignment
+         * <p>This does not read the "Macro image pixel size in microns" preference, which would throw
+         * when unset and is not consumed here: once a {@code fullRes->stage} alignment
          * transform exists -- which is the case in every path that calls this (an already-loaded
          * slide-specific alignment, or a sub-acquisition offset transform) -- tiling needs only the
          * camera FOV and the open image's own pixel calibration. {@code createTilesForAnnotations}'s
          * macro-pixel-size argument is explicitly unused (see {@link TileHelper}), and
-         * {@code buildOffsetBasedTransform} reads the pixel size straight from the image server. The
-         * empty-default change on 2026-08-07 turned that vestigial preference read into a hard crash
-         * that broke multi-slide acquisition on every slot, even though the value is never consumed.
+         * {@code buildOffsetBasedTransform} reads the pixel size straight from the image server.
          *
          * <p>So we read the open image's full-res pixel size (never throwing on a calibrated image),
          * purely to keep {@code state.pixelSize} a real, positive value for downstream logging /
@@ -2110,7 +2101,7 @@ public class ExistingImageWorkflowV2 {
             return new ExistingAlignmentPath(gui, state).execute().thenApply(legacyState -> {
                 if (legacyState == null) {
                     // ExistingAlignmentPath returned null (e.g. no macro image, user canceled).
-                    // Phase 12: explicit cancellation routes through handleError instead of
+                    // Explicit cancellation routes through handleError instead of
                     // propagating null through the chain.
                     throw new CancellationException("ExistingAlignmentPath cancelled (no macro / user cancel)");
                 }
@@ -2194,7 +2185,7 @@ public class ExistingImageWorkflowV2 {
         private CompletableFuture<WorkflowState> processSubAcquisitionPath(WorkflowState state) {
             if (state == null) return CompletableFuture.completedFuture(null);
 
-            // Phase 11: catch missing sample early with a clear message rather than
+            // Catch missing sample early with a clear message rather than
             // letting setupProject NPE on state.sample.projectsFolder(). The check
             // is defensive -- initializeFromConfig populates state.sample -- but the
             // resulting error is much clearer than the downstream NPE.
@@ -2215,11 +2206,11 @@ public class ExistingImageWorkflowV2 {
             Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
             ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
 
-            // Cross-scope sub-image gate (review finding H3). The sub-image's xy_offset
+            // Cross-scope sub-image gate. The sub-image's xy_offset
             // is in the ACQUIRING scope's stage frame -- meaningless on any other
             // microscope. Refuse the acquisition before any stage motion. Falls back
             // to the derived alignment JSON's filename when the per-entry field is
-            // missing (legacy sub-images acquired before 2026-05-14).
+            // missing (older sub-images).
             String acquiredOn = ImageMetadataManager.getAcquiredOnMicroscope(entry);
             if (acquiredOn == null || acquiredOn.isEmpty()) {
                 String imageName = QPProjectFunctions.getActualImageFileName(gui.getImageData());
@@ -2274,7 +2265,7 @@ public class ExistingImageWorkflowV2 {
                     entryObjective,
                     entryDetector);
 
-            // M5 -- missing entry-objective is a hard cancel. buildOffsetBasedTransform
+            // Missing entry-objective is a hard cancel. buildOffsetBasedTransform
             // falls back to MicroscopeController.getCameraFOV() (live MM state) when the
             // entry's objective metadata is null, silently producing a half-FOV correction
             // based on whatever objective MM happens to be on -- which may not match the
@@ -2291,7 +2282,7 @@ public class ExistingImageWorkflowV2 {
                 return cancelled;
             }
 
-            // M4 -- entry-objective vs wizard-objective advisory. The entry's objective
+            // Entry-objective vs wizard-objective advisory. The entry's objective
             // drives the half-FOV correction in buildOffsetBasedTransform; the wizard's
             // objective drives the tile grid. A mismatch shifts tiles by half the
             // FOV-delta with no warning. Continue/Cancel advisory before any stage motion.
@@ -2491,8 +2482,7 @@ public class ExistingImageWorkflowV2 {
             // the live frame against the overview, and without this the three snaps use whatever
             // the last step left behind -- on PPM often a near-extinction angle or an exposure
             // from another objective, which fails every point as "insufficient features". The
-            // refinement dialogs have always done this; this path never did (2026-10-13,
-            // MetroHealth_FNA_PDAC_4). Nobody is watching an unattended acquire, so a state we
+            // refinement dialogs do this too. Nobody is watching an unattended acquire, so a state we
             // cannot set stops the slide unless the operator chose 'warn'.
             AlignmentLivePrep.Result prep = AlignmentLivePrep.prepare(
                     state.sample != null ? state.sample.modality() : null,
@@ -2565,8 +2555,8 @@ public class ExistingImageWorkflowV2 {
          * it always has.
          *
          * <p>The check waits on the server, moves the stage, refocuses and waits for the Live
-         * Viewer to stream. It used to run on the FX thread, which froze QuPath for about 30 s per
-         * slide (2026-10-12 logs) and made it impossible to start the live stream the check needs:
+         * Viewer to stream. It must not run on the FX thread: that would freeze QuPath for about 30 s per
+         * slide and make it impossible to start the live stream the check needs:
          * {@code LiveViewerWindow.ensureStreaming} queues its work on the very thread that was
          * blocked.
          */
@@ -2578,8 +2568,7 @@ public class ExistingImageWorkflowV2 {
                         try {
                             // The check moves the stage and refocuses. If the server still owns
                             // the stage for a previous acquisition -- one the client gave up on
-                            // but the server has not -- this would drive Z out from under it
-                            // (2026-10-12).
+                            // but the server has not -- this would drive Z out from under it.
                             if (!MicroscopeController.getInstance()
                                     .awaitServerIdle(AcquisitionManager.SERVER_IDLE_WAIT_MS)) {
                                 failure = new WorkflowBlockedException(
@@ -2634,7 +2623,7 @@ public class ExistingImageWorkflowV2 {
 
             if (!validateMMAgainstSelection(state)) {
                 logger.warn("Pixel-size or camera-ROI validation failed before refinement; cancelling workflow");
-                // Phase 12: explicit cancellation -- the validate dialog already informed
+                // Explicit cancellation -- the validate dialog already informed
                 // the user, so handleError just logs "Workflow cancelled by user" and runs
                 // cleanup.
                 return CompletableFuture.failedFuture(
@@ -2693,8 +2682,8 @@ public class ExistingImageWorkflowV2 {
                 }
                 return true;
             } catch (IllegalArgumentException e) {
-                // Phase 11: configuration error (e.g. missing objective in YAML, bad detector
-                // key) -- the previous catch (Exception) swallowed these and let the workflow
+                // Configuration error (e.g. missing objective in YAML, bad detector
+                // key) -- swallowing these would let the workflow
                 // proceed against a misconfigured MM/wizard combination, surfacing the failure
                 // 60+ seconds later inside TilingUtilities. Propagate as a workflow cancellation
                 // so the user sees a clear dialog at the gate.
@@ -2713,7 +2702,7 @@ public class ExistingImageWorkflowV2 {
          * Performs single-tile refinement.
          *
          * <p>The viewer's open entry can drift back to the unflipped base
-         * between routing and refinement. Observed on PPM 2026-05-20: the slow
+         * between routing and refinement: the slow
          * white-background data-bounds classifier (~20 s) saturates the FX
          * thread, reordering the queued entry switch so the base is the open
          * entry when refinement begins and the flipped sibling only commits
@@ -2889,8 +2878,8 @@ public class ExistingImageWorkflowV2 {
                             case PROCEED:
                                 // Explicit Skip: acquire with the prior alignment. Re-installing the
                                 // unchanged transform is a no-op, and re-writing the per-slide JSON
-                                // would destroy its original flipMacroX/Y provenance (review
-                                // finding H7), so neither happens.
+                                // would destroy its original flipMacroX/Y provenance, so
+                                // neither happens.
                                 logger.info("Refinement skipped; acquiring with the prior alignment");
                                 return CompletableFuture.completedFuture(state);
                             case ACCEPT:
@@ -2903,7 +2892,7 @@ public class ExistingImageWorkflowV2 {
                         }
                     })
                     .whenComplete((s, ex) -> {
-                        // Phase 11: on exception from refinement (a crash, a hard block or an
+                        // On exception from refinement (a crash, a hard block or an
                         // operator cancel), force-delete the refinement tile directory so a
                         // refinement that does not lead to an acquisition leaves no tiles
                         // polluting the project. Skip returns normally; the workflow continues
@@ -2931,8 +2920,7 @@ public class ExistingImageWorkflowV2 {
          * pixel size + half-FOV correction; persisting it under the parent macro's lookup
          * key (which {@link AlignmentHelper#resolveMacroLookupKey} would resolve to) writes
          * a sub-image-pixel-frame transform tagged {@code pixelFrame="macro"} and silently
-         * corrupts every future macro-entry run. Found during the 2026-05-13 review as
-         * direct fallout from the 2603535 routing fix.
+         * corrupts every future macro-entry run.
          */
         private void saveRefinedAlignment(WorkflowState state) {
             if (isSubAcquisition()) {
@@ -2967,8 +2955,8 @@ public class ExistingImageWorkflowV2 {
                 // the transform actually consumes. The transform that came out of
                 // SingleTileRefinement consumes pixel coords from the currently-open entry's
                 // hierarchy, so the saved alignFlip should equal the open entry's flip
-                // metadata -- not a hardcoded false (which mis-labelled flipped-sibling
-                // alignments and caused the 2026-05-18 stage-mirror bug).
+                // metadata -- not a hardcoded false (which mis-labels flipped-sibling
+                // alignments and produces a stage mirror).
                 boolean openEntryFlipX = false;
                 boolean openEntryFlipY = false;
                 try {
@@ -3102,7 +3090,7 @@ public class ExistingImageWorkflowV2 {
             // switched objective in MicroManager, applied a ROI crop, etc.).
             if (!validateMMAgainstSelection(state)) {
                 logger.warn("Pixel-size or camera-ROI validation failed before acquisition; cancelling workflow");
-                // Phase 12: explicit cancellation through handleError. The validate dialog
+                // Explicit cancellation through handleError. The validate dialog
                 // already informed the user.
                 return CompletableFuture.failedFuture(
                         new CancellationException("Pre-acquisition MM/wizard validation failed"));
@@ -3112,7 +3100,7 @@ public class ExistingImageWorkflowV2 {
 
             return new AcquisitionManager(gui, state).execute().thenApply(legacyState -> {
                 if (legacyState != null) {
-                    // Copy stitching futures back from legacy state to V2 state
+                    // Copy stitching futures back from the working state to V2 state
                     state.stitchingFutures.addAll(legacyState.stitchingFutures);
                 }
                 return state;
@@ -3144,7 +3132,6 @@ public class ExistingImageWorkflowV2 {
          * from disk on the next centroid click -- a net improvement over the
          * residue class of bug (canceling a sub-image run, then clicking on the
          * macro, would otherwise drive the stage with the sub-image transform).
-         * Review finding H6.
          */
         private void cleanup() {
             logger.info("Workflow completed - cleaning up");
@@ -3163,10 +3150,10 @@ public class ExistingImageWorkflowV2 {
             state.annotationPreservation.clearPreservedAnnotations();
             // The globals belong to whichever run holds the registry slot. This run's stitching
             // can outlive its acquisition, and the next run may have set its own transform by
-            // the time we get here (2026-10-27: run N's cleanup nulled run N+1's transform).
+            // the time we get here (run N's cleanup would otherwise null run N+1's transform).
             if (WorkflowRegistry.get().isActive(registryId)) {
                 MicroscopeController.getInstance().setCurrentTransform(null);
-                // Phase 11: safety net for AcquisitionManager.processAnnotations throwing after
+                // Safety net for AcquisitionManager.processAnnotations throwing after
                 // setAcquisitionActive(true) but before its whenComplete reset. Without this the
                 // flag stays stuck across runs and PROBEZ / Live Viewer paths see acquisitionActive
                 // forever.
@@ -3203,7 +3190,7 @@ public class ExistingImageWorkflowV2 {
             // belongs to whatever the operator is doing by now. Say what landed and where.
             // The list is read on the FX thread: a non-pipelined import is posted to it when
             // the stitch finishes and the stitch future completes before the post runs, so a
-            // read here, on the worker, came up empty (demo, 2026-10-27). The FX queue is
+            // read here, on the worker, can come up empty. The FX queue is
             // FIFO, so by the time this runnable runs the import has.
             final String projectName =
                     state.projectInfo != null && state.projectInfo.getCurrentProject() instanceof Project<?> p
@@ -3256,10 +3243,9 @@ public class ExistingImageWorkflowV2 {
             if (cause instanceof WorkflowBlockedException) {
                 // NOT a user cancellation, and it must not read as one. The software stopped
                 // itself because it could not proceed, and the reason -- which the operator saw
-                // in a dialog -- belongs in the log too. It used to land here as a plain
-                // CancellationException whose message was discarded, so the only record of a
-                // hard block was the line "Workflow cancelled by user", which sent anyone
-                // reading the log looking for an operator who had done nothing.
+                // in a dialog -- belongs in the log too. A plain
+                // CancellationException would discard the message, leaving "Workflow
+                // cancelled by user" as the only record of a hard block.
                 logger.warn("Workflow STOPPED before it could finish: {}", cause.getMessage());
             } else if (cause instanceof CancellationException) {
                 logger.info(
@@ -3284,7 +3270,7 @@ public class ExistingImageWorkflowV2 {
             // Clear preserved annotations on error to prevent stale data
             state.annotationPreservation.clearPreservedAnnotations();
 
-            // Phase 11: force-delete temporary tiles on error so a failed run does not
+            // Force-delete temporary tiles on error so a failed run does not
             // leave them on disk even when the user's preference is "Keep" (Keep is for
             // diagnostics on success; on error the tiles are usually incomplete /
             // corrupt). cleanupTilesAfterStitching honors the preference and runs only
@@ -3311,7 +3297,7 @@ public class ExistingImageWorkflowV2 {
         }
 
         /**
-         * Hard-cancel dialog for the cross-scope sub-image gate (review finding H3).
+         * Hard-cancel dialog for the cross-scope sub-image gate.
          * FX-safe, blocking, OK-only -- mirrors {@code AlignmentHelper.showPixelFrameMismatchDialog}.
          */
         private static void showSubImageCrossScopeMismatchDialog(
@@ -3379,9 +3365,9 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Hard-cancel dialog when a sub-image entry has no {@code objective} metadata
-         * (review finding M5). The half-FOV correction in {@link #buildOffsetBasedTransform}
-         * cannot resolve safely without it -- the previous fallback to
-         * {@code MicroscopeController.getCameraFOV()} returns whatever objective MM is on
+         * The half-FOV correction in {@link #buildOffsetBasedTransform}
+         * cannot resolve safely without it -- the fallback to
+         * {@code MicroscopeController.getCameraFOV()} would return whatever objective MM is on
          * right now, which may not match the saved sub-image.
          */
         private static void showMissingEntryObjectiveDialog(String entryName) {
@@ -3443,7 +3429,7 @@ public class ExistingImageWorkflowV2 {
 
         /**
          * Continue / Cancel advisory when the sub-image's recorded objective differs from
-         * the wizard's current objective (review finding M4). Delegates to the shared
+         * the wizard's current objective. Delegates to the shared
          * {@link AlignmentHelper#confirmContinueDialog(String, String, String)}.
          */
         private static boolean confirmContinueWithEntryObjectiveMismatch(
@@ -3482,8 +3468,7 @@ public class ExistingImageWorkflowV2 {
          * The project entry this run acquires from, pinned once routing has settled on the
          * final (flipped / rotated / Camera View) entry. Every later stage that needs "the
          * image" reads this, and {@code assertSourceImageOpen} re-opens it when the viewer has
-         * drifted to something else (an operator click, or before 2026-10-27 a stitch import
-         * opening its result). Null until routing completes, and for runs that never route
+         * drifted to something else (an operator click). Null until routing completes, and for runs that never route
          * (bounded acquisition).
          */
         public ProjectImageEntry<BufferedImage> sourceEntry;
@@ -3507,9 +3492,8 @@ public class ExistingImageWorkflowV2 {
         public final Set<String> regionsAcquired = ConcurrentHashMap.newKeySet();
 
         /**
-         * Per-workflow annotation-preservation service (review finding M12).
-         * Previously a static singleton; one instance per workflow now keeps
-         * preserved annotations from leaking across concurrent or restarted runs.
+         * Per-workflow annotation-preservation service. One instance per
+         * workflow keeps preserved annotations from leaking across concurrent or restarted runs.
          */
         public final AnnotationPreservationService annotationPreservation = new AnnotationPreservationService();
 

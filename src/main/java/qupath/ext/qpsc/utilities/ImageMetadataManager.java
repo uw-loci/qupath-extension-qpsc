@@ -71,8 +71,8 @@ public class ImageMetadataManager {
     // is not meaningful on any other scope. Source-of-truth is
     // {@code MicroscopeConfigManager.getMicroscopeName()} at stitch-import
     // time. Macro entries do not carry this field (they were not acquired
-    // by any QPSC microscope). Added 2026-05-14 as part of the
-    // cross-scope-sub-image hard-cancel gate (review finding H3).
+    // by any QPSC microscope). Used by the
+    // cross-scope-sub-image hard-cancel gate.
     public static final String ACQUIRED_ON_MICROSCOPE = "acquired_on_microscope";
 
     // White balance mode the acquisition ran with (protocol name: off, camera_awb, simple,
@@ -315,7 +315,7 @@ public class ImageMetadataManager {
         metadata.put(XY_OFFSET_X, String.valueOf(xOffset));
         metadata.put(XY_OFFSET_Y, String.valueOf(yOffset));
         metadata.put(Z_OFFSET, String.valueOf(0.0)); // Z offset stored for voxel support
-        // Orientation is no longer stored as a lossy flip_x/flip_y bit here; the
+        // Orientation is not stored as a lossy flip_x/flip_y bit here; the
         // "(Camera View)" companion records the full light path via setLightPath.
         // The flipX/flipY params are retained (vestigial) on this signature only to
         // avoid a wide call-site change; they are intentionally unused.
@@ -1050,7 +1050,7 @@ public class ImageMetadataManager {
      * Gets the microscope that physically captured this image, distinct from
      * {@link #getSourceMicroscope}. Returns {@code null} for entries that
      * predate the {@link #ACQUIRED_ON_MICROSCOPE} field (set on every
-     * sub-image stitch-import starting 2026-05-14) and for imported macros
+     * sub-image stitch-import) and for imported macros
      * (which weren't acquired by a QPSC microscope).
      *
      * @param entry The image entry

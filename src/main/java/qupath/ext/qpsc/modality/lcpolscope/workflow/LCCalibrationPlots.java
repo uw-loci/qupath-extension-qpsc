@@ -34,7 +34,7 @@ import qupath.ext.qpsc.ui.ThemeColors;
  * {@code trace}), so a calibration saved weeks ago can be inspected the same way as a fresh one.
  *
  * <p>Why these two: the extinction ratio describes only the extinction state. A palette whose
- * swing states sit short of the swing on one crystal (LC-B on this rig, 2026-10-26: +0.014 and
+ * swing states sit short of the swing on one crystal (LC-B on this rig: +0.014 and
  * -0.025 waves where the swing is 0.03) posts a good ratio and passes every number in the text
  * summary; the palette plot shows it at a glance, and the curves show why -- one crystal's
  * intensity rises faster on one side of extinction than the other.
@@ -42,7 +42,7 @@ import qupath.ext.qpsc.ui.ThemeColors;
  * <p>Results from microscope server 1.5.x on also carry the drive volts ({@code lca_volts},
  * {@code lcb_volts} on each trace point, and {@code palette_readback}). The palette is in the
  * Meadowlark adapter's waves, which pass through its waves-to-volts table; plotted in volts, a curve
- * lopsided in waves but symmetric in volts is the table, not the crystal (LC-B, 2026-10-28).
+ * lopsided in waves but symmetric in volts is the table, not the crystal (as seen on LC-B).
  */
 public final class LCCalibrationPlots {
 

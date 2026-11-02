@@ -424,7 +424,7 @@ public class TestAutofocusWorkflow {
             //    per-objective exposure tables. On PPM the first entry is the 10x, whose
             //    uncrossed exposure is ~4x the 20x one: applying it at 20x saturates the
             //    sensor and autofocus then reports "99.4% of pixels saturated" three steps
-            //    later, with nothing pointing back here. Observed on the 2026-08-27 run.
+            //    later, with nothing pointing back here.
             java.util.List<Map<String, Object>> hardwareObjectives = configManager.getHardwareObjectives();
             if (!hardwareObjectives.isEmpty()) {
                 Object objectiveId = hardwareObjectives.get(0).get("id");

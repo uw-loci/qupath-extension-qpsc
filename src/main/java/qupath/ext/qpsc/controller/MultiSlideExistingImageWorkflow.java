@@ -1513,8 +1513,7 @@ public final class MultiSlideExistingImageWorkflow {
 
         // A moved stage origin halts the whole pass, not only the slide that noticed it. Every
         // remaining slot's alignment was measured against the old origin, so running them would
-        // image the same wrong field -- which is exactly what the 2026-10-02 run did for three
-        // slides and thirty hours after the first one went wrong.
+        // image the same wrong field for hours.
         String frameSuspect = StageFrameWatchdog.getInstance().suspectReason();
         if (frameSuspect != null) {
             logger.error("MS workflow: {} pass halted at slot index {} -- {}", passName, index, frameSuspect);

@@ -11,7 +11,7 @@ import qupath.ext.qpsc.utilities.AffineTransformManager.TransformPreset;
  * acquisitions where the source scanner is shared (e.g. Ocus40), but the per-slide
  * alignment was saved against a different microscope than the one currently active.
  *
- * <p>Concrete use case from 2026-05-02: an OWS3 sub-acquisition was stitched and
+ * <p>Use case: an OWS3 sub-acquisition was stitched and
  * auto-registered with a per-slide {@code pixel -> OWS3 stage} transform. The user
  * later opens the same sub-acquisition image on PPM, draws a sub-region annotation,
  * and wants to acquire it on PPM. Both microscopes have a saved {@link TransformPreset}

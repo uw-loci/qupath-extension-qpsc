@@ -489,11 +489,11 @@ public class PersistentPreferences {
      *
      * <p><b>Defaults to empty on purpose.</b> This is a measured property of
      * the slide scanner that produced the macro image, not a preference we
-     * are entitled to pick. It previously defaulted to {@code "7.2"}, which
-     * made {@code ExistingImageWorkflowV2}'s own null-or-empty guard
-     * unreachable -- so the workflow silently used 7.2 while the only shipped
-     * scanner config declares 81.0, an 11x error applied to every coordinate
-     * derived from the macro image, with no warning.</p>
+     * are entitled to pick. A non-empty default would make
+     * {@code ExistingImageWorkflowV2}'s own null-or-empty guard unreachable, so the
+     * workflow would silently use the default instead of the scanner's declared value
+     * (the only shipped scanner config declares 81.0), a large error applied to every
+     * coordinate derived from the macro image, with no warning.</p>
      *
      * <p>Empty means "not set", and callers must refuse rather than
      * substitute. {@code MicroscopeAlignmentWorkflow} shows the better
@@ -1522,7 +1522,7 @@ public class PersistentPreferences {
 
     // ---- SIFT bit-depth normalization (cross-modality matching) ----
     // The microscope camera typically produces 16-bit data using only
-    // 12-14 effective bits. The legacy /256 bit-shift compresses the
+    // 12-14 effective bits. A plain /256 bit-shift compresses the
     // useful range to a sliver of 8-bit, which collapses SIFT matching
     // against an 8-bit H&E WSI. PERCENTILE stretch is the right default.
 
@@ -1554,7 +1554,7 @@ public class PersistentPreferences {
      * before SIFT matching. Only affects color images -- the monochrome camera
      * snapshot is untouched. Valid values: "GREEN" (default; best H&E structure
      * and keeps intensity polarity commensurate with a brightfield mono camera),
-     * "LUMINANCE" (legacy BGR2GRAY weighting).
+     * "LUMINANCE" (BGR2GRAY weighting).
      */
     public static String getSiftRgbConversion() {
         return siftRgbConversionProperty.get();

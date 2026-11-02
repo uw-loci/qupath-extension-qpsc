@@ -60,15 +60,13 @@ public class SingleTileRefinement {
      * returns the initial transform unchanged. Consumers must check
      * {@code accepted} before persisting state -- writing the per-slide JSON on a
      * skip overwrites its {@code flipMacroX/Y} provenance and the alignment
-     * cannot then be reconstructed from the original preset (review finding H7).
+     * cannot then be reconstructed from the original preset.
      */
     public static class RefinementResult {
 
         /**
-         * How the refinement ended. Every outcome used to collapse into {@code accepted=false}
-         * and the workflow went on to acquire for all of them, so closing the dialog with the
-         * window's X started an acquisition (2026-10-27, LC-PolScope). Now only an explicit
-         * Skip proceeds.
+         * How the refinement ended. Only an explicit Skip proceeds to acquisition; closing
+         * the dialog with the window's X must not start one.
          */
         public enum Outcome {
             /** A refined transform was saved (SIFT auto-accept or Capture). */
@@ -303,11 +301,9 @@ public class SingleTileRefinement {
         // (AlignmentHelper.checkForSlideAlignment composed any alignment-time
         // flipMacroX/Y from the per-slide JSON into the transform before it
         // reached us). Tile centroids are read from the unflipped base entry, so
-        // they go through unchanged. The previous "flip correction" block that
-        // shifted by frameWidth/Height is no longer correct in this frame; it
-        // was already inert in practice (FlipResolver(null,null,null) returns
-        // false), but removing it avoids a future double-flip if a preset is
-        // ever threaded through here.
+        // they go through unchanged. A "flip correction" shift by
+        // frameWidth/Height would be wrong in this frame and would double-flip
+        // if a preset were ever threaded through here.
         double[] estimatedStageCoords =
                 TransformationFunctions.transformQuPathFullResToStage(tileCoords, initialTransform);
 
@@ -644,7 +640,7 @@ public class SingleTileRefinement {
 
         // If the viewer switches images while this dialog is open, the tile it refers to is
         // no longer on screen and the alignment being refined is for another image: cancel
-        // rather than refine against the wrong picture. Imports no longer open images, so this
+        // rather than refine against the wrong picture. Imports do not open images, so this
         // fires only on an operator's own click in the project browser.
         final ImageData<?> dialogImage = gui != null ? gui.getImageData() : null;
         final javafx.beans.value.ChangeListener<ImageData<java.awt.image.BufferedImage>> viewerSwitch =

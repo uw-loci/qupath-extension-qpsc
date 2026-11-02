@@ -87,8 +87,8 @@ public class LCCalibrationWorkflow {
      * Applies a calibration written by an earlier run ({@code lc_calibration_*.json}) to the
      * microscope configuration QPSC is set to, through the same Apply step a fresh result gets.
      * For a calibration that landed in the wrong file: the two LC-PolScope configs share one
-     * instrument, and on 2026-10-26 the palette was applied to the Oryx file while the
-     * backgrounds and the acquisition used the Hamamatsu one.
+     * instrument, so a palette can be applied to the Oryx file while the backgrounds and the
+     * acquisition use the Hamamatsu one.
      */
     public static void applySaved() {
         Platform.runLater(() -> {
@@ -187,9 +187,9 @@ public class LCCalibrationWorkflow {
      * change it instead of offering a second place to set it.
      *
      * <p>The wavelength in particular is worth reading before every calibration on this
-     * instrument: the value moved between 546 and 549 before the filter was read. It is a
-     * Semrock FF01-549/15 on the transmission lamp (identified 2026-10-13), so 549 is right; the
-     * LC adapter's own Wavelength property still says 546 and the server warns about the gap.
+     * instrument. The filter is a Semrock FF01-549/15 on the transmission lamp, so 549 is
+     * right; the LC adapter's own Wavelength property still says 546 and the server warns about
+     * the gap.
      */
     private static String describeReconstructionSettings() {
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
@@ -667,8 +667,8 @@ public class LCCalibrationWorkflow {
 
         // The server marks a result "unreliable" when the frames cannot support the ratio: a
         // clipped state, a black level in the wrong units, a contrast resolved from noise, a camera
-        // that is not linear. The 2026-10-16 rig run read "Good, ready to use" at ER 133.8 with
-        // State1 at 99.9% saturation; the ratio's band is not the headline in that case.
+        // that is not linear. The ratio can read "Good, ready to use" (e.g. ER 133.8) with a state
+        // at 99.9% saturation; the ratio's band is not the headline in that case.
         boolean unreliable = "unreliable".equals(assessment);
         List<String> issues = new ArrayList<>();
         if (result.has("reliability_issues") && result.get("reliability_issues").isJsonArray()) {

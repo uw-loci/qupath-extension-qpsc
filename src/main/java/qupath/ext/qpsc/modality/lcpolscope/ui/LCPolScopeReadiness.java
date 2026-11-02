@@ -48,8 +48,8 @@ public final class LCPolScopeReadiness {
      * Whether the server and QPSC read the same microscope file. The server keeps the file of
      * the last CONFIG it was sent, so a config switch in QPSC without a reconnect leaves the
      * two on different files: the calibration lands in one, the background records the other,
-     * and the acquisition is checked against a third reading (2026-10-26, the two LC-PolScope
-     * configs). Null when they agree or either side is unknown.
+     * and the acquisition is checked against a third reading. Null when they agree or either
+     * side is unknown.
      */
     public static Check serverConfigCheck(String serverPath, String qpscPath) {
         if (serverPath == null || serverPath.isBlank() || qpscPath == null || qpscPath.isBlank()) {

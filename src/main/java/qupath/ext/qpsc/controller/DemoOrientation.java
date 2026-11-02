@@ -13,9 +13,9 @@ import qupath.ext.qpsc.utilities.CameraOrientation;
  *
  * <p>The camera orientation is a QuPath preference, set by Calibrate Directions on the real
  * microscope. The simulated camera is not flipped, so on an install calibrated for a flipped
- * camera the demo's arrows ran backwards and its mosaics came out mirrored (seen 2026-10-19).
- * The stage polarity used to be swapped here too; it is now {@code stage.polarity} in each
- * microscope's config, and the demo's config says {@code NORMAL}, so a switch carries it.
+ * camera the demo's arrows would run backwards and its mosaics come out mirrored.
+ * The stage polarity is {@code stage.polarity} in each microscope's config, and the demo's
+ * config says {@code NORMAL}, so a switch carries it.
  *
  * <p>Connecting to the demo saves the current orientation and sets NORMAL; switching to any
  * other microscope restores it. Nothing is saved when it is already NORMAL.

@@ -56,11 +56,10 @@ import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.roi.interfaces.ROI;
 
 /**
- * Propagation Manager dialog (Phase 2 rebuild).
+ * Propagation Manager dialog.
  *
- * <p>Replaces the 800-line monolithic static method that previously lived in
- * {@code ForwardPropagationWorkflow}. The math layer stays in the controller;
- * this class owns layout, observable state, and the propagate-button action.
+ * <p>The math layer stays in the controller; this class owns layout, observable state,
+ * and the propagate-button action.
  *
  * <p>Layout:
  * <ul>
@@ -709,15 +708,14 @@ public final class PropagationManagerDialog {
                                 //   1. The first sub's parent entry (via original_image_id) FLIP_X/Y metadata.
                                 //      This is the most direct signal -- the alignment was built in that entry's
                                 //      pixel frame, so its FLIP_X/Y are by definition the alignment-frame flips.
-                                //   2. The per-slide JSON's flipMacroX/Y (Step B canonical source).
+                                //   2. The per-slide JSON's flipMacroX/Y.
                                 //   3. The active microscope's preset for the source scanner.
-                                // Priority 1 sits ahead of 2 because legacy ManualAlignmentPath (pre-45ca489)
-                                // silently saved (false, false) into the JSON even when the alignment was
-                                // actually built in the flipped sibling's frame. That wrote a JSON that
-                                // *claims* hasFlipFrame=true but encodes the wrong values, so falling back to
-                                // priority 2 would still produce 0 propagated objects on PPM. The parent's
-                                // FLIP_X/Y metadata (set when the entry was first imported) was not affected
-                                // by that bug.
+                                // Priority 1 sits ahead of 2 because a JSON written by an older
+                                // ManualAlignmentPath can hold (false, false) even when the alignment was
+                                // built in the flipped sibling's frame. Such a JSON *claims*
+                                // hasFlipFrame=true but encodes the wrong values, so falling back to
+                                // priority 2 would produce 0 propagated objects. The parent's
+                                // FLIP_X/Y metadata (set when the entry was first imported) is reliable.
                                 boolean alignFlipX = false;
                                 boolean alignFlipY = false;
                                 String flipSource = "default-no-flip";
@@ -745,7 +743,7 @@ public final class PropagationManagerDialog {
                                     alignFlipX = parentFlipX;
                                     alignFlipY = parentFlipY;
                                     flipSource = "sub parent metadata";
-                                    // Warn when the JSON disagrees -- legacy ManualAlignmentPath save bug.
+                                    // Warn when the JSON disagrees (an older ManualAlignmentPath wrote wrong flips).
                                     if (slideResult != null && slideResult.hasFlipFrame()) {
                                         boolean jsonX = Boolean.TRUE.equals(slideResult.getFlipMacroX());
                                         boolean jsonY = Boolean.TRUE.equals(slideResult.getFlipMacroY());
@@ -1572,7 +1570,7 @@ public final class PropagationManagerDialog {
      * group, finds the user-selected reference sub, SIFT-matches its content
      * against the base region around the just-back-propagated objects, and
      * applies the resulting micrometer offset as a base-pixel translation.
-     * For legacy {@code (flipped X|Y|XY)} sibling fan-out copies, the offset
+     * For {@code (flipped X|Y|XY)} sibling fan-out copies, the offset
      * is applied with the appropriate per-axis sign flip so the sibling
      * mirrors stay consistent with the corrected base.
      */
@@ -1723,8 +1721,8 @@ public final class PropagationManagerDialog {
             // Build subToStage manually: sub_px * pxSize + corrected = stage_um.
             // For the SIFT step we need to read the same stage region from the
             // ref sub. Convert base px bbox to stage um using baseToStage (the
-            // alignment maps unflipped-base px -> stage um after Step B's
-            // bake-in via AlignmentHelper.checkForSlideAlignment).
+            // alignment maps unflipped-base px -> stage um, as returned by
+            // AlignmentHelper.checkForSlideAlignment).
             double[] baseCorners = {
                 baseRoiX,
                 baseRoiY,
@@ -1805,7 +1803,7 @@ public final class PropagationManagerDialog {
                 }
 
                 // Apply translation: offset is in stage/base um. Translate base
-                // objects directly. For legacy flipped sibling fan-out copies,
+                // objects directly. For flipped sibling fan-out copies,
                 // mirror the X / Y component as appropriate so the corrected
                 // siblings stay consistent with the corrected base.
                 double dxBasePx = offsetX / basePixelSize;

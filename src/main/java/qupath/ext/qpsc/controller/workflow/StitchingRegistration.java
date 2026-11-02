@@ -21,19 +21,17 @@ import qupath.ext.qpsc.utilities.TileRegistrationSupport;
  *
  * <h2>Why this exists</h2>
  *
- * Registration used to be wired into the acquisition stitch only, so the "Stitching recovery" and
- * "MicroManager folder stitch" utilities silently stitched at nominal positions -- a disconnect
- * that stayed invisible until a re-stitch looked wrong. Routing every path through here means a
- * stitch path cannot skip registration by omission: multi-subdir paths call {@link #stitchTargets}
+ * Registration wired into the acquisition stitch only would leave the "Stitching recovery" and
+ * "MicroManager folder stitch" utilities silently stitching at nominal positions.
+ * Routing every path through here means a stitch path cannot skip registration by omission: multi-subdir paths call {@link #stitchTargets}
  * and single-grid paths call {@link #modeForReuse}, and both honor the one "Register tiles on image
  * content" preference and the version-support probe (via {@link #enabled()}).
  *
- * <p><b>That claim was false for six weeks and is worth stating plainly.</b> The single-acquisition
+ * <p><b>The barrier must cover every stitch entry point.</b> The single-acquisition
  * branch of {@code StitchingHelper} -- the one every brightfield and fluorescence acquisition takes,
- * and any single-angle PPM run -- called the stitcher directly with a {@code stitchParams} map that
- * never carried a registration mode, so it stitched at nominal positions no matter what the
- * preference said, and logged nothing to say so (found on OWS3, 2026-08-05). Only the multi-angle
- * and channel paths went through the barrier. The lesson for anyone adding a stitch entry point:
+ * and any single-angle PPM run -- must hand the stitcher a {@code stitchParams} map that
+ * carries a registration mode; without one it stitches at nominal positions no matter what the
+ * preference says, and logs nothing to say so. The lesson for anyone adding a stitch entry point:
  * the absence of a registration mode is indistinguishable from registration being switched off, so
  * a new path that forgets one fails silently and looks like a preference problem. Grep for
  * {@code stitchImagesAndUpdateProject} callers when auditing.
@@ -136,7 +134,7 @@ public final class StitchingRegistration {
     public static <X> List<String> stitchTargets(
             List<X> targets, Path tileBaseDir, int maxConcurrency, int referenceIndex, TargetStitcher<X> stitcher) {
         int total = targets.size();
-        // Results are filled BY INDEX, not appended: the reference is no longer necessarily the
+        // Results are filled BY INDEX, not appended: the reference is not necessarily the
         // first target, and callers that pair targets with outputs positionally (channel
         // split/merge) would otherwise silently mis-associate them.
         List<String> results = new ArrayList<>(Collections.nCopies(total, null));

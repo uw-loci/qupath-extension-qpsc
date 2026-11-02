@@ -52,7 +52,7 @@ public class QPPreferenceDialog {
 
     // --- Preference definitions ---
 
-    // NOTE: Macro flip is no longer a persistent preference. It is captured per-alignment via
+    // NOTE: Macro flip is not a persistent preference. It is captured per-alignment via
     // the orientation question shown at the start of the Microscope Alignment workflow, then
     // saved into the AffineTransformPreset alongside the affine transform. Downstream reads go
     // through FlipResolver, which composes per-image metadata, the active preset, the detector
@@ -181,8 +181,8 @@ public class QPPreferenceDialog {
             PathPrefs.createPersistentPreference("focusSurfaceMode", "off");
 
     // Confirm a stored alignment against the sample before an unattended acquire pass:
-    // off / warn / halt. Defaults to halt -- the failure it catches cost 30 hours of
-    // imaging a slide label on 2026-10-02, and a false stop costs a restart.
+    // off / warn / halt. Defaults to halt -- the failure it catches (imaging a slide
+    // label for hours) is far costlier than a false stop, which costs a restart.
     private static final StringProperty alignmentCheckModeProperty =
             PathPrefs.createPersistentPreference("alignmentCheckMode", "halt");
 
@@ -225,7 +225,7 @@ public class QPPreferenceDialog {
     // Streaming-AF max exposure threshold (ms). When the active exposure
     // exceeds this, the Live Viewer auto-falls back to Sweep Focus
     // because streaming AF cannot satisfy the blur budget at higher
-    // exposures. 40 ms historical default; surfaced here so fluorescence
+    // exposures. Defaults to 40 ms; surfaced here so fluorescence
     // operators can lower it (forces sweep more often) or raise it
     // experimentally without recompiling.
     private static final javafx.beans.property.DoubleProperty streamingMaxExposureMsProperty =
@@ -238,7 +238,7 @@ public class QPPreferenceDialog {
     private static final BooleanProperty streamingAfMigrationAcknowledgedProperty =
             PathPrefs.createPersistentPreference("streamingAfMigrationAcknowledged", false);
 
-    // Set true once the user has dismissed the autofocus-YAML legacy-name
+    // Set true once the user has dismissed the autofocus-YAML old-name
     // migration banner. Suppresses re-prompt on every editor open after
     // the user has chosen "Don't ask again" for files that still hold
     // removed metric aliases (e.g. volath5 -> vollath_f5).

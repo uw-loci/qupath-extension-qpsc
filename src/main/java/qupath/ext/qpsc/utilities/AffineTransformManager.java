@@ -71,17 +71,14 @@ public class AffineTransformManager {
         /** Source scanner that produced the macro image, e.g. "Ocus40" (null = old preset). */
         private final String sourceScanner;
 
-        // ---- Anchor metadata (added 2026-04-30) ---------------------------
+        // ---- Anchor metadata ----------------------------------------------
         // The Stage Map macro overlay is placed on screen by anchoring on the
         // alignment build point: the green-box center on the displayed-flipped
-        // macro <-> the data-region center in stage. Both coordinates were
-        // computed during saveGeneralTransform but not persisted before --
-        // recovering them required re-applying the saved macro->stage transform,
-        // which is unsafe when the transform was built in the wrong frame
-        // (a class of bug observed on 2026-04-30 when alignment ran with the
-        // un-flipped entry open). Storing these explicitly makes Stage Map
-        // placement immune to any extrapolation or frame error in the
-        // transform itself.
+        // macro <-> the data-region center in stage. Both coordinates are
+        // persisted explicitly because re-deriving them by re-applying the saved
+        // macro->stage transform is unsafe when the transform was built in the
+        // wrong frame. Storing them makes Stage Map placement immune to any
+        // extrapolation or frame error in the transform itself.
 
         /** Green-box X center in the orientation-dialog flipped (displayed) macro frame, or null for legacy presets. */
         private final Double greenBoxDisplayCenterX;
@@ -306,8 +303,8 @@ public class AffineTransformManager {
 
         /**
          * True when this preset has the full anchor metadata required for
-         * transform-frame-immune Stage Map overlay placement (added 2026-04-30).
-         * Legacy presets without this data fall back to 4-corner placement.
+         * transform-frame-immune Stage Map overlay placement.
+         * Presets without this data fall back to 4-corner placement.
          */
         public boolean hasOverlayAnchor() {
             return greenBoxDisplayCenterX != null
@@ -545,8 +542,8 @@ public class AffineTransformManager {
     /**
      * The name to save a new ({@code sourceScanner}, {@code targetMicroscope}) preset under.
      * Presets are keyed by name, so saving under a name that another pair already uses would
-     * replace that pair's preset: on 2026-10-21 an LC-PolScope Hamamatsu alignment reused the
-     * Oryx preset's name and the Oryx preset was lost. A name already held by the same pair is
+     * replace that pair's preset (for example an LC-PolScope Hamamatsu alignment reusing the
+     * Oryx preset's name). A name already held by the same pair is
      * kept (that is a re-save); a name held by another pair gets the first free {@code _2},
      * {@code _3}, ... suffix.
      *
@@ -854,8 +851,8 @@ public class AffineTransformManager {
      * Full-control save with objective + detector. Same semantics as the 8-arg form, plus the
      * objective and detector that the alignment was built against are persisted into the JSON.
      * The Existing Image workflow reads these on load to advise the user when the wizard's
-     * current objective differs from the one the alignment was refined against (review
-     * finding H8). Legacy JSONs without these fields load with {@code objective=null} and
+     * current objective differs from the one the alignment was refined against.
+     * JSONs without these fields load with {@code objective=null} and
      * {@code detector=null}; the advisory dialog only fires when both sides have values.
      *
      * @param objective objective identifier the alignment was built at, or null to omit
@@ -916,7 +913,7 @@ public class AffineTransformManager {
 
             // Macro-frame alignments live in alignmentFiles/. Sub-frame auto-registrations
             // live in alignmentFiles/derived/ so they cannot be reached by the macro lookup's
-            // prefix matching. Layer 3 of the 2026-05-11 alignment-lookup restructure.
+            // prefix matching.
             boolean isDerived = PIXEL_FRAME_SUB.equals(pixelFrame);
             File alignmentDir = isDerived
                     ? new File(new File(projectDir, "alignmentFiles"), "derived")
@@ -978,7 +975,7 @@ public class AffineTransformManager {
             if (flipMacroY != null) alignmentData.put("flipMacroY", flipMacroY);
             // flipFrameVerified marks JSONs written by save sites that record the
             // ACTUAL frame the transform was built in (the open entry's FLIP_X/Y),
-            // not a hardcoded false. Older JSONs (pre 2026-05-19) lack this field
+            // not a hardcoded false. Older JSONs lack this field
             // and may mis-label a flipped-frame transform as unflipped; the load-
             // side advisory uses its absence + alignFlip=(false,false) + an active
             // scope that requires a flip to prompt the user before silently
@@ -987,19 +984,19 @@ public class AffineTransformManager {
                 alignmentData.put("flipFrameVerified", true);
             }
 
-            // Pixel-frame tag (Layer 2 of the 2026-05-11 alignment-lookup restructure).
+            // Pixel-frame tag.
             // Defense-in-depth: declares which pixel frame the transform is in so loaders
             // can refuse mismatches. Sub-image auto-register paths stamp "sub"; everything
             // else defaults to "macro" via the 8-arg overload.
             alignmentData.put(
                     "pixelFrame", (pixelFrame != null && !pixelFrame.isEmpty()) ? pixelFrame : PIXEL_FRAME_MACRO);
 
-            // Objective + detector (review finding H8, 2026-05-14). The Existing Image
+            // Objective + detector. The Existing Image
             // workflow reads these on load to advise the user when the wizard's objective
             // differs from the one this alignment was refined against -- a class of failure
             // the 5% pixel-size gate cannot catch when both objectives report the same
             // pixel size in YAML but differ in physical context (e.g. SIFT-refined
-            // translation at 10x reused at 20x). Legacy JSONs that don't carry these
+            // translation at 10x reused at 20x). JSONs that don't carry these
             // fields load with null and the advisory dialog won't fire.
             if (objective != null && !objective.isEmpty()) {
                 alignmentData.put("objective", objective);
@@ -1082,9 +1079,9 @@ public class AffineTransformManager {
 
     /**
      * Load a sub-frame alignment for the given sub-image entry. Looks first in
-     * {@code alignmentFiles/derived/} (where Layer 3 of the 2026-05-11 restructure puts new
-     * sub-image auto-registrations) and falls back to the legacy flat {@code alignmentFiles/}
-     * directory so projects with pre-restructure sub-image JSONs continue to work.
+     * {@code alignmentFiles/derived/} (where new sub-image auto-registrations are written)
+     * and falls back to the flat {@code alignmentFiles/} directory, which holds older
+     * sub-image JSONs.
      *
      * <p>Intended for callers that explicitly want a sub-image's own pixel-frame transform --
      * principally Live Viewer's Go-To-Centroid. Workflows operating on macro-frame annotations
@@ -1100,7 +1097,7 @@ public class AffineTransformManager {
      * {@code <subImageName>_<microscope>_alignment.json}. Used as the legacy
      * fallback for the cross-scope sub-image gate in the Existing Image
      * workflow: when a sub-image entry was acquired before the
-     * {@code acquired_on_microscope} metadata field shipped (2026-05-14), the
+     * {@code acquired_on_microscope} metadata field existed, the
      * derived JSON's filename is the most reliable record of which scope
      * acquired it.
      *
@@ -1673,7 +1670,7 @@ public class AffineTransformManager {
         // with no microscope field is treated as ambiguous and skipped -- the
         // user should re-run alignment under the current scope rather than
         // risk reusing a different scope's transform (the OWS3-loading-PPM-
-        // alignment bug from 2026-04-30).
+        // alignment bug).
         File legacy = new File(alignmentDir, sampleName + "_alignment.json");
         if (legacy.exists()) {
             return readAlignmentJson(legacy, activeMicroscope);
@@ -1758,7 +1755,7 @@ public class AffineTransformManager {
 
         /**
          * Objective identifier the alignment was built against (e.g. "20x"), or null when the JSON
-         * predates the field (2026-05-14, review finding H8). Macro-path loaders use this to
+         * predates the field. Macro-path loaders use this to
          * advise the user when the wizard's current objective differs.
          */
         public String getObjective() {
@@ -1779,8 +1776,8 @@ public class AffineTransformManager {
 
         /**
          * True when the JSON was written by a save site that records the actual frame the
-         * transform was built in (post-2026-05-19 fix). False for JSONs older than that
-         * fix, whose flipMacroX/Y were hardcoded false regardless of the build-time frame
+         * transform was built in. False for older JSONs,
+         * whose flipMacroX/Y were hardcoded false regardless of the build-time frame
          * and may therefore mis-label a flipped-frame transform as unflipped. The macro-
          * path loader uses this to advise the user before silently consuming a potentially
          * mis-labelled transform on a flip-needing scope.
@@ -1792,7 +1789,7 @@ public class AffineTransformManager {
 
     /**
      * Like {@link #loadSlideAlignment(Project, String)} but also surfaces the
-     * recorded flip frame (or nulls if the JSON is from before phase 3).
+     * recorded flip frame (or nulls if the JSON does not record one).
      */
     public static SlideAlignmentResult loadSlideAlignmentWithFrame(Project<BufferedImage> project, String sampleName) {
         try {
@@ -2114,10 +2111,8 @@ public class AffineTransformManager {
         private final String pixelFrame;
 
         /**
-         * Legacy constructor: defaults {@code pixelFrame} to "macro" for
-         * callers that predate the field. The 2026-05-11 lookup restructure
-         * (commit 18a800d) added {@code pixelFrame}; pre-restructure JSONs
-         * are macro-frame by construction.
+         * Defaults {@code pixelFrame} to "macro"; JSONs that carry no
+         * {@code pixelFrame} are macro-frame by construction.
          */
         public SlideAlignmentRecord(AffineTransform transform, String microscope, File file) {
             this(transform, microscope, file, PIXEL_FRAME_MACRO);
@@ -2147,7 +2142,7 @@ public class AffineTransformManager {
          * {@code "sub"}). Cross-scope composition requires macro-frame records
          * -- a sub-frame record fed to {@code CrossScopeTransformBuilder.compose}
          * would silently mix camera-pixel scale with macro-pixel preset
-         * transforms (review finding H4).
+         * transforms.
          */
         public String getPixelFrame() {
             return pixelFrame;
@@ -2254,9 +2249,8 @@ public class AffineTransformManager {
         // Resolve the same file loadSlideAlignmentFromDirectory would load: the
         // scope-namespaced <sample>_<scope>_alignment.json is preferred, the
         // legacy unscoped <sample>_alignment.json is the fallback. Reading only
-        // the legacy name here (the prior behavior) meant any modern scoped
-        // alignment always reported "Last refined: Unknown" and the age-based
-        // outdated warning never fired.
+        // the legacy name would make any scoped alignment report
+        // "Last refined: Unknown" and the age-based outdated warning never fire.
         String activeMicroscope = null;
         try {
             MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();

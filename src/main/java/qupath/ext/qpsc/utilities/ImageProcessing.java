@@ -57,7 +57,7 @@ public class ImageProcessing {
     /**
      * Why the "Data Bounds Classifier" preference cannot be used, or {@code null} when it names
      * an existing file. Microscope Alignment cannot save without it, so it checks this before
-     * its first step rather than failing after all the tile work (2026-10-19).
+     * its first step rather than failing after all the tile work.
      */
     private static void removeAddedAnnotations(
             qupath.lib.objects.hierarchy.PathObjectHierarchy hierarchy,
@@ -101,10 +101,9 @@ public class ImageProcessing {
             }
 
             // Build the detection script
-            // The script returns what the classifier produced and whether the inversion worked.
-            // 2026-10-19: on two Liver slides this step reported "no whitespace" although the
-            // same classifier marks their padding when run by hand, and the session log had
-            // nothing to say which half failed -- QuPath's own warnings go to its main log.
+            // The script returns what the classifier produced and whether the inversion worked,
+            // so the session log shows which half failed (QuPath's own warnings go to its main
+            // log).
             String script = String.format(
                     "resetSelection()\n"
                             + "createAnnotationsFromPixelClassifier(\"%s\", 1000000.0, 0, \"SELECT_NEW\")\n"
@@ -123,7 +122,7 @@ public class ImageProcessing {
             var hierarchy = gui.getViewer().getHierarchy();
             // Everything the script adds is scaffolding: remember what was there before so all
             // of it can be removed afterwards. Removing only the "Other" class and the Bounds
-            // annotation left any other class the classifier produced on the image (2026-10-19).
+            // annotation would leave any other class the classifier produced on the image.
             before = new java.util.HashSet<>(hierarchy.getAnnotationObjects());
 
             // Run the script

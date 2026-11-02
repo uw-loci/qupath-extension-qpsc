@@ -95,7 +95,7 @@ public class AutofocusEditorWorkflow {
         // back to it if the primary's peak validation fails. Operators
         // can opt out per objective by writing
         // {@code p98_p2_fallback_enabled: false} in the YAML; the field
-        // is additive (omitted in legacy files = true).
+        // is additive (omitted = true).
         boolean p98P2FallbackEnabled = true;
 
         AutofocusSettings(
@@ -134,8 +134,8 @@ public class AutofocusEditorWorkflow {
          * operator actually changed this objective's entry. Only changed entries
          * are validated on save -- otherwise saving an edit to one objective pops
          * warnings about a different objective's long-standing values, which reads
-         * as a warning about the objective being edited (reported 2026-08-21: a
-         * 20x edit surfaced "large for 40x objective" from the untouched 40x entry).
+         * as a warning about the objective being edited (e.g. a 20x edit
+         * surfacing "large for 40x objective" from the untouched 40x entry).
          */
         boolean sameValuesAs(AutofocusSettings o) {
             if (o == null) return false;
@@ -2338,10 +2338,9 @@ public class AutofocusEditorWorkflow {
             pg.setVgap(4);
             int pr = 0;
             // Manifest is the source of truth for the param TYPE (int /
-            // float / list_of_float) and RANGE. The editor was previously
-            // building a TextField for every key, which let users type
-            // "abc" into min_spots and only catch the error at YAML load
-            // time. Now: int -> Spinner<Integer>, float -> Spinner<Double>
+            // float / list_of_float) and RANGE. A plain TextField per key would
+            // let users type "abc" into min_spots and only catch the error at
+            // YAML load time, so: int -> Spinner<Integer>, float -> Spinner<Double>
             // with min/max from the manifest, list_of_float -> two-element
             // numeric editor.
             FocusMetricsManifest paramManifest = FocusMetricsManifest.get(null);
@@ -2902,7 +2901,7 @@ public class AutofocusEditorWorkflow {
      * <p>Pattern is anchored to {@code score_metric:} so docstrings,
      * comments mentioning the old name, etc. are left alone -- mirrors
      * the {@code microscope_configurations/scripts/migrate_autofocus_yaml.py}
-     * regex used by the M5 migration script.
+     * regex used by the migration script.
      */
     private static Map<String, String> findDeprecatedAliasesInFile(File file, FocusMetricsManifest manifest) {
         Map<String, String> found = new LinkedHashMap<>();

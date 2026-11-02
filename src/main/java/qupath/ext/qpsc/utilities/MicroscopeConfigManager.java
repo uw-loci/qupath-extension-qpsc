@@ -357,7 +357,7 @@ public class MicroscopeConfigManager {
      * <p>Mutates {@code configData} in place and persists the migrated
      * YAML back to disk. Idempotent on already-migrated configs.
      *
-     * <p>Defaults match the constants previously hardcoded in
+     * <p>Defaults match the constants hardcoded in
      * {@code streaming_focus.py} (Prior 1-100% scale, 11.5 um/s slow
      * speed). They are correct for PPM and wrong for any other vendor;
      * a one-time JavaFX dialog (gated by the
@@ -3607,8 +3607,7 @@ public class MicroscopeConfigManager {
     /**
      * Resolve the "active" detector for code paths that historically picked
      * {@code getAvailableDetectors().iterator().next()} as a stand-in for user
-     * intent. The 2026-04-27 silent-first-detector incident showed that pattern
-     * is unsafe: the iteration order tracks hash bucket layout, so adding a
+     * intent. That pattern is unsafe: the iteration order tracks hash bucket layout, so adding a
      * second detector silently retargets writes (WB calibration, background
      * collection paths) to the wrong YAML profile.
      *

@@ -422,10 +422,9 @@ public class TilingUtilities {
         // The (rotated N)(flipped XY) entry is in CAMERA orientation (camera-X = QuPath-X =
         // stage-X), so the entry->stage transform is DIAGONAL and the camera FOV drives the
         // grid in its native landscape orientation: frameWidth in QuPath-X (-> stage-X),
-        // frameHeight in QuPath-Y (-> stage-Y). The former swap here paired with a spurious
-        // R270 in the alignment transform (ExistingAlignmentPath, ef9926e5): the two
-        // canceled to correct stage STEPS but produced portrait tiles rotated 90 deg from
-        // the camera. Both were removed together (2026-07-12); the tiles are now landscape
+        // frameHeight in QuPath-Y (-> stage-Y). Swapping them here would need a compensating
+        // R270 in the alignment transform: the two would cancel to correct stage STEPS but
+        // produce portrait tiles rotated 90 deg from the camera. Tiles are landscape
         // and match the live camera FOV. See COORDINATE_TRANSFORMS.md "Rotated stage inserts".
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)
@@ -544,10 +543,9 @@ public class TilingUtilities {
         // The (rotated N)(flipped XY) entry is in CAMERA orientation (camera-X = QuPath-X =
         // stage-X), so the entry->stage transform is DIAGONAL and the camera FOV drives the
         // grid in its native landscape orientation: frameWidth in QuPath-X (-> stage-X),
-        // frameHeight in QuPath-Y (-> stage-Y). The former swap here paired with a spurious
-        // R270 in the alignment transform (ExistingAlignmentPath, ef9926e5): the two
-        // canceled to correct stage STEPS but produced portrait tiles rotated 90 deg from
-        // the camera. Both were removed together (2026-07-12); the tiles are now landscape
+        // frameHeight in QuPath-Y (-> stage-Y). Swapping them here would need a compensating
+        // R270 in the alignment transform: the two would cancel to correct stage STEPS but
+        // produce portrait tiles rotated 90 deg from the camera. Tiles are landscape
         // and match the live camera FOV. See COORDINATE_TRANSFORMS.md "Rotated stage inserts".
 
         // Validate FOV is reasonable (between 0.1mm and 50mm)

@@ -32,7 +32,7 @@ public final class ConfigSchema {
      * The wizard writes this into generated configs as a comment for traceability.
      * Tests verify that templates match this version.
      *
-     * <p>v3 (2026-04-29): added stage.streaming_af.* block. Pre-v3
+     * <p>v3 added the stage.streaming_af.* block. Pre-v3
      * configs are auto-migrated on first load by
      * {@link qupath.ext.qpsc.utilities.MicroscopeConfigManager} -- see
      * its constructor / loader for the migration logic.

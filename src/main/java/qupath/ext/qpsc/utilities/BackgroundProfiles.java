@@ -426,7 +426,7 @@ public final class BackgroundProfiles {
      *
      * <p>Only a recorded value counts. {@code ImageMetadataManager.getSlideInsertion} answers A
      * for an entry without one, and stitched sub-images never get one, so the pre-acquisition
-     * check told the operator "Slide placement now: A" for a slide set to B (PPM, 2026-10-22).
+     * check would tell the operator "Slide placement now: A" for a slide set to B.
      * An entry without its own value takes its base image's, the entry the Stage Map's Slide
      * control writes to.
      */

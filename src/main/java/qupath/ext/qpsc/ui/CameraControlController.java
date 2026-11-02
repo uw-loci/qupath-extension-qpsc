@@ -234,16 +234,13 @@ public class CameraControlController {
 
         content.getChildren().add(selectionGrid);
 
-        // Global status label -- declared early so sections built before
-        // the legacy "Global status label" block (e.g. Binning) can write
-        // to it. The block below where it used to be declared has been
-        // converted to a no-op assignment for clarity.
+        // Global status label -- declared early so sections built before the
+        // rest of the panel (e.g. Binning) can write to it.
         Label statusLabel = new Label();
         statusLabel.setStyle("-fx-font-size: 11px;");
 
         // --- Binning ---
-        // Camera Control v2 phase 1: surfaces the camera's MM Binning
-        // property. Hidden when the camera reports no choices (only [1])
+        // Surfaces the camera's MM Binning property. Hidden when the camera reports no choices (only [1])
         // so cameras without the property don't grow a useless control.
         try {
             MicroscopeSocketClient.BinningResult bin =
@@ -719,9 +716,8 @@ public class CameraControlController {
         // selected acquisition profile (Fluorescence -> Lumencor / SOLA, BF
         // -> DiaLamp, etc.). The label refreshes on every profile combo
         // change so the user always sees the device that profile-apply will
-        // touch. Fixes the 2026-04-26 report where switching to a
-        // Fluorescence profile still showed "DiaLamp" (the first modality's
-        // illumination in the YAML iteration order).
+        // touch, rather than the first modality's illumination in
+        // the YAML iteration order.
         VBox illumSection = new VBox(4);
         // Holders so the refresh runnable defined here can be invoked later
         // from the profile-combo listener.
@@ -732,10 +728,8 @@ public class CameraControlController {
         // resolve modality without forward-referencing the combo itself.
         final String[] selectedProfileHolder = {null};
         try {
-            // Camera Control v2 phase 3c: per-source Apply rows built from
-            // GETCAP's illumination list. Replaces the legacy single-source
-            // (active-only) Set row and the read-only status grid with one
-            // editable row per declared source. Each row gets its own Apply
+            // Per-source Apply rows built from GETCAP's illumination list:
+            // one editable row per declared source. Each row gets its own Apply
             // wired to SETILLMD so the user can drive Lumencor while in
             // Brightfield mode (and vice versa) without first APPLYPRing.
             // Vendor-agnostic: the layout is built from the capability
@@ -803,8 +797,8 @@ public class CameraControlController {
 
                 // Gather unique modality names from each profile's `modality:` field
                 // so the user can narrow the profile list (e.g. only show Fluorescence
-                // profiles when working in Fluorescence mode). "All" keeps the legacy
-                // behavior of showing every profile.
+                // profiles when working in Fluorescence mode). "All" shows
+                // every profile.
                 java.util.LinkedHashSet<String> profileModalities = new java.util.LinkedHashSet<>();
                 profileModalities.add("All modalities");
                 for (Object value : profileMap.values()) {
@@ -1041,7 +1035,7 @@ public class CameraControlController {
                 }
             }
 
-            // Second-tier: any modality with a label (legacy fallback).
+            // Second-tier: any modality with a label (fallback).
             for (Object cfg : modMap.values()) {
                 String label = extractIllumLabel(cfg);
                 if (label != null) return label;

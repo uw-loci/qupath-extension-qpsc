@@ -84,9 +84,8 @@ class SiftCapturePane extends VBox {
 
     /**
      * SIFT confidence at or above which a match is trusted, captured from the first
-     * {@link #capture} call so the MANUAL "Auto-Align (SIFT)" button applies the same bar. It
-     * used to pass 0.0, which meant a hand-run SIFT had no gate at all -- fine while the only
-     * thing that followed was a human deciding whether to press Capture, wrong now that an
+     * {@link #capture} call so the MANUAL "Auto-Align (SIFT)" button applies the same bar. A
+     * 0.0 bar would leave a hand-run SIFT with no gate at all, which is wrong when an
      * automatic batch decides from the same result.
      */
     private volatile double confidenceThreshold =

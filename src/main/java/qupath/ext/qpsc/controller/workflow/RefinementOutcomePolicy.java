@@ -6,9 +6,8 @@ import qupath.ext.qpsc.controller.workflow.SingleTileRefinement.RefinementResult
  * What the Existing Image workflow does with a refinement result.
  *
  * <p>Pure: the decision is a function of the result alone, so it is unit-tested without a GUI.
- * Before 2026-10-27 every non-accepted result proceeded to acquisition, so closing the
- * refinement dialog with the window's X (or canceling the tile pick) started a run the
- * operator had not asked for.
+ * Only an explicit Skip proceeds to acquisition; closing the refinement dialog with the
+ * window's X (or canceling the tile pick) must not start a run the operator had not asked for.
  */
 public final class RefinementOutcomePolicy {
 
@@ -29,7 +28,7 @@ public final class RefinementOutcomePolicy {
     }
 
     /**
-     * @param result the refinement result; {@code null} is the legacy hard-block signal
+     * @param result the refinement result; {@code null} is the hard-block signal
      * @return the decision
      */
     public static Decision decide(RefinementResult result) {

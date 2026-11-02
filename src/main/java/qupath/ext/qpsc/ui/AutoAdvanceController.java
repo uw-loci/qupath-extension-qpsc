@@ -97,10 +97,8 @@ public final class AutoAdvanceController {
         mode = (batchMode == null) ? MultiSlideAcquisitionMode.MANUAL : batchMode;
         autoAdvanceSeconds = Math.max(0, seconds);
         overriddenThisSlide = false;
-        // Logged for EVERY mode, including MANUAL. It used to log only when automatic, so a
-        // batch running manually produced no line at all -- and "was this run armed?" is the
-        // first question asked when an operator finds themselves clicking every dialog. Silence
-        // could not answer it.
+        // Logged for EVERY mode, including MANUAL: "was this run armed?" is the first question
+        // asked when an operator finds themselves clicking every dialog, and silence cannot answer it.
         if (mode.isAutomatic()) {
             logger.info(
                     "Auto-advance ARMED: mode={} countdown={}s",

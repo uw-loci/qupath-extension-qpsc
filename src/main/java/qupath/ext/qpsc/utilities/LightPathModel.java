@@ -151,11 +151,11 @@ public final class LightPathModel {
      * {@link #KEY_STAGE_VIEW_FLIP}).
      *
      * <p>The map draws stage coordinates through the insert's axis inversion, which is the stage
-     * polarity, so on an inverted-axis stage the picture came out mirrored on that axis relative to
-     * the stage seen from the front. The polarity term undoes it. It is what each rig needed by eye:
-     * the LC-PolScope (polarity Y) was given {@code stage_view_flip: y} by hand on 2026-10-26, OWS3
-     * (polarity X and Y) drew the slide turned 180 with its label on the left (2026-10-27), and the
-     * PPM (polarity normal) needed nothing. Display only.
+     * polarity, so on an inverted-axis stage the picture comes out mirrored on that axis relative to
+     * the stage seen from the front. The polarity term undoes it. It is what each rig needs by eye:
+     * the LC-PolScope (polarity Y) needs {@code stage_view_flip: y}, OWS3
+     * (polarity X and Y) would otherwise draw the slide turned 180 with its label on the left, and the
+     * PPM (polarity normal) needs nothing. Display only.
      */
     public static boolean[] stageViewFlipFlags(String insertion, String stageViewMirror, StagePolarity polarity) {
         boolean[] rotation = slideRotationFlipFlags(insertion);
@@ -182,7 +182,7 @@ public final class LightPathModel {
      * in a vertical holder (the four-slide carrier, {@code single_v}) has it at the far end or the
      * near end, and the two placements are still a 180 apart: "upside down" to the operator. The
      * far end is the top of Stage View, which draws the stage as the operator sees it from the
-     * front. "Label left / right" on a vertical holder was the 2026-10-27 complaint.
+     * front, so "label left / right" does not describe a vertical holder.
      *
      * @param vertical whether the slide stands along the stage's Y axis (label at an end)
      * @param labelRightOrAwayForA for a horizontal slide, whether placement A has the label on
@@ -213,8 +213,8 @@ public final class LightPathModel {
      * them out from the picture ({@link #placementCaptions}), or null when it has not shown a slide
      * on that insert yet. Remembered across sessions, so text written away from the Stage Map (a
      * background profile's suggested name, a placement warning) names the label side the way the
-     * Stage Map does instead of guessing it: "label left" for A was wrong on the LC-PolScope,
-     * where A puts the label on the right (2026-10-28).
+     * Stage Map does instead of guessing it ("label left" for A is wrong on the LC-PolScope,
+     * where A puts the label on the right).
      */
     public static String[] knownPlacementCaptions(String insertId) {
         String key = captionKey(insertId);
@@ -408,7 +408,7 @@ public final class LightPathModel {
      * <p>This is deliberately independent of scope type and optical flip. On a real inverted scope
      * the physical inversion is already carried by the stage polarity and the per-slide alignment
      * transform -- the Stage Map's macro overlay is already drawn in that inverted baseline (verified
-     * on OWS3 2026-08-09: {@code sX=sY=+1} because the insert inversion {@code dirX=dirY=-1} and the
+     * on OWS3: {@code sX=sY=+1} because the insert inversion {@code dirX=dirY=-1} and the
      * transform sign {@code m00=m11<0} cancel). Re-applying the scope-face flip on top of that
      * baseline double-counts it and mirrors an already-correct macro, which is why the Stage Map must
      * use THIS (insertion only), not {@link #benchFlipFlags}. Equals {@code benchFlipFlags(upright,

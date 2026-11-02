@@ -31,8 +31,7 @@ import qupath.lib.projects.ProjectImageEntry;
  *       workflow and persisted into the preset.
  * </ol>
  *
- * <p>This replaces the chain previously inlined in {@code AcquisitionManager.getParentFlipX/Y}.
- * Per-pair flip lives on the saved preset so switching presets between source scanner -> target
+ * <p>Per-pair flip lives on the saved preset so switching presets between source scanner -> target
  * microscope pairs (e.g. Ocus40 -> OWS3 vs. Ocus40 -> CAMM-PPM) gives different flip values
  * without any global state.
  *

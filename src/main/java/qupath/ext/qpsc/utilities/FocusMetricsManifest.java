@@ -631,7 +631,7 @@ public final class FocusMetricsManifest {
 
     /**
      * Generate the header comment block written above the autofocus
-     * YAML on save. Replaces the previously hardcoded block in
+     * YAML on save, generated (not hardcoded) in
      * {@code AutofocusEditorWorkflow.saveAutofocusSettings} so the
      * comment can never drift from the real metric / strategy /
      * modality-default vocabulary the runtime accepts.

@@ -484,9 +484,9 @@ public class AffineTransformationController {
      * Reports transform health after a refinement. The residual is the meaningful metric:
      * if back-projection residuals are small the transform is good regardless of how the
      * translation term moved between iterations. The translation delta is logged at info
-     * level for traceability but no longer triggers a warning -- on a stage with axis
+     * level for traceability but does not trigger a warning -- on a stage with axis
      * inversion the first refinement reliably produces a slide-width-scale translation
-     * delta even when the alignment is perfect, which the previous warning misreported.
+     * delta even when the alignment is perfect.
      *
      * @param previousTransform the transform before refinement
      * @param newTransform      the transform after refinement

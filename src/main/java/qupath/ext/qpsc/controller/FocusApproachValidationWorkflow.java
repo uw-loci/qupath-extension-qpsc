@@ -256,10 +256,9 @@ public final class FocusApproachValidationWorkflow {
      * Which objective is actually mounted.
      *
      * <p>This resolution order -- MicroManager's reported pixel size, then the session's
-     * objective state, then the config -- used to live here BECAUSE
-     * {@code TestAutofocusWorkflow.getCurrentObjective} got it wrong. It no longer does: the
-     * order moved there, so every caller resolves the objective the same way instead of this
-     * dialog alone being correct. Kept as a named method because the call reads better here.
+     * objective state, then the config -- is implemented in
+     * {@code TestAutofocusWorkflow.getCurrentObjective}, so every caller resolves the objective
+     * the same way. Kept as a named method because the call reads better here.
      *
      * @return the best available objective ID, or null when nothing resolves
      */
@@ -757,7 +756,7 @@ public final class FocusApproachValidationWorkflow {
             // The operator decides; the measurement recommends. It is taken on ONE slide at ONE
             // XY, so "no surface peak here" is not "no surface peak ever" -- and getting that
             // wrong is expensive and quiet: the approach commits the first peak it meets, which
-            // on 2026-08-28 was 200 um off the sample and logged as a success.
+            // can be 200 um off the sample and be logged as a success.
             // Seeded from the measurement OR whatever the operator chose last time, because a
             // measurement can only ever argue the gate ON. It is taken at one XY on one slide,
             // so "no surface peak here" is not evidence of "no surface peak anywhere" -- there

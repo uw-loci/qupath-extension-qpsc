@@ -103,10 +103,10 @@ public final class ConfigFileWriter {
                 }
             }
 
-            // No background_correction placeholder here. It used to be written unconditionally,
-            // which overwrote a configured base_folder with "" on every re-run. The authoritative
-            // copy lives in imageprocessing_<scope>.yml (that is the one getBackgroundCorrectionEntry
-            // reads); seeding a second, competing copy from the wizard only created drift.
+            // No background_correction placeholder here: writing one would overwrite a configured
+            // base_folder with "" on every re-run. The authoritative copy lives in
+            // imageprocessing_<scope>.yml (that is the one getBackgroundCorrectionEntry reads);
+            // a second, competing copy from the wizard would only create drift.
 
             modalities.put(name, modConfig);
         }
@@ -491,12 +491,12 @@ public final class ConfigFileWriter {
      * Recursively merges {@code incoming} over {@code existing}, preserving anything the wizard
      * does not manage.
      *
-     * <p>This is the whole point of the class as it now stands. The wizard collects a fraction of
+     * <p>This is the whole point of the class. The wizard collects a fraction of
      * what a working config holds -- it knows nothing about {@code stage.inserts},
      * {@code light_path}, {@code stage.focus.retract_sign}, {@code stage.safe_z_um},
-     * {@code acquisition_profiles}, or a modality's {@code channels} list -- and it used to write
-     * whole files from that fraction. Re-running it on a calibrated scope therefore deleted every
-     * measured value the rig had, with no prompt and no backup.
+     * {@code acquisition_profiles}, or a modality's {@code channels} list. Writing
+     * whole files from that fraction would delete every measured value the rig has on a
+     * calibrated scope, with no prompt and no backup.
      *
      * <p>Rules: nested maps recurse; a leaf in {@code incoming} wins; a key present only in
      * {@code existing} survives. Lists are replaced wholesale, because the wizard's lists

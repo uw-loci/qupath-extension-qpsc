@@ -152,7 +152,7 @@ public class AcquisitionManager {
      * The exception that made the most recent annotation fail, or null when none did. Lets the
      * end of the chain tell a failure from a cancellation: both arrive as {@code false}, and
      * reporting a refused or broken acquisition as "cancelled by user" is a false statement
-     * about a run nobody touched (2026-10-12, twice).
+     * about a run nobody touched.
      */
     private volatile Throwable lastAnnotationFailure = null;
 
@@ -179,8 +179,8 @@ public class AcquisitionManager {
          * Too far from the last good Z, but the previous annotation was rejected on the same
          * side and agrees with this one to within the cap. Two independent measurements that
          * agree with each other and not with the anchor say the anchor is wrong: adopt this
-         * one. A runaway walks further away each time (Z=7 -> 34 -> 104 on 2026-05-31), so it
-         * never agrees with its predecessor; slide 4 of 2026-10-04 did (-330.2 then -313.0,
+         * one. A runaway walks further away each time (e.g. Z=7 -> 34 -> 104), so it
+         * never agrees with its predecessor; a stale seed does (e.g. -330.2 then -313.0,
          * both deep of a stale -285.8 seed).
          */
         ADOPT_AGREED
@@ -647,8 +647,7 @@ public class AcquisitionManager {
      *
      * <p>This mirrors the check {@link BoundedAcquisitionWorkflow} already runs, but
      * for the Existing-Image and multi-slide-batch paths, which apply the same
-     * background correction and previously ran no such check -- the "doesn't always
-     * warn me" gap. Only fires when correction will actually run. Returns {@code null}
+     * background correction. Only fires when correction will actually run. Returns {@code null}
      * to cancel (user declined), matching the {@link #checkDiskSpace} contract so
      * {@link #processAnnotations} short-circuits.
      */
@@ -669,7 +668,7 @@ public class AcquisitionManager {
                 return null;
             }
             // The chosen white-balance mode's own calibration, now that it is known. The
-            // wizard no longer warns about modes this acquisition does not use.
+            // wizard does not warn about modes this acquisition does not use.
             if (!BackgroundIlluminationCheck.checkChosenWbModeAndWarn(modality, objective, detector, state.wbMode)) {
                 logger.warn("Acquisition cancelled by user after the white balance calibration warning");
                 return null;
@@ -1012,7 +1011,7 @@ public class AcquisitionManager {
             if (progressDialog != null) {
                 if (cancelGate.isCancelled()) {
                     // The stage is released: this is the acknowledgement the dialog has been
-                    // waiting for since Cancel was pressed (it no longer closes on its own).
+                    // waiting for since Cancel was pressed (it does not close on its own).
                     progressDialog.acknowledgeCancelled("Cancelled - the microscope has stopped");
                 } else if (error != null) {
                     Platform.runLater(() -> progressDialog.showError("Workflow failed: " + error.getMessage()));
@@ -1342,7 +1341,7 @@ public class AcquisitionManager {
                                 wsiDarkThreshold = ((Number) afParams.get("wsi_tissue_dark_threshold")).intValue();
                         }
                         // One macro-image scan serves the preferred tile, the allow-list and
-                        // the survey; it used to be prepared once per consumer.
+                        // the survey.
                         WsiTileScan scan = prepareWsiTileScan(annotation);
                         int preferredTile =
                                 findBestAfTileFromWSI(scan, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
@@ -2347,11 +2346,10 @@ public class AcquisitionManager {
      *
      * <p>Timeout is generous (60s) because if the workflow just auto-created or
      * auto-opened a flipped duplicate via ImageFlipHelper, the JavaFX thread is
-     * busy loading the new SVS image data via TransformedServerBuilder. Observed
-     * on OWS3 2026-05-01: opening the freshly-created flipped duplicate pinned
-     * the JavaFX thread for ~9 seconds, so the previous 5s budget tripped a
-     * spurious TimeoutException and aborted the entire acquisition right after
-     * tile generation completed.
+     * busy loading the new SVS image data via TransformedServerBuilder. Opening
+     * a freshly-created flipped duplicate can pin the JavaFX thread for ~9 seconds,
+     * so a short budget would trip a spurious TimeoutException and abort the
+     * entire acquisition right after tile generation completed.
      */
     private DualProgressDialog getDialogSafely(CompletableFuture<DualProgressDialog> dialogSetup) {
         try {
@@ -2367,10 +2365,9 @@ public class AcquisitionManager {
      *
      * <p>The push is the load-bearing half. This is the end of a run that may have been
      * unattended for hours, and {@link UIFunctions#notifyUserOfError} only logs and opens a
-     * modal -- which nobody sees until they next sit down at the workstation. On 2026-09-27 a
-     * long PPM run died on a ZStage error and the operator found out at next login, having had
-     * no reason to check; the same alert channel that reports "slide acquired" said nothing
-     * about "slide failed".
+     * modal -- which nobody sees until they next sit down at the workstation. Without the push, a
+     * long run that dies on a hardware error is found out only at next login; the same alert
+     * channel that reports "slide acquired" must also report "slide failed".
      *
      * <p>Sent at URGENT rather than HIGH because, unlike the saturation and time-lapse
      * warnings, nothing continues after this: the region is over and the stage is idle.
@@ -2395,8 +2392,8 @@ public class AcquisitionManager {
 
     /**
      * Shows notification that acquisition was canceled.
-     * Note: This method is kept for potential future use but is no longer called
-     * for user-initiated cancellations since the dialog already shows cancellation state.
+     * Not called for user-initiated cancellations, since the dialog already shows
+     * cancellation state.
      */
     private void showCancellationNotification() {
         // User initiated cancellation - no error notification needed
@@ -3223,8 +3220,8 @@ public class AcquisitionManager {
 
         // Keep clear of the region boundary before spreading. Farthest-point sampling
         // fills the extremes first, and a boundary tile is the one most likely to be half
-        // off the tissue -- the same reason the first AF position has been inset one
-        // diagonal FOV since 2025-12-12. Replaying real regions measured the cost of not
+        // off the tissue -- the same reason the first AF position is inset one
+        // diagonal FOV. Replaying real regions measured the cost of not
         // doing this: a 16-point farthest-point survey produced a worse point set than a
         // 9-point one on five regions, the extra picks all being edge. Tissue scoring
         // catches the blank ones, but a boundary tile that is half tissue still passes it

@@ -526,8 +526,7 @@ public class StageControlPanel extends VBox {
         navigateTab = new Tab("Navigate");
         // When Live View is off, the tab text turns orange so the user can see
         // the gate from any tab. The in-tab banner repeats the message in full.
-        // (Previously this used an orange dot graphic, but that pushed the tab
-        // label off-center; styling the text keeps it centered.)
+        // Styling the text keeps the tab label centered.
         VBox navigateContent = new VBox(8);
         navigateContent.setPadding(new Insets(8));
 
@@ -695,7 +694,7 @@ public class StageControlPanel extends VBox {
         navXyStatus.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         navXyStatus.textProperty().bind(xyStatus.textProperty());
 
-        // --- Move-to-position controls (formerly the Position tab) ---
+        // --- Move-to-position controls ---
         Label moveToLabel = new Label("Move to Position");
         moveToLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold;");
 
@@ -765,7 +764,7 @@ public class StageControlPanel extends VBox {
         zBarPanel.getControlsColumn().getChildren().add(stepBlock);
 
         // The typed Z target and Move Z sit with the other Z controls too, under the step
-        // field, rather than in Move to Position with X/Y (requested 2026-10-19). Stacked
+        // field, rather than in Move to Position with X/Y. Stacked
         // for the same narrow-column reason as the step block.
         moveZBtn.setMaxWidth(Double.MAX_VALUE);
         VBox moveZBlock = new VBox(2, zLabel, zField, moveZBtn);
@@ -1660,7 +1659,7 @@ public class StageControlPanel extends VBox {
 
                 // Debounce spinner edits: dragging the arrows fires the
                 // listener on every interpolated value (50-100/sec), and each
-                // fire previously spawned a daemon thread + socket round-trip.
+                // fire would otherwise spawn a daemon thread + socket round-trip.
                 // PauseTransition coalesces -- only the last value seen in a
                 // 150 ms quiet window actually goes to the wire. The pending
                 // value is also stored in cameraChannelExpPending so
@@ -2634,7 +2633,7 @@ public class StageControlPanel extends VBox {
         // Use the detected detector (matched from MM pixel size) when available.
         // When detection fails, defer to getActiveDetector() (PersistentPreferences
         // last-detector or the unique hardware detector) rather than iterator-first.
-        // The 2026-04-27 silent-first-detector incident showed that hash-iteration
+        // Hash-iteration
         // order is not safe to use as a stand-in for user intent -- and presets
         // are keyed by detector, so saving under the wrong key strands them.
         if (currentCameraDetectorId != null && !"Unknown".equals(currentCameraDetectorId)) {
@@ -2879,11 +2878,9 @@ public class StageControlPanel extends VBox {
             });
 
             VBox illumBox = new VBox(2);
-            // Keep the ON/OFF toggle OFF the slider row. Previously the row read
-            // "DiaLamp [====slider====] ON", which looks like the slider's right
-            // end is an ON switch (and reinforced the "0..1" misread when the
-            // range bug collapsed the track). The toggle now sits on the bottom
-            // row, visually separated from the slider track.
+            // Keep the ON/OFF toggle OFF the slider row: "DiaLamp [====slider====] ON"
+            // looks like the slider's right end is an ON switch. The toggle sits on the
+            // bottom row, visually separated from the slider track.
             HBox topRow = new HBox(4, label, slider);
             topRow.setAlignment(Pos.CENTER_LEFT);
             HBox bottomRow = new HBox(6);
@@ -2973,7 +2970,7 @@ public class StageControlPanel extends VBox {
      *
      * <p>APPLYPR resets exposure + illumination to the YAML profile's
      * apply_mode_setup defaults, but the UI fields still show whatever the user
-     * (or saved prefs) had previously displayed. Rebuilding the panel re-pulls
+     * (or saved prefs) displayed earlier. Rebuilding the panel re-pulls
      * the saved prefs and pushes them back to hardware via buildExposureControl
      * / buildIlluminationControl's restore threads, so the displayed values
      * match what is actually on the camera. Without this, the user sees stale
@@ -3700,7 +3697,7 @@ public class StageControlPanel extends VBox {
                         if (mc == null || !mc.isConnected()) throw new Exception("Not connected");
 
                         // New format:    profile|exp[,r,g,b]|gain,aR,aB|illum
-                        // Legacy format: exp[,r,g,b]|gain,aR,aB|illum
+                        // Older format: exp[,r,g,b]|gain,aR,aB|illum
                         // Detect by checking whether the first segment
                         // parses as a float (legacy) or a profile name (new).
                         String[] parts = presetStr.split("\\|");
@@ -4328,15 +4325,13 @@ public class StageControlPanel extends VBox {
                         double z = MicroscopeController.getInstance().getStagePositionZ();
                         Platform.runLater(() -> {
                             zField.setText(String.format("%.2f", z));
-                            // The Z bars need this same value. They used to be fed
-                            // only by StagePositionManager -- whose cache is NaN
-                            // until its poller delivers, and whose poller does not
+                            // The Z bars need this same value. StagePositionManager
+                            // alone cannot feed them: its cache is NaN
+                            // until its poller delivers, and its poller does not
                             // start until this panel registers as its first
-                            // listener, which happens AFTER this method runs. So on
-                            // a first open the bars had no Z at all and sat at the
-                            // coarse-range midpoint while this very field showed the
-                            // correct position, because the field had a direct read
-                            // and the bars did not. Give them the direct read too.
+                            // listener, which happens AFTER this method runs. On a
+                            // first open the bars would sit at the coarse-range
+                            // midpoint, so give them the direct read too.
                             if (zBarPanel != null) {
                                 zBarPanel.setCurrentZ(z);
                             }
@@ -4509,7 +4504,7 @@ public class StageControlPanel extends VBox {
      * that pause an acquisition locks everything, since moving off the tile would acquire the
      * wrong field. Called from the joystick and arrow executors as well as the FX thread, so
      * the status labels are set through {@code Platform.runLater}; a direct setText from the
-     * joystick thread threw and swallowed the move (2026-10-26).
+     * joystick thread throws and swallows the move.
      *
      * @param allowDuringManualFocus kept for the call sites; every control is now allowed
      *     during a manual-focus pause, Z and XY alike
@@ -4735,7 +4730,7 @@ public class StageControlPanel extends VBox {
      * <p>Exactly one worker runs per gesture ({@link #zWorkerRunning} guard):
      * this, the {@link #MIN_DISPATCH_INTERVAL_MS} floor, and the absence of any
      * server-side {@code wait_z} mean a fast swipe cannot flood the server --
-     * the failure mode behind the 2026-04-15 Z-scroll storm.
+     * the Z-scroll storm failure mode.
      *
      * <p>The end-of-gesture check is re-evaluated under {@link #zWorkerMutex}
      * so a scroll event racing with worker shutdown cannot be lost: either the
@@ -4948,7 +4943,7 @@ public class StageControlPanel extends VBox {
 
         if (!hasAlignment) {
             // BoundingBox sub-image path: either the per-entry stage-bounds
-            // metadata (2026-05-15+) or the sub-image alignment JSON in
+            // metadata or the sub-image alignment JSON in
             // alignmentFiles/derived/ (older entries) is enough for
             // handleGoToCentroid to navigate, even though loadSlideAlignment
             // above doesn't reach those. Check both so the button stays
@@ -5057,10 +5052,7 @@ public class StageControlPanel extends VBox {
         // BoundingBox acquisitions). The stage bounds + stitcher flips are
         // stamped on the entry by StitchingHelper.autoRegisterBoundsTransformIfAvailable
         // and travel WITH the entry -- no JSON lookup, no cross-scope guard,
-        // no directory restructure to trip over. Rebuilt 2026-05-15 after the
-        // alignment-lookup restructure (commit 18a800d) broke the JSON path
-        // for bounded acquisitions (cross-scope guard rejecting legacy files /
-        // derived directory vs flat directory confusion).
+        // no directory layout to trip over.
         if (gui.getProject() != null) {
             try {
                 @SuppressWarnings("unchecked")
@@ -5108,12 +5100,11 @@ public class StageControlPanel extends VBox {
         }
 
         // Fallback: sub-image alignment JSON. Used for entries that pre-date
-        // the 2026-05-15 per-entry-metadata stamp, or for sub-images other
+        // the per-entry-metadata stamp, or for sub-images other
         // than BoundingBox (e.g. annotation-based sub-acquisitions whose
         // alignment is auto-registered from a parent macro). Sub-frame
-        // transforms live in alignmentFiles/derived/ as of Layer 3 of the
-        // 2026-05-11 lookup restructure; loadDerivedAlignment also falls
-        // back to the flat directory for backward compatibility.
+        // transforms live in alignmentFiles/derived/; loadDerivedAlignment also falls
+        // back to the flat directory.
         if (gui.getProject() != null) {
             try {
                 @SuppressWarnings("unchecked")
@@ -5123,14 +5114,12 @@ public class StageControlPanel extends VBox {
                     AffineTransform subAlignment = AffineTransformManager.loadDerivedAlignment(project, subImageName);
                     if (subAlignment != null) {
                         // ====================================================
-                        // BEGIN one-shot metadata backfill (introduced 2026-05-15).
+                        // BEGIN one-shot metadata backfill.
                         //
                         // WHY THIS EXISTS:
-                        //   Bounded acquisitions made BEFORE 2026-05-15 didn't
-                        //   stamp STAGE_BOUNDS_*_UM / STITCHER_FLIP_* on the
-                        //   project entry -- that stamp only ships from the
-                        //   accompanying StitchingHelper change forward. Those
-                        //   older entries DO have a working sub-image alignment
+                        //   Older bounded acquisitions did not stamp
+                        //   STAGE_BOUNDS_*_UM / STITCHER_FLIP_* on the project
+                        //   entry. Those entries DO have a working sub-image alignment
                         //   JSON (otherwise this branch wouldn't have fired),
                         //   so we can reconstruct the per-entry metadata from
                         //   the transform geometry. Doing it here means the
@@ -5156,10 +5145,8 @@ public class StageControlPanel extends VBox {
                         // HOW TO REMOVE LATER:
                         //   Delete this block (between BEGIN and END markers).
                         //   No other code reads from or depends on it.
-                        //   Safe to strip once enough time has passed that
-                        //   pre-2026-05-15 bounded entries are no longer in
-                        //   active use, or once the older entries have been
-                        //   touched at least once and self-healed.
+                        //   Safe to strip once the older entries are no longer in
+                        //   active use, or have self-healed.
                         // ====================================================
                         try {
                             ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
@@ -5244,8 +5231,8 @@ public class StageControlPanel extends VBox {
                     Boolean alignFlipY = withFrame != null ? withFrame.getFlipMacroY() : null;
 
                     if (raw == null) {
-                        // Fall back to the legacy raw loader for older JSONs that
-                        // pre-date the with-frame format; for those the saved
+                        // Fall back to the raw loader for older JSONs that
+                        // lack the with-frame format; for those the saved
                         // transform is in unflipped-base frame already (Manual /
                         // ExistingAlignment paths produced that).
                         raw = AffineTransformManager.loadSlideAlignment(project, imageName);

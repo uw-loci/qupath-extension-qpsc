@@ -461,7 +461,7 @@ public class WhiteBalanceDialog {
                     // Get objective and detector (shared by both modes). Both come
                     // from the user's explicit dropdown selection -- never iterator-
                     // first, which silently mis-targeted Teledyne when JAI was
-                    // intended (2026-04-27 incident).
+                    // intended.
                     String selectedObjective = objectiveCombo.getValue() != null
                             ? objectiveCombo.getValue().toString()
                             : null;
@@ -766,8 +766,8 @@ public class WhiteBalanceDialog {
                     // Prefer the objective actually mounted right now (matched against the live
                     // MicroManager pixel size) over the wizard's last-selected pref. The pref
                     // goes stale whenever the user swaps objectives without going through the
-                    // Acquisition Wizard, which previously caused WB calibration on the 40x to
-                    // be saved into the 20x YAML slot (2026-05-04 incident).
+                    // Acquisition Wizard, and a stale pref saves WB calibration into the wrong
+                    // objective's YAML slot.
                     Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
                             detectMountedHardware(configManager);
                     String defaultObjective = liveMatch
@@ -810,9 +810,9 @@ public class WhiteBalanceDialog {
         row++;
 
         // Detector selection - calibration is also detector-specific. Without this
-        // dropdown, the dialog used to silently pick whichever detector iterator()
-        // returned first, which on the PPM scope landed on Teledyne instead of JAI
-        // and left the JAI YAML stale (2026-04-27 incident).
+        // dropdown, the dialog would silently pick whichever detector iterator()
+        // returned first (Teledyne instead of JAI on the PPM scope), leaving the
+        // intended detector's YAML stale.
         Label detectorLabel = new Label("Detector:");
         detectorLabel.setTooltip(
                 new Tooltip("Select the detector for calibration (exposures + gain are detector-specific)"));

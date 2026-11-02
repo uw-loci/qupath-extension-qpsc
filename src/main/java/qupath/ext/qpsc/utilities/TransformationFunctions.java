@@ -1208,11 +1208,11 @@ public class TransformationFunctions {
      *
      * <p>Moving from one point of such an image to another is exactly a double-click-to-center
      * in the Live Viewer, so this uses the same mapping, {@link StageImageTransform}: camera
-     * orientation AND stage polarity. Polarity alone ignored the camera orientation that
+     * orientation AND stage polarity. Polarity alone would ignore the camera orientation that
      * Calibrate Directions records; on the LC-PolScope (calibrated with a Y flip in the camera
-     * orientation) the second alignment tile was predicted in the wrong Y direction, and the
-     * per-tile refinement, which re-solves only the translation, would have kept the mirrored Y
-     * (2026-10-19). On a NORMAL camera orientation this equals the old polarity-only scaling.
+     * orientation) the second alignment tile would be predicted in the wrong Y direction, and the
+     * per-tile refinement, which re-solves only the translation, would keep the mirrored Y.
+     * On a NORMAL camera orientation this equals polarity-only scaling.
      *
      * @param pixelSizeSourceImage pixel size of the source image in microns
      * @param transform the scope's stage/camera transform, normally {@link StageImageTransform#current()}
