@@ -1603,7 +1603,7 @@ White balance mode is no longer a global preference. Instead, WB mode is selecte
 | **Simple** | Uniform exposure adjustment across all angles |
 | **Per-angle** | Per-angle calibrated exposures from WB calibration |
 
-This dropdown appears in the Bounding Box acquisition dialog, Existing Image acquisition dialog, and Background Collection dialog. The selected mode flows through to the `--wb-mode` command parameter.
+This dropdown appears in the Bounding Box acquisition dialog, Existing Image acquisition dialog, and Background Collection dialog. In the two acquisition dialogs, **Simple** and **Per-angle** are offered only for PPM. The selected mode flows through to the `--wb-mode` command parameter.
 
 **Note:** The previous `JAI White Balance Mode` preference (SIMPLE/PPM) has been removed in v0.3.0.
 
