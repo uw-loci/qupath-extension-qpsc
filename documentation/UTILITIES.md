@@ -56,7 +56,6 @@ The **QP Scope** entry in the menu bar shows a colored dot so it stands out when
 | **Utilities > Project Tools** | | |
 | [Propagation Manager](tools/propagation-manager.md) | Transfer objects between base and sub-images | Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... |
 | Re-stitch Tiles | Re-stitch tiles from a failed or incomplete acquisition | Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... |
-| Stitch MicroManager Folder | Standalone stitching of MicroManager OME-TIFF tiles (no project required) | Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... |
 | [Orientation Color View](#orientation-color-view) | Color an LC-PolScope orientation image live, brightness from its retardance image; export it as an RGB OME-TIFF on request | Extensions > QP Scope > Utilities > Project Tools > Orientation Color View... |
 | Make Project Portable | Convert or zip ZARR-backed images and clean up raw tile folders for portability | Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... |
 | [Export Spatial Relationships](#export-spatial-relationships-ome-ngff-06) | Write how the project's images relate to each other and to the stage as OME-NGFF 0.6 scene metadata | Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... |
@@ -475,23 +474,9 @@ When parallel stitching exits unexpectedly, angles/channels are temporarily isol
 
 ---
 
-## Stitch MicroManager Folder
+## Stitching a Micro-Manager folder
 
-Standalone stitching utility for tile folders acquired with MicroManager 2.0. Unlike the project-based **Re-stitch Tiles**, this tool operates independently without requiring a QuPath project or existing QPSC acquisition metadata.
-
-**Input:** A folder containing MicroManager OME-TIFF tiles (`*_MMStack_*.ome.tif`) with `*_metadata.txt` sidecars that record tile positions and other acquisition parameters.
-
-**Output:** A single stitched OME-TIFF or OME-ZARR image, plus a `<stem>.mm-metadata.json` sidecar preserving channel names, exposure, pixel size, grid dimensions, and other MicroManager metadata, and a `<stem>.stitch-info.txt` stitch record (see [Stitch record](TROUBLESHOOTING.md#stitch-record-how-an-image-was-produced)).
-
-**Key features:**
-- Reads tile positions directly from MMStack `*_metadata.txt` files (no `TileConfiguration.txt` required).
-- Auto-detects pixel size from MMStack metadata or TIFF resolution tags; fallback default is 0.5 µm.
-- Preserves channel names, MicroManager version, user/computer name, and acquisition comments in the metadata sidecar.
-- Selectable output format: OME-TIFF (single file) or OME-ZARR (directory-based).
-- Selectable compression (LZW, JPEG, etc.) with format-specific options.
-- **Axis inversion controls:** If the microscope's MicroManager configuration inverts an axis (X or Y), the tiles are laid out mirrored unless you negate that coordinate before stitching. Two checkboxes ("Invert X axis", "Invert Y axis") default to the current scope's stage polarity but can be overridden to match the original acquisition hardware configuration (useful when stitching data acquired on a different microscope).
-
-**Access:** Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder...
+QP Scope no longer stitches Micro-Manager tile folders itself. Use the Tiles to Pyramid extension: **Extensions > Tiles to Pyramid > Tiles-to-pyramid**, with **Stitching Method** set to **MicroManager metadata (MMStack or TIFF series)**. It reads tile positions and pixel size from the Micro-Manager metadata and handles axis inversion, per-channel stitching with a merge, time-point averaging and Z projection.
 
 ---
 

@@ -56,6 +56,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Stage polarity lives in the microscope config, not in Preferences.** The **Inverted X stage** and **Inverted Y stage** preferences are gone; each microscope's config now says `stage.polarity: NORMAL | INVERT_X | INVERT_Y | INVERT_XY` (PPM `NORMAL`, OWS3 `INVERT_XY`, both LC-PolScope configs `INVERT_Y`; pull `microscope_configurations`). The preferences were one pair per QuPath install, so a QuPath that switched microscopes carried one stage's polarity to the next. Calibrate Directions' **Manual override** writes `stage.polarity` to the active config; the calibration itself still writes only the camera orientation. Connecting to the demo no longer swaps polarity (its config says `NORMAL`); it still holds your camera orientation while the demo is active. A config without the key reads as `NORMAL`, with a warning in the log. See [PREFERENCES.md](documentation/PREFERENCES.md#stage-polarity-in-the-microscope-config-not-a-preference).
 
+### Removed
+
+- **Utilities > Project Tools > Stitch MicroManager Folder...** Use the Tiles to Pyramid extension's own dialog instead: **Extensions > Tiles to Pyramid > Tiles-to-pyramid**, Stitching Method **MicroManager metadata (MMStack or TIFF series)**. It reads positions and pixel size from the Micro-Manager metadata and handles axis inversion, per-channel stitching with a merge, time-point averaging and Z projection; QPSC's copy did none of the last three and kept only the last channel's output. QPSC no longer writes the `<stem>.mm-metadata.json` sidecar.
+
 ### Fixed
 
 - **A failed calibration or test no longer reads as a connection problem.** When the server answered FAILED, the client counted it as a connection error, so a few failed white balance or autofocus runs raised "Microscope Connection Unstable" and dropped a working connection. An answer from the server is now reported as that answer.

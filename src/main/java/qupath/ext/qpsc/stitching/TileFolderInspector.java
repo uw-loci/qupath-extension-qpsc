@@ -17,10 +17,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 /**
- * Read-only utilities for inspecting tile folders. Centralizes the pixel-size
- * detection logic used by both the standard
- * {@code StitchingRecoveryWorkflow} and the standalone
- * {@code MicroManagerStitchWorkflow}.
+ * Read-only utilities for inspecting tile folders: the pixel-size detection
+ * used by {@code StitchingRecoveryWorkflow}.
  */
 public final class TileFolderInspector {
 

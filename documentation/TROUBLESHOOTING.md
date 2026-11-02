@@ -102,8 +102,7 @@ that it is in Offline / Analysis mode. In this mode the hardware/acquisition
 workflows (Acquisition Wizard, Bounded/Existing Image, alignment, calibration
 utilities) are intentionally disabled, while analysis and project utilities --
 PPM analysis (via the PPM extension), Propagation Manager, Stitching Recovery,
-MicroManager Folder Stitch, Make Project Portable, Stage Map, Live Viewer,
-Report a Bug -- remain available. To enable acquisition, run the **Setup Wizard**
+Make Project Portable, Stage Map, Live Viewer, Report a Bug -- remain available. To enable acquisition, run the **Setup Wizard**
 to configure a real microscope.
 
 #### Q: Where does the offline placeholder config live?

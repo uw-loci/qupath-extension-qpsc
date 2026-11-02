@@ -21,8 +21,8 @@ import qupath.ext.qpsc.stitching.TileRegistrationSupport;
  *
  * <h2>Why this exists</h2>
  *
- * Registration wired into the acquisition stitch only would leave the "Stitching recovery" and
- * "MicroManager folder stitch" utilities silently stitching at nominal positions.
+ * Registration wired into the acquisition stitch only would leave the "Stitching recovery"
+ * utility silently stitching at nominal positions.
  * Routing every path through here means a stitch path cannot skip registration by omission: multi-subdir paths call {@link #stitchTargets}
  * and single-grid paths call {@link #modeForReuse}, and both honor the one "Register tiles on image
  * content" preference and the version-support probe (via {@link #enabled()}).
@@ -77,22 +77,6 @@ public final class StitchingRegistration {
         return Files.exists(solutionFile)
                 ? TileRegistrationSupport.applyMode(solutionFile)
                 : TileRegistrationSupport.solveMode(solutionFile);
-    }
-
-    /**
-     * Attach the single-grid registration mode to a stitching config when registration is on. For
-     * paths that stitch one grid in one call and so have no sibling targets to barrier against (e.g.
-     * the MicroManager folder stitch). A no-op when registration is off/unsupported.
-     *
-     * @param config the config about to be stitched
-     * @param tileBaseDir directory the solution file lives beside
-     * @param matchingString the config's subdir matching string, for the log line
-     */
-    public static void applyTo(StitchingConfig config, Path tileBaseDir, String matchingString) {
-        Object mode = modeForReuse(tileBaseDir);
-        if (mode != null) {
-            TileRegistrationSupport.apply(config, mode, matchingString);
-        }
     }
 
     /**
@@ -304,8 +288,8 @@ public final class StitchingRegistration {
      * Asks the modality which sibling target registration should be solved on, falling back to the
      * first when it has no preference.
      *
-     * <p>Centralised here rather than at each call site so every stitch path -- acquisition,
-     * recovery, MicroManager folder -- makes the same choice, for the same reason the barrier
+     * <p>Centralized here rather than at each call site so every stitch path -- acquisition,
+     * recovery -- makes the same choice, for the same reason the barrier
      * itself lives here.
      *
      * @param targetNames sibling target names in the same order as the targets being stitched

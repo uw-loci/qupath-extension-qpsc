@@ -609,8 +609,8 @@ public class StitchingHelper {
             List<String> alignOn) {
 
         // The registration barrier (solve once, reuse that solve for every target) and the
-        // bounded-parallel stitch are centralised in StitchingRegistration, so every stitch path --
-        // acquisition, recovery, MicroManager folder -- goes through the same gate and no path can
+        // bounded-parallel stitch are centralized in StitchingRegistration, so every stitch path --
+        // acquisition, recovery -- goes through the same gate and no path can
         // silently skip registration.
         StitchingRegistration.TargetStitcher<String> stitcher = (sub, mode, position, count) -> stitchOne(
                 sub,

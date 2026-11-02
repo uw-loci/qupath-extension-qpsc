@@ -526,60 +526,6 @@ public class PersistentPreferences {
         restitchParallelAngles.setValue(String.valueOf(parallel));
     }
 
-    // ================== MICROMANAGER FOLDER STITCH ==================
-    private static final StringProperty mmStitchOutputDir =
-            PathPrefs.createPersistentPreference("mmStitchOutputDir", "");
-
-    public static String getMmStitchOutputDir() {
-        return mmStitchOutputDir.getValue();
-    }
-
-    public static void setMmStitchOutputDir(final String dir) {
-        mmStitchOutputDir.setValue(dir);
-    }
-
-    private static final StringProperty mmStitchInputDir = PathPrefs.createPersistentPreference("mmStitchInputDir", "");
-
-    public static String getMmStitchInputDir() {
-        return mmStitchInputDir.getValue();
-    }
-
-    public static void setMmStitchInputDir(final String dir) {
-        mmStitchInputDir.setValue(dir);
-    }
-
-    // Per-axis stage inversion for the MicroManager folder stitch. MMStack sidecars record absolute
-    // stage positions, so a scope whose X (or Y) axis is inverted in its MicroManager config lays
-    // tiles out mirrored unless the coordinate is negated before stitching.
-    //
-    // Stored as tri-state strings ("" = never chosen; "true"/"false" = remembered) rather than
-    // booleans, so the dialog can tell "the user has an opinion" from "seed me from the current
-    // scope's stage polarity". Empty means: default the checkbox from
-    // StageImageTransform.current().stitcherFlipFlags(); once the user runs a stitch, their choice
-    // is remembered here and wins on the next open.
-    private static final StringProperty mmStitchInvertX = PathPrefs.createPersistentPreference("mmStitchInvertX", "");
-    private static final StringProperty mmStitchInvertY = PathPrefs.createPersistentPreference("mmStitchInvertY", "");
-
-    /** @return remembered X inversion, or {@code null} if the user has never chosen (seed from scope). */
-    public static Boolean getMmStitchInvertX() {
-        String v = mmStitchInvertX.getValue();
-        return (v == null || v.isEmpty()) ? null : Boolean.valueOf(v);
-    }
-
-    public static void setMmStitchInvertX(final boolean invert) {
-        mmStitchInvertX.setValue(Boolean.toString(invert));
-    }
-
-    /** @return remembered Y inversion, or {@code null} if the user has never chosen (seed from scope). */
-    public static Boolean getMmStitchInvertY() {
-        String v = mmStitchInvertY.getValue();
-        return (v == null || v.isEmpty()) ? null : Boolean.valueOf(v);
-    }
-
-    public static void setMmStitchInvertY(final boolean invert) {
-        mmStitchInvertY.setValue(Boolean.toString(invert));
-    }
-
     // ================== METADATA PROPAGATION ==================
     private static final StringProperty metadataPropagationPrefixSaved =
             PathPrefs.createPersistentPreference("MetadataPropagationPrefix", "OCR");

@@ -17,7 +17,6 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/controller/WhiteBalanceWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/WBComparisonWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/StitchingRecoveryWorkflow.java
-  - src/main/java/qupath/ext/qpsc/controller/MicroManagerStitchWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/MakePortableWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/AutofocusBenchmarkWorkflow.java
   - src/main/java/qupath/ext/qpsc/controller/AutofocusEditorWorkflow.java
@@ -279,7 +278,7 @@ surfaces, and cross-workflow dependencies. It is optimized for LLM agents.
 
 | I'm changing... | Read these workflows | Read these data surfaces |
 |---|---|---|
-| Alignment save/load (saveSlideAlignment, TransformPreset, checkForSlideAlignment) | W1, W1c, W1d, W3, W14, W18 | DS4, DS5, DS6, DS7, DS17 |
+| Alignment save/load (saveSlideAlignment, TransformPreset, checkForSlideAlignment) | W1, W1c, W1d, W3, W14 | DS4, DS5, DS6, DS7, DS17 |
 | Flipped sibling / `(Camera View)` companion entries / mirror annotations | W1, W1b, W1d, W3 | DS9 (light-path snapshot: CAMERA_VIEW, LP_BAKED_PARITY_X/Y), DS5, DS17 |
 | Image metadata fields on ProjectImageEntry | All acquisition workflows (W1, W2, W3, W4, W11..W13) | DS8..DS18 |
 | Source vs acquired microscope (cross-scope gating) | W1, W1a, W1c | DS9 (SOURCE_MICROSCOPE, ACQUIRED_ON_MICROSCOPE), DS5, DS6 |
@@ -881,22 +880,14 @@ removed_in: "1355d237 (2026-08-11, v0.9.0 orientation refactor): FlippedDuplicat
 note: "ID kept so older references resolve. Companion entries (now named '(Camera View)', built by QPProjectFunctions.createFlippedDuplicate / createRotatedFlippedDuplicate) are still created on demand for alignment UX and classified by ImageMetadataManager.isCameraView -- DO NOT strip them in the workflow path."
 ```
 
-### W18: MicroManagerStitchWorkflow (no project, no microscope)
+### W18: MicroManagerStitchWorkflow (REMOVED)
 
 ```yaml
 id: W18
-class: qupath.ext.qpsc.controller.MicroManagerStitchWorkflow
-file: src/main/java/qupath/ext/qpsc/controller/MicroManagerStitchWorkflow.java
-entry: run()
-category: utility
-ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Stitch MicroManager Folder... (SetupScope.java:773, dispatch 'stitchMicroManagerFolder')"
-reads:
-  - user-selected MicroManager tile folder (OME-TIFF with MMStack sidecars)
-writes:
-  - DS30-like (stitched output to user-chosen folder; .mm-metadata.json sidecar)
-key_invariants:
-  - "No project required, no microscope required."
+status: removed
+removed_in: "2026-11-02: MicroManagerStitchWorkflow.java, its 'Stitch MicroManager Folder...' menu item, the 'stitchMicroManagerFolder' dispatch, the mmStitch* preferences and StitchingRegistration.applyTo deleted together"
+replaced_by: "Tiles to Pyramid's own dialog (Extensions > Tiles to Pyramid > Tiles-to-pyramid, Stitching Method 'MicroManager metadata (MMStack or TIFF series)')"
+note: "ID kept so older references resolve. The <stem>.mm-metadata.json sidecar it wrote is no longer produced by QPSC."
 ```
 
 ### W19: LiveViewerWindow (UI singleton)
@@ -1925,7 +1916,6 @@ fields_examples:
   tissueSaturationThreshold, tissueBrightnessMin/Max, tissueArtifactFilterEnabled, tissueTwoPassRefine
   tissueMedianKernel, tissueMorphCloseKernel/Iter
   macroImagePixelSizeInMicrons, restitchPixelSize, restitchParallelAngles
-  mmStitchOutputDir, mmStitchInputDir
   metadataPropagationPrefix, classList, modalityForAutomation
   activeBackgroundProfile (BackgroundProfiles.activeId), flatfieldMethod (NONE / BACKGROUND / BASIC), flatfieldProfileFolder
   (about 300 public static accessors -- see PersistentPreferences.java; Java names use unit suffixes such as getMacroImagePixelSizeUm, the stored keys did not change)
@@ -2284,7 +2274,6 @@ formats:
 written_by:
   - "Stitcher (tiles-to-pyramid) called from W14 StitchingHelper"
   - "W16 StitchingRecoveryWorkflow"
-  - "W18 MicroManagerStitchWorkflow"
   - "W15 MakePortableWorkflow (ZARR -> OME-TIFF)"
 read_by:
   - "QuPath project (added as new ProjectImageEntry)"
@@ -2447,7 +2436,7 @@ writes DS Y consumed by Consumer Z."
 | W31 ParfocalityCalibrationController | DS20 (parfocality YAML) | AcquisitionManager during modality switch | Per-profile relative Z offsets |
 | W23, W24, W25 | DS47 (PPM calibration) | qupath-extension-ppm (out of repo), W26 | Five 'PPM Polarity:' MeasurementList keys are stable contract |
 | W1, W2, W3, W10, W11 | DS28 (tile config files) | microscope command server, stitcher, W16 recovery | TileConfiguration.txt is microns; _QP.txt is QuPath pixels |
-| W1, W2, W14, W16, W18 | DS30 (stitched OME-TIFF / ZARR) | QuPath project (new ProjectImageEntry) | Compression/format from DS25 |
+| W1, W2, W14, W16 | DS30 (stitched OME-TIFF / ZARR) | QuPath project (new ProjectImageEntry) | Compression/format from DS25 |
 | W15 MakePortableWorkflow | DS30 (OME-TIFF replacements) | QuPath project | Surfaces tile folders when no ZARR remains |
 | Any dialog | DS24 (PersistentPreferences) | Workflow on next dialog open | Lightweight per-user prefs |
 | Any dialog | DS25 (QPPreferenceDialog) | EVERY workflow | Camera orientation, server settings, stitching format (stage polarity is DS3 stage.polarity) |
