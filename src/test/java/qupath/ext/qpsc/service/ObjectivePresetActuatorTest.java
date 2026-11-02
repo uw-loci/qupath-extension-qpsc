@@ -5,8 +5,8 @@ import static org.junit.jupiter.api.Assertions.*;
 import com.google.gson.JsonObject;
 import com.google.gson.JsonParser;
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.config.MicroscopeConfigManager.ObjectiveMmPreset;
 import qupath.ext.qpsc.service.ObjectivePresetActuator.Decision;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager.ObjectiveMmPreset;
 
 /** When QPSC changes Micro-Manager's objective preset, and when it must not. */
 class ObjectivePresetActuatorTest {

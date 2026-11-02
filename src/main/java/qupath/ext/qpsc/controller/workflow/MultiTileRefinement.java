@@ -24,13 +24,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.AttentionPulse;
 import qupath.ext.qpsc.ui.QpscWindows;
-import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -246,7 +246,7 @@ public class MultiTileRefinement {
         if (!ReferenceTileSelector.wouldAutoPick()) {
             logger.info(
                     "Multi-tile refinement: picking tiles by hand -- {}",
-                    qupath.ext.qpsc.ui.AutoAdvanceController.inactiveReason());
+                    qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.inactiveReason());
             Platform.runLater(
                     () -> showPanel(gui, initialTransform, trustSift, confidenceThreshold, future, List.of()));
             return future;
@@ -513,7 +513,7 @@ public class MultiTileRefinement {
         // and re-enabled the buttons), so it never counts down onto a control that a capture
         // in flight is about to re-enable underneath it.
         advanceAutomatically[0] = () -> {
-            String inactive = qupath.ext.qpsc.ui.AutoAdvanceController.inactiveReason();
+            String inactive = qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.inactiveReason();
             if (inactive != null) {
                 // Say so. Returning silently here is what makes a deliberate stop look like a
                 // hang: the panel simply sits there and the log's last line is whatever
@@ -522,17 +522,17 @@ public class MultiTileRefinement {
                 return;
             }
             if (!pendingAutoTiles.isEmpty()) {
-                qupath.ext.qpsc.ui.AutoAdvanceController.attach(stage, addButton);
+                qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.attach(stage, addButton);
                 return;
             }
             if (points.size() >= MIN_POINTS) {
-                qupath.ext.qpsc.ui.AutoAdvanceController.attach(stage, solveButton);
+                qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.attach(stage, solveButton);
                 return;
             }
             // Out of auto-picked tiles without a solvable set: every remaining point would need
             // a human to pick a tile, and this panel has no countdown that can do that. Say so
             // and notify rather than sitting on an idle dialog for the rest of the batch.
-            qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+            qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.requestOperatorAttention(
                     "Multi-tile alignment refinement",
                     points.size() + " of " + MIN_POINTS + " reference points captured and no auto-picked tiles left");
         };

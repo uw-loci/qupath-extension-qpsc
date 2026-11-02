@@ -31,6 +31,8 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.ManualFocusHandler;
+import qupath.ext.qpsc.ui.acquisition.AutoAdvanceController;
+import qupath.ext.qpsc.ui.focus.AutofocusCurvePane;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.viewer.tools.PathTools;
 import qupath.lib.objects.PathObject;
@@ -591,7 +593,7 @@ public class UIFunctions {
             confirmButton.setDefaultButton(true);
             confirmButton.setOnAction(e -> {
                 if (siftTargetTile != null) {
-                    qupath.ext.qpsc.ui.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                    qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                 }
                 stage.close();
                 future.complete(true);
@@ -601,7 +603,7 @@ public class UIFunctions {
             cancelButton.setCancelButton(true);
             cancelButton.setOnAction(e -> {
                 if (siftTargetTile != null) {
-                    qupath.ext.qpsc.ui.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                    qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                 }
                 stage.close();
                 future.complete(false);
@@ -619,12 +621,12 @@ public class UIFunctions {
                 siftStatus.setStyle("-fx-font-size: 10px;");
                 // A SIFT error is several lines long; grow the window to show all of it.
                 siftStatus.textProperty().addListener((obs, was, now) -> Platform.runLater(stage::sizeToScene));
-                HBox siftRow = qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildSiftButtonRow(
+                HBox siftRow = qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper.buildSiftButtonRow(
                         gui, siftTargetTile, stage, siftStatus);
                 layout.getChildren()
                         .addAll(
                                 headerLabel,
-                                qupath.ext.qpsc.ui.SiftAutoAlignHelper.buildFocusSaturationWarning(),
+                                qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper.buildFocusSaturationWarning(),
                                 instructionLabel,
                                 siftRow,
                                 siftStatus,
@@ -632,7 +634,7 @@ public class UIFunctions {
                                 buttonBox);
                 // Show the SIFT search range on the Stage Map (no-op if it isn't
                 // open) for the whole time this dialog is up. Cleared on close below.
-                qupath.ext.qpsc.ui.SiftAutoAlignHelper.drawSearchRangeAtCurrentPosition(gui, siftTargetTile);
+                qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper.drawSearchRangeAtCurrentPosition(gui, siftTargetTile);
             } else {
                 layout.getChildren().addAll(headerLabel, instructionLabel, new Separator(), buttonBox);
             }
@@ -645,7 +647,7 @@ public class UIFunctions {
 
             stage.setOnCloseRequest(e -> {
                 if (siftTargetTile != null) {
-                    qupath.ext.qpsc.ui.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
+                    qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper.clearSearchRangeOnStageMap();
                 }
                 future.complete(false);
             });

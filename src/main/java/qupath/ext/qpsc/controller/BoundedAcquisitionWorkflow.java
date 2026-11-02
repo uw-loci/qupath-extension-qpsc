@@ -12,13 +12,22 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
+import qupath.ext.qpsc.acquisition.AcquisitionSpaceCheck;
+import qupath.ext.qpsc.acquisition.TilingRequest;
+import qupath.ext.qpsc.acquisition.TilingUtilities;
+import qupath.ext.qpsc.background.BackgroundIlluminationCheck;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.ObjectiveUtils;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.controller.workflow.TileCleanupHelper;
+import qupath.ext.qpsc.geometry.StagePolarity;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.AcquisitionMonitorService;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
@@ -27,10 +36,10 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.stitching.StitchingConfiguration;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.ui.UnifiedAcquisitionController;
+import qupath.ext.qpsc.ui.acquisition.UnifiedAcquisitionController;
 import qupath.ext.qpsc.utilities.*;
-import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.scripting.QPEx;
 import qupath.lib.projects.Project;
@@ -111,7 +120,7 @@ public class BoundedAcquisitionWorkflow {
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
             // Stage polarity is read via the composite StagePolarity enum
             // so it matches what the rest of the refactored pipeline sees.
-            qupath.ext.qpsc.utilities.StagePolarity stagePolarity = StagePolarity.current();
+            qupath.ext.qpsc.geometry.StagePolarity stagePolarity = StagePolarity.current();
             boolean stageInvertedX = stagePolarity.invertX;
             boolean stageInvertedY = stagePolarity.invertY;
 

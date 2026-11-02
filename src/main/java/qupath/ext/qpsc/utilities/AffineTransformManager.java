@@ -17,6 +17,10 @@ import java.util.*;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.geometry.AffineTransform3D;
+import qupath.ext.qpsc.geometry.GreenBoxDetector;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.lib.projects.Project;
 

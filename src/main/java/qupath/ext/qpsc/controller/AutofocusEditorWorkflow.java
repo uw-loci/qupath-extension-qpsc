@@ -22,6 +22,9 @@ import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.config.AutofocusYamlUpdater;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.focus.FocusMetricsManifest;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
@@ -30,10 +33,7 @@ import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
-import qupath.ext.qpsc.utilities.AutofocusYamlUpdater;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.ext.qpsc.utilities.FocusMetricsManifest;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.fx.dialogs.Dialogs;
 
 /**
@@ -746,7 +746,7 @@ public class AutofocusEditorWorkflow {
         if (result.status
                         != qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult.Status.SUCCESS
                 && result.reason != null) {
-            Label hintLabel = new Label(qupath.ext.qpsc.utilities.AfFailureHint.format(null, result.reason));
+            Label hintLabel = new Label(qupath.ext.qpsc.focus.AfFailureHint.format(null, result.reason));
             hintLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             hintLabel.setWrapText(true);
             root.getChildren().add(hintLabel);

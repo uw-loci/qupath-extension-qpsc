@@ -13,7 +13,7 @@ import javafx.scene.control.SpinnerValueFactory;
 import javafx.scene.control.Tooltip;
 import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**

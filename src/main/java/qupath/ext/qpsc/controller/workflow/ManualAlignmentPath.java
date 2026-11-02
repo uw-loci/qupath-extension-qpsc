@@ -8,13 +8,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.ui.AffineTransformationController;
+import qupath.ext.qpsc.geometry.ImageFlipHelper;
+import qupath.ext.qpsc.geometry.MacroImageUtility;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.alignment.AffineTransformationController;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MacroImageUtility;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
@@ -327,9 +327,9 @@ public class ManualAlignmentPath {
                 return null;
             }
             double[] centerPx = {server.getWidth() / 2.0, server.getHeight() / 2.0};
-            AffineTransform scaling = qupath.ext.qpsc.utilities.TransformationFunctions.setupAffineTransformation(
-                    fullResPixelSize, qupath.ext.qpsc.utilities.StageImageTransform.current());
-            AffineTransform estimate = qupath.ext.qpsc.utilities.TransformationFunctions.addTranslationToScaledAffine(
+            AffineTransform scaling = qupath.ext.qpsc.geometry.TransformationFunctions.setupAffineTransformation(
+                    fullResPixelSize, qupath.ext.qpsc.geometry.StageImageTransform.current());
+            AffineTransform estimate = qupath.ext.qpsc.geometry.TransformationFunctions.addTranslationToScaledAffine(
                     scaling, centerPx, slotCenter);
             logger.info(
                     "Built slot-center fullRes->stage estimate: slotCenter=({}, {}), imageCenterPx=({}, {}), "

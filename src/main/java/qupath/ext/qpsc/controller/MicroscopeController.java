@@ -9,6 +9,9 @@ import javafx.beans.property.ReadOnlyObjectProperty;
 import javafx.beans.property.ReadOnlyObjectWrapper;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.acquisition.StagePositionManager;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.model.StagePositionProvider;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -17,9 +20,6 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.state.ObjectiveState;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.StagePositionManager;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.objects.PathObject;
 
 /**
@@ -1117,7 +1117,7 @@ public class MicroscopeController implements StagePositionProvider {
      * @return FrameData record, or null if no frame is available
      * @throws IOException if communication fails
      */
-    public qupath.ext.qpsc.ui.liveviewer.FrameData getFrame() throws IOException {
+    public qupath.ext.qpsc.service.microscope.FrameData getFrame() throws IOException {
         return socketClient.getFrame();
     }
 

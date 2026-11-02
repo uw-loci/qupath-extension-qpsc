@@ -13,15 +13,15 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.geometry.StageImageTransform;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
+import qupath.ext.qpsc.stitching.StitchingConfiguration;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.components.ObjectiveSelector;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.StageImageTransform;
-import qupath.ext.qpsc.utilities.StitchingConfiguration;
 import qupath.lib.gui.QuPathGUI;
 
 /**

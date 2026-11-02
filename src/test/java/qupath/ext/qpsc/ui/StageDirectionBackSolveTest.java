@@ -4,11 +4,12 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.ui.StageDirectionCalibrationDialog.CalibrationResult;
-import qupath.ext.qpsc.ui.StageDirectionCalibrationDialog.Direction;
-import qupath.ext.qpsc.utilities.CameraOrientation;
-import qupath.ext.qpsc.utilities.StageImageTransform;
-import qupath.ext.qpsc.utilities.StagePolarity;
+import qupath.ext.qpsc.geometry.CameraOrientation;
+import qupath.ext.qpsc.geometry.StageImageTransform;
+import qupath.ext.qpsc.geometry.StagePolarity;
+import qupath.ext.qpsc.ui.alignment.StageDirectionCalibrationDialog;
+import qupath.ext.qpsc.ui.alignment.StageDirectionCalibrationDialog.CalibrationResult;
+import qupath.ext.qpsc.ui.alignment.StageDirectionCalibrationDialog.Direction;
 
 /**
  * The calibration asks which way the TISSUE moved, and solves for the orientation that makes

@@ -202,7 +202,7 @@ class MicroscopeSwitcherTest {
 
     @Test
     void theNonModalCameraControlDialogIsRegisteredToo() throws IOException {
-        String s = Files.readString(MAIN.resolve("ui/CameraControlController.java"));
+        String s = Files.readString(MAIN.resolve("ui/connection/CameraControlController.java"));
         assertThat(s).contains("QpscWindows.track(stage);");
     }
 }

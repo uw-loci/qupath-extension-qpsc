@@ -1,9 +1,9 @@
 package qupath.ext.qpsc.modality;
 
+import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.utilities.BackgroundProfiles;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Resolves, for an acquisition-dialog readout, the same values the acquisition

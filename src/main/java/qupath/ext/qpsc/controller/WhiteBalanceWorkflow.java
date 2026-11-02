@@ -14,14 +14,14 @@ import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.ui.WhiteBalanceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.ui.calibration.WhiteBalanceDialog;
 
 /**
  * Workflow for running JAI camera white balance calibration.
@@ -218,7 +218,7 @@ public class WhiteBalanceWorkflow {
      */
     private static String resolveMultiAngleModality(String yamlPath) {
         try {
-            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
+            var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath);
             for (String m : mgr.getAvailableModalities()) {
                 var handler = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(m);
                 if (handler != null && handler.isMultiAngleModality()) {
@@ -241,7 +241,7 @@ public class WhiteBalanceWorkflow {
     private static void applyProfileLampForWb(
             MicroscopeSocketClient client, String yamlPath, String modality, String objective) {
         try {
-            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
+            var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath);
             if (modality == null || mgr.getModalityIllumination(modality) == null) {
                 return;
             }
@@ -310,7 +310,7 @@ public class WhiteBalanceWorkflow {
                         // Resolve modality from config so calibration results are saved to YAML
                         String modality = null;
                         try {
-                            var configManager = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath);
+                            var configManager = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath);
                             var modalities = configManager.getAvailableModalities();
                             modality = modalities.iterator().next();
                             for (String m : modalities) {
@@ -374,7 +374,7 @@ public class WhiteBalanceWorkflow {
                         // Reload config so the Java side picks up the new
                         // calibration values written by the Python server
                         try {
-                            qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath)
+                            qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath)
                                     .reload(yamlPath);
                             logger.info("Reloaded config after simple WB calibration");
                             qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.refreshCameraPresets();
@@ -400,7 +400,7 @@ public class WhiteBalanceWorkflow {
                                             params.detector(),
                                             qupath.ext.qpsc.modality.WbMode.SIMPLE));
                         });
-                        qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
+                        qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
 
                     } catch (Exception e) {
                         logger.error("Simple white balance failed", e);
@@ -516,7 +516,7 @@ public class WhiteBalanceWorkflow {
                         // Reload config so the Java side picks up the new
                         // calibration values written by the Python server
                         try {
-                            qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(yamlPath)
+                            qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath)
                                     .reload(yamlPath);
                             logger.info("Reloaded config after PPM WB calibration");
                             qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow.refreshCameraPresets();
@@ -541,7 +541,7 @@ public class WhiteBalanceWorkflow {
                                             params.detector(),
                                             qupath.ext.qpsc.modality.WbMode.PER_ANGLE));
                         });
-                        qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
+                        qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
 
                     } catch (Exception e) {
                         logger.error("PPM white balance failed", e);

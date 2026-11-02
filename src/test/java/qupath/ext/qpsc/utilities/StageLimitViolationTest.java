@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.geom.AffineTransform;
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 
 /** A region is checked against the stage limits, not the image it was drawn on. */
 class StageLimitViolationTest {

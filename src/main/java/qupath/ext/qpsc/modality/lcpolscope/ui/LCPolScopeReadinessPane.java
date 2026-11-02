@@ -12,12 +12,12 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Check;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Level;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.ThemeColors;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * The "Ready to acquire?" box at the top of the LC-PolScope acquisition panel. Shows the

@@ -1,0 +1,1463 @@
+package qupath.ext.qpsc.ui.calibration;
+
+import java.nio.file.Path;
+import java.nio.file.Paths;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import javafx.beans.property.BooleanProperty;
+import javafx.beans.property.DoubleProperty;
+import javafx.beans.property.IntegerProperty;
+import javafx.beans.property.StringProperty;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.Modality;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.modality.WbMode;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.lib.gui.prefs.PathPrefs;
+
+/**
+ * Dialog for configuring white balance calibration for the JAI camera.
+ *
+ * <p>This dialog provides two modes of white balance calibration:
+ * <ul>
+ *   <li><b>Simple White Balance</b>: Calibrates at 90 degrees first, then automatically
+ *       calibrates all remaining angles using the 90-degree result as starting point.
+ *       Produces per-angle exposures for all angles (~1-2 min).</li>
+ *   <li><b>PPM White Balance</b>: Independent per-angle calibration at each of the 4 standard
+ *       PPM angles with per-angle target intensities. Most accurate but slower.</li>
+ * </ul>
+ *
+ * <p>The dialog is non-modal to allow interaction with QuPath while it remains open.
+ *
+ * @author Mike Nelson
+ * @since 1.0
+ */
+public class WhiteBalanceDialog {
+    private static final Logger logger = LoggerFactory.getLogger(WhiteBalanceDialog.class);
+
+    // Persistent preferences for white balance settings
+    private static final DoubleProperty targetIntensityProperty =
+            PathPrefs.createPersistentPreference("wb.targetIntensity", 180.0);
+    private static final DoubleProperty toleranceProperty = PathPrefs.createPersistentPreference("wb.tolerance", 2.0);
+    // White balance output subfolder name under config directory
+    private static final String WB_SUBFOLDER = "white_balance_calibration";
+    private static final StringProperty cameraProperty =
+            PathPrefs.createPersistentPreference("wb.camera", "JAI AP-3200T-USB");
+
+    // The one dialog instance currently on screen, or null. Only touched on the FX thread.
+    private static Dialog<WBDialogResult> activeDialog;
+
+    // Simple WB preferences
+    private static final DoubleProperty simpleExposureProperty =
+            PathPrefs.createPersistentPreference("wb.simple.exposure", 20.0);
+
+    // PPM WB preferences (no defaults for exposures - user must determine)
+    private static final DoubleProperty ppmPositiveExpProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.positive.exposure", Double.NaN);
+    private static final DoubleProperty ppmNegativeExpProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.negative.exposure", Double.NaN);
+    private static final DoubleProperty ppmCrossedExpProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.crossed.exposure", Double.NaN);
+    private static final DoubleProperty ppmUncrossedExpProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.uncrossed.exposure", Double.NaN);
+
+    // PPM WB target intensity preferences per angle
+    // Defaults based on optical properties of polarized light
+    private static final DoubleProperty ppmPositiveTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.positive.target", 160.0);
+    private static final DoubleProperty ppmNegativeTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.negative.target", 160.0);
+    private static final DoubleProperty ppmCrossedTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.crossed.target", 125.0);
+    private static final DoubleProperty ppmUncrossedTargetProperty =
+            PathPrefs.createPersistentPreference("wb.ppm.uncrossed.target", 245.0);
+
+    // Advanced calibration settings
+    // Max analog gain in dB (JAI supports 0-36.13 dB, but keep low to minimize noise)
+    // 3 dB = 1.41x linear gain, 6 dB = 2x, 12 dB = 4x
+    private static final DoubleProperty maxGainDbProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.maxGainDb", 3.0);
+    // Exposure ratio threshold before applying gain compensation
+    private static final DoubleProperty gainThresholdRatioProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.gainThresholdRatio", 2.0);
+    // Maximum calibration iterations before giving up
+    private static final IntegerProperty maxIterationsProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.maxIterations", 30);
+    // Whether to perform black level calibration
+    private static final BooleanProperty calibrateBlackLevelProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.calibrateBlackLevel", true);
+    // Base gain to start calibration with (reduces exposure requirements)
+    // Default 5.0 = ~14 dB, allows ~5x reduction in exposure time
+    private static final DoubleProperty baseGainProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.baseGain", 5.0);
+    // Exposure soft cap threshold in ms - beyond this, gain can boost past maxGainDb
+    private static final DoubleProperty exposureSoftCapMsProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.exposureSoftCapMs", 50.0);
+    // Maximum analog gain in dB when exposure exceeds soft cap (boosted mode)
+    // 12 dB = 4x linear gain
+    private static final DoubleProperty boostedMaxGainDbProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.boostedMaxGainDb", 12.0);
+    // Per-channel R/B analog gain ceiling (linear, not dB). The JAI hardware spec
+    // lists 4.0 as the safe max, but the firmware accepts higher values when needed
+    // for color balance in unusual scenes (e.g. PPM positive-angle imagery where
+    // blue can need > 4.0x). Default 4.0 keeps spec-compliant behavior; raise this
+    // to allow the calibration's Phase 1c / Phase 2 to drive R or B above 4.0x.
+    private static final DoubleProperty gainAnalogRbMaxProperty =
+            PathPrefs.createPersistentPreference("wb.advanced.gainAnalogRbMax", 4.0);
+
+    // Objective selection is tracked globally via ObjectiveState.
+    // This dialog used to have its own "wb.ppm.objective" shadow preference, but that
+    // silently overrode whatever the Acquisition Wizard (or any other dialog) had selected,
+    // causing mislabeled calibration slots when the shadow was stale.
+
+    // Fixed PPM angles (standard values)
+    public static final double POSITIVE_ANGLE = 7.0;
+    public static final double NEGATIVE_ANGLE = -7.0;
+    public static final double CROSSED_ANGLE = 0.0;
+    public static final double UNCROSSED_ANGLE = 90.0;
+
+    /**
+     * Result record for advanced calibration settings (shared by both modes).
+     */
+    public record AdvancedWBParams(
+            double maxGainDb, // Max analog gain in dB (default 3.0)
+            double gainThresholdRatio, // Exposure ratio before using gain (default 2.0)
+            int maxIterations, // Max calibration iterations (default 30)
+            boolean calibrateBlackLevel, // Whether to calibrate black level (default true)
+            double baseGain, // Starting gain for all channels (default 5.0)
+            double exposureSoftCapMs, // Max exposure before gain boost (default 50.0)
+            double boostedMaxGainDb, // Max gain when past soft cap (default 12.0)
+            double gainAnalogRbMax // R/B per-channel analog gain ceiling, linear (default 4.0)
+            ) {}
+
+    /**
+     * Returns the currently persisted advanced calibration parameters without
+     * opening the dialog. Use this from workflows (e.g. WB Comparison) that
+     * need to honor whatever the user last tuned in the WB dialog's Advanced
+     * Settings pane, instead of hardcoding their own gain caps.
+     */
+    public static AdvancedWBParams getPersistedAdvancedParams() {
+        return new AdvancedWBParams(
+                maxGainDbProperty.get(),
+                gainThresholdRatioProperty.get(),
+                maxIterationsProperty.get(),
+                calibrateBlackLevelProperty.get(),
+                baseGainProperty.get(),
+                exposureSoftCapMsProperty.get(),
+                boostedMaxGainDbProperty.get(),
+                gainAnalogRbMaxProperty.get());
+    }
+
+    /**
+     * Result record for Simple White Balance configuration.
+     */
+    public record SimpleWBParams(
+            String outputPath,
+            String camera,
+            String objective,
+            String detector,
+            double baseExposureMs,
+            double targetIntensity,
+            double tolerance,
+            AdvancedWBParams advanced) {}
+
+    /**
+     * Result record for PPM White Balance configuration.
+     */
+    public record PPMWBParams(
+            String outputPath,
+            String camera,
+            String objective,
+            String detector,
+            double positiveAngle,
+            double positiveExposureMs,
+            double positiveTarget,
+            double negativeAngle,
+            double negativeExposureMs,
+            double negativeTarget,
+            double crossedAngle,
+            double crossedExposureMs,
+            double crossedTarget,
+            double uncrossedAngle,
+            double uncrossedExposureMs,
+            double uncrossedTarget,
+            double targetIntensity, // Default fallback target (for backward compatibility)
+            double tolerance,
+            AdvancedWBParams advanced) {}
+
+    /**
+     * Result wrapper that contains Simple or PPM parameters.
+     */
+    public static class WBDialogResult {
+        private final SimpleWBParams simpleParams;
+        private final PPMWBParams ppmParams;
+
+        private WBDialogResult(SimpleWBParams simpleParams, PPMWBParams ppmParams) {
+            this.simpleParams = simpleParams;
+            this.ppmParams = ppmParams;
+        }
+
+        public static WBDialogResult simple(SimpleWBParams params) {
+            return new WBDialogResult(params, null);
+        }
+
+        public static WBDialogResult ppm(PPMWBParams params) {
+            return new WBDialogResult(null, params);
+        }
+
+        public boolean isSimple() {
+            return simpleParams != null;
+        }
+
+        public boolean isPPM() {
+            return ppmParams != null;
+        }
+
+        public SimpleWBParams getSimpleParams() {
+            return simpleParams;
+        }
+
+        public PPMWBParams getPPMParams() {
+            return ppmParams;
+        }
+    }
+
+    /**
+     * Shows the white balance calibration dialog.
+     *
+     * @return CompletableFuture with configured parameters, or null if canceled
+     */
+    public static CompletableFuture<WBDialogResult> showDialog() {
+        CompletableFuture<WBDialogResult> future = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            try {
+                // Modality was the only thing preventing a second copy from being
+                // opened off the menu while this one is up. Guard it explicitly.
+                if (activeDialog != null && activeDialog.getDialogPane().getScene() != null) {
+                    javafx.stage.Window win =
+                            activeDialog.getDialogPane().getScene().getWindow();
+                    if (win != null && win.isShowing()) {
+                        logger.info("White balance dialog already open - bringing to front");
+                        win.requestFocus();
+                        if (win instanceof javafx.stage.Stage openStage) {
+                            openStage.toFront();
+                        }
+                        future.complete(null);
+                        return;
+                    }
+                }
+
+                Dialog<WBDialogResult> dialog = new Dialog<>();
+                activeDialog = dialog;
+                dialog.setOnHidden(ev -> activeDialog = null);
+                // Non-modal so the operator can act on this dialog's own instructions:
+                // it tells them to navigate to a blank area and check the field in the
+                // Live Viewer, which an application-modal dialog makes impossible.
+                // showAndWait() below still blocks the workflow until they answer.
+                dialog.initModality(Modality.NONE);
+                dialog.setTitle("White Balance Calibration");
+                dialog.setHeaderText("Configure JAI camera white balance calibration");
+                Button adviceButton = new Button("Advice");
+                adviceButton.setTooltip(new Tooltip("Best practices for white balance calibration"));
+                adviceButton.setStyle("-fx-font-size: 10px;");
+                adviceButton.setOnAction(ev -> CalibrationAdviceDialog.showWhiteBalanceAdvice());
+                Button wbHelpButton = DocumentationHelper.createHelpButton("whiteBalance");
+                javafx.scene.layout.HBox graphicBox = new javafx.scene.layout.HBox(8, adviceButton);
+                if (wbHelpButton != null) graphicBox.getChildren().add(wbHelpButton);
+                dialog.setGraphic(graphicBox);
+                dialog.setResizable(true);
+
+                // Main content container
+                VBox content = new VBox(15);
+                content.setPadding(new Insets(20));
+                content.setPrefWidth(750);
+
+                // Wrap content in ScrollPane for long content
+                ScrollPane scrollPane = new ScrollPane(content);
+                scrollPane.setFitToWidth(true);
+                scrollPane.setPrefViewportHeight(500);
+                scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+                scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+
+                // ========== CAMERA SELECTION SECTION ==========
+                TitledPane cameraPane = createCameraSectionPane();
+                cameraPane.setExpanded(true);
+
+                // ========== SHARED SETTINGS SECTION ==========
+                TitledPane sharedPane = createSharedSettingsPane();
+                sharedPane.setExpanded(true);
+
+                // ========== SIMPLE WHITE BALANCE SECTION ==========
+                TitledPane simplePane = createSimpleWBPane();
+                simplePane.setExpanded(true);
+
+                // ========== PPM WHITE BALANCE SECTION ==========
+                TitledPane ppmPane = createPPMWBPane();
+                ppmPane.setExpanded(false);
+
+                // ========== CAMERA AWB SECTION ==========
+                TitledPane cameraAWBPane = createCameraAWBPane();
+                cameraAWBPane.setExpanded(false);
+
+                // ========== ADVANCED SETTINGS SECTION ==========
+                TitledPane advancedPane = createAdvancedSettingsPane();
+                advancedPane.setExpanded(false);
+
+                // Add all sections
+                content.getChildren().addAll(cameraPane, sharedPane, simplePane, ppmPane, cameraAWBPane, advancedPane);
+
+                // ========== DIALOG BUTTONS ==========
+                // Run buttons are inside the TitledPanes. Dialog bar only has Close.
+                ButtonType runSimpleButton = new ButtonType("_SimpleWB", ButtonBar.ButtonData.OK_DONE);
+                ButtonType runPPMButton = new ButtonType("_PPMWB", ButtonBar.ButtonData.APPLY);
+                ButtonType cancelButton = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
+
+                dialog.getDialogPane().getButtonTypes().addAll(runSimpleButton, runPPMButton, cancelButton);
+                // Hide the dialog-bar run buttons (they're triggered by inline buttons)
+                dialog.getDialogPane().lookupButton(runSimpleButton).setVisible(false);
+                dialog.getDialogPane().lookupButton(runSimpleButton).setManaged(false);
+                dialog.getDialogPane().lookupButton(runPPMButton).setVisible(false);
+                dialog.getDialogPane().lookupButton(runPPMButton).setManaged(false);
+                dialog.getDialogPane().setContent(scrollPane);
+
+                // Get references to UI elements for result conversion
+                // Camera dropdown
+                ComboBox<?> cameraCombo = (ComboBox<?>) cameraPane.getContent().lookup("#cameraCombo");
+                // Shared settings
+                TextField outputField = (TextField) sharedPane.getContent().lookup("#outputPath");
+                Spinner<?> toleranceSpinner =
+                        (Spinner<?>) sharedPane.getContent().lookup("#tolerance");
+                // Simple WB
+                Spinner<?> targetSpinner = (Spinner<?>) simplePane.getContent().lookup("#targetIntensity");
+                Spinner<?> simpleExpSpinner =
+                        (Spinner<?>) simplePane.getContent().lookup("#simpleExposure");
+                // PPM WB - angles
+                Spinner<?> posAngleSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveAngle");
+                Spinner<?> negAngleSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeAngle");
+                Spinner<?> crossAngleSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedAngle");
+                Spinner<?> uncrossAngleSpinner =
+                        (Spinner<?>) ppmPane.getContent().lookup("#uncrossedAngle");
+                // PPM WB - exposures
+                Spinner<?> posExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveExposure");
+                Spinner<?> negExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeExposure");
+                Spinner<?> crossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#crossedExposure");
+                Spinner<?> uncrossExpSpinner = (Spinner<?>) ppmPane.getContent().lookup("#uncrossedExposure");
+                // Shared - objective (used by both Simple and PPM)
+                ComboBox<?> objectiveCombo =
+                        (ComboBox<?>) sharedPane.getContent().lookup("#wbObjective");
+                // Shared - detector (used by both Simple and PPM)
+                ComboBox<?> detectorCombo =
+                        (ComboBox<?>) sharedPane.getContent().lookup("#wbDetector");
+                // PPM WB - per-angle targets
+                Spinner<?> posTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#positiveTarget");
+                Spinner<?> negTargetSpinner = (Spinner<?>) ppmPane.getContent().lookup("#negativeTarget");
+                Spinner<?> crossTargetSpinner =
+                        (Spinner<?>) ppmPane.getContent().lookup("#crossedTarget");
+                Spinner<?> uncrossTargetSpinner =
+                        (Spinner<?>) ppmPane.getContent().lookup("#uncrossedTarget");
+                // Advanced settings
+                Spinner<?> maxGainSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#maxGainDb");
+                Spinner<?> gainThresholdSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#gainThresholdRatio");
+                Spinner<?> maxIterSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#maxIterations");
+                CheckBox blackLevelCheck = (CheckBox) advancedPane.getContent().lookup("#calibrateBlackLevel");
+                // New gain algorithm settings
+                Spinner<?> baseGainSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#baseGain");
+                Spinner<?> exposureSoftCapSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#exposureSoftCapMs");
+                Spinner<?> boostedMaxGainSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#boostedMaxGainDb");
+                Spinner<?> gainAnalogRbMaxSpinner =
+                        (Spinner<?>) advancedPane.getContent().lookup("#gainAnalogRbMax");
+
+                // Lookup hidden dialog buttons and inline buttons
+                Button ppmDialogBtn = (Button) dialog.getDialogPane().lookupButton(runPPMButton);
+                Button simpleDialogBtn = (Button) dialog.getDialogPane().lookupButton(runSimpleButton);
+                Button inlineSimpleBtn = (Button) simplePane.getContent().lookup("#runSimpleBtn");
+                Button inlinePpmBtn = (Button) ppmPane.getContent().lookup("#runPpmBtn");
+
+                // Wire inline buttons to fire the hidden dialog buttons
+                inlineSimpleBtn.setOnAction(e -> simpleDialogBtn.fire());
+                inlinePpmBtn.setOnAction(e -> ppmDialogBtn.fire());
+
+                // Validation for PPM button
+                Runnable validatePPM = () -> {
+                    boolean valid = outputField.getText() != null
+                            && !outputField.getText().isEmpty();
+                    valid = valid && objectiveCombo.getValue() != null;
+                    valid = valid && posExpSpinner.getValue() != null && ((Double) posExpSpinner.getValue()) > 0;
+                    valid = valid && negExpSpinner.getValue() != null && ((Double) negExpSpinner.getValue()) > 0;
+                    valid = valid && crossExpSpinner.getValue() != null && ((Double) crossExpSpinner.getValue()) > 0;
+                    valid = valid
+                            && uncrossExpSpinner.getValue() != null
+                            && ((Double) uncrossExpSpinner.getValue()) > 0;
+                    inlinePpmBtn.setDisable(!valid);
+                };
+
+                // Validation for Simple button
+                Runnable validateSimple = () -> {
+                    boolean valid = outputField.getText() != null
+                            && !outputField.getText().isEmpty();
+                    valid = valid && objectiveCombo.getValue() != null;
+                    valid = valid && simpleExpSpinner.getValue() != null && ((Double) simpleExpSpinner.getValue()) > 0;
+                    inlineSimpleBtn.setDisable(!valid);
+                };
+
+                // Set up validation listeners
+                outputField.textProperty().addListener((obs, o, n) -> {
+                    validateSimple.run();
+                    validatePPM.run();
+                });
+                objectiveCombo.valueProperty().addListener((obs, o, n) -> {
+                    validateSimple.run();
+                    validatePPM.run();
+                });
+                simpleExpSpinner.valueProperty().addListener((obs, o, n) -> validateSimple.run());
+                posExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
+                negExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
+                crossExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
+                uncrossExpSpinner.valueProperty().addListener((obs, o, n) -> validatePPM.run());
+
+                // Initial validation
+                validateSimple.run();
+                validatePPM.run();
+
+                // Convert result
+                dialog.setResultConverter(buttonType -> {
+                    String camera = cameraCombo.getValue() != null
+                            ? cameraCombo.getValue().toString()
+                            : "JAI AP-3200T-USB";
+                    String outPath = outputField.getText();
+                    double tolerance = (Double) toleranceSpinner.getValue();
+
+                    // Get advanced settings
+                    double maxGain = (Double) maxGainSpinner.getValue();
+                    double gainThreshold = (Double) gainThresholdSpinner.getValue();
+                    int maxIter = (Integer) maxIterSpinner.getValue();
+                    boolean calibrateBL = blackLevelCheck.isSelected();
+                    // New gain algorithm settings
+                    double baseGain = (Double) baseGainSpinner.getValue();
+                    double exposureSoftCap = (Double) exposureSoftCapSpinner.getValue();
+                    double boostedMaxGain = (Double) boostedMaxGainSpinner.getValue();
+                    double gainAnalogRbMax = (Double) gainAnalogRbMaxSpinner.getValue();
+
+                    // Get objective and detector (shared by both modes). Both come
+                    // from the user's explicit dropdown selection -- never iterator-
+                    // first, which silently mis-targeted Teledyne when JAI was
+                    // intended.
+                    String selectedObjective = objectiveCombo.getValue() != null
+                            ? objectiveCombo.getValue().toString()
+                            : null;
+                    String selectedDetector = detectorCombo.getValue() != null
+                            ? detectorCombo.getValue().toString()
+                            : null;
+
+                    if (selectedDetector == null || selectedDetector.isEmpty()) {
+                        Alert alert = new Alert(Alert.AlertType.ERROR);
+                        alert.setTitle("White Balance: missing detector");
+                        alert.setHeaderText("No detector selected");
+                        alert.setContentText("Pick a detector in Shared Settings before running calibration. "
+                                + "Calibration is written into the detector-specific YAML section, "
+                                + "so picking the wrong one leaves the active detector with stale values.");
+                        DialogOwner.own(alert);
+                        UserErrors.logAlert(logger, alert);
+                        alert.showAndWait();
+                        return null;
+                    }
+
+                    // Save shared preferences (output path is auto-derived, not saved)
+                    toleranceProperty.set(tolerance);
+                    cameraProperty.set(camera);
+                    if (selectedObjective != null && !selectedObjective.isEmpty()) {
+                        qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(selectedObjective);
+                    }
+                    PersistentPreferences.setLastDetector(selectedDetector);
+
+                    // Save advanced preferences
+                    maxGainDbProperty.set(maxGain);
+                    gainThresholdRatioProperty.set(gainThreshold);
+                    maxIterationsProperty.set(maxIter);
+                    calibrateBlackLevelProperty.set(calibrateBL);
+                    // Save new gain algorithm preferences
+                    baseGainProperty.set(baseGain);
+                    exposureSoftCapMsProperty.set(exposureSoftCap);
+                    boostedMaxGainDbProperty.set(boostedMaxGain);
+                    gainAnalogRbMaxProperty.set(gainAnalogRbMax);
+
+                    AdvancedWBParams advanced = new AdvancedWBParams(
+                            maxGain,
+                            gainThreshold,
+                            maxIter,
+                            calibrateBL,
+                            baseGain,
+                            exposureSoftCap,
+                            boostedMaxGain,
+                            gainAnalogRbMax);
+
+                    if (buttonType == runSimpleButton) {
+                        double exposure = (Double) simpleExpSpinner.getValue();
+                        double target = (Double) targetSpinner.getValue();
+                        simpleExposureProperty.set(exposure);
+                        targetIntensityProperty.set(target);
+
+                        logger.info("User selected Simple White Balance:");
+                        logger.info("  Objective: {}, Detector: {}", selectedObjective, selectedDetector);
+                        logger.info("  Output: {}", outPath);
+                        logger.info("  Base exposure: {} ms", exposure);
+                        logger.info("  Target: {}, Tolerance: {}", target, tolerance);
+                        logger.info(
+                                "  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                                maxGain,
+                                gainThreshold,
+                                maxIter,
+                                calibrateBL);
+                        logger.info(
+                                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                                baseGain,
+                                exposureSoftCap,
+                                boostedMaxGain);
+
+                        return WBDialogResult.simple(new SimpleWBParams(
+                                outPath,
+                                camera,
+                                selectedObjective,
+                                selectedDetector,
+                                exposure,
+                                target,
+                                tolerance,
+                                advanced));
+
+                    } else if (buttonType == runPPMButton) {
+                        // Get angle values from editable spinners
+                        double posAngle = (Double) posAngleSpinner.getValue();
+                        double negAngle = (Double) negAngleSpinner.getValue();
+                        double crossAngle = (Double) crossAngleSpinner.getValue();
+                        double uncrossAngle = (Double) uncrossAngleSpinner.getValue();
+
+                        double posExp = (Double) posExpSpinner.getValue();
+                        double negExp = (Double) negExpSpinner.getValue();
+                        double crossExp = (Double) crossExpSpinner.getValue();
+                        double uncrossExp = (Double) uncrossExpSpinner.getValue();
+
+                        // Get per-angle targets
+                        double posTarget = (Double) posTargetSpinner.getValue();
+                        double negTarget = (Double) negTargetSpinner.getValue();
+                        double crossTarget = (Double) crossTargetSpinner.getValue();
+                        double uncrossTarget = (Double) uncrossTargetSpinner.getValue();
+
+                        // Save PPM preferences - exposures
+                        ppmPositiveExpProperty.set(posExp);
+                        ppmNegativeExpProperty.set(negExp);
+                        ppmCrossedExpProperty.set(crossExp);
+                        ppmUncrossedExpProperty.set(uncrossExp);
+
+                        // Save PPM preferences - targets
+                        ppmPositiveTargetProperty.set(posTarget);
+                        ppmNegativeTargetProperty.set(negTarget);
+                        ppmCrossedTargetProperty.set(crossTarget);
+                        ppmUncrossedTargetProperty.set(uncrossTarget);
+
+                        logger.info("User selected PPM White Balance:");
+                        logger.info("  Objective: {}, Detector: {}", selectedObjective, selectedDetector);
+                        logger.info("  Output: {}", outPath);
+                        logger.info("  Positive ({}deg): {} ms, target={}", posAngle, posExp, posTarget);
+                        logger.info("  Negative ({}deg): {} ms, target={}", negAngle, negExp, negTarget);
+                        logger.info("  Crossed ({}deg): {} ms, target={}", crossAngle, crossExp, crossTarget);
+                        logger.info("  Uncrossed ({}deg): {} ms, target={}", uncrossAngle, uncrossExp, uncrossTarget);
+                        logger.info("  Tolerance: {}", tolerance);
+                        logger.info(
+                                "  Advanced: maxGain={}dB, gainThreshold={}, maxIter={}, calibrateBL={}",
+                                maxGain,
+                                gainThreshold,
+                                maxIter,
+                                calibrateBL);
+                        logger.info(
+                                "  Gain algo: baseGain={}, exposureSoftCap={}ms, boostedMaxGain={}dB",
+                                baseGain,
+                                exposureSoftCap,
+                                boostedMaxGain);
+
+                        // Per-angle targets are primary; fallback target from preference for compatibility
+                        double fallbackTarget = targetIntensityProperty.get();
+
+                        return WBDialogResult.ppm(new PPMWBParams(
+                                outPath,
+                                camera,
+                                selectedObjective,
+                                selectedDetector,
+                                posAngle,
+                                posExp,
+                                posTarget,
+                                negAngle,
+                                negExp,
+                                negTarget,
+                                crossAngle,
+                                crossExp,
+                                crossTarget,
+                                uncrossAngle,
+                                uncrossExp,
+                                uncrossTarget,
+                                fallbackTarget,
+                                tolerance,
+                                advanced));
+                    }
+
+                    return null;
+                });
+
+                // Show dialog and complete future
+                DialogOwner.own(dialog);
+                dialog.showAndWait().ifPresentOrElse(future::complete, () -> {
+                    logger.info("White balance dialog canceled");
+                    future.complete(null);
+                });
+
+            } catch (Exception e) {
+                logger.error("Error showing white balance dialog", e);
+                future.completeExceptionally(e);
+            }
+        });
+
+        return future;
+    }
+
+    /**
+     * Creates the camera selection pane.
+     */
+    private static TitledPane createCameraSectionPane() {
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(10));
+
+        Label cameraLabel = new Label("Camera:");
+        cameraLabel.setPrefWidth(120);
+        cameraLabel.setTooltip(new Tooltip("Select the camera for white balance calibration"));
+
+        ComboBox<String> cameraCombo = new ComboBox<>();
+        cameraCombo.setId("cameraCombo");
+        cameraCombo.setPrefWidth(300);
+        cameraCombo.getItems().add("JAI AP-3200T-USB");
+        cameraCombo.setValue(cameraProperty.get());
+        cameraCombo.setTooltip(new Tooltip("Select the camera for white balance calibration"));
+
+        Label cameraNote = new Label("(Currently only JAI camera supported)");
+        cameraNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        grid.add(cameraLabel, 0, 0);
+        grid.add(cameraCombo, 1, 0);
+        grid.add(cameraNote, 1, 1);
+
+        TitledPane pane = new TitledPane("Camera Selection", grid);
+        pane.setCollapsible(true);
+        return pane;
+    }
+
+    /**
+     * Creates the shared settings pane (target intensity, tolerance, output folder).
+     */
+    private static TitledPane createSharedSettingsPane() {
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(10));
+
+        int row = 0;
+
+        // Tolerance
+        Label toleranceLabel = new Label("Tolerance:");
+        toleranceLabel.setTooltip(new Tooltip("Acceptable deviation from target intensity"));
+        Spinner<Double> toleranceSpinner = new Spinner<>(0.1, 50.0, toleranceProperty.get(), 0.5);
+        toleranceSpinner.setId("tolerance");
+        toleranceSpinner.setEditable(true);
+        toleranceSpinner.setPrefWidth(100);
+        toleranceSpinner.setTooltip(new Tooltip("Acceptable deviation from target intensity"));
+
+        Label toleranceNote = new Label("(channels within tolerance are considered balanced)");
+        toleranceNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        toleranceNote.setTooltip(new Tooltip("Channels within tolerance are considered balanced"));
+
+        grid.add(toleranceLabel, 0, row);
+        grid.add(toleranceSpinner, 1, row);
+        grid.add(toleranceNote, 2, row);
+        row++;
+
+        // Output folder - default to config file directory if no saved preference
+        Label outputLabel = new Label("Output Folder:");
+        outputLabel.setTooltip(new Tooltip("Folder where white balance calibration files are saved"));
+
+        TextField outputField = new TextField();
+        outputField.setId("outputPath");
+        outputField.setPrefWidth(300);
+        outputField.setEditable(false); // Read-only - always derived from config location
+
+        // Always derive output path from current config file location
+        String wbOutputPath = "";
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                Path configDir = Paths.get(configPath).getParent();
+                if (configDir != null) {
+                    // Create white_balance_calibration subfolder path
+                    wbOutputPath = configDir.resolve(WB_SUBFOLDER).toString();
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not get output path from config location: {}", e.getMessage());
+        }
+        outputField.setText(wbOutputPath);
+        outputField.setPromptText("Output folder (derived from config location)");
+
+        // Output is read-only (derived from config location)
+        // Add a note explaining this
+        Label outputNote = new Label("(auto: config folder/" + WB_SUBFOLDER + ")");
+        outputNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        outputNote.setTooltip(new Tooltip("Auto-derived: config folder/" + WB_SUBFOLDER));
+
+        grid.add(outputLabel, 0, row);
+        grid.add(outputField, 1, row);
+        grid.add(outputNote, 2, row);
+        row++;
+
+        // Objective selection - calibration results are objective-specific
+        Label objectiveLabel = new Label("Objective:");
+        objectiveLabel.setTooltip(
+                new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
+
+        ComboBox<String> objectiveCombo = new ComboBox<>();
+        objectiveCombo.setId("wbObjective");
+        objectiveCombo.setPrefWidth(350);
+        objectiveCombo.setTooltip(
+                new Tooltip("Select the objective for calibration (exposures are objective-specific)"));
+
+        // Populate objectives from config
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                // Use the central modality state; default to "ppm" when empty.
+                String modality =
+                        qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+                if (modality == null || modality.isEmpty()) {
+                    modality = "ppm";
+                }
+                Set<String> objectives = configManager.getAvailableObjectives();
+                if (!objectives.isEmpty()) {
+                    objectiveCombo
+                            .getItems()
+                            .addAll(objectives.stream().sorted().toList());
+                    // Prefer the objective actually mounted right now (matched against the live
+                    // MicroManager pixel size) over the wizard's last-selected pref. The pref
+                    // goes stale whenever the user swaps objectives without going through the
+                    // Acquisition Wizard, and a stale pref saves WB calibration into the wrong
+                    // objective's YAML slot.
+                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
+                            detectMountedHardware(configManager);
+                    String defaultObjective = liveMatch
+                            .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
+                            .filter(objectives::contains)
+                            .orElse(null);
+                    String fallbackPref = null;
+                    if (defaultObjective == null) {
+                        fallbackPref = qupath.ext.qpsc.state.ObjectiveState.getInstance()
+                                .getObjective();
+                        if (fallbackPref != null && !fallbackPref.isEmpty() && objectives.contains(fallbackPref)) {
+                            defaultObjective = fallbackPref;
+                        }
+                    }
+                    logger.info(
+                            "WB dialog objective seed: liveMatch={}, prefFallback='{}', selected='{}'",
+                            liveMatch
+                                    .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
+                                    .orElse(null),
+                            fallbackPref,
+                            defaultObjective);
+                    if (defaultObjective != null) {
+                        objectiveCombo.setValue(defaultObjective);
+                    } else {
+                        objectiveCombo.getSelectionModel().selectFirst();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load objectives for WB dialog: {}", e.getMessage());
+        }
+
+        Label objectiveNote = new Label("(calibration is objective-specific)");
+        objectiveNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        objectiveNote.setTooltip(new Tooltip("Calibration is objective-specific"));
+
+        grid.add(objectiveLabel, 0, row);
+        grid.add(objectiveCombo, 1, row);
+        grid.add(objectiveNote, 2, row);
+        row++;
+
+        // Detector selection - calibration is also detector-specific. Without this
+        // dropdown, the dialog would silently pick whichever detector iterator()
+        // returned first (Teledyne instead of JAI on the PPM scope), leaving the
+        // intended detector's YAML stale.
+        Label detectorLabel = new Label("Detector:");
+        detectorLabel.setTooltip(
+                new Tooltip("Select the detector for calibration (exposures + gain are detector-specific)"));
+
+        ComboBox<String> detectorCombo = new ComboBox<>();
+        detectorCombo.setId("wbDetector");
+        detectorCombo.setPrefWidth(350);
+        detectorCombo.setTooltip(
+                new Tooltip("Select the detector for calibration (exposures + gain are detector-specific)"));
+
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
+                Set<String> detectors = configManager.getAvailableDetectors();
+                if (!detectors.isEmpty()) {
+                    detectorCombo.getItems().addAll(detectors.stream().sorted().toList());
+                    // Same live-detection-first policy as the objective combo above.
+                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
+                            detectMountedHardware(configManager);
+                    String defaultDetector = liveMatch
+                            .map(MicroscopeConfigManager.HardwareSelection::detectorId)
+                            .filter(detectors::contains)
+                            .orElse(null);
+                    if (defaultDetector == null) {
+                        String savedDetector = PersistentPreferences.getLastDetector();
+                        if (savedDetector != null && !savedDetector.isEmpty() && detectors.contains(savedDetector)) {
+                            defaultDetector = savedDetector;
+                        }
+                    }
+                    if (defaultDetector != null) {
+                        detectorCombo.setValue(defaultDetector);
+                    } else {
+                        detectorCombo.getSelectionModel().selectFirst();
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load detectors for WB dialog: {}", e.getMessage());
+        }
+
+        Label detectorNote = new Label("(calibration is detector-specific)");
+        detectorNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        detectorNote.setTooltip(new Tooltip("Calibration is detector-specific"));
+
+        grid.add(detectorLabel, 0, row);
+        grid.add(detectorCombo, 1, row);
+        grid.add(detectorNote, 2, row);
+
+        TitledPane pane = new TitledPane("Shared Settings", grid);
+        pane.setCollapsible(true);
+        return pane;
+    }
+
+    /**
+     * Creates the Simple White Balance pane.
+     */
+    private static TitledPane createSimpleWBPane() {
+        VBox vbox = new VBox(10);
+        vbox.setPadding(new Insets(10));
+
+        // Description with color-coded mode name
+        Label modeLabel = WbMode.createColoredLabel(WbMode.SIMPLE);
+        modeLabel.setStyle(modeLabel.getStyle() + " -fx-font-size: 13px;");
+
+        Label descLabel = new Label("Calibrates at 90 degrees first, then automatically calibrates\n"
+                + "all remaining PPM angles using the 90-degree result as a starting point.\n"
+                + "This produces per-angle exposure settings for all angles (~1-2 min total).\n\n"
+                + "Navigate to a blank area of the slide first. If you see small debris\n"
+                + "or scratches in the Live Viewer, defocus slightly (1-2 Z steps) until\n"
+                + "the field looks clean -- the illumination pattern is preserved.\n\n"
+                + "IMPORTANT: When you acquire tiles, select the matching WB mode\n"
+                + "(\"Simple (90deg)\" in the Hardware Configuration section).\n"
+                + "Background images must also be collected with this mode selected.");
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 11px;");
+
+        Hyperlink docLink = new Hyperlink("See White Balance documentation for details");
+        docLink.setOnAction(e -> DocumentationHelper.openDocumentation("whiteBalance"));
+        docLink.setStyle("-fx-font-size: 10px;");
+
+        // Base exposure
+        HBox expBox = new HBox(10);
+        expBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label expLabel = new Label("Base Exposure (ms):");
+        expLabel.setPrefWidth(140);
+        expLabel.setTooltip(new Tooltip("Starting exposure for all channels"));
+
+        double defaultExp = Double.isNaN(simpleExposureProperty.get()) ? 20.0 : simpleExposureProperty.get();
+        Spinner<Double> expSpinner = new Spinner<>(0.1, 500.0, defaultExp, 1.0);
+        expSpinner.setId("simpleExposure");
+        expSpinner.setEditable(true);
+        expSpinner.setPrefWidth(100);
+        expSpinner.setTooltip(new Tooltip("Starting exposure for all channels"));
+
+        expBox.getChildren().addAll(expLabel, expSpinner);
+
+        // Target intensity (Simple WB only - PPM has per-angle targets)
+        HBox targetBox = new HBox(10);
+        targetBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label targetLabel = new Label("Target Intensity:");
+        targetLabel.setPrefWidth(140);
+        targetLabel.setTooltip(new Tooltip("Target mean intensity for all channels (0-255)"));
+
+        Spinner<Double> targetSpinner = new Spinner<>(0.0, 255.0, targetIntensityProperty.get(), 1.0);
+        targetSpinner.setId("targetIntensity");
+        targetSpinner.setEditable(true);
+        targetSpinner.setPrefWidth(100);
+        targetSpinner.setTooltip(new Tooltip("Target mean intensity for all channels (0-255)"));
+
+        Label targetNote = new Label("(uncrossed / 90 deg target)");
+        targetNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        targetBox.getChildren().addAll(targetLabel, targetSpinner, targetNote);
+
+        // Single target for all small angles (positive, negative, crossed)
+        HBox smallAngleBox = new HBox(10);
+        smallAngleBox.setAlignment(Pos.CENTER_LEFT);
+
+        Label smallAngleLabel = new Label("Small-Angle Target:");
+        smallAngleLabel.setPrefWidth(140);
+        smallAngleLabel.setTooltip(new Tooltip("Target intensity for positive, negative, and crossed angles.\n"
+                + "Lower values reduce saturation risk. Typical range: 120-180."));
+
+        Spinner<Double> smallAngleSpinner = new Spinner<>(50.0, 255.0, ppmPositiveTargetProperty.get(), 5.0);
+        smallAngleSpinner.setEditable(true);
+        smallAngleSpinner.setPrefWidth(100);
+        smallAngleSpinner.setTooltip(new Tooltip("Target intensity for positive, negative, and crossed angles.\n"
+                + "Lower values reduce saturation risk on bright tissue.\n"
+                + "Typical range: 120-180. Default 160."));
+        // Sync all three angle targets to this single spinner
+        smallAngleSpinner.valueProperty().addListener((obs, o, n) -> {
+            ppmPositiveTargetProperty.set(n);
+            ppmNegativeTargetProperty.set(n);
+            ppmCrossedTargetProperty.set(n);
+        });
+
+        Label smallAngleNote = new Label("(applies to +7, -7, and 0 deg)");
+        smallAngleNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        smallAngleBox.getChildren().addAll(smallAngleLabel, smallAngleSpinner, smallAngleNote);
+
+        // Run button (wired by dialog setup code)
+        Button runSimpleBtn = new Button("Run Simple WB");
+        runSimpleBtn.setId("runSimpleBtn");
+        runSimpleBtn.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+        runSimpleBtn.setMaxWidth(Double.MAX_VALUE);
+        runSimpleBtn.setDisable(true); // Enabled by validation
+
+        vbox.getChildren().addAll(modeLabel, descLabel, docLink, expBox, targetBox, smallAngleBox, runSimpleBtn);
+
+        TitledPane pane = new TitledPane("Simple White Balance", vbox);
+        pane.setCollapsible(true);
+        return pane;
+    }
+
+    /**
+     * Returns the (objective, detector) pair currently mounted, by matching the live
+     * MicroManager pixel size against the configured hardware table. Returns empty if
+     * the microscope is not connected, the pixel size lookup fails, or nothing matches.
+     *
+     * <p>Used to seed the objective and detector combo boxes so the dialog defaults
+     * reflect the physically mounted hardware rather than a possibly-stale persistent
+     * preference. The user can still override via the dropdowns.
+     */
+    private static Optional<MicroscopeConfigManager.HardwareSelection> detectMountedHardware(
+            MicroscopeConfigManager configManager) {
+        try {
+            MicroscopeController mc = MicroscopeController.getInstance();
+            if (mc == null || !mc.isConnected()) {
+                logger.info(
+                        "WB dialog: live hardware detection skipped (controller={}, connected={})",
+                        mc,
+                        mc != null && mc.isConnected());
+                return Optional.empty();
+            }
+            double mmPx = mc.getSocketClient().getMicroscopePixelSize();
+            Optional<MicroscopeConfigManager.HardwareSelection> match = configManager.findHardwareByPixelSize(
+                    mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
+            logger.info(
+                    "WB dialog: live MM pixel size {} um/px -> {}",
+                    mmPx,
+                    match.map(h -> h.objectiveId() + " / " + h.detectorId()).orElse("NO MATCH"));
+            return match;
+        } catch (Exception e) {
+            logger.warn("WB dialog: live hardware detection failed: {}", e.getMessage());
+            return Optional.empty();
+        }
+    }
+
+    /**
+     * Loads PPM angle values from YAML config, falling back to the static constants.
+     * Returns a map with keys: "positive", "negative", "crossed", "uncrossed".
+     */
+    private static Map<String, Double> loadConfiguredAngles() {
+        Map<String, Double> angles = new HashMap<>();
+        // Start with constant defaults
+        angles.put("positive", POSITIVE_ANGLE);
+        angles.put("negative", NEGATIVE_ANGLE);
+        angles.put("crossed", CROSSED_ANGLE);
+        angles.put("uncrossed", UNCROSSED_ANGLE);
+
+        try {
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath != null && !configPath.isEmpty()) {
+                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+                // Find the first PPM modality
+                Set<String> modalities = mgr.getAvailableModalities();
+                String ppmModality = null;
+                for (String m : modalities) {
+                    if (m.startsWith("ppm")) {
+                        ppmModality = m;
+                        break;
+                    }
+                }
+                if (ppmModality != null) {
+                    List<?> anglesList = mgr.getList("modalities", ppmModality, "rotation_angles");
+                    if (anglesList != null) {
+                        for (Object angleObj : anglesList) {
+                            if (angleObj instanceof Map<?, ?> angle) {
+                                Object name = angle.get("name");
+                                Object tickObj = angle.get("tick");
+                                if (name != null && tickObj instanceof Number) {
+                                    double tick = ((Number) tickObj).doubleValue();
+                                    String key = name.toString();
+                                    if (angles.containsKey(key)) {
+                                        angles.put(key, tick);
+                                    }
+                                }
+                            }
+                        }
+                        logger.info("Loaded PPM angles from config: {}", angles);
+                    }
+                }
+            }
+        } catch (Exception e) {
+            logger.warn("Could not load PPM angles from config, using defaults: {}", e.getMessage());
+        }
+
+        return angles;
+    }
+
+    /**
+     * Creates the PPM White Balance pane with 4 angle/exposure/target triplets.
+     */
+    private static TitledPane createPPMWBPane() {
+        VBox vbox = new VBox(10);
+        vbox.setPadding(new Insets(10));
+
+        // Description with color-coded mode name
+        Label ppmModeLabel = WbMode.createColoredLabel(WbMode.PER_ANGLE);
+        ppmModeLabel.setStyle(ppmModeLabel.getStyle() + " -fx-font-size: 13px;");
+
+        Label descLabel = new Label("Calibrates SEPARATELY at each of the 4 PPM polarizer angles.\n"
+                + "Each angle gets its own per-channel exposure and gain settings.\n"
+                + "Use this for multi-angle PPM acquisition where color accuracy\n"
+                + "between angles is important (e.g., birefringence quantification).\n\n"
+                + "Navigate to a blank area of the slide first. If you see small debris\n"
+                + "or scratches in the Live Viewer, defocus slightly (1-2 Z steps) until\n"
+                + "the field looks clean -- the illumination pattern is preserved.\n\n"
+                + "IMPORTANT: When you acquire tiles, select \"Per-angle (PPM)\" as\n"
+                + "the WB mode. Background images must also use Per-angle mode.\n"
+                + "Do NOT mix Per-angle WB with Simple backgrounds or vice versa.");
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 11px;");
+
+        Hyperlink ppmDocLink = new Hyperlink("See White Balance documentation for details");
+        ppmDocLink.setOnAction(e -> DocumentationHelper.openDocumentation("whiteBalance"));
+        ppmDocLink.setStyle("-fx-font-size: 10px;");
+
+        // Load configured angles from YAML (falls back to constants)
+        Map<String, Double> configAngles = loadConfiguredAngles();
+
+        // Grid for angle/exposure/target triplets
+        GridPane grid = new GridPane();
+        grid.setHgap(15);
+        grid.setVgap(8);
+
+        // Header row
+        Label nameHeader = new Label("Name");
+        nameHeader.setStyle("-fx-font-weight: bold;");
+        Label angleHeader = new Label("Angle (deg)");
+        angleHeader.setStyle("-fx-font-weight: bold;");
+        Label expHeader = new Label("Exposure (ms)");
+        expHeader.setStyle("-fx-font-weight: bold;");
+        Label targetHeader = new Label("Target Intensity");
+        targetHeader.setStyle("-fx-font-weight: bold;");
+
+        grid.add(nameHeader, 0, 0);
+        grid.add(angleHeader, 1, 0);
+        grid.add(expHeader, 2, 0);
+        grid.add(targetHeader, 3, 0);
+
+        // Positive - birefringence angle, moderate brightness
+        Label posLabel = new Label("Positive:");
+        posLabel.setPrefWidth(90);
+        Spinner<Double> posAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("positive"), 0.5);
+        posAngleSpinner.setId("positiveAngle");
+        posAngleSpinner.setEditable(true);
+        posAngleSpinner.setPrefWidth(80);
+        double posDefault = Double.isNaN(ppmPositiveExpProperty.get()) ? 0.0 : ppmPositiveExpProperty.get();
+        Spinner<Double> posSpinner = new Spinner<>(0.0, 500.0, posDefault, 1.0);
+        posSpinner.setId("positiveExposure");
+        posSpinner.setEditable(true);
+        posSpinner.setPrefWidth(100);
+        Spinner<Double> posTargetSpinner = new Spinner<>(0.0, 255.0, ppmPositiveTargetProperty.get(), 5.0);
+        posTargetSpinner.setId("positiveTarget");
+        posTargetSpinner.setEditable(true);
+        posTargetSpinner.setPrefWidth(80);
+        posTargetSpinner.setTooltip(new Tooltip("Target intensity for birefringence angle (moderate)"));
+
+        grid.add(posLabel, 0, 1);
+        grid.add(posAngleSpinner, 1, 1);
+        grid.add(posSpinner, 2, 1);
+        grid.add(posTargetSpinner, 3, 1);
+
+        // Negative - birefringence angle, moderate brightness
+        Label negLabel = new Label("Negative:");
+        Spinner<Double> negAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("negative"), 0.5);
+        negAngleSpinner.setId("negativeAngle");
+        negAngleSpinner.setEditable(true);
+        negAngleSpinner.setPrefWidth(80);
+        double negDefault = Double.isNaN(ppmNegativeExpProperty.get()) ? 0.0 : ppmNegativeExpProperty.get();
+        Spinner<Double> negSpinner = new Spinner<>(0.0, 500.0, negDefault, 1.0);
+        negSpinner.setId("negativeExposure");
+        negSpinner.setEditable(true);
+        negSpinner.setPrefWidth(100);
+        Spinner<Double> negTargetSpinner = new Spinner<>(0.0, 255.0, ppmNegativeTargetProperty.get(), 5.0);
+        negTargetSpinner.setId("negativeTarget");
+        negTargetSpinner.setEditable(true);
+        negTargetSpinner.setPrefWidth(80);
+        negTargetSpinner.setTooltip(new Tooltip("Target intensity for birefringence angle (moderate)"));
+
+        grid.add(negLabel, 0, 2);
+        grid.add(negAngleSpinner, 1, 2);
+        grid.add(negSpinner, 2, 2);
+        grid.add(negTargetSpinner, 3, 2);
+
+        // Crossed - very dim due to blocked light
+        Label crossLabel = new Label("Crossed:");
+        Spinner<Double> crossAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("crossed"), 0.5);
+        crossAngleSpinner.setId("crossedAngle");
+        crossAngleSpinner.setEditable(true);
+        crossAngleSpinner.setPrefWidth(80);
+        double crossDefault = Double.isNaN(ppmCrossedExpProperty.get()) ? 0.0 : ppmCrossedExpProperty.get();
+        Spinner<Double> crossSpinner = new Spinner<>(0.0, 5000.0, crossDefault, 10.0); // Higher max for crossed
+        crossSpinner.setId("crossedExposure");
+        crossSpinner.setEditable(true);
+        crossSpinner.setPrefWidth(100);
+        Spinner<Double> crossTargetSpinner = new Spinner<>(0.0, 255.0, ppmCrossedTargetProperty.get(), 5.0);
+        crossTargetSpinner.setId("crossedTarget");
+        crossTargetSpinner.setEditable(true);
+        crossTargetSpinner.setPrefWidth(80);
+        crossTargetSpinner.setTooltip(new Tooltip("Target intensity for crossed polarizers (dim)"));
+
+        grid.add(crossLabel, 0, 3);
+        grid.add(crossAngleSpinner, 1, 3);
+        grid.add(crossSpinner, 2, 3);
+        grid.add(crossTargetSpinner, 3, 3);
+
+        // Uncrossed - very bright
+        Label uncrossLabel = new Label("Uncrossed:");
+        Spinner<Double> uncrossAngleSpinner = new Spinner<>(-180.0, 180.0, configAngles.get("uncrossed"), 0.5);
+        uncrossAngleSpinner.setId("uncrossedAngle");
+        uncrossAngleSpinner.setEditable(true);
+        uncrossAngleSpinner.setPrefWidth(80);
+        double uncrossDefault = Double.isNaN(ppmUncrossedExpProperty.get()) ? 0.0 : ppmUncrossedExpProperty.get();
+        Spinner<Double> uncrossSpinner =
+                new Spinner<>(0.0, 500.0, uncrossDefault, 0.1); // Fine control for short exposure
+        uncrossSpinner.setId("uncrossedExposure");
+        uncrossSpinner.setEditable(true);
+        uncrossSpinner.setPrefWidth(100);
+        Spinner<Double> uncrossTargetSpinner = new Spinner<>(0.0, 255.0, ppmUncrossedTargetProperty.get(), 5.0);
+        uncrossTargetSpinner.setId("uncrossedTarget");
+        uncrossTargetSpinner.setEditable(true);
+        uncrossTargetSpinner.setPrefWidth(80);
+        uncrossTargetSpinner.setTooltip(new Tooltip("Target intensity for uncrossed polarizers (bright)"));
+
+        grid.add(uncrossLabel, 0, 4);
+        grid.add(uncrossAngleSpinner, 1, 4);
+        grid.add(uncrossSpinner, 2, 4);
+        grid.add(uncrossTargetSpinner, 3, 4);
+
+        // Note about editable angles
+        Label noteLabel =
+                new Label("(Angle values loaded from config and are editable. Targets match optical properties.)");
+        noteLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        // Run button (wired by dialog setup code)
+        Button runPpmBtn = new Button("Run PPM WB");
+        runPpmBtn.setId("runPpmBtn");
+        runPpmBtn.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+        runPpmBtn.setMaxWidth(Double.MAX_VALUE);
+        runPpmBtn.setDisable(true); // Enabled by validation
+
+        vbox.getChildren().addAll(ppmModeLabel, descLabel, ppmDocLink, grid, noteLabel, runPpmBtn);
+
+        TitledPane pane = new TitledPane("PPM White Balance (4 Angles)", vbox);
+        pane.setCollapsible(true);
+        return pane;
+    }
+
+    /**
+     * Creates the Camera AWB information pane.
+     * Camera AWB must be configured manually in MicroManager.
+     */
+    private static TitledPane createCameraAWBPane() {
+        VBox vbox = new VBox(10);
+        vbox.setPadding(new Insets(10));
+
+        Label descLabel = new Label("Camera Auto White Balance -- must be configured in MicroManager.\n\n"
+                + "Steps:\n"
+                + "  1. Open MicroManager's Device Property Browser\n"
+                + "  2. Find JAICamera -> WhiteBalance\n"
+                + "  3. Set to \"Continuous\" (ensure Live mode is active)\n"
+                + "  4. Wait for colors to converge (~3-5 seconds)\n"
+                + "  5. Set WhiteBalance back to \"Off\"\n\n"
+                + "To clear AWB: restart MicroManager and wait ~30 seconds.\n\n"
+                + "Camera AWB gains are NOT saved to YAML.\n"
+                + "For reproducible results, use Simple or PPM WB.");
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 11px;");
+
+        vbox.getChildren().add(descLabel);
+
+        TitledPane pane = new TitledPane("Camera AWB (Manual Setup Required)", vbox);
+        pane.setCollapsible(true);
+        return pane;
+    }
+
+    /**
+     * Creates the Advanced Settings pane with calibration algorithm parameters.
+     */
+    private static TitledPane createAdvancedSettingsPane() {
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(10));
+
+        int row = 0;
+
+        // Description
+        Label descLabel = new Label("Advanced calibration parameters. Default values work well for most cases.");
+        descLabel.setWrapText(true);
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        grid.add(descLabel, 0, row, 3, 1);
+        row++;
+
+        // Max Gain (dB)
+        Label maxGainLabel = new Label("Max Gain (dB):");
+        maxGainLabel.setPrefWidth(160);
+
+        Spinner<Double> maxGainSpinner = new Spinner<>(0.0, 36.0, maxGainDbProperty.get(), 0.5);
+        maxGainSpinner.setId("maxGainDb");
+        maxGainSpinner.setEditable(true);
+        maxGainSpinner.setPrefWidth(100);
+        maxGainSpinner.setTooltip(new Tooltip("Maximum analog gain in dB. Higher gain = more noise.\n"
+                + "3 dB = 1.41x, 6 dB = 2x, 12 dB = 4x linear gain.\n"
+                + "JAI camera supports 0-36 dB."));
+
+        Label maxGainNote = new Label("(3dB = 1.41x gain)");
+        maxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        maxGainNote.setTooltip(new Tooltip("3dB = 1.41x, 6dB = 2x, 12dB = 4x linear gain"));
+
+        grid.add(maxGainLabel, 0, row);
+        grid.add(maxGainSpinner, 1, row);
+        grid.add(maxGainNote, 2, row);
+        row++;
+
+        // Gain Threshold Ratio
+        Label gainThresholdLabel = new Label("Gain Threshold Ratio:");
+
+        Spinner<Double> gainThresholdSpinner = new Spinner<>(1.0, 10.0, gainThresholdRatioProperty.get(), 0.1);
+        gainThresholdSpinner.setId("gainThresholdRatio");
+        gainThresholdSpinner.setEditable(true);
+        gainThresholdSpinner.setPrefWidth(100);
+        gainThresholdSpinner.setTooltip(
+                new Tooltip("Exposure ratio between channels before applying gain compensation.\n"
+                        + "If brightest/darkest channel exposure ratio exceeds this, gain is used\n"
+                        + "to reduce exposure spread instead of relying purely on exposure."));
+
+        Label gainThresholdNote = new Label("(exposure ratio before using gain)");
+        gainThresholdNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        gainThresholdNote.setTooltip(new Tooltip("Exposure ratio between channels before applying gain compensation"));
+
+        grid.add(gainThresholdLabel, 0, row);
+        grid.add(gainThresholdSpinner, 1, row);
+        grid.add(gainThresholdNote, 2, row);
+        row++;
+
+        // Max Iterations
+        Label maxIterLabel = new Label("Max Iterations:");
+
+        Spinner<Integer> maxIterSpinner = new Spinner<>(5, 100, maxIterationsProperty.get(), 5);
+        maxIterSpinner.setId("maxIterations");
+        maxIterSpinner.setEditable(true);
+        maxIterSpinner.setPrefWidth(100);
+        maxIterSpinner.setTooltip(new Tooltip("Maximum calibration iterations before giving up.\n"
+                + "More iterations = better convergence but longer calibration time."));
+
+        Label maxIterNote = new Label("(iterations before giving up)");
+        maxIterNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        maxIterNote.setTooltip(new Tooltip("Maximum calibration iterations before giving up"));
+
+        grid.add(maxIterLabel, 0, row);
+        grid.add(maxIterSpinner, 1, row);
+        grid.add(maxIterNote, 2, row);
+        row++;
+
+        // Calibrate Black Level
+        Label blackLevelLabel = new Label("Calibrate Black Level:");
+
+        CheckBox blackLevelCheck = new CheckBox();
+        blackLevelCheck.setId("calibrateBlackLevel");
+        blackLevelCheck.setSelected(calibrateBlackLevelProperty.get());
+        blackLevelCheck.setTooltip(new Tooltip("Whether to calibrate black level before white balance.\n"
+                + "Improves accuracy but adds ~10 seconds to calibration."));
+
+        Label blackLevelNote = new Label("(improves accuracy, adds time)");
+        blackLevelNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        blackLevelNote.setTooltip(new Tooltip("Improves accuracy but adds time to calibration"));
+
+        grid.add(blackLevelLabel, 0, row);
+        grid.add(blackLevelCheck, 1, row);
+        grid.add(blackLevelNote, 2, row);
+        row++;
+
+        // Separator for new gain settings
+        Separator gainSeparator = new Separator();
+        gainSeparator.setPadding(new Insets(5, 0, 5, 0));
+        grid.add(gainSeparator, 0, row, 3, 1);
+        row++;
+
+        // Help button with tooltip explaining the gain algorithm
+        Label gainAlgoLabel = new Label("Gain Algorithm Settings");
+        gainAlgoLabel.setStyle("-fx-font-weight: bold;");
+        Button helpButton = new Button("?");
+        helpButton.setStyle("-fx-font-size: 10px; -fx-padding: 2 6 2 6;");
+        helpButton.setTooltip(new Tooltip("HOW GAIN COMPENSATION WORKS:\n\n"
+                + "1. BASE GAIN: Calibration starts with a base gain applied to all channels.\n"
+                + "   A higher base gain (e.g., 5x) allows shorter exposure times,\n"
+                + "   reducing calibration time and preventing overexposure.\n\n"
+                + "2. EXPOSURE SOFT CAP: When exposures stay below this threshold,\n"
+                + "   the gain is limited to 'Max Gain (dB)' to minimize noise.\n\n"
+                + "3. BOOSTED MODE: If ANY channel's exposure exceeds the soft cap,\n"
+                + "   gain is allowed to increase up to 'Boosted Max Gain' to\n"
+                + "   prevent extremely long exposure times.\n\n"
+                + "EXAMPLE with default settings (Base=5x, SoftCap=50ms, Boost=12dB):\n"
+                + "- If blue channel needs 40ms exposure -> gain stays at 5x (below soft cap)\n"
+                + "- If blue channel needs 80ms exposure -> gain can boost to 16x (12dB)\n"
+                + "  to bring exposure back down\n\n"
+                + "This prevents the 10x longer exposure times seen when using\n"
+                + "per-channel exposure mode without gain compensation."));
+        HBox gainAlgoHeader = new HBox(10, gainAlgoLabel, helpButton);
+        gainAlgoHeader.setAlignment(Pos.CENTER_LEFT);
+        grid.add(gainAlgoHeader, 0, row, 3, 1);
+        row++;
+
+        // Base Gain
+        Label baseGainLabel = new Label("Base Gain:");
+        baseGainLabel.setPrefWidth(160);
+
+        Spinner<Double> baseGainSpinner = new Spinner<>(1.0, 20.0, baseGainProperty.get(), 0.5);
+        baseGainSpinner.setId("baseGain");
+        baseGainSpinner.setEditable(true);
+        baseGainSpinner.setPrefWidth(100);
+        baseGainSpinner.setTooltip(new Tooltip("Starting gain applied to ALL channels at calibration start.\n"
+                + "Higher values = shorter exposure times but more noise.\n"
+                + "Default 5.0x (~14 dB) provides good balance."));
+
+        Label baseGainNote = new Label("(starting gain for all channels)");
+        baseGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        grid.add(baseGainLabel, 0, row);
+        grid.add(baseGainSpinner, 1, row);
+        grid.add(baseGainNote, 2, row);
+        row++;
+
+        // Exposure Soft Cap
+        Label exposureSoftCapLabel = new Label("Exposure Soft Cap (ms):");
+
+        Spinner<Double> exposureSoftCapSpinner = new Spinner<>(10.0, 500.0, exposureSoftCapMsProperty.get(), 10.0);
+        exposureSoftCapSpinner.setId("exposureSoftCapMs");
+        exposureSoftCapSpinner.setEditable(true);
+        exposureSoftCapSpinner.setPrefWidth(100);
+        exposureSoftCapSpinner.setTooltip(new Tooltip("Maximum exposure time before gain boost is enabled.\n"
+                + "When ANY channel exceeds this, gain can increase to Boosted Max.\n"
+                + "Default 50ms keeps calibration fast."));
+
+        Label exposureSoftCapNote = new Label("(max exposure before gain boost)");
+        exposureSoftCapNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        grid.add(exposureSoftCapLabel, 0, row);
+        grid.add(exposureSoftCapSpinner, 1, row);
+        grid.add(exposureSoftCapNote, 2, row);
+        row++;
+
+        // Boosted Max Gain
+        Label boostedMaxGainLabel = new Label("Boosted Max Gain (dB):");
+
+        Spinner<Double> boostedMaxGainSpinner = new Spinner<>(3.0, 36.0, boostedMaxGainDbProperty.get(), 1.0);
+        boostedMaxGainSpinner.setId("boostedMaxGainDb");
+        boostedMaxGainSpinner.setEditable(true);
+        boostedMaxGainSpinner.setPrefWidth(100);
+        boostedMaxGainSpinner.setTooltip(new Tooltip("Maximum gain allowed when exposures exceed the soft cap.\n"
+                + "12 dB = 4x linear gain, 18 dB = 8x, 24 dB = 16x.\n"
+                + "Default 12 dB prevents extremely long exposures."));
+
+        Label boostedMaxGainNote = new Label("(max gain when past soft cap)");
+        boostedMaxGainNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        grid.add(boostedMaxGainLabel, 0, row);
+        grid.add(boostedMaxGainSpinner, 1, row);
+        grid.add(boostedMaxGainNote, 2, row);
+        row++;
+
+        // R/B Analog Gain Max (per-channel ceiling, separate from unified gain dB caps above)
+        Label gainAnalogRbMaxLabel = new Label("R/B Analog Gain Max:");
+
+        Spinner<Double> gainAnalogRbMaxSpinner = new Spinner<>(1.0, 10.0, gainAnalogRbMaxProperty.get(), 0.5);
+        gainAnalogRbMaxSpinner.setId("gainAnalogRbMax");
+        gainAnalogRbMaxSpinner.setEditable(true);
+        gainAnalogRbMaxSpinner.setPrefWidth(100);
+        gainAnalogRbMaxSpinner.setTooltip(
+                new Tooltip("Per-channel ceiling (linear, not dB) for the JAI red and blue analog gains\n"
+                        + "applied during Phase 1c gain compensation and Phase 2 fine tuning.\n"
+                        + "Hardware spec lists 4.0 as the safe max; firmware accepts higher values\n"
+                        + "when needed for color balance in scenes where blue or red would otherwise\n"
+                        + "require very long exposures (e.g. PPM positive-angle imagery).\n"
+                        + "Raise this if calibration warns 'desired Nx' above 4.0x."));
+
+        Label gainAnalogRbMaxNote = new Label("(per-channel R/B ceiling, default 4.0x)");
+        gainAnalogRbMaxNote.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        grid.add(gainAnalogRbMaxLabel, 0, row);
+        grid.add(gainAnalogRbMaxSpinner, 1, row);
+        grid.add(gainAnalogRbMaxNote, 2, row);
+
+        TitledPane pane = new TitledPane("Advanced Settings", grid);
+        pane.setCollapsible(true);
+        return pane;
+    }
+}

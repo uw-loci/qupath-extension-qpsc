@@ -8,6 +8,8 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.config.ConfigYamlEditor;
+import qupath.ext.qpsc.geometry.LightPathModel;
 
 /**
  * Verifies {@link ConfigYamlEditor#setTopLevelChildScalar} -- the create/update/idempotent scalar

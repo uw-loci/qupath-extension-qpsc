@@ -11,8 +11,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 
 /**
  * Whether the LC-PolScope is ready to acquire, as a list of checks the acquisition panel shows

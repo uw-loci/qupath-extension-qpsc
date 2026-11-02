@@ -12,9 +12,9 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 
@@ -211,8 +211,8 @@ class SiftCapturePane extends VBox {
         // pane simply waited: no SIFT, no countdown, no notification, the capture button
         // pulsing at an empty room. Running SIFT does not ACCEPT anything; the confidence gate
         // below still decides that.
-        boolean armed = qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
-                && !qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide();
+        boolean armed = qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isArmed()
+                && !qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isOverriddenThisSlide();
         if (autoRunSift || armed) {
             runSift(autoRunSift, confidenceThreshold);
         }
@@ -283,8 +283,9 @@ class SiftCapturePane extends VBox {
                                         // pane pulsing at nobody: no capture, no hand-back, no
                                         // notification. The confidence bar is unchanged either way; only
                                         // who presses the button differs.
-                                        boolean armed = qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
-                                                && !qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide();
+                                        boolean armed = qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isArmed()
+                                                && !qupath.ext.qpsc.ui.acquisition.AutoAdvanceController
+                                                        .isOverriddenThisSlide();
                                         boolean confident =
                                                 validMatch && result.length >= 4 && result[3] >= confidenceThreshold;
                                         if (armed && confident) {
@@ -297,7 +298,7 @@ class SiftCapturePane extends VBox {
                                                     result[3],
                                                     confidenceThreshold,
                                                     captureButton.getText());
-                                            qupath.ext.qpsc.ui.AutoAdvanceController.attach(
+                                            qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.attach(
                                                     (javafx.stage.Stage)
                                                             getScene().getWindow(),
                                                     captureButton);
@@ -306,11 +307,12 @@ class SiftCapturePane extends VBox {
                                             // unverified position would record a bad correspondence -- so
                                             // hand the slide back and say so, rather than leaving the
                                             // panel silently idle.
-                                            qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
-                                                    "Multi-tile alignment refinement",
-                                                    validMatch
-                                                            ? "SIFT confidence below the auto-accept threshold"
-                                                            : "SIFT found no usable match on the reference tile");
+                                            qupath.ext.qpsc.ui.acquisition.AutoAdvanceController
+                                                    .requestOperatorAttention(
+                                                            "Multi-tile alignment refinement",
+                                                            validMatch
+                                                                    ? "SIFT confidence below the auto-accept threshold"
+                                                                    : "SIFT found no usable match on the reference tile");
                                         }
                                     }
                                 });
@@ -326,12 +328,12 @@ class SiftCapturePane extends VBox {
                                     }
                                     siftButton.setDisable(false);
                                     pulse.highlight(siftButton, "#E65100");
-                                    if (qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()) {
+                                    if (qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isArmed()) {
                                         // Same hand-back as a below-threshold match. Without it a SIFT
                                         // that THREW (socket dropped, region file missing) leaves the
                                         // panel idle with nothing driving it -- the only thing that
                                         // eventually notices is the 20-minute setup watchdog.
-                                        qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+                                        qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.requestOperatorAttention(
                                                 "Multi-tile alignment refinement",
                                                 "SIFT could not run: " + ex.getMessage());
                                     }
@@ -451,7 +453,7 @@ class SiftCapturePane extends VBox {
             return;
         }
         try {
-            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(configPath);
+            var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(configPath);
             String objective = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getCurrentObjective(mgr);
             String outputPath = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getDefaultOutputPath();
             SweepAutofocusRunner.SweepResult sweep =

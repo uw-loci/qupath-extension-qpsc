@@ -1,0 +1,599 @@
+package qupath.ext.qpsc.geometry;
+
+import java.awt.*;
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.util.ArrayList;
+import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.lib.regions.ImagePlane;
+import qupath.lib.roi.ROIs;
+import qupath.lib.roi.interfaces.ROI;
+
+/**
+ * Detects green bounding boxes in macro images that indicate the scanned region.
+ * These boxes are commonly added by slide scanners to show which area was digitized.
+ *
+ * @since 0.3.1
+ */
+public class GreenBoxDetector {
+    private static final Logger logger = LoggerFactory.getLogger(GreenBoxDetector.class);
+
+    /**
+     * Parameters for green box detection.
+     */
+    public static class DetectionParams {
+        public double greenThreshold; // How much green vs other channels
+        public double saturationMin; // Minimum saturation for green
+        public double brightnessMin; // Minimum brightness
+        public double brightnessMax; // Maximum brightness
+        public double hueMin; // Minimum hue value (0.0-1.0, green ~0.25-0.42)
+        public double hueMax; // Maximum hue value (0.0-1.0, green ~0.25-0.42)
+        public int minBoxWidth; // Minimum box width in pixels
+        public int minBoxHeight; // Minimum box height in pixels
+        public int edgeThickness; // Expected thickness of box edges
+        public boolean requireRectangle = true; // Only accept rectangular shapes
+
+        /**
+         * Default constructor - loads from persistent preferences or uses defaults.
+         */
+        public DetectionParams() {
+            try {
+                this.greenThreshold = PersistentPreferences.getGreenThreshold();
+                this.saturationMin = PersistentPreferences.getGreenSaturationMin();
+                this.brightnessMin = PersistentPreferences.getGreenBrightnessMin();
+                this.brightnessMax = PersistentPreferences.getGreenBrightnessMax();
+                this.hueMin = PersistentPreferences.getGreenHueMin();
+                this.hueMax = PersistentPreferences.getGreenHueMax();
+                this.edgeThickness = PersistentPreferences.getGreenEdgeThickness();
+                this.minBoxWidth = PersistentPreferences.getGreenMinBoxWidth();
+                this.minBoxHeight = PersistentPreferences.getGreenMinBoxHeight();
+            } catch (Exception e) {
+                // If preferences fail to load, use defaults
+                loadDefaults();
+            }
+        }
+
+        /**
+         * Constructor with all parameters specified.
+         */
+        public DetectionParams(
+                double greenThreshold,
+                double saturationMin,
+                double brightnessMin,
+                double brightnessMax,
+                double hueMin,
+                double hueMax,
+                int edgeThickness,
+                int minBoxWidth,
+                int minBoxHeight) {
+            this.greenThreshold = greenThreshold;
+            this.saturationMin = saturationMin;
+            this.brightnessMin = brightnessMin;
+            this.brightnessMax = brightnessMax;
+            this.hueMin = hueMin;
+            this.hueMax = hueMax;
+            this.edgeThickness = edgeThickness;
+            this.minBoxWidth = minBoxWidth;
+            this.minBoxHeight = minBoxHeight;
+        }
+
+        /**
+         * Loads default values.
+         */
+        private void loadDefaults() {
+            this.greenThreshold = 0.4;
+            this.saturationMin = 0.3;
+            this.brightnessMin = 0.3;
+            this.brightnessMax = 0.9;
+            this.hueMin = 0.25; // Green hue range start (90 degrees)
+            this.hueMax = 0.42; // Green hue range end (151 degrees)
+            this.minBoxWidth = 20; // Lowered to support small tissue samples
+            this.minBoxHeight = 20; // Lowered to support small tissue samples
+            this.edgeThickness = 3;
+        }
+
+        /**
+         * Saves current parameters to persistent preferences.
+         */
+        public void saveToPreferences() {
+            PersistentPreferences.setGreenThreshold(greenThreshold);
+            PersistentPreferences.setGreenSaturationMin(saturationMin);
+            PersistentPreferences.setGreenBrightnessMin(brightnessMin);
+            PersistentPreferences.setGreenBrightnessMax(brightnessMax);
+            PersistentPreferences.setGreenHueMin(hueMin);
+            PersistentPreferences.setGreenHueMax(hueMax);
+            PersistentPreferences.setGreenEdgeThickness(edgeThickness);
+            PersistentPreferences.setGreenMinBoxWidth(minBoxWidth);
+            PersistentPreferences.setGreenMinBoxHeight(minBoxHeight);
+        }
+    }
+
+    /**
+     * Result of green box detection.
+     */
+    public static class DetectionResult {
+        private final ROI detectedBox;
+        private final BufferedImage debugImage;
+        private final double confidence;
+
+        public DetectionResult(ROI detectedBox, BufferedImage debugImage, double confidence) {
+            this.detectedBox = detectedBox;
+            this.debugImage = debugImage;
+            this.confidence = confidence;
+        }
+
+        public ROI getDetectedBox() {
+            return detectedBox;
+        }
+
+        public BufferedImage getDebugImage() {
+            return debugImage;
+        }
+
+        public double getConfidence() {
+            return confidence;
+        }
+    }
+
+    /**
+     * Detects green bounding box in the macro image that indicates the scanned region.
+     * These boxes are commonly added by slide scanners to show which area was digitized.
+     *
+     * @param macroImage The macro image to analyze
+     * @param params Detection parameters controlling color thresholds and size constraints
+     * @return Detection result containing the found box ROI, debug visualization, and confidence score,
+     *         or null if no suitable green box is found
+     */
+    public static DetectionResult detectGreenBox(BufferedImage macroImage, DetectionParams params) {
+        logger.info("Starting green box detection on {}x{} image", macroImage.getWidth(), macroImage.getHeight());
+
+        // Create binary mask of green pixels
+        BufferedImage greenMask = createGreenMask(macroImage, params);
+
+        // Diagnostic: Analyze hue distribution of green-ish pixels to help troubleshoot
+        analyzeHueDistribution(macroImage, params);
+
+        // Find connected components that could be box edges
+        List<Rectangle> edges = findBoxEdges(greenMask, params);
+
+        // Try to form a complete box from edges
+        ROI detectedBox = findCompleteBox(edges, macroImage.getWidth(), macroImage.getHeight(), params);
+
+        if (detectedBox != null) {
+
+            // TEMPORARY EDGE ADJUSTMENT - REMOVE AFTER TESTING
+            // 0.0 = outer edge (default), 0.5 = middle, 1.0 = inner edge
+            double EDGE_ADJUSTMENT_FACTOR = 0;
+            if (EDGE_ADJUSTMENT_FACTOR > 0 && params.edgeThickness > 0) {
+                double shrink = params.edgeThickness * EDGE_ADJUSTMENT_FACTOR;
+                detectedBox = ROIs.createRectangleROI(
+                        detectedBox.getBoundsX() + shrink,
+                        detectedBox.getBoundsY() + shrink,
+                        detectedBox.getBoundsWidth() - 2 * shrink,
+                        detectedBox.getBoundsHeight() - 2 * shrink,
+                        detectedBox.getImagePlane());
+                logger.info(
+                        "Adjusted green box bounds inward by {} pixels (factor {})", shrink, EDGE_ADJUSTMENT_FACTOR);
+            }
+            // END TEMPORARY ADJUSTMENT
+            // Calculate confidence based on how well it matches expected characteristics
+            double confidence = calculateConfidence(detectedBox, greenMask, params);
+
+            // Create debug image showing detection
+            BufferedImage debugImage = createDebugImage(macroImage, greenMask, detectedBox);
+
+            logger.info(
+                    "Green box detected at ({}, {}, {}, {}) with confidence {}",
+                    detectedBox.getBoundsX(),
+                    detectedBox.getBoundsY(),
+                    detectedBox.getBoundsWidth(),
+                    detectedBox.getBoundsHeight(),
+                    confidence);
+
+            return new DetectionResult(detectedBox, debugImage, confidence);
+        }
+
+        logger.warn("No green box detected in macro image");
+        return null;
+    }
+
+    /**
+     * Creates a binary mask of pixels that match the green box color.
+     */
+    private static BufferedImage createGreenMask(BufferedImage image, DetectionParams params) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+        BufferedImage mask = new BufferedImage(width, height, BufferedImage.TYPE_BYTE_BINARY);
+
+        int greenPixelCount = 0;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = image.getRGB(x, y);
+
+                if (isGreenBoxPixel(rgb, params)) {
+                    mask.setRGB(x, y, 0xFFFFFF);
+                    greenPixelCount++;
+                } else {
+                    mask.setRGB(x, y, 0x000000);
+                }
+            }
+        }
+
+        logger.debug(
+                "Found {} green pixels ({}% of image)", greenPixelCount, (100.0 * greenPixelCount) / (width * height));
+
+        return mask;
+    }
+
+    /**
+     * Checks if a pixel matches the expected green box color.
+     */
+    private static boolean isGreenBoxPixel(int rgb, DetectionParams params) {
+        int r = (rgb >> 16) & 0xFF;
+        int g = (rgb >> 8) & 0xFF;
+        int b = rgb & 0xFF;
+
+        // Convert to normalized values
+        double rNorm = r / 255.0;
+        double gNorm = g / 255.0;
+        double bNorm = b / 255.0;
+
+        // Check if green is dominant
+        double total = rNorm + gNorm + bNorm;
+        if (total == 0) return false;
+
+        double greenRatio = gNorm / total;
+        if (greenRatio < params.greenThreshold) return false;
+
+        // Check saturation and brightness
+        float[] hsb = Color.RGBtoHSB(r, g, b, null);
+        float hue = hsb[0];
+        float saturation = hsb[1];
+        float brightness = hsb[2];
+
+        // Check hue range (configurable - green typically 0.25-0.42, i.e., 90-151 degrees)
+        boolean isGreenHue = hue > params.hueMin && hue < params.hueMax;
+        boolean goodSaturation = saturation > params.saturationMin;
+        boolean goodBrightness = brightness > params.brightnessMin && brightness < params.brightnessMax;
+
+        return isGreenHue && goodSaturation && goodBrightness;
+    }
+
+    /**
+     * Analyzes the hue distribution of green-ish pixels in the image.
+     * This helps diagnose why detection might be failing by showing what hue values are actually present.
+     */
+    private static void analyzeHueDistribution(BufferedImage image, DetectionParams params) {
+        int width = image.getWidth();
+        int height = image.getHeight();
+
+        double minHue = 1.0;
+        double maxHue = 0.0;
+        int greenishPixelCount = 0;
+        int passedAllFilters = 0;
+
+        // Count pixels that fail at each stage
+        int failedGreenRatio = 0;
+        int failedHue = 0;
+        int failedSaturation = 0;
+        int failedBrightness = 0;
+
+        for (int y = 0; y < height; y++) {
+            for (int x = 0; x < width; x++) {
+                int rgb = image.getRGB(x, y);
+                int r = (rgb >> 16) & 0xFF;
+                int g = (rgb >> 8) & 0xFF;
+                int b = rgb & 0xFF;
+
+                // Check if roughly green (g > r and g > b)
+                if (g > r && g > b) {
+                    greenishPixelCount++;
+                    float[] hsb = Color.RGBtoHSB(r, g, b, null);
+                    double hue = hsb[0];
+                    minHue = Math.min(minHue, hue);
+                    maxHue = Math.max(maxHue, hue);
+
+                    // Track why pixels fail
+                    double rNorm = r / 255.0;
+                    double gNorm = g / 255.0;
+                    double bNorm = b / 255.0;
+                    double total = rNorm + gNorm + bNorm;
+                    double greenRatio = total > 0 ? gNorm / total : 0;
+
+                    if (greenRatio < params.greenThreshold) {
+                        failedGreenRatio++;
+                    } else if (hue <= params.hueMin || hue >= params.hueMax) {
+                        failedHue++;
+                    } else if (hsb[1] <= params.saturationMin) {
+                        failedSaturation++;
+                    } else if (hsb[2] <= params.brightnessMin || hsb[2] >= params.brightnessMax) {
+                        failedBrightness++;
+                    } else {
+                        passedAllFilters++;
+                    }
+                }
+            }
+        }
+
+        if (greenishPixelCount > 0) {
+            // A per-pixel REJECTION TALLY, not a list of errors. The first count is a deliberately
+            // loose pre-filter (g > r && g > b) that most of a pale macro passes, and the strict
+            // filters below are what isolate the box -- so large "failed" numbers are the filters
+            // working, not the detection struggling. Said "failed" at INFO, which read as a wall of
+            // errors on a detection that succeeded.
+            logger.debug("Green box pixel filter: {} pixels pass the loose green pre-filter", greenishPixelCount);
+            logger.debug(
+                    "  Hue range in image: [{}, {}] (expected: [{}, {}])",
+                    String.format("%.3f", minHue),
+                    String.format("%.3f", maxHue),
+                    String.format("%.3f", params.hueMin),
+                    String.format("%.3f", params.hueMax));
+            logger.debug("  {} of those pass every strict filter and form the box candidates", passedAllFilters);
+            logger.debug(
+                    "    rejected, green ratio below {}: {}",
+                    String.format("%.2f", params.greenThreshold),
+                    failedGreenRatio);
+            logger.debug("    rejected, hue outside range: {}", failedHue);
+            logger.debug(
+                    "    rejected, saturation below {}: {}",
+                    String.format("%.2f", params.saturationMin),
+                    failedSaturation);
+            logger.debug("    rejected, brightness out of range: {}", failedBrightness);
+
+            // Suggest adjustments if needed
+            if (failedHue > passedAllFilters && failedHue > 100) {
+                logger.warn(
+                        "Many pixels failed hue filter. Consider adjusting hue range to [{}, {}]",
+                        String.format("%.2f", Math.max(0, minHue - 0.02)),
+                        String.format("%.2f", Math.min(1, maxHue + 0.02)));
+            }
+        } else {
+            logger.warn("No green-ish pixels found in image (g > r && g > b)");
+        }
+    }
+
+    /**
+     * Finds potential box edges in the binary mask.
+     */
+    private static List<Rectangle> findBoxEdges(BufferedImage mask, DetectionParams params) {
+        List<Rectangle> edges = new ArrayList<>();
+        int width = mask.getWidth();
+        int height = mask.getHeight();
+
+        // Scan for horizontal edges
+        for (int y = 0; y < height - params.edgeThickness; y++) {
+            for (int x = 0; x < width; x++) {
+                if (isHorizontalEdge(mask, x, y, params)) {
+                    // Find extent of this edge
+                    int startX = x;
+                    while (x < width && isHorizontalEdge(mask, x, y, params)) {
+                        x++;
+                    }
+                    int endX = x;
+
+                    // Accept edges that are at least 80% of minBoxWidth to handle smaller boxes
+                    if (endX - startX >= params.minBoxWidth * 0.8) {
+                        edges.add(new Rectangle(startX, y, endX - startX, params.edgeThickness));
+                    }
+                }
+            }
+        }
+
+        // Scan for vertical edges
+        for (int x = 0; x < width - params.edgeThickness; x++) {
+            for (int y = 0; y < height; y++) {
+                if (isVerticalEdge(mask, x, y, params)) {
+                    // Find extent of this edge
+                    int startY = y;
+                    while (y < height && isVerticalEdge(mask, x, y, params)) {
+                        y++;
+                    }
+                    int endY = y;
+
+                    // Accept edges that are at least 80% of minBoxHeight to handle smaller boxes
+                    if (endY - startY >= params.minBoxHeight * 0.8) {
+                        edges.add(new Rectangle(x, startY, params.edgeThickness, endY - startY));
+                    }
+                }
+            }
+        }
+
+        logger.debug("Found {} potential box edges", edges.size());
+        return edges;
+    }
+
+    /**
+     * Checks if a position contains a horizontal edge.
+     * Allows some tolerance for gaps due to compression artifacts or color variation.
+     */
+    private static boolean isHorizontalEdge(BufferedImage mask, int x, int y, DetectionParams params) {
+        // Check if we have a thick horizontal line
+        // Allow 80% of pixels to be green (tolerance for JPEG artifacts, anti-aliasing, etc.)
+        int greenCount = 0;
+        for (int dy = 0; dy < params.edgeThickness && y + dy < mask.getHeight(); dy++) {
+            if ((mask.getRGB(x, y + dy) & 0xFF) > 0) {
+                greenCount++;
+            }
+        }
+        return greenCount >= params.edgeThickness * 0.8;
+    }
+
+    /**
+     * Checks if a position contains a vertical edge.
+     * Allows some tolerance for gaps due to compression artifacts or color variation.
+     */
+    private static boolean isVerticalEdge(BufferedImage mask, int x, int y, DetectionParams params) {
+        // Check if we have a thick vertical line
+        // Allow 80% of pixels to be green (tolerance for JPEG artifacts, anti-aliasing, etc.)
+        int greenCount = 0;
+        for (int dx = 0; dx < params.edgeThickness && x + dx < mask.getWidth(); dx++) {
+            if ((mask.getRGB(x + dx, y) & 0xFF) > 0) {
+                greenCount++;
+            }
+        }
+        return greenCount >= params.edgeThickness * 0.8;
+    }
+
+    /**
+     * Attempts to find a complete rectangular box from the detected edges.
+     */
+    private static ROI findCompleteBox(List<Rectangle> edges, int imageWidth, int imageHeight, DetectionParams params) {
+        // Find the four edges that form the most likely box
+        Rectangle topEdge = null, bottomEdge = null, leftEdge = null, rightEdge = null;
+
+        // Find horizontal edges (top and bottom)
+        for (Rectangle edge : edges) {
+            if (edge.width > edge.height) { // Horizontal edge
+                if (topEdge == null || edge.y < topEdge.y) {
+                    bottomEdge = topEdge;
+                    topEdge = edge;
+                } else if (bottomEdge == null || edge.y > bottomEdge.y) {
+                    bottomEdge = edge;
+                }
+            }
+        }
+
+        // Find vertical edges (left and right)
+        for (Rectangle edge : edges) {
+            if (edge.height > edge.width) { // Vertical edge
+                if (leftEdge == null || edge.x < leftEdge.x) {
+                    rightEdge = leftEdge;
+                    leftEdge = edge;
+                } else if (rightEdge == null || edge.x > rightEdge.x) {
+                    rightEdge = edge;
+                }
+            }
+        }
+
+        // Check if we have all four edges
+        if (topEdge != null && bottomEdge != null && leftEdge != null && rightEdge != null) {
+            // Calculate box bounds from edges
+            int boxX = leftEdge.x + leftEdge.width / 2;
+            int boxY = topEdge.y + topEdge.height / 2;
+            int boxWidth = (rightEdge.x + rightEdge.width / 2) - boxX;
+            int boxHeight = (bottomEdge.y + bottomEdge.height / 2) - boxY;
+
+            // Validate box dimensions
+            if (boxWidth >= params.minBoxWidth && boxHeight >= params.minBoxHeight) {
+                return ROIs.createRectangleROI(boxX, boxY, boxWidth, boxHeight, ImagePlane.getDefaultPlane());
+            }
+        }
+
+        // Alternative: look for the largest connected green region
+        return findLargestGreenRegion(edges, imageWidth, imageHeight, params);
+    }
+
+    /**
+     * Fallback method to find the largest green region if edge detection fails.
+     */
+    private static ROI findLargestGreenRegion(List<Rectangle> edges, int width, int height, DetectionParams params) {
+        // This would use connected component analysis
+        // For now, return null
+        return null;
+    }
+
+    /**
+     * Calculates confidence score for the detected box.
+     */
+    private static double calculateConfidence(ROI box, BufferedImage mask, DetectionParams params) {
+        // Check how well the edges match expected characteristics
+        double edgeScore = 0.0;
+        double rectangularityScore = 1.0; // Since we enforce rectangles
+        double sizeScore = Math.min(
+                1.0, box.getBoundsWidth() * box.getBoundsHeight() / (mask.getWidth() * mask.getHeight() * 0.5));
+
+        return (edgeScore + rectangularityScore + sizeScore) / 3.0;
+    }
+
+    /**
+     * Creates a debug image showing the detection result.
+     */
+    private static BufferedImage createDebugImage(BufferedImage original, BufferedImage mask, ROI box) {
+        BufferedImage debug = new BufferedImage(original.getWidth(), original.getHeight(), BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = debug.createGraphics();
+
+        // Draw original
+        g.drawImage(original, 0, 0, null);
+
+        // Overlay mask with transparency
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 0.3f));
+        g.setColor(Color.GREEN);
+        for (int y = 0; y < mask.getHeight(); y++) {
+            for (int x = 0; x < mask.getWidth(); x++) {
+                if ((mask.getRGB(x, y) & 0xFF) > 0) {
+                    g.fillRect(x, y, 1, 1);
+                }
+            }
+        }
+
+        // Draw detected box
+        g.setComposite(AlphaComposite.getInstance(AlphaComposite.SRC_OVER, 1.0f));
+        g.setColor(Color.MAGENTA);
+        g.setStroke(new BasicStroke(3));
+        g.drawRect((int) box.getBoundsX(), (int) box.getBoundsY(), (int) box.getBoundsWidth(), (int)
+                box.getBoundsHeight());
+
+        g.dispose();
+        return debug;
+    }
+
+    /**
+     * Calculates initial affine transform based on green box detection.
+     * The green box in the macro image represents the exact area of the main image,
+     * so this creates a transform that maps macro pixel coordinates to main image pixels.
+     *
+     * @param greenBoxInMacro The detected green box ROI in macro coordinates (pixels)
+     * @param mainImageWidth Width of the main image in pixels
+     * @param mainImageHeight Height of the main image in pixels
+     * @param macroPixelSize Pixel size of the macro image in microns (typically ~80)
+     * @param mainPixelSize Pixel size of the main image in microns
+     * @return Initial affine transform from macro to main image coordinates
+     */
+    public static AffineTransform calculateInitialTransform(
+            ROI greenBoxInMacro, int mainImageWidth, int mainImageHeight, double macroPixelSize, double mainPixelSize) {
+
+        // The green box area in the macro represents the entire main image
+        // We need to map macro pixels to main image pixels
+
+        // Physical size of the green box in microns
+        double boxWidthMicrons = greenBoxInMacro.getBoundsWidth() * macroPixelSize;
+        double boxHeightMicrons = greenBoxInMacro.getBoundsHeight() * macroPixelSize;
+
+        // Physical size of the main image in microns
+        double mainWidthMicrons = mainImageWidth * mainPixelSize;
+        double mainHeightMicrons = mainImageHeight * mainPixelSize;
+
+        // These should be approximately equal - log any discrepancy
+        logger.info("Green box physical size: {}x{} um", boxWidthMicrons, boxHeightMicrons);
+        logger.info("Main image physical size: {}x{} um", mainWidthMicrons, mainHeightMicrons);
+
+        // Calculate pixel-to-pixel scale factors
+        double scaleX = mainImageWidth / greenBoxInMacro.getBoundsWidth();
+        double scaleY = mainImageHeight / greenBoxInMacro.getBoundsHeight();
+
+        // Translation to align top-left corners
+        double translateX = -greenBoxInMacro.getBoundsX() * scaleX;
+        double translateY = -greenBoxInMacro.getBoundsY() * scaleY;
+
+        // Create transform
+        AffineTransform transform = new AffineTransform();
+        transform.translate(translateX, translateY);
+        transform.scale(scaleX, scaleY);
+
+        logger.info("Green box transform: scale=({}, {}), translate=({}, {})", scaleX, scaleY, translateX, translateY);
+        logger.info(
+                "Maps macro box ({}, {}, {}, {}) to main image (0, 0, {}, {})",
+                greenBoxInMacro.getBoundsX(),
+                greenBoxInMacro.getBoundsY(),
+                greenBoxInMacro.getBoundsWidth(),
+                greenBoxInMacro.getBoundsHeight(),
+                mainImageWidth,
+                mainImageHeight);
+
+        return transform;
+    }
+}

@@ -22,10 +22,10 @@ import javafx.beans.property.ReadOnlyBooleanProperty;
 import javafx.beans.property.SimpleBooleanProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Socket-based client for communicating with the Python microscope control server.
@@ -6765,7 +6765,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @return FrameData record, or null if no frame is available
      * @throws IOException if communication fails
      */
-    public qupath.ext.qpsc.ui.liveviewer.FrameData getFrame() throws IOException {
+    public qupath.ext.qpsc.service.microscope.FrameData getFrame() throws IOException {
         // Use auxiliary socket for Live Viewer operations
         // This allows frame polling to work even when primary socket is busy
         synchronized (auxSocketLock) {
@@ -6796,7 +6796,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 byte[] pixelData = new byte[dataLength];
                 auxInput.readFully(pixelData);
 
-                return new qupath.ext.qpsc.ui.liveviewer.FrameData(
+                return new qupath.ext.qpsc.service.microscope.FrameData(
                         width, height, channels, bytesPerPixel, pixelData, System.currentTimeMillis());
 
             } catch (IOException e) {
@@ -6833,7 +6833,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *         server could not apply correction
      * @throws IOException if communication itself fails
      */
-    public qupath.ext.qpsc.ui.liveviewer.FrameData getCorrectedFrame(
+    public qupath.ext.qpsc.service.microscope.FrameData getCorrectedFrame(
             String backgroundFolder, String method, String modality) throws IOException {
         if (backgroundFolder == null || backgroundFolder.isBlank()) {
             throw new IOException("CORRECTFRAME needs the background folder to correct with");
@@ -6899,7 +6899,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 byte[] pixelData = new byte[dataLength];
                 auxInput.readFully(pixelData);
 
-                return new qupath.ext.qpsc.ui.liveviewer.FrameData(
+                return new qupath.ext.qpsc.service.microscope.FrameData(
                         width, height, channels, bytesPerPixel, pixelData, System.currentTimeMillis());
 
             } catch (IOException e) {

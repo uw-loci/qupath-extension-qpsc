@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 
 /**
  * Tests for {@link MicroscopeConfigManager#profileHardwareMismatch}: a profile named for its

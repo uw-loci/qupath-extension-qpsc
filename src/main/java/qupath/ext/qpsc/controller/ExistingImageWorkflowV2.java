@@ -10,19 +10,30 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.workflow.*;
+import qupath.ext.qpsc.geometry.AnnotationPreservationService;
+import qupath.ext.qpsc.geometry.CrossScopeTransformBuilder;
+import qupath.ext.qpsc.geometry.FlipResolver;
+import qupath.ext.qpsc.geometry.GreenBoxDetector;
+import qupath.ext.qpsc.geometry.HolderTiltRegistry;
+import qupath.ext.qpsc.geometry.ImageFlipHelper;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.ui.*;
-import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
-import qupath.ext.qpsc.ui.ExistingImageAcquisitionController.RefinementChoice;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.acquisition.AnnotationAcquisitionDialog;
+import qupath.ext.qpsc.ui.acquisition.ExistingImageAcquisitionController;
+import qupath.ext.qpsc.ui.acquisition.ExistingImageAcquisitionController.ExistingImageAcquisitionConfig;
+import qupath.ext.qpsc.ui.acquisition.ExistingImageAcquisitionController.RefinementChoice;
+import qupath.ext.qpsc.ui.alignment.AlignmentSelectionController;
+import qupath.ext.qpsc.ui.alignment.RefinementSelectionController;
 import qupath.ext.qpsc.utilities.*;
-import qupath.ext.qpsc.utilities.AnnotationPreservationService;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
@@ -349,7 +360,7 @@ public class ExistingImageWorkflowV2 {
                 String insertId = PersistentPreferences.getStageMapInsert();
                 String activeModality =
                         qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
-                ownsClearanceMonitor = qupath.ext.qpsc.utilities.SafeZClearanceMonitor.beginIfIdle(
+                ownsClearanceMonitor = qupath.ext.qpsc.focus.SafeZClearanceMonitor.beginIfIdle(
                         clearanceCfg.getSafeZUm(insertId, activeModality), insertId + " / " + activeModality);
             } catch (Exception e) {
                 logger.debug("Safe-Z clearance monitor not armed: {}", e.getMessage());
@@ -1228,7 +1239,7 @@ public class ExistingImageWorkflowV2 {
             // choose between re-tagging the source and proceeding cross-scope anyway. Both are
             // consequential and neither is safe to assume, so refuse this slide and let the
             // batch continue -- rather than waiting on a modal nobody will answer.
-            if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(
+            if (qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.deferBlockingPrompt(
                     "Source-microscope mismatch",
                     "image is tagged source='" + source + "' with no preset reaching the active scope '" + active
                             + "'")) {
@@ -1367,7 +1378,7 @@ public class ExistingImageWorkflowV2 {
             // The workflow is refused either way -- this dialog only explains why. Skipping it
             // unattended changes no outcome; it stops the batch waiting on an OK nobody will
             // click. The notification carries the same message to whoever is not in the room.
-            if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(
+            if (qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.deferBlockingPrompt(
                     "Orphaned flipped sibling",
                     "'" + entry.getImageName() + "' has no stage-bounds metadata; re-run from its base image")) {
                 logger.warn(
@@ -2441,7 +2452,7 @@ public class ExistingImageWorkflowV2 {
          * <p>Gates pixel-size + camera-ROI validation here, before any refinement work
          * (tile creation, stage motion). Refinement allocates tiles using the wizard's
          * objective/detector FOV; if MicroManager is on a different objective, the FOV is
-         * wrong and {@link qupath.ext.qpsc.utilities.TilingUtilities} throws an opaque
+         * wrong and {@link qupath.ext.qpsc.acquisition.TilingUtilities} throws an opaque
          * "too many tiles" error 60+ seconds in. The wizard now runs the same check at
          * launch time, but this gate stays as defense-in-depth for cases where the wizard
          * gate could not run (e.g. MM not connected at wizard time, or MM state changed
@@ -3140,7 +3151,7 @@ public class ExistingImageWorkflowV2 {
             // is false there and the batch reports once over all four slides instead.
             if (ownsClearanceMonitor) {
                 ownsClearanceMonitor = false;
-                String warning = qupath.ext.qpsc.utilities.SafeZClearanceMonitor.report();
+                String warning = qupath.ext.qpsc.focus.SafeZClearanceMonitor.report();
                 if (warning != null) {
                     Platform.runLater(
                             () -> qupath.fx.dialogs.Dialogs.showWarningNotification("Stage safe-Z clearance", warning));

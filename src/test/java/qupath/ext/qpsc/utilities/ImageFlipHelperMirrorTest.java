@@ -5,6 +5,7 @@ import static org.mockito.Mockito.*;
 
 import java.awt.image.BufferedImage;
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.geometry.ImageFlipHelper;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.PathObjects;

@@ -14,16 +14,16 @@ import javafx.scene.control.Label;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.SetupScope;
+import qupath.ext.qpsc.acquisition.StagePositionManager;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.geometry.HolderTiltRegistry;
+import qupath.ext.qpsc.geometry.LightPathModel;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.ui.stagemap.StageMapWindow;
-import qupath.ext.qpsc.utilities.HolderTiltRegistry;
-import qupath.ext.qpsc.utilities.LightPathModel;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.fx.dialogs.Dialogs;
 
 /**

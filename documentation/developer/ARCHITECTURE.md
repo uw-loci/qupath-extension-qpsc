@@ -42,7 +42,7 @@ graph TB
         LCPS[LCPolScopeModalityHandler]
     end
 
-    subgraph "utilities/"
+    subgraph "config/, geometry/, acquisition/, utilities/"
         MCM[MicroscopeConfigManager]
         TF[TransformationFunctions]
         TU[TilingUtilities]
@@ -231,7 +231,23 @@ New modalities are added by:
 
 See [PPM_MODALITY.md](PPM_MODALITY.md) for the full PPM implementation.
 
-### utilities/ -- Core Utilities
+### Non-UI packages by topic
+
+| Package | Holds |
+|---|---|
+| `config/` | `MicroscopeConfigManager`, YAML editing and writing, bundled configs, objective and hardware keys |
+| `geometry/` | Transforms between image, macro and stage, flips and polarity, the light path model, macro image analysis |
+| `acquisition/` | Acquisition settings built from config, tiling, time and disk estimates, stage position tracking |
+| `stitching/` | Stitch output naming, the stitch queue model, tile registration, post-stitch processing |
+| `background/` | Background profiles and settings, flat-field profiles and method, illumination checks |
+| `focus/` | Focus metrics and profiles, focus approach records, Z prediction, safe-Z monitoring |
+| `project/` | Image naming, project entries and their reservation, the project log, NGFF scene export |
+| `utilities/` | `AffineTransformManager`, `ImageMetadataManager`, `DocumentationHelper`, `MinorFunctions`, `ImageProcessing` |
+
+`utilities/` keeps the classes that `qupath-extension-ppm` imports, so that extension builds
+unchanged. Check its imports before moving anything else out of it.
+
+### Coordinate, configuration and tiling details
 
 #### Coordinate Transformation Pipeline
 
@@ -303,7 +319,10 @@ Server side, `--demo` replaces the Pycro-Manager `Core`/`Studio` with `microscop
 
 ### ui/ -- User Interface
 
-The UI layer uses JavaFX exclusively. Key components:
+The UI layer uses JavaFX exclusively. The `ui/` package itself holds shared pieces such as
+`DialogOwner`, `UserErrors`, `ThemeColors`, `UIFunctions` and `QpscWindows`. Dialogs live in
+subpackages by topic: `acquisition/`, `alignment/`, `background/`, `calibration/`, `focus/`,
+`connection/`, `liveviewer/`, `stagemap/`, `setupwizard/`, `components/`. Key components:
 
 | Component | Purpose |
 |-----------|---------|

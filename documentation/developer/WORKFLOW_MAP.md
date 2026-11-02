@@ -48,20 +48,20 @@ watched_files:
   - src/main/java/qupath/ext/qpsc/modality/ppm/workflow/SunburstCalibrationWorkflow.java
   - src/main/java/qupath/ext/qpsc/utilities/ImageMetadataManager.java
   - src/main/java/qupath/ext/qpsc/utilities/AffineTransformManager.java
-  - src/main/java/qupath/ext/qpsc/utilities/MicroscopeConfigManager.java
-  - src/main/java/qupath/ext/qpsc/utilities/ImageFlipHelper.java
-  - src/main/java/qupath/ext/qpsc/utilities/FlipResolver.java
-  - src/main/java/qupath/ext/qpsc/utilities/StageImageTransform.java
-  - src/main/java/qupath/ext/qpsc/utilities/QPProjectFunctions.java
-  - src/main/java/qupath/ext/qpsc/utilities/StagePositionManager.java
-  - src/main/java/qupath/ext/qpsc/utilities/CrossScopeTransformBuilder.java
-  - src/main/java/qupath/ext/qpsc/utilities/TransformationFunctions.java
+  - src/main/java/qupath/ext/qpsc/config/MicroscopeConfigManager.java
+  - src/main/java/qupath/ext/qpsc/geometry/ImageFlipHelper.java
+  - src/main/java/qupath/ext/qpsc/geometry/FlipResolver.java
+  - src/main/java/qupath/ext/qpsc/geometry/StageImageTransform.java
+  - src/main/java/qupath/ext/qpsc/project/QPProjectFunctions.java
+  - src/main/java/qupath/ext/qpsc/acquisition/StagePositionManager.java
+  - src/main/java/qupath/ext/qpsc/geometry/CrossScopeTransformBuilder.java
+  - src/main/java/qupath/ext/qpsc/geometry/TransformationFunctions.java
   - src/main/java/qupath/ext/qpsc/preferences/PersistentPreferences.java
   - src/main/java/qupath/ext/qpsc/preferences/QPPreferenceDialog.java
   - src/main/java/qupath/ext/qpsc/state/ModalityState.java
   - src/main/java/qupath/ext/qpsc/state/ObjectiveState.java
   - src/main/java/qupath/ext/qpsc/service/microscope/MicroscopeSocketClient.java
-  - src/main/java/qupath/ext/qpsc/ui/AcquisitionWizardDialog.java
+  - src/main/java/qupath/ext/qpsc/ui/acquisition/AcquisitionWizardDialog.java
   - src/main/java/qupath/ext/qpsc/ui/liveviewer/LiveViewerWindow.java
   - src/main/java/qupath/ext/qpsc/ui/stagemap/StageMapWindow.java
 watched_symbols:
@@ -1019,8 +1019,8 @@ writes:
 
 ```yaml
 id: W28
-class: qupath.ext.qpsc.ui.AcquisitionWizardDialog
-file: src/main/java/qupath/ext/qpsc/ui/AcquisitionWizardDialog.java
+class: qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog
+file: src/main/java/qupath/ext/qpsc/ui/acquisition/AcquisitionWizardDialog.java
 entry: show()
 category: ui_router
 ui_entries:
@@ -1043,8 +1043,8 @@ key_invariants:
 
 ```yaml
 id: W29
-class: qupath.ext.qpsc.ui.ServerConnectionController
-file: src/main/java/qupath/ext/qpsc/ui/ServerConnectionController.java
+class: qupath.ext.qpsc.ui.connection.ServerConnectionController
+file: src/main/java/qupath/ext/qpsc/ui/connection/ServerConnectionController.java
 entry: showDialog()
 category: configuration
 ui_entries:
@@ -1060,8 +1060,8 @@ writes:
 
 ```yaml
 id: W30
-class: qupath.ext.qpsc.ui.CameraControlController
-file: src/main/java/qupath/ext/qpsc/ui/CameraControlController.java
+class: qupath.ext.qpsc.ui.connection.CameraControlController
+file: src/main/java/qupath/ext/qpsc/ui/connection/CameraControlController.java
 entry: showCameraControlDialog()
 category: utility
 ui_entries:
@@ -1077,8 +1077,8 @@ writes:
 
 ```yaml
 id: W31
-class: qupath.ext.qpsc.ui.ParfocalityCalibrationController
-file: src/main/java/qupath/ext/qpsc/ui/ParfocalityCalibrationController.java
+class: qupath.ext.qpsc.ui.calibration.ParfocalityCalibrationController
+file: src/main/java/qupath/ext/qpsc/ui/calibration/ParfocalityCalibrationController.java
 entry: show()
 category: calibration
 ui_entries:
@@ -1094,8 +1094,8 @@ writes:
 
 ```yaml
 id: W32
-class: qupath.ext.qpsc.ui.SinglePointAcquisitionController
-file: src/main/java/qupath/ext/qpsc/ui/SinglePointAcquisitionController.java
+class: qupath.ext.qpsc.ui.acquisition.SinglePointAcquisitionController
+file: src/main/java/qupath/ext/qpsc/ui/acquisition/SinglePointAcquisitionController.java
 entry: show()
 category: acquisition
 ui_entries:

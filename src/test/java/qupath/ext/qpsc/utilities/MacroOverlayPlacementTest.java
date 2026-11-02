@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.*;
 
 import java.awt.geom.AffineTransform;
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.geometry.MacroOverlayPlacement;
 
 /**
  * The Stage Map moves the preset-placed macro onto where the slide's own alignment puts it

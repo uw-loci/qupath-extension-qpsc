@@ -5,6 +5,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.geometry.CameraOrientation;
+import qupath.ext.qpsc.geometry.StageImageTransform;
+import qupath.ext.qpsc.geometry.StagePolarity;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 
 /**
  * The alignment's initial pixel -> stage scaling must move between two points of a Camera View

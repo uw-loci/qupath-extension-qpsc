@@ -1,6 +1,6 @@
 package qupath.ext.qpsc.modality;
 
-import qupath.ext.qpsc.utilities.HardwareKey;
+import qupath.ext.qpsc.config.HardwareKey;
 
 /**
  * Thrown by a modality handler when background correction is enabled for a

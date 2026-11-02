@@ -263,7 +263,7 @@ Skipped with a written reason instead of guessed: rotated working entries (base 
 
 ## Camera-orientation calibration (Calibrate Directions tool)
 
-`StageDirectionCalibrationDialog` (`ui/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing `Camera orientation`. It runs in two places:
+`StageDirectionCalibrationDialog` (`ui/alignment/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing `Camera orientation`. It runs in two places:
 
 - **Setup Wizard**, as `StageCalibrationStep` (`ui/setupwizard/StageCalibrationStep.java`), inserted between `StageStep` and `ProbeStageAfStep`.
 - **Live Viewer**, as the **Calibrate Directions...** button below the arrow grid in the Navigate tab (`ui/liveviewer/StageControlPanel.java`).
@@ -272,7 +272,7 @@ Skipped with a written reason instead of guessed: rotated working entries (base 
 
 `StagePolarity` and `CameraOrientation` are intentionally separate in this codebase (see "Flip vs Inversion" above). These call sites read `StagePolarity.current()` (`stage.polarity` in the microscope config; a QuPath preference until 2026-10-27) directly without composing with `CameraOrientation`:
 
-- `utilities/TilingUtilities.java` (tile grid traversal direction)
+- `acquisition/TilingUtilities.java` (tile grid traversal direction)
 - `controller/BoundedAcquisitionWorkflow.java`
 - `controller/MicroscopeAlignmentWorkflow.java` (alignment-tile creation)
 - `ui/stagemap/StageInsertRegistry.java`
@@ -491,16 +491,16 @@ is axis-aligned with the QuPath image; the alignment transform's rotation dispro
 
 | File | Purpose |
 |------|---------|
-| `utilities/TransformationFunctions.java` | Complete transform chain (pixel <-> stage) |
+| `geometry/TransformationFunctions.java` | Complete transform chain (pixel <-> stage) |
 | `utilities/AffineTransformManager.java` | Persistent transform storage (JSON); `TransformPreset.flipMacroX/Y` per-pair flip; `saveSlideAlignment` 7-arg overload writes per-slide `flipMacroX/Y` |
-| `controller/ExportSpatialSceneWorkflow.java` + `utilities/NgffSceneBuilder.java` | OME-NGFF 0.6 scene export of the alignment surfaces (reuses the builders listed here); `AffineTransformManager.listSavedAlignments` enumerates every per-slide JSON regardless of scope |
-| `utilities/AffineTransform3D.java` | 3D transform with Z scale/offset |
-| `utilities/FlipResolver.java` | Resolves macro flip in priority order: per-image metadata (legacy), active preset, per-detector YAML, default false |
-| `utilities/ImageFlipHelper.java` | `validateAndFlipIfNeeded` -- ensures a `(flipped X|Y|XY)` sibling exists and is the open entry on scopes where the active `(source_scanner, target_microscope)` preset has `flipMacroX/Y = true`. For visual UX during alignment only; not authoritative for flip state. **No-op when the open entry is a sub-acquisition** (sub-images do not have flipped siblings). |
+| `controller/ExportSpatialSceneWorkflow.java` + `project/NgffSceneBuilder.java` | OME-NGFF 0.6 scene export of the alignment surfaces (reuses the builders listed here); `AffineTransformManager.listSavedAlignments` enumerates every per-slide JSON regardless of scope |
+| `geometry/AffineTransform3D.java` | 3D transform with Z scale/offset |
+| `geometry/FlipResolver.java` | Resolves macro flip in priority order: per-image metadata (legacy), active preset, per-detector YAML, default false |
+| `geometry/ImageFlipHelper.java` | `validateAndFlipIfNeeded` -- ensures a `(flipped X|Y|XY)` sibling exists and is the open entry on scopes where the active `(source_scanner, target_microscope)` preset has `flipMacroX/Y = true`. For visual UX during alignment only; not authoritative for flip state. **No-op when the open entry is a sub-acquisition** (sub-images do not have flipped siblings). |
 | `controller/workflow/AlignmentHelper.java` | `checkForSlideAlignment` — loads per-slide alignment JSON and returns the transform in its saved frame; `flipMacroX/Y` documents the frame but no baking is applied |
 | `controller/ForwardPropagationWorkflow.java` | `createFlip(flipX, flipY, w, h)` flip transform; back/forward propagation also baked through this |
-| `utilities/TilingUtilities.java` | Grid computation with axis inversion |
-| `utilities/ZFocusPredictionModel.java` | Tilt correction model |
+| `acquisition/TilingUtilities.java` | Grid computation with axis inversion |
+| `focus/ZFocusPredictionModel.java` | Tilt correction model |
 | `controller/MicroscopeAlignmentWorkflow.java` | Calibrates the affine transform (manual 3-point workflow) |
 | `controller/workflow/ManualAlignmentPath.java` | Saves `<sample>_<scope>_alignment.json` from manual clicks (unflipped frame) |
 | `controller/workflow/ExistingAlignmentPath.java` | Green-box derived per-slide alignment; saves with preset's `flipMacroX/Y` |
@@ -509,4 +509,4 @@ is axis-aligned with the QuPath image; the alignment transform's rotation dispro
 | `model/StitchingMetadata.java` | Carries optional stage bounds **and** `flipX/Y` through the stitch path |
 | `controller/BoundedAcquisitionWorkflow.java` | Passes `(x1, y1, x2, y2)` into the bounds-aware `performRegionStitching` overload |
 | `preferences/QPPreferenceDialog.java` | Stage inversion flags |
-| `utilities/MicroscopeConfigManager.java` | Per-detector flip lookup (legacy fallback) |
+| `config/MicroscopeConfigManager.java` | Per-detector flip lookup (legacy fallback) |

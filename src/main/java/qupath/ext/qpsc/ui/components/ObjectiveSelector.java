@@ -6,9 +6,9 @@ import java.util.Set;
 import javafx.scene.control.ComboBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Single source of truth for objective-selection dropdowns across QPSC.
@@ -27,7 +27,7 @@ import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
  * </ol>
  *
  * <p>Reference implementation lifted from
- * {@link qupath.ext.qpsc.ui.CameraControlController}'s objective-combo
+ * {@link qupath.ext.qpsc.ui.connection.CameraControlController}'s objective-combo
  * setup. Use {@link #create} for the common case (creates and
  * auto-selects in one step) or {@link #autoSelect} when the caller has
  * already populated the combo with a domain-specific list (e.g. the

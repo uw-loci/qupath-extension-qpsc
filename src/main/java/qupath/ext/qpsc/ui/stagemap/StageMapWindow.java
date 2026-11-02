@@ -25,24 +25,24 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.geometry.GreenBoxDetector;
+import qupath.ext.qpsc.geometry.LightPathModel;
+import qupath.ext.qpsc.geometry.MacroImageUtility;
+import qupath.ext.qpsc.geometry.MacroOverlayPlacement;
+import qupath.ext.qpsc.geometry.StageImageTransform;
+import qupath.ext.qpsc.geometry.StagePolarity;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.ext.qpsc.utilities.GreenBoxDetector;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.LightPathModel;
-import qupath.ext.qpsc.utilities.MacroImageUtility;
-import qupath.ext.qpsc.utilities.MacroOverlayPlacement;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.StageImageTransform;
-import qupath.ext.qpsc.utilities.StagePolarity;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.projects.Project;
@@ -668,7 +668,7 @@ public class StageMapWindow {
                 // A vertical holder names the label's end, a horizontal one its side.
                 refreshPlacementCaptionsForInsert(selected);
                 // One background profile declares this insert and is not active: offer it.
-                qupath.ext.qpsc.ui.BackgroundProfileHint.offerForInsert(
+                qupath.ext.qpsc.ui.background.BackgroundProfileHint.offerForInsert(
                         selected.getId(),
                         insertComboBox.getScene() == null
                                 ? null
@@ -1915,7 +1915,7 @@ public class StageMapWindow {
      * is the reason Camera View differs from Stage View at all (e.g. PPM's objective inversion = XY).
      *
      * <p>The map geometry is drawn through {@code stageToScreen}, which already applies the insert's
-     * axis inversion (= {@link qupath.ext.qpsc.utilities.StagePolarity}), so polarity must NOT be
+     * axis inversion (= {@link qupath.ext.qpsc.geometry.StagePolarity}), so polarity must NOT be
      * folded in again -- {@code stitcherFlipFlags()} (stage+camera) double-counted polarity and made
      * the map 180 deg wrong on inverted-stage scopes (OWS3). The macro-preset flip
      * ({@code flipMacroX/Y}) is likewise NOT included here -- it applies to the macro overlay pixels

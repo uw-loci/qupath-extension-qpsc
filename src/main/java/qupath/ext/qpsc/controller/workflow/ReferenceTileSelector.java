@@ -131,8 +131,8 @@ public final class ReferenceTileSelector {
      * selection onto a worker thread without doing the selection itself to find out.
      */
     public static boolean wouldAutoPick() {
-        return qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
-                && !qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide();
+        return qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isArmed()
+                && !qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isOverriddenThisSlide();
     }
 
     /**

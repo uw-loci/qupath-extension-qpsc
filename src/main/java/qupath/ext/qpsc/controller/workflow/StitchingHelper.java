@@ -23,6 +23,8 @@ import qupath.ext.basicstitching.assembly.ChannelMerger;
 import qupath.ext.basicstitching.assembly.PyramidImageWriter;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.geometry.StageImageTransform;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
@@ -30,21 +32,19 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.model.StitchingMetadata;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.ui.DualProgressDialog;
-import qupath.ext.qpsc.ui.StitchingQueueWindow;
+import qupath.ext.qpsc.project.ImageNameGenerator;
+import qupath.ext.qpsc.project.ProjectEntryReservation;
+import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.stitching.StitchOutputPlanner;
+import qupath.ext.qpsc.stitching.StitchingConfiguration;
+import qupath.ext.qpsc.stitching.TileProcessingUtilities;
+import qupath.ext.qpsc.stitching.TileRegistrationSupport;
 import qupath.ext.qpsc.ui.UIFunctions;
+import qupath.ext.qpsc.ui.acquisition.DualProgressDialog;
+import qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MinorFunctions;
-import qupath.ext.qpsc.utilities.ProjectEntryReservation;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.StageImageTransform;
-import qupath.ext.qpsc.utilities.StitchOutputPlanner;
-import qupath.ext.qpsc.utilities.StitchingConfiguration;
-import qupath.ext.qpsc.utilities.TileProcessingUtilities;
-import qupath.ext.qpsc.utilities.TileRegistrationSupport;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
@@ -1175,8 +1175,8 @@ public class StitchingHelper {
         Double fovXUm = null;
         Double fovYUm = null;
         try {
-            qupath.ext.qpsc.utilities.MicroscopeConfigManager mgr =
-                    qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstanceIfAvailable();
+            qupath.ext.qpsc.config.MicroscopeConfigManager mgr =
+                    qupath.ext.qpsc.config.MicroscopeConfigManager.getInstanceIfAvailable();
             if (mgr != null && sample != null) {
                 double[] fov = mgr.getCameraFOV(sample.modality(), sample.objective(), sample.detector());
                 if (fov != null && fov.length == 2) {
@@ -1250,7 +1250,7 @@ public class StitchingHelper {
         try {
             String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
             if (configPath == null || configPath.isEmpty()) return null;
-            String name = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(configPath)
+            String name = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(configPath)
                     .getMicroscopeName();
             return (name == null || name.isEmpty() || "Unknown".equals(name)) ? null : name;
         } catch (Exception e) {
@@ -1332,8 +1332,8 @@ public class StitchingHelper {
         Double fovXUm = null;
         Double fovYUm = null;
         try {
-            qupath.ext.qpsc.utilities.MicroscopeConfigManager mgr =
-                    qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstanceIfAvailable();
+            qupath.ext.qpsc.config.MicroscopeConfigManager mgr =
+                    qupath.ext.qpsc.config.MicroscopeConfigManager.getInstanceIfAvailable();
             if (mgr != null && modality != null && objective != null) {
                 double[] fov = mgr.getCameraFOV(modality, objective, detector);
                 if (fov != null && fov.length == 2) {
@@ -1395,8 +1395,8 @@ public class StitchingHelper {
             logger.info("resolveChannelIdsForStitching: early exit -- handler={} sample={}", handler, sample);
             return List.of();
         }
-        String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
-                sample.modality(), sample.objective());
+        String profileKey =
+                qupath.ext.qpsc.config.ObjectiveUtils.createEnhancedFolderName(sample.modality(), sample.objective());
         logger.info(
                 "resolveChannelIdsForStitching: handler={} modality='{}' objective='{}' -> profileKey='{}'",
                 handler.getClass().getSimpleName(),
@@ -1715,7 +1715,7 @@ public class StitchingHelper {
 
                                 if (mergedPath != null) {
                                     logger.info("Multichannel merge succeeded for {}: {}", annotationName, mergedPath);
-                                    qupath.ext.qpsc.utilities.StitchInfoSupport.appendAcquisition(
+                                    qupath.ext.qpsc.stitching.StitchInfoSupport.appendAcquisition(
                                             mergedPath,
                                             metadata,
                                             tileBaseDir.toFile(),
@@ -2248,7 +2248,7 @@ public class StitchingHelper {
                     // acquisition can be refused later.
                     if (imported != null) {
                         ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
-                        qupath.ext.qpsc.utilities.StitchInfoSupport.stampEntry(imported, tileFolder);
+                        qupath.ext.qpsc.stitching.StitchInfoSupport.stampEntry(imported, tileFolder);
                         syncProject(project);
                     }
                     // Every per-channel file gets its own alignment keyed by
@@ -2330,7 +2330,7 @@ public class StitchingHelper {
                 // acquisition can be refused later.
                 if (imported != null) {
                     ImageMetadataManager.setAcquiredOnMicroscope(imported, resolveSourceMicroscope());
-                    qupath.ext.qpsc.utilities.StitchInfoSupport.stampEntry(imported, tileFolder);
+                    qupath.ext.qpsc.stitching.StitchInfoSupport.stampEntry(imported, tileFolder);
                     syncProject(project);
                 }
                 logger.info("Merged multichannel file imported to project: {}", mergedFile.getName());

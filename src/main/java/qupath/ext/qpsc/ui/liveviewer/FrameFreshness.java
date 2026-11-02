@@ -1,5 +1,7 @@
 package qupath.ext.qpsc.ui.liveviewer;
 
+import qupath.ext.qpsc.service.microscope.FrameData;
+
 /**
  * Stale-frame detection helpers shared by Sweep Focus and Refine Focus.
  *

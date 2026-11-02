@@ -3,6 +3,7 @@ package qupath.ext.qpsc.ui;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper;
 
 /**
  * A SIFT miss offers a wider search instead of letting the run go on with the old alignment.

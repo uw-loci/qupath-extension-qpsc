@@ -21,24 +21,24 @@ import javafx.stage.DirectoryChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.workflow.StitchingRegistration;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
+import qupath.ext.qpsc.project.ImageNameGenerator;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.stitching.TileFolderInspector;
 import qupath.ext.qpsc.ui.DialogOwner;
-import qupath.ext.qpsc.ui.StitchingQueueWindow;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.ImageNameGenerator;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow;
 import qupath.ext.qpsc.utilities.MinorFunctions;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.TileFolderInspector;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
@@ -585,7 +585,7 @@ public class StitchingRecoveryWorkflow {
             // Composite stage/camera transform; must match the acquisition path so
             // re-stitching reproduces the original layout.
             boolean[] stitcherFlags =
-                    qupath.ext.qpsc.utilities.StageImageTransform.current().stitcherFlipFlags();
+                    qupath.ext.qpsc.geometry.StageImageTransform.current().stitcherFlipFlags();
             final String outputStem =
                     ImageNameGenerator.sanitizeForFilename(finalSampleName) + "_" + angleDir.getName();
 
@@ -620,7 +620,7 @@ public class StitchingRecoveryWorkflow {
             if (finalObjective != null) recovered.put("objective", finalObjective);
             if (finalAnnotationName != null) recovered.put("region", finalAnnotationName);
             if (!isRootDir) recovered.put("angle / channel", angleName);
-            qupath.ext.qpsc.utilities.StitchInfoSupport.appendAcquisition(outPath, null, tileFolderFile, recovered);
+            qupath.ext.qpsc.stitching.StitchInfoSupport.appendAcquisition(outPath, null, tileFolderFile, recovered);
             logger.info("Stitching completed for '{}': {}", angleName, outPath);
             if (progressDialog != null && opId != null) {
                 progressDialog.completeOperation(opId);
@@ -1023,7 +1023,7 @@ public class StitchingRecoveryWorkflow {
         File target = MinorFunctions.uniqueWithExtension(desired, extension);
         if (initial.renameTo(target)) {
             logger.info("Renamed stitched output to configured pattern: {} -> {}", initial.getName(), target.getName());
-            qupath.ext.qpsc.utilities.StitchInfoSupport.moveWith(initial, target);
+            qupath.ext.qpsc.stitching.StitchInfoSupport.moveWith(initial, target);
             return target.getAbsolutePath();
         }
         logger.warn(

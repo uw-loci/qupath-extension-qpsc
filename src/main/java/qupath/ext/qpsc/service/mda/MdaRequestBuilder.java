@@ -6,6 +6,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ChannelExposure;
@@ -13,7 +14,6 @@ import qupath.ext.qpsc.modality.PresetRef;
 import qupath.ext.qpsc.model.AcquisitionPlan;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Builds an {@link MdaWriteRequest} plus the matching {@link AcquisitionPlan}

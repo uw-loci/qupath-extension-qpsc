@@ -6,13 +6,13 @@ import java.io.File;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.geometry.ImageFlipHelper;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -694,7 +694,7 @@ public class AlignmentHelper {
         // Unattended: refuse rather than wait. "Continue anyway" is a judgement about an
         // alignment that does not add up, and nobody is here to make it -- so this slide
         // fails and the batch moves on, instead of the run stopping dead on a modal dialog.
-        if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(title, header)) {
+        if (qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.deferBlockingPrompt(title, header)) {
             logger.warn("Automatic batch: refusing '{}' without asking -- {}", title, header);
             return false;
         }
@@ -749,7 +749,7 @@ public class AlignmentHelper {
         // Informational only -- the caller has already refused the alignment. Skipping the
         // modal unattended changes no decision; it just stops the batch waiting on an OK
         // nobody is going to click.
-        if (qupath.ext.qpsc.ui.AutoAdvanceController.deferBlockingPrompt(title, header)) {
+        if (qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.deferBlockingPrompt(title, header)) {
             logger.warn("Automatic batch: not showing '{}' -- {}", title, header);
             return;
         }

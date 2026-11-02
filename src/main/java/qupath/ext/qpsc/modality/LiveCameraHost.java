@@ -4,7 +4,7 @@ import javafx.scene.Node;
 import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 
 /**
  * What the Live Viewer camera tab offers a modality that builds its own camera controls through

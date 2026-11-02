@@ -3,9 +3,9 @@ package qupath.ext.qpsc.controller;
 import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.ui.AcquisitionWizardDialog;
-import qupath.ext.qpsc.ui.CameraControlController;
-import qupath.ext.qpsc.ui.ServerConnectionController;
+import qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog;
+import qupath.ext.qpsc.ui.connection.CameraControlController;
+import qupath.ext.qpsc.ui.connection.ServerConnectionController;
 
 /**
  * QPScopeController - Main orchestrator for QuPath-side workflows
@@ -132,7 +132,7 @@ public class QPScopeController {
             case "backgroundProfiles" -> {
                 logger.debug("Opening the background profiles dialog");
                 javafx.application.Platform.runLater(
-                        () -> qupath.ext.qpsc.ui.BackgroundProfilesDialog.show(null, null, null));
+                        () -> qupath.ext.qpsc.ui.background.BackgroundProfilesDialog.show(null, null, null));
             }
             // PPM workflows (polarizerCalibration, birefringenceOptimization,
             // sunburstCalibration, ppmSensitivityTest) are now registered dynamically
@@ -191,7 +191,7 @@ public class QPScopeController {
             }
             case "parfocalityCalibration" -> {
                 logger.debug("Launching parfocality calibration dialog");
-                qupath.ext.qpsc.ui.ParfocalityCalibrationController.show();
+                qupath.ext.qpsc.ui.calibration.ParfocalityCalibrationController.show();
             }
             default -> {
                 logger.warn("Unknown workflow mode: {}", mode);

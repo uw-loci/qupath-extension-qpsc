@@ -15,15 +15,15 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
+import qupath.ext.qpsc.modality.ppm.ui.SunburstCalibrationDialog;
+import qupath.ext.qpsc.modality.ppm.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.ui.CalibrationResultDialog;
-import qupath.ext.qpsc.ui.CalibrationResultDialog.CalibrationResultData;
 import qupath.ext.qpsc.ui.DialogOwner;
-import qupath.ext.qpsc.ui.SunburstCalibrationDialog;
-import qupath.ext.qpsc.ui.SunburstCalibrationDialog.SunburstCalibrationParams;
-import qupath.ext.qpsc.ui.ThresholdPreviewDialog;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.calibration.CalibrationResultDialog;
+import qupath.ext.qpsc.ui.calibration.CalibrationResultDialog.CalibrationResultData;
+import qupath.ext.qpsc.ui.calibration.ThresholdPreviewDialog;
 
 /**
  * SunburstCalibrationWorkflow - Create hue-to-angle calibration from a PPM reference slide.

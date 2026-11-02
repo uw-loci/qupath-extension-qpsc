@@ -2,10 +2,10 @@ package qupath.ext.qpsc.service.mda;
 
 import java.util.List;
 import java.util.Map;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Snapshot of everything {@link MdaExportAction#exportAndConfirm} needs to

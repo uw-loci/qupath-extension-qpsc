@@ -14,6 +14,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.scene.paint.Color;
+import qupath.ext.qpsc.service.microscope.FrameData;
 
 /**
  * Histogram display with min/max contrast sliders and FullRange/AutoScale buttons.

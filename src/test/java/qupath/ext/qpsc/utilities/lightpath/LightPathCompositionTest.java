@@ -7,8 +7,10 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.awt.image.BufferedImage;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.utilities.LightPathModel;
-import qupath.ext.qpsc.utilities.MacroImageUtility;
+import qupath.ext.qpsc.geometry.LightPathModel;
+import qupath.ext.qpsc.geometry.MacroImageUtility;
+import qupath.ext.qpsc.geometry.lightpath.LightPath;
+import qupath.ext.qpsc.geometry.lightpath.Parity;
 
 /**
  * Behavior-lock tests for the {@link LightPath} composition, written BEFORE the

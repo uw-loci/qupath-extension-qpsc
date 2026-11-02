@@ -4,13 +4,13 @@ import java.util.*;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityMenuItem;
 import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 import qupath.lib.images.ImageData;
 
 /**
@@ -215,7 +215,7 @@ public class PPMModalityHandler implements ModalityHandler {
     @Override
     public java.util.Optional<String> applyAlignmentReferenceState(String modality, String objective, String detector)
             throws Exception {
-        var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(
+        var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(
                 qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
         Double uncrossedDeg = null;

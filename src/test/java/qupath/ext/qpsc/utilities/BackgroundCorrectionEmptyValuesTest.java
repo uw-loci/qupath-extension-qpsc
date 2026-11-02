@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 
 /**
  * A {@code background_correction} entry whose keys are present but empty means "not configured",

@@ -26,19 +26,19 @@ import javafx.stage.DirectoryChooser;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
+import qupath.ext.qpsc.geometry.StageImageTransform;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
+import qupath.ext.qpsc.project.ImageNameGenerator;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.stitching.TileFolderInspector;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.ImageNameGenerator;
 import qupath.ext.qpsc.utilities.MinorFunctions;
-import qupath.ext.qpsc.utilities.StageImageTransform;
-import qupath.ext.qpsc.utilities.TileFolderInspector;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.images.writers.ome.OMEPyramidWriter;
 
@@ -442,7 +442,7 @@ public class MicroManagerStitchWorkflow {
         if (!initial.getAbsolutePath().equals(desired.getAbsolutePath())) {
             if (initial.renameTo(desired)) {
                 finalOutPath = desired.getAbsolutePath();
-                qupath.ext.qpsc.utilities.StitchInfoSupport.moveWith(initial, desired);
+                qupath.ext.qpsc.stitching.StitchInfoSupport.moveWith(initial, desired);
                 logger.info("Renamed stitched output: {} -> {}", initial.getName(), desired.getName());
             } else {
                 logger.warn(
@@ -454,7 +454,7 @@ public class MicroManagerStitchWorkflow {
 
         // Sidecar JSON with as much MicroManager metadata as we can preserve.
         writeMmMetadataSidecar(finalOutPath, extension, baseName, inDir, firstSidecar);
-        qupath.ext.qpsc.utilities.StitchInfoSupport.appendAcquisition(
+        qupath.ext.qpsc.stitching.StitchInfoSupport.appendAcquisition(
                 finalOutPath,
                 null,
                 inDir,

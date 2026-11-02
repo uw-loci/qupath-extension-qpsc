@@ -141,7 +141,7 @@ public final class LcPanelsDumpScenario {
 
         Thread.sleep(4500); // let the prompt canceller finish
         // ---- Background Collection ----
-        Class<?> bc = Class.forName("qupath.ext.qpsc.ui.BackgroundCollectionController");
+        Class<?> bc = Class.forName("qupath.ext.qpsc.ui.background.BackgroundCollectionController");
         Platform.runLater(() -> {
             try { bc.getMethod("showDialog").invoke(null); } catch (Throwable t) { out.append("showDialog threw ").append(cause(t)).append('\n'); }
         });

@@ -22,6 +22,9 @@ import javafx.stage.Modality;
 import javafx.stage.Stage;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.focus.FocusApproachValidationStore;
+import qupath.ext.qpsc.focus.FocusProfileAnalysis;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
@@ -29,9 +32,6 @@ import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.FocusApproachValidationStore;
-import qupath.ext.qpsc.utilities.FocusProfileAnalysis;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -522,8 +522,8 @@ public final class FocusApproachValidationWorkflow {
         // Live feedback: mirror the Live Viewer's per-frame focus trace onto a vertical plot
         // oriented the way the stage travels -- start at the top, filling downward toward the
         // sample. The samples are the LIVE metric, not the server's; the plot names which.
-        qupath.ext.qpsc.ui.FocusApproachPlot plot =
-                new qupath.ext.qpsc.ui.FocusApproachPlot(safeZ, farEnd, manualFocusZ);
+        qupath.ext.qpsc.ui.focus.FocusApproachPlot plot =
+                new qupath.ext.qpsc.ui.focus.FocusApproachPlot(safeZ, farEnd, manualFocusZ);
         java.util.List<double[]> livePoints = new java.util.ArrayList<>();
         javafx.animation.Timeline poller =
                 new javafx.animation.Timeline(new javafx.animation.KeyFrame(javafx.util.Duration.millis(250), ev -> {

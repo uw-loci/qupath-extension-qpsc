@@ -6,10 +6,10 @@ import java.util.function.Consumer;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.state.ObjectiveState;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Process-lifetime singleton that listens to {@link ModalityState} and drives

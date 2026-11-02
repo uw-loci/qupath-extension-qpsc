@@ -24,8 +24,18 @@ import javafx.application.Platform;
 import javafx.scene.control.Alert;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
+import qupath.ext.qpsc.acquisition.AcquisitionSpaceCheck;
+import qupath.ext.qpsc.acquisition.StageFrameWatchdog;
+import qupath.ext.qpsc.acquisition.TilingUtilities;
+import qupath.ext.qpsc.background.BackgroundIlluminationCheck;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.focus.LiveTileMeasurementPoller;
+import qupath.ext.qpsc.focus.ZFocusPredictionModel;
+import qupath.ext.qpsc.geometry.FlipResolver;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ChannelExposure;
@@ -34,6 +44,7 @@ import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.AcquisitionPlan;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.AngleResolutionService;
 import qupath.ext.qpsc.service.AnnotationOrderingService;
 import qupath.ext.qpsc.service.ChannelResolutionService;
@@ -47,25 +58,14 @@ import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
-import qupath.ext.qpsc.ui.AnnotationAcquisitionDialog;
+import qupath.ext.qpsc.stitching.StitchingConfiguration;
 import qupath.ext.qpsc.ui.DialogOwner;
-import qupath.ext.qpsc.ui.DualProgressDialog;
-import qupath.ext.qpsc.ui.SaturationSummaryDialog;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
-import qupath.ext.qpsc.utilities.AcquisitionSpaceCheck;
+import qupath.ext.qpsc.ui.acquisition.AnnotationAcquisitionDialog;
+import qupath.ext.qpsc.ui.acquisition.DualProgressDialog;
+import qupath.ext.qpsc.ui.acquisition.SaturationSummaryDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.BackgroundIlluminationCheck;
-import qupath.ext.qpsc.utilities.FlipResolver;
-import qupath.ext.qpsc.utilities.LiveTileMeasurementPoller;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.StageFrameWatchdog;
-import qupath.ext.qpsc.utilities.StitchingConfiguration;
-import qupath.ext.qpsc.utilities.TilingUtilities;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
-import qupath.ext.qpsc.utilities.ZFocusPredictionModel;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -499,7 +499,7 @@ public class AcquisitionManager {
         // so acquisition_profiles[] lookups and per-profile channel-library reads
         // land on the right entry. state.sample.modality() is the base name
         // ("Fluorescence") and won't match.
-        String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
+        String profileKey = qupath.ext.qpsc.config.ObjectiveUtils.createEnhancedFolderName(
                 state.sample.modality(), state.sample.objective());
         return AngleResolutionService.resolve(
                 profileKey, state.sample.objective(), state.sample.detector(), state.angleOverrides, state.wbMode);
@@ -1074,7 +1074,7 @@ public class AcquisitionManager {
                 // Resolution keys off the enhanced profile name (e.g. "Fluorescence_10x"),
                 // NOT the base modality name ("Fluorescence"). Profiles are indexed by the
                 // enhanced key and so is the per-profile channel library lookup.
-                String profileKey = qupath.ext.qpsc.utilities.ObjectiveUtils.createEnhancedFolderName(
+                String profileKey = qupath.ext.qpsc.config.ObjectiveUtils.createEnhancedFolderName(
                         state.sample.modality(), state.sample.objective());
 
                 // Refuse to start if the user actively deselected every channel on a
@@ -2009,7 +2009,7 @@ public class AcquisitionManager {
         // Show the job as QUEUED in the stitching queue window now: the single stitching thread
         // may be busy with an earlier region (or an earlier slide) for minutes before it gets here.
         String stitchJobId = state.projectInfo.getSampleName() + " - " + annotation.getName();
-        qupath.ext.qpsc.ui.StitchingQueueWindow.enqueue(stitchJobId, stitchJobId);
+        qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow.enqueue(stitchJobId, stitchJobId);
 
         // Create stitching future - use projectInfo.getSampleName() for correct folder path
         // Pass the dualProgressDialog so stitching status is shown in the unified progress window
@@ -2652,7 +2652,7 @@ public class AcquisitionManager {
      * tile_time_ms.
      *
      * <p>Detections are matched by their TileNumber measurement (set during tile
-     * generation in {@link qupath.ext.qpsc.utilities.TilingUtilities}).
+     * generation in {@link qupath.ext.qpsc.acquisition.TilingUtilities}).
      *
      * @param annotation The annotation whose child detections should be updated
      * @param json       Raw JSON string (array of measurement objects)

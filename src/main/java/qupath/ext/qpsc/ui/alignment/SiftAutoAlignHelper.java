@@ -1,0 +1,1392 @@
+package qupath.ext.qpsc.ui.alignment;
+
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.geometry.Rectangle2D;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.ChoiceBox;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Label;
+import javafx.scene.control.Spinner;
+import javafx.scene.control.Tooltip;
+import javafx.scene.layout.GridPane;
+import javafx.scene.layout.HBox;
+import javafx.stage.Modality;
+import javafx.stage.Screen;
+import javafx.stage.Stage;
+import javafx.stage.Window;
+import javax.imageio.ImageIO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.geometry.ImageFlipHelper;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.servers.ImageServer;
+import qupath.lib.objects.PathObject;
+import qupath.lib.projects.ProjectImageEntry;
+import qupath.lib.regions.RegionRequest;
+
+/**
+ * Shared SIFT auto-alignment helper.
+ *
+ * <p>Used by:
+ * <ul>
+ *   <li>{@code SingleTileRefinement} -- single-tile refinement step in the
+ *       Existing Image Workflow.</li>
+ *   <li>{@code AffineTransformationController} -- per-tile confirm step in
+ *       the 3-point manual alignment workflow.</li>
+ * </ul>
+ *
+ * <p>The helper extracts a region from the WSI around the selected tile,
+ * sends it to the Python server for SIFT matching against a fresh
+ * microscope snapshot, and moves the stage by the resulting offset.
+ *
+ * <p>Returns offset + diagnostic info; callers decide how to react
+ * (auto-accept vs. ask the user to verify).
+ */
+public final class SiftAutoAlignHelper {
+
+    private static final Logger logger = LoggerFactory.getLogger(SiftAutoAlignHelper.class);
+
+    private SiftAutoAlignHelper() {}
+
+    /**
+     * Performs SIFT auto-alignment against the given tile, and moves the stage onto it.
+     *
+     * <p>Side-effects: stops live view, takes a snapshot via the server,
+     * moves the stage by the matched offset, restores live view.
+     *
+     * @param gui  QuPath GUI (for accessing the image server and project entry)
+     * @param tile the tile to match against
+     * @param searchMarginUm how far around the tile to search, normally the Search margin
+     *     preference; a "Search wider" retry passes more
+     * @return {@code [offsetX, offsetY, inliers, confidence]} on success;
+     *     {@code null} if matching failed. The offset is the first one measured, in the
+     *     WSI-entry frame, for display. Confidence is 0 when {@link SiftMoveLoop} could not
+     *     confirm the landing, so the caller does not auto-accept it.
+     * @throws Exception if a low-level error occurs (server I/O, invalid
+     *     pixel calibration, etc.). Match failures (insufficient features)
+     *     return null rather than throwing.
+     */
+    public static double[] autoAlign(QuPathGUI gui, PathObject tile, double searchMarginUm) throws Exception {
+        return match(gui, tile, true, searchMarginUm);
+    }
+
+    /**
+     * The widest search a "Search wider" retry offers. QPSC writes the search region at 1 um/px,
+     * so a 3 mm margin is a 6.4 mm square, about 41 megapixels; 6 mm would be about 150.
+     */
+    public static final double MAX_SEARCH_MARGIN_UM = 3000;
+
+    /**
+     * The margin for a "Search wider" retry after {@code currentUm} found nothing:
+     * {@link #MAX_SEARCH_MARGIN_UM}, or {@code currentUm} when it is already that wide.
+     */
+    public static double widerSearchMarginUm(double currentUm) {
+        return currentUm >= MAX_SEARCH_MARGIN_UM ? currentUm : MAX_SEARCH_MARGIN_UM;
+    }
+
+    /** True when SIFT ran and found no match, as opposed to failing to run at all. */
+    public static boolean isNoMatchFailure(Throwable error) {
+        String message = error == null ? null : error.getMessage();
+        return message != null
+                && (message.contains("SIFT matching failed") || message.contains("insufficient features"));
+    }
+
+    /**
+     * Measures the SIFT offset for a tile WITHOUT moving the stage.
+     *
+     * <p>For checking an alignment rather than applying one. The caller gets the same
+     * numbers {@link #autoAlign} would act on and decides what they mean -- which is the
+     * point: a tile that matched during setup and cannot be matched now, or matches at a
+     * large offset, says the coordinates do not describe the sample.
+     *
+     * <p>This is the only check that can see a stage that did not travel as far as it was
+     * told. An open-loop controller reports the count it was given, so the reported
+     * position agrees with the commanded one whether or not the stage followed, and a slip
+     * during a move leaves no discontinuity. Confirming against the SAMPLE is the only
+     * external reference available to us.
+     *
+     * <p>Shares one body with {@link #autoAlign} so the measurement cannot drift between
+     * the two uses.
+     *
+     * @param gui  QuPath GUI (for accessing the image server and project entry)
+     * @param tile the tile to match against
+     * @return {@code [offsetX, offsetY, inliers, confidence]}, or {@code null} when the
+     *     server could not match. The offset is the raw server offset in the WSI-entry
+     *     frame, pointing FROM the tile TO where the camera actually is.
+     * @throws Exception on a low-level error (server I/O, missing pixel calibration)
+     */
+    public static double[] measureOffsetWithoutMoving(QuPathGUI gui, PathObject tile) throws Exception {
+        return match(gui, tile, false, PersistentPreferences.getSiftSearchMarginUm());
+    }
+
+    /**
+     * The shared body: capture, match, and move only when asked.
+     *
+     * @param moveStage true to apply the matched offset, false to measure only
+     * @param marginUm how far around the tile to search, stage um
+     */
+    private static double[] match(QuPathGUI gui, PathObject tile, boolean moveStage, double marginUm) throws Exception {
+
+        var imageData = gui.getImageData();
+        if (imageData == null) throw new IllegalStateException("No image data available");
+
+        ImageServer<BufferedImage> server = imageData.getServer();
+        double wsiPixelSize = server.getPixelCalibration().getAveragedPixelSizeMicrons();
+        if (Double.isNaN(wsiPixelSize) || wsiPixelSize <= 0) {
+            throw new IllegalStateException("WSI has no valid pixel size calibration");
+        }
+
+        MicroscopeController mc = MicroscopeController.getInstance();
+        double microPixelSize = mc.getSocketClient().getMicroscopePixelSize();
+        if (Double.isNaN(microPixelSize) || microPixelSize <= 0) {
+            // GETPXSZ returns 0.0 when Micro-Manager has no pixel-size
+            // calibration preset for the active objective/detector. Without a
+            // real microscope pixel size the server scales the camera image by
+            // ratio 0 -- collapsing it to 1x1 px, which yields zero SIFT
+            // keypoints and a misleading "insufficient features" failure. Fail
+            // fast with an actionable message instead.
+            // Two causes. A preset can exist and still not apply: Micro-Manager returns 0 when no
+            // pixel-size preset MATCHES the current hardware state (e.g. a preset is defined but
+            // its defining properties differ from what is set now).
+            throw new IllegalStateException("The microscope server reported a pixel size of 0 um/px, so SIFT cannot "
+                    + "scale the camera image against the slide. Either no Micro-Manager pixel-size preset "
+                    + "matches the current hardware state (a preset can exist and still not apply: check that "
+                    + "its defining properties, such as the active camera or objective, match what is set now), "
+                    + "or this connection has not been configured yet (the server log then says "
+                    + "\"GETPXSZ: Blocked - server not configured\").");
+        }
+
+        double marginPx = marginUm / wsiPixelSize;
+
+        double tileX = tile.getROI().getBoundsX();
+        double tileY = tile.getROI().getBoundsY();
+        double tileW = tile.getROI().getBoundsWidth();
+        double tileH = tile.getROI().getBoundsHeight();
+
+        int regionX = Math.max(0, (int) (tileX - marginPx));
+        int regionY = Math.max(0, (int) (tileY - marginPx));
+        int regionW = Math.min(server.getWidth() - regionX, (int) (tileW + 2 * marginPx));
+        int regionH = Math.min(server.getHeight() - regionY, (int) (tileH + 2 * marginPx));
+
+        // Read the WSI region at the resolution SIFT will actually use, not full-res.
+        // The server downscales both images to fine_target = max(micro_px, wsi_px,
+        // min_px) for the fine pass (coarser for the coarse pass), so reading full-res
+        // and letting the server downscale wastes I/O -- a 6614^2 region read + PNG
+        // write when SIFT uses ~1657^2 (~10s in OWS3 logs). Pre-downscaling to the fine
+        // target and reporting the region's EXACT effective pixel size (below) leaves
+        // the server's fine-target and the returned um offset unchanged (the offset math
+        // is invariant), so the stage move is identical -- only far fewer pixels move.
+        double siftMinPx = PersistentPreferences.getSiftMinPixelSize();
+        double siftTargetPx = Math.max(microPixelSize, Math.max(wsiPixelSize, siftMinPx));
+        double readDownsample = Math.max(1.0, siftTargetPx / wsiPixelSize);
+        logger.info(
+                "Extracting WSI region: ({}, {}) {}x{} full-res px (margin={}um={}px), read at downsample {} "
+                        + "(SIFT target {} um/px)",
+                regionX,
+                regionY,
+                regionW,
+                regionH,
+                marginUm,
+                (int) marginPx,
+                String.format("%.2f", readDownsample),
+                String.format("%.3f", siftTargetPx));
+
+        RegionRequest request =
+                RegionRequest.createInstance(server.getPath(), readDownsample, regionX, regionY, regionW, regionH);
+        BufferedImage wsiRegion = server.readRegion(request);
+        // Exact effective pixel size of the returned (downsampled) region, derived from
+        // its actual dimensions so the um offset is exact regardless of readRegion
+        // rounding. Sent to the server as --wsi-px in place of the full-res value.
+        double effectiveWsiPx =
+                wsiRegion.getWidth() > 0 ? (double) regionW / wsiRegion.getWidth() * wsiPixelSize : wsiPixelSize;
+
+        File tempFile = File.createTempFile("sift_wsi_region_", ".png");
+        tempFile.deleteOnExit();
+        ImageIO.write(wsiRegion, "PNG", tempFile);
+        logger.info(
+                "Saved WSI region to temp file: {} ({}x{}, effective {} um/px)",
+                tempFile.getAbsolutePath(),
+                wsiRegion.getWidth(),
+                wsiRegion.getHeight(),
+                String.format("%.4f", effectiveWsiPx));
+
+        ProjectImageEntry<BufferedImage> entry = gui.getProject() != null && gui.getImageData() != null
+                ? gui.getProject().getEntry(gui.getImageData())
+                : null;
+
+        // Flip to send to the server = the RESIDUAL flip still needed to bring the
+        // open entry's pixels into the live-camera orientation.
+        //
+        // An entry's FLIP_X/FLIP_Y record the flip ALREADY baked into its pixels
+        // (createFlippedDuplicate wraps a TransformedServerBuilder). During manual
+        // alignment the open entry is the flipped SIBLING, created by applying
+        // exactly the base->camera flip -- so its pixels are ALREADY camera-oriented
+        // and the residual is ZERO. This holds even when the preset cannot be
+        // resolved (e.g. the sibling has no SOURCE_MICROSCOPE metadata): the
+        // sibling's own baked-in flip is authoritative, so we must NOT try to
+        // re-derive a "required" flip and XOR it back in. Doing so would re-introduce the
+        // mirror on that no-source case (preset unresolved -> net (true,false) -> SIFT fails,
+        // because SIFT descriptors are not mirror-invariant). Only the unflipped BASE needs the
+        // preset's base->camera flip.
+        boolean[] applied = ImageMetadataManager.bakedParity(entry);
+        boolean appliedX = applied[0];
+        boolean appliedY = applied[1];
+        boolean flipX;
+        boolean flipY;
+        if (appliedX || appliedY) {
+            // Flipped sibling: pixels are already camera-oriented -- no residual flip.
+            flipX = false;
+            flipY = false;
+        } else {
+            // Unflipped base: send the preset's base->camera flip (if the scope needs one).
+            boolean[] required =
+                    entry != null ? ImageFlipHelper.resolveRequiredFlipFromPreset(entry) : new boolean[] {false, false};
+            flipX = required[0];
+            flipY = required[1];
+        }
+
+        boolean detectorFlipX = false;
+        boolean detectorFlipY = false;
+        String siftDetectorId = entry != null ? ImageMetadataManager.getDetectorId(entry) : null;
+        if (siftDetectorId != null) {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr != null) {
+                detectorFlipX = mgr.getDetectorFlipX(siftDetectorId);
+                detectorFlipY = mgr.getDetectorFlipY(siftDetectorId);
+                flipX ^= detectorFlipX;
+                flipY ^= detectorFlipY;
+            }
+        }
+        logger.info(
+                "SIFT flip resolve: entryAlreadyFlipped=({}, {}) (residual 0 for a flipped sibling), "
+                        + "detector=({}, {}) -> net sent to server=({}, {})",
+                appliedX,
+                appliedY,
+                detectorFlipX,
+                detectorFlipY,
+                flipX,
+                flipY);
+
+        // (Re)draw the SIFT search range on the Stage Map (no-op if it isn't
+        // open), centered on the current stage position. The box is left
+        // visible after the match; the hosting refinement/confirm dialog owns
+        // clearing it when it closes, so the user can see the search area for
+        // the whole time the dialog is up, not just during the match.
+        try {
+            double[] preMovePos = mc.getStagePositionXY();
+            drawSearchRangeOnStageMap(gui, tile, preMovePos[0], preMovePos[1]);
+        } catch (Exception ex) {
+            logger.debug("Could not draw SIFT search range on Stage Map: {}", ex.getMessage());
+        }
+
+        MicroscopeController.LiveViewState liveState = mc.stopAllLiveViewing();
+        try {
+            double minPx = PersistentPreferences.getSiftMinPixelSize();
+            double ratioThreshold = PersistentPreferences.getSiftRatioThreshold();
+            int minMatchCount = PersistentPreferences.getSiftMinMatchCount();
+            double contrastThreshold = PersistentPreferences.getSiftContrastThreshold();
+            int nFeatures = PersistentPreferences.getSiftNFeatures();
+            String monoNorm = PersistentPreferences.getSiftMonoNormalization();
+            double pctLow = PersistentPreferences.getSiftPercentileLow();
+            double pctHigh = PersistentPreferences.getSiftPercentileHigh();
+            boolean claheEnabled = PersistentPreferences.isSiftClaheEnabled();
+            double claheClip = PersistentPreferences.getSiftClaheClipLimit();
+            boolean coarseToFine = PersistentPreferences.isSiftCoarseToFineEnabled();
+            double coarsePx = PersistentPreferences.getSiftCoarsePixelSizeUm();
+            String rgbConversion = PersistentPreferences.getSiftRgbConversion();
+            String referenceImage = tempFile.getAbsolutePath();
+            boolean serverFlipX = flipX;
+            boolean serverFlipY = flipY;
+            double centerShiftX = regionCenterShiftUm(regionX, regionW, tileX, tileW, wsiPixelSize, serverFlipX);
+            double centerShiftY = regionCenterShiftUm(regionY, regionH, tileY, tileH, wsiPixelSize, serverFlipY);
+            SiftMoveLoop.Meter meter = () -> {
+                String response = mc.getSocketClient()
+                        .siftAutoAlign(
+                                referenceImage,
+                                microPixelSize,
+                                effectiveWsiPx,
+                                serverFlipX,
+                                serverFlipY,
+                                minPx,
+                                ratioThreshold,
+                                minMatchCount,
+                                contrastThreshold,
+                                nFeatures,
+                                monoNorm,
+                                pctLow,
+                                pctHigh,
+                                claheEnabled,
+                                claheClip,
+                                coarseToFine,
+                                coarsePx,
+                                rgbConversion);
+                if (!response.startsWith("SUCCESS:")) {
+                    logger.warn("SIFT auto-align did not succeed: {}", response);
+                    return null;
+                }
+                double[] parsed = parseSiftResponse(response);
+                // The server measures from the center of the region it was sent
+                parsed[0] += centerShiftX;
+                parsed[1] += centerShiftY;
+                return parsed;
+            };
+
+            double[] matched = meter.measure();
+            if (matched == null) {
+                return null;
+            }
+            double offsetX = matched[0];
+            double offsetY = matched[1];
+            double inliers = matched[2];
+            double confidence = matched[3];
+            logger.info(
+                    "SIFT offset: ({}, {}) um from the tile (region center is ({}, {}) um from it), "
+                            + "inliers={}, confidence={}",
+                    offsetX,
+                    offsetY,
+                    centerShiftX,
+                    centerShiftY,
+                    (int) inliers,
+                    confidence);
+
+            if (!moveStage) {
+                logger.info("SIFT measure-only: not moving the stage (checking the alignment, not applying it)");
+                return matched;
+            }
+
+            double[] currentPos = mc.getStagePositionXY();
+            // The first move is -offset; SiftMoveLoop then checks it against the sample and takes
+            // any remaining correction from the response it measured (composeSiftOffsetToStageDelta
+            // and SiftMoveLoop say why).
+            double[] stageDelta = composeSiftOffsetToStageDelta(offsetX, offsetY, flipX, flipY);
+            logger.info(
+                    "SIFT move: offset=({}, {}) um [WSI-entry frame, target->current], serverFlip=({}, {}) -> "
+                            + "stageDelta=({}, {}) um [-offset]; stage ({}, {}) -> ({}, {})",
+                    String.format("%.2f", offsetX),
+                    String.format("%.2f", offsetY),
+                    flipX,
+                    flipY,
+                    String.format("%.2f", stageDelta[0]),
+                    String.format("%.2f", stageDelta[1]),
+                    String.format("%.1f", currentPos[0]),
+                    String.format("%.1f", currentPos[1]),
+                    String.format("%.1f", currentPos[0] + stageDelta[0]),
+                    String.format("%.1f", currentPos[1] + stageDelta[1]));
+
+            SiftMoveLoop.Stage stage = new SiftMoveLoop.Stage() {
+                @Override
+                public double[] position() throws Exception {
+                    return mc.getStagePositionXY();
+                }
+
+                @Override
+                public void moveTo(double x, double y) throws Exception {
+                    mc.moveStageXY(x, y);
+                    awaitArrival(mc, x, y);
+                }
+            };
+            double toleranceUm = Math.max(MIN_VERIFY_TOLERANCE_UM, VERIFY_TOLERANCE_PIXELS * siftTargetPx);
+            SiftMoveLoop.Landing landing =
+                    SiftMoveLoop.run(new double[] {offsetX, offsetY}, flipX, flipY, toleranceUm, stage, meter);
+            // Zero confidence keeps an unconfirmed landing away from the auto-accept gate
+            return new double[] {offsetX, offsetY, inliers, landing.verified() ? confidence : 0};
+
+        } finally {
+            mc.restoreLiveViewState(liveState);
+            if (!tempFile.delete()) {
+                logger.debug("Could not delete temp file: {}", tempFile);
+            }
+        }
+    }
+
+    /** A verified landing is within this of the tile, or the next constant, whichever is larger. */
+    private static final double MIN_VERIFY_TOLERANCE_UM = 5;
+
+    /** SIFT's own repeatability, in pixels at the size it matches. */
+    private static final double VERIFY_TOLERANCE_PIXELS = 3;
+
+    private static final long ARRIVAL_TIMEOUT_MS = 15_000;
+    private static final long ARRIVAL_POLL_MS = 50;
+    private static final long ARRIVAL_SETTLE_MS = 150;
+    private static final double ARRIVAL_TOLERANCE_UM = 2;
+
+    /**
+     * How far the center of the region sent to the server sits from the tile's center, in the
+     * frame the server measures in. Near the image edge the region is clipped on that side, so its
+     * center is not the tile's. The server's offset is from the region's center and needs this
+     * added to be from the tile.
+     *
+     * @param regionStart region start along one axis, full-res px
+     * @param regionSize region size, full-res px
+     * @param tileStart tile start, full-res px
+     * @param tileSize tile size, full-res px
+     * @param pixelSizeUm full-res pixel size
+     * @param serverFlip whether the server mirrors the region along this axis
+     * @return the shift in um
+     */
+    static double regionCenterShiftUm(
+            double regionStart,
+            double regionSize,
+            double tileStart,
+            double tileSize,
+            double pixelSizeUm,
+            boolean serverFlip) {
+        double shift = ((regionStart + regionSize / 2.0) - (tileStart + tileSize / 2.0)) * pixelSizeUm;
+        return serverFlip ? -shift : shift;
+    }
+
+    /**
+     * Waits for the stage to reach a target. {@code moveStageXY} returns once the command is sent,
+     * so a position or a frame read straight after it can be from the middle of the move.
+     */
+    private static void awaitArrival(MicroscopeController mc, double x, double y) throws Exception {
+        long deadline = System.nanoTime() + ARRIVAL_TIMEOUT_MS * 1_000_000;
+        while (System.nanoTime() < deadline) {
+            double[] position = mc.getStagePositionXY();
+            if (Math.hypot(position[0] - x, position[1] - y) <= ARRIVAL_TOLERANCE_UM) {
+                Thread.sleep(ARRIVAL_SETTLE_MS);
+                return;
+            }
+            Thread.sleep(ARRIVAL_POLL_MS);
+        }
+        logger.warn("Stage did not reach ({}, {}) within {} ms", x, y, ARRIVAL_TIMEOUT_MS);
+    }
+
+    /** Reads {@code SUCCESS:x,y|inliers:n|confidence:c} into {@code [x, y, inliers, confidence]}. */
+    private static double[] parseSiftResponse(String response) {
+        String[] parts = response.substring(8).split("\\|");
+        String[] offsets = parts[0].split(",");
+        double inliers = 0;
+        double confidence = 0;
+        for (String part : parts) {
+            if (part.startsWith("inliers:")) inliers = Integer.parseInt(part.substring(8));
+            if (part.startsWith("confidence:")) confidence = Double.parseDouble(part.substring(11));
+        }
+        return new double[] {Double.parseDouble(offsets[0]), Double.parseDouble(offsets[1]), inliers, confidence};
+    }
+
+    /**
+     * Converts the SIFT offset into the stage displacement to ADD to the current
+     * position to bring the camera onto the tile (micrometers): simply
+     * {@code -offset} (after undoing any server-applied flip). <b>No rig
+     * transform.</b>
+     *
+     * <p>This is the first move only. {@link SiftMoveLoop} checks it against the sample, because
+     * on some rigs (OWS3) X goes the wrong way, at the same magnitude, with Y right. Neither this
+     * negation nor the alignment transform fitted both axes, so the loop measures the response
+     * instead of assuming one.
+     *
+     * <p><b>Direction.</b> The server computes the offset as
+     * {@code (microscope-center-in-WSI) - (WSI-center)} -- it points FROM the
+     * target tile (the WSI region is centered on it) TO where the camera currently
+     * is. So the stage must travel the OPPOSITE way: {@code target - current =
+     * -offset}. Confirmed on PPM (predicted P; SIFT landing {@code P + offset}; true
+     * tile {@code P - offset}; "Go to centroid" = P sat at their midpoint) and on
+     * OWS3 (ground truth).
+     *
+     * <p><b>No light-path transform.</b> SIFT computes the offset by matching the
+     * WSI region against the <em>live camera image</em>; that match only succeeds
+     * when the two share an orientation, so the match itself has already resolved
+     * the light path. {@code currentPos} and the offset are captured together, so a
+     * <em>relative</em> "close the gap" correction is already in the stage-command
+     * frame -- {@code -offset} is correct on every rig. This is measured, not
+     * assumed: {@code -offset} lands correctly on both PPM (composite identity) and
+     * OWS3 (composite INVERT_XY), and the only operation consistent with both is the
+     * plain negation. Mapping the offset through the per-slide
+     * alignment transform is wrong: that transform's flip lives in the sibling pixels on PPM
+     * (linear part identity, harmless) but in the transform on OWS3 (XY-flip), which
+     * would turn {@code -offset} into {@code +offset} and mirror the move. (A future
+     * scope with a genuine camera <em>rotation</em> -- not just a flip -- is the one
+     * case that could need more; catch it by matching there.)
+     *
+     * <p>The server mirrors the WSI by {@code (serverFlipX, serverFlipY)} so SIFT
+     * sees the camera orientation; a mirror negates a displacement component, so we
+     * undo that flip before negating. In practice a flipped sibling sends
+     * {@code (false, false)} (zero residual), so this is usually a no-op.
+     *
+     * @param offsetXUm server offset X (um, WSI-entry frame, post server flip)
+     * @param offsetYUm server offset Y (um, WSI-entry frame, post server flip)
+     * @param serverFlipX whether the server mirrored the WSI in X before matching
+     * @param serverFlipY whether the server mirrored the WSI in Y before matching
+     * @return stage displacement {@code [dx, dy]} to ADD to the current stage
+     *     position, in micrometers
+     */
+    static double[] composeSiftOffsetToStageDelta(
+            double offsetXUm, double offsetYUm, boolean serverFlipX, boolean serverFlipY) {
+        // Undo the server flip to return to the raw entry-image frame, then negate:
+        // the server offset points target->current, the stage must go current->target.
+        double dx = (serverFlipX ? -offsetXUm : offsetXUm) * -1.0;
+        double dy = (serverFlipY ? -offsetYUm : offsetYUm) * -1.0;
+        return new double[] {dx, dy};
+    }
+
+    // Context of the search-range box currently shown on the Stage Map, so it
+    // can be re-drawn live when the user changes the Search margin in Settings.
+    // Written from background threads (autoAlign / position fetch) and read on
+    // the FX thread (spinner preview), so volatile for visibility. A slightly
+    // stale center during a live preview is harmless.
+    private static volatile QuPathGUI searchRangeGui;
+    private static volatile PathObject searchRangeTile;
+    private static volatile double searchRangeCenterX = Double.NaN;
+    private static volatile double searchRangeCenterY = Double.NaN;
+    private static volatile boolean searchRangeActive = false;
+
+    /**
+     * Draws the SIFT search-range box on the Stage Map (no-op if the Stage Map
+     * window is closed), centered on the given stage position and sized to one
+     * tile field-of-view plus the configured search margin on each side. With
+     * coarse-to-fine enabled this is the area the coarse pass scans.
+     *
+     * <p>The box is NOT auto-cleared -- the caller (the refinement / position
+     * confirmation dialog) clears it via {@link #clearSearchRangeOnStageMap()}
+     * when it closes, so it stays visible for the dialog's whole lifetime. While
+     * shown it tracks the Search margin preference: changing the margin in the
+     * SIFT Settings dialog re-draws it (see {@link #refreshSearchRangePreview()}
+     * and {@link #previewSearchRangeMargin(double)}).
+     *
+     * @param gui QuPath GUI (for the WSI pixel calibration). No-op if null.
+     * @param tile tile being matched (its bounds give the FOV size). No-op if null.
+     * @param centerStageX stage X (um) the box centers on
+     * @param centerStageY stage Y (um) the box centers on
+     */
+    public static void drawSearchRangeOnStageMap(
+            QuPathGUI gui, PathObject tile, double centerStageX, double centerStageY) {
+        searchRangeGui = gui;
+        searchRangeTile = tile;
+        searchRangeCenterX = centerStageX;
+        searchRangeCenterY = centerStageY;
+        searchRangeActive = true;
+        drawSearchRangeBox(gui, tile, centerStageX, centerStageY, PersistentPreferences.getSiftSearchMarginUm());
+    }
+
+    /** Shared draw with an explicit margin (used for live preview while tuning). */
+    private static void drawSearchRangeBox(
+            QuPathGUI gui, PathObject tile, double centerStageX, double centerStageY, double marginUm) {
+        try {
+            if (gui == null || tile == null || tile.getROI() == null) {
+                return;
+            }
+            var imageData = gui.getImageData();
+            if (imageData == null) {
+                return;
+            }
+            double wsiPixelSize = imageData.getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+            if (Double.isNaN(wsiPixelSize) || wsiPixelSize <= 0) {
+                return;
+            }
+            double halfWidthUm = (tile.getROI().getBoundsWidth() * wsiPixelSize) / 2.0 + marginUm;
+            double halfHeightUm = (tile.getROI().getBoundsHeight() * wsiPixelSize) / 2.0 + marginUm;
+            // Pin the box to the live crosshair so it tracks stage motion during
+            // the alignment step; centerStageX/Y only seed it before the first poll.
+            qupath.ext.qpsc.ui.stagemap.StageMapWindow.setSearchRangeFollow(
+                    centerStageX, centerStageY, halfWidthUm, halfHeightUm);
+        } catch (Exception ex) {
+            logger.debug("Could not draw SIFT search range on Stage Map: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * Convenience variant of
+     * {@link #drawSearchRangeOnStageMap(QuPathGUI, PathObject, double, double)}
+     * that centers on the CURRENT stage position. The position is read on a
+     * background thread so this is safe to call from the FX thread (e.g. when a
+     * dialog opens).
+     */
+    public static void drawSearchRangeAtCurrentPosition(QuPathGUI gui, PathObject tile) {
+        new Thread(
+                        () -> {
+                            try {
+                                double[] pos =
+                                        MicroscopeController.getInstance().getStagePositionXY();
+                                drawSearchRangeOnStageMap(gui, tile, pos[0], pos[1]);
+                            } catch (Exception ex) {
+                                logger.debug(
+                                        "Could not resolve stage position for SIFT search range: {}", ex.getMessage());
+                            }
+                        },
+                        "SIFT-SearchRange-Draw")
+                .start();
+    }
+
+    /**
+     * Re-draws the currently-shown search-range box with an explicit margin,
+     * for a live preview as the user drags the Search margin spinner. No-op if
+     * no box is currently shown.
+     */
+    public static void previewSearchRangeMargin(double marginUm) {
+        if (!searchRangeActive || searchRangeTile == null) {
+            return;
+        }
+        drawSearchRangeBox(searchRangeGui, searchRangeTile, searchRangeCenterX, searchRangeCenterY, marginUm);
+    }
+
+    /**
+     * Re-draws the currently-shown search-range box using the persisted Search
+     * margin preference. Called after the SIFT Settings dialog closes so the box
+     * reflects the saved value (and reverts a canceled live preview). No-op if
+     * no box is currently shown.
+     */
+    public static void refreshSearchRangePreview() {
+        if (!searchRangeActive || searchRangeTile == null) {
+            return;
+        }
+        drawSearchRangeBox(
+                searchRangeGui,
+                searchRangeTile,
+                searchRangeCenterX,
+                searchRangeCenterY,
+                PersistentPreferences.getSiftSearchMarginUm());
+    }
+
+    /** Hides the SIFT search-range box on the Stage Map, if any. */
+    public static void clearSearchRangeOnStageMap() {
+        searchRangeActive = false;
+        searchRangeGui = null;
+        searchRangeTile = null;
+        searchRangeCenterX = Double.NaN;
+        searchRangeCenterY = Double.NaN;
+        try {
+            qupath.ext.qpsc.ui.stagemap.StageMapWindow.clearSearchRangePreview();
+        } catch (Exception ex) {
+            logger.debug("Could not clear SIFT search range overlay: {}", ex.getMessage());
+        }
+    }
+
+    /**
+     * Builds the bold focus/exposure warning shown in every SIFT alignment
+     * dialog. SIFT matches on image detail, so a blurry, out-of-focus, or
+     * saturated live frame will misalign or fail outright -- and the workflow
+     * does NOT detect this automatically. The warning tells the user to verify
+     * focus and exposure before aligning. Reuse this in any new SIFT dialog so
+     * the reminder stays consistent.
+     *
+     * @return a styled, wrapped, bold warning Label ready to add to a dialog layout
+     */
+    public static Label buildFocusSaturationWarning() {
+        Label warn = new Label("Before aligning: confirm the live image is IN FOCUS and well-exposed "
+                + "(not saturated). SIFT matches on image detail -- a blurry or blown-out frame will "
+                + "misalign or fail. This is NOT checked automatically.");
+        warn.setWrapText(true);
+        warn.setMaxWidth(Double.MAX_VALUE);
+        // A wrapped Label in a VBox otherwise collapses to one ellipsized line.
+        warn.setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+        warn.setStyle("-fx-font-weight: bold; -fx-text-fill: " + ThemeColors.ERROR + "; -fx-background-color: "
+                + "ladder(-fx-background, #3A2A15 49%, #fff3e0 50%)" + "; "
+                + "-fx-border-color: #C62828; -fx-border-width: 1; -fx-padding: 6;");
+        return warn;
+    }
+
+    /**
+     * Builds an HBox containing an "Auto-Align (SIFT)" button and a
+     * "Settings..." button. The buttons drive {@link #autoAlign} and
+     * {@link #showSettingsDialog} respectively. Status feedback is written
+     * to {@code statusLabel} (which the caller may also use elsewhere in
+     * its layout).
+     *
+     * <p>Designed to be a drop-in row that both the SingleTileRefinement
+     * dialog and the per-tile confirm dialog in the alignment workflow
+     * embed. Pair it with {@link #buildFocusSaturationWarning()} so every
+     * SIFT dialog carries the focus/exposure reminder.
+     */
+    public static HBox buildSiftButtonRow(
+            QuPathGUI gui, PathObject targetTile, Window settingsOwnerSupplierTarget, Label statusLabel) {
+        return buildSiftButtonRow(gui, targetTile, settingsOwnerSupplierTarget, statusLabel, null);
+    }
+
+    /**
+     * Overload that invokes {@code onSiftSuccess} on the FX thread after SIFT
+     * has run AND returned a valid offset. Used by callers that gate further UI
+     * (e.g. the SingleTileRefinement Save button) on a real refinement having
+     * occurred so a quick "Save" click can't silently skip refinement.
+     */
+    public static HBox buildSiftButtonRow(
+            QuPathGUI gui,
+            PathObject targetTile,
+            Window settingsOwnerSupplierTarget,
+            Label statusLabel,
+            Runnable onSiftSuccess) {
+        Button autoAlignButton = new Button("Auto-Align (SIFT)");
+        autoAlignButton.setStyle(
+                "-fx-font-weight: bold; -fx-border-color: #4A90D9; " + "-fx-border-width: 2; -fx-border-radius: 3;");
+        autoAlignButton.setTooltip(new Tooltip("Auto-align using SIFT feature matching against the selected tile.\n"
+                + "SIFT is a refinement, not a search: the live view must already\n"
+                + "overlap the target tile by at least a few hundred microns.\n"
+                + "Bit-depth normalization (16-bit camera vs 8-bit H&E WSI) and\n"
+                + "CLAHE preprocessing run server-side using the values in Settings.\n"
+                + "If matching fails, refine manually and confirm."));
+
+        Button settingsButton = new Button("Settings...");
+        settingsButton.setStyle("-fx-font-size: 10px;");
+        settingsButton.setOnAction(e -> {
+            // Resolve the owner lazily: by the time the button is clicked,
+            // the dialog has been shown and its window is available.
+            Window owner = settingsButton.getScene() != null
+                    ? settingsButton.getScene().getWindow()
+                    : settingsOwnerSupplierTarget;
+            showSettingsDialog(owner);
+        });
+
+        autoAlignButton.setOnAction(e -> {
+            autoAlignButton.setDisable(true);
+            statusLabel.setText("Running SIFT matching...");
+            statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+            new Thread(
+                            () -> {
+                                try {
+                                    double[] result =
+                                            autoAlign(gui, targetTile, PersistentPreferences.getSiftSearchMarginUm());
+                                    Platform.runLater(() -> {
+                                        autoAlignButton.setDisable(false);
+                                        if (result != null && result.length >= 2) {
+                                            String confStr = result.length >= 4
+                                                    ? String.format(" (%.0f%% confidence)", result[3] * 100)
+                                                    : "";
+                                            statusLabel.setText(String.format(
+                                                    "Aligned! Offset: (%.1f, %.1f) um%s. Verify and Confirm.",
+                                                    result[0], result[1], confStr));
+                                            statusLabel.setStyle(
+                                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
+                                            if (onSiftSuccess != null) {
+                                                try {
+                                                    onSiftSuccess.run();
+                                                } catch (Exception cbEx) {
+                                                    logger.warn("onSiftSuccess callback failed", cbEx);
+                                                }
+                                            }
+                                        } else {
+                                            statusLabel.setText("SIFT matching failed. Align manually.");
+                                            statusLabel.setStyle(
+                                                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";");
+                                        }
+                                    });
+                                } catch (Exception ex) {
+                                    String msg = ex.getMessage();
+                                    boolean isMatchFailure = msg != null
+                                            && (msg.contains("insufficient features")
+                                                    || msg.contains("matching failed"));
+                                    if (isMatchFailure) {
+                                        logger.info("SIFT matching did not find enough features -- "
+                                                + "the selected tile may be outside the search range or "
+                                                + "lack distinctive tissue features");
+                                    } else {
+                                        logger.error("Auto-align failed: {}", msg);
+                                    }
+                                    String userMsg = isMatchFailure
+                                            ? "SIFT could not match. Try driving the stage closer to the tile, or adjust Settings."
+                                            : "Error: " + msg;
+                                    Platform.runLater(() -> {
+                                        autoAlignButton.setDisable(false);
+                                        statusLabel.setText(userMsg);
+                                        statusLabel.setStyle(
+                                                "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.WARNING + ";");
+                                    });
+                                }
+                            },
+                            "SIFT-AutoAlign")
+                    .start();
+        });
+
+        HBox row = new HBox(8, autoAlignButton, settingsButton);
+        row.setAlignment(Pos.CENTER_LEFT);
+        return row;
+    }
+
+    /**
+     * Async variant returning a CompletableFuture instead of relying on a
+     * JavaFX status label. Used when the caller wants to chain logic
+     * after match completion.
+     */
+    public static CompletableFuture<double[]> autoAlignAsync(QuPathGUI gui, PathObject tile) {
+        CompletableFuture<double[]> future = new CompletableFuture<>();
+        new Thread(
+                        () -> {
+                            try {
+                                future.complete(autoAlign(gui, tile, PersistentPreferences.getSiftSearchMarginUm()));
+                            } catch (Exception e) {
+                                future.completeExceptionally(e);
+                            }
+                        },
+                        "SIFT-AutoAlign-Async")
+                .start();
+        return future;
+    }
+
+    /**
+     * Shows a dialog for tuning SIFT matching parameters. Changes are
+     * saved to persistent preferences and take effect on the next SIFT
+     * run.
+     *
+     * <p>Non-modal and docked next to the owner window so the user can
+     * see both at once.
+     *
+     * @param ownerWindow the window the settings dialog should dock next
+     *     to. May be null, in which case the dialog falls back to
+     *     screen-center positioning.
+     */
+    /**
+     * Read/write strategy for the SIFT settings dialog. Lets the same dialog
+     * body persist into different preference namespaces -- the default impl
+     * targets the single-tile-refinement keys; the propagation impl targets
+     * the propagation-refinement keys.
+     */
+    public interface SiftPrefsAccessor {
+        double getMinPixelSize();
+
+        void setMinPixelSize(double v);
+
+        double getRatioThreshold();
+
+        void setRatioThreshold(double v);
+
+        int getMinMatchCount();
+
+        void setMinMatchCount(int v);
+
+        double getContrastThreshold();
+
+        void setContrastThreshold(double v);
+
+        double getSearchMarginUm();
+
+        void setSearchMarginUm(double v);
+
+        double getConfidenceThreshold();
+
+        void setConfidenceThreshold(double v);
+
+        String getMonoNormalization();
+
+        void setMonoNormalization(String v);
+
+        String getRgbConversion();
+
+        void setRgbConversion(String v);
+
+        double getPercentileLow();
+
+        void setPercentileLow(double v);
+
+        double getPercentileHigh();
+
+        void setPercentileHigh(double v);
+
+        boolean isClaheEnabled();
+
+        void setClaheEnabled(boolean v);
+
+        double getClaheClipLimit();
+
+        void setClaheClipLimit(double v);
+    }
+
+    /** Single-tile-refinement / autoAlign SIFT settings. Default scope. */
+    public static final SiftPrefsAccessor DEFAULT_PREFS = new SiftPrefsAccessor() {
+        public double getMinPixelSize() {
+            return PersistentPreferences.getSiftMinPixelSize();
+        }
+
+        public void setMinPixelSize(double v) {
+            PersistentPreferences.setSiftMinPixelSize(v);
+        }
+
+        public double getRatioThreshold() {
+            return PersistentPreferences.getSiftRatioThreshold();
+        }
+
+        public void setRatioThreshold(double v) {
+            PersistentPreferences.setSiftRatioThreshold(v);
+        }
+
+        public int getMinMatchCount() {
+            return PersistentPreferences.getSiftMinMatchCount();
+        }
+
+        public void setMinMatchCount(int v) {
+            PersistentPreferences.setSiftMinMatchCount(v);
+        }
+
+        public double getContrastThreshold() {
+            return PersistentPreferences.getSiftContrastThreshold();
+        }
+
+        public void setContrastThreshold(double v) {
+            PersistentPreferences.setSiftContrastThreshold(v);
+        }
+
+        public double getSearchMarginUm() {
+            return PersistentPreferences.getSiftSearchMarginUm();
+        }
+
+        public void setSearchMarginUm(double v) {
+            PersistentPreferences.setSiftSearchMarginUm(v);
+        }
+
+        public double getConfidenceThreshold() {
+            return PersistentPreferences.getSiftConfidenceThreshold();
+        }
+
+        public void setConfidenceThreshold(double v) {
+            PersistentPreferences.setSiftConfidenceThreshold(v);
+        }
+
+        public String getMonoNormalization() {
+            return PersistentPreferences.getSiftMonoNormalization();
+        }
+
+        public void setMonoNormalization(String v) {
+            PersistentPreferences.setSiftMonoNormalization(v);
+        }
+
+        public String getRgbConversion() {
+            return PersistentPreferences.getSiftRgbConversion();
+        }
+
+        public void setRgbConversion(String v) {
+            PersistentPreferences.setSiftRgbConversion(v);
+        }
+
+        public double getPercentileLow() {
+            return PersistentPreferences.getSiftPercentileLow();
+        }
+
+        public void setPercentileLow(double v) {
+            PersistentPreferences.setSiftPercentileLow(v);
+        }
+
+        public double getPercentileHigh() {
+            return PersistentPreferences.getSiftPercentileHigh();
+        }
+
+        public void setPercentileHigh(double v) {
+            PersistentPreferences.setSiftPercentileHigh(v);
+        }
+
+        public boolean isClaheEnabled() {
+            return PersistentPreferences.isSiftClaheEnabled();
+        }
+
+        public void setClaheEnabled(boolean v) {
+            PersistentPreferences.setSiftClaheEnabled(v);
+        }
+
+        public double getClaheClipLimit() {
+            return PersistentPreferences.getSiftClaheClipLimit();
+        }
+
+        public void setClaheClipLimit(double v) {
+            PersistentPreferences.setSiftClaheClipLimit(v);
+        }
+    };
+
+    /** Propagation refinement SIFT settings. Independent scope. */
+    public static final SiftPrefsAccessor PROPAGATION_PREFS = new SiftPrefsAccessor() {
+        public double getMinPixelSize() {
+            return PersistentPreferences.getPropSiftMinPixelSize();
+        }
+
+        public void setMinPixelSize(double v) {
+            PersistentPreferences.setPropSiftMinPixelSize(v);
+        }
+
+        public double getRatioThreshold() {
+            return PersistentPreferences.getPropSiftRatioThreshold();
+        }
+
+        public void setRatioThreshold(double v) {
+            PersistentPreferences.setPropSiftRatioThreshold(v);
+        }
+
+        public int getMinMatchCount() {
+            return PersistentPreferences.getPropSiftMinMatchCount();
+        }
+
+        public void setMinMatchCount(int v) {
+            PersistentPreferences.setPropSiftMinMatchCount(v);
+        }
+
+        public double getContrastThreshold() {
+            return PersistentPreferences.getPropSiftContrastThreshold();
+        }
+
+        public void setContrastThreshold(double v) {
+            PersistentPreferences.setPropSiftContrastThreshold(v);
+        }
+
+        public double getSearchMarginUm() {
+            return PersistentPreferences.getPropSiftSearchMarginUm();
+        }
+
+        public void setSearchMarginUm(double v) {
+            PersistentPreferences.setPropSiftSearchMarginUm(v);
+        }
+
+        public double getConfidenceThreshold() {
+            return PersistentPreferences.getPropSiftConfidenceThreshold();
+        }
+
+        public void setConfidenceThreshold(double v) {
+            PersistentPreferences.setPropSiftConfidenceThreshold(v);
+        }
+
+        public String getMonoNormalization() {
+            return PersistentPreferences.getPropSiftMonoNormalization();
+        }
+
+        public void setMonoNormalization(String v) {
+            PersistentPreferences.setPropSiftMonoNormalization(v);
+        }
+
+        public String getRgbConversion() {
+            return PersistentPreferences.getPropSiftRgbConversion();
+        }
+
+        public void setRgbConversion(String v) {
+            PersistentPreferences.setPropSiftRgbConversion(v);
+        }
+
+        public double getPercentileLow() {
+            return PersistentPreferences.getPropSiftPercentileLow();
+        }
+
+        public void setPercentileLow(double v) {
+            PersistentPreferences.setPropSiftPercentileLow(v);
+        }
+
+        public double getPercentileHigh() {
+            return PersistentPreferences.getPropSiftPercentileHigh();
+        }
+
+        public void setPercentileHigh(double v) {
+            PersistentPreferences.setPropSiftPercentileHigh(v);
+        }
+
+        public boolean isClaheEnabled() {
+            return PersistentPreferences.isPropSiftClaheEnabled();
+        }
+
+        public void setClaheEnabled(boolean v) {
+            PersistentPreferences.setPropSiftClaheEnabled(v);
+        }
+
+        public double getClaheClipLimit() {
+            return PersistentPreferences.getPropSiftClaheClipLimit();
+        }
+
+        public void setClaheClipLimit(double v) {
+            PersistentPreferences.setPropSiftClaheClipLimit(v);
+        }
+    };
+
+    /**
+     * Show the SIFT settings dialog using propagation-scoped preferences.
+     * Same UI as {@link #showSettingsDialog(Window)} but persists into a
+     * separate preference namespace so the propagation refinement settings
+     * don't trample the single-tile-refinement defaults.
+     */
+    public static void showPropagationSettingsDialog(Window ownerWindow) {
+        buildAndShowSettingsDialog(ownerWindow, PROPAGATION_PREFS, "SIFT Settings (Propagation Refinement)");
+    }
+
+    public static void showSettingsDialog(Window ownerWindow) {
+        buildAndShowSettingsDialog(ownerWindow, DEFAULT_PREFS, "SIFT Matching Settings");
+    }
+
+    private static void buildAndShowSettingsDialog(Window ownerWindow, SiftPrefsAccessor prefs, String title) {
+        Dialog<Void> dialog = new Dialog<>();
+        dialog.setTitle(title);
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        dialog.getDialogPane().setPrefWidth(400);
+        dialog.initModality(Modality.NONE);
+        if (ownerWindow != null) {
+            dialog.initOwner(ownerWindow);
+        }
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(8);
+        grid.setPadding(new Insets(15));
+
+        int row = 0;
+
+        Spinner<Double> minPxSpinner = new Spinner<>(0.1, 5.0, prefs.getMinPixelSize(), 0.1);
+        minPxSpinner.setEditable(true);
+        minPxSpinner.setPrefWidth(90);
+        grid.add(new Label("Min pixel size (um):"), 0, row);
+        grid.add(minPxSpinner, 1, row);
+        Label minPxHelp = new Label("Downsample to this resolution. Lower = more detail but slower.");
+        minPxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        minPxHelp.setWrapText(true);
+        grid.add(minPxHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> ratioSpinner = new Spinner<>(0.3, 0.95, prefs.getRatioThreshold(), 0.05);
+        ratioSpinner.setEditable(true);
+        ratioSpinner.setPrefWidth(90);
+        grid.add(new Label("Ratio threshold:"), 0, ++row);
+        grid.add(ratioSpinner, 1, row);
+        Label ratioHelp = new Label("Lowe's ratio test. Higher = more permissive matching (try 0.8 if failing).");
+        ratioHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        ratioHelp.setWrapText(true);
+        grid.add(ratioHelp, 0, ++row, 2, 1);
+
+        Spinner<Integer> minMatchSpinner = new Spinner<>(3, 50, prefs.getMinMatchCount(), 1);
+        minMatchSpinner.setPrefWidth(90);
+        grid.add(new Label("Min match count:"), 0, ++row);
+        grid.add(minMatchSpinner, 1, row);
+        Label matchHelp = new Label("Minimum inlier matches required. Lower = accept weaker matches.");
+        matchHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        matchHelp.setWrapText(true);
+        grid.add(matchHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> contrastSpinner = new Spinner<>(0.001, 0.2, prefs.getContrastThreshold(), 0.005);
+        contrastSpinner.setEditable(true);
+        contrastSpinner.setPrefWidth(90);
+        grid.add(new Label("Contrast threshold:"), 0, ++row);
+        grid.add(contrastSpinner, 1, row);
+        Label contrastHelp = new Label("Feature detection sensitivity. Lower = detect more features in pale tissue.");
+        contrastHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        contrastHelp.setWrapText(true);
+        grid.add(contrastHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> marginSpinner = new Spinner<>(50.0, 5000.0, prefs.getSearchMarginUm(), 10.0);
+        marginSpinner.setEditable(true);
+        marginSpinner.setPrefWidth(90);
+        grid.add(new Label("Search margin (um):"), 0, ++row);
+        grid.add(marginSpinner, 1, row);
+        // Live-preview the search area on the Stage Map as the margin changes, so
+        // the user can see how big the searched region gets (and how close they
+        // need to drive the stage) before committing.
+        marginSpinner.valueProperty().addListener((obs, oldV, newV) -> {
+            if (newV != null) {
+                previewSearchRangeMargin(newV);
+            }
+        });
+        Label marginHelp = new Label("WSI region extends this far beyond the tile on each side. "
+                + "With coarse-to-fine enabled you can raise this without slowing matching.");
+        marginHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        marginHelp.setWrapText(true);
+        grid.add(marginHelp, 0, ++row, 2, 1);
+
+        CheckBox coarseToFineCheckbox = new CheckBox("Coarse-to-fine search (faster large areas)");
+        coarseToFineCheckbox.setSelected(PersistentPreferences.isSiftCoarseToFineEnabled());
+        grid.add(coarseToFineCheckbox, 0, ++row, 2, 1);
+        Label c2fHelp = new Label("Match a downsampled view of the whole search area first, then refine at full "
+                + "resolution over a small crop. Lets the search margin grow without paying for full-resolution "
+                + "matching over the whole region. Applies to SIFT auto-align (camera refinement).");
+        c2fHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        c2fHelp.setWrapText(true);
+        grid.add(c2fHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> coarsePxSpinner =
+                new Spinner<>(1.0, 16.0, PersistentPreferences.getSiftCoarsePixelSizeUm(), 0.5);
+        coarsePxSpinner.setEditable(true);
+        coarsePxSpinner.setPrefWidth(90);
+        grid.add(new Label("Coarse pixel size (um):"), 0, ++row);
+        grid.add(coarsePxSpinner, 1, row);
+        Label coarsePxHelp = new Label("Resolution of the coarse pass. Higher = faster and larger reach but a coarser "
+                + "rough step. Only used when coarser than Min pixel size above.");
+        coarsePxHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        coarsePxHelp.setWrapText(true);
+        grid.add(coarsePxHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> confSpinner = new Spinner<>(0.1, 1.0, prefs.getConfidenceThreshold(), 0.05);
+        confSpinner.setEditable(true);
+        confSpinner.setPrefWidth(90);
+        grid.add(new Label("Auto-accept confidence:"), 0, ++row);
+        grid.add(confSpinner, 1, row);
+        Label confHelp = new Label("Min inlier ratio to auto-accept when Trust SIFT is enabled.");
+        confHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        confHelp.setWrapText(true);
+        grid.add(confHelp, 0, ++row, 2, 1);
+
+        // ---- Color (H&E) conversion ----
+        Label rgbHeader = new Label("Color reference conversion");
+        rgbHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        grid.add(rgbHeader, 0, ++row, 2, 1);
+
+        ChoiceBox<String> rgbConvChoice = new ChoiceBox<>();
+        rgbConvChoice.getItems().addAll("GREEN", "LUMINANCE");
+        String currentRgb = prefs.getRgbConversion();
+        rgbConvChoice.setValue(rgbConvChoice.getItems().contains(currentRgb) ? currentRgb : "GREEN");
+        rgbConvChoice.setPrefWidth(150);
+        grid.add(new Label("RGB -> gray:"), 0, ++row);
+        grid.add(rgbConvChoice, 1, row);
+        Label rgbHelp = new Label("How to collapse a color (H&E) reference image to one channel. Only affects color "
+                + "images -- the mono camera snapshot is untouched. GREEN (default) takes the green channel: both "
+                + "H&E stains absorb green, so it carries the most tissue structure and keeps the same "
+                + "tissue-dark polarity as a brightfield mono camera. LUMINANCE is the legacy weighting, which "
+                + "brightens eosin and washes out cytoplasm contrast -- match against a mono camera is worse.");
+        rgbHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        rgbHelp.setWrapText(true);
+        grid.add(rgbHelp, 0, ++row, 2, 1);
+
+        // ---- Bit-depth normalization controls ----
+        Label normHeader = new Label("Bit-depth normalization");
+        normHeader.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
+        grid.add(normHeader, 0, ++row, 2, 1);
+
+        ChoiceBox<String> monoNormChoice = new ChoiceBox<>();
+        monoNormChoice.getItems().addAll("PERCENTILE", "MIN_MAX", "BIT_SHIFT");
+        String currentMono = prefs.getMonoNormalization();
+        monoNormChoice.setValue(monoNormChoice.getItems().contains(currentMono) ? currentMono : "PERCENTILE");
+        monoNormChoice.setPrefWidth(150);
+        grid.add(new Label("16-bit -> 8-bit:"), 0, ++row);
+        grid.add(monoNormChoice, 1, row);
+        Label monoHelp = new Label("How to compress >8-bit grayscale (microscope camera) to 8-bit before matching. "
+                + "PERCENTILE clips outliers and stretches; best when the camera doesn't use the full bit "
+                + "range (typical 12-14 bit cameras). MIN_MAX uses the actual data extremes. "
+                + "BIT_SHIFT is the legacy /256 behavior.");
+        monoHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        monoHelp.setWrapText(true);
+        grid.add(monoHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> pctLowSpinner = new Spinner<>(0.0, 50.0, prefs.getPercentileLow(), 0.5);
+        pctLowSpinner.setEditable(true);
+        pctLowSpinner.setPrefWidth(90);
+        grid.add(new Label("Percentile low:"), 0, ++row);
+        grid.add(pctLowSpinner, 1, row);
+
+        Spinner<Double> pctHighSpinner = new Spinner<>(50.0, 100.0, prefs.getPercentileHigh(), 0.5);
+        pctHighSpinner.setEditable(true);
+        pctHighSpinner.setPrefWidth(90);
+        grid.add(new Label("Percentile high:"), 0, ++row);
+        grid.add(pctHighSpinner, 1, row);
+        Label pctHelp = new Label("Used only when normalization = PERCENTILE. Defaults 2 / 98 are robust against a few "
+                + "saturated pixels. Lower the high (e.g. 95) if the camera is over-exposed; raise the "
+                + "low (e.g. 5) for noisy backgrounds.");
+        pctHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        pctHelp.setWrapText(true);
+        grid.add(pctHelp, 0, ++row, 2, 1);
+
+        CheckBox claheCheckbox = new CheckBox("Apply CLAHE (contrast equalisation)");
+        claheCheckbox.setSelected(prefs.isClaheEnabled());
+        grid.add(claheCheckbox, 0, ++row, 2, 1);
+        Label claheHelp =
+                new Label("Cross-modality contrast normalization. Strongly recommended when matching a monochrome "
+                        + "brightfield camera against an H&E (RGB) WSI -- the staining and the camera have very "
+                        + "different intensity statistics, and CLAHE makes the keypoints commensurate.");
+        claheHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        claheHelp.setWrapText(true);
+        grid.add(claheHelp, 0, ++row, 2, 1);
+
+        Spinner<Double> claheClipSpinner = new Spinner<>(0.5, 10.0, prefs.getClaheClipLimit(), 0.25);
+        claheClipSpinner.setEditable(true);
+        claheClipSpinner.setPrefWidth(90);
+        grid.add(new Label("CLAHE clip limit:"), 0, ++row);
+        grid.add(claheClipSpinner, 1, row);
+        Label clipHelp =
+                new Label("Higher = more aggressive equalisation. 2.0 default; raise to 4.0 if matches are scarce.");
+        clipHelp.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        clipHelp.setWrapText(true);
+        grid.add(clipHelp, 0, ++row, 2, 1);
+
+        dialog.getDialogPane().setContent(grid);
+
+        dialog.setResultConverter(bt -> {
+            if (bt == ButtonType.OK) {
+                prefs.setMinPixelSize(minPxSpinner.getValue());
+                prefs.setRatioThreshold(ratioSpinner.getValue());
+                prefs.setMinMatchCount(minMatchSpinner.getValue());
+                prefs.setContrastThreshold(contrastSpinner.getValue());
+                prefs.setSearchMarginUm(marginSpinner.getValue());
+                PersistentPreferences.setSiftCoarseToFineEnabled(coarseToFineCheckbox.isSelected());
+                PersistentPreferences.setSiftCoarsePixelSizeUm(coarsePxSpinner.getValue());
+                prefs.setConfidenceThreshold(confSpinner.getValue());
+                prefs.setRgbConversion(rgbConvChoice.getValue());
+                prefs.setMonoNormalization(monoNormChoice.getValue());
+                prefs.setPercentileLow(pctLowSpinner.getValue());
+                prefs.setPercentileHigh(pctHighSpinner.getValue());
+                prefs.setClaheEnabled(claheCheckbox.isSelected());
+                prefs.setClaheClipLimit(claheClipSpinner.getValue());
+                logger.info(
+                        "{} updated: minPx={}, ratio={}, minMatches={}, contrast={}, margin={}, "
+                                + "confidence={}, monoNorm={}, pctLow={}, pctHigh={}, clahe={}, claheClip={}",
+                        title,
+                        minPxSpinner.getValue(),
+                        ratioSpinner.getValue(),
+                        minMatchSpinner.getValue(),
+                        contrastSpinner.getValue(),
+                        marginSpinner.getValue(),
+                        confSpinner.getValue(),
+                        monoNormChoice.getValue(),
+                        pctLowSpinner.getValue(),
+                        pctHighSpinner.getValue(),
+                        claheCheckbox.isSelected(),
+                        claheClipSpinner.getValue());
+            }
+            return null;
+        });
+
+        dialog.setOnShown(evt -> {
+            Window dialogWindow = dialog.getDialogPane().getScene() != null
+                    ? dialog.getDialogPane().getScene().getWindow()
+                    : null;
+            if (dialogWindow instanceof Stage) {
+                ((Stage) dialogWindow).setAlwaysOnTop(true);
+            }
+            if (ownerWindow != null && dialogWindow != null) {
+                dockNextTo(dialogWindow, ownerWindow);
+            }
+        });
+
+        // On close (OK persisted the new margin; Cancel discarded it), re-draw the
+        // live search box from the persisted value so a canceled preview reverts.
+        dialog.setOnHidden(evt -> refreshSearchRangePreview());
+
+        dialog.show();
+    }
+
+    /**
+     * Position {@code child} immediately to the right of {@code owner}.
+     * If the right side doesn't fit within the containing screen's
+     * visual bounds, fall back to the left. If neither fits, center
+     * horizontally. Y-align with the owner's top edge.
+     */
+    private static void dockNextTo(Window child, Window owner) {
+        double gap = 10;
+        double childW = child.getWidth();
+        double childH = child.getHeight();
+
+        Rectangle2D bounds = Screen.getPrimary().getVisualBounds();
+        double ownerCx = owner.getX() + owner.getWidth() / 2.0;
+        double ownerCy = owner.getY() + owner.getHeight() / 2.0;
+        for (Screen s : Screen.getScreens()) {
+            if (s.getBounds().contains(ownerCx, ownerCy)) {
+                bounds = s.getVisualBounds();
+                break;
+            }
+        }
+
+        double rightX = owner.getX() + owner.getWidth() + gap;
+        double leftX = owner.getX() - gap - childW;
+
+        if (rightX + childW <= bounds.getMaxX()) {
+            child.setX(rightX);
+        } else if (leftX >= bounds.getMinX()) {
+            child.setX(leftX);
+        } else {
+            child.setX(bounds.getMinX() + Math.max(0, (bounds.getWidth() - childW) / 2.0));
+        }
+
+        double y = owner.getY();
+        if (y + childH > bounds.getMaxY()) {
+            y = Math.max(bounds.getMinY(), bounds.getMaxY() - childH);
+        }
+        if (y < bounds.getMinY()) {
+            y = bounds.getMinY();
+        }
+        child.setY(y);
+    }
+}

@@ -4,6 +4,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.service.microscope.FrameData;
 
 /**
  * The top of the live camera's range: 2^bits - 1 for the bits that carry data.

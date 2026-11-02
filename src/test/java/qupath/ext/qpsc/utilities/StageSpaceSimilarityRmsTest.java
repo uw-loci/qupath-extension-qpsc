@@ -3,6 +3,7 @@ package qupath.ext.qpsc.utilities;
 import static org.assertj.core.api.Assertions.assertThat;
 
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 
 /**
  * Pins the property that makes a 2-point multi-tile refinement unverifiable, using the

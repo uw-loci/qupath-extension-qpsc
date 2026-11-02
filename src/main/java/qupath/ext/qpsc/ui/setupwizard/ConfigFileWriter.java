@@ -47,7 +47,7 @@ public final class ConfigFileWriter {
 
         // Reload config if the manager is already active (wizard re-run while connected)
         try {
-            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstanceIfAvailable();
+            var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstanceIfAvailable();
             if (mgr != null) {
                 mgr.reload(data.getMainConfigPath().toString());
                 logger.info("Reloaded config after Setup Wizard write");

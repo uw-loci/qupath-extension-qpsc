@@ -21,6 +21,7 @@ import javafx.scene.layout.VBox;
 import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -28,7 +29,6 @@ import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * UI component allowing per-acquisition override of PPM angles.

@@ -11,12 +11,12 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Check;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Level;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.utilities.BackgroundProfiles;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * The LC-PolScope readiness summary: what the panel shows before the stage moves. Each of these

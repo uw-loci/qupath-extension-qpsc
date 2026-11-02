@@ -1,0 +1,841 @@
+package qupath.ext.qpsc.ui.connection;
+
+import java.text.SimpleDateFormat;
+import java.util.Date;
+import java.util.ResourceBundle;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CountDownLatch;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.scene.paint.Color;
+import javafx.scene.text.Font;
+import javafx.scene.text.FontWeight;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.ui.DialogOwner;
+import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
+
+/**
+ * UI controller for managing microscope server connections.
+ * Provides a user-friendly interface for configuring socket connection parameters,
+ * testing connections, and monitoring connection status.
+ *
+ * <p>Features:</p>
+ * <ul>
+ *   <li>Connection configuration (host, port, timeouts)</li>
+ *   <li>Live connection testing with detailed feedback</li>
+ *   <li>Connection status monitoring</li>
+ *   <li>Advanced settings for reconnection and health checks</li>
+ * </ul>
+ *
+ * @author Mike Nelson
+ * @since 2.0
+ */
+public class ServerConnectionController {
+    private static final Logger logger = LoggerFactory.getLogger(ServerConnectionController.class);
+
+    // Resource bundle for localized strings
+    private static final ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
+
+    // UI Components
+    private Dialog<ButtonType> dialog;
+    private TextField hostField;
+    private Spinner<Integer> portSpinner;
+    private CheckBox autoConnectCheckBox;
+
+    // Advanced settings
+    private Spinner<Integer> connectTimeoutSpinner;
+    private Spinner<Integer> readTimeoutSpinner;
+    private Spinner<Integer> maxReconnectSpinner;
+    private Spinner<Integer> reconnectDelaySpinner;
+    private Spinner<Integer> healthCheckIntervalSpinner;
+
+    // Status components
+    private Label statusLabel;
+    private ProgressIndicator progressIndicator;
+    private TextArea logArea;
+
+    // Alerts tab components
+    private CheckBox beepEnabledCheckBox;
+    private CheckBox ntfyEnabledCheckBox;
+    private TextField ntfyTopicField;
+    private TextField ntfyServerField;
+    private CheckBox notifyAcquisitionCheckBox;
+    private CheckBox notifyStitchingCheckBox;
+    private CheckBox notifyErrorsCheckBox;
+    private Label alertTestStatusLabel;
+
+    // Connection test client
+    private MicroscopeSocketClient testClient;
+
+    /**
+     * Shows the server connection configuration dialog.
+     *
+     * @return CompletableFuture that completes when dialog is closed
+     */
+    public static CompletableFuture<Void> showDialog() {
+        ServerConnectionController controller = new ServerConnectionController();
+        return controller.show();
+    }
+
+    /**
+     * Creates and shows the dialog.
+     */
+    private CompletableFuture<Void> show() {
+        CompletableFuture<Void> future = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            createDialog();
+            dialog.showAndWait();
+            cleanup();
+            future.complete(null);
+        });
+
+        return future;
+    }
+
+    /**
+     * Creates the dialog and all UI components.
+     */
+    private void createDialog() {
+        dialog = new Dialog<>();
+        dialog.initModality(javafx.stage.Modality.NONE);
+        qupath.lib.gui.QuPathGUI gui = qupath.lib.gui.QuPathGUI.getInstance();
+        if (gui != null && gui.getStage() != null) {
+            dialog.initOwner(gui.getStage());
+        }
+        dialog.setTitle(res.getString("server.dialog.title"));
+        dialog.setHeaderText(res.getString("server.dialog.header"));
+        dialog.setGraphic(DocumentationHelper.createHelpButton("serverConnection"));
+        dialog.setResizable(true);
+
+        // Create main layout
+        TabPane tabPane = new TabPane();
+        tabPane.getTabs().addAll(createConnectionTab(), createAdvancedTab(), createAlertsTab());
+
+        // Add control buttons
+        dialog.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+
+        // Set content
+        dialog.getDialogPane().setContent(tabPane);
+        dialog.getDialogPane().setPrefSize(600, 500);
+
+        // Handle OK button
+        dialog.setResultConverter(buttonType -> {
+            if (buttonType == ButtonType.OK) {
+                saveSettings();
+            }
+            return buttonType;
+        });
+
+        // Load current settings
+        loadSettings();
+    }
+
+    /**
+     * Creates the main connection configuration tab.
+     */
+    private Tab createConnectionTab() {
+        Tab tab = new Tab(res.getString("server.tab.connection"));
+        tab.setClosable(false);
+
+        VBox mainLayout = new VBox(10);
+        mainLayout.setPadding(new Insets(20));
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+
+        int row = 0;
+
+        // Server settings
+        Label serverLabel = new Label("Server Settings");
+        serverLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        grid.add(serverLabel, 0, row++, 2, 1);
+
+        // Host
+        grid.add(new Label(res.getString("server.connection.host")), 0, row);
+        hostField = new TextField();
+        hostField.setPromptText("127.0.0.1 or hostname");
+        hostField.setPrefWidth(200);
+        grid.add(hostField, 1, row++);
+
+        // Port
+        grid.add(new Label(res.getString("server.connection.port")), 0, row);
+        portSpinner = new Spinner<>(1, 65535, 5000);
+        portSpinner.setEditable(true);
+        portSpinner.setPrefWidth(100);
+        grid.add(portSpinner, 1, row++);
+
+        // Auto-connect
+        autoConnectCheckBox = new CheckBox(res.getString("server.connection.autoConnect"));
+        autoConnectCheckBox.setTooltip(new Tooltip("Automatically connect to the server when QuPath starts"));
+        grid.add(autoConnectCheckBox, 0, row++, 2, 1);
+
+        // Separator
+        grid.add(new Separator(), 0, row++, 2, 1);
+
+        // Test connection button
+        Button testButton = new Button(res.getString("server.connection.testButton"));
+        testButton.setOnAction(e -> testConnection());
+
+        Button connectButton = new Button(res.getString("server.connection.connectButton"));
+        connectButton.setOnAction(e -> connectNow());
+
+        Button probeButton = new Button("Probe Server");
+        probeButton.setTooltip(
+                new Tooltip("Quick check if server is responding (helps diagnose multi-instance issues)"));
+        probeButton.setOnAction(e -> probeServerStatus());
+
+        HBox buttonBox = new HBox(10, testButton, connectButton, probeButton);
+        grid.add(buttonBox, 0, row++, 2, 1);
+
+        // Connection status with progress indicator
+        HBox statusBox = new HBox(10);
+        statusBox.setAlignment(Pos.CENTER_LEFT);
+
+        statusLabel = new Label(res.getString("server.connection.status") + " Not tested");
+        statusLabel.setWrapText(true);
+
+        progressIndicator = new ProgressIndicator();
+        progressIndicator.setVisible(false);
+        progressIndicator.setPrefSize(24, 24);
+
+        statusBox.getChildren().addAll(statusLabel, progressIndicator);
+        grid.add(statusBox, 0, row++, 3, 1);
+
+        mainLayout.getChildren().add(grid);
+
+        // Connection log area
+        Label logLabel = new Label("Connection Log");
+        logLabel.setFont(Font.font(null, FontWeight.BOLD, 12));
+        mainLayout.getChildren().add(logLabel);
+
+        logArea = new TextArea();
+        logArea.setEditable(false);
+        logArea.setPrefRowCount(8);
+        logArea.setStyle("-fx-font-family: monospace; -fx-font-size: 11px;");
+        VBox.setVgrow(logArea, Priority.ALWAYS);
+        mainLayout.getChildren().add(logArea);
+
+        // Clear log button
+        Button clearButton = new Button("Clear Log");
+        clearButton.setOnAction(e -> logArea.clear());
+        mainLayout.getChildren().add(clearButton);
+
+        tab.setContent(mainLayout);
+        return tab;
+    }
+
+    /**
+     * Creates the advanced settings tab.
+     */
+    private Tab createAdvancedTab() {
+        Tab tab = new Tab(res.getString("server.tab.advanced"));
+        tab.setClosable(false);
+
+        GridPane grid = new GridPane();
+        grid.setHgap(10);
+        grid.setVgap(10);
+        grid.setPadding(new Insets(20));
+
+        int row = 0;
+
+        // Timeout settings
+        Label timeoutLabel = new Label(res.getString("server.advanced.timeouts"));
+        timeoutLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        grid.add(timeoutLabel, 0, row++, 2, 1);
+
+        // Connection timeout
+        grid.add(new Label(res.getString("server.advanced.connectionTimeout")), 0, row);
+        connectTimeoutSpinner = new Spinner<>(100, 30000, 3000, 500);
+        connectTimeoutSpinner.setEditable(true);
+        connectTimeoutSpinner.setPrefWidth(120);
+        connectTimeoutSpinner.setTooltip(new Tooltip("Time to wait for initial connection"));
+        grid.add(connectTimeoutSpinner, 1, row++);
+
+        // Read timeout
+        grid.add(new Label(res.getString("server.advanced.readTimeout")), 0, row);
+        readTimeoutSpinner = new Spinner<>(100, 30000, 5000, 500);
+        readTimeoutSpinner.setEditable(true);
+        readTimeoutSpinner.setPrefWidth(120);
+        readTimeoutSpinner.setTooltip(new Tooltip("Time to wait for response from server"));
+        grid.add(readTimeoutSpinner, 1, row++);
+
+        // Separator
+        grid.add(new Separator(), 0, row++, 2, 1);
+
+        // Reconnection settings
+        Label reconnectLabel = new Label(res.getString("server.advanced.reconnection"));
+        reconnectLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        grid.add(reconnectLabel, 0, row++, 2, 1);
+
+        // Max reconnect attempts
+        grid.add(new Label(res.getString("server.advanced.maxAttempts")), 0, row);
+        maxReconnectSpinner = new Spinner<>(0, 10, 3);
+        maxReconnectSpinner.setEditable(true);
+        maxReconnectSpinner.setPrefWidth(120);
+        maxReconnectSpinner.setTooltip(new Tooltip("Number of automatic reconnection attempts"));
+        grid.add(maxReconnectSpinner, 1, row++);
+
+        // Reconnect delay
+        grid.add(new Label(res.getString("server.advanced.reconnectDelay")), 0, row);
+        reconnectDelaySpinner = new Spinner<>(1000, 60000, 5000, 1000);
+        reconnectDelaySpinner.setEditable(true);
+        reconnectDelaySpinner.setPrefWidth(120);
+        reconnectDelaySpinner.setTooltip(new Tooltip("Delay between reconnection attempts"));
+        grid.add(reconnectDelaySpinner, 1, row++);
+
+        // Separator
+        grid.add(new Separator(), 0, row++, 2, 1);
+
+        // Health check settings
+        Label healthLabel = new Label(res.getString("server.advanced.healthCheck"));
+        healthLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        grid.add(healthLabel, 0, row++, 2, 1);
+
+        // Health check interval
+        grid.add(new Label(res.getString("server.advanced.healthInterval")), 0, row);
+        healthCheckIntervalSpinner = new Spinner<>(5000, 300000, 30000, 5000);
+        healthCheckIntervalSpinner.setEditable(true);
+        healthCheckIntervalSpinner.setPrefWidth(120);
+        healthCheckIntervalSpinner.setTooltip(new Tooltip("Interval between connection health checks"));
+        grid.add(healthCheckIntervalSpinner, 1, row++);
+
+        // Reset to defaults button
+        Button resetButton = new Button(res.getString("server.advanced.resetDefaults"));
+        resetButton.setOnAction(e -> resetToDefaults());
+        grid.add(resetButton, 0, row++, 2, 1);
+
+        ScrollPane scrollPane = new ScrollPane(grid);
+        scrollPane.setFitToWidth(true);
+        tab.setContent(scrollPane);
+        return tab;
+    }
+
+    /**
+     * Creates the alerts configuration tab for ntfy.sh push notifications.
+     */
+    private Tab createAlertsTab() {
+        Tab tab = new Tab("Alerts");
+        tab.setClosable(false);
+
+        VBox mainLayout = new VBox(12);
+        mainLayout.setPadding(new Insets(20));
+
+        // Local alerts section
+        Label localLabel = new Label("Local Alerts");
+        localLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        mainLayout.getChildren().add(localLabel);
+
+        beepEnabledCheckBox = new CheckBox("Play system beep on workflow completion");
+        beepEnabledCheckBox.setTooltip(new Tooltip("Audible beep when acquisition or stitching finishes"));
+        mainLayout.getChildren().add(beepEnabledCheckBox);
+
+        mainLayout.getChildren().add(new Separator());
+
+        // ntfy.sh section
+        Label ntfyLabel = new Label("Push Notifications (ntfy.sh)");
+        ntfyLabel.setFont(Font.font(null, FontWeight.BOLD, 14));
+        mainLayout.getChildren().add(ntfyLabel);
+
+        Label ntfyDesc = new Label("Send push notifications to your phone when workflows complete or fail.\n"
+                + "Setup: Install the ntfy app (free, Android/iOS), subscribe to a topic,\n"
+                + "then enter the same topic name below.");
+        ntfyDesc.setStyle("-fx-text-fill: " + ThemeColors.MUTED + ";");
+        ntfyDesc.setWrapText(true);
+        mainLayout.getChildren().add(ntfyDesc);
+
+        ntfyEnabledCheckBox = new CheckBox("Enable ntfy.sh notifications");
+        mainLayout.getChildren().add(ntfyEnabledCheckBox);
+
+        GridPane ntfyGrid = new GridPane();
+        ntfyGrid.setHgap(10);
+        ntfyGrid.setVgap(8);
+
+        ntfyGrid.add(new Label("Topic:"), 0, 0);
+        ntfyTopicField = new TextField();
+        ntfyTopicField.setPromptText("e.g., loci-ppm-a7f3x");
+        ntfyTopicField.setPrefWidth(250);
+        ntfyTopicField.setTooltip(new Tooltip("Must match the topic subscribed to in the ntfy phone app.\n"
+                + "Use a unique/random name -- ntfy topics are public by default."));
+        ntfyGrid.add(ntfyTopicField, 1, 0);
+
+        ntfyGrid.add(new Label("Server:"), 0, 1);
+        ntfyServerField = new TextField();
+        ntfyServerField.setPromptText("https://ntfy.sh");
+        ntfyServerField.setPrefWidth(250);
+        ntfyServerField.setTooltip(
+                new Tooltip("Default: https://ntfy.sh (free hosted).\n" + "Change for self-hosted ntfy instances."));
+        ntfyGrid.add(ntfyServerField, 1, 1);
+
+        mainLayout.getChildren().add(ntfyGrid);
+
+        // Test button
+        HBox testBox = new HBox(10);
+        testBox.setAlignment(Pos.CENTER_LEFT);
+        Button testAlertButton = new Button("Send Test Notification");
+        testAlertButton.setOnAction(e -> testNotification(testAlertButton));
+        alertTestStatusLabel = new Label();
+        testBox.getChildren().addAll(testAlertButton, alertTestStatusLabel);
+        mainLayout.getChildren().add(testBox);
+
+        mainLayout.getChildren().add(new Separator());
+
+        // Event toggles
+        Label eventsLabel = new Label("Notify on:");
+        eventsLabel.setFont(Font.font(null, FontWeight.BOLD, 12));
+        mainLayout.getChildren().add(eventsLabel);
+
+        notifyAcquisitionCheckBox = new CheckBox("Acquisition complete");
+        notifyStitchingCheckBox = new CheckBox("Stitching complete");
+        notifyErrorsCheckBox = new CheckBox("Errors");
+        mainLayout.getChildren().addAll(notifyAcquisitionCheckBox, notifyStitchingCheckBox, notifyErrorsCheckBox);
+
+        // Bind enable/disable of ntfy fields to the enable checkbox
+        ntfyEnabledCheckBox.selectedProperty().addListener((obs, oldVal, newVal) -> {
+            ntfyTopicField.setDisable(!newVal);
+            ntfyServerField.setDisable(!newVal);
+            notifyAcquisitionCheckBox.setDisable(!newVal);
+            notifyStitchingCheckBox.setDisable(!newVal);
+            notifyErrorsCheckBox.setDisable(!newVal);
+        });
+
+        ScrollPane scrollPane = new ScrollPane(mainLayout);
+        scrollPane.setFitToWidth(true);
+        tab.setContent(scrollPane);
+        return tab;
+    }
+
+    /**
+     * Tests the notification configuration by sending a test message via ntfy.sh.
+     */
+    private void testNotification(Button testButton) {
+        // Save current field values to preferences before testing
+        QPPreferenceDialog.setNotificationTopic(ntfyTopicField.getText());
+        QPPreferenceDialog.setNotificationServer(ntfyServerField.getText());
+        QPPreferenceDialog.setNotificationsEnabled(true); // Temporarily enable for test
+
+        testButton.setDisable(true);
+        alertTestStatusLabel.setText("Sending...");
+        alertTestStatusLabel.setTextFill(Color.BLUE);
+
+        CompletableFuture.runAsync(() -> {
+            String result = NotificationService.getInstance().sendTestNotification();
+            Platform.runLater(() -> {
+                testButton.setDisable(false);
+                if (result == null) {
+                    alertTestStatusLabel.setText("Sent! Check your phone.");
+                    alertTestStatusLabel.setTextFill(Color.GREEN);
+                } else {
+                    alertTestStatusLabel.setText(result);
+                    alertTestStatusLabel.setTextFill(Color.RED);
+                }
+                // Restore actual preference state
+                QPPreferenceDialog.setNotificationsEnabled(ntfyEnabledCheckBox.isSelected());
+            });
+        });
+    }
+
+    /**
+     * Loads current settings from preferences.
+     */
+    private void loadSettings() {
+        // Main settings
+        hostField.setText(QPPreferenceDialog.getMicroscopeServerHost());
+        portSpinner.getValueFactory().setValue(QPPreferenceDialog.getMicroscopeServerPort());
+        autoConnectCheckBox.setSelected(QPPreferenceDialog.getAutoConnectToServer());
+
+        // Advanced settings
+        connectTimeoutSpinner.getValueFactory().setValue(PersistentPreferences.getSocketConnectionTimeoutMs());
+        readTimeoutSpinner.getValueFactory().setValue(PersistentPreferences.getSocketReadTimeoutMs());
+        maxReconnectSpinner.getValueFactory().setValue(PersistentPreferences.getSocketMaxReconnectAttempts());
+        reconnectDelaySpinner.getValueFactory().setValue((int) PersistentPreferences.getSocketReconnectDelayMs());
+        healthCheckIntervalSpinner.getValueFactory().setValue((int)
+                PersistentPreferences.getSocketHealthCheckIntervalMs());
+
+        // Alerts settings
+        beepEnabledCheckBox.setSelected(QPPreferenceDialog.getCompletionBeepEnabled());
+        ntfyEnabledCheckBox.setSelected(QPPreferenceDialog.getNotificationsEnabled());
+        ntfyTopicField.setText(QPPreferenceDialog.getNotificationTopic());
+        ntfyServerField.setText(QPPreferenceDialog.getNotificationServer());
+        notifyAcquisitionCheckBox.setSelected(QPPreferenceDialog.getNotifyOnAcquisition());
+        notifyStitchingCheckBox.setSelected(QPPreferenceDialog.getNotifyOnStitching());
+        notifyErrorsCheckBox.setSelected(QPPreferenceDialog.getNotifyOnErrors());
+
+        // Update connection status display
+        updateConnectionStatus();
+    }
+
+    /**
+     * Saves settings to preferences.
+     */
+    private void saveSettings() {
+        // Main settings
+        QPPreferenceDialog.setMicroscopeServerHost(hostField.getText());
+        QPPreferenceDialog.setMicroscopeServerPort(portSpinner.getValue());
+        QPPreferenceDialog.setAutoConnectToServer(autoConnectCheckBox.isSelected());
+
+        // Advanced settings
+        PersistentPreferences.setSocketConnectionTimeoutMs(connectTimeoutSpinner.getValue());
+        PersistentPreferences.setSocketReadTimeoutMs(readTimeoutSpinner.getValue());
+        PersistentPreferences.setSocketMaxReconnectAttempts(maxReconnectSpinner.getValue());
+        PersistentPreferences.setSocketReconnectDelayMs(reconnectDelaySpinner.getValue());
+        PersistentPreferences.setSocketHealthCheckIntervalMs(healthCheckIntervalSpinner.getValue());
+
+        // Alerts settings
+        QPPreferenceDialog.setCompletionBeepEnabled(beepEnabledCheckBox.isSelected());
+        QPPreferenceDialog.setNotificationsEnabled(ntfyEnabledCheckBox.isSelected());
+        QPPreferenceDialog.setNotificationTopic(ntfyTopicField.getText());
+        QPPreferenceDialog.setNotificationServer(ntfyServerField.getText());
+        QPPreferenceDialog.setNotifyOnAcquisition(notifyAcquisitionCheckBox.isSelected());
+        QPPreferenceDialog.setNotifyOnStitching(notifyStitchingCheckBox.isSelected());
+        QPPreferenceDialog.setNotifyOnErrors(notifyErrorsCheckBox.isSelected());
+
+        logger.info("Communication settings saved");
+        logMessage("Settings saved successfully");
+    }
+
+    /**
+     * Resets advanced settings to defaults.
+     */
+    private void resetToDefaults() {
+        connectTimeoutSpinner.getValueFactory().setValue(3000);
+        readTimeoutSpinner.getValueFactory().setValue(5000);
+        maxReconnectSpinner.getValueFactory().setValue(3);
+        reconnectDelaySpinner.getValueFactory().setValue(5000);
+        healthCheckIntervalSpinner.getValueFactory().setValue(30000);
+
+        logMessage("Advanced settings reset to defaults");
+    }
+
+    /**
+     * Tests the connection with current settings.
+     */
+    private void testConnection() {
+        // SAFETY CHECK: Validate config is set before attempting connection
+        String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.trim().isEmpty()) {
+            Platform.runLater(() -> {
+                statusLabel.setText("[X] Config Not Set");
+                statusLabel.setTextFill(Color.RED);
+
+                javafx.scene.control.Alert alert =
+                        new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.ERROR);
+                alert.setTitle("Config Not Set");
+                alert.setHeaderText("Microscope configuration file not set");
+                alert.setContentText(
+                        "Please set the microscope configuration file path in the Preferences tab below.\n\n"
+                                + "This is required for safe operation - the wrong config could damage the microscope!");
+                DialogOwner.own(alert);
+                UserErrors.logAlert(logger, alert);
+                alert.showAndWait();
+
+                logMessage("ERROR: Microscope config file not set!");
+                logMessage("Go to Preferences tab and set the config file path.");
+            });
+            return;
+        }
+
+        // Show progress
+        progressIndicator.setVisible(true);
+        statusLabel.setText(res.getString("server.status.testing"));
+        statusLabel.setTextFill(Color.BLUE);
+
+        // Disable controls during test
+        setControlsEnabled(false);
+
+        // Run test in background
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Create test client
+                testClient = new MicroscopeSocketClient(
+                        hostField.getText(),
+                        portSpinner.getValue(),
+                        connectTimeoutSpinner.getValue(),
+                        readTimeoutSpinner.getValue(),
+                        1, // Only try once for test
+                        1000,
+                        30000);
+
+                logMessage("Testing connection to " + hostField.getText() + ":" + portSpinner.getValue());
+
+                // Try to connect
+                testClient.connect();
+                logMessage("Connected successfully!");
+
+                // Test getting position
+                double[] pos = testClient.getStageXY();
+                logMessage(String.format("Stage position: (%.2f, %.2f)", pos[0], pos[1]));
+
+                // Test Z position
+                double z = testClient.getStageZ();
+                logMessage(String.format("Stage Z position: %.2f", z));
+
+                // Success
+                Platform.runLater(() -> {
+                    statusLabel.setText(String.format(res.getString("server.status.success"), pos[0], pos[1], z));
+                    statusLabel.setTextFill(Color.GREEN);
+                });
+
+            } catch (Exception e) {
+                // Failed
+                String error = e.getMessage();
+                logMessage("Connection failed: " + error);
+
+                // Provide helpful guidance based on error type
+                if (error != null && error.contains("config file path not set")) {
+                    logMessage("");
+                    logMessage("CRITICAL: Microscope config file not set!");
+                    logMessage("This should have been caught earlier - please report this bug.");
+                    logMessage("Go to Preferences tab and set the config file path.");
+                } else if (error != null && error.contains("connection blocked")) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Another QuPath instance is already connected to the server");
+                    logMessage("2. Only ONE connection is allowed at a time for safety");
+                    logMessage("3. Close the other QuPath instance or disconnect it");
+                    logMessage("4. Wait a few seconds and try again");
+                } else if (error != null && error.contains("Failed to load config")) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Server could not load the config file");
+                    logMessage("2. Check that the config file path is correct (see Preferences tab)");
+                    logMessage("3. Verify the config file is valid YAML format");
+                    logMessage("4. Ensure the config file has required sections (microscope, stage, id_detector)");
+                } else if (error != null && (error.contains("Connection refused") || error.contains("connect"))) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Make sure the Python microscope server is running");
+                    logMessage("2. Check that only ONE server instance is running");
+                    logMessage("3. Verify the host and port settings are correct");
+                } else if (error != null && (error.contains("timeout") || error.contains("Timeout"))) {
+                    logMessage("");
+                    logMessage("TROUBLESHOOTING:");
+                    logMessage("1. Server may be busy or unresponsive");
+                    logMessage("2. Check if multiple server instances are running (can cause conflicts)");
+                    logMessage("3. Try increasing the connection timeout in Advanced settings");
+                }
+
+                Platform.runLater(() -> {
+                    statusLabel.setText(String.format(res.getString("server.status.failed"), error));
+                    statusLabel.setTextFill(Color.RED);
+                });
+
+            } finally {
+                // Clean up
+                if (testClient != null) {
+                    testClient.close();
+                    testClient = null;
+                }
+
+                Platform.runLater(() -> {
+                    progressIndicator.setVisible(false);
+                    setControlsEnabled(true);
+                });
+            }
+        });
+    }
+
+    /**
+     * Connects to the server immediately and updates the main controller.
+     */
+    private void connectNow() {
+        progressIndicator.setVisible(true);
+        statusLabel.setText(res.getString("server.status.connecting"));
+        statusLabel.setTextFill(Color.BLUE);
+        setControlsEnabled(false);
+
+        CompletableFuture.runAsync(() -> {
+            try {
+                // Save settings on the FX thread and wait for it to finish before
+                // disconnecting -- correct ordering instead of a fixed-delay guess.
+                CountDownLatch saveLatch = new CountDownLatch(1);
+                Platform.runLater(() -> {
+                    try {
+                        saveSettings();
+                    } finally {
+                        saveLatch.countDown();
+                    }
+                });
+                saveLatch.await();
+
+                MicroscopeController controller = MicroscopeController.getInstance();
+
+                // Only disconnect the primary socket -- leave the auxiliary
+                // (Live Viewer, stage control) running so we don't disrupt
+                // an active live session while reconnecting.
+                if (controller.isPrimaryConnected()) {
+                    controller.disconnectPrimary();
+                    logMessage("Disconnected primary socket (auxiliary left intact)");
+                }
+
+                // userTriggeredConnect() clears the server-unresponsive latch
+                // before connecting -- the user pressing Reconnect is by
+                // definition a fresh shot, and otherwise every subsequent
+                // aux op short-circuits with "MicroManager likely crashed".
+                controller.userTriggeredConnect();
+
+                logMessage("Primary socket connected");
+
+                // Report both socket states
+                boolean auxOk = controller.isAuxConnected();
+                if (auxOk) {
+                    logMessage("Auxiliary socket also connected (Live Viewer ready)");
+                } else {
+                    logMessage("Auxiliary socket will connect on next Live Viewer use");
+                }
+
+                Platform.runLater(() -> {
+                    updateConnectionStatus();
+                });
+
+            } catch (Exception e) {
+                String error = e.getMessage();
+                logMessage("Failed to connect via controller: " + error);
+
+                Platform.runLater(() -> {
+                    statusLabel.setText(String.format(res.getString("server.status.failed"), error));
+                    statusLabel.setTextFill(Color.RED);
+                });
+
+            } finally {
+                Platform.runLater(() -> {
+                    progressIndicator.setVisible(false);
+                    setControlsEnabled(true);
+                });
+            }
+        });
+    }
+
+    /**
+     * Probes the server to check if it's available and responding.
+     * This is a quick diagnostic check that helps identify multi-instance issues.
+     */
+    private void probeServerStatus() {
+        progressIndicator.setVisible(true);
+        statusLabel.setText("Probing server...");
+        statusLabel.setTextFill(Color.BLUE);
+        setControlsEnabled(false);
+
+        CompletableFuture.runAsync(() -> {
+            String host = hostField.getText();
+            int port = portSpinner.getValue();
+            int timeout = connectTimeoutSpinner.getValue();
+
+            logMessage("Probing server at " + host + ":" + port + "...");
+
+            MicroscopeSocketClient.ServerProbeResult result = MicroscopeSocketClient.probeServer(host, port, timeout);
+
+            if (result.isResponding()) {
+                logMessage("Server probe successful: " + result.getMessage());
+                Platform.runLater(() -> {
+                    statusLabel.setText("Server OK: " + result.getMessage());
+                    statusLabel.setTextFill(Color.GREEN);
+                });
+            } else if (result.canConnect()) {
+                // Connected but not responding correctly - possible multi-instance issue
+                logMessage("WARNING: Connected but server not responding correctly!");
+                logMessage("This can happen if multiple server instances are running.");
+                logMessage("Please ensure only ONE server instance is running.");
+                logMessage("Details: " + result.getMessage());
+
+                Platform.runLater(() -> {
+                    statusLabel.setText("WARNING: Server connection issue - check for multiple instances!");
+                    statusLabel.setTextFill(Color.ORANGE);
+                });
+            } else {
+                // Cannot connect at all
+                logMessage("Cannot connect to server: " + result.getMessage());
+                logMessage("Make sure the Python server is running.");
+
+                Platform.runLater(() -> {
+                    statusLabel.setText("No server: " + result.getMessage());
+                    statusLabel.setTextFill(Color.RED);
+                });
+            }
+
+            Platform.runLater(() -> {
+                progressIndicator.setVisible(false);
+                setControlsEnabled(true);
+            });
+        });
+    }
+
+    /**
+     * Updates the connection status label based on controller state.
+     * Shows both primary and auxiliary socket states so the user can
+     * diagnose partial-connection scenarios (e.g., Live Viewer works
+     * but acquisition commands fail).
+     */
+    private void updateConnectionStatus() {
+        try {
+            MicroscopeController controller = MicroscopeController.getInstance();
+            boolean primary = controller.isPrimaryConnected();
+            boolean auxiliary = controller.isAuxConnected();
+
+            String prefix = res.getString("server.connection.status") + " ";
+
+            if (primary && auxiliary) {
+                statusLabel.setText(prefix + "Connected (primary + auxiliary)");
+                statusLabel.setTextFill(Color.GREEN);
+            } else if (primary) {
+                statusLabel.setText(prefix + "Primary connected (auxiliary will connect on use)");
+                statusLabel.setTextFill(Color.GREEN);
+            } else if (auxiliary) {
+                statusLabel.setText(
+                        prefix + "Auxiliary only (Live Viewer works; primary will reconnect on next command)");
+                statusLabel.setTextFill(Color.ORANGE);
+            } else {
+                statusLabel.setText(prefix + "Disconnected");
+                statusLabel.setTextFill(Color.GRAY);
+            }
+        } catch (Exception e) {
+            statusLabel.setText(res.getString("server.connection.status") + " Not initialized");
+            statusLabel.setTextFill(Color.GRAY);
+        }
+    }
+
+    /**
+     * Logs a message to the log area.
+     */
+    private void logMessage(String message) {
+        String timestamp = new SimpleDateFormat("HH:mm:ss").format(new Date());
+        String logEntry = String.format("[%s] %s%n", timestamp, message);
+
+        Platform.runLater(() -> {
+            logArea.appendText(logEntry);
+            // Auto-scroll to bottom
+            logArea.setScrollTop(Double.MAX_VALUE);
+        });
+    }
+
+    /**
+     * Enables or disables controls.
+     */
+    private void setControlsEnabled(boolean enabled) {
+        hostField.setDisable(!enabled);
+        portSpinner.setDisable(!enabled);
+        // Don't disable checkboxes - user should be able to change these anytime
+    }
+
+    /**
+     * Cleanup when dialog closes.
+     */
+    private void cleanup() {
+        if (testClient != null) {
+            testClient.close();
+            testClient = null;
+        }
+    }
+}

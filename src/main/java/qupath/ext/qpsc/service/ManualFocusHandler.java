@@ -7,9 +7,9 @@ import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.acquisition.StageFrameWatchdog;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.utilities.StageFrameWatchdog;
 
 /**
  * Shared handler for the manual focus dialog pattern used during acquisition monitoring.

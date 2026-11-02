@@ -23,12 +23,12 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.ui.AutofocusBenchmarkDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.focus.AutofocusBenchmarkDialog;
 
 /**
  * Workflow for running autofocus parameter benchmarks.

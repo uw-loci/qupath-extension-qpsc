@@ -6,7 +6,7 @@ import java.util.List;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.lib.objects.PathObject;
 
 /**

@@ -13,8 +13,8 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.ChannelRegistrationSupport;
-import qupath.ext.qpsc.utilities.TileRegistrationSupport;
+import qupath.ext.qpsc.stitching.ChannelRegistrationSupport;
+import qupath.ext.qpsc.stitching.TileRegistrationSupport;
 
 /**
  * The single place every stitch path goes through to apply content-based tile registration.

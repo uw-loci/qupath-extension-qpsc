@@ -6,7 +6,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import java.awt.geom.AffineTransform;
 import java.awt.geom.Point2D;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.utilities.TransformationFunctions.SimilarityFit;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
+import qupath.ext.qpsc.geometry.TransformationFunctions.SimilarityFit;
 
 /**
  * Unit tests for {@link TransformationFunctions#computeStageSpaceSimilarity}, the

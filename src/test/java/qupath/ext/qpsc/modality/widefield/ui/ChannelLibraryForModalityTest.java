@@ -10,9 +10,9 @@ import java.nio.file.StandardCopyOption;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.config.BundledScopeInstaller.Bundle;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.utilities.BundledScopeInstaller.Bundle;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * The channel picker shows the selected modality's library. The demo config lists

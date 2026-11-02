@@ -8,7 +8,7 @@ import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
-import qupath.ext.qpsc.utilities.ConfigYamlEditor;
+import qupath.ext.qpsc.config.ConfigYamlEditor;
 
 /**
  * The LC-PolScope exposure, read and written as ONE value: the server's per-state signal report

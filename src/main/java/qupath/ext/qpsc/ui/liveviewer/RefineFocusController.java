@@ -4,8 +4,9 @@ import java.io.IOException;
 import java.util.function.Supplier;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.service.microscope.FrameData;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Automated focus refinement using histogram width (P2-P98 percentile range)

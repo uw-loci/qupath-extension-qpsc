@@ -160,12 +160,12 @@ public final class AcquisitionDialogDumpScenario {
 
         Class<?> cls;
         if (bounded) {
-            cls = Class.forName("qupath.ext.qpsc.ui.UnifiedAcquisitionController$UnifiedDialogBuilder");
+            cls = Class.forName("qupath.ext.qpsc.ui.acquisition.UnifiedAcquisitionController$UnifiedDialogBuilder");
             Constructor<?> k = cls.getDeclaredConstructor();
             k.setAccessible(true);
             builder = onFx(k::newInstance);
         } else {
-            cls = Class.forName("qupath.ext.qpsc.ui.ExistingImageAcquisitionController$ConsolidatedDialogBuilder");
+            cls = Class.forName("qupath.ext.qpsc.ui.acquisition.ExistingImageAcquisitionController$ConsolidatedDialogBuilder");
             Constructor<?> k = cls.getDeclaredConstructor(String.class, List.class, boolean.class);
             k.setAccessible(true);
             PathObject annotation = PathObjects.createAnnotationObject(

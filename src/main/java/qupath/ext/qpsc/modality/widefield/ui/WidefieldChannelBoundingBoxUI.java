@@ -30,6 +30,7 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
@@ -48,7 +49,6 @@ import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 
 /**

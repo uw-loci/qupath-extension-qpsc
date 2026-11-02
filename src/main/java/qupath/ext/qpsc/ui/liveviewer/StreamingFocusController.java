@@ -3,12 +3,12 @@ package qupath.ext.qpsc.ui.liveviewer;
 import java.io.IOException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.focus.AfFailureHint;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.StreamingFocusResult;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.Outcome;
 import qupath.ext.qpsc.ui.liveviewer.RefineFocusController.StatusCallback;
-import qupath.ext.qpsc.utilities.AfFailureHint;
 
 /**
  * Thin Java-side wrapper around the server's STRMAFZ (streaming autofocus) command.
@@ -144,7 +144,7 @@ public class StreamingFocusController {
                     // searches near it instead of retracting and traversing the whole bound.
                     // Without this, a later point whose Z is near the hand-found focus would
                     // run the full approach because nothing had told it where focus is.
-                    qupath.ext.qpsc.utilities.SafeZClearanceMonitor.recordFocus(result.finalZ);
+                    qupath.ext.qpsc.focus.SafeZClearanceMonitor.recordFocus(result.finalZ);
                     qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus.noteFocusOnThisSlide(result.finalZ);
                     finish(callback, okMsg, Outcome.SUCCESS);
                     return;

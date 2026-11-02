@@ -9,13 +9,13 @@ import javafx.scene.control.Label;
 import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.ObjectiveUtils;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -234,7 +234,7 @@ public class QPScopeChecks {
             }
             // getFrame() triggers a real camera snap. ~100-300ms cost per gate is acceptable
             // because the gate fires once per workflow invocation, not per tile.
-            qupath.ext.qpsc.ui.liveviewer.FrameData frame =
+            qupath.ext.qpsc.service.microscope.FrameData frame =
                     controller.getSocketClient().getFrame();
             liveW = frame.width();
             liveH = frame.height();

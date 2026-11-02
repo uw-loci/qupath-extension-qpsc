@@ -34,7 +34,7 @@ public final class ConfigSchema {
      *
      * <p>v3 added the stage.streaming_af.* block. Pre-v3
      * configs are auto-migrated on first load by
-     * {@link qupath.ext.qpsc.utilities.MicroscopeConfigManager} -- see
+     * {@link qupath.ext.qpsc.config.MicroscopeConfigManager} -- see
      * its constructor / loader for the migration logic.
      */
     public static final int SCHEMA_VERSION = 3;

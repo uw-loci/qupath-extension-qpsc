@@ -7,6 +7,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 
 /**
  * The per-insert sample-side Z limit ({@code stage.inserts.configurations.<insert>.z_limit_um})

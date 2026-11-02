@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
 
 /**
  * Tests for {@link BackgroundSettingsReader} parsing of the v2.0

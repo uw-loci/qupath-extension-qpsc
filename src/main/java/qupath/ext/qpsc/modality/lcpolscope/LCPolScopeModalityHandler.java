@@ -6,6 +6,7 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.LiveCameraHost;
@@ -16,7 +17,6 @@ import qupath.ext.qpsc.modality.lcpolscope.ui.LCLiveCameraControls;
 import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.images.ImageData;
 
 /**

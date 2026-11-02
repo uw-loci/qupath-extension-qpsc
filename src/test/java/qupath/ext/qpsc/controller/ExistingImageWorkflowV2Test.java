@@ -9,7 +9,7 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
-import qupath.ext.qpsc.ui.RefinementSelectionController.RefinementChoice;
+import qupath.ext.qpsc.ui.alignment.RefinementSelectionController.RefinementChoice;
 
 /**
  * Unit tests for ExistingImageWorkflowV2 workflow state.

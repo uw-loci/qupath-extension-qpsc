@@ -10,6 +10,7 @@ import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.config.ConfigYamlEditor;
 
 /**
  * Verifies the comment-preserving list/map append primitives added to

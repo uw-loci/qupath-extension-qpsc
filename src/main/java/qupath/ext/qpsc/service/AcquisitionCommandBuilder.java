@@ -4,10 +4,10 @@ import java.util.*;
 import java.util.stream.Collectors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.ObjectiveUtils;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.ObjectiveUtils;
 
 /**
  * Centralized builder for acquisition commands for socket-based communication.

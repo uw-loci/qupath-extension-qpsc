@@ -28,13 +28,13 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.ProbeStageAfResult;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Standalone "Re-probe Stage AF" workflow.

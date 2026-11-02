@@ -6,17 +6,17 @@ import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
+import qupath.ext.qpsc.focus.SafeZClearanceMonitor;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.ui.AutofocusCancelWindow;
+import qupath.ext.qpsc.ui.focus.AutofocusCancelWindow;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.SafeZClearanceMonitor;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 
@@ -294,7 +294,7 @@ public final class SlotJumpAutofocus {
             if (scope == null || modality == null || objective == null) {
                 return ApproachPlan.disabled("scope, modality or objective is unknown");
             }
-            var record = qupath.ext.qpsc.utilities.FocusApproachValidationStore.find(scope, modality, objective);
+            var record = qupath.ext.qpsc.focus.FocusApproachValidationStore.find(scope, modality, objective);
             if (record == null) {
                 logger.info(
                         "Slot-jump AF: no focus-approach validation for {}/{}/{}; using the standard scan",
@@ -568,7 +568,7 @@ public final class SlotJumpAutofocus {
         if (n == 0) {
             return null;
         }
-        double[] centreStage = qupath.ext.qpsc.utilities.TransformationFunctions.transformQuPathFullResToStage(
+        double[] centreStage = qupath.ext.qpsc.geometry.TransformationFunctions.transformQuPathFullResToStage(
                 new double[] {sumX / n, sumY / n}, estimate);
         double dx = centreStage[0] - fromStageXY[0];
         double dy = centreStage[1] - fromStageXY[1];
@@ -611,8 +611,8 @@ public final class SlotJumpAutofocus {
             java.util.Collection<qupath.lib.objects.PathObject> tiles,
             double[] predictedStageXY,
             java.awt.geom.AffineTransform estimate) {
-        if (!qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
-                || qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide()) {
+        if (!qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isArmed()
+                || qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isOverriddenThisSlide()) {
             return null;
         }
         double[] hint = tissueDirectionHint(tiles, predictedStageXY, estimate);

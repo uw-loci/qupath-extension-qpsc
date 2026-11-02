@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import javafx.scene.Node;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
 
 /**
  * Core extensibility interface for the QPSC modality plugin system.
@@ -728,7 +728,7 @@ public interface ModalityHandler {
         if (channelId == null || channelId.isEmpty()) {
             return Optional.empty();
         }
-        var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(
+        var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(
                 qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty());
         String profileName = mgr.findFirstProfileForModality(modality);
         if (profileName == null) {

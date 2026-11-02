@@ -16,11 +16,11 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeReadiness.Check;
 import qupath.ext.qpsc.ui.DialogOwner;
-import qupath.ext.qpsc.ui.SaturationSummaryDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.ui.acquisition.SaturationSummaryDialog;
 
 /**
  * The reminder an LC-PolScope acquisition shows before the stage locks: calibrate the liquid

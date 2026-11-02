@@ -3,6 +3,7 @@ package qupath.ext.qpsc.utilities;
 import static org.junit.jupiter.api.Assertions.*;
 
 import org.junit.jupiter.api.Test;
+import qupath.ext.qpsc.focus.FocusProfileAnalysis;
 
 /**
  * The two-position validation: one scan over tissue, one over bare slide at the same Z range.

@@ -21,6 +21,9 @@ import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.DumperOptions;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.ModalityHandler;
@@ -29,11 +32,8 @@ import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.ui.BackgroundCollectionController;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.BackgroundProfiles;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
+import qupath.ext.qpsc.ui.background.BackgroundCollectionController;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.fx.dialogs.Dialogs;
 
@@ -509,7 +509,7 @@ public class BackgroundCollectionWorkflow {
                             bgResult.appliedLampIntensity(),
                             bgResult.lampDeviceLabel());
             Platform.runLater(() -> Dialogs.showInfoNotification("Background Collection Complete", summary));
-            qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
+            qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
 
         } catch (Exception e) {
             logger.error("Background acquisition failed", e);
@@ -610,7 +610,7 @@ public class BackgroundCollectionWorkflow {
                             bgResult.channelExposures(),
                             bgResult.channelIntensities());
             Platform.runLater(() -> Dialogs.showInfoNotification("Background Collection Complete", summary));
-            qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
+            qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
         } catch (Exception e) {
             logger.error("Channel background acquisition failed", e);
             Platform.runLater(() -> UserErrors.show(

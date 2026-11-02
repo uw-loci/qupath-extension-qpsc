@@ -9,6 +9,11 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
+import qupath.ext.qpsc.background.BackgroundIlluminationCheck;
+import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.FlatfieldMethod;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 
 /**

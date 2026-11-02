@@ -58,22 +58,22 @@ import javafx.stage.Window;
 import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.acquisition.StagePositionManager;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.modality.LiveCameraHost;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.VirtualJoystick;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.StagePositionManager;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
@@ -733,7 +733,7 @@ public class StageControlPanel extends VBox {
                         + "stage polarity and camera orientation preferences.");
         calibrateTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(calibrateDirectionsBtn, calibrateTooltip);
-        calibrateDirectionsBtn.setOnAction(e -> qupath.ext.qpsc.ui.StageDirectionCalibrationDialog.show(
+        calibrateDirectionsBtn.setOnAction(e -> qupath.ext.qpsc.ui.alignment.StageDirectionCalibrationDialog.show(
                 calibrateDirectionsBtn.getScene() == null
                         ? null
                         : calibrateDirectionsBtn.getScene().getWindow()));
@@ -2114,7 +2114,7 @@ public class StageControlPanel extends VBox {
                         Thread writer = new Thread(
                                 () -> {
                                     try {
-                                        var result = qupath.ext.qpsc.utilities.ConfigYamlEditor.setProfileScalar(
+                                        var result = qupath.ext.qpsc.config.ConfigYamlEditor.setProfileScalar(
                                                 java.nio.file.Paths.get(configPath),
                                                 profileKey,
                                                 "illumination_intensity",
@@ -2275,7 +2275,7 @@ public class StageControlPanel extends VBox {
                             qupath.ext.qpsc.modality.Channel ch = entry.getValue();
                             Double exp = expSnap.get(id);
                             if (exp != null) {
-                                var r = qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelExposureMs(
+                                var r = qupath.ext.qpsc.config.ConfigYamlEditor.setChannelExposureMs(
                                         path, modality, id, exp);
                                 if (r.changed) writes++;
                                 summary.append(id)
@@ -2288,7 +2288,7 @@ public class StageControlPanel extends VBox {
                                 String valueStr = (intensity == Math.floor(intensity) && !Double.isInfinite(intensity))
                                         ? Long.toString((long) (double) intensity)
                                         : Double.toString(intensity);
-                                var r = qupath.ext.qpsc.utilities.ConfigYamlEditor.setChannelDevicePropertyValue(
+                                var r = qupath.ext.qpsc.config.ConfigYamlEditor.setChannelDevicePropertyValue(
                                         path,
                                         modality,
                                         id,
@@ -4540,7 +4540,7 @@ public class StageControlPanel extends VBox {
             double screenDx = step * xDir;
             double screenDy = step * (-yDir);
             double[] mmDelta =
-                    qupath.ext.qpsc.utilities.StageImageTransform.current().screenPanDeltaToMmDelta(screenDx, screenDy);
+                    qupath.ext.qpsc.geometry.StageImageTransform.current().screenPanDeltaToMmDelta(screenDx, screenDy);
             if (!sampleMode) {
                 mmDelta[0] = -mmDelta[0];
             }
@@ -4597,7 +4597,7 @@ public class StageControlPanel extends VBox {
             // StageImageTransform. Sample mode inverts X on top.
             boolean sampleMode = sampleMovementMode.get();
             double[] mmDelta =
-                    qupath.ext.qpsc.utilities.StageImageTransform.current().screenPanDeltaToMmDelta(deltaX, deltaY);
+                    qupath.ext.qpsc.geometry.StageImageTransform.current().screenPanDeltaToMmDelta(deltaX, deltaY);
             if (!sampleMode) {
                 mmDelta[0] = -mmDelta[0];
             }

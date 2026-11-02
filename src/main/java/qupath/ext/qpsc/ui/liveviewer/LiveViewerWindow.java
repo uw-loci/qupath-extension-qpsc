@@ -46,6 +46,9 @@ import javafx.stage.Stage;
 import javax.imageio.ImageIO;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.acquisition.StagePositionManager;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.config.ObjectiveUtils;
 import qupath.ext.qpsc.controller.AutofocusEditorWorkflow;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
@@ -55,13 +58,11 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.autofocus.AutofocusEvent;
 import qupath.ext.qpsc.service.autofocus.AutofocusFeed;
+import qupath.ext.qpsc.service.microscope.FrameData;
 import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.ObjectiveUtils;
-import qupath.ext.qpsc.utilities.StagePositionManager;
 import qupath.lib.gui.QuPathGUI;
 
 /**
@@ -2181,8 +2182,8 @@ public class LiveViewerWindow {
                             stageControlPanel.getZBarPanel().getFocusTrace().clear();
                         }
                     }
-                    double metric = qupath.ext.qpsc.utilities.FocusMetricCalculator.brennerGradient(frame);
-                    double spread = qupath.ext.qpsc.utilities.FocusMetricCalculator.p98MinusP2(frame);
+                    double metric = qupath.ext.qpsc.focus.FocusMetricCalculator.brennerGradient(frame);
+                    double spread = qupath.ext.qpsc.focus.FocusMetricCalculator.p98MinusP2(frame);
                     double z = MicroscopeController.getInstance().getStageZFast();
                     stageControlPanel.getZBarPanel().getFocusTrace().addSample(z, metric, spread);
                 } catch (Exception e) {
@@ -2439,8 +2440,7 @@ public class LiveViewerWindow {
         // center"), so unlike the arrow/joystick controls it does NOT
         // apply the sample-movement inversion -- the sample must always
         // move toward the clicked point.
-        qupath.ext.qpsc.utilities.StageImageTransform transform =
-                qupath.ext.qpsc.utilities.StageImageTransform.current();
+        qupath.ext.qpsc.geometry.StageImageTransform transform = qupath.ext.qpsc.geometry.StageImageTransform.current();
 
         // Final variables for use in background thread
         final int finalSrcW = srcW;

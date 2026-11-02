@@ -2139,16 +2139,16 @@ public class PersistentPreferences {
     // How non-PPM (monochrome) acquisitions are corrected. JAI/PPM uses a WB-mode selector that
     // implicitly controls background correction; monochrome needs its own choice.
     private static final StringProperty flatfieldMethod = PathPrefs.createPersistentPreference(
-            "flatfieldMethod", qupath.ext.qpsc.utilities.FlatfieldMethod.BACKGROUND.name());
+            "flatfieldMethod", qupath.ext.qpsc.background.FlatfieldMethod.BACKGROUND.name());
 
     private static final StringProperty flatfieldProfileFolder =
             PathPrefs.createPersistentPreference("flatfieldProfileFolder", "");
 
-    public static qupath.ext.qpsc.utilities.FlatfieldMethod getFlatfieldMethod() {
-        return qupath.ext.qpsc.utilities.FlatfieldMethod.fromName(flatfieldMethod.get());
+    public static qupath.ext.qpsc.background.FlatfieldMethod getFlatfieldMethod() {
+        return qupath.ext.qpsc.background.FlatfieldMethod.fromName(flatfieldMethod.get());
     }
 
-    public static void setFlatfieldMethod(qupath.ext.qpsc.utilities.FlatfieldMethod method) {
+    public static void setFlatfieldMethod(qupath.ext.qpsc.background.FlatfieldMethod method) {
         flatfieldMethod.set(method.name());
     }
 

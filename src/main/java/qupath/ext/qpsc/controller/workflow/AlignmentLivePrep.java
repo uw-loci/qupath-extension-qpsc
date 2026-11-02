@@ -168,8 +168,8 @@ public final class AlignmentLivePrep {
             java.util.function.Consumer<Boolean> setReady,
             Runnable onHardBlock) {
 
-        boolean automatic = qupath.ext.qpsc.ui.AutoAdvanceController.isArmed()
-                && !qupath.ext.qpsc.ui.AutoAdvanceController.isOverriddenThisSlide();
+        boolean automatic = qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isArmed()
+                && !qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.isOverriddenThisSlide();
 
         // Nothing can be captured until the rig state is known -- in automatic mode especially,
         // where the very next thing to happen would be an unattended stage move.
@@ -184,7 +184,7 @@ public final class AlignmentLivePrep {
         String detector = null;
         String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath != null && !configPath.isBlank()) {
-            var mgr = qupath.ext.qpsc.utilities.MicroscopeConfigManager.getInstance(configPath);
+            var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(configPath);
             objective = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getCurrentObjective(mgr);
             detector = mgr.getActiveDetector();
         }

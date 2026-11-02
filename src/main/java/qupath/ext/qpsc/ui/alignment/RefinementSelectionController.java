@@ -1,0 +1,439 @@
+package qupath.ext.qpsc.ui.alignment;
+
+import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.Modality;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.acquisition.AutoAdvanceController;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.lib.gui.QuPathGUI;
+
+/**
+ * Controller for selecting alignment refinement options.
+ *
+ * <p>This dialog consolidates all refinement-related choices into a single
+ * unified interface with confidence-based recommendations. It replaces:
+ * <ul>
+ *   <li>Refinement checkbox in AlignmentSelectionController</li>
+ *   <li>3-button dialog in AlignmentHelper.checkForSlideAlignment()</li>
+ *   <li>Scattered refinement options in SingleTileRefinement</li>
+ * </ul>
+ *
+ * <p>The dialog shows alignment confidence and provides intelligent
+ * recommendations based on the confidence level:
+ * <ul>
+ *   <li>High confidence ({@literal >}0.8): Recommend proceeding without refinement</li>
+ *   <li>Medium confidence (0.5-0.8): Recommend single-tile refinement</li>
+ *   <li>Low confidence ({@literal <}0.5): Recommend full manual alignment</li>
+ * </ul>
+ */
+public class RefinementSelectionController {
+    private static final Logger logger = LoggerFactory.getLogger(RefinementSelectionController.class);
+
+    // Confidence thresholds for recommendations
+    private static final double HIGH_CONFIDENCE_THRESHOLD = 0.8;
+    private static final double MEDIUM_CONFIDENCE_THRESHOLD = 0.5;
+
+    /**
+     * Enumeration of refinement choices available to the user.
+     */
+    public enum RefinementChoice {
+        /** Proceed directly without any refinement */
+        NONE("Proceed without refinement"),
+        /** Verify position with a single tile acquisition (translation-only correction) */
+        SINGLE_TILE("Single-tile refinement"),
+        /** Correct rotation + scale from 2+ measured tiles (for slide play in a holder slot) */
+        MULTI_TILE("Multi-tile refinement"),
+        /** Start completely fresh with full manual alignment */
+        FULL_MANUAL("Full manual alignment");
+
+        private final String displayName;
+
+        RefinementChoice(String displayName) {
+            this.displayName = displayName;
+        }
+
+        public String getDisplayName() {
+            return displayName;
+        }
+    }
+
+    /**
+     * Result from the refinement selection dialog.
+     *
+     * @param choice The user's selected refinement option
+     * @param wasAutoSelected Whether the choice was auto-selected based on confidence
+     */
+    public record RefinementResult(RefinementChoice choice, boolean wasAutoSelected) {}
+
+    /**
+     * Information about the current alignment state.
+     *
+     * @param confidence Confidence score (0.0-1.0) of the alignment
+     * @param source Description of alignment source (e.g., "Slide-specific", "General")
+     * @param transformName Name of the transform being used
+     */
+    public record AlignmentInfo(double confidence, String source, String transformName) {
+        /**
+         * Creates alignment info with default medium confidence.
+         */
+        public static AlignmentInfo withDefaults(String source, String transformName) {
+            return new AlignmentInfo(0.7, source, transformName);
+        }
+
+        /**
+         * Returns the confidence level category.
+         */
+        public String getConfidenceLevel() {
+            if (confidence >= HIGH_CONFIDENCE_THRESHOLD) {
+                return "HIGH";
+            } else if (confidence >= MEDIUM_CONFIDENCE_THRESHOLD) {
+                return "MEDIUM";
+            } else {
+                return "LOW";
+            }
+        }
+    }
+
+    /**
+     * Shows the refinement selection dialog.
+     *
+     * @param gui The QuPath GUI instance
+     * @param alignmentInfo Information about the current alignment
+     * @return CompletableFuture with the user's choice, or null if canceled
+     */
+    public static CompletableFuture<RefinementResult> showDialog(QuPathGUI gui, AlignmentInfo alignmentInfo) {
+
+        logger.info(
+                "Showing refinement selection dialog - confidence: {}, source: {}",
+                String.format("%.2f", alignmentInfo.confidence()),
+                alignmentInfo.source());
+
+        CompletableFuture<RefinementResult> future = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            try {
+                Dialog<RefinementResult> dialog = new Dialog<>();
+                // Modality downgraded from APPLICATION_MODAL to NONE: this is a
+                // future-gated pick-a-mode step, not a destructive confirm, so it must
+                // not grab app-wide input and block the multi-slide panel's Abort All.
+                dialog.initModality(Modality.NONE);
+                // TODO(increment: owner=panel) owner is the QuPath main window for now;
+                // thread the consolidated MS panel Stage here once reachable to co-float.
+                if (gui != null && gui.getStage() != null) {
+                    dialog.initOwner(gui.getStage());
+                }
+                dialog.setTitle("Alignment Refinement");
+                dialog.setHeaderText("Choose refinement level for alignment");
+                dialog.setGraphic(DocumentationHelper.createHelpButton("existingImage"));
+                dialog.setResizable(true);
+
+                VBox content = new VBox(15);
+                content.setPadding(new Insets(20));
+                content.setPrefWidth(500);
+
+                // Alignment info section
+                VBox infoSection = createAlignmentInfoSection(alignmentInfo);
+
+                // Question header
+                Label questionLabel = new Label("How would you like to proceed?");
+                questionLabel.setStyle("-fx-font-size: 13px; -fx-font-weight: bold;");
+
+                // Radio button options
+                ToggleGroup toggleGroup = new ToggleGroup();
+
+                VBox optionsBox = new VBox(12);
+                optionsBox.setPadding(new Insets(0, 0, 0, 10));
+
+                // Option 1: No refinement
+                RadioButton noRefineRadio = new RadioButton();
+                noRefineRadio.setTooltip(new Tooltip("Skip refinement and use the existing alignment directly.\n"
+                        + "Fastest option but least accurate (+/- 20 um).\n"
+                        + "Best for high-confidence alignments."));
+                VBox noRefineOption = createOptionCard(
+                        noRefineRadio,
+                        "Proceed without refinement",
+                        "Fastest option - use existing alignment as-is",
+                        "Accuracy: +/- 20 um | Time: No additional time",
+                        toggleGroup);
+
+                // Option 2: Single-tile refinement
+                RadioButton singleTileRadio = new RadioButton();
+                singleTileRadio.setTooltip(
+                        new Tooltip("Acquire a single tile at the expected position to verify alignment.\n"
+                                + "Allows fine-tuning the offset before full acquisition (+/- 5 um).\n"
+                                + "Recommended for medium-confidence alignments."));
+                VBox singleTileOption = createOptionCard(
+                        singleTileRadio,
+                        "Single-tile refinement",
+                        "Acquire one tile to verify and adjust position",
+                        "Accuracy: +/- 5 um | Time: +2-3 minutes",
+                        toggleGroup);
+
+                // Option 2b: Multi-tile refinement (corrects rotation + scale)
+                RadioButton multiTileRadio = new RadioButton();
+                multiTileRadio.setTooltip(
+                        new Tooltip("Acquire tiles at 2+ spread positions and solve a rotation + scale correction.\n"
+                                + "Fixes a slide that has shifted/rotated in its holder slot -- which single-tile\n"
+                                + "(offset only) cannot. Faster than full manual; starts from the current alignment."));
+                VBox multiTileOption = createOptionCard(
+                        multiTileRadio,
+                        "Multi-tile refinement",
+                        "Acquire 2+ tiles to correct rotation and scale (slide play in a slot)",
+                        "Accuracy: +/- 3 um | Time: +4-6 minutes",
+                        toggleGroup);
+
+                // Option 3: Full manual alignment
+                RadioButton fullManualRadio = new RadioButton();
+                fullManualRadio.setTooltip(
+                        new Tooltip("Discard the current alignment and start a fresh manual alignment\n"
+                                + "using multiple reference points. Most accurate (+/- 2 um) but\n"
+                                + "takes the longest. Recommended for low-confidence alignments."));
+                VBox fullManualOption = createOptionCard(
+                        fullManualRadio,
+                        "Start manual alignment over",
+                        "Complete re-alignment with multiple points",
+                        "Accuracy: +/- 2 um | Time: +10-15 minutes",
+                        toggleGroup);
+
+                optionsBox.getChildren().addAll(noRefineOption, singleTileOption, multiTileOption, fullManualOption);
+
+                // Auto-select based on confidence
+                RefinementChoice recommendedChoice = getRecommendedChoice(alignmentInfo.confidence());
+                boolean autoSelected = true;
+
+                switch (recommendedChoice) {
+                    case NONE -> noRefineRadio.setSelected(true);
+                    case SINGLE_TILE -> singleTileRadio.setSelected(true);
+                    case MULTI_TILE -> multiTileRadio.setSelected(true);
+                    case FULL_MANUAL -> fullManualRadio.setSelected(true);
+                }
+
+                // Try to restore last user preference (overrides auto-selection)
+                String lastChoice = PersistentPreferences.getLastRefinementChoice();
+                if (!lastChoice.isEmpty()) {
+                    try {
+                        RefinementChoice savedChoice = RefinementChoice.valueOf(lastChoice);
+                        switch (savedChoice) {
+                            case NONE -> noRefineRadio.setSelected(true);
+                            case SINGLE_TILE -> singleTileRadio.setSelected(true);
+                            case MULTI_TILE -> multiTileRadio.setSelected(true);
+                            case FULL_MANUAL -> fullManualRadio.setSelected(true);
+                        }
+                        autoSelected = false;
+                    } catch (IllegalArgumentException e) {
+                        logger.debug("Invalid saved refinement choice: {}", lastChoice);
+                    }
+                }
+
+                // Recommendation label
+                Label recommendationLabel = createRecommendationLabel(alignmentInfo.confidence(), recommendedChoice);
+
+                content.getChildren()
+                        .addAll(
+                                infoSection,
+                                new Separator(),
+                                questionLabel,
+                                optionsBox,
+                                new Separator(),
+                                recommendationLabel);
+
+                // Dialog buttons
+                ButtonType continueButton = new ButtonType("Continue", ButtonBar.ButtonData.OK_DONE);
+                ButtonType backButton = new ButtonType("Back", ButtonBar.ButtonData.BACK_PREVIOUS);
+                dialog.getDialogPane().getButtonTypes().addAll(continueButton, backButton);
+
+                dialog.getDialogPane().setContent(content);
+
+                // Track if user changes selection away from the auto-selected one
+                final boolean[] wasAutoSelected = {autoSelected};
+                toggleGroup.selectedToggleProperty().addListener((obs, old, newVal) -> {
+                    wasAutoSelected[0] = false;
+                });
+
+                // Result converter
+                dialog.setResultConverter(buttonType -> {
+                    if (buttonType == continueButton) {
+                        RefinementChoice choice;
+                        if (noRefineRadio.isSelected()) {
+                            choice = RefinementChoice.NONE;
+                        } else if (singleTileRadio.isSelected()) {
+                            choice = RefinementChoice.SINGLE_TILE;
+                        } else if (multiTileRadio.isSelected()) {
+                            choice = RefinementChoice.MULTI_TILE;
+                        } else {
+                            choice = RefinementChoice.FULL_MANUAL;
+                        }
+
+                        // Save preference
+                        PersistentPreferences.setLastRefinementChoice(choice.name());
+                        logger.info("User selected refinement: {} (auto-selected: {})", choice, wasAutoSelected[0]);
+
+                        return new RefinementResult(choice, wasAutoSelected[0]);
+                    } else if (buttonType == backButton) {
+                        logger.info("User pressed Back - returning to previous step");
+                        return null; // Signals to go back
+                    }
+                    return null;
+                });
+
+                // Multi-slide auto-advance: no-op unless a batch armed an automatic mode.
+                AutoAdvanceController.attach(dialog, continueButton);
+                dialog.showAndWait().ifPresent(future::complete);
+                if (!future.isDone()) {
+                    future.complete(null);
+                }
+
+            } catch (Exception e) {
+                logger.error("Error showing refinement selection dialog", e);
+                future.completeExceptionally(e);
+            }
+        });
+
+        return future;
+    }
+
+    /**
+     * Creates the alignment info section showing confidence and source.
+     */
+    private static VBox createAlignmentInfoSection(AlignmentInfo info) {
+        VBox section = new VBox(8);
+        section.setPadding(new Insets(12));
+        section.setStyle("-fx-background-color: " + "ladder(-fx-background, #303334 49%, #F5F5F5 50%)"
+                + "; -fx-background-radius: 4;");
+
+        // Confidence display with color coding
+        HBox confidenceRow = new HBox(10);
+        confidenceRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label confidenceLabel = new Label("Alignment Confidence:");
+        confidenceLabel.setStyle("-fx-font-weight: bold;");
+
+        String confidenceLevel = info.getConfidenceLevel();
+        Label confidenceValue = new Label(String.format("%s (%.0f%%)", confidenceLevel, info.confidence() * 100));
+
+        // Color code based on confidence
+        String confidenceColor;
+        if (info.confidence() >= HIGH_CONFIDENCE_THRESHOLD) {
+            confidenceColor = "#2E7D32"; // Green
+        } else if (info.confidence() >= MEDIUM_CONFIDENCE_THRESHOLD) {
+            confidenceColor = "#F57F17"; // Amber
+        } else {
+            confidenceColor = "#C62828"; // Red
+        }
+        confidenceValue.setStyle("-fx-font-weight: bold; -fx-text-fill: " + confidenceColor + ";");
+
+        confidenceRow.getChildren().addAll(confidenceLabel, confidenceValue);
+
+        // Source info
+        Label sourceLabel = new Label("Source: " + info.source());
+        sourceLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        // Transform name if available
+        Label transformLabel = new Label("Transform: " + info.transformName());
+        transformLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+
+        section.getChildren().addAll(confidenceRow, sourceLabel, transformLabel);
+
+        return section;
+    }
+
+    /**
+     * Creates an option card with radio button, title, description, and metrics.
+     */
+    private static VBox createOptionCard(
+            RadioButton radio, String title, String description, String metrics, ToggleGroup group) {
+        radio.setToggleGroup(group);
+
+        VBox card = new VBox(4);
+        card.setPadding(new Insets(10));
+        card.setStyle("-fx-background-color: " + "ladder(-fx-background, #2F3234 49%, #FAFAFA 50%)"
+                + "; -fx-background-radius: 4; " + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
+
+        // Title row with radio button
+        HBox titleRow = new HBox(8);
+        titleRow.setAlignment(Pos.CENTER_LEFT);
+
+        Label titleLabel = new Label(title);
+        titleLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+
+        titleRow.getChildren().addAll(radio, titleLabel);
+
+        // Description
+        Label descLabel = new Label(description);
+        descLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        descLabel.setPadding(new Insets(0, 0, 0, 24)); // Indent under radio
+
+        // Metrics
+        Label metricsLabel = new Label(metrics);
+        metricsLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+        metricsLabel.setPadding(new Insets(0, 0, 0, 24)); // Indent under radio
+
+        card.getChildren().addAll(titleRow, descLabel, metricsLabel);
+
+        // Make entire card clickable
+        card.setOnMouseClicked(e -> radio.setSelected(true));
+        card.setCursor(javafx.scene.Cursor.HAND);
+
+        // Visual feedback for selection
+        radio.selectedProperty().addListener((obs, old, selected) -> {
+            if (selected) {
+                card.setStyle("-fx-background-color: " + "ladder(-fx-background, #1A2A3A 49%, #E3F2FD 50%)"
+                        + "; -fx-background-radius: 4; "
+                        + "-fx-border-color: #1976D2; -fx-border-width: 2; -fx-border-radius: 4;");
+            } else {
+                card.setStyle("-fx-background-color: " + "ladder(-fx-background, #2F3234 49%, #FAFAFA 50%)"
+                        + "; -fx-background-radius: 4; " + "-fx-border-color: #E0E0E0; -fx-border-radius: 4;");
+            }
+        });
+
+        return card;
+    }
+
+    /**
+     * Gets the recommended refinement choice based on confidence.
+     */
+    private static RefinementChoice getRecommendedChoice(double confidence) {
+        if (confidence >= HIGH_CONFIDENCE_THRESHOLD) {
+            return RefinementChoice.NONE;
+        } else if (confidence >= MEDIUM_CONFIDENCE_THRESHOLD) {
+            return RefinementChoice.SINGLE_TILE;
+        } else {
+            return RefinementChoice.FULL_MANUAL;
+        }
+    }
+
+    /**
+     * Creates a recommendation label with explanation.
+     */
+    private static Label createRecommendationLabel(double confidence, RefinementChoice recommended) {
+        Label label = new Label();
+        label.setWrapText(true);
+        label.setPadding(new Insets(10));
+        label.setStyle("-fx-background-color: " + "ladder(-fx-background, #3A3000 49%, #FFF8E1 50%)"
+                + "; -fx-background-radius: 4; -fx-font-size: 11px;");
+
+        String reason;
+        if (confidence >= HIGH_CONFIDENCE_THRESHOLD) {
+            reason = "High confidence alignments rarely need refinement";
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.SUCCESS + ";");
+        } else if (confidence >= MEDIUM_CONFIDENCE_THRESHOLD) {
+            reason = "Medium confidence - single-tile verification recommended";
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.WARNING + ";");
+        } else {
+            reason = "Low confidence - full re-alignment recommended for accuracy";
+            label.setStyle(label.getStyle() + " -fx-text-fill: " + ThemeColors.ERROR + ";");
+        }
+
+        label.setText("[i] Recommendation: " + recommended.getDisplayName() + "\n    (" + reason + ")");
+
+        return label;
+    }
+}

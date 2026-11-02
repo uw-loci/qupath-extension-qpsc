@@ -10,12 +10,12 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.geometry.CameraOrientation;
+import qupath.ext.qpsc.geometry.StagePolarity;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.CameraOrientation;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
-import qupath.ext.qpsc.utilities.StagePolarity;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -64,7 +64,7 @@ public class QPPreferenceDialog {
     // image is oriented relative to the sample frame. Distinct from stage polarity
     // (which is hardware wiring) and distinct from macro-image flip (which is a
     // property of loaded overview images). Stored as a string to persist the enum
-    // name across sessions; parsed into a {@link qupath.ext.qpsc.utilities.CameraOrientation}
+    // name across sessions; parsed into a {@link qupath.ext.qpsc.geometry.CameraOrientation}
     // in {@link #getCameraOrientationProperty()}.
     private static final StringProperty cameraOrientationProperty =
             PathPrefs.createPersistentPreference("cameraOrientationProperty", "NORMAL");
@@ -1208,7 +1208,7 @@ public class QPPreferenceDialog {
     private static boolean isTileRegistrationSupported() {
         try {
             Class.forName(
-                    qupath.ext.qpsc.utilities.TileRegistrationSupport.PROBE_CLASS,
+                    qupath.ext.qpsc.stitching.TileRegistrationSupport.PROBE_CLASS,
                     false,
                     QPPreferenceDialog.class.getClassLoader());
             return true;

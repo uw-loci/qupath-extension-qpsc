@@ -6,6 +6,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode;
+import qupath.ext.qpsc.ui.acquisition.AutoAdvanceController;
 
 /**
  * Session semantics of {@link AutoAdvanceController} -- the arm / per-slide-override /

@@ -638,7 +638,7 @@ You will need to modify the Python code if your new hardware requires:
 | Hardware control (Python)        | microscope_control          | `hardware/pycromanager.py`               |
 | Server command routing (Python)  | microscope_command_server   | `server/qp_server.py`                    |
 | Acquisition workflows (Python)   | microscope_command_server   | `acquisition/workflow.py`                |
-| QuPath extension (Java)          | qupath-extension-qpsc       | `utilities/MicroscopeConfigManager.java` |
+| QuPath extension (Java)          | qupath-extension-qpsc       | `config/MicroscopeConfigManager.java` |
 
 For most new-hardware scenarios, you only need to update the YAML config files. Python or Java changes are only necessary if the new hardware requires behavior not already supported by the existing abstractions.
 

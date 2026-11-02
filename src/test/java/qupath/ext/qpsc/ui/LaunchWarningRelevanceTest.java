@@ -31,7 +31,7 @@ class LaunchWarningRelevanceTest {
 
     @Test
     void theWizardDoesNotWarnAboutWhiteBalanceModesBeforeOneIsChosen() throws IOException {
-        String wizard = read(MAIN.resolve("ui/AcquisitionWizardDialog.java"));
+        String wizard = read(MAIN.resolve("ui/acquisition/AcquisitionWizardDialog.java"));
         String body = method(wizard, "private boolean confirmCalibrationStatus(boolean needsAlignment)");
         assertFalse(body.contains("CalibrationChecker.checkWhiteBalance("), "no white balance roll-up at launch");
         assertFalse(body.contains("CalibrationChecker.checkBackgroundCorrection("), "no background roll-up at launch");
@@ -53,7 +53,7 @@ class LaunchWarningRelevanceTest {
 
     @Test
     void theChosenModeCheckLooksAtThatModeAlone() throws IOException {
-        String checker = read(MAIN.resolve("ui/CalibrationChecker.java"));
+        String checker = read(MAIN.resolve("ui/calibration/CalibrationChecker.java"));
         String body = method(checker, "public static java.util.List<String> problemsForChosenWbMode(");
         assertTrue(body.contains("label.equals(mode.label())"), "filters the per-mode breakdown to the chosen mode");
     }

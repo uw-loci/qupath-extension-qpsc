@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.stitching.TileProcessingUtilities;
 
 /** Cleaning up tiles must not remove the backgrounds a run depends on. */
 class ProtectedFolderTest {

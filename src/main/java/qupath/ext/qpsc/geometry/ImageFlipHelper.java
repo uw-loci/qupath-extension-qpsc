@@ -1,0 +1,861 @@
+package qupath.ext.qpsc.geometry;
+
+import java.awt.geom.AffineTransform;
+import java.awt.image.BufferedImage;
+import java.io.File;
+import java.util.ArrayList;
+import java.util.List;
+import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import javafx.beans.value.ChangeListener;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.controller.ForwardPropagationWorkflow;
+import qupath.ext.qpsc.geometry.lightpath.LightPath;
+import qupath.ext.qpsc.geometry.lightpath.LightPathSnapshot;
+import qupath.ext.qpsc.geometry.lightpath.Parity;
+import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.utilities.AffineTransformManager;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
+import qupath.lib.gui.QuPathGUI;
+import qupath.lib.images.ImageData;
+import qupath.lib.objects.PathObject;
+import qupath.lib.objects.PathObjectTools;
+import qupath.lib.objects.hierarchy.PathObjectHierarchy;
+import qupath.lib.projects.Project;
+import qupath.lib.projects.ProjectImageEntry;
+
+/**
+ * Ensures a `(flipped X|Y|XY)` sibling entry exists for the currently-open
+ * project entry whenever the active `(source_scanner, target_microscope)`
+ * preset says a macro flip is needed, and switches the QuPath viewer to
+ * that sibling.
+ *
+ * <p>The flipped sibling is required for the visual UX of the alignment
+ * step: during single-tile refinement and 3-point alignment the operator
+ * compares the QuPath display to the live camera view, and on scopes
+ * with an optical flip (e.g. PPM) the unflipped Ocus40 H&E and the live
+ * camera view disagree by a mirror -- impossible to align by eye.
+ *
+ * <p>The **source of truth** for flip state is
+ * `TransformPreset.flipMacroX/Y` (per `(source_scanner, target_microscope)`
+ * preset) and the per-slide alignment JSON, not per-entry `FLIP_X`/`FLIP_Y`
+ * metadata. This class resolves flip from the preset. The
+ * `(flipped XY)` sibling is created for visual UX only -- it is not
+ * authoritative for flip state.
+ */
+public final class ImageFlipHelper {
+
+    private static final Logger logger = LoggerFactory.getLogger(ImageFlipHelper.class);
+
+    private ImageFlipHelper() {}
+
+    /**
+     * Resolve flip from the active preset for the open entry's source
+     * scanner and the active microscope, then ensure a flipped sibling
+     * exists and is the open entry. Completes with {@code true} on
+     * success (whether or not a flip was needed).
+     */
+    public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
+            QuPathGUI gui, Project<BufferedImage> project, String sampleName) {
+        return ensureFlippedSiblingIfNeeded(gui, project, sampleName, null, null);
+    }
+
+    /**
+     * Caller-resolved flip overload. Used by paths that already know the
+     * flip state out-of-band (e.g. preset rebuild). The preset-driven
+     * resolution is bypassed; the explicit flags are taken as truth.
+     */
+    public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            String sampleName,
+            boolean explicitFlipX,
+            boolean explicitFlipY) {
+        return ensureFlippedSiblingIfNeeded(gui, project, sampleName, explicitFlipX, explicitFlipY);
+    }
+
+    /** Sample-result variant -- delegates to the string overload. */
+    public static CompletableFuture<Boolean> validateAndFlipIfNeeded(
+            QuPathGUI gui, Project<BufferedImage> project, SampleSetupResult sample) {
+        return validateAndFlipIfNeeded(gui, project, sample != null ? sample.sampleName() : null);
+    }
+
+    // ---------------------------------------------------------------
+    // Worker
+    // ---------------------------------------------------------------
+
+    private static CompletableFuture<Boolean> ensureFlippedSiblingIfNeeded(
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            String sampleName,
+            Boolean explicitFlipX,
+            Boolean explicitFlipY) {
+
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+
+        if (gui == null || project == null || gui.getImageData() == null) {
+            logger.warn("validateAndFlipIfNeeded: missing gui/project/imageData -- skipping");
+            future.complete(true);
+            return future;
+        }
+
+        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+        if (openEntry == null) {
+            logger.warn("validateAndFlipIfNeeded: open imageData has no project entry -- skipping");
+            future.complete(true);
+            return future;
+        }
+
+        // If the open entry IS already the camera-view companion, nothing to do.
+        // Classified by metadata, not the name.
+        if (ImageMetadataManager.isCameraView(openEntry)) {
+            logger.info(
+                    "validateAndFlipIfNeeded: open entry '{}' is already the camera-view companion -- no-op",
+                    openEntry.getImageName());
+            future.complete(true);
+            return future;
+        }
+
+        // If the open entry is a sub-acquisition (stitched output with xy_offset
+        // metadata and a base_image distinct from its own name), no flipped sibling
+        // applies. Sub-images are pyramid outputs from the active microscope's
+        // camera, so the (source_scanner, target_microscope) preset flip is a
+        // property of the parent macro -- not of the sub-image. Worse,
+        // findFlippedSibling matches by shared base_image, which means a
+        // sub-image and the macro's (flipped XY) companion appear as siblings;
+        // without this guard, the helper switches the open entry from the
+        // sub-image to the macro's flipped companion, dropping all sub-image
+        // annotations.
+        if (isSubAcquisitionEntry(openEntry)) {
+            logger.info(
+                    "validateAndFlipIfNeeded: open entry '{}' is a sub-acquisition -- no-op", openEntry.getImageName());
+            future.complete(true);
+            return future;
+        }
+
+        // Same-scope short-circuit. An image whose source IS the active microscope
+        // (identity transform, no pair preset) or that was acquired on the active
+        // microscope (pixels are already in this scope's frame) needs no flip.
+        // Belt-and-suspenders against stale source_microscope tags from before
+        // the active-microscope-as-source change.
+        //
+        // Skipped when the caller passed explicit flip flags: the caller is
+        // asserting flip state out-of-band (orientation-dialog answer or
+        // preset flipMacroX/Y), and that intent must win. Otherwise a stale
+        // or auto-stamped source_microscope equal to the active scope
+        // silently nullifies a user-requested flip -- the exact failure mode
+        // hit by Microscope Alignment when StageMapWindow.onOpenedImageChanged
+        // auto-stamps the active microscope on a fresh import that actually
+        // came from a different scanner.
+        String entrySource = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+        String entryAcquiredOn = openEntry.getMetadata().get(ImageMetadataManager.ACQUIRED_ON_MICROSCOPE);
+        MicroscopeConfigManager activeMgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        String activeScopeName = (activeMgr != null) ? activeMgr.getMicroscopeName() : null;
+        boolean callerSuppliedFlip = (explicitFlipX != null && explicitFlipY != null);
+        if (!callerSuppliedFlip
+                && activeScopeName != null
+                && !activeScopeName.isBlank()
+                && (activeScopeName.equals(entrySource) || activeScopeName.equals(entryAcquiredOn))) {
+            logger.info(
+                    "validateAndFlipIfNeeded: entry '{}' is in active scope's frame "
+                            + "(source='{}', acquired_on='{}', active='{}') -- no flip",
+                    openEntry.getImageName(),
+                    entrySource,
+                    entryAcquiredOn,
+                    activeScopeName);
+            future.complete(true);
+            return future;
+        }
+
+        // Resolve the flip we need.
+        boolean flipX;
+        boolean flipY;
+        if (explicitFlipX != null && explicitFlipY != null) {
+            flipX = explicitFlipX;
+            flipY = explicitFlipY;
+            logger.info(
+                    "validateAndFlipIfNeeded: using explicit flip flags ({}, {}) for sample='{}'",
+                    flipX,
+                    flipY,
+                    sampleName);
+        } else {
+            // Missing source_microscope on a flip-needing scope: hard-cancel.
+            // Otherwise resolveFlipFromPreset silently returns (false, false) and
+            // the workflow runs against the unflipped macro on a scope that
+            // requires a flip -- the same failure as for entries
+            // that DO carry source_microscope.
+            String src = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            if ((src == null || src.isBlank()) && isActiveScopeFlipNeeding()) {
+                logger.error(
+                        "validateAndFlipIfNeeded: entry '{}' has no SOURCE_MICROSCOPE metadata and the "
+                                + "active microscope requires a flipped sibling; refusing to proceed.",
+                        openEntry.getImageName());
+                showMissingSourceMicroscopeDialog(openEntry.getImageName());
+                // Cancel (not a RuntimeException): the missing-source dialog already informs
+                // the operator. A RuntimeException here reaches the workflow's handleError,
+                // which pops a SECOND "Workflow Error" dialog on top of this one -- two stacked
+                // modal dialogs the user cannot dismiss (locks the app). CancellationException
+                // makes handleError log-and-cleanup silently, leaving just this one dialog.
+                future.completeExceptionally(new java.util.concurrent.CancellationException(
+                        "source_microscope missing on a flip-needing scope"));
+                return future;
+            }
+            boolean[] resolved = resolveFlipFromPreset(openEntry);
+            flipX = resolved[0];
+            flipY = resolved[1];
+        }
+
+        // Compose this slide's PER-SLIDE placement on top of the raw-scanner->camera
+        // parity, so the "(Camera View)" companion matches the LIVE camera for the way
+        // the slide was actually placed. Routed through the LightPath model: placement A
+        // (label-left / as scanned) is identity, B (label-right) is a 180. This is the
+        // only new term vs the historical companion; from here flipX/flipY == companionBake.
+        String insertion = ImageMetadataManager.getSlideInsertion(openEntry);
+        Parity bake = cameraViewBake(openEntry, flipX, flipY);
+        if (bake.flipX() != flipX || bake.flipY() != flipY) {
+            logger.info(
+                    "validateAndFlipIfNeeded: placement '{}' composed onto raw->camera ({},{}) -> bake ({},{})",
+                    insertion,
+                    flipX,
+                    flipY,
+                    bake.flipX(),
+                    bake.flipY());
+        }
+        flipX = bake.flipX();
+        flipY = bake.flipY();
+
+        if (!flipX && !flipY) {
+            logger.info(
+                    "validateAndFlipIfNeeded: entry '{}' needs no camera-view bake (raw->camera identity, "
+                            + "placement A) -- no-op",
+                    openEntry.getImageName());
+            future.complete(true);
+            return future;
+        }
+
+        // Look for an existing flipped sibling of this base entry.
+        ProjectImageEntry<BufferedImage> sibling = findFlippedSibling(project, openEntry, flipX, flipY);
+        List<ProjectImageEntry<BufferedImage>> children = List.of();
+        if (sibling != null && !new Parity(flipX, flipY).equals(builtParity(sibling))) {
+            // There is one companion per base, and its pixels are flipped once, when it is
+            // built. Reusing it for a different flip would only re-stamp its metadata, leaving a
+            // Y-only image labeled X+Y after ticking Y and then X. The companion is
+            // a viewing copy (annotations are mirrored from the base), so replace it, even when
+            // acquisitions were made from it (keeping it would make the orientation dialog reload
+            // the same image on every toggle in a project shared by scopes needing different
+            // flips).
+            // original_image_id is the only reference to a companion by ID, so the children are
+            // repointed to the rebuilt one instead.
+            children = childrenOf(project, sibling);
+            logger.info(
+                    "validateAndFlipIfNeeded: companion '{}' is built with {} but {} is needed; rebuilding it" + "{}",
+                    sibling.getImageName(),
+                    builtParity(sibling),
+                    new Parity(flipX, flipY),
+                    children.isEmpty() ? "" : " and repointing " + children.size() + " acquisition(s) made from it");
+            try {
+                project.removeImage(sibling, true);
+                project.syncChanges();
+            } catch (Exception e) {
+                logger.error("validateAndFlipIfNeeded: could not remove the stale companion", e);
+                future.completeExceptionally(e);
+                return future;
+            }
+            sibling = null;
+        }
+        if (sibling != null) {
+            logger.info(
+                    "validateAndFlipIfNeeded: flipped sibling already exists ({}); switching open entry",
+                    sibling.getImageName());
+            // Re-mirror so the sibling reflects the base's current LIVE annotations
+            // (including any drawn since the sibling was created) and re-runs don't
+            // accumulate duplicates -- the open entry is still the base here.
+            mirrorAnnotationsToSibling(gui, sibling, flipX, flipY);
+            stampCameraViewMetadata(openEntry, sibling, flipX, flipY);
+            syncStamp(project);
+            switchOpenEntry(gui, sibling, future);
+            return future;
+        }
+
+        // No sibling; create one and switch to it.
+        try {
+            logger.info(
+                    "validateAndFlipIfNeeded: creating flipped duplicate of '{}' (flipX={}, flipY={})",
+                    openEntry.getImageName(),
+                    flipX,
+                    flipY);
+            ProjectImageEntry<BufferedImage> created =
+                    QPProjectFunctions.createFlippedDuplicate(project, openEntry, flipX, flipY, sampleName);
+            if (created == null) {
+                logger.warn("validateAndFlipIfNeeded: createFlippedDuplicate returned null");
+                future.complete(false);
+                return future;
+            }
+            // Populate the freshly-created (annotation-free) sibling from the base's
+            // live hierarchy. createFlippedDuplicate does not transfer annotations.
+            mirrorAnnotationsToSibling(gui, created, flipX, flipY);
+            stampCameraViewMetadata(openEntry, created, flipX, flipY);
+            repointChildren(children, created);
+            syncStamp(project);
+            switchOpenEntry(gui, created, future);
+        } catch (Exception e) {
+            logger.error("validateAndFlipIfNeeded: failed to create flipped duplicate", e);
+            future.completeExceptionally(e);
+        }
+        return future;
+    }
+
+    /**
+     * The parity the "(Camera View)" companion of {@code baseEntry} is baked with for the
+     * raw-scanner -> camera flip {@code (flipX, flipY)}: that flip composed with the slide's
+     * per-slide placement.
+     */
+    public static Parity cameraViewBake(ProjectImageEntry<BufferedImage> baseEntry, boolean flipX, boolean flipY) {
+        String insertion = ImageMetadataManager.getSlideInsertion(baseEntry);
+        return LightPath.forActiveScope().companionBake(insertion, new Parity(flipX, flipY));
+    }
+
+    /**
+     * Save the camera-view stamp now. The companion entry itself is already in the project
+     * file; if QuPath then closed without saving, the stamp would be lost, the next run could
+     * not recognize the companion, and it would build another one.
+     */
+    private static void syncStamp(Project<BufferedImage> project) {
+        try {
+            project.syncChanges();
+        } catch (Exception e) {
+            logger.warn("validateAndFlipIfNeeded: could not save the camera-view stamp: {}", e.getMessage());
+        }
+    }
+
+    /** The entries that record {@code entry} as their parent ({@code original_image_id}). */
+    static List<ProjectImageEntry<BufferedImage>> childrenOf(
+            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> entry) {
+        String id = entry.getID();
+        List<ProjectImageEntry<BufferedImage>> out = new java.util.ArrayList<>();
+        for (ProjectImageEntry<BufferedImage> e : project.getImageList()) {
+            if (e != entry && id.equals(ImageMetadataManager.getOriginalImageId(e))) out.add(e);
+        }
+        return out;
+    }
+
+    /** Point every entry in {@code children} at {@code newParent} ({@code original_image_id}). */
+    static void repointChildren(List<ProjectImageEntry<BufferedImage>> children, ProjectImageEntry<?> newParent) {
+        for (ProjectImageEntry<BufferedImage> child : children) {
+            child.getMetadata().put(ImageMetadataManager.ORIGINAL_IMAGE_ID, newParent.getID());
+            logger.info(
+                    "validateAndFlipIfNeeded: '{}' now points at the rebuilt companion '{}'",
+                    child.getImageName(),
+                    newParent.getImageName());
+        }
+    }
+
+    /**
+     * The flip actually built into a companion's pixels, read from its server builder (the
+     * outermost affine transform), falling back to the stamped {@code bakedParity} when the
+     * builder does not expose an axis-aligned transform. The metadata alone is not trusted:
+     * a reused companion can be re-stamped without being rebuilt.
+     */
+    public static Parity builtParity(ProjectImageEntry<BufferedImage> companion) {
+        try {
+            var json = qupath.lib.io.GsonTools.getInstance()
+                    .toJsonTree(companion.getServerBuilder())
+                    .getAsJsonObject();
+            if (json.has("transform")) {
+                var t = json.getAsJsonObject("transform");
+                double m00 = t.get("m00").getAsDouble();
+                double m11 = t.get("m11").getAsDouble();
+                double m01 = t.get("m01").getAsDouble();
+                double m10 = t.get("m10").getAsDouble();
+                if (Math.abs(m01) < 1e-9 && Math.abs(m10) < 1e-9) {
+                    return new Parity(m00 < 0, m11 < 0);
+                }
+            }
+        } catch (Exception e) {
+            logger.debug("builtParity: could not read the server builder of '{}'", companion.getImageName(), e);
+        }
+        return Parity.of(ImageMetadataManager.bakedParity(companion));
+    }
+
+    /**
+     * Resolve `(flipMacroX, flipMacroY)` from the preset that matches
+     * the open entry's source scanner and the currently active
+     * microscope. Returns `(false, false)` if no match is found.
+     *
+     * <p>Public so that save-site code (e.g. `ManualAlignmentPath`) can
+     * record the same flip frame the alignment was actually built in,
+     * matching what `ImageFlipHelper.validateAndFlipIfNeeded` saw at
+     * the time it switched the open entry to the flipped sibling.
+     *
+     * @return a 2-element array {flipMacroX, flipMacroY}.
+     */
+    public static boolean[] resolveRequiredFlipFromPreset(ProjectImageEntry<BufferedImage> openEntry) {
+        return resolveFlipFromPreset(openEntry);
+    }
+
+    /**
+     * Replace the flipped sibling's annotation set with a flip of the base's
+     * <b>live</b> hierarchy.
+     *
+     * <p>The flipped sibling is a derived mirror of the base, not an independent
+     * entry. Its annotations must be a deterministic function of the base's, so
+     * this method <i>replaces</i> rather than appends: it clears the sibling's
+     * existing annotations first, then transfers flip-transformed copies of the
+     * base's annotations. Replacing is what keeps re-runs idempotent (no
+     * accumulating duplicates) and lets an already-duplicated project self-heal
+     * on the next run-from-base.
+     *
+     * <p>The caller passes the base's LIVE hierarchy
+     * ({@code gui.getImageData().getHierarchy()}), not {@code baseEntry.readImageData()}
+     * (the persisted {@code .qpdata} file) -- deliberate: the live hierarchy
+     * carries annotations the user drew but never saved.
+     *
+     * <p>Must be called while the base is still the open entry -- i.e. before
+     * {@link #switchOpenEntry}. Best-effort: a failure is logged, not thrown, so
+     * a mirroring hiccup never aborts the workflow.
+     *
+     * @param baseHierarchy the base entry's live annotation hierarchy
+     * @param siblingEntry the {@code (flipped ...)} entry to repopulate
+     * @param flipX whether the sibling is X-flipped relative to the base
+     * @param flipY whether the sibling is Y-flipped relative to the base
+     * @param baseWidth base image width, for the flip transform
+     * @param baseHeight base image height, for the flip transform
+     */
+    public static void mirrorAnnotationsToSibling(
+            PathObjectHierarchy baseHierarchy,
+            ProjectImageEntry<BufferedImage> siblingEntry,
+            boolean flipX,
+            boolean flipY,
+            int baseWidth,
+            int baseHeight) {
+        if (baseHierarchy == null || siblingEntry == null) {
+            logger.warn("mirrorAnnotationsToSibling: null base hierarchy or sibling entry; skipping");
+            return;
+        }
+        try {
+            ImageData<BufferedImage> sibData = siblingEntry.readImageData();
+            PathObjectHierarchy sibHierarchy = sibData.getHierarchy();
+
+            // Guard: if the base carries no annotations, there is nothing
+            // authoritative to mirror -- so do NOT clear the sibling. In the
+            // multi-slide manual-draw flow the operator draws tissue ROIs
+            // directly on the (rotated)(flipped) sibling (it matches the live
+            // viewer), and those must survive re-entry into
+            // validateAndFlipIfNeeded. Clobbering them here was silent data loss.
+            boolean baseHasAnnotations =
+                    baseHierarchy.getAnnotationObjects().stream().anyMatch(a -> a.getROI() != null);
+            if (!baseHasAnnotations) {
+                logger.info(
+                        "mirrorAnnotationsToSibling: base has no annotations; leaving {} existing "
+                                + "sibling annotation(s) on '{}' untouched (no mirror, no clear)",
+                        sibHierarchy.getAnnotationObjects().size(),
+                        siblingEntry.getImageName());
+                return;
+            }
+
+            // Replace step: clear whatever annotations the sibling currently holds.
+            List<PathObject> stale = new ArrayList<>(sibHierarchy.getAnnotationObjects());
+            if (!stale.isEmpty()) {
+                sibHierarchy.removeObjects(stale, false);
+            }
+
+            // Transfer flip-transformed copies of the base's annotations only
+            // (detections / tiles are workflow scratch, not part of the mirror).
+            AffineTransform flip = ForwardPropagationWorkflow.createFlip(flipX, flipY, baseWidth, baseHeight);
+            List<PathObject> mirrored = new ArrayList<>();
+            for (PathObject ann : baseHierarchy.getAnnotationObjects()) {
+                if (ann.getROI() == null) {
+                    continue;
+                }
+                PathObject copy = PathObjectTools.transformObject(ann, flip, true, true);
+                if (copy != null) {
+                    mirrored.add(copy);
+                }
+            }
+            if (!mirrored.isEmpty()) {
+                sibHierarchy.addObjects(mirrored);
+            }
+            sibHierarchy.fireHierarchyChangedEvent(sibHierarchy.getRootObject());
+            siblingEntry.saveImageData(sibData);
+            logger.info(
+                    "mirrorAnnotationsToSibling: replaced {} stale with {} mirrored annotation(s) on '{}' "
+                            + "(flipX={}, flipY={})",
+                    stale.size(),
+                    mirrored.size(),
+                    siblingEntry.getImageName(),
+                    flipX,
+                    flipY);
+        } catch (Exception e) {
+            logger.warn("mirrorAnnotationsToSibling failed for '{}': {}", siblingEntry.getImageName(), e.getMessage());
+        }
+    }
+
+    /**
+     * Convenience overload: extracts the base's live hierarchy and dimensions from
+     * the GUI's open image and delegates to
+     * {@link #mirrorAnnotationsToSibling(PathObjectHierarchy, ProjectImageEntry, boolean, boolean, int, int)}.
+     */
+    private static void mirrorAnnotationsToSibling(
+            QuPathGUI gui, ProjectImageEntry<BufferedImage> siblingEntry, boolean flipX, boolean flipY) {
+        ImageData<BufferedImage> baseData = gui != null ? gui.getImageData() : null;
+        if (baseData == null || baseData.getHierarchy() == null || baseData.getServer() == null) {
+            logger.warn("mirrorAnnotationsToSibling: no open base image; skipping annotation mirror");
+            return;
+        }
+        mirrorAnnotationsToSibling(
+                baseData.getHierarchy(),
+                siblingEntry,
+                flipX,
+                flipY,
+                baseData.getServer().getWidth(),
+                baseData.getServer().getHeight());
+    }
+
+    /**
+     * Hard-cancel dialog for the missing-{@code source_microscope} gate.
+     * FX-safe, blocking, OK-only.
+     */
+    private static void showMissingSourceMicroscopeDialog(String entryName) {
+        String title = "Source Microscope Missing -- Workflow Canceled";
+        String header = "This entry has no source-scanner metadata.";
+        StringBuilder body = new StringBuilder();
+        body.append(String.format(
+                "The open entry%n  '%s'%nhas no 'source_microscope' metadata, but the active%n"
+                        + "microscope requires a flipped sibling for visual-UX during%n"
+                        + "alignment (one or more saved presets for this scope have%n"
+                        + "flipMacroX or flipMacroY set).%n%n",
+                entryName));
+        body.append("Without source_microscope we cannot resolve which preset's flip\n");
+        body.append("state applies, and the workflow would silently run against the\n");
+        body.append("unflipped macro -- targeting the wrong physical location.\n\n");
+        body.append("To fix, set the source scanner via:\n");
+        body.append("  Extensions -> QP Scope -> Stage Map -> pick the Source, or\n");
+        body.append("  set it in the Multi-Slide assignment dialog, then re-run.\n\n");
+        body.append("This workflow has been canceled.");
+
+        Runnable show = () -> {
+            javafx.scene.control.Alert alert =
+                    new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+            alert.setTitle(title);
+            alert.setHeaderText(header);
+            alert.setContentText(body.toString());
+            alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
+            alert.getDialogPane().setMinWidth(620);
+            alert.getDialogPane().setPrefWidth(720);
+            alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
+            javafx.scene.control.Label contentLabel =
+                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
+            if (contentLabel != null) {
+                contentLabel.setWrapText(true);
+                contentLabel.setMaxWidth(680);
+                contentLabel.setStyle("-fx-font-family: 'monospace';");
+            }
+            javafx.scene.control.Label headerLabel =
+                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".header-panel .label");
+            if (headerLabel != null) {
+                headerLabel.setWrapText(true);
+                headerLabel.setMaxWidth(660);
+            }
+            qupath.ext.qpsc.ui.DialogOwner.own(alert);
+            alert.showAndWait();
+        };
+        if (Platform.isFxApplicationThread()) {
+            // Defer via runLater even on the FX thread: this can be reached while a
+            // project-setup future completes inside an Animation/layout pulse, where
+            // showAndWait is forbidden ("not allowed during animation or layout
+            // processing"). runLater re-dispatches it into a clean pulse. Fire-and-forget
+            // is fine -- the caller refuses to proceed regardless of the dialog result.
+            Platform.runLater(show);
+            return;
+        }
+        java.util.concurrent.FutureTask<Void> task = new java.util.concurrent.FutureTask<>(() -> {
+            show.run();
+            return null;
+        });
+        Platform.runLater(task);
+        try {
+            task.get();
+        } catch (Exception e) {
+            logger.warn("Failed to display missing-source dialog: {}", e.getMessage());
+        }
+    }
+
+    /**
+     * @return {@code true} when any saved preset for the active microscope has
+     *     {@code flipMacroX} or {@code flipMacroY} set to true -- i.e. operating
+     *     on a macro from some scanner on this scope requires building a flipped
+     *     sibling for visual UX. Used as the "is the active scope flip-needing"
+     *     predicate in the missing-{@code source_microscope} hard-cancel gate.
+     */
+    public static boolean isActiveScopeFlipNeeding() {
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String activeMicroscope = mgr != null ? mgr.getMicroscopeName() : null;
+            if (activeMicroscope == null || activeMicroscope.isBlank()) return false;
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isBlank()) return false;
+            AffineTransformManager atm = new AffineTransformManager(new File(configPath).getParent());
+            for (AffineTransformManager.TransformPreset preset : atm.getTransformsForMicroscope(activeMicroscope)) {
+                if (!preset.hasFlipState()) continue;
+                if (Boolean.TRUE.equals(preset.getFlipMacroX()) || Boolean.TRUE.equals(preset.getFlipMacroY())) {
+                    return true;
+                }
+            }
+            return false;
+        } catch (Exception e) {
+            logger.warn("isActiveScopeFlipNeeding: probe failed: {}", e.getMessage());
+            return false;
+        }
+    }
+
+    /**
+     * Resolve `(flipMacroX, flipMacroY)` from the preset that matches
+     * the open entry's source scanner and the currently active
+     * microscope. Returns `(false, false)` if no match is found -- the
+     * caller treats that as "no flip needed".
+     */
+    private static boolean[] resolveFlipFromPreset(ProjectImageEntry<BufferedImage> openEntry) {
+        AffineTransformManager.TransformPreset preset = resolvePresetForEntry(openEntry);
+        if (preset == null || !preset.hasFlipState()) {
+            return new boolean[] {false, false};
+        }
+        boolean flipX = Boolean.TRUE.equals(preset.getFlipMacroX());
+        boolean flipY = Boolean.TRUE.equals(preset.getFlipMacroY());
+        logger.info(
+                "validateAndFlipIfNeeded: preset '{}' -> flipMacroX={}, flipMacroY={}", preset.getName(), flipX, flipY);
+        return new boolean[] {flipX, flipY};
+    }
+
+    /**
+     * Resolve the active {@code (sourceScanner -> activeMicroscope)} transform preset
+     * for an entry, or null when it cannot be resolved (no source scanner / no active
+     * scope / no config / no matching preset). Shared by flip resolution and the
+     * light-path snapshot stamped onto the companion.
+     */
+    private static AffineTransformManager.TransformPreset resolvePresetForEntry(
+            ProjectImageEntry<BufferedImage> openEntry) {
+        try {
+            String sourceScanner = openEntry.getMetadata().get(ImageMetadataManager.SOURCE_MICROSCOPE);
+            if (sourceScanner == null || sourceScanner.isBlank()) {
+                return null;
+            }
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            String activeMicroscope = mgr != null ? mgr.getMicroscopeName() : null;
+            if (activeMicroscope == null || activeMicroscope.isBlank()) {
+                return null;
+            }
+            String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            if (configPath == null || configPath.isBlank()) {
+                return null;
+            }
+            AffineTransformManager atm = new AffineTransformManager(new File(configPath).getParent());
+            return atm.getBestPresetForPair(sourceScanner, activeMicroscope);
+        } catch (Exception e) {
+            logger.warn("resolvePresetForEntry failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    /**
+     * Stamp the full light-path snapshot + the {@code camera_view} flag onto a
+     * freshly created or reused companion, recording the placement it was baked at
+     * and the net baked parity. Caller must have the project synced afterward.
+     *
+     * <p>Public so the multi-slide assignment path can stamp a
+     * {@code createRotatedFlippedDuplicate} companion it built directly (that path
+     * does not route through {@link #validateAndFlipIfNeeded}, which stamps the
+     * single-slide companion). Without this stamp the companion carries neither the
+     * {@code camera_view} flag nor its baked parity, so downstream readers
+     * ({@code bakedParity}, {@code isCameraView}) treat it as an unflipped base.
+     */
+    public static void stampCameraViewMetadata(
+            ProjectImageEntry<BufferedImage> openEntry,
+            ProjectImageEntry<BufferedImage> companion,
+            boolean bakeX,
+            boolean bakeY) {
+        if (companion == null) return;
+        String insertion = ImageMetadataManager.getSlideInsertion(openEntry);
+        String detectorId = ImageMetadataManager.getDetectorId(openEntry);
+        AffineTransformManager.TransformPreset preset = resolvePresetForEntry(openEntry);
+        LightPathSnapshot lp =
+                LightPath.forActiveScope().capture(preset, insertion, detectorId, new Parity(bakeX, bakeY));
+        ImageMetadataManager.setLightPath(companion, lp);
+        ImageMetadataManager.setCameraView(companion, true);
+    }
+
+    /**
+     * Find the existing "(Camera View)" companion of {@code baseEntry}. There is one
+     * companion per {@code (base_image, rotation)}; the baked flip axes live in metadata,
+     * so {@code flipX/flipY} are not used to select among siblings. Matching is purely
+     * metadata-based -- {@code base_image} + baked rotation + the {@code camera_view} flag --
+     * and never reads the entry name.
+     */
+    public static ProjectImageEntry<BufferedImage> findFlippedSibling(
+            Project<BufferedImage> project, ProjectImageEntry<BufferedImage> baseEntry, boolean flipX, boolean flipY) {
+
+        List<ProjectImageEntry<BufferedImage>> entries = project.getImageList();
+
+        String baseImage = ImageMetadataManager.getBaseImage(baseEntry);
+        if (baseImage == null || baseImage.isBlank()) {
+            baseImage = qupath.lib.common.GeneralTools.stripExtension(baseEntry.getImageName());
+        }
+        String baseImageFinal = baseImage;
+        int baseRotation = ImageMetadataManager.getRotationDegrees(baseEntry);
+
+        // A camera-view companion sharing this base_image AND baked at the SAME rotation.
+        // The rotation match keeps a rotated base from resolving to the un-rotated
+        // original's companion (which shares base_image but differs in orientation).
+        for (ProjectImageEntry<BufferedImage> e : entries) {
+            if (e == baseEntry) continue;
+            if (!ImageMetadataManager.isCameraView(e)) continue;
+            String candBase = ImageMetadataManager.getBaseImage(e);
+            if (candBase == null || !candBase.equals(baseImageFinal)) continue;
+            if (ImageMetadataManager.getRotationDegrees(e) != baseRotation) continue;
+            return e;
+        }
+        return null;
+    }
+
+    /**
+     * @return true if {@code entry} looks like a sub-acquisition: it carries a
+     *     non-zero {@code xy_offset} and a {@code base_image} distinct from its
+     *     own stripped name. Mirrors {@code ExistingImageWorkflowV2.isSubAcquisition}.
+     */
+    public static boolean isSubAcquisitionEntry(ProjectImageEntry<BufferedImage> entry) {
+        if (entry == null) return false;
+        double[] offset = ImageMetadataManager.getXYOffset(entry);
+        if (offset[0] == 0 && offset[1] == 0) return false;
+        String baseImage = ImageMetadataManager.getBaseImage(entry);
+        if (baseImage == null || baseImage.isEmpty()) return false;
+        String ownName = qupath.lib.common.GeneralTools.stripExtension(entry.getImageName());
+        return !baseImage.equals(ownName);
+    }
+
+    /**
+     * Open {@code entry} in the viewer and return a future that completes when the
+     * entry's {@code ImageData} is actually installed (not when
+     * {@code openImageEntry} returns -- it kicks off loading on a background thread).
+     * Use this instead of a fixed sleep after {@code openImageEntry}. Safe to call
+     * from any thread (the open is always deferred to an FX pulse); the future
+     * completes on the FX thread, and resolves to {@code false}/exceptionally via a
+     * 5-second timeout if the install never commits. Do NOT block on the returned
+     * future from the FX thread -- attach a continuation instead.
+     */
+    public static CompletableFuture<Boolean> openEntryAndAwaitInstall(
+            QuPathGUI gui, ProjectImageEntry<BufferedImage> entry) {
+        CompletableFuture<Boolean> future = new CompletableFuture<>();
+        switchOpenEntry(gui, entry, future);
+        return future;
+    }
+
+    /**
+     * Switch the QuPath viewer to {@code targetEntry} and complete
+     * {@code future} when the target entry's {@code ImageData} is
+     * actually installed in the viewer. Always defers to a
+     * later FX pulse via {@link Platform#runLater(Runnable)}.
+     *
+     * <p>Why always-defer (not "run now if on FX thread"): callers may
+     * arrive inside a JavaFX animation pulse -- e.g. when this is a
+     * synchronous continuation of a CompletableFuture completed by
+     * {@code ProjectHelper.setupProject}'s post-creation Timeline.
+     * {@code QuPathGUI.openImageEntry} calls {@code checkSaveChanges},
+     * which calls {@code Dialogs.showAndWait}; JavaFX throws
+     * "showAndWait is not allowed during animation or layout
+     * processing" if invoked inside a pulse, and the dialog returns
+     * null, causing an NPE in {@code Optional.orElse}. Deferring puts
+     * the open on the next pulse where modal dialogs are legal.
+     *
+     * <p>Why subscribe to {@code imageDataProperty}:
+     * {@code openImageEntry} kicks off image loading on a background
+     * thread and returns before the new {@code ImageData} is installed.
+     * Completing the future immediately after the call returns lets
+     * downstream {@code .thenCompose} continuations read
+     * {@code gui.getImageData()} and see the OLD entry's hierarchy.
+     * The change listener waits for the install to commit to the
+     * viewer before signalling. A 5-second timeout fallback prevents
+     * deadlock if the install never fires (e.g. user canceled a
+     * checkSaveChanges dialog).
+     */
+    private static void switchOpenEntry(
+            QuPathGUI gui, ProjectImageEntry<BufferedImage> targetEntry, CompletableFuture<Boolean> future) {
+        Platform.runLater(() -> {
+            String targetName = targetEntry.getImageName();
+            // Listener completes the future when the viewer's ImageData
+            // actually changes to a non-null value -- meaning openImageEntry's
+            // background install committed. Match by name (the only stable
+            // identifier we have without reading the entry's data again).
+            // AtomicReference is used so the listener body can self-remove
+            // without forward-reference issues.
+            java.util.concurrent.atomic.AtomicReference<ChangeListener<ImageData<BufferedImage>>> listenerRef =
+                    new java.util.concurrent.atomic.AtomicReference<>();
+            ChangeListener<ImageData<BufferedImage>> listener = (obs, oldImage, newImage) -> {
+                if (newImage == null) return;
+                String installedName =
+                        newImage.getServer() != null && newImage.getServer().getMetadata() != null
+                                ? newImage.getServer().getMetadata().getName()
+                                : null;
+                if (installedName == null || (targetName != null && !targetName.equals(installedName))) {
+                    // Some other change (race with an unrelated open / refresh).
+                    // Keep waiting for the right one; the timeout fallback
+                    // below guarantees we don't deadlock.
+                    return;
+                }
+                gui.getViewer().imageDataProperty().removeListener(listenerRef.get());
+                logger.info("Switched open entry to '{}' (ImageData installed)", targetName);
+                // Complete on a later pulse. The viewer fires this while openImageEntry is still
+                // running and before gui.getImageData() reports the new entry, so a continuation
+                // run here sees the PREVIOUS entry: the orientation dialog's OK returns to the
+                // original scan, the flip step sees Camera View still open and skips, and Select
+                // Tile comes up on the original.
+                Platform.runLater(() -> future.complete(true));
+            };
+            listenerRef.set(listener);
+            try {
+                gui.getViewer().imageDataProperty().addListener(listener);
+                gui.refreshProject();
+                gui.openImageEntry(targetEntry);
+                logger.info("openImageEntry initiated for '{}'; waiting for ImageData install", targetName);
+            } catch (Exception e) {
+                gui.getViewer().imageDataProperty().removeListener(listener);
+                logger.error("Failed to switch open entry to '{}'", targetName, e);
+                future.completeExceptionally(e);
+                return;
+            }
+            // Timeout fallback. If the install never fires (e.g. user canceled
+            // the checkSaveChanges dialog), the workflow chain would deadlock
+            // waiting on this future. After 5 seconds, remove the listener and
+            // resolve based on whether the open eventually succeeded.
+            CompletableFuture.delayedExecutor(5, java.util.concurrent.TimeUnit.SECONDS)
+                    .execute(() -> Platform.runLater(() -> {
+                        if (future.isDone()) return;
+                        gui.getViewer().imageDataProperty().removeListener(listenerRef.get());
+                        ImageData<BufferedImage> current = gui.getImageData();
+                        String currentName = current != null
+                                        && current.getServer() != null
+                                        && current.getServer().getMetadata() != null
+                                ? current.getServer().getMetadata().getName()
+                                : null;
+                        if (targetName != null && targetName.equals(currentName)) {
+                            // Install committed before listener fired (or listener missed it);
+                            // accept the open.
+                            logger.warn(
+                                    "switchOpenEntry timeout: viewer already shows '{}'; completing future",
+                                    currentName);
+                            future.complete(true);
+                        } else {
+                            logger.error(
+                                    "switchOpenEntry timeout: expected '{}' but viewer shows '{}'",
+                                    targetName,
+                                    currentName);
+                            future.completeExceptionally(new java.util.concurrent.TimeoutException(
+                                    "Image switch did not commit within 5s: expected '" + targetName
+                                            + "', viewer shows '" + currentName + "'"));
+                        }
+                    }));
+        });
+    }
+}

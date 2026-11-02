@@ -15,12 +15,12 @@ import javafx.scene.control.ButtonType;
 import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Shared "Save as MicroManager MDA..." export helper used by the per-modality

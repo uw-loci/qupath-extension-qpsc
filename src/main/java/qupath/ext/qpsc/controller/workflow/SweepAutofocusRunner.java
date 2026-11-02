@@ -92,7 +92,7 @@ public final class SweepAutofocusRunner {
                     double z = Double.parseDouble(finalZ.trim());
                     AfHistoryService.add(z);
                     SlotJumpAutofocus.noteFocusOnThisSlide(z);
-                    qupath.ext.qpsc.utilities.SafeZClearanceMonitor.recordFocus(z);
+                    qupath.ext.qpsc.focus.SafeZClearanceMonitor.recordFocus(z);
                 } catch (NumberFormatException ignored) {
                     // history is advisory only
                 }

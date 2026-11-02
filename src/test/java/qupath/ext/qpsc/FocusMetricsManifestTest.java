@@ -9,7 +9,7 @@ import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
-import qupath.ext.qpsc.utilities.FocusMetricsManifest;
+import qupath.ext.qpsc.focus.FocusMetricsManifest;
 
 /**
  * Loader smoke tests for FocusMetricsManifest. These exercise the

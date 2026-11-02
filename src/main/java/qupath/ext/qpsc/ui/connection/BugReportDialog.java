@@ -1,0 +1,453 @@
+package qupath.ext.qpsc.ui.connection;
+
+import java.awt.Graphics2D;
+import java.awt.RenderingHints;
+import java.awt.image.BufferedImage;
+import java.io.ByteArrayOutputStream;
+import java.util.Base64;
+import java.util.Map;
+import javafx.application.Platform;
+import javafx.embed.swing.SwingFXUtils;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.Alert;
+import javafx.scene.control.Button;
+import javafx.scene.control.ButtonType;
+import javafx.scene.control.CheckBox;
+import javafx.scene.control.Dialog;
+import javafx.scene.control.Hyperlink;
+import javafx.scene.control.Label;
+import javafx.scene.control.TextArea;
+import javafx.scene.control.TextField;
+import javafx.scene.control.Tooltip;
+import javafx.scene.image.ImageView;
+import javafx.scene.image.WritableImage;
+import javafx.scene.layout.HBox;
+import javafx.scene.layout.Priority;
+import javafx.scene.layout.Region;
+import javafx.scene.layout.VBox;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import javafx.stage.Window;
+import javax.imageio.ImageIO;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.service.BugReportService;
+import qupath.ext.qpsc.service.BugReportService.BugReport;
+import qupath.ext.qpsc.service.BugReportService.Result;
+import qupath.ext.qpsc.ui.QpscWindows;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.lib.gui.QuPathGUI;
+
+/**
+ * "Report a bug" dialog. Collects a description plus opt-in artifacts (system
+ * info, logs, a window screenshot) and submits them to the Cloudflare Worker
+ * via {@link BugReportService}, which files a GitHub Issue. No GitHub account
+ * is required from the user.
+ *
+ * <p>Screenshot note: QPSC does not own QuPath's window/widget tree, so the
+ * automatic widget-level redaction used by some apps does not apply here.
+ * Instead the user is shown a mandatory full-window preview and an explicit
+ * warning before anything is sent -- that preview is the safety mechanism.</p>
+ *
+ * <p>The network call runs on a daemon background thread so the FX thread never
+ * blocks; results are marshalled back via {@link Platform#runLater}.</p>
+ */
+public class BugReportDialog {
+
+    private static final Logger logger = LoggerFactory.getLogger(BugReportDialog.class);
+
+    /** Screenshots are downscaled to this width before encoding to stay under the size cap. */
+    private static final int SCREENSHOT_MAX_WIDTH = 1600;
+
+    private final Stage stage;
+    private final Window owner;
+
+    private final TextField summaryField = new TextField();
+    private final TextArea descriptionArea = new TextArea();
+    private final TextField githubUserField = new TextField();
+    private final TextField imageScUserField = new TextField();
+    private final CheckBox chkOpenIssue = new CheckBox("Open the issue in my browser after submitting");
+    private final CheckBox chkSysInfo = new CheckBox("Include system info (versions, OS)");
+    private final CheckBox chkSessionLog = new CheckBox("Include QPSC session log");
+    private final CheckBox chkServerLog = new CheckBox("Include microscope server log");
+    private final CheckBox chkQuPathLog = new CheckBox("Include QuPath log");
+    private final CheckBox chkScreenshot = new CheckBox("Include a screenshot of the QuPath window");
+    private final Label screenshotWarning =
+            new Label("The screenshot is NOT auto-redacted. You will preview it before sending. "
+                    + "Close anything sensitive first.");
+    private final Label statusLabel = new Label("");
+    private final Button submitButton = new Button("Submit");
+
+    private volatile boolean submitting = false;
+
+    // The one dialog window currently on screen, or null. Only touched on the FX thread.
+    private static Stage activeStage;
+
+    private BugReportDialog(QuPathGUI qupath) {
+        this.owner = qupath != null && qupath.getStage() != null ? qupath.getStage() : null;
+        this.stage = new Stage();
+        QpscWindows.track(this.stage);
+        stage.setTitle("Report a bug");
+        if (owner != null) {
+            stage.initOwner(owner);
+        }
+        // Non-modal: the screenshot warning tells the operator to close anything
+        // sensitive before submitting, and the capture happens at submit time --
+        // application modality locks out the very windows they need to close.
+        stage.initModality(Modality.NONE);
+        stage.setScene(new Scene(buildContent()));
+        stage.setMinWidth(560);
+    }
+
+    /** Builds and shows the dialog on the FX thread. */
+    public static void show() {
+        // Modality was the only thing preventing a second copy from being opened
+        // off the menu while one is up. Guard it explicitly.
+        Runnable r = () -> {
+            if (activeStage != null && activeStage.isShowing()) {
+                logger.info("Bug report dialog already open - bringing to front");
+                activeStage.toFront();
+                activeStage.requestFocus();
+                return;
+            }
+            BugReportDialog dialog = new BugReportDialog(QuPathGUI.getInstance());
+            activeStage = dialog.stage;
+            dialog.stage.setOnHidden(e -> activeStage = null);
+            dialog.stage.show();
+        };
+        if (Platform.isFxApplicationThread()) {
+            r.run();
+        } else {
+            Platform.runLater(r);
+        }
+    }
+
+    private Region buildContent() {
+        VBox root = new VBox(10);
+        root.setPadding(new Insets(16));
+
+        // The single most surprising thing about this reporter: the issue is not
+        // filed under the reporter's name, so GitHub has nobody to notify. Say
+        // so at the top, before they write anything, not in the success dialog.
+        Label anonymityNote = new Label("Reports are filed anonymously -- the issue is created by the reporting "
+                + "service, not from your GitHub account. You will NOT be notified of replies unless you comment "
+                + "on the issue yourself on GitHub. Adding a GitHub username below mentions you on the issue, "
+                + "which does notify you.");
+        anonymityNote.setWrapText(true);
+        anonymityNote.setStyle("-fx-text-fill: -fx-accent;");
+
+        Label summaryHeading = new Label("Summary (used as the issue title):");
+        summaryHeading.setStyle("-fx-font-weight: bold;");
+
+        summaryField.setPromptText("One line, e.g. \"Acquisition stalls after autofocus on tile 3\"");
+
+        Label heading =
+                new Label("Describe the bug (minimum " + BugReportService.MIN_DESCRIPTION_CHARS + " characters):");
+        heading.setStyle("-fx-font-weight: bold;");
+
+        descriptionArea.setWrapText(true);
+        descriptionArea.setPromptText("What were you doing, what happened, and what did you expect to happen?");
+        descriptionArea.setPrefRowCount(7);
+        VBox.setVgrow(descriptionArea, Priority.ALWAYS);
+
+        chkSysInfo.setSelected(true);
+        chkSessionLog.setSelected(true);
+
+        boolean serverLogAvailable = BugReportService.isServerLogAvailable();
+        chkServerLog.setSelected(serverLogAvailable);
+        chkServerLog.setDisable(!serverLogAvailable);
+        if (!serverLogAvailable) {
+            chkServerLog.setText("Include microscope server log (not connected)");
+        }
+
+        boolean quPathLogAvailable = BugReportService.isQuPathLogAvailable();
+        chkQuPathLog.setSelected(quPathLogAvailable);
+        chkQuPathLog.setDisable(!quPathLogAvailable);
+        if (!quPathLogAvailable) {
+            chkQuPathLog.setText("Include QuPath log (none captured this session)");
+        }
+
+        chkScreenshot.setSelected(false);
+        screenshotWarning.setWrapText(true);
+        screenshotWarning.setStyle("-fx-text-fill: -fx-accent;");
+        screenshotWarning.setVisible(false);
+        screenshotWarning.setManaged(false);
+        chkScreenshot.selectedProperty().addListener((obs, was, now) -> {
+            screenshotWarning.setVisible(now);
+            screenshotWarning.setManaged(now);
+            stage.sizeToScene();
+        });
+
+        VBox options =
+                new VBox(6, chkSysInfo, chkSessionLog, chkServerLog, chkQuPathLog, chkScreenshot, screenshotWarning);
+
+        // Optional contact. Both handles are user-typed and go into a public
+        // issue, so the note below says so plainly rather than relying on the
+        // user knowing where the report lands.
+        Label contactHeading = new Label("Contact (optional -- leave blank to report anonymously):");
+        contactHeading.setStyle("-fx-font-weight: bold;");
+        githubUserField.setPromptText("GitHub username, with or without @ (e.g. alice or @alice)");
+        imageScUserField.setPromptText("image.sc forum username (e.g. alice)");
+        Label contactNote = new Label("Both are shown publicly in the issue.");
+        contactNote.setWrapText(true);
+        VBox contactBox = new VBox(6, contactHeading, githubUserField, imageScUserField, contactNote);
+
+        chkOpenIssue.setSelected(true);
+
+        statusLabel.setWrapText(true);
+
+        submitButton.setDefaultButton(true);
+        submitButton.setOnAction(e -> onSubmit());
+        Button cancelButton = new Button("Cancel");
+        cancelButton.setCancelButton(true);
+        cancelButton.setOnAction(e -> stage.close());
+        Region spacer = new Region();
+        HBox.setHgrow(spacer, Priority.ALWAYS);
+        HBox buttons = new HBox(8, spacer, cancelButton, submitButton);
+        buttons.setAlignment(Pos.CENTER_RIGHT);
+
+        if (!BugReportService.isConfigured()) {
+            Label notConfigured = new Label("Bug reporting is not set up yet: the Worker URL has not been configured. "
+                    + "See cloudflare-worker-bug-reporter/README.md.");
+            notConfigured.setWrapText(true);
+            notConfigured.setStyle("-fx-text-fill: -fx-accent;");
+            submitButton.setDisable(true);
+            root.getChildren().add(notConfigured);
+        }
+
+        root.getChildren()
+                .addAll(
+                        anonymityNote,
+                        summaryHeading,
+                        summaryField,
+                        heading,
+                        descriptionArea,
+                        contactBox,
+                        options,
+                        chkOpenIssue,
+                        statusLabel,
+                        buttons);
+        return root;
+    }
+
+    private void onSubmit() {
+        if (submitting) {
+            return;
+        }
+        String summary = summaryField.getText().trim();
+        if (summary.length() < BugReportService.MIN_SUMMARY_CHARS) {
+            setStatus(
+                    "Please enter a one-line summary (at least " + BugReportService.MIN_SUMMARY_CHARS
+                            + " characters). It becomes the issue title.",
+                    true);
+            return;
+        }
+        if (summary.length() > BugReportService.MAX_SUMMARY_CHARS) {
+            setStatus("Summary is too long (max " + BugReportService.MAX_SUMMARY_CHARS + " characters).", true);
+            return;
+        }
+
+        String description = descriptionArea.getText().trim();
+        if (description.length() < BugReportService.MIN_DESCRIPTION_CHARS) {
+            setStatus("Please enter at least " + BugReportService.MIN_DESCRIPTION_CHARS + " characters.", true);
+            return;
+        }
+        if (description.length() > BugReportService.MAX_DESCRIPTION_CHARS) {
+            setStatus("Description is too long (max " + BugReportService.MAX_DESCRIPTION_CHARS + " characters).", true);
+            return;
+        }
+
+        // Validated before the screenshot is captured so a typo does not cost
+        // the user a preview round-trip. Blank stays blank -- both are optional.
+        String githubUser = BugReportService.normalizeHandle(githubUserField.getText());
+        if (!githubUser.isEmpty() && !BugReportService.isValidGitHubHandle(githubUser)) {
+            setStatus(
+                    "That does not look like a GitHub username. Use letters, digits and single hyphens "
+                            + "(max 39 characters), with or without a leading @. Leave it blank to stay anonymous.",
+                    true);
+            return;
+        }
+        String imageScUser = BugReportService.normalizeHandle(imageScUserField.getText());
+        if (!imageScUser.isEmpty() && !BugReportService.isValidImageScHandle(imageScUser)) {
+            setStatus(
+                    "That does not look like an image.sc username. Use letters, digits, '.', '_' or '-'. "
+                            + "Leave it blank to stay anonymous.",
+                    true);
+            return;
+        }
+
+        // Screenshot capture + mandatory preview happen on the FX thread.
+        String screenshotBase64 = null;
+        if (chkScreenshot.isSelected()) {
+            WritableImage snapshot = captureWindow();
+            if (snapshot == null) {
+                setStatus("Could not capture the window. Try unchecking the screenshot option.", true);
+                return;
+            }
+            if (!confirmScreenshotPreview(snapshot)) {
+                return; // user canceled at preview -- keep the form open
+            }
+            screenshotBase64 = encodePng(snapshot);
+            if (screenshotBase64 == null) {
+                setStatus("Could not encode the screenshot.", true);
+                return;
+            }
+            if (screenshotBase64.length() > BugReportService.MAX_SCREENSHOT_B64_CHARS) {
+                setStatus("Screenshot is too large. Shrink the QuPath window and try again.", true);
+                return;
+            }
+        }
+
+        String sysinfo = chkSysInfo.isSelected() ? BugReportService.gatherSysInfo() : null;
+        Map<String, String> artifacts = BugReportService.gatherLogArtifacts(
+                chkSessionLog.isSelected(), chkServerLog.isSelected(), chkQuPathLog.isSelected());
+
+        BugReport report =
+                new BugReport(summary, description, githubUser, imageScUser, sysinfo, artifacts, screenshotBase64);
+
+        submitting = true;
+        submitButton.setDisable(true);
+        submitButton.setText("Submitting...");
+        summaryField.setDisable(true);
+        descriptionArea.setDisable(true);
+        githubUserField.setDisable(true);
+        imageScUserField.setDisable(true);
+        setStatus("Submitting...", false);
+
+        Thread worker = new Thread(
+                () -> {
+                    Result result = BugReportService.submit(report);
+                    Platform.runLater(() -> onResult(result));
+                },
+                "qpsc-bug-report-submit");
+        worker.setDaemon(true);
+        worker.start();
+    }
+
+    private void onResult(Result result) {
+        submitting = false;
+        submitButton.setDisable(false);
+        submitButton.setText("Submit");
+        summaryField.setDisable(false);
+        descriptionArea.setDisable(false);
+        githubUserField.setDisable(false);
+        imageScUserField.setDisable(false);
+
+        if (result.ok()) {
+            stage.close();
+            String issueUrl = result.issueUrl();
+            if (chkOpenIssue.isSelected() && issueUrl != null && !issueUrl.isEmpty()) {
+                DocumentationHelper.openUrl(issueUrl);
+            }
+            showSuccess(result.issueNumber(), issueUrl);
+        } else {
+            setStatus(result.error() != null ? result.error() : "Submission failed.", true);
+        }
+    }
+
+    /**
+     * Confirmation dialog with a clickable link to the created issue, so the
+     * user can open it in a browser to follow up or add detail. The URL is also
+     * shown as the link text so it stays visible (and copyable) if the browser
+     * cannot be launched.
+     */
+    private void showSuccess(Integer issueNumber, String url) {
+        String number = issueNumber != null ? "#" + issueNumber : "";
+        Label message = new Label(
+                number.isEmpty()
+                        ? "Your bug report was submitted. Thank you!"
+                        : "Your bug report was submitted as issue " + number + ". Thank you!");
+        message.setWrapText(true);
+
+        VBox content = new VBox(10, message);
+        content.setPadding(new Insets(4));
+
+        if (url != null && !url.isEmpty()) {
+            Label hint = new Label("View it or add more detail here:");
+            hint.setWrapText(true);
+            Hyperlink link = new Hyperlink(url);
+            link.setTooltip(new Tooltip("Open the issue in your browser"));
+            link.setOnAction(e -> DocumentationHelper.openUrl(url));
+            content.getChildren().addAll(hint, link);
+        }
+
+        Alert alert = new Alert(Alert.AlertType.INFORMATION);
+        alert.setTitle("Thanks!");
+        alert.setHeaderText(null);
+        if (owner != null) {
+            alert.initOwner(owner);
+        }
+        alert.getDialogPane().setContent(content);
+        alert.showAndWait();
+    }
+
+    private void setStatus(String message, boolean isError) {
+        statusLabel.setText(message);
+        statusLabel.setStyle(isError ? "-fx-text-fill: -fx-accent;" : "-fx-text-fill: -fx-text-base-color;");
+    }
+
+    // ---- screenshot helpers ------------------------------------------------
+
+    private WritableImage captureWindow() {
+        try {
+            if (owner instanceof Stage ownerStage && ownerStage.getScene() != null) {
+                return ownerStage.getScene().snapshot(null);
+            }
+        } catch (Exception e) {
+            logger.warn("Window capture failed: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    private boolean confirmScreenshotPreview(WritableImage image) {
+        Dialog<ButtonType> preview = new Dialog<>();
+        preview.setTitle("Screenshot preview");
+        if (owner != null) {
+            preview.initOwner(owner);
+        }
+        Label note = new Label("This is exactly what will be attached to the bug report. "
+                + "Anything visible here is uploaded. OK to include it?");
+        note.setWrapText(true);
+        note.setMaxWidth(720);
+        ImageView view = new ImageView(image);
+        view.setPreserveRatio(true);
+        view.setFitWidth(720);
+        VBox content = new VBox(10, note, view);
+        content.setPadding(new Insets(10));
+        preview.getDialogPane().setContent(content);
+        preview.getDialogPane().getButtonTypes().addAll(ButtonType.OK, ButtonType.CANCEL);
+        return preview.showAndWait().filter(b -> b == ButtonType.OK).isPresent();
+    }
+
+    private String encodePng(WritableImage image) {
+        try {
+            BufferedImage buffered = SwingFXUtils.fromFXImage(image, null);
+            buffered = scaleToMaxWidth(buffered, SCREENSHOT_MAX_WIDTH);
+            ByteArrayOutputStream out = new ByteArrayOutputStream();
+            ImageIO.write(buffered, "png", out);
+            return Base64.getEncoder().encodeToString(out.toByteArray());
+        } catch (Exception e) {
+            logger.warn("Screenshot encoding failed: {}", e.getMessage());
+            return null;
+        }
+    }
+
+    private static BufferedImage scaleToMaxWidth(BufferedImage source, int maxWidth) {
+        int width = source.getWidth();
+        int height = source.getHeight();
+        if (width <= maxWidth || width == 0) {
+            return source;
+        }
+        double ratio = (double) maxWidth / width;
+        int newWidth = maxWidth;
+        int newHeight = Math.max(1, (int) Math.round(height * ratio));
+        BufferedImage scaled = new BufferedImage(newWidth, newHeight, BufferedImage.TYPE_INT_ARGB);
+        Graphics2D g = scaled.createGraphics();
+        g.setRenderingHint(RenderingHints.KEY_INTERPOLATION, RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+        g.drawImage(source, 0, 0, newWidth, newHeight, null);
+        g.dispose();
+        return scaled;
+    }
+}

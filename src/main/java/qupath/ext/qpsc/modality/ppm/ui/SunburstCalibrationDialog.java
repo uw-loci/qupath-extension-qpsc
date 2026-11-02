@@ -1,0 +1,485 @@
+package qupath.ext.qpsc.modality.ppm.ui;
+
+import java.io.File;
+import java.util.concurrent.CompletableFuture;
+import javafx.application.Platform;
+import javafx.geometry.Insets;
+import javafx.geometry.Pos;
+import javafx.scene.Scene;
+import javafx.scene.control.*;
+import javafx.scene.layout.*;
+import javafx.stage.DirectoryChooser;
+import javafx.stage.Modality;
+import javafx.stage.Stage;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.ui.QpscWindows;
+import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.connection.CameraControlController;
+import qupath.ext.qpsc.utilities.DocumentationHelper;
+import qupath.lib.gui.QuPathGUI;
+
+/**
+ * Non-modal window for Sunburst Calibration parameters.
+ *
+ * <p>This window collects parameters for creating a hue-to-angle calibration
+ * from a PPM reference slide with sunburst/fan pattern (radial spokes).
+ *
+ * <p>The window is non-modal so the user can interact with QuPath and the
+ * Camera Control dialog while it is open. It uses the QuPath main window
+ * as its owner so it stays on top of QuPath but not on top of other
+ * applications.
+ *
+ * @author Mike Nelson
+ * @since 1.0
+ */
+public class SunburstCalibrationDialog {
+
+    private static final Logger logger = LoggerFactory.getLogger(SunburstCalibrationDialog.class);
+
+    /**
+     * Parameters for sunburst calibration.
+     */
+    public record SunburstCalibrationParams(
+            String outputFolder,
+            String modality,
+            int expectedSpokes,
+            double saturationThreshold,
+            double valueThreshold,
+            String calibrationName,
+            int radiusInner,
+            int radiusOuter) {}
+
+    /**
+     * Creates a label with a tooltip indicator (?) that shows additional help on hover.
+     *
+     * @param text Main label text
+     * @param tooltipText Detailed help text for the tooltip
+     * @return HBox containing the label and tooltip indicator
+     */
+    private static HBox createLabelWithTooltip(String text, String tooltipText) {
+        Label mainLabel = new Label(text);
+
+        Label helpIndicator = new Label(" (?)");
+        helpIndicator.setStyle("-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold; -fx-cursor: hand;");
+
+        Tooltip tooltip = new Tooltip(tooltipText);
+        tooltip.setWrapText(true);
+        tooltip.setMaxWidth(400);
+        tooltip.setShowDelay(javafx.util.Duration.millis(200));
+        tooltip.setShowDuration(javafx.util.Duration.seconds(30));
+        Tooltip.install(helpIndicator, tooltip);
+
+        HBox container = new HBox(mainLabel, helpIndicator);
+        container.setAlignment(Pos.CENTER_LEFT);
+        return container;
+    }
+
+    /**
+     * Shows the sunburst calibration window (non-modal).
+     *
+     * <p>The window stays on top of QuPath's main window but does not block
+     * interaction with QuPath or the Camera Control dialog.
+     *
+     * @return CompletableFuture with calibration parameters or null if canceled
+     */
+    public static CompletableFuture<SunburstCalibrationParams> showDialog() {
+        CompletableFuture<SunburstCalibrationParams> future = new CompletableFuture<>();
+
+        Platform.runLater(() -> {
+            Stage stage = new Stage();
+            QpscWindows.track(stage);
+            stage.setTitle("PPM Reference Slide Calibration");
+            stage.initModality(Modality.NONE);
+
+            // Set owner to QuPath main window so it stays on top of QuPath
+            // but not on top of other applications
+            QuPathGUI gui = QuPathGUI.getInstance();
+            if (gui != null && gui.getStage() != null) {
+                stage.initOwner(gui.getStage());
+                logger.debug("Calibration window owner set to QuPath main window");
+            } else {
+                logger.warn("Could not get QuPath main stage for calibration window");
+            }
+
+            // Build the content
+            VBox root = new VBox(10);
+            root.setPadding(new Insets(15));
+
+            // Header with instructions and help button
+            Label headerLabel = new Label("Create Hue-to-Angle Calibration from PPM Reference Slide");
+            headerLabel.setStyle("-fx-font-size: 14px; -fx-font-weight: bold;");
+            HBox headerRow = DocumentationHelper.createHeaderWithHelp(headerLabel, "sunburstCalibration");
+
+            Label instructionLabel = new Label("Position the PPM reference slide (sunburst/fan pattern)\n"
+                    + "under the microscope and ensure it is properly focused.\n\n"
+                    + "This workflow will:\n"
+                    + "  1. Acquire an image using the current camera settings\n"
+                    + "  2. Sample hue values along radial spokes from the pattern center\n"
+                    + "  3. Create a linear regression mapping hue to orientation angle (0-180 deg)\n"
+                    + "  4. Save the calibration for use in PPM analysis\n\n"
+                    + "Hover over (?) icons for detailed parameter descriptions.");
+            instructionLabel.setWrapText(true);
+            instructionLabel.setStyle("-fx-font-size: 11px;");
+
+            // Important note about angle settings and saturation
+            Label angleNote = new Label("IMPORTANT: Check camera settings before calibrating!\n\n"
+                    + "- Use low-angle PPM settings (crossed or near-crossed) for best color contrast.\n"
+                    + "- Avoid pixel saturation (overexposure). Saturated pixels have corrupted hue\n"
+                    + "  values and will produce an incorrect calibration. Use Camera Control below\n"
+                    + "  to verify that no channels are clipping (check the histogram or RGB readout).\n"
+                    + "- If the image looks washed out or white, reduce exposure before proceeding.");
+            angleNote.setWrapText(true);
+            angleNote.setMaxWidth(Double.MAX_VALUE);
+            angleNote.setStyle(
+                    "-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
+
+            root.getChildren().addAll(headerRow, new Separator(), instructionLabel, angleNote, new Separator());
+
+            // Main content layout
+            GridPane grid = new GridPane();
+            grid.setHgap(10);
+            grid.setVgap(10);
+            grid.setPadding(new Insets(10));
+
+            int row = 0;
+
+            // === Output folder ===
+            HBox outputLabelBox = createLabelWithTooltip(
+                    "Calibration Folder:",
+                    "Folder where calibration files will be saved.\n\n"
+                            + "All calibration output files are saved directly\n"
+                            + "into this folder.");
+            outputLabelBox.getChildren().get(0).setStyle("-fx-font-weight: bold;");
+
+            TextField outputField = new TextField();
+            outputField.setPrefColumnCount(30);
+
+            // Get default output from preferences (remembers last used folder)
+            String defaultOutput = QPPreferenceDialog.getDefaultCalibrationFolder();
+            outputField.setText(defaultOutput);
+
+            Button browseBtn = new Button("Browse...");
+            browseBtn.setOnAction(e -> {
+                DirectoryChooser chooser = new DirectoryChooser();
+                chooser.setTitle("Select Calibration Output Folder");
+                File current = new File(outputField.getText());
+                if (current.exists() && current.isDirectory()) {
+                    chooser.setInitialDirectory(current);
+                } else if (current.getParentFile() != null
+                        && current.getParentFile().exists()) {
+                    chooser.setInitialDirectory(current.getParentFile());
+                }
+                File chosen = chooser.showDialog(stage);
+                if (chosen != null) {
+                    outputField.setText(chosen.getAbsolutePath());
+                }
+            });
+
+            grid.add(outputLabelBox, 0, row);
+            grid.add(outputField, 1, row);
+            grid.add(browseBtn, 2, row);
+            row++;
+
+            grid.add(new Separator(), 0, row, 3, 1);
+            row++;
+
+            // === Camera Setup Section ===
+            Label cameraSetupLabel = new Label("Camera Setup");
+            cameraSetupLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+            grid.add(cameraSetupLabel, 0, row, 3, 1);
+            row++;
+
+            Label cameraInstructions =
+                    new Label("Open Camera Control to set the polarizer to a low angle (crossed or near-crossed)\n"
+                            + "and verify the camera settings before running calibration.");
+            cameraInstructions.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+            cameraInstructions.setWrapText(true);
+            grid.add(cameraInstructions, 0, row, 3, 1);
+            row++;
+
+            Button cameraControlBtn = new Button("Open Camera Control...");
+            cameraControlBtn.setOnAction(e -> {
+                CameraControlController.showCameraControlDialog();
+            });
+            grid.add(cameraControlBtn, 1, row);
+            row++;
+
+            grid.add(new Separator(), 0, row, 3, 1);
+            row++;
+
+            // === Detection Settings Section ===
+            Label detectionLabel = new Label("Detection Settings");
+            detectionLabel.setStyle("-fx-font-weight: bold; -fx-font-size: 12px;");
+            grid.add(detectionLabel, 0, row, 3, 1);
+            row++;
+
+            // Number of spokes
+            HBox spokesLabelBox = createLabelWithTooltip(
+                    "Number of Spokes:",
+                    "Number of radial spokes (unique orientations) in the sunburst pattern.\n\n" + "Common values:\n"
+                            + "  - 16: Standard sunburst slides (11.25 deg spacing)\n"
+                            + "  - 12: Some older slides (15 deg spacing)\n"
+                            + "  - 8: Simplified slides (22.5 deg spacing)\n\n"
+                            + "Valid range: 4-32\n\n"
+                            + "The calibrator samples hue values along radial lines\n"
+                            + "at each spoke angle to build the hue-to-angle mapping.");
+
+            int savedSpokes = QPPreferenceDialog.getSunburstExpectedSpokes();
+            Spinner<Integer> spokesSpinner = new Spinner<>(4, 32, savedSpokes, 4);
+            spokesSpinner.setEditable(true);
+            spokesSpinner.setPrefWidth(100);
+
+            grid.add(spokesLabelBox, 0, row);
+            grid.add(spokesSpinner, 1, row);
+            row++;
+
+            // Saturation threshold
+            HBox saturationLabelBox = createLabelWithTooltip(
+                    "Saturation Threshold:",
+                    "Minimum HSV saturation to classify a pixel as foreground (colored).\n\n"
+                            + "Range: 0.0 - 1.0 (default: 0.1)\n\n"
+                            + "In HSV color space, saturation measures color intensity:\n"
+                            + "  - 0.0 = grayscale (no color)\n"
+                            + "  - 1.0 = fully saturated color\n\n"
+                            + "In the debug mask image:\n"
+                            + "  WHITE = detected foreground (above threshold)\n"
+                            + "  BLACK = background (below threshold)\n\n"
+                            + "Lower values (0.05-0.1): Include more pixels, may pick up noise\n"
+                            + "Higher values (0.2-0.3): Stricter, may miss pale spokes\n\n"
+                            + "If mask is all BLACK -> lower this value (threshold too high)\n"
+                            + "If mask is all WHITE -> raise this value (threshold too low)");
+
+            double savedSaturation = QPPreferenceDialog.getSunburstSaturationThreshold();
+            Spinner<Double> saturationSpinner = new Spinner<>(0.01, 0.5, savedSaturation, 0.01);
+            saturationSpinner.setEditable(true);
+            saturationSpinner.setPrefWidth(100);
+
+            grid.add(saturationLabelBox, 0, row);
+            grid.add(saturationSpinner, 1, row);
+            row++;
+
+            // Value threshold
+            HBox valueLabelBox = createLabelWithTooltip(
+                    "Value Threshold:",
+                    "Minimum HSV value (brightness) to classify a pixel as foreground.\n\n"
+                            + "Range: 0.0 - 1.0 (default: 0.1)\n\n"
+                            + "In HSV color space, value measures brightness:\n"
+                            + "  - 0.0 = black\n"
+                            + "  - 1.0 = maximum brightness\n\n"
+                            + "This helps exclude dark regions (slide edges, shadows).\n\n"
+                            + "In the debug mask image:\n"
+                            + "  WHITE = detected foreground (above threshold)\n"
+                            + "  BLACK = background (below threshold)\n\n"
+                            + "Lower values (0.05-0.1): Include dimmer pixels\n"
+                            + "Higher values (0.2-0.3): Only bright pixels\n\n"
+                            + "If mask is all BLACK -> lower this value (threshold too high)\n"
+                            + "If mask is all WHITE -> raise this value (threshold too low)");
+
+            double savedValue = QPPreferenceDialog.getSunburstValueThreshold();
+            Spinner<Double> valueSpinner = new Spinner<>(0.01, 0.5, savedValue, 0.01);
+            valueSpinner.setEditable(true);
+            valueSpinner.setPrefWidth(100);
+
+            grid.add(valueLabelBox, 0, row);
+            grid.add(valueSpinner, 1, row);
+            row++;
+
+            grid.add(new Separator(), 0, row, 3, 1);
+            row++;
+
+            // === Advanced Detection Settings (collapsible) ===
+            TitledPane advancedPane = new TitledPane();
+            advancedPane.setText("Advanced Radial Detection Settings");
+            advancedPane.setExpanded(false);
+
+            GridPane advGrid = new GridPane();
+            advGrid.setHgap(10);
+            advGrid.setVgap(10);
+            advGrid.setPadding(new Insets(10));
+
+            int advRow = 0;
+
+            // Inner radius
+            HBox innerRadiusLabelBox = createLabelWithTooltip(
+                    "Inner Radius (px):",
+                    "Inner radius for radial sampling, in pixels from pattern center.\n\n"
+                            + "Sampling starts at this distance from the detected center.\n"
+                            + "Increase to skip noisy/dark pixels near the center of the pattern.\n\n"
+                            + "Default: 30, Range: 10-200");
+            int savedInnerRadius = QPPreferenceDialog.getSunburstRadiusInner();
+            Spinner<Integer> innerRadiusSpinner = new Spinner<>(10, 200, savedInnerRadius, 5);
+            innerRadiusSpinner.setEditable(true);
+            innerRadiusSpinner.setPrefWidth(100);
+            advGrid.add(innerRadiusLabelBox, 0, advRow);
+            advGrid.add(innerRadiusSpinner, 1, advRow);
+            advRow++;
+
+            // Outer radius
+            HBox outerRadiusLabelBox = createLabelWithTooltip(
+                    "Outer Radius (px):",
+                    "Outer radius for radial sampling, in pixels from pattern center.\n\n"
+                            + "Sampling ends at this distance. Should reach into the colored\n"
+                            + "spokes but not extend past them into the background.\n\n"
+                            + "Default: 150, Range: 50-500");
+            int savedOuterRadius = QPPreferenceDialog.getSunburstRadiusOuter();
+            Spinner<Integer> outerRadiusSpinner = new Spinner<>(50, 500, savedOuterRadius, 10);
+            outerRadiusSpinner.setEditable(true);
+            outerRadiusSpinner.setPrefWidth(100);
+            advGrid.add(outerRadiusLabelBox, 0, advRow);
+            advGrid.add(outerRadiusSpinner, 1, advRow);
+
+            advancedPane.setContent(advGrid);
+            grid.add(advancedPane, 0, row, 3, 1);
+            row++;
+
+            grid.add(new Separator(), 0, row, 3, 1);
+            row++;
+
+            // === Calibration name ===
+            HBox nameLabelBox = createLabelWithTooltip(
+                    "Calibration Name:",
+                    "Optional custom name for the calibration files.\n\n"
+                            + "If left empty, an automatic name is generated:\n"
+                            + "  sunburst_cal_YYYYMMDD_HHMMSS\n\n"
+                            + "Custom names can help identify calibrations:\n"
+                            + "  - slide_batch1\n"
+                            + "  - before_realignment\n"
+                            + "  - optimal_exposure\n\n"
+                            + "Allowed characters: letters, numbers, underscore, hyphen\n"
+                            + "Spaces and special characters are not allowed.");
+            nameLabelBox.getChildren().get(0).setStyle("-fx-font-weight: bold;");
+
+            TextField nameField = new TextField();
+            nameField.setPrefColumnCount(20);
+            nameField.setPromptText("(auto-generated if empty)");
+
+            grid.add(nameLabelBox, 0, row);
+            grid.add(nameField, 1, row);
+            row++;
+
+            grid.add(new Separator(), 0, row, 3, 1);
+            row++;
+
+            // === Output info ===
+            Label outputInfoLabel = new Label(
+                    "Output files saved to: {folder}/\n" + "  - {name}_image.tif    Acquired calibration image\n"
+                            + "  - {name}.npz          Calibration data (used by PPM analysis)\n"
+                            + "  - {name}_plot.png     Visual verification of calibration fit");
+            outputInfoLabel.setStyle(
+                    "-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-family: monospace;");
+            outputInfoLabel.setWrapText(true);
+            grid.add(outputInfoLabel, 0, row, 3, 1);
+
+            // Wrap in ScrollPane
+            ScrollPane scrollPane = new ScrollPane(grid);
+            scrollPane.setFitToWidth(true);
+            scrollPane.setHbarPolicy(ScrollPane.ScrollBarPolicy.NEVER);
+            scrollPane.setVbarPolicy(ScrollPane.ScrollBarPolicy.AS_NEEDED);
+            scrollPane.setPrefViewportHeight(420);
+
+            root.getChildren().add(scrollPane);
+
+            // === Button bar ===
+            Button startBtn = new Button("Start Calibration");
+            startBtn.setDefaultButton(true);
+            Button restoreBtn = new Button("Restore Defaults");
+            Button cancelBtn = new Button("Cancel");
+            cancelBtn.setCancelButton(true);
+
+            // Push Start and Cancel to the right, Restore Defaults to the left
+            Region spacer = new Region();
+            HBox.setHgrow(spacer, Priority.ALWAYS);
+            HBox buttonBar = new HBox(10, restoreBtn, spacer, startBtn, cancelBtn);
+            buttonBar.setAlignment(Pos.CENTER_RIGHT);
+            buttonBar.setPadding(new Insets(10, 0, 0, 0));
+
+            root.getChildren().add(buttonBar);
+
+            // Restore defaults action
+            restoreBtn.setOnAction(e -> {
+                spokesSpinner.getValueFactory().setValue(16);
+                saturationSpinner.getValueFactory().setValue(0.1);
+                valueSpinner.getValueFactory().setValue(0.1);
+                innerRadiusSpinner.getValueFactory().setValue(30);
+                outerRadiusSpinner.getValueFactory().setValue(150);
+                nameField.clear();
+            });
+
+            // Start calibration action with validation
+            startBtn.setOnAction(e -> {
+                String output = outputField.getText().trim();
+
+                if (output.isEmpty()) {
+                    UserErrors.show(
+                            logger, "Invalid Output Folder", "Please specify an output folder for calibration files.");
+                    return;
+                }
+
+                if (spokesSpinner.getValue() < 4) {
+                    UserErrors.show(logger, "Invalid Spoke Count", "Number of spokes must be at least 4.");
+                    return;
+                }
+
+                String name = nameField.getText().trim();
+                if (!name.isEmpty() && !name.matches("[a-zA-Z0-9_\\-]+")) {
+                    UserErrors.show(
+                            logger,
+                            "Invalid Calibration Name",
+                            "Calibration name can only contain letters, numbers, underscores, and hyphens.");
+                    return;
+                }
+
+                // Save preferences
+                String folderPath = outputField.getText().trim();
+                int spokes = spokesSpinner.getValue();
+                double saturation = saturationSpinner.getValue();
+                double value = valueSpinner.getValue();
+                int innerRadius = innerRadiusSpinner.getValue();
+                int outerRadius = outerRadiusSpinner.getValue();
+
+                QPPreferenceDialog.setLastCalibrationFolder(folderPath);
+                QPPreferenceDialog.setSunburstExpectedSpokes(spokes);
+                QPPreferenceDialog.setSunburstSaturationThreshold(saturation);
+                QPPreferenceDialog.setSunburstValueThreshold(value);
+                QPPreferenceDialog.setSunburstRadiusInner(innerRadius);
+                QPPreferenceDialog.setSunburstRadiusOuter(outerRadius);
+
+                SunburstCalibrationParams params = new SunburstCalibrationParams(
+                        folderPath,
+                        "ppm",
+                        spokes,
+                        saturation,
+                        value,
+                        name.isEmpty() ? null : name,
+                        innerRadius,
+                        outerRadius);
+
+                stage.close();
+                future.complete(params);
+            });
+
+            // Cancel action
+            cancelBtn.setOnAction(e -> {
+                stage.close();
+                future.complete(null);
+            });
+
+            // Handle window close (X button) as cancel
+            stage.setOnCloseRequest(e -> {
+                if (!future.isDone()) {
+                    future.complete(null);
+                }
+            });
+
+            Scene scene = new Scene(root, 650, 700);
+            stage.setScene(scene);
+            stage.setResizable(true);
+            stage.show();
+        });
+
+        return future;
+    }
+}

@@ -25,10 +25,10 @@ import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.VersionInfo;
 import qupath.ext.qpsc.controller.MicroscopeController;
+import qupath.ext.qpsc.project.ProjectLogger;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
-import qupath.ext.qpsc.utilities.ProjectLogger;
-import qupath.ext.qpsc.utilities.VersionInfo;
 
 /**
  * Backend client for the in-app bug reporter.

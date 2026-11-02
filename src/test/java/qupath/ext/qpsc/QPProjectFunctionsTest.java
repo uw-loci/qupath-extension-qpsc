@@ -12,7 +12,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.junit.jupiter.api.io.TempDir;
 import org.mockito.junit.jupiter.MockitoExtension;
-import qupath.ext.qpsc.utilities.QPProjectFunctions;
+import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
 

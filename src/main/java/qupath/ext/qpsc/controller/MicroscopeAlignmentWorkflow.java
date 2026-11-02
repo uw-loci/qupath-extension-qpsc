@@ -16,11 +16,27 @@ import javafx.scene.control.ButtonType;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.QPScopeChecks;
+import qupath.ext.qpsc.acquisition.TilingUtilities;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
+import qupath.ext.qpsc.geometry.FlipResolver;
+import qupath.ext.qpsc.geometry.GreenBoxDetector;
+import qupath.ext.qpsc.geometry.ImageFlipHelper;
+import qupath.ext.qpsc.geometry.MacroImageAnalyzer;
+import qupath.ext.qpsc.geometry.MacroImageUtility;
+import qupath.ext.qpsc.geometry.StagePolarity;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
+import qupath.ext.qpsc.project.QPProjectFunctions;
+import qupath.ext.qpsc.stitching.TileProcessingUtilities;
 import qupath.ext.qpsc.ui.*;
+import qupath.ext.qpsc.ui.acquisition.SampleSetupController;
+import qupath.ext.qpsc.ui.alignment.AffineTransformationController;
+import qupath.ext.qpsc.ui.alignment.MacroImageController;
+import qupath.ext.qpsc.ui.alignment.MacroOrientationDialog;
+import qupath.ext.qpsc.ui.connection.MicroscopeSelectionDialog;
 import qupath.ext.qpsc.utilities.*;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
@@ -283,7 +299,7 @@ public class MicroscopeAlignmentWorkflow {
         // the Live Viewer's stage polarity AND camera orientation; flag a sign only if it
         // disagrees with that.
         AffineTransform expected = TransformationFunctions.setupAffineTransformation(
-                1.0, qupath.ext.qpsc.utilities.StageImageTransform.current());
+                1.0, qupath.ext.qpsc.geometry.StageImageTransform.current());
         boolean expectNegX = expected.getScaleX() < 0;
         boolean expectNegY = expected.getScaleY() < 0;
         boolean sxNeg = (sx < 0) != expectNegX;
@@ -891,7 +907,7 @@ public class MicroscopeAlignmentWorkflow {
 
             // Get stage axis inversion settings (not optical flip -- see CLAUDE.md).
             // Read via the composite StagePolarity enum so all call sites agree.
-            qupath.ext.qpsc.utilities.StagePolarity stagePolarity = StagePolarity.current();
+            qupath.ext.qpsc.geometry.StagePolarity stagePolarity = StagePolarity.current();
             boolean stageInvertedX = stagePolarity.invertX;
             boolean stageInvertedY = stagePolarity.invertY;
 
@@ -1667,7 +1683,7 @@ public class MicroscopeAlignmentWorkflow {
                             "Transform Saved",
                             String.format("Successfully saved alignment transform: %s (verified)", finalTransformName));
                 }
-                qupath.ext.qpsc.ui.AcquisitionWizardDialog.notifyCalibrationChanged();
+                qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
             });
 
         } catch (Exception e) {

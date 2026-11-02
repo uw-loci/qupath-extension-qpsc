@@ -7,13 +7,13 @@ import java.util.Optional;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
+import qupath.ext.qpsc.config.HardwareKey;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.utilities.BackgroundProfiles;
-import qupath.ext.qpsc.utilities.BackgroundSettingsReader;
-import qupath.ext.qpsc.utilities.HardwareKey;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.images.ImageData;
 
 /**

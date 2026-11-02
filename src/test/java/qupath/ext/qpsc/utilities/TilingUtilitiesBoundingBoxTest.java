@@ -8,7 +8,10 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
-import qupath.ext.qpsc.utilities.TilingUtilities.TileGrid;
+import qupath.ext.qpsc.acquisition.BoundingBox;
+import qupath.ext.qpsc.acquisition.TilingRequest;
+import qupath.ext.qpsc.acquisition.TilingUtilities;
+import qupath.ext.qpsc.acquisition.TilingUtilities.TileGrid;
 
 /** The tile grid for a bounding box, and that the file the server reads follows it. */
 class TilingUtilitiesBoundingBoxTest {

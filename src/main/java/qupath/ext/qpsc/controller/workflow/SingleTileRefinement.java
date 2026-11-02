@@ -21,11 +21,11 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.MicroscopeController;
 import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 import qupath.ext.qpsc.ui.QpscWindows;
-import qupath.ext.qpsc.ui.SiftAutoAlignHelper;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
-import qupath.ext.qpsc.utilities.TransformationFunctions;
+import qupath.ext.qpsc.ui.alignment.SiftAutoAlignHelper;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
@@ -211,7 +211,7 @@ public class SingleTileRefinement {
         if (!ReferenceTileSelector.wouldAutoPick()) {
             logger.info(
                     "Single-tile refinement: asking the operator to pick a tile -- {}",
-                    qupath.ext.qpsc.ui.AutoAdvanceController.inactiveReason());
+                    qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.inactiveReason());
             return UIFunctions.promptTileSelectionDialogAsync(prompt);
         }
         // Scoring reads an image region per candidate tile, and this can be reached on the FX
@@ -438,7 +438,7 @@ public class SingleTileRefinement {
                                 // watching, and this dialog has no countdown to fire -- accepting a
                                 // position SIFT could not verify would silently mis-align the slide.
                                 // Hand the slide back and notify instead of stalling unannounced.
-                                qupath.ext.qpsc.ui.AutoAdvanceController.requestOperatorAttention(
+                                qupath.ext.qpsc.ui.acquisition.AutoAdvanceController.requestOperatorAttention(
                                         "Single-tile alignment refinement",
                                         "SIFT could not match the reference tile confidently");
                                 Platform.runLater(() ->

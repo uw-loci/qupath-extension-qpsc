@@ -5,8 +5,8 @@ import javafx.beans.property.BooleanProperty;
 import javafx.beans.property.StringProperty;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.lib.gui.prefs.PathPrefs;
 
 /**
@@ -30,7 +30,7 @@ import qupath.lib.gui.prefs.PathPrefs;
  * @author Mike Nelson
  * @since 1.0
  * @see qupath.lib.gui.prefs.PathPrefs
- * @see qupath.ext.qpsc.utilities.MicroscopeConfigManager
+ * @see qupath.ext.qpsc.config.MicroscopeConfigManager
  */
 public class PPMPreferences {
 

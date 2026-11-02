@@ -5,8 +5,8 @@ import java.util.Map;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 
 /**
  * Test class to verify configuration accessor methods work correctly.

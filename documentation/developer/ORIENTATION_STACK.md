@@ -38,11 +38,11 @@ microscope**. When a report says "the arrows move the wrong way", "the Stage Map
 "SIFT moved to the mirror", start here.
 
 Companion material:
-- **Code aggregator:** [`LightPathModel`](../../src/main/java/qupath/ext/qpsc/utilities/LightPathModel.java)
+- **Code aggregator:** [`LightPathModel`](../../src/main/java/qupath/ext/qpsc/geometry/LightPathModel.java)
   -- reads every factor from its authoritative source and prints one `describe()` dump. Logged at
   startup as `Orientation stack at startup: ...` (see `SetupScope`).
-- **Composite transform:** [`StageImageTransform`](../../src/main/java/qupath/ext/qpsc/utilities/StageImageTransform.java).
-- **Macro flip resolution:** [`FlipResolver`](../../src/main/java/qupath/ext/qpsc/utilities/FlipResolver.java).
+- **Composite transform:** [`StageImageTransform`](../../src/main/java/qupath/ext/qpsc/geometry/StageImageTransform.java).
+- **Macro flip resolution:** [`FlipResolver`](../../src/main/java/qupath/ext/qpsc/geometry/FlipResolver.java).
 - **Narrative + visual model:** [`COORDINATE_TRANSFORMS.md`](COORDINATE_TRANSFORMS.md) and the
   published Stage Map orientation artifact.
 

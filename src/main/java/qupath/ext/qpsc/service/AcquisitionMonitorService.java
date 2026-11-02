@@ -8,7 +8,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
 import qupath.ext.qpsc.ui.DialogOwner;
-import qupath.ext.qpsc.ui.SaturationSummaryDialog;
+import qupath.ext.qpsc.ui.acquisition.SaturationSummaryDialog;
 
 /**
  * Shared acquisition monitoring service.

@@ -28,7 +28,7 @@ package qupath.ext.qpsc.preferences;
  * <p>Two situations still hand a slide back deliberately, both because proceeding would
  * mis-align it: tissue too small to contain an interior tile (nothing survives the
  * selector's filters), and a SIFT match below the confidence threshold. Both call
- * {@link qupath.ext.qpsc.ui.AutoAdvanceController#requestOperatorAttention}, which stops
+ * {@link qupath.ext.qpsc.ui.acquisition.AutoAdvanceController#requestOperatorAttention}, which stops
  * auto-advance for that slide only and sends a push notification.
  *
  * <p>The first point measured on each slide also runs a tissue search before focusing

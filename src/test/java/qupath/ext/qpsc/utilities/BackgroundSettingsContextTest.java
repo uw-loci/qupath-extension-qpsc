@@ -8,6 +8,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
 
 /** The {@code context} block of a background_settings.yml: the setup the set was collected under. */
 class BackgroundSettingsContextTest {
