@@ -346,7 +346,7 @@ The new code path lives in `_acquire_tile_angles_angle_outer` in `microscope_com
 
 ## PPM Menu Contributions
 
-`PPMModalityHandler.getModalityMenuContributions()` adds four items to the PPM menu in QuPath:
+`PPMModalityUi.getMenuContributions()` (reached through `ModalityRegistry.getUi(handler)`) adds four items to the PPM menu in QuPath:
 
 | Menu Item | Workflow | Purpose |
 |-----------|----------|---------|
