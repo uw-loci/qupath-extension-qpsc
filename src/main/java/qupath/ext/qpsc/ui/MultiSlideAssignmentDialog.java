@@ -1094,7 +1094,7 @@ public final class MultiSlideAssignmentDialog {
         }
         String scanner = ImageMetadataManager.getSourceMicroscope(entry);
         if (scanner == null || scanner.isEmpty()) {
-            scanner = PersistentPreferences.getSelectedScannerProperty();
+            scanner = PersistentPreferences.getSelectedScanner();
         }
         if (scanner == null || scanner.isEmpty()) {
             logger.info("No scanner known for '{}'; previewing uncropped macro", entry.getImageName());

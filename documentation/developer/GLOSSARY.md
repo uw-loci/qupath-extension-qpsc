@@ -52,6 +52,15 @@ A pixel size or FOV without a unit in its name is a defect, because both exist i
 | inverted | Stage wiring: which way a positive command moves. Affects command direction only. `stage.polarity` in the config holds it. | using `flipped` |
 | baked parity | The flip already written into a stored image. | |
 
+A pixel size comes from one of four places, and they are not interchangeable:
+
+| Source | Read with | Use for |
+|---|---|---|
+| The open image | `getPixelCalibration()` | Anything in that image's pixels |
+| The scanner config | `MacroImageUtility.getMacroPixelSize` | The macro image |
+| The microscope config | `MicroscopeConfigManager.getHardwarePixelSize` | An objective and detector pair |
+| Micro-Manager, live | `MicroscopeSocketClient.getMicroscopePixelSize` | Which objective is really in place |
+
 Flipped and inverted are independent, and `COORDINATE_TRANSFORMS.md` and `ORIENTATION_STACK.md` define them fully.
 
 ## Projects and images

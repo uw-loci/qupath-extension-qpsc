@@ -109,7 +109,7 @@ public class MacroImageUtility {
      * @throws IllegalStateException if no scanner is selected in preferences
      */
     public static CroppedMacroResult cropToSlideArea(BufferedImage macroImage) {
-        String scannerName = PersistentPreferences.getSelectedScannerProperty();
+        String scannerName = PersistentPreferences.getSelectedScanner();
         if (scannerName == null || scannerName.isEmpty()) {
             throw new IllegalStateException("No scanner selected in preferences. Cannot determine crop bounds. "
                     + "Please select a scanner in Edit > Preferences.");
@@ -288,7 +288,7 @@ public class MacroImageUtility {
      * @throws IllegalStateException if scanner is not configured or pixel size is missing
      */
     public static double getMacroPixelSize() {
-        String scannerName = PersistentPreferences.getSelectedScannerProperty();
+        String scannerName = PersistentPreferences.getSelectedScanner();
         if (scannerName == null || scannerName.isEmpty()) {
             String error = "No scanner selected in preferences. Please select a scanner in Edit > Preferences.";
             logger.error(error);

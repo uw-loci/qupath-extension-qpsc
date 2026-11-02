@@ -2,23 +2,18 @@ package qupath.ext.qpsc.controller.workflow;
 
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
-import java.io.File;
-import java.util.Map;
 import java.util.concurrent.CancellationException;
 import java.util.concurrent.CompletableFuture;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.controller.MicroscopeController;
-import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.AffineTransformationController;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MacroImageUtility;
-import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.projects.Project;
@@ -167,37 +162,11 @@ public class ManualAlignmentPath {
     /**
      * Loads pixel size for manual alignment.
      *
-     * <p>Attempts to load from:
-     * <ol>
-     *   <li>Saved scanner configuration if available</li>
-     *   <li>MacroImageUtility fallback configuration</li>
-     * </ol>
-     *
      * @return CompletableFuture containing the pixel size in micrometers
      */
     private CompletableFuture<Double> loadPixelSize() {
         return CompletableFuture.supplyAsync(() -> {
             try {
-                // Try saved scanner first
-                String savedScanner = PersistentPreferences.getSelectedScanner();
-                if (savedScanner != null && !savedScanner.isEmpty()) {
-                    String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                    File configDir = new File(configPath).getParentFile();
-                    File scannerConfigFile = new File(configDir, "config_" + savedScanner + ".yml");
-
-                    if (scannerConfigFile.exists()) {
-                        Map<String, Object> scannerConfig =
-                                MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
-                        Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
-
-                        if (pixelSize != null && pixelSize > 0) {
-                            logger.info("Loaded pixel size {} from scanner config", pixelSize);
-                            return pixelSize;
-                        }
-                    }
-                }
-
-                // Try to get from MacroImageUtility - will throw if not configured
                 return MacroImageUtility.getMacroPixelSize();
             } catch (Exception e) {
                 logger.error("Failed to load pixel size", e);

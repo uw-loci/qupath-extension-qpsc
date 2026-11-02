@@ -126,7 +126,8 @@ public class MockMicroscopeServer implements AutoCloseable {
 
     /** Puts back what {@link #useMockConfigPath} replaced. */
     public static void restoreConfigPath(String saved) {
-        qupath.ext.qpsc.preferences.QPPreferenceDialog.microscopeConfigFileProperty().set(saved);
+        qupath.ext.qpsc.preferences.QPPreferenceDialog.microscopeConfigFileProperty()
+                .set(saved);
     }
 
     public void setAutofocusReply(String reply) {

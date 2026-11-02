@@ -112,7 +112,7 @@ public class ExistingAlignmentPath {
                 String scannerName = state.alignmentChoice.selectedTransform().getMountingMethod();
                 logger.info("Loading pixel size for scanner: {}", scannerName);
 
-                return loadScannerPixelSize(scannerName);
+                return MacroImageUtility.getMacroPixelSize(scannerName);
             } catch (Exception e) {
                 logger.error("Failed to load pixel size", e);
                 throw new RuntimeException("Cannot load macro pixel size: " + e.getMessage());
@@ -589,29 +589,6 @@ public class ExistingAlignmentPath {
     }
 
     // Helper methods
-
-    /**
-     * Loads scanner-specific pixel size from configuration.
-     */
-    private double loadScannerPixelSize(String scannerName) {
-        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-        File configDir = new File(configPath).getParentFile();
-        File scannerConfigFile = new File(configDir, "config_" + scannerName + ".yml");
-
-        if (scannerConfigFile.exists()) {
-            Map<String, Object> scannerConfig = MinorFunctions.loadYamlFile(scannerConfigFile.getAbsolutePath());
-            Double pixelSize = MinorFunctions.getYamlDouble(scannerConfig, "macro", "pixel_size_um");
-
-            if (pixelSize != null && pixelSize > 0) {
-                return pixelSize;
-            }
-        }
-
-        // No fallback - throw exception
-        throw new IllegalStateException("Scanner '" + scannerName + "' has no valid macro pixel size configured.\n"
-                + "Please add 'macro.pixel_size_um' to the scanner configuration file:\n"
-                + scannerConfigFile.getAbsolutePath());
-    }
 
     /**
      * Crops macro image based on scanner configuration.

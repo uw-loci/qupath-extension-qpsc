@@ -33,14 +33,6 @@ public class PersistentPreferences {
     private static final StringProperty selectedScannerProperty =
             PathPrefs.createPersistentPreference("selectedScanner", "Generic");
 
-    public static String getSelectedScannerProperty() {
-        return selectedScannerProperty.get();
-    }
-
-    public static void setSelectedScannerProperty(String scanner) {
-        selectedScannerProperty.set(scanner);
-    }
-
     public static StringProperty selectedScannerProperty() {
         return selectedScannerProperty;
     }
