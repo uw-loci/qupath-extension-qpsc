@@ -79,9 +79,11 @@ class SocketCommandRepliesTest {
 
     private MockMicroscopeServer server;
     private MicroscopeSocketClient client;
+    private String savedConfigPath;
 
     @BeforeEach
     void connect() throws IOException {
+        savedConfigPath = MockMicroscopeServer.useMockConfigPath();
         server = MockMicroscopeServer.createOnRandomPort();
         server.start();
         client = new MicroscopeSocketClient("localhost", server.getPort());
@@ -90,6 +92,7 @@ class SocketCommandRepliesTest {
 
     @AfterEach
     void close() {
+        MockMicroscopeServer.restoreConfigPath(savedConfigPath);
         client.close();
         server.stop();
     }

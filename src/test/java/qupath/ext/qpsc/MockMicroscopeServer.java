@@ -113,6 +113,22 @@ public class MockMicroscopeServer implements AutoCloseable {
         return lastScriptedMessages.get(command);
     }
 
+    /**
+     * Sets the config path preference, which connect() requires, and returns the old value to pass
+     * to {@link #restoreConfigPath}. The path only travels to this mock, which never opens it.
+     */
+    public static String useMockConfigPath() {
+        var path = qupath.ext.qpsc.preferences.QPPreferenceDialog.microscopeConfigFileProperty();
+        String saved = path.get();
+        path.set("mock_config.yml");
+        return saved;
+    }
+
+    /** Puts back what {@link #useMockConfigPath} replaced. */
+    public static void restoreConfigPath(String saved) {
+        qupath.ext.qpsc.preferences.QPPreferenceDialog.microscopeConfigFileProperty().set(saved);
+    }
+
     public void setAutofocusReply(String reply) {
         autofocusReply = reply;
     }

@@ -31,10 +31,12 @@ class MicroscopeSocketClientTest {
 
     private MockMicroscopeServer mockServer;
     private MicroscopeSocketClient client;
+    private String savedConfigPath;
     private int serverPort;
 
     @BeforeEach
     void setUp() throws IOException {
+        savedConfigPath = MockMicroscopeServer.useMockConfigPath();
         // Create and start mock server
         mockServer = MockMicroscopeServer.createOnRandomPort();
         mockServer.start();
@@ -46,6 +48,7 @@ class MicroscopeSocketClientTest {
 
     @AfterEach
     void tearDown() {
+        MockMicroscopeServer.restoreConfigPath(savedConfigPath);
         // Clean up
         if (client != null) {
             client.close();
