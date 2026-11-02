@@ -170,12 +170,6 @@ abstract class AcquisitionDialogBuilder<R> {
 
     // ==================== What differs between the dialogs ====================
 
-    /** Theme-aware text color for a semantic name such as "green", "amber" or "red". */
-    protected abstract String accentColor(String semanticColor);
-
-    /** Font size of secondary text, for {@link #subtleTextStyle}. */
-    protected abstract int subtleTextFontPx();
-
     /** Text the sample name field starts with. */
     protected abstract String initialSampleName();
 
@@ -185,26 +179,11 @@ abstract class AcquisitionDialogBuilder<R> {
     /** Adds the rows about the project to the project section, starting at {@code row}. */
     protected abstract void addProjectRows(GridPane grid, int row);
 
-    /** Whether the WB mode tooltip names per-angle as the default. */
-    protected abstract boolean wbTooltipNamesPerAngleDefault();
-
     /** Adds rows after the flat-field selector in the hardware section, starting at {@code row}. */
     protected void addHardwareRows(GridPane grid, int row) {}
 
-    /** Called at the end of the modality combo's listener, for a non-null modality. */
-    protected void afterModalitySelected() {}
-
-    /** Whether an objective or detector with no friendly name is listed by ID alone. */
-    protected abstract boolean listsHardwareByIdWhenUnnamed();
-
-    /** Whether modes with valid backgrounds still lose the PPM-only modes on non-PPM modalities. */
-    protected abstract boolean filtersValidWbModesToModality();
-
     /** Called when the modality panel has been replaced: true if it has options to show. */
     protected void onModalityOptionsChanged(boolean hasOptions) {}
-
-    /** The placeholder shown in the modality panel for a modality with no options. */
-    protected abstract Label createNoModalityOptionsLabel(String modality);
 
     /** Largest value the Z range spinner accepts, in um. */
     protected abstract double zRangeMaxUm();
@@ -214,18 +193,6 @@ abstract class AcquisitionDialogBuilder<R> {
 
     /** Recomputes the preview. Runs when the debounce timer ends. */
     protected abstract void updatePreviewPanel();
-
-    /** Text placed before a time or storage estimate. */
-    protected abstract String estimatePrefix();
-
-    /** Decimal places of a time estimate given in minutes. */
-    protected abstract int estimateMinuteDecimals();
-
-    /** Color of the title of the error summary. */
-    protected abstract String errorTitleColor();
-
-    /** Checks the projects folder, recording an error if it is invalid. Does nothing here. */
-    protected void validateProjectsFolder() {}
 
     /** Checks the fields only this dialog has. Runs after the hardware checks. */
     protected abstract void validateWorkflowFields();
@@ -247,7 +214,24 @@ abstract class AcquisitionDialogBuilder<R> {
 
     /** Secondary or description text style that works in both light and dark themes. */
     protected String subtleTextStyle() {
-        return "-fx-font-size: " + subtleTextFontPx() + "px; -fx-opacity: 0.65;";
+        return "-fx-font-size: 11px; -fx-opacity: 0.65;";
+    }
+
+    /** Accent text color for "green", "blue", "amber" or "red" that reads well in both themes. */
+    protected String accentColor(String semanticColor) {
+        boolean dark = isDark();
+        switch (semanticColor) {
+            case "green":
+                return dark ? "#66BB6A" : "#2E7D32";
+            case "blue":
+                return dark ? "#64B5F6" : "#1565C0";
+            case "amber":
+                return dark ? "#FFD54F" : "#856404";
+            case "red":
+                return dark ? "#EF5350" : "#C62828";
+            default:
+                return dark ? "#B0BEC5" : "#424242";
+        }
     }
 
     // ==================== Project section ====================
@@ -297,6 +281,16 @@ abstract class AcquisitionDialogBuilder<R> {
         projectPane.setStyle("-fx-font-weight: bold;");
     }
 
+    /** Creates {@link #folderField} from the saved projects folder, validated on every edit. */
+    protected void createProjectsFolderField() {
+        folderField = new TextField(QPPreferenceDialog.getProjectsFolderProperty());
+        folderField.setPrefWidth(250);
+        folderField.textProperty().addListener((obs, oldVal, newVal) -> {
+            validateProjectsFolder();
+            updateErrorSummary();
+        });
+    }
+
     /** {@link #folderField} with a Browse button beside it. */
     protected HBox createProjectsFolderBox() {
         Button browseBtn = new Button("Browse...");
@@ -339,8 +333,7 @@ abstract class AcquisitionDialogBuilder<R> {
                 + "  Off - No white balance correction\n"
                 + "  Camera AWB - Set in MicroManager before acquisition\n"
                 + "  Simple (90deg) - Use 90deg R:G:B ratios, scaled per angle\n"
-                + "  Per-angle (PPM) - Independent calibration per angle"
-                + (wbTooltipNamesPerAngleDefault() ? " (default)" : "")));
+                + "  Per-angle (PPM) - Independent calibration per angle"));
 
         wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
             if (newVal != null) {
@@ -453,7 +446,7 @@ abstract class AcquisitionDialogBuilder<R> {
                 List<WbMode> validModes = BackgroundValidityChecker.getValidModes(
                         baseFolder, modality, objective, detector, configManager);
                 for (WbMode mode : validModes) {
-                    if (!filtersValidWbModesToModality() || isPPM || !isPpmOnlyMode(mode)) {
+                    if (isPPM || !isPpmOnlyMode(mode)) {
                         wbModeComboBox.getItems().add(mode.getDisplayName());
                     }
                 }
@@ -523,7 +516,6 @@ abstract class AcquisitionDialogBuilder<R> {
                 updateObjectivesForModality(newVal);
                 updateModalityUI(newVal);
                 updateAfStrategyDefaultForModality(newVal);
-                afterModalitySelected();
             }
         });
 
@@ -626,7 +618,7 @@ abstract class AcquisitionDialogBuilder<R> {
 
     private String hardwareDisplayItem(String friendlyName, String id) {
         boolean named = friendlyName != null && !friendlyName.isEmpty();
-        return named || !listsHardwareByIdWhenUnnamed() ? friendlyName + " (" + id + ")" : id;
+        return named ? friendlyName + " (" + id + ")" : id;
     }
 
     private void updateObjectivesForModality(String modality) {
@@ -737,7 +729,9 @@ abstract class AcquisitionDialogBuilder<R> {
             }
         } else {
             modalityUI = null;
-            modalityContent.getChildren().add(createNoModalityOptionsLabel(modality));
+            Label noOptions = new Label("No additional options for " + modality + " modality.");
+            noOptions.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
+            modalityContent.getChildren().add(noOptions);
             onModalityOptionsChanged(false);
         }
 
@@ -1219,25 +1213,83 @@ abstract class AcquisitionDialogBuilder<R> {
         return zPlanes;
     }
 
-    /** Formats a duration in seconds as seconds, minutes or hours. */
-    protected String formatTime(double seconds) {
-        String prefix = estimatePrefix();
+    /** Whether the modality takes one image per rotation angle, rather than per channel. */
+    protected boolean isMultiAngle(String modality) {
+        ModalityHandler handler = ModalityRegistry.getHandler(modality);
+        return handler != null && handler.isMultiAngleModality();
+    }
+
+    /**
+     * Gets the number of images captured per tile position for a modality.
+     * For PPM this is the number of rotation angles; for fluorescence/BF-IF
+     * this is the number of channels.
+     *
+     * @param modality The modality name
+     * @return Images per tile (minimum 1)
+     */
+    protected int getImagesPerTileForModality(String modality) {
+        if (modality == null) return 1;
+
+        ModalityHandler handler = ModalityRegistry.getHandler(modality);
+        if (handler != null) {
+            // PPM: use angle overrides if available, else default angle count
+            if (handler.isMultiAngleModality()) {
+                if (modalityUI != null) {
+                    Map<String, Double> overrides = modalityUI.getAngleOverrides();
+                    if (overrides != null && !overrides.isEmpty()) {
+                        return overrides.size();
+                    }
+                }
+                return handler.getDefaultAngleCount();
+            }
+        }
+
+        // Non-PPM: count channels from the modality config
+        try {
+            List<Channel> channels = configManager.getModalityChannels(modality);
+            if (channels != null && !channels.isEmpty()) {
+                return channels.size();
+            }
+        } catch (Exception e) {
+            logger.debug("Could not read channels for modality {}: {}", modality, e.getMessage());
+        }
+        return 1;
+    }
+
+    /**
+     * Seconds to acquire {@code images} files. Uses the per-file mean saved from previous
+     * acquisitions, which already includes autofocus overhead at its actual frequency, else
+     * a conservative 2 seconds per image.
+     */
+    protected double estimatedAcquisitionSeconds(int images) {
+        if (PersistentPreferences.hasTimingData()) {
+            return PersistentPreferences.estimateAcquisitionTime(images) / 1000.0;
+        }
+        return images * 2.0;
+    }
+
+    /** Formats a time estimate and says what it is based on. */
+    protected String formatTimeEstimate(double seconds) {
+        String basis = PersistentPreferences.hasTimingData() ? " (based on previous acquisitions)" : " (estimate)";
+        return formatTime(seconds) + basis;
+    }
+
+    private String formatTime(double seconds) {
         if (seconds < 60) {
-            return String.format(prefix + "%.0f seconds", seconds);
+            return String.format("~%.0f seconds", seconds);
         } else if (seconds < 3600) {
-            return String.format(prefix + "%." + estimateMinuteDecimals() + "f minutes", seconds / 60.0);
+            return String.format("~%.0f minutes", seconds / 60.0);
         } else {
-            return String.format(prefix + "%.1f hours", seconds / 3600.0);
+            return String.format("~%.1f hours", seconds / 3600.0);
         }
     }
 
     /** Formats a size in megabytes as MB or GB. */
     protected String formatStorage(double megabytes) {
-        String prefix = estimatePrefix();
         if (megabytes < 1024) {
-            return String.format(prefix + "%.0f MB", megabytes);
+            return String.format("~%.0f MB", megabytes);
         } else {
-            return String.format(prefix + "%.1f GB", megabytes / 1024.0);
+            return String.format("~%.1f GB", megabytes / 1024.0);
         }
     }
 
@@ -1254,10 +1306,26 @@ abstract class AcquisitionDialogBuilder<R> {
         errorSummaryPanel.setManaged(false);
 
         Label errorTitle = new Label("Please fix the following errors:");
-        errorTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: " + errorTitleColor() + ";");
+        errorTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: " + accentColor("amber") + ";");
 
         errorListBox = new VBox(3);
         errorSummaryPanel.getChildren().addAll(errorTitle, errorListBox);
+    }
+
+    /**
+     * A new project needs a folder to go in. Left empty, the project was created relative
+     * to QuPath's working directory and the run stopped there with nothing on screen.
+     */
+    private void validateProjectsFolder() {
+        boolean needsFolder = !hasOpenProject;
+        String text = folderField != null ? folderField.getText().trim() : "";
+        if (needsFolder && text.isEmpty()) {
+            validationErrors.put("projectsFolder", "Choose a projects folder for the new project");
+        } else if (needsFolder && !new File(text).isAbsolute()) {
+            validationErrors.put("projectsFolder", "The projects folder must be a full path");
+        } else {
+            validationErrors.remove("projectsFolder");
+        }
     }
 
     /** Checks every field, recording an error per invalid one, and updates the error summary. */

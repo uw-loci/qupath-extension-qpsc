@@ -236,70 +236,13 @@ public class UnifiedAcquisitionController {
         }
 
         @Override
-        protected int subtleTextFontPx() {
-            return 11;
-        }
-
-        @Override
-        protected String accentColor(String semantic) {
-            boolean dark = isDark();
-            switch (semantic) {
-                case "green":
-                    return dark ? "#66BB6A" : "#28a745";
-                case "red":
-                    return dark ? "#EF5350" : "#C62828";
-                case "amber":
-                    return dark ? "#FFD54F" : "#856404";
-                default:
-                    return dark ? "#B0BEC5" : "#666";
-            }
-        }
-
-        @Override
         protected String initialSampleName() {
             return PersistentPreferences.getLastSampleName();
         }
 
         @Override
-        protected boolean wbTooltipNamesPerAngleDefault() {
-            return true;
-        }
-
-        @Override
-        protected boolean listsHardwareByIdWhenUnnamed() {
-            return true;
-        }
-
-        @Override
-        protected boolean filtersValidWbModesToModality() {
-            return true;
-        }
-
-        @Override
         protected double zRangeMaxUm() {
             return 200.0;
-        }
-
-        @Override
-        protected String estimatePrefix() {
-            return "";
-        }
-
-        @Override
-        protected int estimateMinuteDecimals() {
-            return 1;
-        }
-
-        @Override
-        protected String errorTitleColor() {
-            return accentColor("amber");
-        }
-
-        @Override
-        protected Label createNoModalityOptionsLabel(String modality) {
-            Label noOptions = new Label("No additional options for " + modality + " modality.");
-            noOptions.setStyle("-fx-font-style: italic; -fx-opacity: 0.65;");
-            return noOptions;
         }
 
         Optional<UnifiedAcquisitionResult> buildAndShow() {
@@ -414,13 +357,7 @@ public class UnifiedAcquisitionController {
         protected void addProjectRows(GridPane grid, int row) {
             // The projects-folder field is built once so what the operator typed survives a
             // project being opened and closed; the rows around it follow the project state.
-            folderField = new TextField();
-            folderField.setPrefWidth(250);
-            folderField.setText(QPPreferenceDialog.getProjectsFolderProperty());
-            folderField.textProperty().addListener((obs, oldVal, newVal) -> {
-                validateProjectsFolder();
-                updateErrorSummary();
-            });
+            createProjectsFolderField();
             projectRowsBox = new VBox(8);
             grid.add(projectRowsBox, 0, row, 2, 1);
             rebuildProjectRows();
@@ -1186,14 +1123,13 @@ public class UnifiedAcquisitionController {
                 int totalTiles = tilesX * tilesY;
                 setTileCount(String.format("%d tiles (%d x %d)", totalTiles, tilesX, tilesY));
 
-                // Get angle count from modality handler for preview estimation
-                int angleCount = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(modality)
-                        .getDefaultAngleCount();
+                // Per-tile image count (angles for PPM, channels for fluorescence/BF-IF)
+                int imagesPerTile = getImagesPerTileForModality(modality);
 
                 // Z-stack multiplier
                 int zPlanes = zPlaneCount();
 
-                int totalImages = totalTiles * angleCount * zPlanes;
+                int totalImages = totalTiles * imagesPerTile * zPlanes;
 
                 // Time-lapse multiplier: repeat the full acquisition over N timepoints.
                 int timepoints = 1;
@@ -1203,15 +1139,16 @@ public class UnifiedAcquisitionController {
                     intervalSec = Math.max(0.0, PersistentPreferences.getTimeLapseIntervalSec());
                 }
 
-                // Estimate time: ~2s per image for capture+move, plus ~10s per AF tile
-                double perTimepointAcqSeconds = totalImages * 2.0;
+                double perTimepointAcqSeconds = estimatedAcquisitionSeconds(totalImages);
                 totalImages *= timepoints;
                 // If the interval exceeds per-timepoint acquisition the run is interval-bound:
                 // (N-1) intervals to start the last timepoint, plus that timepoint's acquisition.
                 double estimatedSeconds = timepoints > 1
-                        ? Math.max(totalImages * 2.0, (timepoints - 1) * intervalSec + perTimepointAcqSeconds)
+                        ? Math.max(
+                                estimatedAcquisitionSeconds(totalImages),
+                                (timepoints - 1) * intervalSec + perTimepointAcqSeconds)
                         : perTimepointAcqSeconds;
-                String timeEstimate = formatTime(estimatedSeconds);
+                String timeEstimate = formatTimeEstimate(estimatedSeconds);
 
                 // Estimate storage (rough: 4MB per image for 16-bit 2048x2048)
                 double estimatedMB = totalImages * 4.0;
@@ -1247,7 +1184,9 @@ public class UnifiedAcquisitionController {
                         String.format("Field of View: %.0f x %.0f um (%s)", frameWidth, frameHeight, objective));
                 previewTileGridLabel.setText(String.format(
                         "Tile Grid: %d x %d = %d tiles (%.0f%% overlap)", tilesX, tilesY, totalTiles, overlapPercent));
-                String anglesText = String.format("Angles: %d (%s modality)", angleCount, modality);
+                String anglesText = String.format(
+                        "%s: %d (%s modality)",
+                        isMultiAngle(modality) ? "Angles" : "Channels", imagesPerTile, modality);
                 if (zPlanes > 1) {
                     anglesText += String.format(", Z-planes: %d", zPlanes);
                 }
@@ -1365,23 +1304,6 @@ public class UnifiedAcquisitionController {
         @Override
         protected void validateWorkflowFields() {
             validateRegion();
-        }
-
-        /**
-         * A new project needs a folder to go in. Left empty, the project was created relative
-         * to QuPath's working directory and the run stopped there with nothing on screen.
-         */
-        @Override
-        protected void validateProjectsFolder() {
-            boolean needsFolder = !hasOpenProject;
-            String text = folderField != null ? folderField.getText().trim() : "";
-            if (needsFolder && text.isEmpty()) {
-                validationErrors.put("projectsFolder", "Choose a projects folder for the new project");
-            } else if (needsFolder && !new File(text).isAbsolute()) {
-                validationErrors.put("projectsFolder", "The projects folder must be a full path");
-            } else {
-                validationErrors.remove("projectsFolder");
-            }
         }
 
         private UnifiedAcquisitionResult createResult() {

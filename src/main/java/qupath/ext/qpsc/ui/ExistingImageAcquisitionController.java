@@ -18,9 +18,6 @@ import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
-import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.ModalityHandler;
-import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -346,11 +343,6 @@ public class ExistingImageAcquisitionController {
                     && qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(openEntry) != null;
         }
 
-        @Override
-        protected int subtleTextFontPx() {
-            return 10;
-        }
-
         /** Info-banner background style for a given semantic color. */
         private String bannerStyle(String semanticColor) {
             // semanticColor: "green", "blue", "yellow"
@@ -378,24 +370,6 @@ public class ExistingImageAcquisitionController {
             }
         }
 
-        /** Accent text color that reads well in both themes. */
-        @Override
-        protected String accentColor(String semanticColor) {
-            boolean dark = isDark();
-            switch (semanticColor) {
-                case "green":
-                    return dark ? "#66BB6A" : "#2E7D32";
-                case "blue":
-                    return dark ? "#64B5F6" : "#1565C0";
-                case "amber":
-                    return dark ? "#FFD54F" : "#F57F17";
-                case "red":
-                    return dark ? "#EF5350" : "#C62828";
-                default:
-                    return dark ? "#B0BEC5" : "#424242";
-            }
-        }
-
         @Override
         protected String initialSampleName() {
             return defaultSampleName;
@@ -407,35 +381,8 @@ public class ExistingImageAcquisitionController {
         }
 
         @Override
-        protected boolean wbTooltipNamesPerAngleDefault() {
-            return false;
-        }
-
-        @Override
-        protected void afterModalitySelected() {
-            updateWhiteBalanceVisibility();
-        }
-
-        @Override
-        protected boolean listsHardwareByIdWhenUnnamed() {
-            return false;
-        }
-
-        @Override
-        protected boolean filtersValidWbModesToModality() {
-            return false;
-        }
-
-        @Override
         protected void onModalityOptionsChanged(boolean hasOptions) {
             modalityPane.setExpanded(hasOptions);
-        }
-
-        @Override
-        protected Label createNoModalityOptionsLabel(String modality) {
-            Label placeholder = new Label("No specific options for " + modality);
-            placeholder.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
-            return placeholder;
         }
 
         @Override
@@ -446,21 +393,6 @@ public class ExistingImageAcquisitionController {
         @Override
         protected Node[] previewContentNodes() {
             return new Node[] {previewAnnotationsLabel, previewTilesLabel, previewTimeLabel, previewStorageLabel};
-        }
-
-        @Override
-        protected String estimatePrefix() {
-            return "~";
-        }
-
-        @Override
-        protected int estimateMinuteDecimals() {
-            return 0;
-        }
-
-        @Override
-        protected String errorTitleColor() {
-            return isDark() ? "#ffc107" : "#856404";
         }
 
         @Override
@@ -609,9 +541,7 @@ public class ExistingImageAcquisitionController {
         @Override
         protected void addProjectRows(GridPane grid, int row) {
             if (!hasOpenProject) {
-                // Projects folder
-                folderField = new TextField(QPPreferenceDialog.getProjectsFolderProperty());
-                folderField.setPrefWidth(250);
+                createProjectsFolderField();
 
                 grid.add(new Label("Projects Folder:"), 0, row);
                 grid.add(createProjectsFolderBox(), 1, row);
@@ -1634,9 +1564,7 @@ public class ExistingImageAcquisitionController {
                 // Update labels with actual counts
                 String zSuffix = zPlanes > 1 ? String.format(" x %d Z-planes", zPlanes) : "";
                 if (imagesPerTile > 1) {
-                    ModalityHandler handler = ModalityRegistry.getHandler(modality);
-                    boolean isPpm = handler != null && handler.isMultiAngleModality();
-                    String unit = isPpm ? "angles" : "channels";
+                    String unit = isMultiAngle(modality) ? "angles" : "channels";
                     previewTilesLabel.setText(String.format(
                             "Images: %,d tiles x %d %s%s = %,d images",
                             totalTiles, imagesPerTile, unit, zSuffix, totalImages));
@@ -1645,19 +1573,7 @@ public class ExistingImageAcquisitionController {
                             String.format("Tiles: %,d%s = %,d images", totalTiles, zSuffix, totalImages));
                 }
 
-                // Time estimate using persistent per-file mean from previous acquisitions.
-                // The stored mean already bakes in autofocus overhead at its actual
-                // occurrence frequency, so the estimate is a simple product.
-                String timeEstimate;
-                if (PersistentPreferences.hasTimingData()) {
-                    long estimatedMs = PersistentPreferences.estimateAcquisitionTime(totalImages);
-                    double estimatedSeconds = estimatedMs / 1000.0;
-                    timeEstimate = formatTime(estimatedSeconds) + " (based on previous acquisitions)";
-                } else {
-                    // Fallback: ~2 seconds per image (conservative estimate)
-                    double estimatedSeconds = totalImages * 2.0;
-                    timeEstimate = formatTime(estimatedSeconds) + " (estimate)";
-                }
+                String timeEstimate = formatTimeEstimate(estimatedAcquisitionSeconds(totalImages));
                 previewTimeLabel.setText("Estimated Time: " + timeEstimate);
 
                 // Storage estimate: ~4 MB per image
@@ -1708,43 +1624,6 @@ public class ExistingImageAcquisitionController {
             }
 
             return totalTiles;
-        }
-
-        /**
-         * Gets the number of images captured per tile position for a modality.
-         * For PPM this is the number of rotation angles; for fluorescence/BF-IF
-         * this is the number of channels.
-         *
-         * @param modality The modality name
-         * @return Images per tile (minimum 1)
-         */
-        private int getImagesPerTileForModality(String modality) {
-            if (modality == null) return 1;
-
-            ModalityHandler handler = ModalityRegistry.getHandler(modality);
-            if (handler != null) {
-                // PPM: use angle overrides if available, else default angle count
-                if (handler.isMultiAngleModality()) {
-                    if (modalityUI != null) {
-                        Map<String, Double> overrides = modalityUI.getAngleOverrides();
-                        if (overrides != null && !overrides.isEmpty()) {
-                            return overrides.size();
-                        }
-                    }
-                    return handler.getDefaultAngleCount();
-                }
-            }
-
-            // Non-PPM: count channels from the modality config
-            try {
-                List<Channel> channels = configManager.getModalityChannels(modality);
-                if (channels != null && !channels.isEmpty()) {
-                    return channels.size();
-                }
-            } catch (Exception e) {
-                logger.debug("Could not read channels for modality {}: {}", modality, e.getMessage());
-            }
-            return 1;
         }
 
         private ExistingImageAcquisitionConfig createResult() {
