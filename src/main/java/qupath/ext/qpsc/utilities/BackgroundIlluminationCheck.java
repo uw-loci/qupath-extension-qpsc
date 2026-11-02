@@ -14,7 +14,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.AngleExposure;
-import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.ui.DialogOwner;
 
 /**
@@ -92,8 +92,8 @@ public final class BackgroundIlluminationCheck {
         if (cfg == null || baseModality == null || objective == null || detector == null || bgBaseFolder == null) {
             return true;
         }
-        if (LCPolScopeModalityHandler.isLcPolScope(baseModality)) {
-            // Not a flat-field reference: the server checks an LC-PolScope background against the
+        if (ModalityRegistry.getHandler(baseModality).reconstructsFromBackground()) {
+            // Not a flat-field reference: the server checks such a background against the
             // LC calibration, exposure and adapter wavelength it was collected under
             // (background_provenance.json), and refuses or warns per tile there.
             return true;

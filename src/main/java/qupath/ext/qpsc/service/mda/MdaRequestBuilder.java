@@ -3,7 +3,6 @@ package qupath.ext.qpsc.service.mda;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -66,8 +65,8 @@ public final class MdaRequestBuilder {
         }
 
         String modalityBaseName = sample != null ? sample.modality() : commandBuilder.getScanType();
-        boolean ppm = modalityBaseName != null
-                && modalityBaseName.toLowerCase(Locale.ROOT).startsWith("ppm");
+        boolean ppm = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(modalityBaseName)
+                .usesRotationStage();
 
         List<ChannelExposure> channelExposures = commandBuilder.getChannelExposures();
         List<AngleExposure> angleExposures = commandBuilder.getAngleExposures();

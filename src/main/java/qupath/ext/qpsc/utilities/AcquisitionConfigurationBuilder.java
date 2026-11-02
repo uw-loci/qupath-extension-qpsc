@@ -10,7 +10,6 @@ import qupath.ext.qpsc.modality.BackgroundValidationResult;
 import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -68,7 +67,7 @@ public class AcquisitionConfigurationBuilder {
                 bgEnabled = true;
             }
         }
-        if (LCPolScopeModalityHandler.isLcPolScope(baseModality)) {
+        if (ModalityRegistry.getHandler(baseModality).reconstructsFromBackground()) {
             bgEnabled = bgBaseFolder != null;
         }
         return bgEnabled;
@@ -87,7 +86,7 @@ public class AcquisitionConfigurationBuilder {
     public static FlatfieldMethod effectiveFlatfieldMethod(
             MicroscopeConfigManager configManager, String baseModality, String detector) {
         if ((detector != null && configManager.isJAICamera(detector))
-                || LCPolScopeModalityHandler.isLcPolScope(baseModality)) {
+                || ModalityRegistry.getHandler(baseModality).reconstructsFromBackground()) {
             return FlatfieldMethod.BACKGROUND;
         }
         FlatfieldMethod chosen = PersistentPreferences.getFlatfieldMethod();
@@ -220,11 +219,12 @@ public class AcquisitionConfigurationBuilder {
         // YAML enabled flag gates it. Whenever a background folder is configured it is sent; the
         // server checks it against the current LC calibration and refuses a mismatched one, and
         // reconstructs uncorrected (with a warning) when no background is there.
-        if (LCPolScopeModalityHandler.isLcPolScope(baseModality)) {
+        if (ModalityRegistry.getHandler(baseModality).reconstructsFromBackground()) {
             bgEnabled = bgBaseFolder != null;
             if (!bgEnabled) {
-                logger.warn("LC-PolScope: no background folder configured; tiles reconstruct uncorrected."
-                        + " Collect a background (LC-PolScope Setup, step 3).");
+                logger.warn(
+                        "{}: no background folder configured; tiles reconstruct uncorrected. Collect a background.",
+                        baseModality);
             }
         }
 

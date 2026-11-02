@@ -1359,7 +1359,7 @@ public class ImageMetadataManager {
             if (getImageCollection(entry) != collection) continue;
 
             String modality = entry.getMetadata().get(MODALITY);
-            if (modality == null || !modality.toLowerCase().startsWith("ppm")) continue;
+            if (!qupath.ext.qpsc.modality.ModalityRegistry.getHandler(modality).usesRotationStage()) continue;
 
             String existing = entry.getMetadata().get(PPM_CALIBRATION);
             if (existing == null || existing.isEmpty()) {

@@ -59,7 +59,8 @@ public final class MdaSettingsWriter {
                 .serializeNulls()
                 .create();
 
-        boolean ppm = isPpm(req.modalityBaseName());
+        boolean ppm = qupath.ext.qpsc.modality.ModalityRegistry.getHandler(req.modalityBaseName())
+                .usesRotationStage();
 
         MdaSequenceSettings settings = buildSequenceSettings(req, ppm);
         Map<String, Object> positions = MmPositionListJson.build(req.tiles(), req.stageDevices());
@@ -112,10 +113,6 @@ public final class MdaSettingsWriter {
         Path positionsFile = regionDir.resolve("MDA_" + regionName + ".pos");
         writeAtomic(positionsFile, gson.toJson(positions));
         return positionsFile;
-    }
-
-    private static boolean isPpm(String modalityBaseName) {
-        return modalityBaseName != null && modalityBaseName.toLowerCase().startsWith("ppm");
     }
 
     private static MdaSequenceSettings buildSequenceSettings(MdaWriteRequest req, boolean ppm) {

@@ -16,7 +16,6 @@ import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.controller.workflow.TileCleanupHelper;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeSlideReminder;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -341,8 +340,7 @@ public class BoundedAcquisitionWorkflow {
                                     tempTileDir);
                         }
 
-                        // LC-PolScope: the calibration and background must come from this slide.
-                        if (!LCPolScopeSlideReminder.confirmBeforeAcquiring(result.modality())) {
+                        if (!ModalityRegistry.getHandler(result.modality()).confirmBeforeAcquiring(result.modality())) {
                             return;
                         }
 

@@ -385,6 +385,19 @@ public class PPMModalityHandler implements ModalityHandler {
      * Returns 4 as the default angle count for PPM (minus, zero, plus, uncrossed).
      */
     @Override
+    public boolean usesRotationStage() {
+        return true;
+    }
+
+    @Override
+    public void stampImageMetadata(qupath.lib.projects.ProjectImageEntry<?> entry) {
+        String calibration = PPMPreferences.getActiveCalibrationPath();
+        if (calibration != null && !calibration.isEmpty()) {
+            qupath.ext.qpsc.utilities.ImageMetadataManager.setPPMCalibration(entry, calibration, false);
+        }
+    }
+
+    @Override
     public int getDefaultAngleCount() {
         return 4;
     }

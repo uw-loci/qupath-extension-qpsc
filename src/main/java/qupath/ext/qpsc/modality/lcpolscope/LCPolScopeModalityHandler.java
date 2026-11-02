@@ -299,6 +299,26 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         return null;
     }
 
+    @Override
+    public boolean reconstructsFromBackground() {
+        return true;
+    }
+
+    @Override
+    public boolean confirmBeforeAcquiring(String modality) {
+        return qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeSlideReminder.confirmBeforeAcquiring(modality);
+    }
+
+    @Override
+    public boolean confirmBatch(int slides) {
+        return qupath.ext.qpsc.modality.lcpolscope.ui.LCPolScopeSlideReminder.confirmBatch(slides);
+    }
+
+    @Override
+    public java.util.OptionalDouble retardanceCeilingNm() {
+        return java.util.OptionalDouble.of(displayCeilingNm());
+    }
+
     private static double displayCeilingNm() {
         // The acquisition panel's ceiling when one was set, else the config's, else 20 nm.
         return qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane.effectiveCeilingNm();

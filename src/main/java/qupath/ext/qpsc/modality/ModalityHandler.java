@@ -213,6 +213,56 @@ public interface ModalityHandler {
         return Optional.empty();
     }
 
+    /** Whether this modality acquires by turning a rotation stage rather than by switching channels. */
+    default boolean usesRotationStage() {
+        return false;
+    }
+
+    /**
+     * Records modality-specific metadata on a newly created project entry.
+     *
+     * @param entry the entry for an image of this modality
+     */
+    default void stampImageMetadata(qupath.lib.projects.ProjectImageEntry<?> entry) {}
+
+    /**
+     * Whether a background is an input to this modality's reconstruction rather than a flat-field
+     * divide. If so, the flat-field choice and the YAML enabled flag do not apply: a configured
+     * background is always sent, and the server checks it against what it was collected under.
+     */
+    default boolean reconstructsFromBackground() {
+        return false;
+    }
+
+    /**
+     * Last check before a single acquisition, for anything the operator must confirm in person.
+     *
+     * @param modality the modality name
+     * @return false to stop the acquisition
+     */
+    default boolean confirmBeforeAcquiring(String modality) {
+        return true;
+    }
+
+    /**
+     * One check for a batch, asked while the operator is present.
+     *
+     * @param slides how many slides of this modality the batch holds
+     * @return false to stop the batch
+     */
+    default boolean confirmBatch(int slides) {
+        return true;
+    }
+
+    /**
+     * The retardance shown at full brightness, in nm, for a modality that reconstructs retardance.
+     *
+     * @return the ceiling, or empty for any other modality
+     */
+    default java.util.OptionalDouble retardanceCeilingNm() {
+        return java.util.OptionalDouble.empty();
+    }
+
     /**
      * Whether a BaSiC flat-field profile can correct this modality's images. True where an image is
      * an intensity with no measured background to prefer: laser scanning and widefield channels.

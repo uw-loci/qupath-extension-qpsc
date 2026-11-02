@@ -13,7 +13,6 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.utilities.FlatfieldMethod;
 import qupath.ext.qpsc.utilities.FlatfieldProfiles;
@@ -100,7 +99,9 @@ public class FlatfieldMethodSelector extends VBox {
     public void refresh(String modality, String detector) {
         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
         boolean jai = mgr != null && detector != null && mgr.isJAICamera(detector);
-        boolean shown = modality != null && !jai && !LCPolScopeModalityHandler.isLcPolScope(modality);
+        boolean shown = modality != null
+                && !jai
+                && !ModalityRegistry.getHandler(modality).reconstructsFromBackground();
         setVisible(shown);
         setManaged(shown);
         if (!shown) {

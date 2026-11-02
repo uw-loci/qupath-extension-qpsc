@@ -131,13 +131,8 @@ public final class ProjectEntryReservation {
                             metadata.imageIndex,
                             metadata.detector,
                             metadata.sourceMicroscope);
-                    if (metadata.modality != null
-                            && metadata.modality.toLowerCase().startsWith("ppm")) {
-                        String cal = qupath.ext.qpsc.modality.ppm.PPMPreferences.getActiveCalibrationPath();
-                        if (cal != null && !cal.isEmpty()) {
-                            ImageMetadataManager.setPPMCalibration(entry, cal, false);
-                        }
-                    }
+                    qupath.ext.qpsc.modality.ModalityRegistry.getHandler(metadata.modality)
+                            .stampImageMetadata(entry);
                 }
                 if (acquiredOnMicroscope != null) {
                     ImageMetadataManager.setAcquiredOnMicroscope(entry, acquiredOnMicroscope);

@@ -30,7 +30,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.display.orientation.OrientationColormap.Kind;
 import qupath.ext.qpsc.display.orientation.OrientationColormap.PpmHue;
-import qupath.ext.qpsc.modality.lcpolscope.ui.LCColormapPane;
+import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.UserErrors;
@@ -63,6 +63,8 @@ public final class OrientationColorViewWindow {
 
     private static final StringProperty KIND =
             PathPrefs.createPersistentPreference("orientationColourView.kind", Kind.UNIFORM.configName());
+    private static final double FALLBACK_CEILING_NM = 20.0;
+
     private static final DoubleProperty CEILING =
             PathPrefs.createPersistentPreference("orientationColourView.ceilingNm", Double.NaN);
     private static final BooleanProperty COLOUR_ONLY =
@@ -445,8 +447,7 @@ public final class OrientationColorViewWindow {
     }
 
     private static double defaultCeiling(MicroscopeConfigManager mgr) {
-        // The acquisition panel's ceiling when one was set, else the config's, else 20 nm.
-        return LCColormapPane.effectiveCeilingNm();
+        return ModalityRegistry.getHandler("lcpolscope").retardanceCeilingNm().orElse(FALLBACK_CEILING_NM);
     }
 
     private static String[] append(String[] base, String key) {
