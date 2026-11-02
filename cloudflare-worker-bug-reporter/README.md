@@ -77,6 +77,17 @@ printf '%s' "$GITHUB_PAT_FOR_WORKER" | npx --yes wrangler@latest secret put GITH
 rm .env   # optional but tidy
 ```
 
+Optional phone push: issues are filed with your own token, so GitHub never
+notifies you of them, even on a repo you watch. To get a push for each new
+report, store an ntfy.sh topic as a secret (topics are public, so the push
+carries only the issue number, title and link):
+
+```bash
+printf '%s' "$NTFY_TOPIC" | npx --yes wrangler@latest secret put NTFY_TOPIC
+```
+
+Without the secret the Worker skips the push.
+
 The Worker URL will be `https://qpsc-bug-reporter.<your-subdomain>.workers.dev`.
 That URL goes into each extension's Java client as a constant.
 

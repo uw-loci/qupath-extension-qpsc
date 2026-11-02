@@ -33,6 +33,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The bug report dialog asks for a way to reach you first.** Without a GitHub username a
+  report cannot be answered, because it is filed by the reporting service, not your account. The
+  contact fields now come first, say so, and keep their hint visible; if you submit without a
+  username, the confirmation says how to follow the issue on GitHub.
 - **The two acquisition dialogs match each other.** Bounded Acquisition and Acquire from Existing Image share one dialog base, so they now behave alike where they had drifted. **WB Mode** offers **Simple** and **Per-angle** only for PPM. Acquire from Existing Image now refuses an empty or relative **Projects Folder** when no project is open, as Bounded Acquisition did. Bounded Acquisition's estimate now counts channels, so a 5-channel run no longer reads as one fifth of its time, and **Est. Time** says "(based on previous acquisitions)" once this install has timed an acquisition, or "(estimate)" until then.
 - **American spelling in the interface.** Menus, dialogs, log messages and docs now read color, center, canceled and so on, so **Orientation Colour View...** is now **Orientation Color View...**. Saved settings, YAML keys, image metadata keys and file names keep their old spelling.
 - **A Bounded Acquisition region smaller than one field takes one tile.** Even a 1 um x 1 um box used to take 2 x 2 tiles, because every region gets a half-field margin on each side. A region that fits inside the field now takes a single tile centered on it, and a thin strip takes one row or one column. The tile count in the dialog, the acquisition and the MicroManager export now use the same calculation. This also applies to a 1-tile-wide WB Comparison grid.

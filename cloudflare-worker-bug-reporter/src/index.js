@@ -10,6 +10,10 @@
 // `wrangler secret put GITHUB_PAT`). The PAT must have Issues:write on every
 // allow-listed repo, plus Contents:write on any repo that accepts screenshots.
 //
+// Optional secret NTFY_TOPIC: when set, each new issue is also pushed to that
+// ntfy.sh topic. GitHub sends the maintainer nothing for these issues, because
+// they are filed with the maintainer's own token.
+//
 // ASCII-only on purpose: issue bodies flow back into a Windows/cp1252 toolchain.
 
 const REPOS = {
@@ -38,9 +42,10 @@ const IMAGESC_USER_RE = /^[A-Za-z0-9][A-Za-z0-9._-]{1,38}$/;
 const MAX_BODY_CHARS = 64000;                      // GitHub issue body cap is 65,536
 const MAX_SCREENSHOT_B64_CHARS = 4 * 1024 * 1024;  // ~3 MB binary
 const ATTACHMENTS_BRANCH = "bug-attachments";
+const NTFY_SERVER = "https://ntfy.sh";
 
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     if (request.method === "OPTIONS") return new Response(null, { headers: corsHeaders() });
     if (request.method !== "POST") return jsonError("Method not allowed.", 405);
 
@@ -120,6 +125,7 @@ export default {
       return jsonError(`GitHub returned ${ghResp.status}.`, 502);
     }
     const issue = await ghResp.json();
+    ctx.waitUntil(notifyMaintainer(env, extension, issue));
     return new Response(JSON.stringify({
       ok: true, issue_url: issue.html_url, issue_number: issue.number,
       screenshot_url: screenshotUrl, screenshot_error: screenshotError,
@@ -139,6 +145,29 @@ function cleanHandle(value, re) {
   if (slash >= 0) handle = handle.slice(0, slash);
   handle = handle.trim();
   return re.test(handle) ? handle : null;
+}
+
+// Push a new issue to the maintainer's ntfy topic. Topics are public, so this
+// carries only what the issue already shows publicly. A failure is logged and
+// never affects the report.
+async function notifyMaintainer(env, extension, issue) {
+  if (!env.NTFY_TOPIC) return;
+  try {
+    const resp = await fetch(NTFY_SERVER, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        topic: env.NTFY_TOPIC,
+        title: `New ${extension} bug report #${issue.number}`,
+        message: issue.title,
+        click: issue.html_url,
+        tags: ["bug"],
+      }),
+    });
+    if (!resp.ok) console.error(`ntfy returned ${resp.status}`);
+  } catch (e) {
+    console.error(`ntfy failed: ${e}`);
+  }
 }
 
 function resolveRepo(keyOrSlug) {
