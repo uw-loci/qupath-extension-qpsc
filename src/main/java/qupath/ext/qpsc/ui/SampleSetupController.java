@@ -250,7 +250,7 @@ public class SampleSetupController {
             objectiveBox.valueProperty().addListener((obs, oldObjective, newObjective) -> {
                 if (newObjective != null && modalityBox.getValue() != null) {
                     // Extract objective ID from display string
-                    String objectiveId = extractIdFromDisplayString(newObjective);
+                    String objectiveId = AcquisitionDialogBuilder.extractIdFromDisplayString(newObjective);
                     logger.debug("Objective changed to: {} ({})", newObjective, objectiveId);
 
                     // Get available detectors for this modality+objective combo
@@ -275,7 +275,7 @@ public class SampleSetupController {
                     if (!lastDetector.isEmpty()) {
                         // Try to find matching detector by ID
                         for (String displayItem : detectorDisplayItems) {
-                            String id = extractIdFromDisplayString(displayItem);
+                            String id = AcquisitionDialogBuilder.extractIdFromDisplayString(displayItem);
                             if (id.equals(lastDetector)) {
                                 detectorBox.setValue(displayItem);
                                 detectorRestored = true;
@@ -327,7 +327,7 @@ public class SampleSetupController {
                     if (!lastObjective.isEmpty()) {
                         // Try to find matching objective by ID
                         for (String displayItem : objectiveDisplayItems) {
-                            String id = extractIdFromDisplayString(displayItem);
+                            String id = AcquisitionDialogBuilder.extractIdFromDisplayString(displayItem);
                             if (id.equals(lastObjective)) {
                                 objectiveBox.setValue(displayItem);
                                 objectiveRestored = true;
@@ -416,8 +416,8 @@ public class SampleSetupController {
                 String name = sampleNameField.getText().trim();
                 File folder = new File(folderField.getText().trim());
                 String mod = modalityBox.getValue();
-                String obj = extractIdFromDisplayString(objectiveBox.getValue());
-                String det = extractIdFromDisplayString(detectorBox.getValue());
+                String obj = AcquisitionDialogBuilder.extractIdFromDisplayString(objectiveBox.getValue());
+                String det = AcquisitionDialogBuilder.extractIdFromDisplayString(detectorBox.getValue());
 
                 // Build validation error message
                 StringBuilder errors = new StringBuilder();
@@ -489,8 +489,8 @@ public class SampleSetupController {
                     String name = sampleNameField.getText().trim();
                     File folder = new File(folderField.getText().trim());
                     String mod = modalityBox.getValue();
-                    String obj = extractIdFromDisplayString(objectiveBox.getValue());
-                    String det = extractIdFromDisplayString(detectorBox.getValue());
+                    String obj = AcquisitionDialogBuilder.extractIdFromDisplayString(objectiveBox.getValue());
+                    String det = AcquisitionDialogBuilder.extractIdFromDisplayString(detectorBox.getValue());
 
                     // ALWAYS save preferences (for all workflows)
                     PersistentPreferences.setLastSampleName(name);
@@ -537,23 +537,6 @@ public class SampleSetupController {
         });
 
         return future;
-    }
-
-    /**
-     * Helper method to extract the ID from display strings like "20x Olympus (LOCI_OBJECTIVE_OLYMPUS_20X_POL_001)"
-     * Returns the ID part in parentheses, or the original string if no parentheses found.
-     */
-    private static String extractIdFromDisplayString(String displayString) {
-        if (displayString == null) return null;
-
-        int openParen = displayString.lastIndexOf('(');
-        int closeParen = displayString.lastIndexOf(')');
-
-        if (openParen != -1 && closeParen != -1 && closeParen > openParen) {
-            return displayString.substring(openParen + 1, closeParen);
-        }
-
-        return displayString; // fallback to original string
     }
 
     // ==================== Variant Detection Banner ====================

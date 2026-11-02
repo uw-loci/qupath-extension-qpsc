@@ -3,41 +3,28 @@ package qupath.ext.qpsc.ui;
 import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.text.SimpleDateFormat;
 import java.util.*;
 import java.util.concurrent.CompletableFuture;
-import java.util.stream.Collectors;
-import javafx.animation.PauseTransition;
-import javafx.application.ColorScheme;
 import javafx.application.Platform;
-import javafx.beans.binding.Bindings;
-import javafx.beans.value.ObservableBooleanValue;
-import javafx.collections.FXCollections;
 import javafx.geometry.Insets;
 import javafx.geometry.Pos;
+import javafx.scene.Node;
 import javafx.scene.control.*;
 import javafx.scene.layout.*;
-import javafx.stage.DirectoryChooser;
 import javafx.stage.Modality;
 import javafx.stage.Window;
-import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.controller.workflow.AlignmentHelper;
-import qupath.ext.qpsc.modality.AngleExposure;
 import qupath.ext.qpsc.modality.Channel;
-import qupath.ext.qpsc.modality.ChannelExposure;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.modality.WbMode;
-import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
-import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.AcquisitionCommandBuilder;
-import qupath.ext.qpsc.service.AngleResolutionService;
-import qupath.ext.qpsc.service.ChannelResolutionService;
 import qupath.ext.qpsc.service.mda.MdaExportAction;
 import qupath.ext.qpsc.service.mda.MdaExportContext;
 import qupath.ext.qpsc.service.mda.TileStagePos;
@@ -45,15 +32,12 @@ import qupath.ext.qpsc.ui.stagemap.StageInsert;
 import qupath.ext.qpsc.ui.stagemap.StageInsertRegistry;
 import qupath.ext.qpsc.utilities.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
-import qupath.ext.qpsc.utilities.BackgroundValidityChecker;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.ext.qpsc.utilities.MicroscopeConfigManager;
 import qupath.ext.qpsc.utilities.ObjectiveUtils;
 import qupath.ext.qpsc.utilities.QPProjectFunctions;
-import qupath.ext.qpsc.utilities.SampleNameValidator;
 import qupath.ext.qpsc.utilities.TransformationFunctions;
 import qupath.lib.gui.QuPathGUI;
-import qupath.lib.gui.prefs.QuPathStyleManager;
 import qupath.lib.objects.PathObject;
 import qupath.lib.projects.Project;
 
@@ -82,15 +66,6 @@ import qupath.lib.projects.Project;
  */
 public class ExistingImageAcquisitionController {
     private static final Logger logger = LoggerFactory.getLogger(ExistingImageAcquisitionController.class);
-
-    /** Debounce delay for preview updates in milliseconds */
-    private static final long PREVIEW_DEBOUNCE_MS = 300;
-
-    /** Stitched-output organization dropdown labels and persistence key (shared with the bounded dialog). */
-    private static final String ORG_SINGLE = "Single combined file";
-
-    private static final String ORG_PER_CHANNEL = "Separate file per channel";
-    private static final String PREF_STITCH_ORGANIZATION = "qpscStitchOrganization";
 
     /**
      * Refinement choice options.
@@ -222,11 +197,7 @@ public class ExistingImageAcquisitionController {
     /**
      * Internal builder class that constructs and manages the consolidated dialog.
      */
-    private static class ConsolidatedDialogBuilder {
-        private final MicroscopeConfigManager configManager;
-        private final boolean hasOpenProject;
-        private final String existingProjectName;
-        private final File existingProjectFolder;
+    private static class ConsolidatedDialogBuilder extends AcquisitionDialogBuilder<ExistingImageAcquisitionConfig> {
         private final String defaultSampleName;
         private final List<PathObject> annotations;
         private final int annotationCount;
@@ -243,16 +214,6 @@ public class ExistingImageAcquisitionController {
 
         // UI Components - Banner
         private HBox variantBanner;
-
-        // UI Components - Project Section
-        private TextField sampleNameField;
-        private Label sampleNameErrorLabel;
-        private TextField folderField;
-
-        // UI Components - Hardware Section
-        private ComboBox<String> modalityBox;
-        private ComboBox<String> objectiveBox;
-        private ComboBox<String> detectorBox;
 
         // UI Components - Alignment Section
         private RadioButton useExistingRadio;
@@ -280,58 +241,21 @@ public class ExistingImageAcquisitionController {
         private VBox refinementBox;
 
         // UI Components - Advanced Section
-        private ModalityHandler.BoundingBoxUI modalityUI;
         private TitledPane modalityPane;
-        private VBox modalityContent;
-        private ComboBox<String> afStrategyCombo;
-
-        // Z-stack section: loop-order toggle (channel-inner / angle-inner alternative).
-        private CheckBox zStackEnableCheck;
-        private ComboBox<String> outputOrganizationCombo;
-        private RadioButton loopOrderInnerZRadio;
-        private RadioButton loopOrderInnerAltRadio;
-        private Label loopOrderLabel;
-        private VBox loopOrderRow;
-
-        // UI Components - White Balance (hidden for non-JAI or non-WB modalities)
-        private Label wbLabel;
-        private ComboBox<String> wbModeComboBox;
-        private BackgroundProfileSelector backgroundProfileSelector;
-        private FlatfieldMethodSelector flatfieldSelector;
 
         // UI Components - Preview Section
         private Label previewAnnotationsLabel;
         private Label previewTilesLabel;
-        private Label previewTimeLabel;
-        private Label previewStorageLabel;
-
-        // UI Components - Validation
-        private VBox errorSummaryPanel;
-        private VBox errorListBox;
-        private final Map<String, String> validationErrors = new LinkedHashMap<>();
 
         // TitledPanes
-        private TitledPane projectPane;
-        private TitledPane hardwarePane;
         private TitledPane alignmentPane;
         private TitledPane refinementPane;
-        private TitledPane advancedPane;
-        private TitledPane autofocusPane;
-
-        // Debounce timer
-        private final PauseTransition previewDebounce = new PauseTransition(Duration.millis(PREVIEW_DEBOUNCE_MS));
-
-        // Dialog and button references
-        private Dialog<ExistingImageAcquisitionConfig> dialog;
-        private Button startButton;
 
         ConsolidatedDialogBuilder(String defaultSampleName, List<PathObject> annotations, boolean forceFreshAlignment) {
             this.forceFreshAlignment = forceFreshAlignment;
             this.defaultSampleName = defaultSampleName;
             this.annotations = annotations != null ? annotations : new ArrayList<>();
             this.annotationCount = this.annotations.size();
-            this.configManager =
-                    MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
 
             // Initialize transform manager
             String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
@@ -422,14 +346,9 @@ public class ExistingImageAcquisitionController {
                     && qupath.ext.qpsc.utilities.ImageMetadataManager.getBoundingBoxStageBounds(openEntry) != null;
         }
 
-        /** Returns true when QuPath is using a dark color scheme. */
-        private boolean isDark() {
-            return QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
-        }
-
-        /** Secondary/description text style that works in both light and dark themes. */
-        private String subtleTextStyle() {
-            return "-fx-font-size: 10px; -fx-opacity: 0.65;";
+        @Override
+        protected int subtleTextFontPx() {
+            return 10;
         }
 
         /** Info-banner background style for a given semantic color. */
@@ -460,7 +379,8 @@ public class ExistingImageAcquisitionController {
         }
 
         /** Accent text color that reads well in both themes. */
-        private String accentColor(String semanticColor) {
+        @Override
+        protected String accentColor(String semanticColor) {
             boolean dark = isDark();
             switch (semanticColor) {
                 case "green":
@@ -473,6 +393,82 @@ public class ExistingImageAcquisitionController {
                     return dark ? "#EF5350" : "#C62828";
                 default:
                     return dark ? "#B0BEC5" : "#424242";
+            }
+        }
+
+        @Override
+        protected String initialSampleName() {
+            return defaultSampleName;
+        }
+
+        @Override
+        protected void afterSampleNameEdited() {
+            triggerPreviewUpdate();
+        }
+
+        @Override
+        protected boolean wbTooltipNamesPerAngleDefault() {
+            return false;
+        }
+
+        @Override
+        protected void afterModalitySelected() {
+            updateWhiteBalanceVisibility();
+        }
+
+        @Override
+        protected boolean listsHardwareByIdWhenUnnamed() {
+            return false;
+        }
+
+        @Override
+        protected boolean filtersValidWbModesToModality() {
+            return false;
+        }
+
+        @Override
+        protected void onModalityOptionsChanged(boolean hasOptions) {
+            modalityPane.setExpanded(hasOptions);
+        }
+
+        @Override
+        protected Label createNoModalityOptionsLabel(String modality) {
+            Label placeholder = new Label("No specific options for " + modality);
+            placeholder.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
+            return placeholder;
+        }
+
+        @Override
+        protected double zRangeMaxUm() {
+            return 2000.0;
+        }
+
+        @Override
+        protected Node[] previewContentNodes() {
+            return new Node[] {previewAnnotationsLabel, previewTilesLabel, previewTimeLabel, previewStorageLabel};
+        }
+
+        @Override
+        protected String estimatePrefix() {
+            return "~";
+        }
+
+        @Override
+        protected int estimateMinuteDecimals() {
+            return 0;
+        }
+
+        @Override
+        protected String errorTitleColor() {
+            return isDark() ? "#ffc107" : "#856404";
+        }
+
+        @Override
+        protected void validateWorkflowFields() {
+            if (useExistingRadio.isSelected() && transformCombo.getValue() == null && !hasSlideAlignment) {
+                validationErrors.put("transform", "Please select a transform");
+            } else {
+                validationErrors.remove("transform");
             }
         }
 
@@ -610,68 +606,15 @@ public class ExistingImageAcquisitionController {
             variantBanner.getChildren().addAll(iconLabel, textLabel);
         }
 
-        private void createProjectSection() {
-            GridPane grid = new GridPane();
-            grid.setHgap(10);
-            grid.setVgap(8);
-            grid.setPadding(new Insets(10));
-
-            // Sample name field
-            sampleNameField = new TextField(defaultSampleName);
-            sampleNameField.setPromptText("e.g., MySample01");
-            sampleNameField.setPrefWidth(300);
-
-            sampleNameErrorLabel = new Label();
-            sampleNameErrorLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-size: 10px;");
-            sampleNameErrorLabel.setVisible(false);
-
-            sampleNameField.textProperty().addListener((obs, oldVal, newVal) -> {
-                String error = SampleNameValidator.getValidationError(newVal);
-                if (error != null) {
-                    sampleNameErrorLabel.setText(error);
-                    sampleNameErrorLabel.setVisible(true);
-                    validationErrors.put("sampleName", error);
-                } else {
-                    sampleNameErrorLabel.setVisible(false);
-                    validationErrors.remove("sampleName");
-                }
-                updateErrorSummary();
-                triggerPreviewUpdate();
-            });
-
-            int row = 0;
-            grid.add(new Label("Sample Name:"), 0, row);
-            grid.add(sampleNameField, 1, row);
-            row++;
-            grid.add(new Label(""), 0, row);
-            grid.add(sampleNameErrorLabel, 1, row);
-            row++;
-
+        @Override
+        protected void addProjectRows(GridPane grid, int row) {
             if (!hasOpenProject) {
                 // Projects folder
                 folderField = new TextField(QPPreferenceDialog.getProjectsFolderProperty());
                 folderField.setPrefWidth(250);
 
-                Button browseBtn = new Button("Browse...");
-                browseBtn.setOnAction(e -> {
-                    Window win = dialog.getDialogPane().getScene().getWindow();
-                    DirectoryChooser chooser = new DirectoryChooser();
-                    chooser.setTitle("Select Projects Folder");
-                    File currentFolder = new File(folderField.getText());
-                    if (currentFolder.exists() && currentFolder.isDirectory()) {
-                        chooser.setInitialDirectory(currentFolder);
-                    }
-                    File chosen = chooser.showDialog(win);
-                    if (chosen != null) {
-                        folderField.setText(chosen.getAbsolutePath());
-                    }
-                });
-
-                HBox folderBox = new HBox(5, folderField, browseBtn);
-                HBox.setHgrow(folderField, Priority.ALWAYS);
-
                 grid.add(new Label("Projects Folder:"), 0, row);
-                grid.add(folderBox, 1, row);
+                grid.add(createProjectsFolderBox(), 1, row);
             } else {
                 folderField = new TextField(existingProjectFolder.getParent());
                 folderField.setVisible(false);
@@ -681,142 +624,6 @@ public class ExistingImageAcquisitionController {
                 grid.add(new Label("Project:"), 0, row);
                 grid.add(projectLabel, 1, row);
             }
-
-            projectPane = new TitledPane("PROJECT & SAMPLE", grid);
-            projectPane.setExpanded(true);
-            projectPane.setStyle("-fx-font-weight: bold;");
-        }
-
-        private void createWbModeCombo() {
-            wbModeComboBox = new ComboBox<>();
-            wbModeComboBox.getItems().addAll("Off", "Camera AWB", "Simple (90deg)", "Per-angle (PPM)");
-            // Default from modality handler; fall back to saved preference
-            String defaultDisplay = getDefaultWbModeFromModality();
-            String savedWBMode = PersistentPreferences.getLastWhiteBalanceMode();
-            if (savedWBMode != null && wbModeComboBox.getItems().contains(savedWBMode)) {
-                wbModeComboBox.setValue(savedWBMode);
-            } else {
-                wbModeComboBox.setValue(defaultDisplay);
-            }
-            WbMode.applyColorCellFactory(wbModeComboBox);
-            wbModeComboBox.setTooltip(new Tooltip("White balance mode:\n"
-                    + "  Off - No white balance correction\n"
-                    + "  Camera AWB - Set in MicroManager before acquisition\n"
-                    + "  Simple (90deg) - Use 90deg R:G:B ratios, scaled per angle\n"
-                    + "  Per-angle (PPM) - Independent calibration per angle"));
-
-            wbModeComboBox.valueProperty().addListener((obs, oldVal, newVal) -> {
-                if (newVal != null) {
-                    PersistentPreferences.setLastWhiteBalanceMode(newVal);
-                }
-                refreshModalityReadout(); // wbMode targets the background subfolder PPM exposures resolve from
-            });
-        }
-
-        /**
-         * Maps the current modality handler's wire mode to a display name.
-         */
-        private String getDefaultWbModeFromModality() {
-            try {
-                String modality = modalityBox != null ? modalityBox.getValue() : null;
-                if (modality != null) {
-                    var handler = ModalityRegistry.getHandler(modality);
-                    String wireMode = handler.getDefaultWbMode();
-                    for (WbMode wm : WbMode.values()) {
-                        if (wm.getProtocolName().equals(wireMode)) {
-                            return wm.getDisplayName();
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                // Fallback silently
-            }
-            return "Off";
-        }
-
-        private void createHardwareSection() {
-            GridPane grid = new GridPane();
-            grid.setHgap(10);
-            grid.setVgap(8);
-            grid.setPadding(new Insets(10));
-
-            Set<String> modalities = configManager.getSection("modalities").keySet();
-
-            modalityBox = new ComboBox<>(FXCollections.observableArrayList(modalities));
-            modalityBox.setPrefWidth(200);
-
-            objectiveBox = new ComboBox<>();
-            objectiveBox.setPrefWidth(300);
-
-            detectorBox = new ComboBox<>();
-            detectorBox.setPrefWidth(300);
-
-            // Cascading selection
-            modalityBox.valueProperty().addListener((obs, oldVal, newVal) -> {
-                if (newVal != null) {
-                    updateObjectivesForModality(newVal);
-                    updateModalityUI(newVal);
-                    updateAfStrategyDefaultForModality(newVal);
-                    updateWhiteBalanceVisibility();
-                }
-            });
-
-            objectiveBox.valueProperty().addListener((obs, oldVal, newVal) -> {
-                if (newVal != null && modalityBox.getValue() != null) {
-                    updateDetectorsForObjective(modalityBox.getValue(), newVal);
-                }
-            });
-
-            // Preview updates on hardware change
-            modalityBox.valueProperty().addListener((obs, old, newVal) -> triggerPreviewUpdate());
-            objectiveBox.valueProperty().addListener((obs, old, newVal) -> {
-                triggerPreviewUpdate();
-                refreshModalityReadout(); // objective drives the resolved profile / exposure / intensity
-            });
-            detectorBox.valueProperty().addListener((obs, old, newVal) -> {
-                triggerPreviewUpdate();
-                updateWhiteBalanceVisibility(); // Update WB section visibility when detector changes
-                refreshModalityReadout();
-            });
-
-            int row = 0;
-            grid.add(new Label("Modality:"), 0, row);
-            Hyperlink quickStartLink = new Hyperlink("Quick Start Guide");
-            quickStartLink.setStyle("-fx-font-size: 10px;");
-            quickStartLink.setOnAction(e -> DocumentationHelper.openDocumentation("quickstartBF"));
-            HBox modalityRow = new HBox(8, modalityBox, quickStartLink);
-            modalityRow.setAlignment(Pos.CENTER_LEFT);
-            grid.add(modalityRow, 1, row);
-            row++;
-
-            grid.add(new Label("Objective:"), 0, row);
-            grid.add(objectiveBox, 1, row);
-            row++;
-
-            grid.add(new Label("Detector:"), 0, row);
-            grid.add(detectorBox, 1, row);
-            row++;
-
-            wbLabel = new Label("WB Mode:");
-            wbLabel.setTooltip(new Tooltip("White balance mode for acquisition"));
-            grid.add(wbLabel, 0, row);
-            grid.add(wbModeComboBox, 1, row);
-            row++;
-
-            // Background profile: which set of backgrounds this acquisition is corrected with.
-            backgroundProfileSelector = new BackgroundProfileSelector(configManager::getBackgroundBaseFolder, () -> {
-                updateWhiteBalanceVisibility();
-                refreshModalityReadout();
-            });
-            grid.add(backgroundProfileSelector, 0, row, 2, 1);
-            row++;
-
-            flatfieldSelector = new FlatfieldMethodSelector(this::refreshBackgroundStatusVisibility);
-            grid.add(flatfieldSelector, 0, row, 2, 1);
-
-            hardwarePane = new TitledPane("HARDWARE CONFIGURATION", grid);
-            hardwarePane.setExpanded(true);
-            hardwarePane.setStyle("-fx-font-weight: bold;");
         }
 
         private void createAlignmentSection() {
@@ -1064,20 +871,7 @@ public class ExistingImageAcquisitionController {
             // Note: Green box detection parameters are handled by ExistingAlignmentPath
             // which shows its own dialog during the alignment process
 
-            // WB combo already created in createWbModeCombo()
-
-            // Autofocus strategy override dropdown (a GUI entry point to pick the strategy
-            // without editing YAML).
-            afStrategyCombo = new ComboBox<>();
-            afStrategyCombo.getItems().addAll(AfStrategyChoice.displayOrder());
-            afStrategyCombo.setValue(AfStrategyChoice.protocolToDisplay(PersistentPreferences.getLastAfStrategy()));
-            afStrategyCombo.setTooltip(new Tooltip(AfStrategyChoice.TOOLTIP));
-            GridPane afGrid = new GridPane();
-            afGrid.setHgap(10);
-            afGrid.setVgap(5);
-            afGrid.setPadding(new Insets(5));
-            afGrid.add(new Label("Autofocus:"), 0, 0);
-            afGrid.add(afStrategyCombo, 1, 0);
+            GridPane afGrid = createAutofocusGrid();
 
             // Modality-specific options (will be populated by updateModalityUI)
             modalityContent = new VBox(5);
@@ -1088,254 +882,11 @@ public class ExistingImageAcquisitionController {
             modalityPane = new TitledPane("Modality Options", modalityContent);
             modalityPane.setExpanded(false);
 
-            // Autofocus applies to every modality, so it has its own section; under
-            // "modality-specific" it read as a PPM concern on a fluorescence run.
-            autofocusPane = new TitledPane("AUTOFOCUS", afGrid);
-            autofocusPane.setExpanded(false); // Collapsed by default, as it was inside the modality pane
-            autofocusPane.setStyle("-fx-font-weight: bold;");
+            createAutofocusPane(afGrid);
 
             content.getChildren().add(modalityPane);
 
-            advancedPane = new TitledPane("MODALITY-SPECIFIC OPTIONS", content);
-            advancedPane.setExpanded(false);
-            advancedPane.setStyle("-fx-font-weight: bold;");
-        }
-
-        private TitledPane createZStackSection() {
-            zStackEnableCheck = new CheckBox("Enable Z-stack acquisition");
-            zStackEnableCheck.setTooltip(
-                    new Tooltip("Acquire multiple Z-planes at each tile position and compute a projection. "
-                            + "Essential for thick samples and SHG/multiphoton imaging."));
-            zStackEnableCheck.setSelected(PersistentPreferences.isZStackEnabled());
-            CheckBox enableCheck = zStackEnableCheck;
-
-            Spinner<Double> rangeSpinner = new Spinner<>(1.0, 2000.0, PersistentPreferences.getZStackRange(), 5.0);
-            rangeSpinner.setEditable(true);
-            rangeSpinner.setPrefWidth(100);
-            rangeSpinner.setTooltip(new Tooltip(
-                    "Total Z range in micrometers centered on autofocus. " + "Example: 20um = +/-10um around focus."));
-
-            Spinner<Double> stepSpinner = new Spinner<>(0.1, 50.0, PersistentPreferences.getZStackStep(), 0.5);
-            stepSpinner.setEditable(true);
-            stepSpinner.setPrefWidth(100);
-            stepSpinner.setTooltip(new Tooltip("Distance between Z-planes in micrometers. "
-                    + "Smaller steps give finer Z sampling but more planes."));
-
-            ComboBox<String> projectionCombo = new ComboBox<>();
-            projectionCombo
-                    .getItems()
-                    .addAll(
-                            "Max Intensity",
-                            "Min Intensity",
-                            "Sum",
-                            "Mean",
-                            "Std Deviation",
-                            "Extended Depth of Field",
-                            "None");
-            projectionCombo.setValue(PersistentPreferences.getZStackProjection());
-            projectionCombo.setTooltip(new Tooltip("How to combine Z-planes for stitching. "
-                    + "Max intensity is standard for fluorescence and SHG. "
-                    + "Extended Depth of Field takes each pixel from the plane where it is "
-                    + "sharpest -- use it for brightfield, and wherever one field spans more "
-                    + "than a depth of field in Z (a tilted sample, or thick/uneven tissue), "
-                    + "which no amount of autofocus can fix because autofocus picks a single "
-                    + "Z for the whole field. "
-                    + "Choose \"None\" to preserve the full Z-stack (and time series, if any) as a single "
-                    + "multi-dimensional stitched image instead of projecting to 2D."));
-
-            // EDF is the only projection with settings, so the button appears
-            // beside the dropdown and enables only for it -- the alternative was
-            // three more controls on a dialog that is already dense, permanently
-            // grayed out for everyone using max intensity.
-            Button edfSettingsButton = new Button("EDF settings...");
-            edfSettingsButton.setTooltip(
-                    new Tooltip("Sharpness metric, averaging window and focal-surface smoothing for the "
-                            + "Extended Depth of Field projection. Only available when that projection "
-                            + "is selected; the others have nothing to tune."));
-            edfSettingsButton.setOnAction(e -> EdfSettingsDialog.show(
-                    edfSettingsButton.getScene() == null
-                            ? null
-                            : edfSettingsButton.getScene().getWindow()));
-            Runnable syncEdfButton = () -> edfSettingsButton.setDisable(
-                    !"Extended Depth of Field".equals(projectionCombo.getValue()) || projectionCombo.isDisabled());
-            projectionCombo.valueProperty().addListener((obs, o, n) -> syncEdfButton.run());
-            projectionCombo.disabledProperty().addListener((obs, o, n) -> syncEdfButton.run());
-            syncEdfButton.run();
-
-            Label infoLabel = new Label();
-            infoLabel.setStyle("-fx-font-style: italic; -fx-font-size: 11;");
-
-            Runnable updateInfo = () -> {
-                double range = rangeSpinner.getValue();
-                double step = stepSpinner.getValue();
-                int planes = (int) Math.ceil(range / step) + 1;
-                infoLabel.setText(String.format("%d planes over +/-%.1f um", planes, range / 2));
-            };
-            rangeSpinner.valueProperty().addListener((obs, o, n) -> updateInfo.run());
-            stepSpinner.valueProperty().addListener((obs, o, n) -> updateInfo.run());
-            updateInfo.run();
-
-            rangeSpinner.disableProperty().bind(enableCheck.selectedProperty().not());
-            stepSpinner.disableProperty().bind(enableCheck.selectedProperty().not());
-            projectionCombo
-                    .disableProperty()
-                    .bind(enableCheck.selectedProperty().not());
-
-            enableCheck.selectedProperty().addListener((obs, o, n) -> PersistentPreferences.setZStackEnabled(n));
-            rangeSpinner.valueProperty().addListener((obs, o, n) -> {
-                if (n != null) PersistentPreferences.setZStackRange(n);
-            });
-            stepSpinner.valueProperty().addListener((obs, o, n) -> {
-                if (n != null) PersistentPreferences.setZStackStep(n);
-            });
-            projectionCombo.valueProperty().addListener((obs, o, n) -> {
-                if (n != null) PersistentPreferences.setZStackProjection(n);
-            });
-
-            // Stitched-output organization (independent of Z-stack).
-            outputOrganizationCombo = new ComboBox<>();
-            outputOrganizationCombo.getItems().addAll(ORG_SINGLE, ORG_PER_CHANNEL);
-            outputOrganizationCombo.setValue(
-                    PersistentPreferences.getStringPreference(PREF_STITCH_ORGANIZATION, ORG_SINGLE));
-            outputOrganizationCombo.setTooltip(new Tooltip("How to group the stitched output. "
-                    + "\"Single combined file\" merges all channels (and any preserved Z/T) into one image; "
-                    + "\"Separate file per channel\" writes each channel as its own file. The per-channel "
-                    + "\"Split\" checkboxes give finer control."));
-            outputOrganizationCombo.valueProperty().addListener((obs, o, n) -> {
-                if (n != null) PersistentPreferences.setStringPreference(PREF_STITCH_ORGANIZATION, n);
-            });
-
-            GridPane grid = new GridPane();
-            grid.setHgap(10);
-            grid.setVgap(8);
-            grid.setPadding(new Insets(10));
-            grid.add(new Label("Z range (um):"), 0, 0);
-            grid.add(rangeSpinner, 1, 0);
-            grid.add(new Label("Z step (um):"), 0, 1);
-            grid.add(stepSpinner, 1, 1);
-            grid.add(new Label("Projection:"), 0, 2);
-            grid.add(projectionCombo, 1, 2);
-            grid.add(edfSettingsButton, 2, 2);
-            grid.add(infoLabel, 0, 3, 2, 1);
-            grid.add(new Label("Stitched output:"), 0, 4);
-            grid.add(outputOrganizationCombo, 1, 4);
-
-            // Loop-order toggle: mirrors the one in UnifiedAcquisitionController.
-            // Disabled when Z-stack is off OR (widefield) fewer than 2 channels
-            // are selected. Hidden for non-participating modalities (BF, LSM).
-            ToggleGroup loopOrderGroup = new ToggleGroup();
-            loopOrderInnerZRadio = new RadioButton();
-            loopOrderInnerAltRadio = new RadioButton();
-            loopOrderInnerZRadio.setToggleGroup(loopOrderGroup);
-            loopOrderInnerAltRadio.setToggleGroup(loopOrderGroup);
-            loopOrderInnerZRadio.setSelected(true);
-            loopOrderInnerZRadio.setTooltip(new Tooltip("Loop order across Z and channels (widefield) or angles (PPM). "
-                    + "Default sweeps Z inner -- fewer filter / rotation changes, faster."));
-            loopOrderInnerAltRadio.setTooltip(
-                    new Tooltip("Alternative loop order. Widefield: 'Channels per Z' re-images every "
-                            + "channel at each Z -- slower but tightly Z-registered for live samples. "
-                            + "PPM: 'Z per angle' sweeps Z per angle -- fewer rotation moves on z-stacks."));
-            loopOrderInnerAltRadio.selectedProperty().addListener((obs, oldV, newV) -> {
-                String family = loopOrderFamily(modalityBox != null ? modalityBox.getValue() : null);
-                if (family == null) return;
-                String chosen;
-                if (PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD.equals(family)) {
-                    chosen = newV ? "channel" : "z";
-                } else {
-                    chosen = newV ? "z" : "angle";
-                }
-                PersistentPreferences.setAcqLoopOrder(family, chosen);
-            });
-            loopOrderLabel = new Label("Loop order:");
-            loopOrderLabel.setStyle("-fx-font-weight: bold;");
-            HBox loopOrderRadios = new HBox(15, loopOrderInnerZRadio, loopOrderInnerAltRadio);
-            loopOrderRadios.setAlignment(Pos.CENTER_LEFT);
-            loopOrderRow = new VBox(4, loopOrderLabel, loopOrderRadios);
-            loopOrderRow.setPadding(new Insets(8, 0, 0, 0));
-            updateLoopOrderToggle(modalityBox != null ? modalityBox.getValue() : null);
-
-            VBox zContent = new VBox(8, enableCheck, grid, loopOrderRow);
-            zContent.setPadding(new Insets(5));
-
-            TitledPane pane = new TitledPane("Z-STACK OPTIONS", zContent);
-            pane.setExpanded(false);
-            pane.setAnimated(false);
-            pane.setStyle("-fx-font-weight: bold;");
-            return pane;
-        }
-
-        private static String loopOrderFamily(String modality) {
-            if (modality == null) {
-                return null;
-            }
-            String norm = modality.toLowerCase();
-            if (norm.startsWith("ppm")) {
-                return PersistentPreferences.LOOP_ORDER_FAMILY_PPM;
-            }
-            if (norm.startsWith("fl")
-                    || norm.startsWith("widefield")
-                    || norm.startsWith("epi")
-                    || norm.startsWith("fluorescence")) {
-                return PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD;
-            }
-            return null;
-        }
-
-        private void updateLoopOrderToggle(String modality) {
-            if (loopOrderInnerZRadio == null || loopOrderInnerAltRadio == null) {
-                return;
-            }
-            String family = loopOrderFamily(modality);
-            loopOrderInnerZRadio.disableProperty().unbind();
-            loopOrderInnerAltRadio.disableProperty().unbind();
-            loopOrderLabel.setDisable(false);
-
-            if (PersistentPreferences.LOOP_ORDER_FAMILY_PPM.equals(family)) {
-                loopOrderInnerZRadio.setText("Angle per Z (current default)");
-                loopOrderInnerAltRadio.setText("Z per angle (fast for thicker slides)");
-                loopOrderInnerZRadio
-                        .disableProperty()
-                        .bind(zStackEnableCheck.selectedProperty().not());
-                loopOrderInnerAltRadio
-                        .disableProperty()
-                        .bind(zStackEnableCheck.selectedProperty().not());
-                String saved = PersistentPreferences.getAcqLoopOrder(family);
-                boolean useAlt = "z".equalsIgnoreCase(saved);
-                loopOrderInnerAltRadio.setSelected(useAlt);
-                loopOrderInnerZRadio.setSelected(!useAlt);
-                loopOrderRow.setVisible(true);
-                loopOrderRow.setManaged(true);
-            } else if (PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD.equals(family)) {
-                loopOrderInnerZRadio.setText("Z per channel (fast, fixed slides)");
-                loopOrderInnerAltRadio.setText("Channels per Z (drift-tolerant)");
-                ObservableBooleanValue multipleChannels = modalityUI instanceof WidefieldChannelBoundingBoxUI wfUi
-                        ? wfUi.hasMultipleChannelsSelectedProperty()
-                        : null;
-                if (multipleChannels != null) {
-                    loopOrderInnerZRadio
-                            .disableProperty()
-                            .bind(zStackEnableCheck.selectedProperty().not().or(Bindings.not(multipleChannels)));
-                    loopOrderInnerAltRadio
-                            .disableProperty()
-                            .bind(zStackEnableCheck.selectedProperty().not().or(Bindings.not(multipleChannels)));
-                } else {
-                    loopOrderInnerZRadio
-                            .disableProperty()
-                            .bind(zStackEnableCheck.selectedProperty().not());
-                    loopOrderInnerAltRadio
-                            .disableProperty()
-                            .bind(zStackEnableCheck.selectedProperty().not());
-                }
-                String saved = PersistentPreferences.getAcqLoopOrder(family);
-                boolean useAlt = "channel".equalsIgnoreCase(saved);
-                loopOrderInnerAltRadio.setSelected(useAlt);
-                loopOrderInnerZRadio.setSelected(!useAlt);
-                loopOrderRow.setVisible(true);
-                loopOrderRow.setManaged(true);
-            } else {
-                loopOrderRow.setVisible(false);
-                loopOrderRow.setManaged(false);
-            }
+            createAdvancedPane(content);
         }
 
         private void createPreviewPanel() {
@@ -1347,155 +898,6 @@ public class ExistingImageAcquisitionController {
             previewTilesLabel = new Label("Tiles: --");
             previewTimeLabel = new Label("Estimated Time: --");
             previewStorageLabel = new Label("Estimated Storage: --");
-        }
-
-        private TitledPane createPreviewSection() {
-            VBox previewContent =
-                    new VBox(5, previewAnnotationsLabel, previewTilesLabel, previewTimeLabel, previewStorageLabel);
-            previewContent.setPadding(new Insets(10));
-            boolean dark = QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
-            previewContent.setStyle("-fx-background-color: " + (dark ? "#333" : "#f8f9fa") + "; -fx-border-color: "
-                    + (dark ? "#555" : "#dee2e6") + "; -fx-border-width: 1px;");
-
-            TitledPane previewPane = new TitledPane("ACQUISITION PREVIEW", previewContent);
-            previewPane.setExpanded(true);
-            previewPane.setCollapsible(false);
-            previewPane.setStyle("-fx-font-weight: bold;");
-
-            return previewPane;
-        }
-
-        private void createErrorSummaryPanel() {
-            errorSummaryPanel = new VBox(5);
-            boolean darkErr = QuPathStyleManager.getStyleColorScheme() == ColorScheme.DARK;
-            errorSummaryPanel.setStyle("-fx-background-color: " + (darkErr ? "#4a3800" : "#fff3cd")
-                    + "; -fx-border-color: " + (darkErr ? "#806000" : "#ffc107")
-                    + "; -fx-border-width: 1px; -fx-padding: 10px;");
-            errorSummaryPanel.setVisible(false);
-            errorSummaryPanel.setManaged(false);
-
-            Label errorTitle = new Label("Please fix the following errors:");
-            errorTitle.setStyle("-fx-font-weight: bold; -fx-text-fill: " + (darkErr ? "#ffc107" : "#856404") + ";");
-
-            errorListBox = new VBox(3);
-            errorSummaryPanel.getChildren().addAll(errorTitle, errorListBox);
-        }
-
-        private void initializeHardwareSelections() {
-            var modalityState = qupath.ext.qpsc.state.ModalityState.getInstance();
-            String fromState = modalityState.getModality();
-            Set<String> modalities = configManager.getSection("modalities").keySet();
-
-            if (fromState != null && !fromState.isEmpty() && modalities.contains(fromState)) {
-                modalityBox.setValue(fromState);
-            } else if (!modalities.isEmpty()) {
-                modalityBox.setValue(modalities.iterator().next());
-            }
-            modalityBox.valueProperty().addListener((obs, oldV, newV) -> {
-                if (newV != null) modalityState.setModality(newV);
-            });
-            javafx.beans.value.ChangeListener<String> stateListener = (obs, oldV, newV) -> {
-                if (newV != null
-                        && !newV.equals(modalityBox.getValue())
-                        && modalityBox.getItems().contains(newV)) {
-                    modalityBox.setValue(newV);
-                }
-            };
-            modalityState.modalityProperty().addListener(stateListener);
-            modalityBox.sceneProperty().addListener((s, oldScene, newScene) -> {
-                if (newScene == null) {
-                    modalityState.modalityProperty().removeListener(stateListener);
-                }
-            });
-        }
-
-        private void updateObjectivesForModality(String modality) {
-            Set<String> objectiveIds = configManager.getAvailableObjectives();
-            Map<String, String> objectiveNames = configManager.getObjectiveFriendlyNames(objectiveIds);
-
-            List<String> objectiveDisplayItems = objectiveIds.stream()
-                    .map(id -> objectiveNames.get(id) + " (" + id + ")")
-                    .sorted()
-                    .collect(Collectors.toList());
-
-            objectiveBox.getItems().clear();
-            objectiveBox.getItems().addAll(objectiveDisplayItems);
-
-            String lastObjective =
-                    qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
-            if (lastObjective == null) lastObjective = "";
-            boolean restored = false;
-            if (!lastObjective.isEmpty()) {
-                for (String displayItem : objectiveDisplayItems) {
-                    if (extractIdFromDisplayString(displayItem).equals(lastObjective)) {
-                        objectiveBox.setValue(displayItem);
-                        restored = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!restored && !objectiveDisplayItems.isEmpty()) {
-                objectiveBox.setValue(objectiveDisplayItems.get(0));
-            }
-        }
-
-        private void updateDetectorsForObjective(String modality, String objectiveDisplay) {
-            String objectiveId = extractIdFromDisplayString(objectiveDisplay);
-            Set<String> detectorIds = configManager.getAvailableDetectors();
-            Map<String, String> detectorNames = configManager.getDetectorFriendlyNames(detectorIds);
-
-            List<String> detectorDisplayItems = detectorIds.stream()
-                    .map(id -> detectorNames.get(id) + " (" + id + ")")
-                    .sorted()
-                    .collect(Collectors.toList());
-
-            detectorBox.getItems().clear();
-            detectorBox.getItems().addAll(detectorDisplayItems);
-
-            String lastDetector = PersistentPreferences.getLastDetector();
-            boolean restored = false;
-            if (!lastDetector.isEmpty()) {
-                for (String displayItem : detectorDisplayItems) {
-                    if (extractIdFromDisplayString(displayItem).equals(lastDetector)) {
-                        detectorBox.setValue(displayItem);
-                        restored = true;
-                        break;
-                    }
-                }
-            }
-
-            if (!restored && !detectorDisplayItems.isEmpty()) {
-                detectorBox.setValue(detectorDisplayItems.get(0));
-            }
-        }
-
-        /**
-         * Mirrors UnifiedAcquisitionController.updateAfStrategyDefaultForModality:
-         * rewrites the "Default (from config)" item label to show the resolved
-         * strategy binding for the current modality. See that method's docstring.
-         */
-        private void updateAfStrategyDefaultForModality(String modality) {
-            if (afStrategyCombo == null) return;
-            String boundStrategy = configManager.getAutofocusStrategyForModality(modality);
-            String defaultLabel = boundStrategy != null && !boundStrategy.isBlank()
-                    ? AfStrategyChoice.DEFAULT_DISPLAY + " -> " + boundStrategy
-                    : AfStrategyChoice.DEFAULT_DISPLAY;
-            int defaultIdx = -1;
-            for (int i = 0; i < afStrategyCombo.getItems().size(); i++) {
-                String item = afStrategyCombo.getItems().get(i);
-                if (item != null && item.startsWith(AfStrategyChoice.DEFAULT_DISPLAY)) {
-                    defaultIdx = i;
-                    break;
-                }
-            }
-            if (defaultIdx < 0) return;
-            String currentValue = afStrategyCombo.getValue();
-            boolean wasOnDefault = currentValue != null && currentValue.startsWith(AfStrategyChoice.DEFAULT_DISPLAY);
-            afStrategyCombo.getItems().set(defaultIdx, defaultLabel);
-            if (wasOnDefault) {
-                afStrategyCombo.setValue(defaultLabel);
-            }
         }
 
         /**
@@ -1512,217 +914,138 @@ public class ExistingImageAcquisitionController {
          * (same as the auto-save path) so the exported {@code .pos} file uses
          * stage micrometers from the same transform pipeline.
          */
-        private MdaExportContext buildMdaExportContext() {
-            try {
-                if (annotations == null || annotations.isEmpty()) {
-                    return MdaExportContext.notReady(
-                            "Select at least one annotation before exporting MicroManager MDA files.");
-                }
-                // When a project is already open, the OK path derives the
-                // effective sample name from the open project's folder name
-                // (the QPProjectFunctions layout that AcquisitionManager
-                // uses); mirror that here so MDA files land inside the open
-                // project, not in a sibling folder named after whatever stale
-                // value sat in PersistentPreferences.getLastSampleName().
-                String sampleName;
-                if (hasOpenProject && existingProjectName != null) {
-                    sampleName = existingProjectName;
-                } else {
-                    sampleName =
-                            sampleNameField != null ? sampleNameField.getText().trim() : "";
-                }
-                if (sampleName.isEmpty()) {
-                    return MdaExportContext.notReady("Enter a sample name before exporting MDA.");
-                }
-                String folderText = folderField != null ? folderField.getText().trim() : "";
-                if (folderText.isEmpty()) {
-                    return MdaExportContext.notReady("Enter a projects folder before exporting MDA.");
-                }
-                File projectsFolder = new File(folderText);
-                String modality = modalityBox != null ? modalityBox.getValue() : null;
-                String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
-                String detector = extractIdFromDisplayString(detectorBox != null ? detectorBox.getValue() : null);
-                if (modality == null || objective == null || detector == null) {
-                    return MdaExportContext.notReady("Select modality, objective, and detector before exporting MDA.");
-                }
-
-                SampleSetupResult sample =
-                        new SampleSetupResult(sampleName, projectsFolder, modality, objective, detector);
-
-                String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
-                MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configFileLocation);
-
-                String enhancedModality = ObjectiveUtils.createEnhancedFolderName(modality, objective);
-                java.nio.file.Path sampleRoot = projectsFolder.toPath().resolve(sampleName);
-                java.nio.file.Path modalityRoot = sampleRoot.resolve(enhancedModality);
-
-                // Per-region overrides (channel + angle + focus) read from the panel
-                // -- same source the OK path uses.
-                Map<String, Double> angleOverrides = modalityUI != null ? modalityUI.getAngleOverrides() : null;
-                String focusChannelId = modalityUI != null ? modalityUI.getFocusChannelId() : null;
-                Map<String, Double> channelIntensityOverrides =
-                        modalityUI != null ? modalityUI.getChannelIntensityOverrides() : Map.of();
-                if (channelIntensityOverrides == null) {
-                    channelIntensityOverrides = Map.of();
-                }
-
-                // Resolve angles + channels (mirrors AcquisitionManager.performSingleAnnotationAcquisition).
-                String wbMode;
-                if (wbModeComboBox == null || !wbModeComboBox.isVisible()) {
-                    wbMode = "off";
-                } else {
-                    String wbModeDisplay = wbModeComboBox.getValue();
-                    wbMode = WbMode.fromDisplayName(wbModeDisplay != null ? wbModeDisplay : "Off")
-                            .getProtocolName();
-                }
-                List<AngleExposure> angleExposures = AngleResolutionService.resolve(
-                                enhancedModality, objective, detector, angleOverrides, wbMode)
-                        .join();
-                List<ChannelExposure> channelExposures = ChannelResolutionService.resolve(
-                        enhancedModality, objective, detector, angleOverrides, focusChannelId);
-
-                if (ChannelResolutionService.isEmptySelectionForChannelBasedModality(
-                        enhancedModality, objective, detector, angleOverrides)) {
-                    return MdaExportContext.notReady(
-                            "No fluorescence channels selected. Enable at least one channel before exporting MDA.");
-                }
-
-                double pixelSize = mgr.getPixelSize(objective, detector);
-                AcquisitionConfigurationBuilder.AcquisitionConfiguration config =
-                        AcquisitionConfigurationBuilder.buildConfiguration(
-                                sample,
-                                configFileLocation,
-                                enhancedModality,
-                                annotations.get(0).getName() == null
-                                        ? "region"
-                                        : annotations.get(0).getName(),
-                                angleExposures,
-                                channelExposures,
-                                projectsFolder.getAbsolutePath(),
-                                sampleName,
-                                pixelSize,
-                                wbMode);
-                AcquisitionCommandBuilder cmdBuilder = config.commandBuilder();
-                if (wbMode != null) {
-                    cmdBuilder.wbMode(wbMode);
-                }
-                if (channelIntensityOverrides != null && !channelIntensityOverrides.isEmpty()) {
-                    cmdBuilder.channelIntensityOverrides(channelIntensityOverrides);
-                }
-                cmdBuilder.focusChannel(focusChannelId);
-                var dedicatedFocus = modalityUI != null ? modalityUI.getDedicatedFocusChannel() : null;
-                if (dedicatedFocus != null) {
-                    cmdBuilder.dedicatedFocusChannel(
-                            dedicatedFocus.channelId(), dedicatedFocus.exposureMs(), dedicatedFocus.intensity());
-                }
-                // Let the modality handler tweak the builder (e.g. disable debayer for LSM).
-                ModalityRegistry.getHandler(modality).configureCommandBuilder(cmdBuilder);
-
-                // Build the per-region tile lists. For pre-acquisition export we
-                // synthesize centroids directly from the annotation bounds + camera
-                // FOV without writing files (avoids polluting the project before
-                // the user commits to actually acquiring).
-                double[] fovMicrons = mgr.getCameraFOV(modality, objective, detector);
-                double fovWumicrons = fovMicrons[0];
-                double fovHumicrons = fovMicrons[1];
-                double overlap = QPPreferenceDialog.getTileOverlapPercentProperty();
-
-                // Prompt for the tiling FoV to use for THIS export. Pre-filled with the camera
-                // FoV (so accepting the default reproduces the acquisition tiling exactly). The
-                // use case is handing the position list to a device with a different field size --
-                // e.g. the MicroManager laser scanner -- so its tiling matches that field, not the
-                // camera's. MDA-export only: the real camera acquisition is unaffected.
-                Window promptParent = (dialog != null && dialog.getDialogPane().getScene() != null)
-                        ? dialog.getDialogPane().getScene().getWindow()
-                        : null;
-                Optional<double[]> fovChoice = promptTileFov(promptParent, fovWumicrons, fovHumicrons, overlap);
-                if (fovChoice.isEmpty()) {
-                    return MdaExportContext.cancelled();
-                }
-                fovWumicrons = fovChoice.get()[0];
-                fovHumicrons = fovChoice.get()[1];
-                overlap = fovChoice.get()[2];
-                double imagePixelSize = pixelSize;
-                try {
-                    var gui = qupath.lib.gui.QuPathGUI.getInstance();
-                    if (gui != null && gui.getImageData() != null) {
-                        imagePixelSize = gui.getImageData()
-                                .getServer()
-                                .getPixelCalibration()
-                                .getAveragedPixelSizeMicrons();
-                    }
-                } catch (Exception ignored) {
-                    // Fall back to detector pixel size.
-                }
-                // Resolve the FULL-RES -> STAGE transform so synthesized centroids land in real stage
-                // micrometers. The annotation centroids are in the OPEN IMAGE's full-res pixel space,
-                // so we must apply the same full-res -> stage transform the acquisition uses -- NOT a
-                // saved macro -> stage preset (that maps MACRO pixels, ~81 um/px, and applied to
-                // full-res pixels, ~0.25 um/px, it produced coordinates off by ~300x: the reported
-                // "numbers that don't match any stage coordinates" bug).
-                //
-                // Priority:
-                //   1. MicroscopeController.getCurrentTransform() -- the live full-res -> stage
-                //      transform established by the alignment step, identical to what the acquisition
-                //      writes into TileConfiguration.txt (so the exported .pos matches the acquired one).
-                //   2. A selected slide-specific preset that is ALREADY full-res -> stage (its scale
-                //      matches the full-res pixel size), applied directly.
-                // A macro -> stage preset alone cannot be applied to image pixels without the
-                // green-box/data-bounds alignment context, so we refuse rather than emit garbage.
-                AffineTransform transform = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
-                        .getCurrentTransform();
-                if (transform == null) {
-                    AffineTransformManager.TransformPreset preset =
-                            (useExistingRadio != null && useExistingRadio.isSelected() && transformCombo != null)
-                                    ? transformCombo.getValue()
-                                    : null;
-                    AffineTransform presetTransform = preset != null ? preset.getTransform() : null;
-                    boolean presetIsSlideSpecific =
-                            presetTransform != null && Math.abs(presetTransform.getScaleX() - imagePixelSize) < 1.0;
-                    if (presetIsSlideSpecific) {
-                        logger.info(
-                                "MDA export: using slide-specific preset '{}' (already full-res -> stage)",
-                                preset.getName());
-                        transform = presetTransform;
-                    } else {
-                        return MdaExportContext.notReady(
-                                "No stage alignment is available yet, so stage coordinates cannot be computed.\n\n"
-                                        + "Run the alignment step (or acquire once) first -- then the exported MDA "
-                                        + "positions will match the acquisition. A saved macro-scale preset alone "
-                                        + "cannot be applied to the full-resolution image without alignment.");
-                    }
-                }
-
-                List<MdaExportAction.RegionPlan> regionPlans = new ArrayList<>(annotations.size());
-                for (PathObject ann : annotations) {
-                    if (ann == null || ann.getROI() == null) {
-                        continue;
-                    }
-                    String regionName = ann.getName() != null ? ann.getName() : "region";
-                    java.nio.file.Path regionDir = modalityRoot.resolve(regionName);
-                    List<TileStagePos> tiles = synthesizeTileCentroids(
-                            ann, fovWumicrons, fovHumicrons, overlap, imagePixelSize, transform);
-                    regionPlans.add(new MdaExportAction.RegionPlan(regionName, regionDir, tiles));
-                }
-                if (regionPlans.isEmpty()) {
-                    return MdaExportContext.notReady("No usable annotations to export.");
-                }
-
-                Map<String, Channel> channelLibrary = new LinkedHashMap<>();
-                try {
-                    for (Channel ch : mgr.getModalityChannels(modality)) {
-                        channelLibrary.put(ch.id(), ch);
-                    }
-                } catch (Exception e) {
-                    logger.debug("No channel library for modality '{}': {}", modality, e.getMessage());
-                }
-
-                return MdaExportContext.ready(sample, cmdBuilder, regionPlans, mgr, channelLibrary);
-            } catch (Exception ex) {
-                logger.error("Could not build MDA export context: {}", ex.getMessage(), ex);
-                return MdaExportContext.notReady("Could not prepare MDA export: "
-                        + (ex.getMessage() == null ? ex.getClass().getSimpleName() : ex.getMessage()));
+        @Override
+        protected MdaExportContext prepareMdaExport() throws IOException {
+            if (annotations == null || annotations.isEmpty()) {
+                return MdaExportContext.notReady(
+                        "Select at least one annotation before exporting MicroManager MDA files.");
             }
+            String sampleName = mdaSampleName();
+            if (sampleName.isEmpty()) {
+                return MdaExportContext.notReady("Enter a sample name before exporting MDA.");
+            }
+            String folderText = folderField != null ? folderField.getText().trim() : "";
+            if (folderText.isEmpty()) {
+                return MdaExportContext.notReady("Enter a projects folder before exporting MDA.");
+            }
+            File projectsFolder = new File(folderText);
+            String modality = modalityBox != null ? modalityBox.getValue() : null;
+            String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
+            String detector = extractIdFromDisplayString(detectorBox != null ? detectorBox.getValue() : null);
+            if (modality == null || objective == null || detector == null) {
+                return MdaExportContext.notReady("Select modality, objective, and detector before exporting MDA.");
+            }
+
+            SampleSetupResult sample = new SampleSetupResult(sampleName, projectsFolder, modality, objective, detector);
+
+            String configFileLocation = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configFileLocation);
+
+            String enhancedModality = ObjectiveUtils.createEnhancedFolderName(modality, objective);
+            java.nio.file.Path sampleRoot = projectsFolder.toPath().resolve(sampleName);
+            java.nio.file.Path modalityRoot = sampleRoot.resolve(enhancedModality);
+
+            String firstAnnotationName = annotations.get(0).getName();
+            AcquisitionCommandBuilder cmdBuilder = buildMdaCommand(
+                    sample,
+                    configFileLocation,
+                    mgr,
+                    enhancedModality,
+                    firstAnnotationName == null ? "region" : firstAnnotationName);
+            if (cmdBuilder == null) {
+                return MdaExportContext.notReady(MDA_NO_CHANNELS_MESSAGE);
+            }
+            double pixelSize = mgr.getPixelSize(objective, detector);
+
+            // Build the per-region tile lists. For pre-acquisition export we
+            // synthesize centroids directly from the annotation bounds + camera
+            // FOV without writing files (avoids polluting the project before
+            // the user commits to actually acquiring).
+            double[] fovMicrons = mgr.getCameraFOV(modality, objective, detector);
+            double fovWumicrons = fovMicrons[0];
+            double fovHumicrons = fovMicrons[1];
+            double overlap = QPPreferenceDialog.getTileOverlapPercentProperty();
+
+            // Prompt for the tiling FoV to use for THIS export. Pre-filled with the camera
+            // FoV (so accepting the default reproduces the acquisition tiling exactly). The
+            // use case is handing the position list to a device with a different field size --
+            // e.g. the MicroManager laser scanner -- so its tiling matches that field, not the
+            // camera's. MDA-export only: the real camera acquisition is unaffected.
+            Window promptParent = (dialog != null && dialog.getDialogPane().getScene() != null)
+                    ? dialog.getDialogPane().getScene().getWindow()
+                    : null;
+            Optional<double[]> fovChoice = promptTileFov(promptParent, fovWumicrons, fovHumicrons, overlap);
+            if (fovChoice.isEmpty()) {
+                return MdaExportContext.cancelled();
+            }
+            fovWumicrons = fovChoice.get()[0];
+            fovHumicrons = fovChoice.get()[1];
+            overlap = fovChoice.get()[2];
+            double imagePixelSize = pixelSize;
+            try {
+                var gui = qupath.lib.gui.QuPathGUI.getInstance();
+                if (gui != null && gui.getImageData() != null) {
+                    imagePixelSize =
+                            gui.getImageData().getServer().getPixelCalibration().getAveragedPixelSizeMicrons();
+                }
+            } catch (Exception ignored) {
+                // Fall back to detector pixel size.
+            }
+            // Resolve the FULL-RES -> STAGE transform so synthesized centroids land in real stage
+            // micrometers. The annotation centroids are in the OPEN IMAGE's full-res pixel space,
+            // so we must apply the same full-res -> stage transform the acquisition uses -- NOT a
+            // saved macro -> stage preset (that maps MACRO pixels, ~81 um/px, and applied to
+            // full-res pixels, ~0.25 um/px, it produced coordinates off by ~300x: the reported
+            // "numbers that don't match any stage coordinates" bug).
+            //
+            // Priority:
+            //   1. MicroscopeController.getCurrentTransform() -- the live full-res -> stage
+            //      transform established by the alignment step, identical to what the acquisition
+            //      writes into TileConfiguration.txt (so the exported .pos matches the acquired one).
+            //   2. A selected slide-specific preset that is ALREADY full-res -> stage (its scale
+            //      matches the full-res pixel size), applied directly.
+            // A macro -> stage preset alone cannot be applied to image pixels without the
+            // green-box/data-bounds alignment context, so we refuse rather than emit garbage.
+            AffineTransform transform = qupath.ext.qpsc.controller.MicroscopeController.getInstance()
+                    .getCurrentTransform();
+            if (transform == null) {
+                AffineTransformManager.TransformPreset preset =
+                        (useExistingRadio != null && useExistingRadio.isSelected() && transformCombo != null)
+                                ? transformCombo.getValue()
+                                : null;
+                AffineTransform presetTransform = preset != null ? preset.getTransform() : null;
+                boolean presetIsSlideSpecific =
+                        presetTransform != null && Math.abs(presetTransform.getScaleX() - imagePixelSize) < 1.0;
+                if (presetIsSlideSpecific) {
+                    logger.info(
+                            "MDA export: using slide-specific preset '{}' (already full-res -> stage)",
+                            preset.getName());
+                    transform = presetTransform;
+                } else {
+                    return MdaExportContext.notReady(
+                            "No stage alignment is available yet, so stage coordinates cannot be computed.\n\n"
+                                    + "Run the alignment step (or acquire once) first -- then the exported MDA "
+                                    + "positions will match the acquisition. A saved macro-scale preset alone "
+                                    + "cannot be applied to the full-resolution image without alignment.");
+                }
+            }
+
+            List<MdaExportAction.RegionPlan> regionPlans = new ArrayList<>(annotations.size());
+            for (PathObject ann : annotations) {
+                if (ann == null || ann.getROI() == null) {
+                    continue;
+                }
+                String regionName = ann.getName() != null ? ann.getName() : "region";
+                java.nio.file.Path regionDir = modalityRoot.resolve(regionName);
+                List<TileStagePos> tiles =
+                        synthesizeTileCentroids(ann, fovWumicrons, fovHumicrons, overlap, imagePixelSize, transform);
+                regionPlans.add(new MdaExportAction.RegionPlan(regionName, regionDir, tiles));
+            }
+            if (regionPlans.isEmpty()) {
+                return MdaExportContext.notReady("No usable annotations to export.");
+            }
+
+            return MdaExportContext.ready(sample, cmdBuilder, regionPlans, mgr, modalityChannelLibrary(mgr, modality));
         }
 
         /**
@@ -1921,189 +1244,6 @@ public class ExistingImageAcquisitionController {
             return String.format("%.1f", v);
         }
 
-        /** Current dialog selection for the modality panel's "what will be used" readout. */
-        private qupath.ext.qpsc.modality.AcquisitionReadout.Context currentReadoutContext() {
-            String modality = modalityBox != null ? modalityBox.getValue() : null;
-            String objective = extractIdFromDisplayString(objectiveBox != null ? objectiveBox.getValue() : null);
-            String detector = extractIdFromDisplayString(detectorBox != null ? detectorBox.getValue() : null);
-            return new qupath.ext.qpsc.modality.AcquisitionReadout.Context(
-                    modality, objective, detector, currentWbModeProtocol());
-        }
-
-        /** The internal white-balance protocol name for the current selection ({@code "off"} when hidden). */
-        private String currentWbModeProtocol() {
-            if (wbModeComboBox == null || !wbModeComboBox.isVisible()) {
-                return "off";
-            }
-            String display = wbModeComboBox.getValue();
-            return WbMode.fromDisplayName(display != null ? display : "Off").getProtocolName();
-        }
-
-        /** Refresh the current modality panel's resolved-values readout, if it has one. */
-        private void refreshModalityReadout() {
-            if (modalityUI instanceof qupath.ext.qpsc.modality.BrightfieldExposureBoundingBoxUI bfUi) {
-                bfUi.refreshReadout();
-            } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
-                ppmUi.refreshReadout();
-            }
-        }
-
-        private void updateModalityUI(String modality) {
-            ModalityHandler handler = ModalityRegistry.getHandler(modality);
-            Optional<ModalityHandler.BoundingBoxUI> uiOpt = handler.createBoundingBoxUI(modality);
-
-            // Clear existing content
-            modalityContent.getChildren().clear();
-
-            if (uiOpt.isPresent()) {
-                modalityUI = uiOpt.get();
-                // Add the modality-specific UI to the content pane
-                modalityContent.getChildren().add(modalityUI.getNode());
-                modalityPane.setExpanded(true); // Auto-expand when there's content
-                logger.debug("Added modality UI for: {}", modality);
-                // Wire the "Save as MicroManager MDA..." button on the panel
-                // so it can build an export context from this dialog's live state.
-                java.util.function.Supplier<MdaExportContext> supplier = this::buildMdaExportContext;
-                if (modalityUI instanceof WidefieldChannelBoundingBoxUI wfUi) {
-                    wfUi.installMdaExportContext(supplier);
-                } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
-                    ppmUi.installMdaExportContext(supplier);
-                    // Live "what will be used" readout: resolved per-angle exposures.
-                    ppmUi.installReadoutContext(this::currentReadoutContext);
-                } else if (modalityUI instanceof qupath.ext.qpsc.modality.BrightfieldExposureBoundingBoxUI bfUi) {
-                    // Live "what will be used" readout: resolved profile / exposure / illumination.
-                    bfUi.installReadoutContext(this::currentReadoutContext);
-                }
-            } else {
-                modalityUI = null;
-                // Show placeholder when no modality-specific UI
-                Label placeholder = new Label("No specific options for " + modality);
-                placeholder.setStyle("-fx-text-fill: " + ThemeColors.MUTED + "; -fx-font-style: italic;");
-                modalityContent.getChildren().add(placeholder);
-                modalityPane.setExpanded(false);
-            }
-
-            // Update white balance visibility based on current detector and modality
-            updateWhiteBalanceVisibility();
-
-            // Refresh the loop-order toggle in the Z-stack section (labels +
-            // disable binding depend on the new modality's family and channel
-            // count). Re-applies the saved per-family pick from preferences.
-            updateLoopOrderToggle(modality);
-        }
-
-        /**
-         * Updates the visibility and default of the white balance row based on
-         * the current detector and modality.  WB is shown only when the detector
-         * is a JAI camera AND the modality supports white balance (i.e. its
-         * {@code getDefaultWbMode()} is not "off").
-         */
-        private void updateWhiteBalanceVisibility() {
-            if (wbModeComboBox == null || wbLabel == null) {
-                return; // Not yet initialized
-            }
-
-            String detectorDisplay = detectorBox.getValue();
-            String detector = detectorDisplay != null ? extractIdFromDisplayString(detectorDisplay) : null;
-            boolean isJAI = configManager.isJAICamera(detector);
-
-            String modality = modalityBox.getValue();
-            var handler = modality != null ? ModalityRegistry.getHandler(modality) : null;
-            String defaultWb = handler != null ? handler.getDefaultWbMode() : "off";
-            boolean modalityUsesWb = !"off".equals(defaultWb);
-
-            boolean showWb = isJAI && modalityUsesWb;
-            wbLabel.setVisible(showWb);
-            wbLabel.setManaged(showWb);
-            wbModeComboBox.setVisible(showWb);
-            wbModeComboBox.setManaged(showWb);
-
-            // When modality changes, reset the WB default from the handler
-            if (showWb) {
-                String displayDefault = getDefaultWbModeFromModality();
-                wbModeComboBox.setValue(displayDefault);
-                boolean isMultiAngle = handler != null && handler.isMultiAngleModality();
-                filterWbModesByBackgroundValidity(modality, detector, isMultiAngle);
-            }
-
-            if (flatfieldSelector != null) {
-                flatfieldSelector.refresh(modality, detector);
-                refreshBackgroundStatusVisibility();
-            }
-
-            if (backgroundProfileSelector != null) {
-                String objectiveDisplay = objectiveBox.getValue();
-                backgroundProfileSelector.refreshStatus(
-                        modality,
-                        objectiveDisplay != null ? extractIdFromDisplayString(objectiveDisplay) : null,
-                        detector);
-            }
-
-            logger.debug(
-                    "White balance visibility updated: JAI={}, modalityWB={}, visible={}",
-                    isJAI,
-                    modalityUsesWb,
-                    showWb);
-        }
-
-        /** "No background profile" means nothing to a run that does not use backgrounds. */
-        private void refreshBackgroundStatusVisibility() {
-            if (backgroundProfileSelector != null && flatfieldSelector != null) {
-                backgroundProfileSelector.setStatusVisible(flatfieldSelector.usesBackground());
-            }
-        }
-
-        /**
-         * Filter WB mode dropdown to only show modes with valid backgrounds.
-         * When background correction is disabled in config, all modes are shown.
-         */
-        private void filterWbModesByBackgroundValidity(String modality, String detector, boolean isPPM) {
-            String objectiveDisplay = objectiveBox.getValue();
-            String objective = objectiveDisplay != null ? extractIdFromDisplayString(objectiveDisplay) : null;
-            if (objective == null) {
-                return;
-            }
-
-            boolean bgEnabled = configManager.isBackgroundCorrectionEnabled(modality);
-
-            String currentSelection = wbModeComboBox.getValue();
-            wbModeComboBox.getItems().clear();
-
-            if (bgEnabled) {
-                String baseFolder = configManager.getBackgroundProfileFolder();
-                if (baseFolder != null) {
-                    List<WbMode> validModes = BackgroundValidityChecker.getValidModes(
-                            baseFolder, modality, objective, detector, configManager);
-                    for (WbMode mode : validModes) {
-                        wbModeComboBox.getItems().add(mode.getDisplayName());
-                    }
-                    logger.debug("Filtered WB modes to {} valid options (BG correction enabled)", validModes.size());
-                } else {
-                    for (WbMode mode : WbMode.values()) {
-                        if (isPPM || !isPpmOnlyMode(mode)) {
-                            wbModeComboBox.getItems().add(mode.getDisplayName());
-                        }
-                    }
-                }
-            } else {
-                for (WbMode mode : WbMode.values()) {
-                    if (isPPM || !isPpmOnlyMode(mode)) {
-                        wbModeComboBox.getItems().add(mode.getDisplayName());
-                    }
-                }
-            }
-
-            if (wbModeComboBox.getItems().contains(currentSelection)) {
-                wbModeComboBox.setValue(currentSelection);
-            } else if (!wbModeComboBox.getItems().isEmpty()) {
-                wbModeComboBox.setValue(wbModeComboBox.getItems().get(0));
-            }
-        }
-
-        private static boolean isPpmOnlyMode(WbMode mode) {
-            return mode == WbMode.SIMPLE || mode == WbMode.PER_ANGLE;
-        }
-
         private void updatePresetAgeLabel() {
             AffineTransformManager.TransformPreset preset = transformCombo.getValue();
             presetAgeLabel.setText(AlignmentHelper.presetAgeText(preset));
@@ -2232,8 +1372,9 @@ public class ExistingImageAcquisitionController {
             }
         }
 
-        private void setupPreviewUpdateListeners() {
-            previewDebounce.setOnFinished(event -> updatePreviewPanel());
+        @Override
+        protected void setupPreviewUpdateListeners() {
+            super.setupPreviewUpdateListeners();
 
             // These listeners are registered here (not in createAlignmentSection) because
             // they reference fields from createRefinementSection (refinementBox, radio buttons, etc.)
@@ -2257,10 +1398,6 @@ public class ExistingImageAcquisitionController {
                 PersistentPreferences.setUseExistingAlignment(selected);
                 triggerPreviewUpdate();
             });
-        }
-
-        private void triggerPreviewUpdate() {
-            previewDebounce.playFromStart();
         }
 
         /**
@@ -2451,7 +1588,8 @@ public class ExistingImageAcquisitionController {
             return banner;
         }
 
-        private void updatePreviewPanel() {
+        @Override
+        protected void updatePreviewPanel() {
             try {
                 String modality = modalityBox.getValue();
                 String objective = extractIdFromDisplayString(objectiveBox.getValue());
@@ -2489,14 +1627,7 @@ public class ExistingImageAcquisitionController {
                 int imagesPerTile = getImagesPerTileForModality(modality);
 
                 // Z-stack multiplier
-                int zPlanes = 1;
-                if (PersistentPreferences.isZStackEnabled()) {
-                    double zRange = PersistentPreferences.getZStackRange();
-                    double zStep = PersistentPreferences.getZStackStep();
-                    if (zStep > 0) {
-                        zPlanes = (int) Math.ceil(zRange / zStep) + 1;
-                    }
-                }
+                int zPlanes = zPlaneCount();
 
                 int totalImages = totalTiles * imagesPerTile * zPlanes;
 
@@ -2616,79 +1747,6 @@ public class ExistingImageAcquisitionController {
             return 1;
         }
 
-        private String formatTime(double seconds) {
-            if (seconds < 60) {
-                return String.format("~%.0f seconds", seconds);
-            } else if (seconds < 3600) {
-                return String.format("~%.0f minutes", seconds / 60.0);
-            } else {
-                return String.format("~%.1f hours", seconds / 3600.0);
-            }
-        }
-
-        private String formatStorage(double megabytes) {
-            if (megabytes < 1024) {
-                return String.format("~%.0f MB", megabytes);
-            } else {
-                return String.format("~%.1f GB", megabytes / 1024.0);
-            }
-        }
-
-        private void validateAll() {
-            String sampleName = sampleNameField.getText().trim();
-            String sampleError = SampleNameValidator.getValidationError(sampleName);
-            if (sampleError != null) {
-                validationErrors.put("sampleName", sampleError);
-            } else {
-                validationErrors.remove("sampleName");
-            }
-
-            if (modalityBox.getValue() == null) {
-                validationErrors.put("modality", "Please select a modality");
-            } else {
-                validationErrors.remove("modality");
-            }
-
-            if (objectiveBox.getValue() == null) {
-                validationErrors.put("objective", "Please select an objective");
-            } else {
-                validationErrors.remove("objective");
-            }
-
-            if (detectorBox.getValue() == null) {
-                validationErrors.put("detector", "Please select a detector");
-            } else {
-                validationErrors.remove("detector");
-            }
-
-            if (useExistingRadio.isSelected() && transformCombo.getValue() == null && !hasSlideAlignment) {
-                validationErrors.put("transform", "Please select a transform");
-            } else {
-                validationErrors.remove("transform");
-            }
-
-            updateErrorSummary();
-        }
-
-        private void updateErrorSummary() {
-            if (validationErrors.isEmpty()) {
-                errorSummaryPanel.setVisible(false);
-                errorSummaryPanel.setManaged(false);
-                startButton.setDisable(false);
-            } else {
-                errorListBox.getChildren().clear();
-                validationErrors.forEach((fieldId, errorMsg) -> {
-                    Label errorLabel = new Label("- " + errorMsg);
-                    errorLabel.setStyle("-fx-text-fill: " + accentColor("amber") + ";");
-                    errorListBox.getChildren().add(errorLabel);
-                });
-
-                errorSummaryPanel.setVisible(true);
-                errorSummaryPanel.setManaged(true);
-                startButton.setDisable(true);
-            }
-        }
-
         private ExistingImageAcquisitionConfig createResult() {
             try {
                 String sampleName = sampleNameField.getText().trim();
@@ -2709,79 +1767,20 @@ public class ExistingImageAcquisitionController {
 
                 // Angle / channel-intensity overrides + focus channel from modality UI
                 // (green box params handled by ExistingAlignmentPath)
-                Map<String, Double> angleOverrides = null;
-                Map<String, Double> channelIntensityOverrides = Map.of();
-                String focusChannelId = null;
-                qupath.ext.qpsc.modality.ModalityHandler.BoundingBoxUI.FocusChannelOverride dedicatedFocusChannel =
-                        null;
-                java.util.Set<String> splitChannelIds = java.util.Set.of();
-                java.util.List<String> alignmentChannelIds = java.util.List.of();
-                if (modalityUI != null) {
-                    angleOverrides = modalityUI.getAngleOverrides();
-                    Map<String, Double> intensityMap = modalityUI.getChannelIntensityOverrides();
-                    channelIntensityOverrides = intensityMap == null ? Map.of() : intensityMap;
-                    focusChannelId = modalityUI.getFocusChannelId();
-                    dedicatedFocusChannel = modalityUI.getDedicatedFocusChannel();
-                    java.util.Set<String> split = modalityUI.getSplitChannelIds();
-                    splitChannelIds = split == null ? java.util.Set.of() : split;
-                    java.util.List<String> align = modalityUI.getAlignmentChannelIds();
-                    alignmentChannelIds = align == null ? java.util.List.of() : align;
-                }
+                ModalityPanelSelections panel = readModalityPanelSelections();
 
-                qupath.ext.qpsc.service.OutputFormat stitchingOrganization = outputOrganizationCombo != null
-                        ? (ORG_PER_CHANNEL.equals(outputOrganizationCombo.getValue())
-                                ? qupath.ext.qpsc.service.OutputFormat.OME_PER_CHANNEL
-                                : qupath.ext.qpsc.service.OutputFormat.OME_SINGLE)
-                        : qupath.ext.qpsc.service.OutputFormat.OME_SINGLE;
+                qupath.ext.qpsc.service.OutputFormat stitchingOrganization = selectedStitchingOrganization();
 
-                // Autofocus strategy override: display -> protocol name.
-                // Null means "use YAML per-modality binding".
-                String afStrategyProtocol = AfStrategyChoice.displayToProtocol(
-                        afStrategyCombo != null ? afStrategyCombo.getValue() : AfStrategyChoice.DEFAULT_DISPLAY);
-                PersistentPreferences.setLastAfStrategy(afStrategyProtocol);
-                if (afStrategyProtocol != null) {
-                    logger.info("User selected AF strategy override: {}", afStrategyProtocol);
-                }
+                String afStrategyProtocol = saveAfStrategyChoice();
 
                 // Get white balance settings from ComboBox.
                 // Force "off" when the WB row is hidden (non-JAI cameras or
                 // modalities that don't use WB, e.g. Fluorescence).
-                String wbMode;
-                if (wbModeComboBox == null || !wbModeComboBox.isVisible()) {
-                    wbMode = "off";
-                } else {
-                    String wbModeDisplay = wbModeComboBox.getValue();
-                    wbMode = WbMode.fromDisplayName(wbModeDisplay != null ? wbModeDisplay : "Off")
-                            .getProtocolName();
-                }
+                String wbMode = currentWbModeProtocol();
                 boolean enableWhiteBalance = !"off".equals(wbMode);
                 boolean perAngleWhiteBalance = "per_angle".equals(wbMode);
 
-                // Drift guard: surface any divergence between the dialog combo and
-                // the global objective state that may have accumulated since this
-                // dialog opened (e.g. Live Viewer Camera tab pick, another dialog's
-                // submit). The combo wins (user's explicit choice), but the warning
-                // flags a drift we want to catch early.
-                String globalObjective =
-                        qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
-                if (objective != null
-                        && !objective.isEmpty()
-                        && globalObjective != null
-                        && !globalObjective.isEmpty()
-                        && !globalObjective.equals(objective)) {
-                    logger.warn(
-                            "Existing image acquisition objective drift: dialog combo='{}' but "
-                                    + "ObjectiveState='{}'. Using dialog value.",
-                            objective,
-                            globalObjective);
-                }
-
-                // Save preferences. Modality + objective route through their
-                // central state singletons so cross-dialog sync stays canonical.
-                PersistentPreferences.setLastSampleName(sampleName);
-                qupath.ext.qpsc.state.ModalityState.getInstance().setModality(modality);
-                qupath.ext.qpsc.state.ObjectiveState.getInstance().setObjective(objective);
-                PersistentPreferences.setLastDetector(detector);
+                saveSelections("Existing image acquisition", sampleName, modality, objective, detector);
 
                 logger.info(
                         "Created acquisition config: sample={}, modality={}, useExisting={}, refinement={}, "
@@ -2794,21 +1793,7 @@ public class ExistingImageAcquisitionController {
                         enableWhiteBalance,
                         perAngleWhiteBalance);
 
-                // Resolve --inner-axis from the loop-order toggle. Null means
-                // "use server's per-modality default" so byte-identical wire
-                // format is preserved when the toggle stays on default.
-                String innerAxis = null;
-                String loopFamily = loopOrderFamily(modality);
-                if (loopFamily != null
-                        && loopOrderInnerAltRadio != null
-                        && !loopOrderInnerAltRadio.isDisabled()
-                        && loopOrderInnerAltRadio.isSelected()) {
-                    if (PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD.equals(loopFamily)) {
-                        innerAxis = "channel";
-                    } else if (PersistentPreferences.LOOP_ORDER_FAMILY_PPM.equals(loopFamily)) {
-                        innerAxis = "z";
-                    }
-                }
+                String innerAxis = resolveInnerAxis(modality);
 
                 return new ExistingImageAcquisitionConfig(
                         sampleName,
@@ -2820,36 +1805,23 @@ public class ExistingImageAcquisitionController {
                         useExisting,
                         transform,
                         refinement,
-                        angleOverrides,
-                        channelIntensityOverrides,
-                        focusChannelId,
+                        panel.angleOverrides(),
+                        panel.channelIntensityOverrides(),
+                        panel.focusChannelId(),
                         afStrategyProtocol,
                         enableWhiteBalance,
                         perAngleWhiteBalance,
                         wbMode,
                         innerAxis,
-                        splitChannelIds,
-                        alignmentChannelIds,
+                        panel.splitChannelIds(),
+                        panel.alignmentChannelIds(),
                         stitchingOrganization,
-                        dedicatedFocusChannel);
+                        panel.dedicatedFocusChannel());
 
             } catch (Exception e) {
                 logger.error("Error creating result", e);
                 return null;
             }
-        }
-
-        private static String extractIdFromDisplayString(String displayString) {
-            if (displayString == null) return null;
-
-            int openParen = displayString.lastIndexOf('(');
-            int closeParen = displayString.lastIndexOf(')');
-
-            if (openParen != -1 && closeParen != -1 && closeParen > openParen) {
-                return displayString.substring(openParen + 1, closeParen);
-            }
-
-            return displayString;
         }
     }
 }
