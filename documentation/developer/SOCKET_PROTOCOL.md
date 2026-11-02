@@ -739,7 +739,8 @@ The client polls STATUS and PROGRESS on a background thread while the primary so
 | Socket connection | 3000 ms |
 | Default read | 5000 ms |
 | Acquisition acknowledgment | 30 s |
-| Autofocus test | 120 s |
+| Autofocus test (drift check) | 120 s |
+| Autofocus test, wide search (`--wide-search`) | 300 s |
 | Background acquisition | 180 s |
 | Z-stack / time-lapse | 600 s |
 | LCCALIB / LCSWEEP acknowledgement | 30 s |
