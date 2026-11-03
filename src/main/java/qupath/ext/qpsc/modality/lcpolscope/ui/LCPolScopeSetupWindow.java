@@ -41,36 +41,42 @@ public final class LCPolScopeSetupWindow {
                 12,
                 step(
                         "1. Camera",
-                        "In Micro-Manager's Device Property Browser: Gain Auto and Exposure Auto Off, Gamma off "
-                                + "(Gamma Enabled 0, or Gamma 1.0), and a 12- or 16-bit pixel format. The status above "
-                                + "rechecks when you come back to this window.",
+                        "The camera must not adjust itself between the five frames. In Micro-Manager, open "
+                                + "Devices > Device Property Browser, set Gain Auto and Exposure Auto to Off, turn "
+                                + "gamma off (Gamma Enabled 0, or Gamma 1.0), and choose a 12-bit or 16-bit pixel "
+                                + "format. The box above checks again when you come back to this window.",
                         "Recheck",
                         status::refresh),
                 step(
                         "2. Calibrate on a clear, specimen-free field",
-                        "Finds the extinction point and swing states, measures the black level, and on Apply "
-                                + "writes the palette and offers the measured black level and an exposure from the "
-                                + "usable range. Apply then offers the background, step 3. A calibration file from "
-                                + "an earlier run can be applied to the current config instead, for instance one "
-                                + "that was applied to the other LC-PolScope config file.",
+                        "Tunes the two liquid crystals for this slide. It finds the setting where empty glass is "
+                                + "darkest (the extinction state) and the four settings just off it, one on each "
+                                + "side for each crystal (the swing states), and measures the camera's black level. "
+                                + "Apply saves these five settings (the palette) for acquisition, offers the measured "
+                                + "black level and an exposure, and then offers the background, step 3. Calibrate "
+                                + "again on every new slide. Apply a saved calibration... reuses a calibration file "
+                                + "from an earlier run instead, for example one applied to the other LC-PolScope "
+                                + "config file.",
                         "Calibrate Liquid Crystals...",
                         LCCalibrationWorkflow::run,
                         "Apply a saved calibration...",
                         LCCalibrationWorkflow::applySaved),
                 step(
                         "3. Background, after every calibration",
-                        "Move to a specimen-free area and defocus 10-20 um, then collect the five-state "
-                                + "background for each LC-PolScope profile you will acquire with. A background from "
-                                + "an earlier calibration is refused by the acquisition.",
+                        "Move to an empty area of the slide, defocus 10-20 um, and collect the background for "
+                                + "each LC-PolScope profile you will acquire with (one per objective, such as "
+                                + "lcpolscope_20x). The acquisition refuses a background taken before the latest "
+                                + "calibration.",
                         "Collect background...",
                         LCCalibrationWorkflow::startBackgroundCollection),
                 step(
-                        "Diagnostic: the crystals' own voltage curves",
-                        "Not part of getting ready. On a clear field, sweeps each crystal's voltage and measures "
-                                + "the retardance it really has, beside the Meadowlark adapter's waves-to-volts "
-                                + "table, with the applied palette marked. Use it when the palette looks lopsided "
-                                + "on one crystal. Changes nothing; collect the background again afterwards only "
-                                + "if you then change the calibration.",
+                        "Optional diagnostic: each crystal's voltage curve",
+                        "Not needed before acquiring, and the calibration does not use it. On a clear field, it "
+                                + "steps each crystal through its voltages and measures the retardance it really "
+                                + "gives, next to the waves-to-volts table in Micro-Manager's Meadowlark adapter, "
+                                + "with the applied calibration marked. Run it after calibrating if the "
+                                + "calibration's Palette tab shows one crystal's swing states unevenly spaced around "
+                                + "extinction. It puts the crystals and exposure back as it found them.",
                         "Measure LC voltage curves...",
                         LCVoltageSweepWorkflow::run));
 

@@ -98,8 +98,8 @@ public final class LCPolScopeReadiness {
         if (calibratedAt == null) {
             checks.add(new Check(
                     Level.WARN,
-                    "No QPSC LC calibration applied: the states come from the YAML's original palette. "
-                            + "Calibrate Liquid Crystals, then Apply."));
+                    "No LC calibration applied yet: the five states use the settings already in the microscope "
+                            + "configuration. Calibrate Liquid Crystals, then Apply."));
         } else {
             String age = "";
             try {
@@ -154,13 +154,17 @@ public final class LCPolScopeReadiness {
 
     static Check backgroundCheck(String profile, String base, String objective, String detector, String calibratedAt) {
         if (base == null || base.isBlank()) {
-            return new Check(Level.WARN, profile + ": no background collected yet; it reconstructs uncorrected.");
+            return new Check(
+                    Level.WARN,
+                    profile + ": no background collected yet; its images will not be background-corrected.");
         }
         String folder =
                 BackgroundSettingsReader.resolveChannelBackgroundFolder(base, MODALITY, objective, detector, profile);
         File provenance = folder == null ? null : new File(folder, "background_provenance.json");
         if (provenance == null || !provenance.isFile()) {
-            return new Check(Level.WARN, profile + ": no background for this profile; it reconstructs uncorrected.");
+            return new Check(
+                    Level.WARN,
+                    profile + ": no background for this profile; its images will not be background-corrected.");
         }
         try {
             JsonObject json = com.google.gson.JsonParser.parseString(Files.readString(provenance.toPath()))
@@ -207,7 +211,9 @@ public final class LCPolScopeReadiness {
                                 profile,
                                 spread * 100));
             }
-            return new Check(Level.OK, profile + ": background " + collected.replace('T', ' ') + ", this calibration");
+            return new Check(
+                    Level.OK,
+                    profile + ": background " + collected.replace('T', ' ') + ", taken with the current calibration");
         } catch (Exception e) {
             return new Check(Level.WARN, profile + ": background record unreadable (" + e.getMessage() + ").");
         }
@@ -241,11 +247,13 @@ public final class LCPolScopeReadiness {
             checks.add(new Check(
                     Level.WARN,
                     String.format(
-                            "LC adapter at %s nm, reconstruction at %s nm: retardance is scaled by %.4f until "
-                                    + "the next calibration sets the adapter.",
+                            "LC wavelength %s nm in Micro-Manager, %s nm in the reconstruction: retardance is scaled by "
+                                    + "%.4f until the next calibration sets Micro-Manager.",
                             trim(adapter), trim(recon), adapter / recon)));
         } else if (adapter != null) {
-            checks.add(new Check(Level.OK, "LC adapter wavelength " + trim(adapter) + " nm"));
+            checks.add(new Check(
+                    Level.OK,
+                    "LC wavelength " + trim(adapter) + " nm, the same in Micro-Manager and the reconstruction"));
         }
         return checks;
     }

@@ -102,7 +102,7 @@ class LCPolScopeReadinessTest {
     @Test
     void noCalibrationNoBlackLevelNoBackgroundAreAllSaid() throws Exception {
         List<Check> checks = LCPolScopeReadiness.configChecks(config("", null), LocalDateTime.now());
-        assertEquals(Level.WARN, find(checks, "No QPSC LC calibration").level());
+        assertEquals(Level.WARN, find(checks, "No LC calibration applied").level());
         assertEquals(Level.WARN, find(checks, "No black level").level());
         assertEquals(Level.WARN, find(checks, "lcpolscope_20x: no background").level());
     }
@@ -202,7 +202,9 @@ class LCPolScopeReadinessTest {
         List<Check> checks = LCPolScopeReadiness.liveChecks(report);
         assertEquals(Level.FAIL, find(checks, "Gain Auto").level());
         assertNull(find(checks, "Camera: "), "no all-clear camera line when something is fatal");
-        assertEquals(Level.WARN, find(checks, "LC adapter at 546").level());
+        assertEquals(
+                Level.WARN,
+                find(checks, "LC wavelength 546 nm in Micro-Manager").level());
 
         var clean = JsonParser.parseString("""
                 {"camera_fatal": [], "camera_advisory": [], "camera_text": "Oryx, 33 ms, 12-bit",
@@ -210,7 +212,7 @@ class LCPolScopeReadinessTest {
                 """).getAsJsonObject();
         List<Check> ok = LCPolScopeReadiness.liveChecks(clean);
         assertEquals(Level.OK, find(ok, "Camera: Oryx").level());
-        assertEquals(Level.OK, find(ok, "LC adapter wavelength 549").level());
+        assertEquals(Level.OK, find(ok, "LC wavelength 549 nm, the same").level());
         assertEquals(Level.INFO, LCPolScopeReadiness.liveChecks(null).get(0).level());
     }
 
