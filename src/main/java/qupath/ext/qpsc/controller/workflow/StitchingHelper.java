@@ -37,7 +37,6 @@ import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.stitching.StitchOutputPlanner;
 import qupath.ext.qpsc.stitching.StitchingConfiguration;
-import qupath.ext.qpsc.stitching.TileRegistrationSupport;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.acquisition.DualProgressDialog;
 import qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow;
@@ -583,15 +582,23 @@ public class StitchingHelper {
      * mix flip values) is intentionally NOT introduced here: the caller's
      * {@code STITCH_EXECUTOR} keeps one annotation batch running at a time.
      *
+     * <p>The modality's derived outputs ({@code derivedDirs}) join the same pool after the
+     * registration solve, queued behind the targets, and are imported as each finishes. The call
+     * returns when the targets are done, so a channel merge starts while derived outputs may still
+     * be stitching; collect them from {@link StitchingRegistration.Batch#extras()} before the job
+     * ends.
+     *
      * @param alignOn for channel targets, the channel(s) registration measures on (see
      *     {@link StitchingOptions#alignmentFor}); null for angle targets, whose reference comes
      *     from the modality handler
-     * @return a list the SAME size and order as {@code targetSubdirs}; element i is
-     *         the stitched output path for target i, or {@code null} if that target
-     *         failed. Positional alignment lets callers that pair targets with
-     *         outputs (e.g. channel split/merge) keep their indexing.
+     * @param derivedDirs derived folders from {@link #findDerivedDirectories}
+     * @param status the job's status line, told when each target starts and ends
+     * @return the targets' results, the SAME size and order as {@code targetSubdirs} (element i
+     *         is target i's output path, or {@code null} if it failed; callers that pair targets
+     *         with outputs, e.g. channel split/merge, rely on that), and the derived outputs'
+     *         future, in {@code derivedDirs} order
      */
-    private static List<String> stitchTargetsBounded(
+    private static StitchingRegistration.Batch stitchTargetsBounded(
             List<String> targetSubdirs,
             String targetKind,
             Path tileBaseDir,
@@ -606,41 +613,122 @@ public class StitchingHelper {
             Project<BufferedImage> project,
             ModalityHandler handler,
             Map<String, Object> stitchParams,
-            List<String> alignOn) {
+            List<String> alignOn,
+            List<String> derivedDirs,
+            StitchJobStatus status) {
 
         // The registration barrier (solve once, reuse that solve for every target) and the
         // bounded-parallel stitch are centralized in StitchingRegistration, so every stitch path --
         // acquisition, recovery -- goes through the same gate and no path can
         // silently skip registration.
-        StitchingRegistration.TargetStitcher<String> stitcher = (sub, mode, position, count) -> stitchOne(
-                sub,
-                targetKind,
-                position,
-                count,
-                withRegistrationMode(stitchParams, mode),
-                tileBaseDir,
-                projectsFolder,
-                sampleName,
-                modeWithIndex,
-                annotationName,
-                compression,
-                pixelSize,
-                downsampleFactor,
-                gui,
-                project,
-                handler);
+        StitchingRegistration.TargetStitcher<String> stitcher = (sub, mode, position, count) -> {
+            status.started(sub);
+            String out = stitchOne(
+                    sub,
+                    targetKind,
+                    position,
+                    count,
+                    withRegistrationMode(stitchParams, mode),
+                    tileBaseDir,
+                    projectsFolder,
+                    sampleName,
+                    modeWithIndex,
+                    annotationName,
+                    compression,
+                    pixelSize,
+                    downsampleFactor,
+                    gui,
+                    project,
+                    handler);
+            status.finished(sub, out != null);
+            return out;
+        };
+        Map<String, Object> derivedParams = derivedStitchParams(stitchParams);
+        StitchingRegistration.Extras derived =
+                new StitchingRegistration.Extras(derivedDirs, (dir, mode, position, count) -> {
+                    status.started(dir);
+                    String out = stitchDerivedOne(
+                            dir,
+                            position,
+                            count,
+                            withRegistrationMode(derivedParams, mode),
+                            tileBaseDir,
+                            projectsFolder,
+                            sampleName,
+                            modeWithIndex,
+                            annotationName,
+                            compression,
+                            pixelSize,
+                            downsampleFactor,
+                            gui,
+                            project,
+                            handler);
+                    status.finished(dir, out != null);
+                    return out;
+                });
         int maxConcurrency = QPPreferenceDialog.getStitchingConcurrency();
+        if (!derivedDirs.isEmpty()) {
+            logger.info(
+                    "Stitching {} {} target(s) and {} derived output(s) {} on one pool of at most {}",
+                    targetSubdirs.size(),
+                    targetKind,
+                    derivedDirs.size(),
+                    derivedDirs,
+                    maxConcurrency);
+        }
         if (alignOn != null) {
             // Channels: the operator's alignment choice, solved with every channel in view.
             return StitchingRegistration.stitchChannels(
-                    targetSubdirs, alignOn, tileBaseDir, pixelSize, downsampleFactor, maxConcurrency, stitcher);
+                    targetSubdirs,
+                    alignOn,
+                    tileBaseDir,
+                    pixelSize,
+                    downsampleFactor,
+                    maxConcurrency,
+                    stitcher,
+                    derived);
         }
         return StitchingRegistration.stitchTargets(
                 targetSubdirs,
                 tileBaseDir,
                 maxConcurrency,
                 StitchingRegistration.referenceIndexFor(targetSubdirs, handler),
-                stitcher);
+                stitcher,
+                derived);
+    }
+
+    /**
+     * Waits for the derived outputs still stitching on the job's pool and returns the paths of
+     * those that succeeded, in folder order. Never throws.
+     */
+    private static List<String> awaitDerived(
+            StitchingRegistration.Batch batch, StitchJobStatus status, String annotationName) {
+        if (batch == null) {
+            return List.of();
+        }
+        if (status != null && status.derivedPending()) {
+            status.phase("Finishing derived outputs for " + annotationName);
+        }
+        List<String> out = new ArrayList<>();
+        for (String path : batch.extras().join()) {
+            if (path != null) {
+                out.add(path);
+            }
+        }
+        return out;
+    }
+
+    /** A status line that goes to the job's row in the queue window and in the progress dialog. */
+    private static java.util.function.Consumer<String> statusSink(
+            StitchingQueueWindow queueWindow, DualProgressDialog progressDialog, String operationId) {
+        return line -> {
+            if (queueWindow != null) {
+                queueWindow.updateStatus(operationId, line);
+            }
+            if (progressDialog != null) {
+                progressDialog.updateStitchingStatus(operationId, line);
+            }
+        };
     }
 
     /** Stitch one target, converting any failure into a null result so siblings still complete. */
@@ -796,6 +884,8 @@ public class StitchingHelper {
             // For multi-angle acquisitions, do ONE batch stitch with "." as matching string
             return CompletableFuture.runAsync(
                     () -> {
+                        // Set once the pool is running, so a failure can wait for its derived outputs.
+                        final StitchingRegistration.Batch[] batchRef = {null};
                         try {
                             String annotationName = targetName;
 
@@ -883,17 +973,20 @@ public class StitchingHelper {
                                     angleExposures.size(),
                                     stitchingConfig.outputFormat());
 
-                            if (blockingDialog != null) {
-                                blockingDialog.updateStatus(
-                                        operationId,
-                                        "Stitching " + angleExposures.size() + " angles for " + annotationName + "...");
-                            }
-
                             List<String> angleSubdirs = new ArrayList<>(angleExposures.size());
                             for (AngleExposure ae : angleExposures) {
                                 angleSubdirs.add(String.valueOf(ae.ticks()));
                             }
-                            for (String outPath : stitchTargetsBounded(
+                            // Modality-specific outputs (PPM .biref / .sum) stitch on the angles'
+                            // pool, so they do not wait for the last angle to finish.
+                            List<String> derivedDirs = findDerivedDirectories(handler, tileBaseDir, angleSubdirs);
+                            StitchJobStatus status = new StitchJobStatus(
+                                    "angles",
+                                    angleSubdirs,
+                                    derivedDirs,
+                                    statusSink(blockingDialog, dualProgressDialog, operationId));
+                            status.phase("Stitching " + annotationName);
+                            StitchingRegistration.Batch batch = stitchTargetsBounded(
                                     angleSubdirs,
                                     "angle",
                                     tileBaseDir,
@@ -908,7 +1001,11 @@ public class StitchingHelper {
                                     project,
                                     handler,
                                     stitchParams,
-                                    null)) {
+                                    null,
+                                    derivedDirs,
+                                    status);
+                            batchRef[0] = batch;
+                            for (String outPath : batch.siblings()) {
                                 if (outPath != null) {
                                     stitchedImages.add(outPath);
                                 }
@@ -919,23 +1016,16 @@ public class StitchingHelper {
                                     angleExposures.size(),
                                     stitchedImages.size());
 
-                            // Process modality-specific post-processing directories (e.g., biref, sum)
-                            processPostProcessingDirectories(
-                                    handler,
-                                    tileBaseDir,
-                                    annotationName,
-                                    projectsFolder,
-                                    sampleName,
-                                    modeWithIndex,
-                                    compression,
-                                    pixelSize,
-                                    stitchingConfig.downsampleFactor(),
-                                    gui,
-                                    project,
-                                    stitchParams,
-                                    blockingDialog,
-                                    operationId,
-                                    stitchedImages);
+                            List<String> derivedImages = awaitDerived(batch, status, annotationName);
+                            stitchedImages.addAll(derivedImages);
+                            if (!derivedDirs.isEmpty()) {
+                                logger.info(
+                                        "Derived outputs for {}: {} of {} stitched ({})",
+                                        annotationName,
+                                        derivedImages.size(),
+                                        derivedDirs.size(),
+                                        derivedImages);
+                            }
 
                             // Return path of last successfully processed image
                             String outPath =
@@ -958,6 +1048,7 @@ public class StitchingHelper {
 
                         } catch (Exception e) {
                             logger.error("Stitching failed for {}", targetName, e);
+                            awaitDerivedAfterFailure(batchRef[0], targetName);
                             if (reservation != null) {
                                 reservation.failUnfilled(e.getMessage());
                             }
@@ -1460,6 +1551,8 @@ public class StitchingHelper {
 
         return CompletableFuture.runAsync(
                 () -> {
+                    // Set once the pool is running, so a failure can wait for its derived outputs.
+                    final StitchingRegistration.Batch[] batchRef = {null};
                     try {
                         if (blockingDialog != null) {
                             blockingDialog.updateStatus(
@@ -1538,14 +1631,20 @@ public class StitchingHelper {
                         // independent writer to its own output file. The result list is
                         // positionally aligned to acquiredChannelIds so the split/merge
                         // partition below keeps its index pairing.
-                        if (blockingDialog != null) {
-                            blockingDialog.updateStatus(
-                                    operationId,
-                                    String.format(
-                                            "Stitching %d channels for %s...",
-                                            acquiredChannelIds.size(), annotationName));
-                        }
-                        List<String> channelResults = stitchTargetsBounded(
+                        //
+                        // Outputs the acquisition computed from the channels and wrote to folders
+                        // of their own (LC-PolScope retardance/, orientation/, orientation_color/)
+                        // are the result of such a run, not an extra. They read their own tiles,
+                        // never the per-channel files or the merge, so they stitch on the same pool,
+                        // queued behind the channels, and may still be running during the merge.
+                        List<String> derivedDirs = findDerivedDirectories(handler, tileBaseDir, acquiredChannelIds);
+                        StitchJobStatus status = new StitchJobStatus(
+                                "channels",
+                                acquiredChannelIds,
+                                derivedDirs,
+                                statusSink(blockingDialog, dualProgressDialog, operationId));
+                        status.phase("Stitching " + annotationName);
+                        StitchingRegistration.Batch batch = stitchTargetsBounded(
                                 acquiredChannelIds,
                                 "channel",
                                 tileBaseDir,
@@ -1560,7 +1659,11 @@ public class StitchingHelper {
                                 project,
                                 handler,
                                 stitchParams,
-                                options.alignmentFor(acquiredChannelIds));
+                                options.alignmentFor(acquiredChannelIds),
+                                derivedDirs,
+                                status);
+                        batchRef[0] = batch;
+                        List<String> channelResults = batch.siblings();
                         List<String> successfullyStitchedChannelIds = new ArrayList<>();
                         for (int i = 0; i < acquiredChannelIds.size(); i++) {
                             String outPath = channelResults.get(i);
@@ -1634,11 +1737,7 @@ public class StitchingHelper {
                                     importContext,
                                     reservation);
                         } else if (mergeImages.size() >= 2) {
-                            if (blockingDialog != null) {
-                                blockingDialog.updateStatus(
-                                        operationId,
-                                        "Merging " + mergeImages.size() + " channels into multichannel pyramid...");
-                            }
+                            status.phase("Merging " + mergeImages.size() + " channels into a multichannel pyramid");
                             try {
                                 Path firstStitch = Paths.get(mergeImages.get(0));
                                 String mergedDir = firstStitch.getParent().toString();
@@ -1780,32 +1879,16 @@ public class StitchingHelper {
                                     annotationName);
                         }
 
-                        // Outputs the acquisition computed from the channels and wrote to folders of
-                        // their own (LC-PolScope retardance/ and orientation/). They are the result
-                        // of such a run, not an extra; without looking for them the stitch would produce
-                        // only the raw states.
-                        List<String> derivedImages = new ArrayList<>();
-                        processPostProcessingDirectories(
-                                handler,
-                                tileBaseDir,
-                                annotationName,
-                                projectsFolder,
-                                sampleName,
-                                modeWithIndex,
-                                compression,
-                                pixelSize,
-                                stitchingConfig.downsampleFactor(),
-                                gui,
-                                project,
-                                stitchParams,
-                                blockingDialog,
-                                operationId,
-                                derivedImages);
-                        if (!handler.getPostProcessingDirectorySuffixes().isEmpty()) {
+                        // The derived outputs have been stitching on the channels' pool since the
+                        // channels left it free; each was imported as it finished. The job is not
+                        // done, and its unfilled reservations are not dropped, until they all are.
+                        List<String> derivedImages = awaitDerived(batch, status, annotationName);
+                        if (!derivedDirs.isEmpty()) {
                             logger.info(
-                                    "Derived outputs for {}: {} stitched ({})",
+                                    "Derived outputs for {}: {} of {} stitched ({})",
                                     annotationName,
                                     derivedImages.size(),
+                                    derivedDirs.size(),
                                     derivedImages);
                         }
 
@@ -1820,6 +1903,7 @@ public class StitchingHelper {
                         }
                     } catch (Exception e) {
                         logger.error("Channel stitching failed for {}", annotationName, e);
+                        awaitDerivedAfterFailure(batchRef[0], annotationName);
                         if (reservation != null) {
                             reservation.failUnfilled(e.getMessage());
                         }
@@ -2387,7 +2471,41 @@ public class StitchingHelper {
 
         logger.info("Processing angle {} with directory isolation for region {}", angleStr, regionName);
         logger.info("Tile base directory: {}", tileBaseDir);
+        // The stitching method will look in projects/sample/mode/[regionName/tempDirName]/, which
+        // holds only the one directory being processed.
+        return runIsolated(
+                tileBaseDir,
+                angleStr,
+                tempDirName -> TileProcessingUtilities.stitchImagesAndUpdateProject(
+                        projectsFolder,
+                        sampleName,
+                        modeWithIndex,
+                        regionName + File.separator + tempDirName,
+                        angleStr,
+                        gui,
+                        project,
+                        compression,
+                        pixelSize,
+                        downsampleFactor,
+                        handler,
+                        stitchParams));
+    }
 
+    /** A stitch of one folder moved into {@code tileBaseDir/<tempDirName>/}. */
+    @FunctionalInterface
+    interface IsolatedStitch {
+        String stitch(String tempDirName) throws IOException;
+    }
+
+    /**
+     * Moves {@code tileBaseDir/<angleStr>} into a fresh {@code _temp_<angleStr>_<uuid>} folder,
+     * runs {@code body} on it, and always moves it back and removes the temp folder, on success,
+     * failure or interruption. The UUID keeps concurrent isolations of different folders apart;
+     * callers never isolate the same folder twice at once (see {@link #findDerivedDirectories}).
+     *
+     * @return what {@code body} returned, or null when the folder does not exist
+     */
+    static String runIsolated(Path tileBaseDir, String angleStr, IsolatedStitch body) throws IOException {
         Path angleDir = tileBaseDir.resolve(angleStr);
         if (!Files.exists(angleDir)) {
             logger.warn("Angle directory does not exist: {}", angleDir);
@@ -2418,23 +2536,7 @@ public class StitchingHelper {
             Files.move(angleDir, tempAngleDir);
             logger.info("Moved {} to isolation: {}", angleDir, tempAngleDir);
 
-            // CRITICAL FIX: Pass the combined region path that includes both region and temp directory
-            // The stitching method will look in: projects/sample/mode/[regionName/tempDirName]/
-            // which now contains only the single angle directory we want to process
-            String combinedRegion = regionName + File.separator + tempDirName;
-            String outPath = TileProcessingUtilities.stitchImagesAndUpdateProject(
-                    projectsFolder,
-                    sampleName,
-                    modeWithIndex,
-                    combinedRegion, // FIXED: Use combined region path so path resolves correctly
-                    angleStr, // Now this will only match the single directory in isolation
-                    gui,
-                    project,
-                    compression,
-                    pixelSize,
-                    downsampleFactor,
-                    handler,
-                    stitchParams);
+            String outPath = body.stitch(tempDirName);
 
             logger.info("Isolation processing completed for angle {}, output: {}", angleStr, outPath);
             logger.info("Final stitched file path: {}", outPath);
@@ -2491,153 +2593,130 @@ public class StitchingHelper {
     }
 
     /**
-     * Scans for and processes modality-specific post-processing directories.
+     * The modality's derived-output folders beside the targets, found before any target is
+     * moved into isolation.
      *
-     * <p>After all angle directories are stitched, this method checks for additional
-     * output directories created by the Python acquisition side (e.g., birefringence
-     * and sum images for PPM). The suffixes to scan for are provided by the modality
-     * handler via {@link ModalityHandler#getPostProcessingDirectorySuffixes()}.</p>
+     * <p>The Python acquisition side writes outputs it computed per tile into folders of their
+     * own (PPM {@code 7.0.biref} / {@code 7.0.sum}, LC-PolScope {@code retardance},
+     * {@code orientation}, {@code orientation_color}); the suffixes come from
+     * {@link ModalityHandler#getPostProcessingDirectorySuffixes()}. For each suffix, in order, the
+     * first folder by name ending with it. A target folder, an isolation folder ({@code _temp_*})
+     * or a folder already taken by an earlier suffix is never returned, so no folder is
+     * isolated by two stitches at once.
      *
-     * @param handler          the modality handler providing directory suffixes
-     * @param tileBaseDir      base directory containing angle subdirectories
-     * @param regionName       name of the region/annotation being processed
-     * @param projectsFolder   projects folder path
-     * @param sampleName       sample name
-     * @param modeWithIndex    imaging mode with index
-     * @param compression      compression type for output
-     * @param pixelSize        pixel size in microns
-     * @param downsampleFactor downsample factor
-     * @param gui              QuPath GUI
-     * @param project          QuPath project
-     * @param stitchParams     stitching parameters
-     * @param blockingDialog   optional blocking dialog for status updates
-     * @param operationId      operation ID for dialog progress tracking
-     * @param stitchedImages   list to append successfully stitched image paths to
+     * @param handler the modality handler providing the suffixes
+     * @param tileBaseDir folder holding the target and derived folders
+     * @param targets the angle or channel folders stitched alongside
+     * @return folder names, in suffix order
      */
-    private static void processPostProcessingDirectories(
-            ModalityHandler handler,
+    static List<String> findDerivedDirectories(ModalityHandler handler, Path tileBaseDir, List<String> targets) {
+        List<String> suffixes = handler == null ? List.of() : handler.getPostProcessingDirectorySuffixes();
+        if (suffixes.isEmpty()) {
+            return List.of();
+        }
+        List<String> names = new ArrayList<>();
+        try (var dirs = Files.list(tileBaseDir)) {
+            dirs.filter(Files::isDirectory)
+                    .map(d -> d.getFileName().toString())
+                    .filter(n -> !n.startsWith("_temp_") && !targets.contains(n))
+                    .sorted()
+                    .forEach(names::add);
+        } catch (IOException e) {
+            logger.warn("Could not scan {} for derived outputs: {}", tileBaseDir, e.getMessage());
+            return List.of();
+        }
+        List<String> found = new ArrayList<>();
+        for (String suffix : suffixes) {
+            String label = suffix.startsWith(".") ? suffix.substring(1) : suffix;
+            String match = names.stream()
+                    .filter(n -> n.endsWith(suffix) && !found.contains(n))
+                    .findFirst()
+                    .orElse(null);
+            if (match == null) {
+                logger.info("No {} directory found in {}", label, tileBaseDir);
+                continue;
+            }
+            found.add(match);
+            try (var files = Files.list(tileBaseDir.resolve(match))) {
+                logger.info("Found {} directory: {} ({} files)", label, match, files.count());
+            } catch (IOException e) {
+                logger.info("Found {} directory: {} (could not list it: {})", label, match, e.getMessage());
+            }
+        }
+        return found;
+    }
+
+    /**
+     * The stitch parameters for a derived output.
+     *
+     * <p>The channel path stitches its per-channel pyramids with skipProjectImport, so that only
+     * the merged file becomes an entry. The derived outputs are results in their own right and
+     * must be imported: with the flag inherited, an LC-PolScope run would add its five-state merge
+     * to the project and leave retardance and orientation on disk only. The registration mode is
+     * attached per stitch by the pool: derived outputs share the targets' grid, and left at
+     * nominal they would be misregistered against the very targets they were computed from.
+     */
+    private static Map<String, Object> derivedStitchParams(Map<String, Object> stitchParams) {
+        Map<String, Object> copy = stitchParams == null ? new HashMap<>() : new HashMap<>(stitchParams);
+        copy.remove("skipProjectImport");
+        return copy;
+    }
+
+    /** Stitch and import one derived output, converting any failure into a null result. */
+    private static String stitchDerivedOne(
+            String dir,
+            int position,
+            int total,
+            Map<String, Object> stitchParams,
             Path tileBaseDir,
-            String regionName,
             String projectsFolder,
             String sampleName,
             String modeWithIndex,
+            String regionName,
             String compression,
             double pixelSize,
             int downsampleFactor,
             QuPathGUI gui,
             Project<BufferedImage> project,
-            Map<String, Object> stitchParams,
-            StitchingQueueWindow blockingDialog,
-            String operationId,
-            List<String> stitchedImages) {
+            ModalityHandler handler) {
+        logger.info("Stitching derived output {} ({}/{}) for {}", dir, position, total, regionName);
+        try {
+            String outPath = processAngleWithIsolation(
+                    tileBaseDir,
+                    dir,
+                    projectsFolder,
+                    sampleName,
+                    modeWithIndex,
+                    regionName,
+                    compression,
+                    pixelSize,
+                    downsampleFactor,
+                    gui,
+                    project,
+                    handler,
+                    stitchParams);
+            if (outPath != null) {
+                logger.info("Successfully processed derived output {} - output: {}", dir, outPath);
+            } else {
+                logger.error("Derived output {} processing returned null output path", dir);
+            }
+            return outPath;
+        } catch (Exception e) {
+            logger.error("Failed to stitch derived output {} for {}: {}", dir, regionName, e.getMessage(), e);
+            return null;
+        }
+    }
 
-        List<String> suffixes = handler.getPostProcessingDirectorySuffixes();
-        if (suffixes.isEmpty()) {
+    /**
+     * After a job failed, waits for its derived outputs still on the pool, so the job does not
+     * report failure (and the next job start) while they write and import.
+     */
+    private static void awaitDerivedAfterFailure(StitchingRegistration.Batch batch, String regionName) {
+        if (batch == null || batch.extras().isDone()) {
             return;
         }
-
-        // The channel path stitches its per-channel pyramids with skipProjectImport, so that
-        // only the merged file becomes an entry, and hands the same parameters on to here.
-        // The derived outputs are results in their own right and must be imported: with the
-        // flag inherited, an LC-PolScope run would add its five-state merge to the project and
-        // leave retardance and orientation on disk only.
-        if (stitchParams != null && stitchParams.containsKey("skipProjectImport")) {
-            stitchParams = new java.util.HashMap<>(stitchParams);
-            stitchParams.remove("skipProjectImport");
-        }
-
-        // Post-processing outputs (.biref / .sum) are computed from the angles and share their
-        // grid, but they stitch here, separately from the angle loop. If registration corrected the
-        // angles and these were left at nominal, they would be the one output misregistered against
-        // everything else -- and misregistered against the very angles they were derived from.
-        if (QPPreferenceDialog.getTileRegistrationEnabled()) {
-            stitchParams = withRegistrationMode(
-                    stitchParams,
-                    TileRegistrationSupport.applyMode(tileBaseDir.resolve(TileRegistrationSupport.solutionFileName())));
-        }
-
-        for (String suffix : suffixes) {
-            String suffixLabel = suffix.startsWith(".") ? suffix.substring(1) : suffix;
-
-            if (blockingDialog != null) {
-                blockingDialog.updateStatus(
-                        operationId, "Checking for " + suffixLabel + " results for " + regionName + "...");
-            }
-
-            // Scan for directory ending with this suffix
-            String extraAngleStr = null;
-            Path extraPath = null;
-
-            try {
-                if (Files.exists(tileBaseDir)) {
-                    extraPath = Files.list(tileBaseDir)
-                            .filter(Files::isDirectory)
-                            .filter(path -> path.getFileName().toString().endsWith(suffix))
-                            .findFirst()
-                            .orElse(null);
-
-                    if (extraPath != null) {
-                        extraAngleStr = extraPath.getFileName().toString();
-                        logger.info("Found {} directory: {}", suffixLabel, extraAngleStr);
-                    }
-                }
-            } catch (IOException e) {
-                logger.warn("Could not scan for {} directories: {}", suffixLabel, e.getMessage());
-            }
-
-            if (extraPath != null && Files.exists(extraPath)) {
-                logger.info("Found {} directory: {}", suffixLabel, extraPath);
-
-                // Log directory contents
-                try {
-                    long fileCount = Files.list(extraPath).count();
-                    logger.info("{} directory contains {} files", suffixLabel, fileCount);
-                    logger.debug("{} directory contents:", suffixLabel);
-                    Files.list(extraPath).forEach(path -> logger.debug("  - {}", path));
-                } catch (IOException e) {
-                    logger.warn("Could not list {} directory contents: {}", suffixLabel, e.getMessage());
-                }
-
-                if (blockingDialog != null) {
-                    blockingDialog.updateStatus(
-                            operationId, "Processing " + suffixLabel + " image for " + regionName + "...");
-                }
-
-                try {
-                    logger.info("Starting {} isolation processing for angle string: {}", suffixLabel, extraAngleStr);
-                    String outPath = processAngleWithIsolation(
-                            tileBaseDir,
-                            extraAngleStr,
-                            projectsFolder,
-                            sampleName,
-                            modeWithIndex,
-                            regionName,
-                            compression,
-                            pixelSize,
-                            downsampleFactor,
-                            gui,
-                            project,
-                            handler,
-                            stitchParams);
-
-                    if (outPath != null) {
-                        stitchedImages.add(outPath);
-                        logger.info("Successfully processed {} image - output: {}", suffixLabel, outPath);
-                    } else {
-                        logger.error("{} processing returned null output path", suffixLabel);
-                    }
-                } catch (Exception e) {
-                    logger.error(
-                            "Failed to stitch {} image for angle {}: {}",
-                            suffixLabel,
-                            extraAngleStr,
-                            e.getMessage(),
-                            e);
-                }
-            } else {
-                logger.info("No {} directory found in {}", suffixLabel, tileBaseDir);
-            }
-        }
+        logger.info("Waiting for derived outputs of {} still stitching before reporting the failure", regionName);
+        batch.extras().join();
     }
 
     /**

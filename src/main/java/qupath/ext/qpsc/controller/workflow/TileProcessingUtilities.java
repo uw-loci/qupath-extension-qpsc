@@ -11,7 +11,6 @@ import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
-import qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.geometry.StageImageTransform;
@@ -24,6 +23,7 @@ import qupath.ext.qpsc.project.ProjectEntryReservation;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.stitching.StitchInfoSupport;
 import qupath.ext.qpsc.stitching.StitchOutputPlanner;
+import qupath.ext.qpsc.stitching.StitcherFlipFlags;
 import qupath.ext.qpsc.stitching.TileRegistrationSupport;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -319,20 +319,21 @@ public class TileProcessingUtilities {
         // The direct OME-TIFF writer cannot silently corrupt pyramid levels and
         // writes straight to the final path, so the former tile-write-error
         // detection / retry / OME_TIFF_VIA_ZARR escalation has been removed.
+        // A stitch of one named sub-folder writes <outputName>_<sub-folder> (tiles-to-pyramid's
+        // StitchingWorkflow); its failure cleanup is limited to that name, because siblings on the
+        // same pool, a channel merge and derived outputs write into the same folder meanwhile.
+        String ownStem = (matchingString.equals(".") || matchingString.equals(annotationName))
+                ? null
+                : (outputName == null || outputName.isBlank() ? matchingString : outputName + "_" + matchingString);
         String outPath;
-        try {
-            TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
-            TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
+        try (StitcherFlipFlags.Hold flips = StitcherFlipFlags.hold(stitcherFlags)) {
             outPath = StitchingWorkflow.run(config);
             if (outPath == null) {
                 throw new IOException("Stitching produced no output");
             }
         } catch (Exception stitchEx) {
-            cleanupCorruptStitchingOutput(outputDir, existingFiles, stitchStartMs);
+            cleanupCorruptStitchingOutput(outputDir, existingFiles, stitchStartMs, ownStem);
             throw new IOException("Stitching failed: " + stitchEx.getMessage(), stitchEx);
-        } finally {
-            TileConfigurationTxtStrategy.flipStitchingX = false;
-            TileConfigurationTxtStrategy.flipStitchingY = false;
         }
         logger.info("Stitching completed. Output: {}", outPath);
 
@@ -848,14 +849,26 @@ public class TileProcessingUtilities {
      * from deleting a sample's entire stitched history, so each file has to clear two
      * independent tests to be considered this run's garbage.
      *
+     * <p>When {@code ownStem} is given, a file must also carry this stitch's own name: stitches
+     * of sibling targets, a channel merge and derived outputs run at the same time and write
+     * into the same folder after this stitch's snapshot, so the two bounds alone would delete them.
+     *
      * @param outputDir         the shared stitched-output folder
      * @param existingFiles     names present before this stitch began
      * @param stitchStartMillis wall-clock time this stitch began
+     * @param ownStem           the output name this stitch writes ({@code <stem>.ome.tif}, or
+     *     {@code <stem>_<n>} when that was taken), or null when it has no single name
      */
     // Package-private rather than private so the test can drive it directly.
-    static void cleanupCorruptStitchingOutput(File outputDir, Set<String> existingFiles, long stitchStartMs) {
-        File[] candidates = outputDir.listFiles((dir, name) ->
-                (name.endsWith(".ome.tif") || name.endsWith(".ome.zarr")) && !existingFiles.contains(name));
+    static void cleanupCorruptStitchingOutput(
+            File outputDir, Set<String> existingFiles, long stitchStartMs, String ownStem) {
+        java.util.regex.Pattern own = ownStem == null
+                ? null
+                : java.util.regex.Pattern.compile(
+                        java.util.regex.Pattern.quote(ownStem) + "(_\\d+)?\\.ome\\.(tif|zarr)");
+        File[] candidates = outputDir.listFiles((dir, name) -> (name.endsWith(".ome.tif") || name.endsWith(".ome.zarr"))
+                && !existingFiles.contains(name)
+                && (own == null || own.matcher(name).matches()));
         if (candidates == null || candidates.length == 0) {
             return;
         }

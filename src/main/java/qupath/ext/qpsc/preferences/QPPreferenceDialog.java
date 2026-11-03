@@ -507,7 +507,8 @@ public class QPPreferenceDialog {
                 .name("Stitching concurrency")
                 .category(CATEGORY)
                 .description("Maximum number of angles or channels stitched simultaneously within a "
-                        + "single annotation (default: 4). Higher values stitch multi-angle (PPM) and "
+                        + "single annotation (default: 4). Derived outputs (retardance, orientation, "
+                        + ".biref, .sum) share this limit. Higher values stitch multi-angle (PPM) and "
                         + "multi-channel (fluorescence) acquisitions faster, but use more memory and run "
                         + "more concurrent writers. Set to 1 for fully sequential stitching.")
                 .build());

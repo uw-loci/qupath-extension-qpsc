@@ -9,7 +9,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.basicstitching.config.StitchingConfig;
 import qupath.ext.basicstitching.registration.RegistrationMode;
 import qupath.ext.basicstitching.registration.RegistrationReference;
-import qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy;
 import qupath.ext.basicstitching.workflow.StitchingWorkflow;
 import qupath.ext.qpsc.geometry.StageImageTransform;
 
@@ -91,14 +90,15 @@ public final class ChannelRegistrationSupport {
         // The solution records the flip flags and refuses to apply to a stitch with different ones,
         // so they must be exactly what each channel's stitch will set.
         boolean[] flips = StageImageTransform.current().stitcherFlipFlags();
-        TileConfigurationTxtStrategy.flipStitchingX = flips[0];
-        TileConfigurationTxtStrategy.flipStitchingY = flips[1];
 
         logger.info(
                 "Solving tile registration across channels {} on {} before stitching",
                 channels,
                 alignOn.size() == 1 ? "'" + alignOn.get(0) + "'" : "a normalized merge of " + alignOn);
-        boolean written = StitchingWorkflow.solveRegistration(config, channels);
+        boolean written;
+        try (var held = StitcherFlipFlags.hold(flips)) {
+            written = StitchingWorkflow.solveRegistration(config, channels);
+        }
         if (!written) {
             logger.warn("Channel registration solve wrote no solution; every channel will stitch at nominal positions");
         }

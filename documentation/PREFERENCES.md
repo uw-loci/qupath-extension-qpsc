@@ -835,7 +835,7 @@ This preference requires the `qupath-extension-tiles-to-pyramid` extension. If t
 | Requires Restart | No |
 
 **Description:**
-Maximum number of angles (PPM) or channels (fluorescence) stitched **simultaneously within a single annotation**. Each angle/channel is an independent stitch writing its own output file, so they run concurrently up to this limit.
+Maximum number of angles (PPM) or channels (fluorescence, LC-PolScope states) stitched **simultaneously within a single annotation**. Each angle/channel is an independent stitch writing its own output file, so they run concurrently up to this limit. A modality's derived outputs (LC-PolScope retardance, orientation and orientation color; PPM `.biref` and `.sum`) share the same limit: they are queued behind the angles/channels and take a slot as one frees. A channel merge is not counted: it can run while derived outputs are still stitching, so during that phase up to this many stitches plus the merge write at once.
 
 - Higher values stitch multi-angle and multi-channel acquisitions faster, at the cost of more memory and more concurrent writers running at once.
 - `1` makes stitching fully sequential (one angle/channel at a time) -- useful if you hit memory pressure or want to isolate a stitching problem.
@@ -843,7 +843,7 @@ Maximum number of angles (PPM) or channels (fluorescence) stitched **simultaneou
 
 Applies to both OME-TIFF and OME-ZARR output. The default of 4 is a balance that speeds up the common 4-angle PPM and ~4-channel IF cases while keeping peak memory bounded.
 
-Note: when **Register tiles on image content** is enabled, one angle/channel of each annotation is stitched on its own to solve the tile positions before the others reuse that result. The remaining angles/channels then stitch concurrently up to this limit. On PPM the solve runs on the 90-degree (open) angle; on other modalities, the first target is used.
+Note: when **Register tiles on image content** is enabled, one angle/channel of each annotation is stitched on its own to solve the tile positions before the others reuse that result. The remaining angles/channels and the derived outputs then stitch concurrently up to this limit. On PPM the solve runs on the 90-degree (open) angle; on other modalities, the first target is used.
 
 ---
 

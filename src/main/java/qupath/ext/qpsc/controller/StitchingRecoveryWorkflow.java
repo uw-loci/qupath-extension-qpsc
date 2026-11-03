@@ -590,13 +590,8 @@ public class StitchingRecoveryWorkflow {
                     ImageNameGenerator.sanitizeForFilename(finalSampleName) + "_" + angleDir.getName();
 
             String stitchedOutPath;
-            try {
-                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = stitcherFlags[0];
-                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = stitcherFlags[1];
+            try (var flips = qupath.ext.qpsc.stitching.StitcherFlipFlags.hold(stitcherFlags)) {
                 stitchedOutPath = qupath.ext.basicstitching.workflow.StitchingWorkflow.run(config);
-            } finally {
-                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingX = false;
-                qupath.ext.basicstitching.stitching.TileConfigurationTxtStrategy.flipStitchingY = false;
             }
             if (stitchedOutPath == null) {
                 deleteStitchOutputs(new File(outputFolder), outputStem);

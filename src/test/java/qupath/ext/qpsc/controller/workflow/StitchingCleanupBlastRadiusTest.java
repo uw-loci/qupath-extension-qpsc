@@ -36,7 +36,7 @@ class StitchingCleanupBlastRadiusTest {
         File a = write(dir, "MetroHealth_FNA_PDAC_2_20x_6022_7751_90.0_007.ome.tif", now - 600_000);
         File b = write(dir, "MetroHealth_FNA_PDAC_3_20x_32180_49369_-7.0_008.ome.tif", now - 300_000);
 
-        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), new HashSet<>(), now);
+        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), new HashSet<>(), now, null);
 
         assertThat(a)
                 .as("a previous run's output must survive a later stitch failure")
@@ -54,7 +54,7 @@ class StitchingCleanupBlastRadiusTest {
         Set<String> snapshot = new HashSet<>();
         snapshot.add(previous.getName());
 
-        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), snapshot, start);
+        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), snapshot, start, null);
 
         assertThat(partial)
                 .as("the failed stitch's own partial output must be cleaned up")
@@ -73,7 +73,7 @@ class StitchingCleanupBlastRadiusTest {
         Set<String> snapshot = new HashSet<>();
         snapshot.add(inSnapshotButNew.getName());
 
-        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), snapshot, start);
+        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), snapshot, start, null);
 
         assertThat(inSnapshotButNew).exists();
         assertThat(notInSnapshotButOld).exists();
@@ -85,9 +85,31 @@ class StitchingCleanupBlastRadiusTest {
         File sidecar = write(dir, "something.stitch-info.txt", start + 5_000);
         File tiles = write(dir, "TileConfiguration.txt", start + 5_000);
 
-        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), new HashSet<>(), start);
+        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), new HashSet<>(), start, null);
 
         assertThat(sidecar).exists();
         assertThat(tiles).exists();
+    }
+
+    @Test
+    void concurrentSiblingOutputsSurviveAFailedTarget(@TempDir Path dir) throws Exception {
+        // Channels, derived outputs and the merge write into SlideImages at the same time; a
+        // failed State0 must take only its own partial file with it.
+        long start = System.currentTimeMillis() - 60_000;
+        File own = write(dir, "S_State0.ome.tif", start + 5_000);
+        File ownRetry = write(dir, "S_State0_1.ome.tif", start + 6_000);
+        File sibling = write(dir, "S_State1.ome.tif", start + 5_000);
+        File derived = write(dir, "S_retardance.ome.tif", start + 7_000);
+        File merged = write(dir, "S_lcps_20x_bounds_001.ome.tif", start + 8_000);
+        File similar = write(dir, "S_State0_old.ome.tif", start + 8_000);
+
+        TileProcessingUtilities.cleanupCorruptStitchingOutput(dir.toFile(), new HashSet<>(), start, "S_State0");
+
+        assertThat(own).doesNotExist();
+        assertThat(ownRetry).doesNotExist();
+        assertThat(sibling).exists();
+        assertThat(derived).exists();
+        assertThat(merged).exists();
+        assertThat(similar).exists();
     }
 }

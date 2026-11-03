@@ -46,6 +46,10 @@ import qupath.ext.qpsc.stitching.TileRegistrationSupport;
  * {@link #stitchTargets} therefore solves the first target synchronously (writing the solution the
  * rest reuse), then applies that solution to the remaining targets in parallel. With registration
  * off it degrades to a plain bounded-parallel stitch.
+ *
+ * <p>{@link Extras} (outputs a modality computed into folders of their own) join the same pool
+ * after the solve and apply the same solution, but the call returns when the siblings are done,
+ * so a channel merge does not wait for them.
  */
 public final class StitchingRegistration {
 
@@ -102,6 +106,36 @@ public final class StitchingRegistration {
     }
 
     /**
+     * Targets that share the siblings' tile grid and pool but that nothing after the siblings
+     * reads, such as the outputs a modality computes into folders of its own (LC-PolScope
+     * retardance, PPM {@code .biref}). They run on the siblings' bounded pool after any reference
+     * solve, with the mode every non-reference sibling gets, and are queued behind the siblings.
+     *
+     * @param targets folder names, in the order their results are returned
+     * @param stitcher builds and runs the stitch for one of them
+     */
+    public record Extras(List<String> targets, TargetStitcher<String> stitcher) {
+        public Extras {
+            targets = targets == null ? List.of() : List.copyOf(targets);
+        }
+
+        /** No extras. */
+        public static Extras none() {
+            return new Extras(List.of(), null);
+        }
+    }
+
+    /**
+     * What a stitch with extras returns.
+     *
+     * @param siblings each sibling's output path (null where it failed), in input order; all
+     *     siblings have finished when the batch is returned
+     * @param extras each extra's output path (null where it failed), in input order; may still be
+     *     running, and never completes exceptionally
+     */
+    public record Batch(List<String> siblings, CompletableFuture<List<String>> extras) {}
+
+    /**
      * Stitch a set of sibling targets (angle/channel subdirs) that share one grid, applying the
      * registration barrier when enabled and a plain bounded-parallel stitch otherwise.
      *
@@ -117,13 +151,37 @@ public final class StitchingRegistration {
      */
     public static <X> List<String> stitchTargets(
             List<X> targets, Path tileBaseDir, int maxConcurrency, int referenceIndex, TargetStitcher<X> stitcher) {
+        return stitchTargets(targets, tileBaseDir, maxConcurrency, referenceIndex, stitcher, Extras.none())
+                .siblings();
+    }
+
+    /**
+     * {@link #stitchTargets(List, Path, int, int, TargetStitcher)} with extras on the same pool.
+     * The extras start once the reference solve (if any) is done and may still be running when
+     * this returns.
+     *
+     * @param extras targets stitched with the siblings' apply mode, collected through
+     *     {@link Batch#extras()}
+     * @return the siblings' results and the extras' future
+     */
+    public static <X> Batch stitchTargets(
+            List<X> targets,
+            Path tileBaseDir,
+            int maxConcurrency,
+            int referenceIndex,
+            TargetStitcher<X> stitcher,
+            Extras extras) {
         int total = targets.size();
         // Results are filled BY INDEX, not appended: the reference is not necessarily the
         // first target, and callers that pair targets with outputs positionally (channel
         // split/merge) would otherwise silently mis-associate them.
         List<String> results = new ArrayList<>(Collections.nCopies(total, null));
         if (total == 0) {
-            return results;
+            Object mode = enabled()
+                    ? TileRegistrationSupport.applyMode(tileBaseDir.resolve(TileRegistrationSupport.solutionFileName()))
+                    : null;
+            return new Batch(
+                    results, stitchInParallel(targets, List.of(), mode, maxConcurrency, 0, stitcher, results, extras));
         }
 
         int reference = (referenceIndex >= 0 && referenceIndex < total) ? referenceIndex : 0;
@@ -157,8 +215,9 @@ public final class StitchingRegistration {
                 remaining.add(i);
             }
         }
-        stitchInParallel(targets, remaining, applyMode, maxConcurrency, total - remaining.size(), stitcher, results);
-        return results;
+        CompletableFuture<List<String>> extrasDone = stitchInParallel(
+                targets, remaining, applyMode, maxConcurrency, total - remaining.size(), stitcher, results, extras);
+        return new Batch(results, extrasDone);
     }
 
     /**
@@ -191,12 +250,37 @@ public final class StitchingRegistration {
             double downsample,
             int maxConcurrency,
             TargetStitcher<String> stitcher) {
+        return stitchChannels(
+                        channels,
+                        alignOn,
+                        tileBaseDir,
+                        pixelSizeUm,
+                        downsample,
+                        maxConcurrency,
+                        stitcher,
+                        Extras.none())
+                .siblings();
+    }
+
+    /**
+     * {@link #stitchChannels(List, List, Path, double, double, int, TargetStitcher)} with extras on
+     * the same pool, started after the solve with the mode every channel applies.
+     *
+     * @param extras targets stitched alongside the channels, collected through {@link Batch#extras()}
+     * @return the channels' results and the extras' future, which may still be running
+     */
+    public static Batch stitchChannels(
+            List<String> channels,
+            List<String> alignOn,
+            Path tileBaseDir,
+            double pixelSizeUm,
+            double downsample,
+            int maxConcurrency,
+            TargetStitcher<String> stitcher,
+            Extras extras) {
         List<String> results = new ArrayList<>(Collections.nCopies(channels.size(), null));
-        if (channels.isEmpty()) {
-            return results;
-        }
-        if (!enabled() || alignOn.isEmpty()) {
-            return stitchTargets(channels, tileBaseDir, maxConcurrency, 0, stitcher);
+        if (channels.isEmpty() || !enabled() || alignOn.isEmpty()) {
+            return stitchTargets(channels, tileBaseDir, maxConcurrency, 0, stitcher, extras);
         }
         if (!channelSolveSupported()) {
             int reference = Math.max(0, channels.indexOf(alignOn.get(0)));
@@ -206,7 +290,7 @@ public final class StitchingRegistration {
                         alignOn,
                         channels.get(reference));
             }
-            return stitchTargets(channels, tileBaseDir, maxConcurrency, reference, stitcher);
+            return stitchTargets(channels, tileBaseDir, maxConcurrency, reference, stitcher, extras);
         }
 
         Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
@@ -218,8 +302,8 @@ public final class StitchingRegistration {
         for (int i = 0; i < channels.size(); i++) {
             all.add(i);
         }
-        stitchInParallel(channels, all, applyMode, maxConcurrency, 0, stitcher, results);
-        return results;
+        return new Batch(
+                results, stitchInParallel(channels, all, applyMode, maxConcurrency, 0, stitcher, results, extras));
     }
 
     /**
@@ -242,46 +326,76 @@ public final class StitchingRegistration {
     }
 
     /**
-     * Stitch the targets at {@code indices} with one mode, bounded-parallel, writing each output
-     * into {@code results} at its target's index.
+     * Stitch the targets at {@code indices}, then the extras, with one mode on one bounded pool,
+     * writing each sibling's output into {@code results} at its target's index.
+     *
+     * <p>Siblings are queued first, so a free slot goes to a sibling before an extra: the caller's
+     * next step (a channel merge) waits on the siblings only. Returns once every sibling is done;
+     * the extras may still be running and are collected through the returned future.
      */
-    private static <X> void stitchInParallel(
+    private static <X> CompletableFuture<List<String>> stitchInParallel(
             List<X> targets,
             List<Integer> indices,
             Object mode,
             int maxConcurrency,
             int positionOffset,
             TargetStitcher<X> stitcher,
-            List<String> results) {
-        if (indices.isEmpty()) {
-            return;
+            List<String> results,
+            Extras extras) {
+        List<String> extraTargets = extras.targets();
+        if (indices.isEmpty() && extraTargets.isEmpty()) {
+            return CompletableFuture.completedFuture(List.of());
         }
         int total = targets.size();
-        int concurrency = Math.max(1, Math.min(indices.size(), maxConcurrency));
+        int concurrency = Math.max(1, Math.min(indices.size() + extraTargets.size(), maxConcurrency));
         ExecutorService pool = Executors.newFixedThreadPool(concurrency, r -> {
             Thread t = new Thread(r, "stitch-target");
             t.setDaemon(true);
             return t;
         });
+        List<CompletableFuture<String>> futures = new ArrayList<>(indices.size());
+        List<CompletableFuture<String>> extraFutures = new ArrayList<>(extraTargets.size());
         try {
-            List<CompletableFuture<String>> futures = new ArrayList<>(indices.size());
             for (int i = 0; i < indices.size(); i++) {
                 X target = targets.get(indices.get(i));
                 int position = positionOffset + i + 1;
                 futures.add(CompletableFuture.supplyAsync(() -> runOne(stitcher, target, mode, position, total), pool));
             }
-            CompletableFuture.allOf(futures.toArray(new CompletableFuture[0])).join();
-            for (int i = 0; i < futures.size(); i++) {
-                try {
-                    results.set(indices.get(i), futures.get(i).get());
-                } catch (Exception e) {
-                    logger.error("Failed to retrieve a stitch result: {}", e.getMessage());
-                    results.set(indices.get(i), null);
-                }
+            for (int i = 0; i < extraTargets.size(); i++) {
+                String target = extraTargets.get(i);
+                int position = i + 1;
+                extraFutures.add(CompletableFuture.supplyAsync(
+                        () -> runOne(extras.stitcher(), target, mode, position, extraTargets.size()), pool));
             }
         } finally {
+            // Queued tasks still run; the pool's threads end with the last of them.
             pool.shutdown();
         }
+        CompletableFuture<List<String>> extrasDone = CompletableFuture.allOf(
+                        extraFutures.toArray(new CompletableFuture[0]))
+                .handle((ignored, failure) -> collect(extraFutures));
+        CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
+                .handle((ignored, failure) -> null)
+                .join();
+        List<String> siblingResults = collect(futures);
+        for (int i = 0; i < futures.size(); i++) {
+            results.set(indices.get(i), siblingResults.get(i));
+        }
+        return extrasDone;
+    }
+
+    /** Each future's result, null where it failed. */
+    private static List<String> collect(List<CompletableFuture<String>> futures) {
+        List<String> out = new ArrayList<>(futures.size());
+        for (CompletableFuture<String> f : futures) {
+            try {
+                out.add(f.get());
+            } catch (Exception e) {
+                logger.error("Failed to retrieve a stitch result: {}", e.getMessage(), e);
+                out.add(null);
+            }
+        }
+        return out;
     }
 
     /**
