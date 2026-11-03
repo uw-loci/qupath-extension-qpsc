@@ -826,6 +826,8 @@ key_invariants:
   - "Imports only add the entry, stamp metadata and refreshProject(); they never open an entry in the viewer, save the viewer's image data or call setProject (4c841bf5). Added entries are collected through StitchingHelper.ImportContext (by operation id) for the completion toast and StitchingQueueWindow.recordOutput."
   - "Reservation is OME-TIFF only: a ZARR job gets an empty plan and imports the ordinary way. A wrong prediction costs only a placeholder entry, dropped when the job finishes."
   - "Derived outputs (getPostProcessingDirectorySuffixes: LC-PolScope retardance/orientation/orientation_color, PPM .biref/.sum) are found by findDerivedDirectories before any target is isolated and stitch on the targets' bounded pool as StitchingRegistration.Extras: after the registration solve, with the targets' apply mode and flips, queued behind the targets. The call returns when the targets are done, so the channel merge runs while derived outputs may still stitch; the job awaits them before dropUnfilled / completeOperation, also on failure, so the next job never overlaps them. Each derived output imports when it finishes (reserved entries keep list order and names independent of timing)."
+  - "stitchDerivedConcurrently (DS25, default true) gates the derived outputs through Extras.start: false holds them until StitchingHelper.awaitDerived (after the channel merge, or after the last angle) or awaitDerivedAfterFailure releases the gate; they then run on the same pool with the same mode. One scheduling path; every await releases first, so a held gate can never hang a job."
+  - "StitchMemoryCheck runs once per job in stitchTargetsBounded (job thread, never FX) before the pool starts: measured per-stitch / merge / solve terms, compared with 80% of Runtime.maxMemory() and with committed heap + physical RAM available; a warning is a non-modal owned Alert plus a StitchJobStatus note and a log line, never a change to the job. Unknown physical RAM never triggers it."
   - "Concurrent stitches share SlideImages and tiles-to-pyramid's static flip flags: failure cleanup is limited to the failed target's own <outputName>_<subdir> name, and the flags are held through StitcherFlipFlags (reset only when the last concurrent stitch ends)."
   - "Background ZARR->TIFF escalation was removed in the 2026-06-01 stitching refactor (OmePyramidErrorMonitor / StitchRetryExecutor / OME_TIFF_VIA_ZARR deleted); the direct OME-TIFF writer writes the final path so no escalation is needed. convertSingleZarrToTiff is kept only for W15 MakePortableWorkflow."
 ```
@@ -1943,7 +1945,7 @@ fields_examples:
   projectsFolder
   tissueDetectionScript, dataBoundsClassifier
   saveRawTiles, tileHandling (getTileHandlingMethodProperty), tileOverlapPercent
-  stitchingConcurrency, tileRegistrationEnabled
+  stitchingConcurrency, stitchDerivedConcurrently, tileRegistrationEnabled
   multiSlideAcquisitionMode, multiSlideReuseAlignment, focusSurfaceMode, alignmentCheckMode, focusSurveyPoints, inheritHolderTilt
   compressionType (OMEPyramidWriter.CompressionType)
   stitching output format (StitchingConfig.OutputFormat)

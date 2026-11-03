@@ -11,12 +11,14 @@ import java.util.function.Consumer;
  * now, plus how far its siblings (angles or channels) and its derived outputs have got.
  *
  * <p>Derived outputs run on the siblings' pool and can outlive a channel merge, so the line names
- * the ones still stitching rather than leaving a "Merging..." line up while they finish. Any
- * thread; every change publishes the whole line to the sink.
+ * the ones still stitching rather than leaving a "Merging..." line up while they finish; held
+ * derived outputs (the "Stitch derived outputs concurrently" preference off) are listed as waiting
+ * until {@link #releaseDerived()}. Any thread; every change publishes the whole line to the sink.
  */
 final class StitchJobStatus {
 
     private enum State {
+        HELD,
         WAITING,
         STITCHING,
         DONE,
@@ -27,7 +29,9 @@ final class StitchJobStatus {
     private final Consumer<String> sink;
     private final Map<String, State> siblings = new LinkedHashMap<>();
     private final Map<String, State> derived = new LinkedHashMap<>();
+    private final String heldUntil;
     private String phase = "";
+    private String note = "";
 
     /**
      * @param siblingKind plural noun for the siblings, e.g. "channels" or "angles"
@@ -36,10 +40,45 @@ final class StitchJobStatus {
      * @param sink receives the full line on every change
      */
     StitchJobStatus(String siblingKind, List<String> siblingNames, List<String> derivedNames, Consumer<String> sink) {
+        this(siblingKind, siblingNames, derivedNames, null, sink);
+    }
+
+    /**
+     * @param heldUntil when the derived outputs are held back, what they wait for (e.g. "the
+     *     merge"); null when they are queued behind the siblings
+     */
+    StitchJobStatus(
+            String siblingKind,
+            List<String> siblingNames,
+            List<String> derivedNames,
+            String heldUntil,
+            Consumer<String> sink) {
         this.siblingKind = siblingKind;
         this.sink = sink;
+        this.heldUntil = heldUntil;
+        State initial = heldUntil == null ? State.WAITING : State.HELD;
         siblingNames.forEach(n -> siblings.put(n, State.WAITING));
-        derivedNames.forEach(n -> derived.put(n, State.WAITING));
+        derivedNames.forEach(n -> derived.put(n, initial));
+    }
+
+    /** The held derived outputs are queued now. */
+    void releaseDerived() {
+        String line;
+        synchronized (this) {
+            derived.replaceAll((n, s) -> s == State.HELD ? State.WAITING : s);
+            line = text();
+        }
+        sink.accept(line);
+    }
+
+    /** A short line appended to every status, e.g. a memory warning; empty for none. */
+    void note(String text) {
+        String line;
+        synchronized (this) {
+            note = text == null ? "" : text;
+            line = text();
+        }
+        sink.accept(line);
     }
 
     /** Sets what the job is doing now, e.g. "Merging 5 channels". */
@@ -77,7 +116,7 @@ final class StitchJobStatus {
 
     /** True while a derived output is waiting or stitching. */
     synchronized boolean derivedPending() {
-        return derived.values().stream().anyMatch(s -> s == State.WAITING || s == State.STITCHING);
+        return derived.values().stream().anyMatch(s -> s != State.DONE && s != State.FAILED);
     }
 
     /** The current line. */
@@ -89,13 +128,11 @@ final class StitchJobStatus {
         if (!derived.isEmpty()) {
             parts.add(group("derived outputs", derived));
         }
-        if (parts.isEmpty()) {
-            return phase;
-        }
-        return phase + " (" + String.join("; ", parts) + ")";
+        String line = parts.isEmpty() ? phase : phase + " (" + String.join("; ", parts) + ")";
+        return note.isEmpty() ? line : line + " - " + note;
     }
 
-    private static String group(String kind, Map<String, State> states) {
+    private String group(String kind, Map<String, State> states) {
         long done = states.values().stream().filter(s -> s == State.DONE).count();
         StringBuilder sb = new StringBuilder();
         sb.append(kind)
@@ -107,6 +144,7 @@ final class StitchJobStatus {
         appendNames(sb, "failed", states, State.FAILED);
         appendNames(sb, "stitching", states, State.STITCHING);
         appendNames(sb, "queued", states, State.WAITING);
+        appendNames(sb, "waiting for " + heldUntil, states, State.HELD);
         return sb.toString();
     }
 

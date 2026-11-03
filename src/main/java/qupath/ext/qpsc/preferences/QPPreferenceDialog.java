@@ -126,6 +126,11 @@ public class QPPreferenceDialog {
     // and more concurrent writers. 1 = fully sequential.
     private static final IntegerProperty stitchingConcurrencyProperty =
             PathPrefs.createPersistentPreference("stitchingConcurrency", 4);
+    // Whether derived outputs (LC-PolScope retardance/orientation, PPM .biref/.sum) join the
+    // angles'/channels' pool and may run beside the channel merge (true), or wait until the merge
+    // (or the last angle) is done and then use the pool (false).
+    private static final BooleanProperty stitchDerivedConcurrentlyProperty =
+            PathPrefs.createPersistentPreference("stitchDerivedConcurrently", true);
 
     // Content-based tile registration. Off by default until validated on the scope: it changes
     // where every tile lands, and a nominal mosaic is a known quantity. Enabling it also serializes
@@ -513,6 +518,17 @@ public class QPPreferenceDialog {
                         + "more concurrent writers. Set to 1 for fully sequential stitching.")
                 .build());
 
+        items.add(new PropertyItemBuilder<>(stitchDerivedConcurrentlyProperty, Boolean.class)
+                .name("Stitch derived outputs concurrently")
+                .category(CATEGORY)
+                .description("Stitch derived outputs (LC-PolScope retardance, orientation and "
+                        + "orientation_color; PPM .biref and .sum) alongside the angles or channels, and "
+                        + "beside the channel merge (default: on). Faster, but more stitches run at once.\n\n"
+                        + "Turn off when the computer's memory or processors are needed for other work: the "
+                        + "derived outputs then wait until the channel merge (or the last angle) is done, and "
+                        + "only then use the stitching slots. Results are the same either way.")
+                .build());
+
         items.add(new PropertyItemBuilder<>(tileRegistrationEnabledProperty, Boolean.class)
                 .name("Register tiles on image content")
                 .category(CATEGORY)
@@ -894,6 +910,14 @@ public class QPPreferenceDialog {
      */
     public static int getStitchingConcurrency() {
         return Math.max(1, stitchingConcurrencyProperty.get());
+    }
+
+    /**
+     * Whether derived outputs stitch on the angles'/channels' pool as soon as a slot is free
+     * (true, default) or only after the channel merge or the last angle (false).
+     */
+    public static boolean getStitchDerivedConcurrently() {
+        return stitchDerivedConcurrentlyProperty.get();
     }
 
     /**

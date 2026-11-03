@@ -592,6 +592,9 @@ public class StitchingHelper {
      *     {@link StitchingOptions#alignmentFor}); null for angle targets, whose reference comes
      *     from the modality handler
      * @param derivedDirs derived folders from {@link #findDerivedDirectories}
+     * @param derivedConcurrent the "Stitch derived outputs concurrently" preference; false holds
+     *     the derived outputs until {@link #awaitDerived} or {@link #awaitDerivedAfterFailure}
+     * @param mergeAfter whether a channel merge follows the targets (for the memory estimate)
      * @param status the job's status line, told when each target starts and ends
      * @return the targets' results, the SAME size and order as {@code targetSubdirs} (element i
      *         is target i's output path, or {@code null} if it failed; callers that pair targets
@@ -615,6 +618,8 @@ public class StitchingHelper {
             Map<String, Object> stitchParams,
             List<String> alignOn,
             List<String> derivedDirs,
+            boolean derivedConcurrent,
+            boolean mergeAfter,
             StitchJobStatus status) {
 
         // The registration barrier (solve once, reuse that solve for every target) and the
@@ -644,8 +649,13 @@ public class StitchingHelper {
             return out;
         };
         Map<String, Object> derivedParams = derivedStitchParams(stitchParams);
-        StitchingRegistration.Extras derived =
-                new StitchingRegistration.Extras(derivedDirs, (dir, mode, position, count) -> {
+        // Held derived outputs are released by awaitDerived / awaitDerivedAfterFailure, after the
+        // merge or the last angle.
+        CompletableFuture<Void> derivedStart =
+                derivedConcurrent || derivedDirs.isEmpty() ? null : new CompletableFuture<>();
+        StitchingRegistration.Extras derived = new StitchingRegistration.Extras(
+                derivedDirs,
+                (dir, mode, position, count) -> {
                     status.started(dir);
                     String out = stitchDerivedOne(
                             dir,
@@ -665,17 +675,33 @@ public class StitchingHelper {
                             handler);
                     status.finished(dir, out != null);
                     return out;
-                });
+                },
+                derivedStart);
         int maxConcurrency = QPPreferenceDialog.getStitchingConcurrency();
         if (!derivedDirs.isEmpty()) {
             logger.info(
-                    "Stitching {} {} target(s) and {} derived output(s) {} on one pool of at most {}",
+                    "Stitching {} {} target(s) and {} derived output(s) {} on one pool of at most {}{}",
                     targetSubdirs.size(),
                     targetKind,
                     derivedDirs.size(),
                     derivedDirs,
-                    maxConcurrency);
+                    maxConcurrency,
+                    derivedConcurrent
+                            ? ""
+                            : "; derived outputs wait for the " + (mergeAfter ? "channel merge" : "last " + targetKind)
+                                    + " (Stitch derived outputs concurrently is off)");
         }
+        StitchMemoryCheck.check(
+                StitchMemoryCheck.Plan.read(
+                        tileBaseDir,
+                        targetSubdirs,
+                        derivedDirs,
+                        maxConcurrency,
+                        mergeAfter,
+                        derivedConcurrent,
+                        StitchingRegistration.enabled()),
+                annotationName,
+                status);
         if (alignOn != null) {
             // Channels: the operator's alignment choice, solved with every channel in view.
             return StitchingRegistration.stitchChannels(
@@ -698,13 +724,17 @@ public class StitchingHelper {
     }
 
     /**
-     * Waits for the derived outputs still stitching on the job's pool and returns the paths of
-     * those that succeeded, in folder order. Never throws.
+     * Releases the derived outputs if they were held, waits for them on the job's pool and
+     * returns the paths of those that succeeded, in folder order. Never throws.
      */
     private static List<String> awaitDerived(
             StitchingRegistration.Batch batch, StitchJobStatus status, String annotationName) {
         if (batch == null) {
             return List.of();
+        }
+        batch.releaseExtras();
+        if (status != null) {
+            status.releaseDerived();
         }
         if (status != null && status.derivedPending()) {
             status.phase("Finishing derived outputs for " + annotationName);
@@ -980,10 +1010,12 @@ public class StitchingHelper {
                             // Modality-specific outputs (PPM .biref / .sum) stitch on the angles'
                             // pool, so they do not wait for the last angle to finish.
                             List<String> derivedDirs = findDerivedDirectories(handler, tileBaseDir, angleSubdirs);
+                            boolean derivedConcurrent = QPPreferenceDialog.getStitchDerivedConcurrently();
                             StitchJobStatus status = new StitchJobStatus(
                                     "angles",
                                     angleSubdirs,
                                     derivedDirs,
+                                    derivedConcurrent ? null : "the last angle",
                                     statusSink(blockingDialog, dualProgressDialog, operationId));
                             status.phase("Stitching " + annotationName);
                             StitchingRegistration.Batch batch = stitchTargetsBounded(
@@ -1003,6 +1035,8 @@ public class StitchingHelper {
                                     stitchParams,
                                     null,
                                     derivedDirs,
+                                    derivedConcurrent,
+                                    false,
                                     status);
                             batchRef[0] = batch;
                             for (String outPath : batch.siblings()) {
@@ -1638,10 +1672,16 @@ public class StitchingHelper {
                         // never the per-channel files or the merge, so they stitch on the same pool,
                         // queued behind the channels, and may still be running during the merge.
                         List<String> derivedDirs = findDerivedDirectories(handler, tileBaseDir, acquiredChannelIds);
+                        // Off: derived outputs wait for the merge, as before they shared the pool.
+                        boolean derivedConcurrent = QPPreferenceDialog.getStitchDerivedConcurrently();
+                        long channelsMerged = acquiredChannelIds.stream()
+                                .filter(c -> !options.isSplit(c))
+                                .count();
                         StitchJobStatus status = new StitchJobStatus(
                                 "channels",
                                 acquiredChannelIds,
                                 derivedDirs,
+                                derivedConcurrent ? null : "the merge",
                                 statusSink(blockingDialog, dualProgressDialog, operationId));
                         status.phase("Stitching " + annotationName);
                         StitchingRegistration.Batch batch = stitchTargetsBounded(
@@ -1661,6 +1701,8 @@ public class StitchingHelper {
                                 stitchParams,
                                 options.alignmentFor(acquiredChannelIds),
                                 derivedDirs,
+                                derivedConcurrent,
+                                channelsMerged >= 2,
                                 status);
                         batchRef[0] = batch;
                         List<String> channelResults = batch.siblings();
@@ -2708,11 +2750,15 @@ public class StitchingHelper {
     }
 
     /**
-     * After a job failed, waits for its derived outputs still on the pool, so the job does not
-     * report failure (and the next job start) while they write and import.
+     * After a job failed, releases its derived outputs if they were held and waits for them, so
+     * the job does not report failure (and the next job start) while they write and import.
      */
     private static void awaitDerivedAfterFailure(StitchingRegistration.Batch batch, String regionName) {
-        if (batch == null || batch.extras().isDone()) {
+        if (batch == null) {
+            return;
+        }
+        batch.releaseExtras();
+        if (batch.extras().isDone()) {
             return;
         }
         logger.info("Waiting for derived outputs of {} still stitching before reporting the failure", regionName);

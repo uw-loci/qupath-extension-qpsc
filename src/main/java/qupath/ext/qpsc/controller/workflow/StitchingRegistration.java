@@ -111,17 +111,28 @@ public final class StitchingRegistration {
      * retardance, PPM {@code .biref}). They run on the siblings' bounded pool after any reference
      * solve, with the mode every non-reference sibling gets, and are queued behind the siblings.
      *
+     * <p>{@code start} holds them back: they are submitted to the pool when it completes. A
+     * completed future (the default) submits them right behind the siblings; an incomplete one
+     * lets the caller run them after its next step, through {@link Batch#releaseExtras()}.
+     *
      * @param targets folder names, in the order their results are returned
      * @param stitcher builds and runs the stitch for one of them
+     * @param start completes when the extras may be submitted; null means at once
      */
-    public record Extras(List<String> targets, TargetStitcher<String> stitcher) {
+    public record Extras(List<String> targets, TargetStitcher<String> stitcher, CompletableFuture<Void> start) {
         public Extras {
             targets = targets == null ? List.of() : List.copyOf(targets);
+            start = start == null ? CompletableFuture.completedFuture(null) : start;
+        }
+
+        /** Extras submitted right behind the siblings. */
+        public Extras(List<String> targets, TargetStitcher<String> stitcher) {
+            this(targets, stitcher, null);
         }
 
         /** No extras. */
         public static Extras none() {
-            return new Extras(List.of(), null);
+            return new Extras(List.of(), null, null);
         }
     }
 
@@ -131,9 +142,18 @@ public final class StitchingRegistration {
      * @param siblings each sibling's output path (null where it failed), in input order; all
      *     siblings have finished when the batch is returned
      * @param extras each extra's output path (null where it failed), in input order; may still be
-     *     running, and never completes exceptionally
+     *     running, or not yet submitted while {@code extrasStart} is incomplete; never completes
+     *     exceptionally
+     * @param extrasStart the extras' start gate (see {@link Extras#start()})
      */
-    public record Batch(List<String> siblings, CompletableFuture<List<String>> extras) {}
+    public record Batch(
+            List<String> siblings, CompletableFuture<List<String>> extras, CompletableFuture<Void> extrasStart) {
+
+        /** Lets held extras start; a no-op when they already have. Call before waiting on them. */
+        public void releaseExtras() {
+            extrasStart.complete(null);
+        }
+    }
 
     /**
      * Stitch a set of sibling targets (angle/channel subdirs) that share one grid, applying the
@@ -181,7 +201,9 @@ public final class StitchingRegistration {
                     ? TileRegistrationSupport.applyMode(tileBaseDir.resolve(TileRegistrationSupport.solutionFileName()))
                     : null;
             return new Batch(
-                    results, stitchInParallel(targets, List.of(), mode, maxConcurrency, 0, stitcher, results, extras));
+                    results,
+                    stitchInParallel(targets, List.of(), mode, maxConcurrency, 0, stitcher, results, extras),
+                    extras.start());
         }
 
         int reference = (referenceIndex >= 0 && referenceIndex < total) ? referenceIndex : 0;
@@ -217,7 +239,7 @@ public final class StitchingRegistration {
         }
         CompletableFuture<List<String>> extrasDone = stitchInParallel(
                 targets, remaining, applyMode, maxConcurrency, total - remaining.size(), stitcher, results, extras);
-        return new Batch(results, extrasDone);
+        return new Batch(results, extrasDone, extras.start());
     }
 
     /**
@@ -303,7 +325,9 @@ public final class StitchingRegistration {
             all.add(i);
         }
         return new Batch(
-                results, stitchInParallel(channels, all, applyMode, maxConcurrency, 0, stitcher, results, extras));
+                results,
+                stitchInParallel(channels, all, applyMode, maxConcurrency, 0, stitcher, results, extras),
+                extras.start());
     }
 
     /**
@@ -330,8 +354,10 @@ public final class StitchingRegistration {
      * writing each sibling's output into {@code results} at its target's index.
      *
      * <p>Siblings are queued first, so a free slot goes to a sibling before an extra: the caller's
-     * next step (a channel merge) waits on the siblings only. Returns once every sibling is done;
-     * the extras may still be running and are collected through the returned future.
+     * next step (a channel merge) waits on the siblings only. The extras are submitted when their
+     * start gate completes, which for an already completed gate is right behind the siblings.
+     * Returns once every sibling is done; the extras may still be running (or held) and are
+     * collected through the returned future.
      */
     private static <X> CompletableFuture<List<String>> stitchInParallel(
             List<X> targets,
@@ -354,26 +380,38 @@ public final class StitchingRegistration {
             return t;
         });
         List<CompletableFuture<String>> futures = new ArrayList<>(indices.size());
-        List<CompletableFuture<String>> extraFutures = new ArrayList<>(extraTargets.size());
+        CompletableFuture<List<String>> extrasDone;
         try {
             for (int i = 0; i < indices.size(); i++) {
                 X target = targets.get(indices.get(i));
                 int position = positionOffset + i + 1;
                 futures.add(CompletableFuture.supplyAsync(() -> runOne(stitcher, target, mode, position, total), pool));
             }
-            for (int i = 0; i < extraTargets.size(); i++) {
-                String target = extraTargets.get(i);
-                int position = i + 1;
-                extraFutures.add(CompletableFuture.supplyAsync(
-                        () -> runOne(extras.stitcher(), target, mode, position, extraTargets.size()), pool));
-            }
         } finally {
-            // Queued tasks still run; the pool's threads end with the last of them.
-            pool.shutdown();
+            // Runs on the thread that opens the gate: at once for an open gate, so the extras queue
+            // right behind the siblings. Queued tasks still run after shutdown; the pool's threads
+            // end with the last of them.
+            extrasDone = extras.start()
+                    .handle((ignored, gateFailure) -> {
+                        List<CompletableFuture<String>> extraFutures = new ArrayList<>(extraTargets.size());
+                        try {
+                            for (int i = 0; i < extraTargets.size(); i++) {
+                                String target = extraTargets.get(i);
+                                int position = i + 1;
+                                extraFutures.add(CompletableFuture.supplyAsync(
+                                        () -> runOne(extras.stitcher(), target, mode, position, extraTargets.size()),
+                                        pool));
+                            }
+                        } catch (RuntimeException e) {
+                            logger.error("Could not submit the derived outputs: {}", e.getMessage(), e);
+                        } finally {
+                            pool.shutdown();
+                        }
+                        return extraFutures;
+                    })
+                    .thenCompose(extraFutures -> CompletableFuture.allOf(extraFutures.toArray(new CompletableFuture[0]))
+                            .handle((ignored, failure) -> padded(collect(extraFutures), extraTargets.size())));
         }
-        CompletableFuture<List<String>> extrasDone = CompletableFuture.allOf(
-                        extraFutures.toArray(new CompletableFuture[0]))
-                .handle((ignored, failure) -> collect(extraFutures));
         CompletableFuture.allOf(futures.toArray(new CompletableFuture[0]))
                 .handle((ignored, failure) -> null)
                 .join();
@@ -382,6 +420,15 @@ public final class StitchingRegistration {
             results.set(indices.get(i), siblingResults.get(i));
         }
         return extrasDone;
+    }
+
+    /** {@code values} with nulls appended up to {@code size} (extras that were never submitted). */
+    private static List<String> padded(List<String> values, int size) {
+        List<String> out = new ArrayList<>(values);
+        while (out.size() < size) {
+            out.add(null);
+        }
+        return out;
     }
 
     /** Each future's result, null where it failed. */

@@ -34,6 +34,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Compression type](#compression-type) | Choice | LZW | OME pyramid compression |
 | [Stitching output format](#stitching-output-format) | Choice | OME_TIFF | Output format for stitched images |
 | [Stitching concurrency](#stitching-concurrency) | Integer | 4 | Max angles/channels stitched at once per annotation |
+| [Stitch derived outputs concurrently](#stitch-derived-outputs-concurrently) | Boolean | ON | Derived outputs (retardance, orientation, `.biref`, `.sum`) stitch beside the angles/channels and the merge; off = after the merge |
 | [Register tiles on image content](#register-tiles-on-image-content) | Boolean | false | Correct tile positions by matching overlap content instead of trusting the stage |
 | [EDF Sharpness Metric](#edf-sharpness-metric) | Enum | tenengrad | EDF sharpness measurement method. **Not in the Preferences pane** -- edited via the "EDF settings..." button in the acquisition dialog |
 | [EDF Averaging Window](#edf-averaging-window) | Integer | 9 | EDF local averaging window, in pixels. **Dialog only**, as above |
@@ -844,6 +845,52 @@ Maximum number of angles (PPM) or channels (fluorescence, LC-PolScope states) st
 Applies to both OME-TIFF and OME-ZARR output. The default of 4 is a balance that speeds up the common 4-angle PPM and ~4-channel IF cases while keeping peak memory bounded.
 
 Note: when **Register tiles on image content** is enabled, one angle/channel of each annotation is stitched on its own to solve the tile positions before the others reuse that result. The remaining angles/channels and the derived outputs then stitch concurrently up to this limit. On PPM the solve runs on the 90-degree (open) angle; on other modalities, the first target is used.
+
+Before each annotation's stitches start, QPSC estimates their memory and warns when it looks short; see [Stitching memory warning](#stitching-memory-warning) below.
+
+---
+
+### Stitch derived outputs concurrently
+
+| Property | Value |
+|----------|-------|
+| Type | Boolean |
+| Default | ON |
+| Requires Restart | No (applies to the next annotation that starts stitching) |
+
+**Description:**
+Whether a modality's derived outputs -- LC-PolScope `retardance`, `orientation` and `orientation_color`; PPM `.biref` and `.sum` -- stitch **alongside** the angles or channels, or **after** them.
+
+- **ON (default):** derived outputs go on the same pool as the angles/channels, queued behind them, and take a slot as one frees. They can still be stitching while the channel merge runs. Fastest.
+- **OFF:** derived outputs wait until the channel merge is done (for PPM angles: until the last angle is done) and only then use the stitching slots, up to **Stitching concurrency** at once. The merge runs alone, as it did before 2026-11-03. Use this when the computer's memory or processors are needed for other work while QPSC stitches.
+
+Either way the images, file names, registration, flips and project entries are the same; only the order changes. The stitching queue window says `waiting for the merge: retardance, ...` (or `waiting for the last angle: ...`) while they are held.
+
+---
+
+### Stitching memory warning
+
+Not a preference: a check that runs once per annotation, just before its stitches start. It estimates the heap the planned stitches need at their busiest moment and compares that with what this QuPath has:
+
+- **Detected:** QuPath's maximum heap (`Runtime.maxMemory()`, set by **Edit > Preferences > General > Set max memory %**), the heap in use now (which includes garbage not yet collected) and the heap committed; on Windows and macOS the physical RAM total and available from the Java management bean, on Linux from `/proc/meminfo` (`MemAvailable`). If physical RAM cannot be read, the warning says so and uses the heap rule alone.
+- **Estimated:** see the formula below. It is an estimate built from measurements, not a reading. QuPath's tile cache (by default 25% of the heap) is not counted, because it gives its memory back when the heap runs short.
+
+The warning appears when the estimate is above **80% of the maximum heap**, or above **the heap committed now plus the physical RAM available now** (the heap would have to grow into memory other programs are using). It opens a non-modal window titled **QPSC Stitching - Memory Warning** with all the numbers, adds a `memory warning: ...` note to the job's row in the stitching queue window and writes the same text to the log. It never stops or changes the job. To use less memory turn off **Stitch derived outputs concurrently**, lower **Stitching concurrency**, or give QuPath more memory. Every job logs its estimate and the detected values at INFO (`Stitching memory for ...`), warning or not.
+
+**The estimate.** The largest of these phases, where *S* is one grayscale stitch, *M* the channel merge and *P* the mosaic's full-resolution pixel count:
+
+| Phase | Heap |
+|---|---|
+| Registration solve (when **Register tiles on image content** is on) | 145 MB |
+| Angles/channels stitching | `min(concurrency, targets [+ derived when concurrent])` stitches, each *S*, or 155 MB for an RGB one (orientation_color) |
+| Channel merge | *M*, plus `min(concurrency, derived)` derived stitches when concurrent |
+| After the merge (concurrent off) | `min(concurrency, derived)` derived stitches |
+
+with *S* = 47 MB + 0.0095 bytes x *P* and *M* = 26 MB + 0.0104 bytes x *P*. These come from live heap measured in a hidden QuPath (harness `harness/StitchMemoryScenario.java`) after a full garbage collection with soft references cleared, sampled every 0.25-1 s, for five 16-bit channels plus three derived outputs with tiles-to-pyramid 0.8.3 and 0.8.4, 1024 and 2048 px tiles and mosaics from 3,790 to 37,065 px square. Each line lies on or above every measurement of both versions; 0.8.4, which stages its pyramid levels on disk, measured 15-25 MB per grayscale stitch against 47-51 MB for 0.8.3, so the estimate is high for 0.8.4. The largest measured mosaic is 1.4 gigapixels; a bigger region is extrapolated along these lines. Larger tiles, more channels or another tiles-to-pyramid can need more.
+
+For a 5-state LC-PolScope region of 1810 tiles (101,864 x 87,085 px) with concurrency 4: *S* = 127 MB, *M* = 114 MB; the peak is four stitches at once (three grayscale and, at worst, orientation_color), about **537 MB**; the merge beside three derived stitches is about 524 MB; with **Stitch derived outputs concurrently** off the peak is about 509 MB (four channels at once). The warning therefore appears only with a small heap or when the computer has almost no RAM left; the memory QuPath's monitor shows during stitching is mostly the tile cache and garbage the collector has not yet needed to reclaim.
+
+The 80% margin covers what the estimate leaves out: QuPath's own objects (about 45 MB for an idle QuPath with a project, more with images and detections open), short peaks between the samples, and the free space the garbage collector needs to work.
 
 ---
 

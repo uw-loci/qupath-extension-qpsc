@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Objects;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -208,5 +209,122 @@ class DerivedStitchSchedulingTest {
                 "Merging 1 channels (channels 1 of 2 done, failed: State1; derived outputs 2 of 2 done)",
                 status.text());
         assertEquals(status.text(), lines.get(lines.size() - 1), "every change is published");
+    }
+
+    @Test
+    void heldDerivedOutputsStartOnlyAfterTheMerge() throws Exception {
+        List<String> order = Collections.synchronizedList(new ArrayList<>());
+        CountDownLatch derivedStarted = new CountDownLatch(1);
+        StitchingRegistration.Extras extras = new StitchingRegistration.Extras(
+                List.of("retardance", "orientation", "orientation_color"),
+                (t, m, p, n) -> {
+                    order.add(t);
+                    derivedStarted.countDown();
+                    return t + "-out";
+                },
+                new CompletableFuture<>());
+        StitchingRegistration.Batch batch = StitchingRegistration.stitchChannels(
+                List.of("State0", "State1", "State2", "State3", "State4"),
+                List.of(),
+                BASE,
+                1,
+                1,
+                4,
+                (t, m, p, n) -> {
+                    order.add(t);
+                    return t + "-out";
+                },
+                extras);
+
+        assertEquals(5, batch.siblings().size());
+        assertFalse(derivedStarted.await(300, TimeUnit.MILLISECONDS), "no derived output starts before the merge");
+        assertFalse(batch.extras().isDone());
+        order.add("merge");
+        batch.releaseExtras();
+        assertEquals(
+                List.of("retardance-out", "orientation-out", "orientation_color-out"),
+                batch.extras().get(30, TimeUnit.SECONDS));
+        assertEquals("merge", order.get(5), "derived outputs run after the merge: " + order);
+        assertEquals(9, order.size());
+    }
+
+    @Test
+    void heldDerivedOutputsKeepThePoolBoundAndIsolateFailures() {
+        AtomicInteger running = new AtomicInteger();
+        AtomicInteger peak = new AtomicInteger();
+        StitchingRegistration.TargetStitcher<String> busy = (t, m, p, n) -> {
+            peak.accumulateAndGet(running.incrementAndGet(), Math::max);
+            try {
+                Thread.sleep(30);
+                if (t.equals("d1")) {
+                    throw new IllegalStateException("disk full");
+                }
+                return t;
+            } finally {
+                running.decrementAndGet();
+            }
+        };
+        StitchingRegistration.Batch batch = StitchingRegistration.stitchTargets(
+                List.of("s0", "s1", "s2"),
+                BASE,
+                2,
+                0,
+                busy,
+                new StitchingRegistration.Extras(List.of("d0", "d1", "d2"), busy, new CompletableFuture<>()));
+        assertEquals(List.of("s0", "s1", "s2"), batch.siblings());
+        batch.releaseExtras();
+        batch.releaseExtras(); // a second release is harmless
+        List<String> derived = batch.extras().join();
+        assertEquals("d0", derived.get(0));
+        assertNull(derived.get(1), "a failure lands in its own slot");
+        assertEquals("d2", derived.get(2));
+        assertTrue(peak.get() <= 2, "held derived outputs still use the bounded pool: " + peak.get());
+    }
+
+    @Test
+    void releasingAfterAFailedJobStillRunsHeldDerivedOutputs() {
+        StitchingRegistration.Batch batch = StitchingRegistration.stitchTargets(
+                List.of("boom"),
+                BASE,
+                4,
+                0,
+                (t, m, p, n) -> {
+                    throw new IllegalStateException("stitch failed");
+                },
+                new StitchingRegistration.Extras(
+                        List.of("retardance"), (t, m, p, n) -> t + "-out", new CompletableFuture<>()));
+        assertNull(batch.siblings().get(0));
+        assertFalse(batch.extras().isDone(), "held until released");
+        batch.releaseExtras();
+        assertEquals(List.of("retardance-out"), batch.extras().join());
+    }
+
+    @Test
+    void concurrentByDefaultNeedsNoRelease() {
+        StitchingRegistration.Extras extras = new StitchingRegistration.Extras(List.of("d"), (t, m, p, n) -> t);
+        assertTrue(extras.start().isDone(), "extras without a gate start right behind the siblings");
+        StitchingRegistration.Batch batch =
+                StitchingRegistration.stitchTargets(List.of("s"), BASE, 2, 0, quick(), extras);
+        assertEquals(List.of("d"), batch.extras().join());
+    }
+
+    @Test
+    void statusLineSaysHeldDerivedOutputsWaitForTheMerge() {
+        List<String> lines = Collections.synchronizedList(new ArrayList<>());
+        StitchJobStatus status = new StitchJobStatus(
+                "channels", List.of("State0"), List.of("retardance", "orientation"), "the merge", lines::add);
+        status.phase("Stitching bounds");
+        assertTrue(status.derivedPending());
+        assertEquals(
+                "Stitching bounds (channels 0 of 1 done, queued: State0; derived outputs 0 of 2 done,"
+                        + " waiting for the merge: retardance, orientation)",
+                status.text());
+        status.releaseDerived();
+        status.note("memory warning: estimated 9.0 GB, QuPath heap max 8.0 GB");
+        assertEquals(
+                "Stitching bounds (channels 0 of 1 done, queued: State0; derived outputs 0 of 2 done,"
+                        + " queued: retardance, orientation) - memory warning: estimated 9.0 GB, QuPath heap max 8.0 GB",
+                status.text());
+        assertEquals(status.text(), lines.get(lines.size() - 1));
     }
 }

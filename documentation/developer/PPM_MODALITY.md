@@ -281,7 +281,7 @@ tiles/
       tile_000.tif
 ```
 
-The `.biref` and `.sum` directories are discovered by `StitchingHelper.findDerivedDirectories` via `PPMModalityHandler.getPostProcessingDirectorySuffixes()` before any angle is stitched, and stitched as additional output images on the angles' pool (`StitchingRegistration.Extras`), queued behind the angles and with the angles' registration solution.
+The `.biref` and `.sum` directories are discovered by `StitchingHelper.findDerivedDirectories` via `PPMModalityHandler.getPostProcessingDirectorySuffixes()` before any angle is stitched, and stitched as additional output images on the angles' pool (`StitchingRegistration.Extras`), queued behind the angles and with the angles' registration solution. With the **Stitch derived outputs concurrently** preference off, their start gate (`Extras.start`) is held until the last angle is done (`StitchingHelper.awaitDerived` releases it), so they run after the angles, still on that pool.
 
 ### Channel Naming on Import
 
