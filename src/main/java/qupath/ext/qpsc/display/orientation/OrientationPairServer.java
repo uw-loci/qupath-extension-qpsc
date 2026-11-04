@@ -37,9 +37,9 @@ final class OrientationPairServer extends AbstractTileableImageServer {
         this.orientation = orientation;
         this.retardance = retardance;
         List<ImageChannel> channels = new ArrayList<>();
-        channels.add(ImageChannel.getInstance("Orientation (deg x 100)", 0xff00ff));
+        channels.add(ImageChannel.getInstance("Orientation_deg_x_100", 0xff00ff));
         if (retardance != null) {
-            channels.add(ImageChannel.getInstance("Retardance (nm x 100)", 0x00ffff));
+            channels.add(ImageChannel.getInstance("Retardance_nm_x_100", 0x00ffff));
         }
         this.metadata = new ImageServerMetadata.Builder(orientation.getMetadata())
                 .channels(channels)

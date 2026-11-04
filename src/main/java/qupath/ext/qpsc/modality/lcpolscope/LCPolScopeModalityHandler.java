@@ -252,7 +252,7 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
 
     /**
      * Stable channel names for the reconstructed outputs, so display settings carry across
-     * images. Values are stored as counts: retardance in nanometres x 100, orientation in
+     * images. Values are stored as counts: retardance in nanometers x 100, orientation in
      * degrees x 100 over [0, 180).
      */
     @Override
@@ -262,10 +262,10 @@ public class LCPolScopeModalityHandler implements ModalityHandler {
         }
         String lower = fileName.toLowerCase(java.util.Locale.ROOT);
         if (lower.contains("_retardance")) {
-            return "Retardance (nm x100)";
+            return "Retardance_nm_x_100";
         }
         if (lower.contains("_orientation") && !lower.contains("_orientation_color")) {
-            return "Orientation (deg x100)";
+            return "Orientation_deg_x_100";
         }
         return null;
     }

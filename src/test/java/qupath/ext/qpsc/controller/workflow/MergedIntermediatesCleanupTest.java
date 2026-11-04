@@ -79,8 +79,8 @@ class MergedIntermediatesCleanupTest {
         assertEquals(
                 List.of("retardance", "orientation", "orientation_color"),
                 handler.getPostProcessingDirectorySuffixes());
-        assertEquals("Retardance (nm x100)", handler.getChannelNameForOutput("S_lcps_20x_r1_1_retardance.ome.tif"));
-        assertEquals("Orientation (deg x100)", handler.getChannelNameForOutput("S_lcps_20x_r1_1_orientation.ome.tif"));
+        assertEquals("Retardance_nm_x_100", handler.getChannelNameForOutput("S_lcps_20x_r1_1_retardance.ome.tif"));
+        assertEquals("Orientation_deg_x_100", handler.getChannelNameForOutput("S_lcps_20x_r1_1_orientation.ome.tif"));
         assertNull(handler.getChannelNameForOutput("S_lcps_20x_r1_1_State0.ome.tif"));
         assertNull(
                 handler.getChannelNameForOutput("S_lcps_20x_r1_1_orientation_color.ome.tif"),

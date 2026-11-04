@@ -36,6 +36,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **LC-PolScope channel names give the units.** The retardance image's channel is now
+  `Retardance_nm_x_100` and the orientation image's `Orientation_deg_x_100`. The microscope
+  server writes these names into every tile (retardance was mislabeled "Retardance (nm)"), Tiles
+  to Pyramid carries them into the stitched file, and QPSC still sets them on import. Divide a
+  pixel value or a QuPath measurement by 100 for nm or degrees. Entries and files made earlier keep
+  their old names.
+
 - **Derived outputs stitch alongside the channels, not after the merge.** LC-PolScope's retardance, orientation and orientation_color images (and PPM's `.biref` / `.sum`) used to stitch one after another once the channel merge had finished, although they come from their own tile folders and read neither the per-channel files nor the merge. They now go on the same pool as the channels or angles, bounded by **Stitching concurrency**, queued behind them, so they start as soon as a slot frees and may still be stitching while the merge runs. Each is added to the project as it finishes (the entries reserved for them hold their place in the list, so names and order do not depend on which finishes first); the merged image is added when the merge ends, and the job is done only when all of them are. Registration solution, flips, file names, metadata and failure handling are unchanged, and a failed derived output still leaves the others and the merge. The stitching queue window and the acquisition progress window now show how many channels (or angles) and derived outputs are done and which are still stitching. On a 5-state LC-PolScope run with the default concurrency of 4 this removes the serial tail of three full-size stitches after the merge (estimated 1.2 to 2.6 hours on the 2026-11-02 run). The merge can now run while up to that many derived stitches do, so memory peaks higher than before during that phase.
 
 - **The bug report dialog asks for a way to reach you first.** Without a GitHub username a
