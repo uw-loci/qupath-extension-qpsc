@@ -26,3 +26,4 @@ Docs_MultiSlide_StageMap.png	195c3bbbc1ef788b0490481037c777263bb3eb3a	2026-11-02
 Docs_AcquisitionWorkflowProgress.png	74c3465671b706134f8ebd58baeac100455b75ae	2026-11-02	Marked current 2026-11-02: the flagged lines changed only variable names (glossary unit-suffix renames, 05ee3284); the text on screen is the same
 Docs_BoundedAcquisition.png	74c3465671b706134f8ebd58baeac100455b75ae	2026-11-02	Marked current 2026-11-02: the flagged lines changed only variable names (glossary unit-suffix renames, 05ee3284); the text on screen is the same
 Docs_CameraControl.png	74c3465671b706134f8ebd58baeac100455b75ae	2026-11-02	Marked current 2026-11-02: the flagged lines changed only variable names (glossary unit-suffix renames, 05ee3284); the text on screen is the same
+Docs_MultiSlide_BatchPanel.png	7abed17d1f18211373b8f19e7a6d21ff7bccf3e6	2026-11-05	Removed the Force Camera View checkbox from Advanced / SIFT settings, which is collapsed in this figure
