@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Fixed
+
+- **The Stage Map is in Camera View while you pick refinement and alignment tiles.** It used to switch only during a multi-slide batch, and in multi-tile refinement only after the first point's stage move and autofocus had finished, so the tile choice and the whole focus happened in whatever view the map was in. It now switches when single- or multi-tile refinement opens, at every multi-tile **Select tile** before the stage moves, when the stage arrives, and when manual alignment starts, in single-slide workflows as well. The **Force Camera View on alignment start** setting still turns it off. The zoom to the tissue box stays multi-slide only.
+
 ### Added
 
 - **Stitch derived outputs concurrently (preference, default on).** In Edit > Preferences > QPSC, beside **Stitching concurrency**. On, derived outputs (LC-PolScope retardance, orientation and orientation_color; PPM `.biref` / `.sum`) stitch alongside the channels or angles and beside the channel merge, as they have since they moved onto the channels' pool. Off, they wait until the merge (or the last angle) is done and then stitch on the same pool, up to **Stitching concurrency** at once, with the same registration, flips, project entries and failure handling; the merge runs alone. For when the computer's memory or processors are needed for other work. The stitching queue window says `waiting for the merge: ...` while they are held.

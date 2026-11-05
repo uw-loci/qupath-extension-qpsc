@@ -234,6 +234,9 @@ public class MultiTileRefinement {
         CompletableFuture<SingleTileRefinement.RefinementResult> future = new CompletableFuture<>();
         // Forget the previous slide's focus points before measuring this one's.
         focusPointsThisRun.clear();
+        // Camera View before any tile is picked, so the operator chooses on a map oriented like
+        // the Live Viewer.
+        MultiSlideExistingImageWorkflow.ensureCameraView("multi-tile refinement start");
         logger.info(
                 "Starting multi-tile refinement (trustSift={}, threshold={}, annotations={})",
                 trustSift,
@@ -793,6 +796,10 @@ public class MultiTileRefinement {
 
             // Stage move is socket I/O: run off the FX thread. Then embed the shared
             // capture pane on the FX thread and let it drive SIFT / manual capture.
+            // Camera View for this point before the stage moves and focuses, not after: the
+            // operator watches the move and the autofocus on the map. Every point, since the
+            // operator may have switched views between points.
+            MultiSlideExistingImageWorkflow.ensureCameraView("multi-tile refinement point " + pointNumber);
             new Thread(
                             () -> {
                                 try {

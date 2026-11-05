@@ -7,6 +7,7 @@ import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.controller.MultiSlideExistingImageWorkflow;
 import qupath.ext.qpsc.controller.workflow.ReferenceTileSelector;
 import qupath.ext.qpsc.controller.workflow.SlotJumpAutofocus;
 import qupath.ext.qpsc.controller.workflow.WorkflowHelpers;
@@ -172,19 +173,13 @@ public class AffineTransformationController {
                         TransformationFunctions.setupAffineTransformation(macroPixelSizeUm, stageImage);
                 logger.info("Initial scaling transform: {}", scalingTransform);
 
-                // Multi-slide alignment-step start (slotJumpAssist == a slide-carrier slot jump):
-                // optionally drive the Stage Map to Camera View and zoom it to the green tissue box,
-                // per the Section-D toggles. Best-effort: no-ops if the Stage Map is closed / no box
-                // is set. Standalone alignment (slotJumpAssist == false) is untouched.
-                // TODO(increment: align-start-hook): a dedicated per-slot alignment-start callback in
-                // the multi-slide panel would be a cleaner trigger than this shared-controller hook.
-                if (slotJumpAssist) {
-                    if (PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart()) {
-                        StageMapWindow.forceCameraView();
-                    }
-                    if (PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart()) {
-                        StageMapWindow.zoomToBoundingBoxPreview();
-                    }
+                // Alignment-step start: Camera View in every alignment, so the reference tiles are
+                // picked on a map oriented like the Live Viewer. The zoom to the green tissue box
+                // only on a multi-slide slot jump (slotJumpAssist), where that box is the slot's.
+                // Best-effort: no-ops if the Stage Map is closed / no box is set.
+                MultiSlideExistingImageWorkflow.ensureCameraView("manual alignment start");
+                if (slotJumpAssist && PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart()) {
+                    StageMapWindow.zoomToBoundingBoxPreview();
                 }
 
                 // 2. Prompt user to select a reference tile

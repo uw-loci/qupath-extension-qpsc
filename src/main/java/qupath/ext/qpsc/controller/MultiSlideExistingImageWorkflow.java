@@ -172,33 +172,39 @@ public final class MultiSlideExistingImageWorkflow {
     }
 
     /**
-     * Applies the multi-slide "alignment start" Stage Map view assists -- force Camera View and
-     * zoom to the tissue box -- per the Advanced / SIFT-settings toggles, but ONLY while a
-     * multi-slide batch is active (an intended slot entry is set). The manual landmark path
-     * (AffineTransformationController) already does this on its slot jump; the green-box + preset
-     * flow instead drives the stage in the single-/multi-tile REFINEMENT step, so those call this
-     * when the operator arrives at a refinement tile. Best-effort: no-op for standalone
-     * single-slide refinement, when the Stage Map is closed, or when no tissue box is set. Must be
-     * called on the FX thread.
+     * Puts the Stage Map in Camera View for a tile-selection or refinement step, in every
+     * workflow (single-slide, multi-slide, manual alignment), so the map is oriented like the
+     * Live Viewer the operator is matching against. Governed by the "Force Camera View on
+     * alignment start" setting (default on). Call it BEFORE the operator picks a tile, not only
+     * once the stage has arrived: a switch that waited for the move and autofocus left the tile
+     * choice and the whole focus in Stage View. Best-effort and safe from any thread; a no-op
+     * when the Stage Map is closed.
      */
-    public static void applyAlignStartViewAssists() {
-        if (intendedSlotEntry == null) {
-            // Not in a multi-slide batch -- leave the Stage Map view as the user set it.
-            // Logged because every no-op below is otherwise invisible: when the Stage Map does
-            // not switch to Camera View the operator sees a feature that "stopped working", with
-            // nothing in the log to say which of the four reasons it was.
-            logger.debug("Align-start view assists skipped: no multi-slide batch is active");
+    public static void ensureCameraView(String step) {
+        if (!PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart()) {
+            // Logged: silence here reads to the operator as "Camera View stopped working".
+            logger.info("Stage Map left in its current view at {}: 'Force Camera View' is off", step);
             return;
         }
-        boolean forceCameraView = PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart();
-        boolean zoomToTissue = PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart();
-        logger.info(
-                "Align-start view assists: forceCameraView={}, zoomToTissue={} (Advanced / SIFT settings)",
-                forceCameraView,
-                zoomToTissue);
-        if (forceCameraView) {
-            StageMapWindow.forceCameraView();
+        logger.info("Stage Map to Camera View at {}", step);
+        StageMapWindow.forceCameraView();
+    }
+
+    /**
+     * The alignment-start view assists: Camera View ({@link #ensureCameraView}) in every
+     * workflow, and, during a multi-slide batch only, a zoom to the slot's tissue box per the
+     * "Zoom Stage Map to tissue on alignment start" setting. The zoom is batch-only because the
+     * tissue box is the batch's slot preview; a single-slide run keeps the operator's zoom. Safe
+     * from any thread.
+     */
+    public static void applyAlignStartViewAssists() {
+        ensureCameraView("alignment start");
+        if (intendedSlotEntry == null) {
+            logger.debug("Zoom to tissue skipped: no multi-slide batch is active");
+            return;
         }
+        boolean zoomToTissue = PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart();
+        logger.info("Alignment start in a multi-slide batch: zoomToTissue={}", zoomToTissue);
         if (zoomToTissue) {
             StageMapWindow.zoomToBoundingBoxPreview();
         }
@@ -1013,7 +1019,9 @@ public final class MultiSlideExistingImageWorkflow {
         CheckBox forceCamCheck = new CheckBox("Force Camera View on alignment start");
         forceCamCheck.setSelected(PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart());
         forceCamCheck.setTooltip(
-                new Tooltip("When an alignment step begins, switch the Stage Map to Camera View automatically."));
+                new Tooltip("Switch the Stage Map to Camera View whenever an alignment or refinement step asks\n"
+                        + "for a tile, in every workflow (not only multi-slide), so the map matches the\n"
+                        + "Live Viewer."));
         forceCamCheck
                 .selectedProperty()
                 .addListener((o, ov, nv) -> PersistentPreferences.setMultiSlideForceCameraViewOnAlignStart(nv));

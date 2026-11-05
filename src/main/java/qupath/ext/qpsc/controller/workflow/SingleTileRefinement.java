@@ -163,6 +163,10 @@ public class SingleTileRefinement {
 
         String classSummary = summarizeAnnotationClasses(annotations);
 
+        // Camera View before the tile is picked, so the operator chooses it on a map oriented
+        // like the Live Viewer (the full assists run again when the stage arrives).
+        MultiSlideExistingImageWorkflow.ensureCameraView("single-tile refinement tile selection");
+
         // Select tile for refinement. During an automatic multi-slide batch the tile is picked
         // by ReferenceTileSelector instead of by a click -- the selection dialog's Confirm is
         // created disabled and only enables on a viewer selection, so a countdown cannot drive
@@ -366,10 +370,10 @@ public class SingleTileRefinement {
             double confidenceThreshold)
             throws Exception {
 
-        // Multi-slide alignment-step start: force the Stage Map to Camera View and zoom to the
-        // tissue box per the batch toggles (no-op outside a multi-slide batch / when the map is
-        // closed). The green-box + preset flow drives the stage HERE (not via the manual landmark
-        // controller), so this is the alignment-start hook for it.
+        // Alignment-step start: Camera View again (the operator may have toggled it while the
+        // stage moved) and, in a multi-slide batch, the zoom to the tissue box. The green-box +
+        // preset flow drives the stage HERE (not via the manual landmark controller), so this is
+        // the alignment-start hook for it.
         MultiSlideExistingImageWorkflow.applyAlignStartViewAssists();
 
         // Show the SIFT search range on the Stage Map (no-op if it isn't open)

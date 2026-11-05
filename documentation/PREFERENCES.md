@@ -52,7 +52,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Setup-pass automation](#setup-pass-automation) | Choice | MANUAL | How much of the multi-slide setup pass runs without a human |
 | [Reuse saved alignment (TESTING ONLY)](#reuse-saved-alignment-testing-only) | Boolean | OFF | Multi-slide batch alignment reuse (UNSAFE, testing only) |
 | [Autofocus on slot jump](#autofocus-on-slot-jump) | Boolean | ON | Auto-focus after stage reaches each slot during multi-slide batch |
-| [Force Camera View on alignment start](#force-camera-view-on-alignment-start) | Boolean | ON | Switch Stage Map to Camera View when multi-slide alignment starts |
+| [Force Camera View on alignment start](#force-camera-view-on-alignment-start) | Boolean | ON | Switch Stage Map to Camera View at every alignment and refinement tile selection |
 | [Zoom Stage Map to tissue on alignment start](#zoom-stage-map-to-tissue-on-alignment-start) | Boolean | ON | Auto-zoom Stage Map to green tissue box at alignment start |
 | [Image name includes: Objective](#image-name-includes-objective) | Boolean | OFF | Add objective to filename |
 | [Image name includes: Modality](#image-name-includes-modality) | Boolean | OFF | Add modality to filename |
@@ -965,7 +965,7 @@ The autofocus-on-slot-jump system reuses the existing Live Viewer autofocus, rea
 | Requires Restart | No |
 
 **Description:**
-When enabled during multi-slide batch acquisition, the Stage Map automatically switches to Camera View (showing the image as the microscope sees it, with optical flips applied) when each slot's alignment step begins. This eliminates the need to manually toggle the Camera View checkbox before starting to align.
+When enabled, the Stage Map switches to Camera View (oriented like the Live Viewer, with the camera orientation applied) whenever an alignment or refinement step asks for a tile, in every workflow, not only multi-slide batches: when single-tile or multi-tile refinement opens (before you pick a tile), at each multi-tile **Select tile** (before the stage moves and autofocuses), when the stage arrives at a refinement tile, and when manual 3-point alignment starts. If you switch to Stage View in between, the next of these steps switches back. The setting is in the multi-slide panel's Advanced / SIFT settings; it is on by default. The zoom to the tissue box (the next setting) stays multi-slide only.
 
 **When to Enable:**
 - You always align in Camera View on your scope
