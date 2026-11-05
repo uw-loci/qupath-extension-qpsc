@@ -23,7 +23,8 @@ import qupath.lib.gui.QuPathGUI;
  * Cancel only on the Live Viewer's Autofocus button, and with the Live Viewer closed there was
  * none anywhere (the refinement dialog opens only once the focus is done).
  *
- * <p>Shows what the search is for, its live curve ({@link AutofocusCurvePane}), and
+ * <p>Shows what the search is for, its live curve and the stage Z while it scans
+ * ({@link AutofocusCurvePane}), and
  * <b>Cancel autofocus</b>; the window's X does the same. Canceling stops the search, the
  * microscope returns Z to where it started, and the workflow carries on as after a failed focus.
  * Show and close from any thread.
@@ -82,7 +83,9 @@ public final class AutofocusCancelWindow {
                 new Label("Cancel stops the search and returns Z to where it started; you can then focus by hand.");
         hint.setWrapText(true);
         hint.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
-        AutofocusCurvePane curve = new AutofocusCurvePane();
+        // The live stage Z: on a slide change the approach sweep runs ~40 s before its first
+        // scores arrive, and without a moving number the window looked stuck.
+        AutofocusCurvePane curve = AutofocusCurvePane.withLiveZ(AutofocusCurvePane.STAGE_Z);
         Button cancel = new Button("Cancel autofocus");
         cancel.setDefaultButton(false);
         Runnable doCancel = () -> {
@@ -109,7 +112,10 @@ public final class AutofocusCancelWindow {
 
         Runnable unsubscribe = AutofocusFeed.getInstance().subscribe(curve::accept);
         s.showingProperty().addListener((obs, was, showing) -> {
-            if (!showing) unsubscribe.run();
+            if (!showing) {
+                unsubscribe.run();
+                curve.dispose();
+            }
         });
         stage.set(s);
         s.show();

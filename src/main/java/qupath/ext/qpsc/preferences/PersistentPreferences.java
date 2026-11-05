@@ -131,22 +131,6 @@ public class PersistentPreferences {
         return multiSlideAutofocusOnJumpProperty;
     }
 
-    /** When true, an alignment step start switches the Stage Map to Camera View automatically. */
-    private static final BooleanProperty multiSlideForceCameraViewOnAlignStartProperty =
-            PathPrefs.createPersistentPreference("multiSlideForceCameraViewOnAlignStart", true);
-
-    public static boolean isMultiSlideForceCameraViewOnAlignStart() {
-        return multiSlideForceCameraViewOnAlignStartProperty.get();
-    }
-
-    public static void setMultiSlideForceCameraViewOnAlignStart(boolean enabled) {
-        multiSlideForceCameraViewOnAlignStartProperty.set(enabled);
-    }
-
-    public static BooleanProperty multiSlideForceCameraViewOnAlignStartProperty() {
-        return multiSlideForceCameraViewOnAlignStartProperty;
-    }
-
     /** When true, an alignment step start zooms the Stage Map to the green tissue box automatically. */
     private static final BooleanProperty multiSlideZoomToTissueOnAlignStartProperty =
             PathPrefs.createPersistentPreference("multiSlideZoomToTissueOnAlignStart", true);

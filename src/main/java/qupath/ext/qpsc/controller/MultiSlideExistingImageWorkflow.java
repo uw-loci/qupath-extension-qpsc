@@ -174,18 +174,13 @@ public final class MultiSlideExistingImageWorkflow {
     /**
      * Puts the Stage Map in Camera View for a tile-selection or refinement step, in every
      * workflow (single-slide, multi-slide, manual alignment), so the map is oriented like the
-     * Live Viewer the operator is matching against. Governed by the "Force Camera View on
-     * alignment start" setting (default on). Call it BEFORE the operator picks a tile, not only
+     * Live Viewer the operator is matching against. Always: tiles are matched against the live
+     * camera, so Stage View during these steps only gets in the way. Call it BEFORE the operator picks a tile, not only
      * once the stage has arrived: a switch that waited for the move and autofocus left the tile
      * choice and the whole focus in Stage View. Best-effort and safe from any thread; a no-op
      * when the Stage Map is closed.
      */
     public static void ensureCameraView(String step) {
-        if (!PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart()) {
-            // Logged: silence here reads to the operator as "Camera View stopped working".
-            logger.info("Stage Map left in its current view at {}: 'Force Camera View' is off", step);
-            return;
-        }
         logger.info("Stage Map to Camera View at {}", step);
         StageMapWindow.forceCameraView();
     }
@@ -1016,16 +1011,6 @@ public final class MultiSlideExistingImageWorkflow {
                 .selectedProperty()
                 .addListener((o, ov, nv) -> PersistentPreferences.setMultiSlideAutofocusOnJump(nv));
 
-        CheckBox forceCamCheck = new CheckBox("Force Camera View on alignment start");
-        forceCamCheck.setSelected(PersistentPreferences.isMultiSlideForceCameraViewOnAlignStart());
-        forceCamCheck.setTooltip(
-                new Tooltip("Switch the Stage Map to Camera View whenever an alignment or refinement step asks\n"
-                        + "for a tile, in every workflow (not only multi-slide), so the map matches the\n"
-                        + "Live Viewer."));
-        forceCamCheck
-                .selectedProperty()
-                .addListener((o, ov, nv) -> PersistentPreferences.setMultiSlideForceCameraViewOnAlignStart(nv));
-
         CheckBox zoomOnStartCheck = new CheckBox("Zoom Stage Map to tissue on alignment start");
         zoomOnStartCheck.setSelected(PersistentPreferences.isMultiSlideZoomToTissueOnAlignStart());
         zoomOnStartCheck.setTooltip(new Tooltip(
@@ -1054,8 +1039,7 @@ public final class MultiSlideExistingImageWorkflow {
         HBox confidenceRow = new HBox(8, confidenceLabel, confidenceSpinner);
         confidenceRow.setAlignment(Pos.CENTER_LEFT);
 
-        VBox advancedBox = new VBox(
-                8, afOnJumpCheck, forceCamCheck, zoomOnStartCheck, new Separator(), trustSiftCheck, confidenceRow);
+        VBox advancedBox = new VBox(8, afOnJumpCheck, zoomOnStartCheck, new Separator(), trustSiftCheck, confidenceRow);
         TitledPane advancedSection = SectionBuilder.section("Advanced / SIFT settings", false, advancedBox);
         advancedSection.setTooltip(new Tooltip("Autofocus, camera-view, zoom, and SIFT auto-align options."));
 

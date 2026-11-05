@@ -1,8 +1,11 @@
 package qupath.ext.qpsc.ui.focus;
 
+import java.beans.PropertyChangeListener;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
+import java.util.function.DoubleConsumer;
+import javafx.application.Platform;
 import javafx.geometry.Insets;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
@@ -12,6 +15,7 @@ import javafx.scene.shape.Circle;
 import javafx.scene.shape.Line;
 import javafx.scene.shape.Polyline;
 import javafx.scene.shape.Rectangle;
+import qupath.ext.qpsc.acquisition.StagePositionManager;
 import qupath.ext.qpsc.service.autofocus.AutofocusEvent;
 import qupath.ext.qpsc.ui.ThemeColors;
 
@@ -22,6 +26,11 @@ import qupath.ext.qpsc.ui.ThemeColors;
  * <p>Feed it {@link AutofocusEvent}s on the FX thread with {@link #accept}; it keeps showing the
  * last search's result until the next one starts. Drawn with shapes rather than a canvas so the
  * colors follow the QuPath theme.
+ *
+ * <p>Optionally shows where the stage is while a search runs ({@link #withLiveZ}). The server
+ * scores a streaming sweep's frames only once the sweep has finished (each frame's Z comes from a
+ * position trace that is complete only then), so the curve arrives a sweep at a time; on a slide
+ * change the approach sweep alone takes about 40 s. Without a moving Z the window looks stuck.
  */
 public class AutofocusCurvePane extends VBox {
 
@@ -33,13 +42,64 @@ public class AutofocusCurvePane extends VBox {
     private final Label zLowLabel = new Label("");
     private final Label zHighLabel = new Label("");
     private final List<double[]> samples = new ArrayList<>(); // {z, score}
+    private final Label liveZLabel = new Label("");
+
+    /** Stage Z updates while a search runs; null when this pane does not show them. */
+    private final ZFeed liveZ;
+    /** Stops the live Z updates; non-null only while a search is running. */
+    private Runnable stopLiveZ;
 
     private AutofocusEvent start;
     private Double resultZ;
     private boolean resultOk;
 
+    /**
+     * Stage Z, pushed to a listener from any thread.
+     *
+     * <p>Returns the action that stops the updates.
+     */
+    @FunctionalInterface
+    public interface ZFeed {
+        Runnable subscribe(DoubleConsumer onZ);
+    }
+
+    /**
+     * The Z the Live Viewer also reads: {@link StagePositionManager}, which polls only while
+     * someone listens and shares one poll among all of them. Sends the last known Z at once.
+     */
+    public static final ZFeed STAGE_Z = onZ -> {
+        StagePositionManager manager = StagePositionManager.getInstance();
+        PropertyChangeListener listener = evt -> {
+            if (StagePositionManager.PROP_POS_Z.equals(evt.getPropertyName())
+                    && evt.getNewValue() instanceof Double z
+                    && Double.isFinite(z)) {
+                onZ.accept(z);
+            }
+        };
+        manager.addPropertyChangeListener(listener);
+        double now = manager.getZ();
+        if (Double.isFinite(now)) {
+            onZ.accept(now);
+        }
+        return () -> manager.removePropertyChangeListener(listener);
+    };
+
+    /** A pane that shows the search's events only. */
     public AutofocusCurvePane() {
+        this(null);
+    }
+
+    /**
+     * A pane that also shows the stage Z while a search runs, read from {@code liveZ} only between
+     * the search's start and end. Call {@link #dispose()} when the pane goes away.
+     */
+    public static AutofocusCurvePane withLiveZ(ZFeed liveZ) {
+        return new AutofocusCurvePane(liveZ);
+    }
+
+    private AutofocusCurvePane(ZFeed liveZ) {
         super(4);
+        this.liveZ = liveZ;
         Label header = new Label("Autofocus");
         header.setStyle("-fx-font-weight: bold; -fx-font-size: 11px;");
         statusLabel.setWrapText(true);
@@ -56,8 +116,60 @@ public class AutofocusCurvePane extends VBox {
         axis.setLeft(zLowLabel);
         axis.setRight(zHighLabel);
         axis.setMaxWidth(PLOT_WIDTH);
+        liveZLabel.setWrapText(true);
+        liveZLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.INFO + ";");
+        liveZLabel.setVisible(false);
+        liveZLabel.setManaged(false);
         setPadding(new Insets(2, 0, 2, 0));
-        getChildren().addAll(header, statusLabel, plot, axis);
+        getChildren().addAll(header, statusLabel, liveZLabel, plot, axis);
+    }
+
+    /** Stops the live Z updates, if any. Safe to call more than once (FX thread). */
+    public void dispose() {
+        endLiveZ();
+    }
+
+    /** The scanning line for a stage at {@code z}, or before its position is known (NaN). */
+    static String scanningText(double z, boolean haveCurve) {
+        String where = Double.isFinite(z) ? String.format("stage at Z %.2f um", z) : "reading the stage position";
+        return "Scanning... " + where + ". "
+                + (haveCurve
+                        ? "The curve grows when each sweep ends."
+                        : "The focus curve appears when the sweep ends.");
+    }
+
+    private void beginLiveZ() {
+        if (liveZ == null) {
+            return;
+        }
+        liveZLabel.setText(scanningText(Double.NaN, false));
+        liveZLabel.setVisible(true);
+        liveZLabel.setManaged(true);
+        if (stopLiveZ == null) {
+            stopLiveZ = liveZ.subscribe(z -> {
+                if (Platform.isFxApplicationThread()) {
+                    showZ(z);
+                } else {
+                    Platform.runLater(() -> showZ(z));
+                }
+            });
+        }
+    }
+
+    private void showZ(double z) {
+        if (stopLiveZ != null) {
+            liveZLabel.setText(scanningText(z, !samples.isEmpty()));
+        }
+    }
+
+    private void endLiveZ() {
+        Runnable stop = stopLiveZ;
+        stopLiveZ = null;
+        if (stop != null) {
+            stop.run();
+        }
+        liveZLabel.setVisible(false);
+        liveZLabel.setManaged(false);
     }
 
     /** Takes one event of the feed (FX thread). */
@@ -69,6 +181,7 @@ public class AutofocusCurvePane extends VBox {
             statusLabel.setText(
                     e.describe() + ": searching" + (e.z0 != null ? String.format(" from Z %.2f", e.z0) : ""));
             statusLabel.setStyle("-fx-font-size: 10px;");
+            beginLiveZ();
         } else if (e.isSample()) {
             if (e.z == null || e.score == null) return;
             samples.add(new double[] {e.z, e.score});
@@ -78,6 +191,7 @@ public class AutofocusCurvePane extends VBox {
                     : String.valueOf(samples.size());
             statusLabel.setText(String.format("%s: step %s, Z %.2f", what, steps, e.z));
         } else if (e.isEnd()) {
+            endLiveZ();
             resultZ = e.z;
             resultOk = "ok".equals(e.status);
             statusLabel.setText(AutofocusEvent.describeOutcome(start, e));
