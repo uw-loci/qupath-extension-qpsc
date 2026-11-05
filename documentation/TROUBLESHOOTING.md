@@ -531,7 +531,7 @@ If matching still fails on a tile that visually overlaps the camera's live view:
 
 #### Q: Auto-Align (SIFT) fails when the live view is far from the target tile
 
-**A:** SIFT is a *refinement*, not a search. The WSI region pulled around the target tile extends only ~160 um beyond the tile (configurable via `Search margin (um)` in the SIFT Settings dialog). If the live view doesn't overlap the WSI region at all, there's nothing to match against and SIFT will report `insufficient features` or `matching failed`.
+**A:** SIFT is a *refinement*, not a search. The WSI region pulled around the target tile extends only ~160 um beyond the tile (configurable via `Search margin (um)` in the SIFT Settings dialog). Auto-Align first tries a smaller region, about half a field beyond the tile, and reads the configured one only when that finds nothing. If the live view doesn't overlap the WSI region at all, there's nothing to match against and SIFT will report `insufficient features` or `matching failed`.
 
 Drive the stage roughly close (a few hundred microns is enough) using the joystick, Live Viewer click-to-center, or the initial transform estimate before clicking SIFT. If you genuinely need a wider capture range, raise the search margin -- but matching cost grows with margin squared, so 300-400 um is a reasonable upper bound.
 
