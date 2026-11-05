@@ -419,7 +419,10 @@ for unattended acquisition:
   (Z is restored to the pre-scan position on cancel). Single-tile refinement runs
   the same autofocus before its dialog opens. Every such scan also opens a small
   **Autofocus** window with the live focus curve and a **Cancel autofocus** button,
-  so it can be canceled even with the Live Viewer closed.
+  so it can be canceled even with the Live Viewer closed. Until the sweep ends the
+  window shows "Scanning... stage at Z ..." with the stage's current Z, updated about
+  twice a second, because the focus curve appears only when each sweep finishes (on
+  a slide change the approach sweep can take about 40 s).
 
 The setup pass writes a fresh per-slide alignment JSON specific to that slide's
 position in the current holder, and records which stage insert it was made on.
