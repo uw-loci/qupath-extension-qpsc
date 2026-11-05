@@ -2,6 +2,7 @@ package qupath.ext.qpsc.ui.alignment;
 
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.io.IOException;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -168,18 +169,6 @@ public final class SiftAutoAlignHelper {
                     + "\"GETPXSZ: Blocked - server not configured\").");
         }
 
-        double marginPx = marginUm / wsiPixelSize;
-
-        double tileX = tile.getROI().getBoundsX();
-        double tileY = tile.getROI().getBoundsY();
-        double tileW = tile.getROI().getBoundsWidth();
-        double tileH = tile.getROI().getBoundsHeight();
-
-        int regionX = Math.max(0, (int) (tileX - marginPx));
-        int regionY = Math.max(0, (int) (tileY - marginPx));
-        int regionW = Math.min(server.getWidth() - regionX, (int) (tileW + 2 * marginPx));
-        int regionH = Math.min(server.getHeight() - regionY, (int) (tileH + 2 * marginPx));
-
         // Read the WSI region at the resolution SIFT will actually use, not full-res.
         // The server downscales both images to fine_target = max(micro_px, wsi_px,
         // min_px) for the fine pass (coarser for the coarse pass), so reading full-res
@@ -191,36 +180,20 @@ public final class SiftAutoAlignHelper {
         double siftMinPx = PersistentPreferences.getSiftMinPixelSize();
         double siftTargetPx = Math.max(microPixelSize, Math.max(wsiPixelSize, siftMinPx));
         double readDownsample = Math.max(1.0, siftTargetPx / wsiPixelSize);
-        logger.info(
-                "Extracting WSI region: ({}, {}) {}x{} full-res px (margin={}um={}px), read at downsample {} "
-                        + "(SIFT target {} um/px)",
-                regionX,
-                regionY,
-                regionW,
-                regionH,
-                marginUm,
-                (int) marginPx,
-                String.format("%.2f", readDownsample),
-                String.format("%.3f", siftTargetPx));
 
-        RegionRequest request =
-                RegionRequest.createInstance(server.getPath(), readDownsample, regionX, regionY, regionW, regionH);
-        BufferedImage wsiRegion = server.readRegion(request);
-        // Exact effective pixel size of the returned (downsampled) region, derived from
-        // its actual dimensions so the um offset is exact regardless of readRegion
-        // rounding. Sent to the server as --wsi-px in place of the full-res value.
-        double effectiveWsiPx =
-                wsiRegion.getWidth() > 0 ? (double) regionW / wsiRegion.getWidth() * wsiPixelSize : wsiPixelSize;
-
-        File tempFile = File.createTempFile("sift_wsi_region_", ".png");
-        tempFile.deleteOnExit();
-        ImageIO.write(wsiRegion, "PNG", tempFile);
-        logger.info(
-                "Saved WSI region to temp file: {} ({}x{}, effective {} um/px)",
-                tempFile.getAbsolutePath(),
-                wsiRegion.getWidth(),
-                wsiRegion.getHeight(),
-                String.format("%.4f", effectiveWsiPx));
+        // Fast first try: a small region around the tile, matched at the fine resolution only.
+        // Most matches land within a few tens of micrometres of the prediction, and this region
+        // reads and matches in about a second, against ~4 s for the configured search (a 1 mm
+        // margin is a 2.3 mm region to read, and at 20x its coarse pass sees a postage stamp of
+        // the camera image and often falls through to a slow full-resolution pass). The
+        // configured search runs only when the fast one finds nothing.
+        double tileWidthUm = tile.getROI().getBoundsWidth() * wsiPixelSize;
+        double tileHeightUm = tile.getROI().getBoundsHeight() * wsiPixelSize;
+        double fastMarginUm = fastSearchMarginUm(tileWidthUm, tileHeightUm, marginUm);
+        SearchRegion fastRegion = fastMarginUm > 0
+                ? SearchRegion.read(server, tile, fastMarginUm, readDownsample, wsiPixelSize, siftTargetPx)
+                : null;
+        SearchRegion[] fullRegion = {null};
 
         ProjectImageEntry<BufferedImage> entry = gui.getProject() != null && gui.getImageData() != null
                 ? gui.getProject().getEntry(gui.getImageData())
@@ -306,17 +279,16 @@ public final class SiftAutoAlignHelper {
             boolean coarseToFine = PersistentPreferences.isSiftCoarseToFineEnabled();
             double coarsePx = PersistentPreferences.getSiftCoarsePixelSizeUm();
             String rgbConversion = PersistentPreferences.getSiftRgbConversion();
-            String referenceImage = tempFile.getAbsolutePath();
+            double fastAcceptConfidence = PersistentPreferences.getSiftConfidenceThreshold();
             boolean serverFlipX = flipX;
             boolean serverFlipY = flipY;
-            double centerShiftX = regionCenterShiftUm(regionX, regionW, tileX, tileW, wsiPixelSize, serverFlipX);
-            double centerShiftY = regionCenterShiftUm(regionY, regionH, tileY, tileH, wsiPixelSize, serverFlipY);
-            SiftMoveLoop.Meter meter = () -> {
+            // One SIFTAL against one region. coarse = whether the server may run its coarse pass.
+            SiftAttempt attempt = (region, coarse) -> {
                 String response = mc.getSocketClient()
                         .siftAutoAlign(
-                                referenceImage,
+                                region.file().getAbsolutePath(),
                                 microPixelSize,
-                                effectiveWsiPx,
+                                region.effectiveWsiPx(),
                                 serverFlipX,
                                 serverFlipY,
                                 minPx,
@@ -329,18 +301,50 @@ public final class SiftAutoAlignHelper {
                                 pctHigh,
                                 claheEnabled,
                                 claheClip,
-                                coarseToFine,
+                                coarse,
                                 coarsePx,
                                 rgbConversion);
                 if (!response.startsWith("SUCCESS:")) {
-                    logger.warn("SIFT auto-align did not succeed: {}", response);
+                    logger.info("SIFT (margin {} um) found no match: {}", region.marginUm(), response);
                     return null;
                 }
                 double[] parsed = parseSiftResponse(response);
                 // The server measures from the center of the region it was sent
-                parsed[0] += centerShiftX;
-                parsed[1] += centerShiftY;
+                parsed[0] += region.centerShiftUm(serverFlipX)[0];
+                parsed[1] += region.centerShiftUm(serverFlipY)[1];
                 return parsed;
+            };
+            // Fast region first, then the configured one (read only when needed). The move loop
+            // re-measures through this too, and after a move the tile is near the center, so the
+            // checks are fast as well.
+            SiftMoveLoop.Meter meter = () -> {
+                if (fastRegion != null) {
+                    long t0 = System.nanoTime();
+                    double[] fast = attempt.match(fastRegion, false);
+                    long ms = (System.nanoTime() - t0) / 1_000_000;
+                    if (fast != null && fast[3] >= fastAcceptConfidence) {
+                        logger.info(
+                                "SIFT fast search (margin {} um) matched in {} ms: confidence {}",
+                                String.format("%.0f", fastRegion.marginUm()),
+                                ms,
+                                String.format("%.2f", fast[3]));
+                        return fast;
+                    }
+                    logger.info(
+                            "SIFT fast search (margin {} um) {} in {} ms; trying the configured search (margin {} um)",
+                            String.format("%.0f", fastRegion.marginUm()),
+                            fast == null
+                                    ? "found no match"
+                                    : "matched below the confidence threshold ("
+                                            + String.format("%.2f < %.2f", fast[3], fastAcceptConfidence) + ")",
+                            ms,
+                            String.format("%.0f", marginUm));
+                }
+                if (fullRegion[0] == null) {
+                    fullRegion[0] =
+                            SearchRegion.read(server, tile, marginUm, readDownsample, wsiPixelSize, siftTargetPx);
+                }
+                return attempt.match(fullRegion[0], coarseToFine);
             };
 
             double[] matched = meter.measure();
@@ -352,12 +356,9 @@ public final class SiftAutoAlignHelper {
             double inliers = matched[2];
             double confidence = matched[3];
             logger.info(
-                    "SIFT offset: ({}, {}) um from the tile (region center is ({}, {}) um from it), "
-                            + "inliers={}, confidence={}",
+                    "SIFT offset: ({}, {}) um from the tile, inliers={}, confidence={}",
                     offsetX,
                     offsetY,
-                    centerShiftX,
-                    centerShiftY,
                     (int) inliers,
                     confidence);
 
@@ -405,8 +406,130 @@ public final class SiftAutoAlignHelper {
 
         } finally {
             mc.restoreLiveViewState(liveState);
-            if (!tempFile.delete()) {
-                logger.debug("Could not delete temp file: {}", tempFile);
+            if (fastRegion != null) {
+                fastRegion.delete();
+            }
+            if (fullRegion[0] != null) {
+                fullRegion[0].delete();
+            }
+        }
+    }
+
+    /** One SIFT request against one search region. */
+    @FunctionalInterface
+    private interface SiftAttempt {
+        double[] match(SearchRegion region, boolean coarseToFine) throws Exception;
+    }
+
+    /**
+     * Half-width added around the tile for the fast first search: half the tile's larger side, so
+     * the region is twice the field of view and any landing within half a field of the prediction
+     * is inside it. That is the size of the server's own fine-pass crop, which matches in well
+     * under a second. Returns 0 (no fast search) when it would not be clearly smaller than the
+     * configured margin, since the configured search then costs about the same.
+     */
+    static double fastSearchMarginUm(double tileWidthUm, double tileHeightUm, double configuredMarginUm) {
+        double fast = 0.5 * Math.max(tileWidthUm, tileHeightUm);
+        if (!(fast > 0) || fast >= FAST_SEARCH_MAX_FRACTION * configuredMarginUm) {
+            return 0;
+        }
+        return fast;
+    }
+
+    /** The fast search runs only when its margin is below this fraction of the configured one. */
+    static final double FAST_SEARCH_MAX_FRACTION = 0.75;
+
+    /**
+     * A WSI region around a tile, read at the SIFT resolution and written to a temporary PNG for
+     * the server.
+     *
+     * @param effectiveWsiPx exact pixel size of the written image (from its real dimensions)
+     */
+    private record SearchRegion(
+            File file,
+            double effectiveWsiPx,
+            double marginUm,
+            int regionX,
+            int regionY,
+            int regionW,
+            int regionH,
+            double tileX,
+            double tileY,
+            double tileW,
+            double tileH,
+            double wsiPixelSize) {
+
+        static SearchRegion read(
+                ImageServer<BufferedImage> server,
+                PathObject tile,
+                double marginUm,
+                double readDownsample,
+                double wsiPixelSize,
+                double siftTargetPx)
+                throws IOException {
+            double marginPx = marginUm / wsiPixelSize;
+            double tileX = tile.getROI().getBoundsX();
+            double tileY = tile.getROI().getBoundsY();
+            double tileW = tile.getROI().getBoundsWidth();
+            double tileH = tile.getROI().getBoundsHeight();
+            int regionX = Math.max(0, (int) (tileX - marginPx));
+            int regionY = Math.max(0, (int) (tileY - marginPx));
+            int regionW = Math.min(server.getWidth() - regionX, (int) (tileW + 2 * marginPx));
+            int regionH = Math.min(server.getHeight() - regionY, (int) (tileH + 2 * marginPx));
+            logger.info(
+                    "Extracting WSI region: ({}, {}) {}x{} full-res px (margin={}um={}px), read at downsample {} "
+                            + "(SIFT target {} um/px)",
+                    regionX,
+                    regionY,
+                    regionW,
+                    regionH,
+                    String.format("%.0f", marginUm),
+                    (int) marginPx,
+                    String.format("%.2f", readDownsample),
+                    String.format("%.3f", siftTargetPx));
+            RegionRequest request =
+                    RegionRequest.createInstance(server.getPath(), readDownsample, regionX, regionY, regionW, regionH);
+            BufferedImage wsiRegion = server.readRegion(request);
+            // Exact effective pixel size of the returned (downsampled) region, derived from its
+            // actual dimensions so the um offset is exact regardless of readRegion rounding. Sent
+            // to the server as --wsi-px in place of the full-res value.
+            double effectiveWsiPx =
+                    wsiRegion.getWidth() > 0 ? (double) regionW / wsiRegion.getWidth() * wsiPixelSize : wsiPixelSize;
+            File tempFile = File.createTempFile("sift_wsi_region_", ".png");
+            tempFile.deleteOnExit();
+            ImageIO.write(wsiRegion, "PNG", tempFile);
+            logger.info(
+                    "Saved WSI region to temp file: {} ({}x{}, effective {} um/px)",
+                    tempFile.getAbsolutePath(),
+                    wsiRegion.getWidth(),
+                    wsiRegion.getHeight(),
+                    String.format("%.4f", effectiveWsiPx));
+            return new SearchRegion(
+                    tempFile,
+                    effectiveWsiPx,
+                    marginUm,
+                    regionX,
+                    regionY,
+                    regionW,
+                    regionH,
+                    tileX,
+                    tileY,
+                    tileW,
+                    tileH,
+                    wsiPixelSize);
+        }
+
+        /** Offset of the region center from the tile center, um, per axis, in the server's frame. */
+        double[] centerShiftUm(boolean serverFlip) {
+            return new double[] {
+                regionCenterShiftUm(regionX, regionW, tileX, tileW, wsiPixelSize, serverFlip),
+                regionCenterShiftUm(regionY, regionH, tileY, tileH, wsiPixelSize, serverFlip)
+            };
+        }
+
+        void delete() {
+            if (!file.delete()) {
+                logger.debug("Could not delete temp file: {}", file);
             }
         }
     }

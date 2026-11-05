@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- **Auto-Align (SIFT) tries a fast search first.** Before the configured search, it matches against a region twice the field of view around the tile, at the fine resolution only, and keeps the result when it reaches the confidence threshold. On PPM at 20x with a 1 mm margin a match took about 4 s end to end, 1.3 s of it reading the 2.3 mm region from the slide image, and a coarse pass that missed fell through to a 6 s full-resolution pass; most matches were within 40 um of the prediction. The configured search, and **Search wider**, still run when the fast one finds nothing. Applies to the check after the stage move too. Not done when the configured margin is already about that small.
+
 ### Fixed
 
 - **The Stage Map is in Camera View while you pick refinement and alignment tiles.** It used to switch only during a multi-slide batch, and in multi-tile refinement only after the first point's stage move and autofocus had finished, so the tile choice and the whole focus happened in whatever view the map was in. It now switches when single- or multi-tile refinement opens, at every multi-tile **Select tile** before the stage moves, when the stage arrives, and when manual alignment starts, in single-slide workflows as well. The **Force Camera View on alignment start** setting still turns it off. The zoom to the tissue box stays multi-slide only.

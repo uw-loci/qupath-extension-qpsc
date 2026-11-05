@@ -130,7 +130,7 @@ The workflow first attempts the green-box + preset path, which re-detects the ti
 The slot-center seed (from holder calibration) speeds up multi-slide runs by moving the stage near the slide at the start of each alignment, so you drive a short distance to the tissue rather than navigating from scratch.
 
 **Auto-Align (SIFT)**:
-- Extracts a region from the WSI around the selected tile (with the configured search margin, default 160um).
+- Tries a fast search first: a region twice the field of view around the selected tile, matched at the fine resolution only; the server matched a crop this size in under a second in the October PPM logs, though stopping the Live Viewer for the snap adds about 1.5 s either way. Most landings are within a few tens of micrometres, so this usually finds the match. When it does not (or its confidence is below the threshold), it extracts the region with the configured search margin (default 160 um) and runs the full search; **Search wider** goes further. The log says which search matched and how long it took.
 - Snaps a microscope image and matches against the WSI region using SIFT feature detection.
 - Moves the stage onto the match, then matches again to confirm it landed. If an axis answered the opposite way, the correction uses the direction it measured; the log shows `SIFT verify` lines with each position and offset. A landing it cannot confirm is not auto-accepted.
 - Pixel size differences between the WSI and microscope are handled automatically (both images are rescaled to the lower resolution).
