@@ -35,8 +35,10 @@ import qupath.ext.qpsc.project.ImageNameGenerator;
 import qupath.ext.qpsc.project.ProjectEntryReservation;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.stitching.ChannelRegistrationSupport;
 import qupath.ext.qpsc.stitching.StitchOutputPlanner;
 import qupath.ext.qpsc.stitching.StitchingConfiguration;
+import qupath.ext.qpsc.stitching.TargetEta;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.acquisition.DualProgressDialog;
 import qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow;
@@ -627,13 +629,14 @@ public class StitchingHelper {
         // acquisition, recovery -- goes through the same gate and no path can
         // silently skip registration.
         StitchingRegistration.TargetStitcher<String> stitcher = (sub, mode, position, count) -> {
+            status.solveDone();
             status.started(sub);
             String out = stitchOne(
                     sub,
                     targetKind,
                     position,
                     count,
-                    withRegistrationMode(stitchParams, mode),
+                    withProgress(withRegistrationMode(stitchParams, mode), status),
                     tileBaseDir,
                     projectsFolder,
                     sampleName,
@@ -656,12 +659,13 @@ public class StitchingHelper {
         StitchingRegistration.Extras derived = new StitchingRegistration.Extras(
                 derivedDirs,
                 (dir, mode, position, count) -> {
+                    status.solveDone();
                     status.started(dir);
                     String out = stitchDerivedOne(
                             dir,
                             position,
                             count,
-                            withRegistrationMode(derivedParams, mode),
+                            withProgress(withRegistrationMode(derivedParams, mode), status),
                             tileBaseDir,
                             projectsFolder,
                             sampleName,
@@ -702,6 +706,38 @@ public class StitchingHelper {
                         StitchingRegistration.enabled()),
                 annotationName,
                 status);
+        // Time left: every target predicted from its folder before it starts, the targets'
+        // own measured estimates once they run (see StitchJobStatus#remainingSeconds).
+        List<String> allTargets = new ArrayList<>(targetSubdirs);
+        allTargets.addAll(derivedDirs);
+        status.configureEta(maxConcurrency, StitchTimePrediction.perTarget(tileBaseDir, allTargets, compression));
+        ChannelRegistrationSupport.SOLVE_PROGRESS.set(status::progress);
+        try {
+            return stitchSiblings(
+                    targetSubdirs,
+                    tileBaseDir,
+                    pixelSize,
+                    downsampleFactor,
+                    handler,
+                    alignOn,
+                    maxConcurrency,
+                    stitcher,
+                    derived);
+        } finally {
+            ChannelRegistrationSupport.SOLVE_PROGRESS.remove();
+        }
+    }
+
+    private static StitchingRegistration.Batch stitchSiblings(
+            List<String> targetSubdirs,
+            Path tileBaseDir,
+            double pixelSize,
+            int downsampleFactor,
+            ModalityHandler handler,
+            List<String> alignOn,
+            int maxConcurrency,
+            StitchingRegistration.TargetStitcher<String> stitcher,
+            StitchingRegistration.Extras derived) {
         if (alignOn != null) {
             // Channels: the operator's alignment choice, solved with every channel in view.
             return StitchingRegistration.stitchChannels(
@@ -818,6 +854,14 @@ public class StitchingHelper {
      * <p>Copied rather than mutated because the map is shared across the concurrent targets, which
      * need different modes.
      */
+    /** {@code stitchParams} with the job's progress sink, which the stitch hands its progress to. */
+    private static Map<String, Object> withProgress(Map<String, Object> stitchParams, StitchJobStatus status) {
+        Map<String, Object> copy = stitchParams == null ? new HashMap<>() : new HashMap<>(stitchParams);
+        java.util.function.Consumer<TargetEta> sink = status::progress;
+        copy.put(TileProcessingUtilities.PROGRESS_KEY, sink);
+        return copy;
+    }
+
     private static Map<String, Object> withRegistrationMode(Map<String, Object> stitchParams, Object mode) {
         Map<String, Object> copy = stitchParams == null ? new HashMap<>() : new HashMap<>(stitchParams);
         copy.put(TileProcessingUtilities.REGISTRATION_MODE_KEY, mode);
@@ -1029,6 +1073,7 @@ public class StitchingHelper {
                                     derivedConcurrent ? null : "the last angle",
                                     statusSink(blockingDialog, dualProgressDialog, operationId));
                             status.phase("Stitching " + annotationName);
+                            status.onRemaining(sec -> StitchingQueueWindow.updateRemaining(operationId, sec));
                             StitchingRegistration.Batch batch = stitchTargetsBounded(
                                     angleSubdirs,
                                     "angle",
@@ -1695,6 +1740,7 @@ public class StitchingHelper {
                                 derivedConcurrent ? null : "the merge",
                                 statusSink(blockingDialog, dualProgressDialog, operationId));
                         status.phase("Stitching " + annotationName);
+                        status.onRemaining(sec -> StitchingQueueWindow.updateRemaining(operationId, sec));
                         StitchingRegistration.Batch batch = stitchTargetsBounded(
                                 acquiredChannelIds,
                                 "channel",

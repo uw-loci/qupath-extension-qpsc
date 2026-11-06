@@ -75,6 +75,12 @@ public class TileProcessingUtilities {
      */
     public static final String REGISTRATION_MODE_KEY = "registrationMode";
 
+    /**
+     * stitchParams key for a {@code Consumer<TargetEta>} that receives the stitch's progress and
+     * time left (needs a tiles-to-pyramid that reports them; ignored otherwise).
+     */
+    public static final String PROGRESS_KEY = "progressSink";
+
     private static final ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
 
     /** Seconds to wait for a stitched-image import to run on the FX thread before warning. */
@@ -308,6 +314,13 @@ public class TileProcessingUtilities {
         Object registrationMode = stitchParams == null ? null : stitchParams.get(REGISTRATION_MODE_KEY);
         if (registrationMode != null) {
             TileRegistrationSupport.apply(config, registrationMode, matchingString);
+        }
+        if (stitchParams != null
+                && stitchParams.get(PROGRESS_KEY) instanceof java.util.function.Consumer<?> progressSink) {
+            @SuppressWarnings("unchecked")
+            java.util.function.Consumer<qupath.ext.qpsc.stitching.TargetEta> typed =
+                    (java.util.function.Consumer<qupath.ext.qpsc.stitching.TargetEta>) progressSink;
+            qupath.ext.qpsc.stitching.StitchProgressBridge.attach(config, typed);
         }
 
         // Pass the composite stage/camera transform to the tile-config stitching

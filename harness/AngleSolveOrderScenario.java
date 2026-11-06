@@ -176,6 +176,21 @@ public final class AngleSolveOrderScenario {
         check(events.stream().noneMatch(e -> e.contains("Tile registration mode for") && e.contains(": Solve")),
                 "no angle solves inside its own stitch (every one applies)");
 
+        // -- time left: tiles-to-pyramid reports it, QPSC's job status receives it
+        check(events.stream().anyMatch(e -> e.contains("Stitching 'registration") && e.contains("left")),
+                "the solve logs its time left");
+        for (String angle : ANGLES) {
+            check(events.stream().anyMatch(e -> e.contains("Stitching '" + angle + "': writing the image")),
+                    angle + " logs its time left while writing");
+        }
+        check(events.stream().anyMatch(e -> e.contains("Stitch time estimates need a newer")) == false,
+                "QPSC found tiles-to-pyramid's progress API");
+        var job = qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow.model().jobs().stream()
+                .findFirst()
+                .orElse(null);
+        line("queue job: " + (job == null ? "none" : job.displayName() + " remaining=" + job.remainingSec()
+                + " predicted=" + job.predictedSec()));
+
         // -- files on disk
         Path slide = projectsFolder.resolve(sampleName).resolve("SlideImages");
         List<String> files;

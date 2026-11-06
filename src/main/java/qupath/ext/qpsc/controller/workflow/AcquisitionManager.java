@@ -2010,6 +2010,17 @@ public class AcquisitionManager {
         // may be busy with an earlier region (or an earlier slide) for minutes before it gets here.
         String stitchJobId = state.projectInfo.getSampleName() + " - " + annotation.getName();
         qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow.enqueue(stitchJobId, stitchJobId);
+        // Predict the job from its tile folders (a header per folder) off this thread, so the
+        // queue window can say when everything queued will be done before the job starts.
+        java.nio.file.Path predictDir = java.nio.file.Paths.get(tempTileDir, annotation.getName());
+        CompletableFuture.runAsync(() -> qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow.setPrediction(
+                stitchJobId,
+                StitchTimePrediction.jobSeconds(
+                        predictDir,
+                        qupath.ext.qpsc.stitching.StitchingConfiguration.getStandardConfiguration()
+                                .compressionType(),
+                        QPPreferenceDialog.getStitchingConcurrency(),
+                        QPPreferenceDialog.getTileRegistrationEnabled())));
 
         // Create stitching future - use projectInfo.getSampleName() for correct folder path
         // Pass the dualProgressDialog so stitching status is shown in the unified progress window

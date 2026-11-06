@@ -5,6 +5,8 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
+import qupath.ext.qpsc.stitching.JobEta;
+import qupath.ext.qpsc.stitching.TargetEta;
 
 /**
  * The one-line status of a stitch job whose targets run concurrently: what the job is doing
@@ -14,6 +16,11 @@ import java.util.function.Consumer;
  * the ones still stitching rather than leaving a "Merging..." line up while they finish; held
  * derived outputs (the "Stitch derived outputs concurrently" preference off) are listed as waiting
  * until {@link #releaseDerived()}. Any thread; every change publishes the whole line to the sink.
+ *
+ * <p>Time left ({@link #remainingSeconds()}): the targets stitching now report theirs (tiles-to-pyramid
+ * measures it); a target still waiting is costed at its predicted time times the slowdown the
+ * started targets show against their own predictions; all of them are scheduled on the pool's
+ * writers ({@link JobEta#makespan}). A registration solve still running comes first.
  */
 final class StitchJobStatus {
 
@@ -32,6 +39,13 @@ final class StitchJobStatus {
     private final String heldUntil;
     private String phase = "";
     private String note = "";
+
+    private final Map<String, TargetEta> eta = new LinkedHashMap<>();
+    private final Map<String, Double> durations = new LinkedHashMap<>();
+    private Map<String, Double> predicted = Map.of();
+    private int slots = 1;
+    private Consumer<Double> remainingSink;
+    private TargetEta solve;
 
     /**
      * @param siblingKind plural noun for the siblings, e.g. "channels" or "angles"
@@ -96,7 +110,107 @@ final class StitchJobStatus {
     }
 
     void finished(String name, boolean ok) {
+        synchronized (this) {
+            TargetEta e = eta.get(name);
+            if (e != null && ok) {
+                durations.put(name, e.elapsedSec());
+            }
+            eta.remove(name);
+        }
         set(name, ok ? State.DONE : State.FAILED);
+        publishRemaining();
+    }
+
+    /**
+     * Time-left inputs: the pool's writer count and each target's predicted seconds (missing or
+     * NaN when unknown).
+     */
+    synchronized void configureEta(int writers, Map<String, Double> predictedSeconds) {
+        slots = Math.max(1, writers);
+        predicted = predictedSeconds == null ? Map.of() : new LinkedHashMap<>(predictedSeconds);
+    }
+
+    /** Where to send the job's time left on every change; null for nowhere. */
+    synchronized void onRemaining(Consumer<Double> sink) {
+        remainingSink = sink;
+    }
+
+    /** Progress of one target, or of the registration solve (a name that is not a target). */
+    void progress(TargetEta e) {
+        synchronized (this) {
+            if (siblings.containsKey(e.target()) || derived.containsKey(e.target())) {
+                eta.put(e.target(), e);
+            } else {
+                solve = e.fraction() >= 1 && "measuring tile overlaps".equals(e.step()) ? null : e;
+            }
+        }
+        publishRemaining();
+    }
+
+    /** The registration solve ended (its listener does not say so once the job moves on). */
+    void solveDone() {
+        synchronized (this) {
+            solve = null;
+        }
+        publishRemaining();
+    }
+
+    private void publishRemaining() {
+        Consumer<Double> s;
+        double r;
+        synchronized (this) {
+            s = remainingSink;
+            r = remainingSeconds();
+        }
+        if (s != null) {
+            s.accept(r);
+        }
+    }
+
+    /** Estimated seconds until every target is stitched, NaN when not known. */
+    synchronized double remainingSeconds() {
+        // Slowdown: how much longer the started targets take than predicted.
+        double ratioSum = 0;
+        int ratios = 0;
+        for (Map.Entry<String, Double> d : durations.entrySet()) {
+            double p = predicted.getOrDefault(d.getKey(), Double.NaN);
+            if (p > 0) {
+                ratioSum += d.getValue() / p;
+                ratios++;
+            }
+        }
+        for (TargetEta e : eta.values()) {
+            double p = predicted.getOrDefault(e.target(), Double.NaN);
+            if (e.measured() && p > 0 && Double.isFinite(e.remainingSec())) {
+                ratioSum += (e.elapsedSec() + e.remainingSec()) / p;
+                ratios++;
+            }
+        }
+        double slowdown = ratios > 0 ? ratioSum / ratios : 1.0;
+
+        List<Double> running = new ArrayList<>();
+        List<Double> waiting = new ArrayList<>();
+        Map<String, State> all = new LinkedHashMap<>(siblings);
+        all.putAll(derived);
+        for (Map.Entry<String, State> t : all.entrySet()) {
+            switch (t.getValue()) {
+                case STITCHING -> {
+                    TargetEta e = eta.get(t.getKey());
+                    double p = predicted.getOrDefault(t.getKey(), Double.NaN);
+                    running.add(e != null && Double.isFinite(e.remainingSec()) ? e.remainingSec() : p * slowdown);
+                }
+                case WAITING, HELD -> waiting.add(predicted.getOrDefault(t.getKey(), Double.NaN) * slowdown);
+                default -> {}
+            }
+        }
+        double stitch = JobEta.makespan(
+                running.stream().mapToDouble(Double::doubleValue).toArray(),
+                waiting.stream().mapToDouble(Double::doubleValue).toArray(),
+                slots);
+        if (solve != null) {
+            stitch += solve.remainingSec();
+        }
+        return stitch;
     }
 
     private void set(String name, State state) {

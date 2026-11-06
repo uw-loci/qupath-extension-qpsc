@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+
+- **The stitching queue says how long stitching has left.** A **Time left** column, and a window title with when the whole queue should be done ("all done in about 3 h 20 min (around 17:55)"). A running job's time comes from each angle or channel's own progress, which tiles-to-pyramid now reports (tile headers, overlap measurement, and every pyramid level, at the speed it measures), scheduled on the stitching pool the way the job runs; a target still waiting is costed from its tile folder (tiles, image size, channels, bit depth, compression) at the speed this computer reached in earlier stitches, scaled by how much slower the running ones are going than predicted. A queued job is predicted the same way from its tile folders the moment the acquisition hands it over, so a multi-slide run shows when its last stitch should land. Needs a tiles-to-pyramid with progress reporting (its next release); with an older one the column stays empty and nothing else changes.
+
 ### Changed
 
 - **Angles no longer wait for the reference angle's whole stitch.** With **Register tiles on image content** on, the tile positions were solved inside the reference angle's own stitch (90 degrees on PPM), so the other angles and the derived outputs started only after that angle's whole pyramid was written. On 2026-11-06 a 2,381-tile PPM region solved in 12 minutes and then had a single writer busy for 4 hours before the other three outputs began. The solve now runs first, on its own, and every angle (the reference included) and derived output then stitches in parallel up to **Stitching concurrency**, as fluorescence channels already did. Needs tiles-to-pyramid 0.7.0 or later; an older one keeps the previous order.

@@ -39,6 +39,12 @@ public final class ChannelRegistrationSupport {
     /** Fully-qualified name of a type that proves the channel solve API is present. */
     public static final String PROBE_CLASS = "qupath.ext.basicstitching.registration.RegistrationReference";
 
+    /**
+     * Where a solve run on this thread reports its progress (the stitch job sets it around the
+     * call); empty for nowhere.
+     */
+    public static final ThreadLocal<java.util.function.Consumer<TargetEta>> SOLVE_PROGRESS = new ThreadLocal<>();
+
     private ChannelRegistrationSupport() {}
 
     /**
@@ -86,6 +92,7 @@ public final class ChannelRegistrationSupport {
                 StitchingConfig.OutputFormat.OME_TIFF);
         config.setRegistrationMode(
                 new RegistrationMode.Solve(solutionFile, TileRegistrationSupport.currentSettings(), reference));
+        StitchProgressBridge.attach(config, SOLVE_PROGRESS.get());
 
         // The solution records the flip flags and refuses to apply to a stitch with different ones,
         // so they must be exactly what each channel's stitch will set.

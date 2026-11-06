@@ -39,7 +39,21 @@ public final class StitchingQueueModel {
             List<String> outputs,
             long enqueuedAtMs,
             long startedAtMs,
-            long finishedAtMs) {
+            long finishedAtMs,
+            double remainingSec,
+            double predictedSec) {
+
+        /**
+         * Seconds left: the running job's estimate, a queued job's prediction, 0 when finished;
+         * NaN while unknown.
+         */
+        public double timeLeftSec() {
+            return switch (state) {
+                case RUNNING -> remainingSec;
+                case QUEUED -> predictedSec;
+                default -> 0;
+            };
+        }
 
         /** Seconds the job has been running, or ran; 0 while queued. */
         public long elapsedSec(long nowMs) {
@@ -64,6 +78,8 @@ public final class StitchingQueueModel {
         final long enqueuedAtMs;
         long startedAtMs;
         long finishedAtMs;
+        double remainingSec = Double.NaN;
+        double predictedSec = Double.NaN;
 
         Record(String id, String displayName, State state, String status, long now) {
             this.id = id;
@@ -82,7 +98,9 @@ public final class StitchingQueueModel {
                     Collections.unmodifiableList(new ArrayList<>(outputs)),
                     enqueuedAtMs,
                     startedAtMs,
-                    finishedAtMs);
+                    finishedAtMs,
+                    remainingSec,
+                    predictedSec);
         }
     }
 
@@ -114,6 +132,44 @@ public final class StitchingQueueModel {
         r.state = State.RUNNING;
         r.status = "Starting";
         r.startedAtMs = clockMs.getAsLong();
+    }
+
+    /** The running job's estimated seconds left (NaN when unknown); ignored when not active. */
+    public synchronized void updateRemaining(String id, double seconds) {
+        Record r = jobs.get(id);
+        if (r != null && r.snapshot().isActive()) {
+            r.remainingSec = seconds;
+        }
+    }
+
+    /** A queued job's predicted duration, from its tile folders, before it starts. */
+    public synchronized void setPrediction(String id, double seconds) {
+        Record r = jobs.get(id);
+        if (r != null && r.snapshot().isActive()) {
+            r.predictedSec = seconds;
+            if (Double.isNaN(r.remainingSec)) {
+                r.remainingSec = seconds;
+            }
+        }
+    }
+
+    /**
+     * Seconds until every active job is done: the running job's time left, then each queued job's
+     * prediction in turn (one stitching thread). NaN when any is unknown; 0 when idle.
+     */
+    public synchronized double queueRemainingSec() {
+        List<Double> running = new ArrayList<>();
+        List<Double> queued = new ArrayList<>();
+        for (Record r : jobs.values()) {
+            if (r.state == State.RUNNING) {
+                running.add(r.remainingSec);
+            } else if (r.state == State.QUEUED) {
+                queued.add(r.predictedSec);
+            }
+        }
+        return JobEta.queueSeconds(
+                running.stream().mapToDouble(Double::doubleValue).toArray(),
+                queued.stream().mapToDouble(Double::doubleValue).toArray());
     }
 
     /** A progress line for a running job; ignored for unknown or finished jobs. */
@@ -225,6 +281,29 @@ public final class StitchingQueueModel {
         if (failed > 0) {
             sb.append(sb.length() > 0 ? ", " : "").append(failed).append(" failed");
         }
+        double left = queueRemainingSec();
+        if ((queued > 0 || running > 0) && Double.isFinite(left)) {
+            sb.append(" - all done in ")
+                    .append(left < 60 ? "less than a minute" : "about " + formatDuration(left))
+                    .append(" (around ")
+                    .append(java.time.Instant.ofEpochMilli(clockMs.getAsLong() + (long) (left * 1000))
+                            .atZone(java.time.ZoneId.systemDefault())
+                            .toLocalTime()
+                            .format(java.time.format.DateTimeFormatter.ofPattern("HH:mm")))
+                    .append(")");
+        }
         return sb.length() == 0 ? "No stitching jobs" : sb.toString();
+    }
+
+    /** "3 h 05 min", "12 min", "45 s". */
+    public static String formatDuration(double seconds) {
+        if (Double.isNaN(seconds) || seconds < 0) {
+            return "?";
+        }
+        if (seconds < 60) {
+            return Math.round(seconds) + " s";
+        }
+        long minutes = Math.round(seconds / 60.0);
+        return minutes < 60 ? minutes + " min" : String.format("%d h %02d min", minutes / 60, minutes % 60);
     }
 }

@@ -195,6 +195,10 @@ public final class StitchingQueueWindow {
                 c -> new SimpleStringProperty(elapsedText(c.getValue().elapsedSec(System.currentTimeMillis()))));
         elapsedCol.setPrefWidth(70);
 
+        TableColumn<Job, String> leftCol = new TableColumn<>("Time left");
+        leftCol.setCellValueFactory(c -> new SimpleStringProperty(timeLeftText(c.getValue())));
+        leftCol.setPrefWidth(110);
+
         TableColumn<Job, Job> openCol = new TableColumn<>("Result");
         openCol.setCellValueFactory(c -> new javafx.beans.property.SimpleObjectProperty<>(c.getValue()));
         openCol.setCellFactory(col -> new TableCell<>() {
@@ -235,6 +239,7 @@ public final class StitchingQueueWindow {
         table.getColumns().add(stateCol);
         table.getColumns().add(statusCol);
         table.getColumns().add(elapsedCol);
+        table.getColumns().add(leftCol);
         table.getColumns().add(openCol);
         table.setPlaceholder(new Label("No stitching jobs yet"));
         table.setPrefHeight(220);
@@ -284,6 +289,40 @@ public final class StitchingQueueWindow {
             logger.info("Stitching queue window shown ({})", MODEL.summary());
         }
         refresh();
+    }
+
+    /** "about 2 h 10 min", "about 40 min (estimate)" for a queued job, "" when unknown or done. */
+    static String timeLeftText(Job job) {
+        double s = job.timeLeftSec();
+        if (!job.isActive() || !Double.isFinite(s)) {
+            return "";
+        }
+        String text = s < 60 ? "under a minute" : "about " + StitchingQueueModel.formatDuration(s);
+        return job.state() == State.QUEUED ? text + " (estimate)" : text;
+    }
+
+    /** The running job's time left, from its targets' progress; any thread. */
+    public static void updateRemaining(String operationId, double seconds) {
+        MODEL.updateRemaining(operationId, seconds);
+        refreshShowing();
+    }
+
+    /** A queued job's predicted duration; any thread. */
+    public static void setPrediction(String operationId, double seconds) {
+        MODEL.setPrediction(operationId, seconds);
+        refreshShowing();
+    }
+
+    private static void refreshShowing() {
+        onFx(() -> {
+            StitchingQueueWindow w;
+            synchronized (StitchingQueueWindow.class) {
+                w = instance;
+            }
+            if (w != null) {
+                w.refresh();
+            }
+        });
     }
 
     private void refresh() {
