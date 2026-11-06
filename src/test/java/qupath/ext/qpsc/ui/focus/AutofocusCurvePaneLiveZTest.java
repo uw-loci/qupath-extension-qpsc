@@ -151,6 +151,36 @@ class AutofocusCurvePaneLiveZTest {
     }
 
     @Test
+    void fallbackSnapsFarFromTheSweepAreNotJoinedToIt() {
+        // 2026-11-06: a sweep sampled every ~0.9 um up to -38.4, then the fallback snapped at
+        // -7.8 and +41.6; the plot drew straight lines out to +41.6.
+        java.util.List<double[]> byZ = new java.util.ArrayList<>();
+        for (double z = -108.6; z <= -38.4; z += 0.9) {
+            byZ.add(new double[] {z, 1.0});
+        }
+        byZ.add(new double[] {-7.8, 1.0});
+        byZ.add(new double[] {41.6, 1.0});
+        var runs = AutofocusCurvePane.contiguousRuns(byZ);
+        assertEquals(3, runs.size());
+        assertEquals(byZ.size() - 2, runs.get(0).size());
+        assertEquals(1, runs.get(1).size());
+        assertEquals(1, runs.get(2).size());
+    }
+
+    @Test
+    void anEvenSweepIsOneLine() {
+        java.util.List<double[]> byZ = new java.util.ArrayList<>();
+        for (double z = 0; z <= 20; z += 1.0) {
+            byZ.add(new double[] {z, z});
+        }
+        assertEquals(1, AutofocusCurvePane.contiguousRuns(byZ).size());
+        assertEquals(
+                1,
+                AutofocusCurvePane.contiguousRuns(java.util.List.of(new double[] {1, 1}))
+                        .size());
+    }
+
+    @Test
     void scanningTextIsAscii() {
         for (String s : new String[] {
             AutofocusCurvePane.scanningText(Double.NaN, false), AutofocusCurvePane.scanningText(-5.0, true)

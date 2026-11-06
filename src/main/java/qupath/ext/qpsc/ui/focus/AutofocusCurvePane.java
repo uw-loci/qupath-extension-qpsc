@@ -234,12 +234,17 @@ public class AutofocusCurvePane extends VBox {
         java.util.function.DoubleUnaryOperator px = z -> pad + (z - z0) / zSpan * w;
         java.util.function.DoubleUnaryOperator py = s -> pad + h - (s - s0) / sSpan * h;
 
-        Polyline curve = new Polyline();
-        curve.setStyle("-fx-stroke: " + ThemeColors.INFO + "; -fx-stroke-width: 1.5;");
-        for (double[] s : byZ) {
-            curve.getPoints().addAll(px.applyAsDouble(s[0]), py.applyAsDouble(s[1]));
+        // One line per run of closely spaced samples. A sweep samples densely; the fallback
+        // search's single snaps can be tens of um apart, and a line between them reads as a
+        // measured curve where nothing was measured.
+        for (List<double[]> run : contiguousRuns(byZ)) {
+            Polyline curve = new Polyline();
+            curve.setStyle("-fx-stroke: " + ThemeColors.INFO + "; -fx-stroke-width: 1.5;");
+            for (double[] s : run) {
+                curve.getPoints().addAll(px.applyAsDouble(s[0]), py.applyAsDouble(s[1]));
+            }
+            plot.getChildren().add(curve);
         }
-        plot.getChildren().add(curve);
         for (double[] s : byZ) {
             Circle dot = new Circle(px.applyAsDouble(s[0]), py.applyAsDouble(s[1]), 2);
             dot.setStyle("-fx-fill: " + ThemeColors.INFO + ";");
@@ -257,5 +262,43 @@ public class AutofocusCurvePane extends VBox {
         }
         zLowLabel.setText(String.format("Z %.1f", zMin));
         zHighLabel.setText(String.format("%.1f", zMax));
+    }
+
+    /** A gap wider than this many typical sample spacings ends a line. */
+    static final double GAP_FACTOR = 5.0;
+
+    /**
+     * Splits samples sorted by Z into runs that a line may join: a new run starts where the
+     * gap to the previous sample is more than {@link #GAP_FACTOR} times the median gap.
+     */
+    static List<List<double[]>> contiguousRuns(List<double[]> byZ) {
+        List<List<double[]>> runs = new ArrayList<>();
+        if (byZ.isEmpty()) {
+            return runs;
+        }
+        List<Double> gaps = new ArrayList<>();
+        for (int i = 1; i < byZ.size(); i++) {
+            gaps.add(byZ.get(i)[0] - byZ.get(i - 1)[0]);
+        }
+        double limit = Double.POSITIVE_INFINITY;
+        if (gaps.size() >= 2) {
+            List<Double> sorted = new ArrayList<>(gaps);
+            sorted.sort(Comparator.naturalOrder());
+            double median = sorted.get(sorted.size() / 2);
+            if (median > 0) {
+                limit = GAP_FACTOR * median;
+            }
+        }
+        List<double[]> run = new ArrayList<>();
+        run.add(byZ.get(0));
+        for (int i = 1; i < byZ.size(); i++) {
+            if (gaps.get(i - 1) > limit) {
+                runs.add(run);
+                run = new ArrayList<>();
+            }
+            run.add(byZ.get(i));
+        }
+        runs.add(run);
+        return runs;
     }
 }
