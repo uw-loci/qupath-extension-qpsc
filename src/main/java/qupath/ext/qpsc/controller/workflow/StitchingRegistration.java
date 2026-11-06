@@ -243,7 +243,9 @@ public final class StitchingRegistration {
     }
 
     /**
-     * Stitch a channel acquisition, measuring registration on the chosen channel(s).
+     * Stitch a channel acquisition, measuring registration on the chosen channel(s). Angle
+     * acquisitions use it too, with {@code alignOn} naming the reference angle, so no angle waits
+     * for another angle's pyramid write.
      *
      * <p>With a current tiles-to-pyramid the solve runs <b>before</b> any channel is stitched,
      * with every channel subdirectory in view, and every channel then applies the written

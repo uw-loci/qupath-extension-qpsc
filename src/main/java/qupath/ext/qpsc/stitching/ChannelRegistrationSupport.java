@@ -92,15 +92,18 @@ public final class ChannelRegistrationSupport {
         boolean[] flips = StageImageTransform.current().stitcherFlipFlags();
 
         logger.info(
-                "Solving tile registration across channels {} on {} before stitching",
+                "Solving tile registration for {} on {} before stitching",
                 channels,
                 alignOn.size() == 1 ? "'" + alignOn.get(0) + "'" : "a normalized merge of " + alignOn);
         boolean written;
         try (var held = StitcherFlipFlags.hold(flips)) {
-            written = StitchingWorkflow.solveRegistration(config, channels);
+            // Only the measured subdirectories: a Single or Projection reference reads nothing else,
+            // and listing the rest would read every one of their tile headers too (about 47 s per
+            // 2,381-tile angle on the PPM rig).
+            written = StitchingWorkflow.solveRegistration(config, alignOn);
         }
         if (!written) {
-            logger.warn("Channel registration solve wrote no solution; every channel will stitch at nominal positions");
+            logger.warn("Registration solve wrote no solution; every target will stitch at nominal positions");
         }
         return written;
     }

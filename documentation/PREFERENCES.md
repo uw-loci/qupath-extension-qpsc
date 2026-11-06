@@ -843,7 +843,7 @@ Maximum number of angles (PPM) or channels (fluorescence, LC-PolScope states) st
 
 Applies to both OME-TIFF and OME-ZARR output. The default of 4 is a balance that speeds up the common 4-angle PPM and ~4-channel IF cases while keeping peak memory bounded.
 
-Note: when **Register tiles on image content** is enabled, one angle/channel of each annotation is stitched on its own to solve the tile positions before the others reuse that result. The remaining angles/channels and the derived outputs then stitch concurrently up to this limit. On PPM the solve runs on the 90-degree (open) angle; on other modalities, the first target is used.
+Note: when **Register tiles on image content** is enabled, the tile positions of each annotation are solved once, on one angle or the chosen channel(s), before anything is stitched. Every angle/channel and the derived outputs then stitch concurrently up to this limit, all applying that solve. On PPM the solve runs on the 90-degree (open) angle; on other modalities, the first target is used.
 
 Before each annotation's stitches start, QPSC estimates their memory and warns when it looks short; see [Stitching memory warning](#stitching-memory-warning) below.
 
@@ -908,7 +908,7 @@ Stage coordinates are *nominal*. Real stages have backlash, finite encoder resol
 
 **Requires a non-zero [Tile Overlap Percent](#tile-overlap-percent).** Tiles placed edge to edge share no content, so there is nothing to match: registration will warn and change nothing. Around 10% is a good starting point. (A 0% overlap is also the most common cause of visible seams in the first place, so setting an overlap is worth doing regardless.)
 
-**It is slower.** The tile positions are solved once per annotation, and every angle/channel then reuses that solve. For angles, the reference angle is stitched first and solves as it goes, so expect it to take noticeably longer than the others. For fluorescence channels, the solve runs before any channel is stitched, and then all channels stitch in parallel.
+**It is slower.** The tile positions are solved once per annotation, and every angle/channel then reuses that solve. The solve runs before any angle or channel is stitched (about 12 minutes for a 2,381-tile PPM region at 20x), and then all of them stitch in parallel.
 
 **Which target is solved on matters.** Registration matches the *image* content in each overlap, so it is only as good as the contrast in that image -- and sibling angles of the very same tissue can differ enormously. PPM's crossed angles sit near extinction: dark and low-contrast pictures of tissue that is perfectly well textured. QPSC therefore solves on the **90-degree (open) angle** whenever it was acquired, and falls back to the first target otherwise. Fluorescence solves on the channel(s) ticked in the channel picker's **Align** column. With none ticked it uses the focus channel, and with no usable focus channel a normalized merge of every acquired channel. See [Tile alignment channel](CHANNELS.md#tile-alignment-channel).
 

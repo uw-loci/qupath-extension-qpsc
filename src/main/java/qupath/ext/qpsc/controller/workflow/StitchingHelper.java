@@ -714,11 +714,22 @@ public class StitchingHelper {
                     stitcher,
                     derived);
         }
-        return StitchingRegistration.stitchTargets(
+        if (targetSubdirs.isEmpty()) {
+            return StitchingRegistration.stitchTargets(
+                    targetSubdirs, tileBaseDir, maxConcurrency, 0, stitcher, derived);
+        }
+        // Angles: solve on the modality's reference angle before any angle is stitched, then stitch
+        // every angle (the reference included) in parallel. Solving inside the reference's own
+        // stitch made the other angles wait for its whole pyramid write, not just the solve: on a
+        // 2381-tile PPM region that was a 12 min solve followed by 4 h with one writer busy.
+        String reference = targetSubdirs.get(StitchingRegistration.referenceIndexFor(targetSubdirs, handler));
+        return StitchingRegistration.stitchChannels(
                 targetSubdirs,
+                List.of(reference),
                 tileBaseDir,
+                pixelSize,
+                downsampleFactor,
                 maxConcurrency,
-                StitchingRegistration.referenceIndexFor(targetSubdirs, handler),
                 stitcher,
                 derived);
     }

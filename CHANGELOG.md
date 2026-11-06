@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Angles no longer wait for the reference angle's whole stitch.** With **Register tiles on image content** on, the tile positions were solved inside the reference angle's own stitch (90 degrees on PPM), so the other angles and the derived outputs started only after that angle's whole pyramid was written. On 2026-11-06 a 2,381-tile PPM region solved in 12 minutes and then had a single writer busy for 4 hours before the other three outputs began. The solve now runs first, on its own, and every angle (the reference included) and derived output then stitches in parallel up to **Stitching concurrency**, as fluorescence channels already did. Needs tiles-to-pyramid 0.7.0 or later; an older one keeps the previous order.
+
 - **Auto-Align (SIFT) tries a fast search first.** Before the configured search, it matches against a region twice the field of view around the tile, at the fine resolution only, and keeps the result when it reaches the confidence threshold. On PPM at 20x with a 1 mm margin a match took about 4 s end to end, 1.3 s of it reading the 2.3 mm region from the slide image, and a coarse pass that missed fell through to a 6 s full-resolution pass; most matches were within 40 um of the prediction. The configured search, and **Search wider**, still run when the fast one finds nothing. Applies to the check after the stage move too. Not done when the configured margin is already about that small.
 
 ### Fixed
