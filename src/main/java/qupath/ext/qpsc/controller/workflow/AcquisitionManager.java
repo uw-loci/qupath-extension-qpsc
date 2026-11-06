@@ -2233,9 +2233,12 @@ public class AcquisitionManager {
             double fovXUm = fovUm[0];
             double fovYUm = fovUm[1];
 
-            // Get overlap percentage and delegate to the shared grid math (same formula the tiler uses)
+            // The tiles the tiler makes for this shape (its own grid and keep-test), in image pixels
             double overlapPercent = QPPreferenceDialog.getTileOverlapPercentProperty();
-            int totalTiles = TilingUtilities.estimateTileCount(annWidthUm, annHeightUm, fovXUm, fovYUm, overlapPercent);
+            int totalTiles = Math.max(
+                    1,
+                    TilingUtilities.countAnnotationTiles(
+                            annotation.getROI(), fovXUm / imagePixelSize, fovYUm / imagePixelSize, overlapPercent));
 
             logger.info(
                     "Tile estimate: annotation {}x{} um, FOV {}x{} um, overlap {}% = {} tiles",

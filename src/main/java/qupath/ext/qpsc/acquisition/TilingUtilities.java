@@ -145,6 +145,66 @@ public class TilingUtilities {
                 oneRow ? 1 : tilesToCover(height + frameHeight, frameHeight * (1 - overlapFraction)));
     }
 
+    /**
+     * The grid an annotation is tiled with: its bounding box, padded by half a frame on every side
+     * when {@code addBuffer} (as both acquisition paths do), so edge tiles are centered on the
+     * annotation's edge. The tiler then keeps only the tiles that {@link #tileTouches} the shape.
+     * Frame sizes are in the ROI's units.
+     */
+    static TileGrid annotationGrid(
+            ROI roi, double frameWidth, double frameHeight, double overlapPercent, boolean addBuffer) {
+        double x = roi.getBoundsX();
+        double y = roi.getBoundsY();
+        double w = roi.getBoundsWidth();
+        double h = roi.getBoundsHeight();
+        if (addBuffer) {
+            x -= frameWidth / 2.0;
+            y -= frameHeight / 2.0;
+            w += frameWidth;
+            h += frameHeight;
+        }
+        double overlapFraction = overlapPercent / 100.0;
+        return new TileGrid(
+                x,
+                y,
+                tilesToCover(w, frameWidth * (1 - overlapFraction)),
+                tilesToCover(h, frameHeight * (1 - overlapFraction)));
+    }
+
+    /** Whether the tiler keeps a tile for an annotation: its center is inside, or it overlaps the shape. */
+    static boolean tileTouches(ROI annotation, ROI tile) {
+        return annotation.contains(tile.getCentroidX(), tile.getCentroidY())
+                || annotation.getGeometry().intersects(tile.getGeometry());
+    }
+
+    /**
+     * How many tiles the tiler makes for one annotation: the buffered grid over its bounding box,
+     * keeping only the tiles that touch the shape. Writes nothing. For an irregular annotation this
+     * is far below the bounding-box grid (a region covering half its box needs about half the
+     * tiles). Frame sizes are in the ROI's units (image pixels for an annotation).
+     */
+    public static int countAnnotationTiles(ROI roi, double frameWidth, double frameHeight, double overlapPercent) {
+        if (roi == null || frameWidth <= 0 || frameHeight <= 0 || overlapPercent >= 100) {
+            return 0;
+        }
+        TileGrid grid = annotationGrid(roi, frameWidth, frameHeight, overlapPercent, true);
+        double overlapFraction = overlapPercent / 100.0;
+        double xStep = frameWidth * (1 - overlapFraction);
+        double yStep = frameHeight * (1 - overlapFraction);
+        int count = 0;
+        for (int row = 0; row < grid.rows(); row++) {
+            double y = grid.startY() + row * yStep;
+            for (int col = 0; col < grid.cols(); col++) {
+                double x = grid.startX() + col * xStep;
+                ROI tile = ROIs.createRectangleROI(x, y, frameWidth, frameHeight, ImagePlane.getDefaultPlane());
+                if (tileTouches(roi, tile)) {
+                    count++;
+                }
+            }
+        }
+        return count;
+    }
+
     /** Tiles at this step that cover this span; an exact fit takes one more for the far edge. */
     private static int tilesToCover(double span, double step) {
         int tiles = (int) Math.ceil(span / step);
@@ -188,20 +248,6 @@ public class TilingUtilities {
                     roi.getBoundsWidth(),
                     roi.getBoundsHeight());
 
-            // Calculate bounds with optional buffer
-            double x = roi.getBoundsX();
-            double y = roi.getBoundsY();
-            double w = roi.getBoundsWidth();
-            double h = roi.getBoundsHeight();
-
-            if (request.isAddBuffer()) {
-                x -= request.getFrameWidth() / 2.0;
-                y -= request.getFrameHeight() / 2.0;
-                w += request.getFrameWidth();
-                h += request.getFrameHeight();
-                logger.debug("Added buffer - new bounds: ({}, {}, {}, {})", x, y, w, h);
-            }
-
             // IMPORTANT: Don't apply axis inversion here - it's handled in createTileGrid
             // The inversion affects the order of tile generation, not the bounds
 
@@ -212,12 +258,12 @@ public class TilingUtilities {
             String configPath = annotationDir.resolve("TileConfiguration.txt").toString();
 
             // Generate tiles
-            double overlapFraction = request.getOverlapPercent() / 100.0;
-            TileGrid grid = new TileGrid(
-                    x,
-                    y,
-                    tilesToCover(w, request.getFrameWidth() * (1 - overlapFraction)),
-                    tilesToCover(h, request.getFrameHeight() * (1 - overlapFraction)));
+            TileGrid grid = annotationGrid(
+                    roi,
+                    request.getFrameWidth(),
+                    request.getFrameHeight(),
+                    request.getOverlapPercent(),
+                    request.isAddBuffer());
 
             processTileGridRequest(grid, request, configPath, roi, annotationName);
         }
@@ -298,11 +344,7 @@ public class TilingUtilities {
                         x, y, request.getFrameWidth(), request.getFrameHeight(), ImagePlane.getDefaultPlane());
 
                 // Check if we should include this tile
-                boolean includeTile = true;
-                if (filterROI != null) {
-                    includeTile = filterROI.contains(tileROI.getCentroidX(), tileROI.getCentroidY())
-                            || filterROI.getGeometry().intersects(tileROI.getGeometry());
-                }
+                boolean includeTile = filterROI == null || tileTouches(filterROI, tileROI);
 
                 if (!includeTile) {
                     skippedTiles++;
@@ -656,26 +698,5 @@ public class TilingUtilities {
                 logger.debug("Annotation '{}' will create {} tiles ({}x{})", ann.getName(), totalTiles, tilesX, tilesY);
             }
         }
-    }
-
-    /**
-     * Pure tiles-per-annotation count: how many camera frames a rectangular region needs at the
-     * given overlap. {@code annWidth}/{@code annHeight} and {@code frameWidth}/{@code frameHeight}
-     * MUST be in the same unit (both microns, or both pixels). Mirrors the acquisition grid math
-     * ({@code nCols = ceil(annW / (frameW*(1-overlap)))}, likewise for rows). Returns at least 1.
-     *
-     * <p>Shared by the acquisition tile-count estimate ({@code AcquisitionManager}) and the
-     * multi-slide run-time estimate so both agree with the grid the tiler actually generates.
-     */
-    public static int estimateTileCount(
-            double annWidth, double annHeight, double frameWidth, double frameHeight, double overlapPercent) {
-        double effW = frameWidth * (1 - overlapPercent / 100.0);
-        double effH = frameHeight * (1 - overlapPercent / 100.0);
-        if (effW <= 0 || effH <= 0 || annWidth <= 0 || annHeight <= 0) {
-            return 1;
-        }
-        int tilesX = (int) Math.ceil(annWidth / effW);
-        int tilesY = (int) Math.ceil(annHeight / effH);
-        return Math.max(1, tilesX * tilesY);
     }
 }

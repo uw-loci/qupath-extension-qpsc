@@ -5,37 +5,51 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
 import org.junit.jupiter.api.Test;
+import qupath.lib.regions.ImagePlane;
+import qupath.lib.roi.ROIs;
+import qupath.lib.roi.interfaces.ROI;
 
 /**
  * Unit tests for the pure (I/O-free) pieces of the multi-slide run-time estimate: the shared
- * tiles-per-annotation grid math and the batch summary formatting.
+ * tiles-per-annotation count (the tiler's own grid and keep-test) and the batch summary
+ * formatting.
  */
 class MultiSlideEstimateTest {
 
-    @Test
-    void tileCount_exactFit_noOverlap() {
-        // 1000x1000 um region, 100x100 um frame, 0% overlap -> 10x10 = 100 tiles.
-        assertEquals(100, TilingUtilities.estimateTileCount(1000, 1000, 100, 100, 0));
+    private static ROI square(double size) {
+        return ROIs.createRectangleROI(0, 0, size, size, ImagePlane.getDefaultPlane());
     }
 
     @Test
-    void tileCount_ceilsPartialTiles() {
-        // 950 um / 100 um step -> ceil(9.5) = 10 columns; 100 um / 100 -> 1 row.
-        assertEquals(10, TilingUtilities.estimateTileCount(950, 100, 100, 100, 0));
+    void tileCount_rectangleIsTheBufferedGridThatTouchesIt() {
+        // Buffered grid from -50 at a 100 step: 12 columns, the 12th starting at 1050, past the
+        // square's edge, so 11 x 11 tiles touch it.
+        assertEquals(121, TilingUtilities.countAnnotationTiles(square(1000), 100, 100, 0));
     }
 
     @Test
-    void tileCount_overlapShrinksEffectiveStep() {
-        // 10% overlap -> effective step 90 um; ceil(1000/90) = 12 per axis -> 144.
-        assertEquals(144, TilingUtilities.estimateTileCount(1000, 1000, 100, 100, 10));
+    void tileCount_followsTheShapeNotItsBoundingBox() {
+        // 2026-11-06: an annotation covering about half its bounding box was estimated at the
+        // box's 4,200 tiles while it held 2,210. A triangle is half its box.
+        ROI triangle = ROIs.createPolygonROI(
+                new double[] {0, 1000, 0}, new double[] {0, 0, 1000}, ImagePlane.getDefaultPlane());
+        int half = TilingUtilities.countAnnotationTiles(triangle, 100, 100, 0);
+        int whole = TilingUtilities.countAnnotationTiles(square(1000), 100, 100, 0);
+        assertTrue(half > whole * 0.45 && half < whole * 0.65, half + " of " + whole);
     }
 
     @Test
-    void tileCount_degenerateInputsReturnAtLeastOne() {
-        assertEquals(1, TilingUtilities.estimateTileCount(0, 0, 100, 100, 0));
-        assertEquals(1, TilingUtilities.estimateTileCount(100, 100, 0, 0, 0));
-        // 100% overlap -> zero effective step -> guarded to 1, not a divide-by-zero.
-        assertEquals(1, TilingUtilities.estimateTileCount(1000, 1000, 100, 100, 100));
+    void tileCount_overlapShrinksTheStep() {
+        assertTrue(TilingUtilities.countAnnotationTiles(square(1000), 100, 100, 10)
+                > TilingUtilities.countAnnotationTiles(square(1000), 100, 100, 0));
+    }
+
+    @Test
+    void tileCount_degenerateInputsGiveNoTiles() {
+        assertEquals(0, TilingUtilities.countAnnotationTiles(null, 100, 100, 0));
+        assertEquals(0, TilingUtilities.countAnnotationTiles(square(1000), 0, 0, 0));
+        // 100% overlap is a zero step: guarded, not an endless grid
+        assertEquals(0, TilingUtilities.countAnnotationTiles(square(1000), 100, 100, 100));
     }
 
     @Test

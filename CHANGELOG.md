@@ -13,6 +13,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The multi-slide run estimate counts the tiles the annotation will really get.** It counted a grid over each annotation's bounding box, so an irregular region was estimated at the size of its box: on 2026-11-06 a slide read 4,200 tiles while its annotation held 2,210. It now uses the tiler's own grid and keeps only the tiles that touch the shape, so the count matches what is acquired. The single-slide progress fallback (used when no tile configuration file can be read) counts the same way.
+
 - **The Stage Map is in Camera View while you pick refinement and alignment tiles.** It used to switch only during a multi-slide batch, and in multi-tile refinement only after the first point's stage move and autofocus had finished, so the tile choice and the whole focus happened in whatever view the map was in. It now switches when single- or multi-tile refinement opens, at every multi-tile **Select tile** before the stage moves, when the stage arrives, and when manual alignment starts, in single-slide workflows as well. The **Force Camera View on alignment start** setting is gone: the switch always happens. The zoom to the tissue box stays multi-slide only, with its own setting.
 
 ### Added

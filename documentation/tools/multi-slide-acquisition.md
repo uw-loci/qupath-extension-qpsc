@@ -445,7 +445,10 @@ a "(measured timing)" or "(rough -- no measured timing yet)" qualifier; during
 **annotation-aware** -- each region incurs a startup overhead (~6 s for a region
 move + focus pass), so many small regions cost more than one large region at
 equal tile count. It uses the learned per-file wall-clock cost when available
-(self-calibrating after every run) and a conservative fallback otherwise.
+(self-calibrating after every run) and a conservative fallback otherwise. Tiles
+are counted the way the tiler makes them, only those touching each annotation's
+shape rather than a grid over its bounding box, from the annotations as last
+saved in the project.
 
 ## Alerts
 

@@ -20,8 +20,8 @@ import qupath.lib.projects.ProjectImageEntry;
 /**
  * Whole-run acquisition-time estimate for a multi-slide (N-slide) batch.
  *
- * <p>For each slot it counts the tiles its annotations will generate (same grid math the tiler
- * uses, via {@link TilingUtilities#estimateTileCount}), multiplies by the modality's captures per
+ * <p>For each slot it counts the tiles its annotations will generate (the tiler's own grid and
+ * keep-test, via {@link TilingUtilities#countAnnotationTiles}), multiplies by the modality's captures per
  * tile (PPM angles / channels), and applies a per-file wall-clock cost:
  * <ul>
  *   <li><b>Learned (preferred):</b> {@link PersistentPreferences#getBaseTileTimeMs()} -- the mean
@@ -185,9 +185,10 @@ public final class MultiSlideAcquisitionEstimator {
                     }
                 }
                 annCount++;
-                double wUm = a.getROI().getBoundsWidth() * px;
-                double hUm = a.getROI().getBoundsHeight() * px;
-                tiles += TilingUtilities.estimateTileCount(wUm, hUm, fov[0], fov[1], overlapPct);
+                // The tiles the tiler will make for this shape, not its bounding box: an irregular
+                // region covering half its box needs about half the tiles (2026-11-06: a slide
+                // read 4,200 tiles while its annotation held 2,210).
+                tiles += TilingUtilities.countAnnotationTiles(a.getROI(), fov[0] / px, fov[1] / px, overlapPct);
             }
 
             long totalImages = tiles * captures;

@@ -142,6 +142,8 @@ The **Multi-Slide Acquisition...** menu entry appears automatically when the act
    - **During the unattended acquire pass (Step 2):** The estimate **updates live** as each slide finishes — a "Remaining ~Xs of ~Ys" line shows the shrinking predicted time for slides not yet done, the count of remaining slides and tiles, and the same timing qualifier.
    - **After all acquisitions complete:** Shows "Run complete" and the final total time and tile count.
    
+   Tiles are counted the way the tiler makes them: only the tiles that touch each annotation's shape, not a grid over its bounding box, so an irregular region is not counted at the size of its box. The count reads each slide's annotations as last saved in the project.
+
    The estimate is **annotation-aware**: it accounts for the fact that many small regions cost more than one large region at equal tile count. Each annotation (region) incurs a startup overhead (region move + focus pass, ~6 seconds), so an acquisition with 20 small 5-tile regions costs noticeably more than one 100-tile region, even though both acquire 100 tiles. The estimate uses the learned per-file wall-clock cost when available (which self-calibrates after every run), plus per-annotation and per-slide startup overhead. No measured timing yet? The estimate uses a conservative fallback and is labeled "rough -- no measured timing yet" until at least one full acquisition run completes on this microscope.
 
    Whenever the panel is idle, an **attention pulse glows the recommended next step** (Step 1 → Step 2 → Finish) so you always know what to click next. There are two ways to run the batch, and you can mix them:
