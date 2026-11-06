@@ -1030,7 +1030,7 @@ If the first key you see is `STAGE_POSITIONS`, the file is from an old build and
 3. Stitching time depends on the image's size, channels and bit depth and on the compression: a few minutes for a small region, hours for a whole slide at 20x (on 2026-11-06 a 2,381-tile PPM region with J2K wrote each angle's full-resolution level in 1.5 h alone and about 2 h with three angles side by side). Only one job stitches at a time, so a queue of several regions is served in order; the tiles-to-pyramid log also prints each stitch's time left every five minutes.
 4. The project entries for a region appear as soon as it is handed to stitching, showing a four-piece puzzle picture ("Stitching in progress" in the description) until the file lands. An entry that keeps the picture after the queue is empty is a stitch that failed: its description says why, and **Utilities > Re-stitch Tiles...** can try again from the tiles on disk.
 
-**Stitching time guide:**
+**Stitching time guide** (small regions; large 20x regions with J2K or several angles take far longer, see step 3):
 - 10 tiles: ~30 seconds
 - 50 tiles: ~2 minutes
 - 150 tiles: ~5-8 minutes
