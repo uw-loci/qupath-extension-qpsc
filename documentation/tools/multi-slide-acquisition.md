@@ -313,9 +313,9 @@ not, they hand the slide back themselves.
 ### Manual, one slot at a time
 
 Use the **Status** dropdown to mark a slot **Done** (acquired outside the batch)
-or **Skipped**, or to set a **Skipped** slot back to **Pending**. **Open** switches to that slot's macro entry. Right-click a
-slot's entry name for **Run Single**, which launches the regular workflow on
-that slot.
+or **Skipped**, or to set a **Skipped** slot back to **Pending**. **Open**
+switches to that slot's macro entry. Right-click a slot's entry name for
+**Run Single**, which launches the regular workflow on that slot.
 
 ### Control buttons
 
