@@ -86,11 +86,19 @@ public final class MultiSlideAssignmentDialog {
      * rotated duplicate instead left the base without the metadata, so assignments were forgotten
      * once vertical holders started defaulting to a 270 rotation.
      */
+    /**
+     * One slot that holds a slide.
+     *
+     * @param skipped the slide is in the slot but is not acquired in this run. It is still
+     *     remembered in the slot (stamped like any other) and shown on the Stage Map; only an
+     *     empty slot means no slide is there.
+     */
     public record SlotAssignment(
             int position,
             String slotLabel,
             ProjectImageEntry<BufferedImage> entry,
-            ProjectImageEntry<BufferedImage> baseEntry) {}
+            ProjectImageEntry<BufferedImage> baseEntry,
+            boolean skipped) {}
 
     /** Result of the whole dialog: a chosen carrier + a list of per-slot assignments. */
     /**
@@ -436,8 +444,8 @@ public final class MultiSlideAssignmentDialog {
         Label intro = new Label("Pick a carrier. For each occupied slide position, choose the project "
                 + "image that maps to it, and set its Rotation to match how the slide is physically mounted "
                 + "(open the Stage Map beside this dialog -- it previews all assigned slides live, so you can "
-                + "rotate each until it matches how the slide sits in the holder). Leave a slot empty (or check Skip) for unoccupied "
-                + "positions. Pass 1 of the workflow walks you through alignment and annotation per slide; "
+                + "rotate each until it matches how the slide sits in the holder). Leave a slot empty when no slide is in it; check Skip "
+                + "to keep a slide in its slot (remembered and on the Stage Map) without acquiring it in this run. Pass 1 of the workflow walks you through alignment and annotation per slide; "
                 + "Pass 2 acquires across all assigned slides.");
         intro.setWrapText(true);
         // No fixed max width: a hardcoded wrap width silently goes stale the moment the
@@ -609,7 +617,7 @@ public final class MultiSlideAssignmentDialog {
             List<ProjectImageEntry<BufferedImage>> entries = new ArrayList<>();
             List<int[]> slotAndRot = new ArrayList<>(); // {slotIndex, rotationDeg}
             for (SlotRow r : slotRows) {
-                if (r.skip.isSelected()) continue;
+                // A skipped slide is still in the holder, so it is still drawn.
                 ProjectImageEntry<BufferedImage> entry =
                         r.entryBox.getSelectionModel().getSelectedItem();
                 if (entry == null) continue;
@@ -776,14 +784,12 @@ public final class MultiSlideAssignmentDialog {
                         return 0;
                     }
                 });
+                // Skip = the slide is in this slot but is not acquired this run. It keeps the slot's
+                // slide and rotation (an EMPTY slot is the way to say no slide is there).
                 CheckBox skip = new CheckBox();
-                skip.selectedProperty().addListener((obs, oldV, newV) -> {
-                    if (newV) {
-                        entryBox.getSelectionModel().select(null);
-                    }
-                    entryBox.setDisable(newV);
-                    rotationBox.setDisable(newV);
-                });
+                skip.setTooltip(
+                        new javafx.scene.control.Tooltip(
+                                "The slide stays assigned to this slot and on the Stage Map; it is just not acquired in this run."));
                 // Any change updates the live Stage Map preview (rotation guarded so a bulk
                 // "Rotate all" coalesces into one refresh).
                 entryBox.getSelectionModel().selectedItemProperty().addListener((o, ov, nv) -> refreshPreview.run());
@@ -859,7 +865,6 @@ public final class MultiSlideAssignmentDialog {
             java.util.Set<ProjectImageEntry<BufferedImage>> assignedEntries =
                     java.util.Collections.newSetFromMap(new IdentityHashMap<>());
             for (SlotRow r : slotRows) {
-                if (r.skip.isSelected()) continue;
                 ProjectImageEntry<BufferedImage> entry =
                         r.entryBox.getSelectionModel().getSelectedItem();
                 if (entry == null) continue;
@@ -878,12 +883,13 @@ public final class MultiSlideAssignmentDialog {
                 Integer rotDeg = r.rotationBox.getValue();
                 ProjectImageEntry<BufferedImage> assigned =
                         resolveAssignedEntry(project, entry, rotDeg == null ? 0 : rotDeg, chosenSource);
-                assignments.add(new SlotAssignment(r.position, r.slotLabel, assigned, entry));
+                assignments.add(new SlotAssignment(r.position, r.slotLabel, assigned, entry, r.skip.isSelected()));
             }
-            if (assignments.isEmpty()) {
-                hint.setText("Assign at least one slot before starting.");
+            if (assignments.stream().allMatch(SlotAssignment::skipped)) {
+                hint.setText("Assign at least one slot that is not skipped before starting.");
                 return;
             }
+            logSlots(slotRows, carrierBox.getValue(), "Start");
             // Keep the previews on the Stage Map as a reference for the per-slide alignments
             // that follow; just restore the Apply Flips control.
             StageMapWindow.finishOrientationCheck();
@@ -916,11 +922,15 @@ public final class MultiSlideAssignmentDialog {
             stage.close();
         });
         cancelButton.setOnAction(e -> {
+            logSlots(slotRows, carrierBox.getValue(), "Cancel");
             StageMapWindow.clearSlotMacroPreviews();
             future.complete(null);
             stage.close();
         });
         stage.setOnCloseRequest(e -> {
+            if (!future.isDone()) {
+                logSlots(slotRows, carrierBox.getValue(), "window closed");
+            }
             StageMapWindow.clearSlotMacroPreviews();
             if (!future.isDone()) future.complete(null);
         });
@@ -1043,6 +1053,35 @@ public final class MultiSlideAssignmentDialog {
         }
         logger.info("collectMacroCandidates: {} eligible of {} project entries", out.size(), total);
         return out;
+    }
+
+    /**
+     * Writes every slot as the dialog closes, acquired, skipped or empty, whether the run starts
+     * or not: the log is the only record of what was in a slot once the dialog is gone.
+     */
+    private static void logSlots(List<SlotRow> rows, StageInsert carrier, String how) {
+        logger.info(
+                "MS assignment closed ({}): carrier '{}', {} slot(s)",
+                how,
+                carrier == null ? "?" : carrier.getId(),
+                rows.size());
+        for (SlotRow r : rows) {
+            logger.info("MS assignment slot {} ({}): {}", r.position, r.slotLabel, slotText(r));
+        }
+    }
+
+    private static String slotText(SlotRow r) {
+        ProjectImageEntry<BufferedImage> entry = r.entryBox.getSelectionModel().getSelectedItem();
+        return slotText(entry == null ? null : entry.getImageName(), r.rotationBox.getValue(), r.skip.isSelected());
+    }
+
+    /** One slot as the log states it: "empty", or the image, its rotation and whether it is acquired. */
+    static String slotText(String imageName, Integer rotationDeg, boolean skipped) {
+        if (imageName == null) {
+            return "empty";
+        }
+        return "'" + imageName + "', rotation " + (rotationDeg == null ? 0 : rotationDeg) + " deg, "
+                + (skipped ? "skipped (in the slot, not acquired)" : "acquire");
     }
 
     private record SlotRow(

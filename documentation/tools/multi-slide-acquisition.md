@@ -68,8 +68,14 @@ In the assignment dialog:
    - **270** -- rotated 270 degrees clockwise (90 counter-clockwise)
 
    Each non-zero rotation creates or reuses a rotated duplicate entry so
-   acquisition aligns to the mounted orientation. Check **Skip** to leave a slot
-   empty.
+   acquisition aligns to the mounted orientation. Leave a slot's image empty when
+   no slide is in it. Check **Skip** when a slide is in the slot but should not be
+   acquired this time: it keeps its image and rotation, is remembered for the slot
+   the next time the dialog opens, stays on the Stage Map, and starts as
+   **Skipped** in the progress panel (set its **Status** back to **Pending** to run
+   it after all). When the dialog closes, by **Start** or **Cancel**, the QPSC log
+   lists every slot as acquired, skipped or empty, so what was in each slot can be
+   found later even if no run started.
 4. **Preview placement.** The [Stage Map](stage-map.md) is displayed alongside this
    dialog and shows all assigned slides rendered at their chosen rotations over the
    holder's slots, updating live as you change rotations. The preview stays
@@ -307,7 +313,7 @@ not, they hand the slide back themselves.
 ### Manual, one slot at a time
 
 Use the **Status** dropdown to mark a slot **Done** (acquired outside the batch)
-or **Skipped**. **Open** switches to that slot's macro entry. Right-click a
+or **Skipped**, or to set a **Skipped** slot back to **Pending**. **Open** switches to that slot's macro entry. Right-click a
 slot's entry name for **Run Single**, which launches the regular workflow on
 that slot.
 

@@ -227,11 +227,16 @@ public final class MultiSlideExistingImageWorkflow {
                 return;
             }
             String runId = UUID.randomUUID().toString();
+            long skippedSlots = result.assignments().stream()
+                    .filter(MultiSlideAssignmentDialog.SlotAssignment::skipped)
+                    .count();
             logger.info(
-                    "MS workflow starting: carrier={}, runId={}, slots={}",
+                    "MS workflow starting: carrier={}, runId={}, slots={} ({} to acquire, {} skipped)",
                     result.carrier().getId(),
                     runId,
-                    result.assignments().size());
+                    result.assignments().size(),
+                    result.assignments().size() - skippedSlots,
+                    skippedSlots);
 
             // Clear stale assignments for THIS carrier first. setSlideAssignment only ADDS
             // slide_position to the newly-picked entries; an entry assigned in an earlier run of
@@ -257,11 +262,12 @@ public final class MultiSlideExistingImageWorkflow {
                 ImageMetadataManager.setSlideAssignment(
                         a.baseEntry(), a.position(), result.carrier().getId(), runId);
                 logger.info(
-                        "MS workflow: stamped slide_position={} carrier='{}' on base entry '{}' (assigned entry '{}')",
+                        "MS workflow: stamped slide_position={} carrier='{}' on base entry '{}' (assigned entry '{}'){}",
                         a.position(),
                         result.carrier().getId(),
                         a.baseEntry() == null ? "<null>" : a.baseEntry().getImageName(),
-                        a.entry() == null ? "<null>" : a.entry().getImageName());
+                        a.entry() == null ? "<null>" : a.entry().getImageName(),
+                        a.skipped() ? ", skipped this run" : "");
             }
             try {
                 project.syncChanges();
@@ -452,6 +458,10 @@ public final class MultiSlideExistingImageWorkflow {
                 }
                 if (newV == Status.DONE || newV == Status.SKIPPED) {
                     s.setStatus(newV);
+                    refreshFinish.run();
+                } else if (newV == Status.PENDING && s.status == Status.SKIPPED) {
+                    // A skipped slide is still in its slot: un-skipping queues it again.
+                    s.setStatus(Status.PENDING);
                     refreshFinish.run();
                 } else if (newV != s.status) {
                     // System-driven state picked manually: no-op advisory, revert to current.
@@ -1807,6 +1817,11 @@ public final class MultiSlideExistingImageWorkflow {
 
         SlotState(MultiSlideAssignmentDialog.SlotAssignment a) {
             this.assignment = a;
+            // Skipped in the assignment dialog: listed, not acquired; the row's status can be set
+            // back to Pending to run it after all.
+            if (a.skipped()) {
+                this.status = Status.SKIPPED;
+            }
         }
 
         void setStatus(Status s) {
