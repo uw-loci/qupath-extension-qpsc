@@ -19,6 +19,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **Collect Regions enables as soon as a matching annotation is drawn.** In the Annotation Acquisition dialog the count updated ("1 annotation will be acquired") but the button stayed disabled until a class was toggled, because it only re-checked when the class selection changed. It now re-checks whenever the count does.
+
 - **Auto-Align (SIFT) searches the configured margin again when the fast search finds nothing.** Since the fast search was added, the server's "no match" reply to it was raised as an error, which ended the attempt before the configured search ran: SIFT only matched with the stage within the fast search's margin (179 um at PPM 20x), while the message still said "no match within 1.0 mm". On the 2026-11-09 PPM batch it failed three times a tile or two from the target and matched once the operator moved within about 180 um. The configured search (and **Search wider**) now runs after a fast-search miss; any other server failure still stops the attempt.
 - **A reused alignment from another slot no longer sends a multi-slide slide to the wrong place.** With **Reuse saved alignment (TESTING ONLY)** on, each slide's saved alignment was used whatever slot it was measured in. On 2026-11-09 the alignments of MetroHealth_142 (May) and MetroHealth_163 (April) put both slides in the empty slot 2 of the quad_v holder, so refinement and focus started there. A saved alignment that puts the slide's center nearer another slot than its own is now ignored, and the slide aligns fresh from its slot center.
 

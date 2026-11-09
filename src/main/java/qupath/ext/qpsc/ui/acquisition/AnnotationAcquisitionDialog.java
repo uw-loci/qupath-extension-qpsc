@@ -145,11 +145,17 @@ public class AnnotationAcquisitionDialog {
             Node collectNode = dialog.getDialogPane().lookupButton(collectButton);
             collectNode.setStyle("-fx-base: #5a9fd4; -fx-font-weight: bold;");
 
-            // Disable collect button if no annotations match
+            // Disable collect button if no annotations match. Re-evaluated when the class
+            // selection changes AND whenever the count line is rewritten, which happens after
+            // every annotation change and every Refresh: an annotation drawn while the dialog is
+            // open must enable the button without the operator toggling a class.
+            Label countLabel = (Label) summaryContent.lookup("#countLabel");
             collectNode
                     .disableProperty()
                     .bind(Bindings.createBooleanBinding(
-                            () -> getMatchingAnnotations(selectedClasses).isEmpty(), selectedClasses));
+                            () -> getMatchingAnnotations(selectedClasses).isEmpty(),
+                            selectedClasses,
+                            countLabel.textProperty()));
 
             // Set up proper result handling
             dialog.setResultConverter(button -> {
