@@ -317,35 +317,18 @@ public final class SiftAutoAlignHelper {
             // Fast region first, then the configured one (read only when needed). The move loop
             // re-measures through this too, and after a move the tile is near the center, so the
             // checks are fast as well.
-            SiftMoveLoop.Meter meter = () -> {
-                if (fastRegion != null) {
-                    long t0 = System.nanoTime();
-                    double[] fast = attempt.match(fastRegion, false);
-                    long ms = (System.nanoTime() - t0) / 1_000_000;
-                    if (fast != null && fast[3] >= fastAcceptConfidence) {
-                        logger.info(
-                                "SIFT fast search (margin {} um) matched in {} ms: confidence {}",
-                                String.format("%.0f", fastRegion.marginUm()),
-                                ms,
-                                String.format("%.2f", fast[3]));
-                        return fast;
-                    }
-                    logger.info(
-                            "SIFT fast search (margin {} um) {} in {} ms; trying the configured search (margin {} um)",
-                            String.format("%.0f", fastRegion.marginUm()),
-                            fast == null
-                                    ? "found no match"
-                                    : "matched below the confidence threshold ("
-                                            + String.format("%.2f < %.2f", fast[3], fastAcceptConfidence) + ")",
-                            ms,
-                            String.format("%.0f", marginUm));
-                }
-                if (fullRegion[0] == null) {
-                    fullRegion[0] =
-                            SearchRegion.read(server, tile, marginUm, readDownsample, wsiPixelSize, siftTargetPx);
-                }
-                return attempt.match(fullRegion[0], coarseToFine);
-            };
+            SiftMoveLoop.Meter meter = () -> fastThenConfigured(
+                    fastRegion == null ? null : () -> attempt.match(fastRegion, false),
+                    fastRegion == null ? 0 : fastRegion.marginUm(),
+                    () -> {
+                        if (fullRegion[0] == null) {
+                            fullRegion[0] = SearchRegion.read(
+                                    server, tile, marginUm, readDownsample, wsiPixelSize, siftTargetPx);
+                        }
+                        return attempt.match(fullRegion[0], coarseToFine);
+                    },
+                    marginUm,
+                    fastAcceptConfidence);
 
             double[] matched = meter.measure();
             if (matched == null) {
@@ -419,6 +402,48 @@ public final class SiftAutoAlignHelper {
     @FunctionalInterface
     private interface SiftAttempt {
         double[] match(SearchRegion region, boolean coarseToFine) throws Exception;
+    }
+
+    /** One search: the match as {dx, dy, inliers, confidence}, or null when it found none. */
+    @FunctionalInterface
+    interface Search {
+        double[] run() throws Exception;
+    }
+
+    /**
+     * The fast search first, then the configured one whenever the fast one finds no match or
+     * matches below {@code acceptConfidence}.
+     *
+     * @param fast the fast search, or null when the fast search is skipped
+     * @param configured the configured search
+     * @return the accepted match, or the configured search's result (null when it found none)
+     */
+    static double[] fastThenConfigured(
+            Search fast, double fastMarginUm, Search configured, double configuredMarginUm, double acceptConfidence)
+            throws Exception {
+        if (fast != null) {
+            long t0 = System.nanoTime();
+            double[] found = fast.run();
+            long ms = (System.nanoTime() - t0) / 1_000_000;
+            if (found != null && found[3] >= acceptConfidence) {
+                logger.info(
+                        "SIFT fast search (margin {} um) matched in {} ms: confidence {}",
+                        String.format("%.0f", fastMarginUm),
+                        ms,
+                        String.format("%.2f", found[3]));
+                return found;
+            }
+            logger.info(
+                    "SIFT fast search (margin {} um) {} in {} ms; trying the configured search (margin {} um)",
+                    String.format("%.0f", fastMarginUm),
+                    found == null
+                            ? "found no match"
+                            : "matched below the confidence threshold ("
+                                    + String.format("%.2f < %.2f", found[3], acceptConfidence) + ")",
+                    ms,
+                    String.format("%.0f", configuredMarginUm));
+        }
+        return configured.run();
     }
 
     /**

@@ -118,6 +118,71 @@ public final class WorkflowHelpers {
     }
 
     /**
+     * Center of the slot nearest to {@code slotPosition} among the carrier's other slots, from
+     * the same per-slot calibration as {@link #resolveSlotCenterStageXY}.
+     *
+     * @return {@code [x, y]} in um, or {@code null} for a one-slot holder or missing calibration
+     */
+    public static double[] resolveNearestOtherSlotCenterStageXY(StageInsert carrier, int slotPosition) {
+        try {
+            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+            if (mgr == null || carrier == null || carrier.getSlideSamples() == null) {
+                return null;
+            }
+            double[] own = slotCenter(mgr, carrier, slotPosition);
+            if (own == null) {
+                return null;
+            }
+            double[] nearest = null;
+            double best = Double.POSITIVE_INFINITY;
+            for (int k = 1; k <= carrier.getSlideSamples().size(); k++) {
+                if (k == slotPosition) {
+                    continue;
+                }
+                double[] c = slotCenter(mgr, carrier, k);
+                if (c == null) {
+                    continue;
+                }
+                double d = Math.hypot(c[0] - own[0], c[1] - own[1]);
+                if (d > 0 && d < best) {
+                    best = d;
+                    nearest = c;
+                }
+            }
+            return nearest;
+        } catch (Exception e) {
+            logger.warn("Could not resolve the slots next to slot {}: {}", slotPosition, e.getMessage());
+            return null;
+        }
+    }
+
+    private static double[] slotCenter(MicroscopeConfigManager mgr, StageInsert carrier, int k) {
+        Double cx = mgr.getDouble("stage", "inserts", "configurations", carrier.getId(), "slide" + k + "_center_x_um");
+        Double cy = mgr.getDouble("stage", "inserts", "configurations", carrier.getId(), "slide" + k + "_center_y_um");
+        return cx == null || cy == null ? null : new double[] {cx, cy};
+    }
+
+    /**
+     * Whether a stage point belongs to a slot: along the line to the nearest other slot it lies
+     * less than halfway there, on either side. Distance along the slot's own length does not
+     * count, so tissue near the end of a long slot still belongs to it.
+     *
+     * @param point stage (X, Y) in um
+     * @param slotCenter the slot's center
+     * @param neighborCenter the nearest other slot's center
+     */
+    public static boolean withinSlot(double[] point, double[] slotCenter, double[] neighborCenter) {
+        double ax = neighborCenter[0] - slotCenter[0];
+        double ay = neighborCenter[1] - slotCenter[1];
+        double len2 = ax * ax + ay * ay;
+        if (!(len2 > 0)) {
+            return true;
+        }
+        double t = ((point[0] - slotCenter[0]) * ax + (point[1] - slotCenter[1]) * ay) / len2;
+        return Math.abs(t) < 0.5;
+    }
+
+    /**
      * Centers the viewer on the tile and selects it. Shared by single-tile and multi-tile
      * refinement.
      *

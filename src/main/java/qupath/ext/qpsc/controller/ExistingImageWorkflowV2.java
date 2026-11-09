@@ -115,7 +115,7 @@ public class ExistingImageWorkflowV2 {
      *     re-derive this slide's position from scratch
      */
     public static CompletableFuture<WorkflowState> startAsync(boolean forceFreshAlignment) {
-        return startAsync(forceFreshAlignment, null, null);
+        return startAsync(forceFreshAlignment, null, null, null);
     }
 
     /**
@@ -127,13 +127,19 @@ public class ExistingImageWorkflowV2 {
      * @param forceFreshAlignment when true, ignore any saved per-slide alignment
      * @param slotCenterStageXY absolute stage (X, Y) center (um) of this slide's holder
      *     slot, or {@code null} (no auto-move hint)
+     * @param neighborSlotCenterStageXY center of the nearest other slot of the holder, or
+     *     {@code null}; see {@code WorkflowState.neighborSlotCenterStageXY}
      * @param cancellationToken optional batch-level cancel signal (multi-slide Abort All),
      *     or {@code null} in the single-slide menu path
      */
     public static CompletableFuture<WorkflowState> startAsync(
-            boolean forceFreshAlignment, double[] slotCenterStageXY, CancellationToken cancellationToken) {
+            boolean forceFreshAlignment,
+            double[] slotCenterStageXY,
+            double[] neighborSlotCenterStageXY,
+            CancellationToken cancellationToken) {
         WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.FULL, null, null, null, forceFreshAlignment);
         o.state.slotCenterStageXY = slotCenterStageXY;
+        o.state.neighborSlotCenterStageXY = neighborSlotCenterStageXY;
         o.state.cancellationToken = cancellationToken;
         return o.execute();
     }
@@ -173,15 +179,21 @@ public class ExistingImageWorkflowV2 {
      * @param forceFreshAlignment when true, ignore any saved per-slide alignment and
      *     re-derive; when false, reuse a saved per-slide JSON if one exists for this mount
      *     (slots without a valid saved alignment still fall back to fresh alignment)
+     * @param neighborSlotCenterStageXY center of the nearest other slot of the holder, or
+     *     {@code null}; see {@code WorkflowState.neighborSlotCenterStageXY}
      * @param cancellationToken optional batch-level cancel signal (multi-slide Abort All),
      *     or {@code null}
      * @return a future completing with the captured {@link SetupResult} on success, or
      *     {@code null} on cancel / short-circuit / handled error. Never exceptional.
      */
     public static CompletableFuture<SetupResult> startSetupAsync(
-            double[] slotCenterStageXY, boolean forceFreshAlignment, CancellationToken cancellationToken) {
+            double[] slotCenterStageXY,
+            double[] neighborSlotCenterStageXY,
+            boolean forceFreshAlignment,
+            CancellationToken cancellationToken) {
         WorkflowOrchestrator o = new WorkflowOrchestrator(Mode.SETUP_ONLY, null, null, null, forceFreshAlignment);
         o.state.slotCenterStageXY = slotCenterStageXY;
+        o.state.neighborSlotCenterStageXY = neighborSlotCenterStageXY;
         o.state.cancellationToken = cancellationToken;
         return o.execute().thenApply(st -> {
             if (st == null || o.capturedConfig == null) {
@@ -1599,6 +1611,38 @@ public class ExistingImageWorkflowV2 {
         }
 
         /**
+         * Whether a saved per-slide alignment puts this slide's image center outside the slot
+         * it is mounted in now (nearer another slot of the holder). False outside a multi-slide
+         * batch, or when the image size or the transform is unavailable.
+         */
+        private boolean savedAlignmentPlacesSlideInAnotherSlot(WorkflowState state, AffineTransform saved) {
+            if (saved == null || state.slotCenterStageXY == null || state.neighborSlotCenterStageXY == null) {
+                return false;
+            }
+            var imageData = gui.getImageData();
+            if (imageData == null) {
+                return false;
+            }
+            var server = imageData.getServer();
+            java.awt.geom.Point2D centre = saved.transform(
+                    new java.awt.geom.Point2D.Double(server.getWidth() / 2.0, server.getHeight() / 2.0), null);
+            double[] at = {centre.getX(), centre.getY()};
+            if (WorkflowHelpers.withinSlot(at, state.slotCenterStageXY, state.neighborSlotCenterStageXY)) {
+                return false;
+            }
+            logger.warn(
+                    "Saved alignment for '{}' puts the slide's center at stage ({}, {}), outside its slot"
+                            + " (slot center ({}, {})): it was measured with the slide mounted elsewhere."
+                            + " Aligning this slide fresh instead.",
+                    state.sample,
+                    String.format("%.0f", at[0]),
+                    String.format("%.0f", at[1]),
+                    String.format("%.0f", state.slotCenterStageXY[0]),
+                    String.format("%.0f", state.slotCenterStageXY[1]));
+            return true;
+        }
+
+        /**
          * Checks for existing slide-specific alignment.
          */
         private CompletableFuture<WorkflowState> checkExistingSlideAlignment(WorkflowState state) {
@@ -1620,6 +1664,11 @@ public class ExistingImageWorkflowV2 {
             logger.info("Checking for existing slide-specific alignment");
 
             return AlignmentHelper.checkForSlideAlignment(gui, state.sample).thenApply(slideResult -> {
+                if (slideResult != null && savedAlignmentPlacesSlideInAnotherSlot(state, slideResult.getTransform())) {
+                    // Same outcome as force-fresh: no saved alignment, fresh alignment from the
+                    // slot center, which then overwrites the stale JSON.
+                    return state;
+                }
                 if (slideResult != null) {
                     state.useExistingSlideAlignment = true;
                     // The transform is in the pixel frame of the entry the workflow runs
@@ -3533,6 +3582,14 @@ public class ExistingImageWorkflowV2 {
          * estimate so selecting a reference tile auto-moves the stage near the tissue.
          */
         public double[] slotCenterStageXY;
+
+        /**
+         * Center of the nearest OTHER slot of the same holder, or {@code null}. With
+         * {@link #slotCenterStageXY} it bounds this slot: a reused per-slide alignment that puts
+         * the slide nearer another slot was measured with the slide mounted elsewhere, and is
+         * ignored in favor of a fresh alignment.
+         */
+        public double[] neighborSlotCenterStageXY;
 
         /**
          * Optional batch-level cancellation signal, set by the multi-slide "Abort All"

@@ -7394,8 +7394,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param wsiPixelSize WSI pixel size in um/pixel
      * @param flipX Whether WSI is flipped in X relative to microscope
      * @param flipY Whether WSI is flipped in Y relative to microscope
-     * @return Response string with offset: "SUCCESS:x,y|inliers:N|confidence:C" or throws on failure
-     * @throws IOException if communication fails or matching fails
+     * @return the server's reply: "SUCCESS:x,y|inliers:N|confidence:C", or the no-match reply
+     *     ({@link #isSiftNoMatch}) when the region holds no match, so a caller can go on to a
+     *     wider search
+     * @throws IOException if communication fails or the server reports any other failure
      */
     public String siftAutoAlign(
             String wsiRegionPath,
@@ -7450,10 +7452,19 @@ public class MicroscopeSocketClient implements AutoCloseable {
         });
         logger.info("SIFTAL response: {}", response);
 
-        if (response.startsWith("FAILED")) {
+        if (response.startsWith("FAILED") && !isSiftNoMatch(response)) {
             throw new IOException("SIFT matching failed: " + response.substring(7));
         }
         return response;
+    }
+
+    /**
+     * Whether a SIFTAL reply means "this region holds no match" rather than an error. Only that
+     * reply lets a caller try a wider region; anything else (bad arguments, OpenCV missing) would
+     * fail the same way again.
+     */
+    public static boolean isSiftNoMatch(String response) {
+        return response != null && response.startsWith("FAILED:SIFT matching failed");
     }
 
     /**

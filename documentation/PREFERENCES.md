@@ -1083,7 +1083,8 @@ confidence gate — hand the slide back themselves if they fail.
 2. Clicking "OK" reuses saved per-slide alignment (skips alignment / refinement)
 3. Clicking "Cancel" runs fresh alignment on all slots (safe)
 4. Slots with no valid saved alignment always align fresh (per-slot fallback)
-5. The confirmation choice is cached for the batch, so you are not re-prompted per slot
+5. A saved alignment that puts the slide's center in a different slot (nearer another slot of the holder than its own) is ignored, and that slot aligns fresh; the log says `Saved alignment for '...' puts the slide's center at stage (...), outside its slot`
+6. The confirmation choice is cached for the batch, so you are not re-prompted per slot
 
 **When to Enable:**
 - Iterative on-scope testing where you know the holder has not been touched

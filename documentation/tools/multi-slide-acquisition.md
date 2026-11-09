@@ -439,7 +439,8 @@ and treated as invalid, and the dialog recommends fresh refinement.
 > ONLY)** makes the batch reuse each slot's saved alignment instead of
 > re-deriving it. This is **UNSAFE for real acquisition** -- it assumes every
 > slide is still mounted exactly as when its alignment was captured. Slots with
-> no valid saved alignment fall back to fresh alignment. See
+> no valid saved alignment fall back to fresh alignment, and so does a slot whose
+> saved alignment places the slide in a different slot. See
 > [Preferences](../PREFERENCES.md) for when to enable it.
 
 ## Estimated run time

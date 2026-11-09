@@ -1230,7 +1230,9 @@ public final class MultiSlideExistingImageWorkflow {
         // TEST-ONLY: reuseAlignment (pref + per-batch confirm) flips this to false so a
         // saved per-slide JSON is reused (holder assumed untouched); see resolveReuseForBatch.
         boolean forceFresh = !reuseAlignment;
-        ExistingImageWorkflowV2.startAsync(forceFresh, slotCenter, cancelToken)
+        double[] neighborCenter =
+                WorkflowHelpers.resolveNearestOtherSlotCenterStageXY(carrier, s.assignment.position());
+        ExistingImageWorkflowV2.startAsync(forceFresh, slotCenter, neighborCenter, cancelToken)
                 .whenComplete((result, ex) -> Platform.runLater(() -> {
                     boolean ok = result != null;
                     if (ok) {
@@ -1299,7 +1301,9 @@ public final class MultiSlideExistingImageWorkflow {
         // saved per-slide JSON (holder assumed untouched) instead of re-aligning; slots
         // without a valid saved alignment still fall back to fresh alignment.
         boolean forceFresh = !reuseAlignment;
-        ExistingImageWorkflowV2.startSetupAsync(slotCenter, forceFresh, cancelToken)
+        double[] neighborCenter =
+                WorkflowHelpers.resolveNearestOtherSlotCenterStageXY(carrier, s.assignment.position());
+        ExistingImageWorkflowV2.startSetupAsync(slotCenter, neighborCenter, forceFresh, cancelToken)
                 .whenComplete((setup, ex) -> Platform.runLater(() -> {
                     if (setup != null) {
                         s.setup = setup;
