@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import qupath.lib.regions.ImagePlane;
 import qupath.lib.roi.ROIs;
@@ -95,6 +96,6 @@ class MultiSlideEstimateTest {
     @Test
     void batchSummary_emptyIsGraceful() {
         var empty = new MultiSlideAcquisitionEstimator.BatchEstimate(List.of(), 0, 0, 0, 0, false);
-        assertTrue(empty.summary().toLowerCase().contains("no set-up slides"));
+        assertTrue(empty.summary().toLowerCase(Locale.ROOT).contains("no set-up slides"));
     }
 }

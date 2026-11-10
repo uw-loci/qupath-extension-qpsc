@@ -9,6 +9,7 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
 import java.util.concurrent.atomic.AtomicBoolean;
@@ -1431,7 +1432,7 @@ public class StageControlPanel extends VBox {
         if (ModalityRegistry.getUi(modality).buildLiveCameraControls(modality, cameraHost)) {
             return;
         }
-        String norm = modality.toLowerCase();
+        String norm = modality.toLowerCase(Locale.ROOT);
         if (norm.startsWith("ppm")) {
             buildPpmCameraContent(modality);
         } else if (norm.startsWith("brightfield") || norm.startsWith("bf")) {
@@ -2802,12 +2803,12 @@ public class StageControlPanel extends VBox {
         java.util.List<String> matching = new java.util.ArrayList<>();
         Object profiles = mgr.getConfigItem("acquisition_profiles");
         if (!(profiles instanceof java.util.Map<?, ?> profileMap)) return matching;
-        String modalityLower = modality.toLowerCase();
+        String modalityLower = modality.toLowerCase(Locale.ROOT);
         for (var entry : profileMap.entrySet()) {
             if (entry.getValue() instanceof java.util.Map<?, ?> profileCfg) {
                 Object profModality = profileCfg.get("modality");
                 if (profModality != null
-                        && profModality.toString().toLowerCase().equals(modalityLower)) {
+                        && profModality.toString().toLowerCase(Locale.ROOT).equals(modalityLower)) {
                     matching.add(String.valueOf(entry.getKey()));
                 }
             }
@@ -2924,7 +2925,7 @@ public class StageControlPanel extends VBox {
 
     private String getPresetKey(String modality) {
         return "camera.preset."
-                + modality.toLowerCase().replaceAll("[^a-z0-9]", "")
+                + modality.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "")
                 + "." + currentCameraObjectiveId
                 + "." + currentCameraDetectorId;
     }
@@ -3738,7 +3739,7 @@ public class StageControlPanel extends VBox {
 
     private static String capitalize(String s) {
         if (s == null || s.isEmpty()) return s;
-        return s.substring(0, 1).toUpperCase() + s.substring(1);
+        return s.substring(0, 1).toUpperCase(Locale.ROOT) + s.substring(1);
     }
 
     private void setupEventHandlers() {

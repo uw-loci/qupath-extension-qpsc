@@ -4,6 +4,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -250,7 +251,7 @@ public final class InsertCalibrationDialog {
                 Button useCurrent = new Button("Use current " + f.axis());
                 useCurrent.setTooltip(new Tooltip("Capture the live stage " + f.axis()
                         + " position into this field. Center the objective on the "
-                        + f.label().toLowerCase() + " first."));
+                        + f.label().toLowerCase(Locale.ROOT) + " first."));
                 final Axis axis = f.axis();
                 useCurrent.setOnAction(e -> captureAxis(axis, valueField, currentPosLabel, useCurrent));
                 grid.addRow(row++, nameLabel, valueField, useCurrent);

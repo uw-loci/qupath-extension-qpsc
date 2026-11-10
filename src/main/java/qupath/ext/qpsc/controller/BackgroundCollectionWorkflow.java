@@ -9,6 +9,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -1149,7 +1150,7 @@ public class BackgroundCollectionWorkflow {
         java.util.regex.Matcher matcher = pattern.matcher(objective);
 
         if (matcher.find()) {
-            return matcher.group(1).toLowerCase() + "x"; // "20X" -> "20x"
+            return matcher.group(1).toLowerCase(Locale.ROOT) + "x"; // "20X" -> "20x"
         }
 
         // Fallback: return "unknown" if pattern not found

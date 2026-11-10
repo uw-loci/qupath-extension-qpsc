@@ -115,7 +115,7 @@ while (Files.exists(outFile)) {
 }
 
 // ---------- write via ImageIO, matching source format ----------
-String extLower = ext.toLowerCase()
+String extLower = ext.toLowerCase(Locale.ROOT)
 String formatTag = extLower == ".bmp" ? "bmp" : "tiff"   // .tif / .tiff both map to "tiff"
 boolean wrote = ImageIO.write(dstImg, formatTag, outFile.toFile())
 if (!wrote) {

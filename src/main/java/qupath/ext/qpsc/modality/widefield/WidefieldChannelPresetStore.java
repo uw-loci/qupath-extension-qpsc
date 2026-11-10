@@ -3,6 +3,7 @@ package qupath.ext.qpsc.modality.widefield;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 
@@ -118,7 +119,7 @@ public final class WidefieldChannelPresetStore {
 
     /** Lowercase + non-alphanumerics -> '_'. Names are validated to <=40 chars so the key stays under Prefs' 80-char limit. */
     public static String safeKey(String name) {
-        return name.toLowerCase().replaceAll("[^a-z0-9_-]", "_");
+        return name.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9_-]", "_");
     }
 
     static String encode(String focusId, Map<String, ChannelState> states) {

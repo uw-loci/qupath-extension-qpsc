@@ -1,6 +1,7 @@
 package qupath.ext.qpsc;
 
 import java.io.IOException;
+import java.util.Locale;
 import java.util.ResourceBundle;
 import javafx.animation.PauseTransition;
 import javafx.application.Platform;
@@ -1002,8 +1003,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             }
 
             // Skip modalities not present in the microscope config
-            boolean modalityInConfig =
-                    configModalities.stream().anyMatch(m -> m.toLowerCase().startsWith(prefix));
+            boolean modalityInConfig = configModalities.stream()
+                    .anyMatch(m -> m.toLowerCase(Locale.ROOT).startsWith(prefix));
             if (!modalityInConfig && configValid) {
                 continue;
             }
@@ -1013,7 +1014,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 menuHandlersAdded.add(handler);
                 String name = handler.getDisplayName();
                 if (name == null) {
-                    name = entry.getKey().toUpperCase();
+                    name = entry.getKey().toUpperCase(Locale.ROOT);
                 }
                 Menu modalityMenu = new Menu(name);
                 for (var item : contributions) {

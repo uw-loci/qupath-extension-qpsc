@@ -2,6 +2,7 @@ package qupath.ext.qpsc.acquisition;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -498,8 +499,8 @@ public class AcquisitionConfigurationBuilder {
         if (objective != null && objective.contains("_")) {
             String[] parts = objective.split("_");
             for (String part : parts) {
-                if (part.toUpperCase().endsWith("X")) {
-                    return part.toLowerCase();
+                if (part.toUpperCase(Locale.ROOT).endsWith("X")) {
+                    return part.toLowerCase(Locale.ROOT);
                 }
             }
         }

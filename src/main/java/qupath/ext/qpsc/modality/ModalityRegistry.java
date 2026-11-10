@@ -1,6 +1,7 @@
 package qupath.ext.qpsc.modality;
 
 import java.util.Collections;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 import org.slf4j.Logger;
@@ -184,7 +185,7 @@ public final class ModalityRegistry {
             return;
         }
 
-        String normalizedPrefix = prefix.toLowerCase().trim();
+        String normalizedPrefix = prefix.toLowerCase(Locale.ROOT).trim();
         ModalityHandler existingHandler = HANDLERS.put(normalizedPrefix, handler);
 
         if (existingHandler != null) {
@@ -252,7 +253,7 @@ public final class ModalityRegistry {
             return NO_OP;
         }
 
-        String normalizedName = modalityName.toLowerCase().trim();
+        String normalizedName = modalityName.toLowerCase(Locale.ROOT).trim();
         logger.debug("Looking up handler for modality name: '{}'", normalizedName);
 
         // The longest matching prefix wins. A first-match scan is wrong here because the map's

@@ -1,5 +1,6 @@
 package qupath.ext.qpsc.project;
 
+import java.util.Locale;
 import java.util.regex.Pattern;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -70,7 +71,7 @@ public class SampleNameValidator {
         }
 
         // Check for reserved Windows names
-        String upperName = trimmed.toUpperCase();
+        String upperName = trimmed.toUpperCase(Locale.ROOT);
         for (String reserved : RESERVED_NAMES) {
             if (upperName.equals(reserved) || upperName.startsWith(reserved + ".")) {
                 return false;
@@ -116,7 +117,7 @@ public class SampleNameValidator {
         }
 
         // Check for reserved Windows names
-        String upperName = trimmed.toUpperCase();
+        String upperName = trimmed.toUpperCase(Locale.ROOT);
         for (String reserved : RESERVED_NAMES) {
             if (upperName.equals(reserved) || upperName.startsWith(reserved + ".")) {
                 return "Sample name '" + reserved + "' is reserved by Windows";
@@ -156,7 +157,7 @@ public class SampleNameValidator {
         }
 
         // Check for reserved names and append underscore if needed
-        String upperName = sanitized.toUpperCase();
+        String upperName = sanitized.toUpperCase(Locale.ROOT);
         for (String reserved : RESERVED_NAMES) {
             if (upperName.equals(reserved) || upperName.startsWith(reserved + ".")) {
                 sanitized = sanitized + "_sample";

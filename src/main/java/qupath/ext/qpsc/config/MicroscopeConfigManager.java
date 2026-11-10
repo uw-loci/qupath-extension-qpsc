@@ -103,7 +103,7 @@ public class MicroscopeConfigManager {
             if (section.startsWith("ID_") || section.startsWith("id_")) {
                 String field = section.substring(3) // remove "id_"
                         .replaceAll("_", "") // e.g. "OBJECTIVE_LENS" -> "OBJECTIVELENS"
-                        .toLowerCase(); // "OBJECTIVELENS" -> "objectivelens"
+                        .toLowerCase(Locale.ROOT); // "OBJECTIVELENS" -> "objectivelens"
                 lociSectionMap.put(field, section);
             }
         }
@@ -269,7 +269,7 @@ public class MicroscopeConfigManager {
         Map<String, String> newSectionMap = new HashMap<>();
         for (String section : newResources.keySet()) {
             if (section.startsWith("ID_") || section.startsWith("id_")) {
-                String field = section.substring(3).replaceAll("_", "").toLowerCase();
+                String field = section.substring(3).replaceAll("_", "").toLowerCase(Locale.ROOT);
                 newSectionMap.put(field, section);
             }
         }
@@ -649,7 +649,7 @@ public class MicroscopeConfigManager {
         String nameWithoutExt = configFilename.replaceFirst("\\.[^.]+$", "");
 
         // Remove "config_" prefix if present (case insensitive)
-        if (nameWithoutExt.toLowerCase().startsWith("config_")) {
+        if (nameWithoutExt.toLowerCase(Locale.ROOT).startsWith("config_")) {
             return nameWithoutExt.substring(7);
         }
 
@@ -744,7 +744,7 @@ public class MicroscopeConfigManager {
     private static String findResourceSectionForID(
             String parentField, Map<String, Object> resourceData, ResourceBundle res) {
         for (String section : resourceData.keySet()) {
-            if (section.toLowerCase().contains(parentField.toLowerCase())) {
+            if (section.toLowerCase(Locale.ROOT).contains(parentField.toLowerCase(Locale.ROOT))) {
                 return section;
             }
         }
@@ -823,7 +823,7 @@ public class MicroscopeConfigManager {
             if (!(profiles instanceof Map<?, ?> profileMap) || profileMap.isEmpty()) {
                 return null;
             }
-            String modalityLower = modality.toLowerCase();
+            String modalityLower = modality.toLowerCase(Locale.ROOT);
             for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
                 if (!(entry.getValue() instanceof Map<?, ?> profileCfg)) {
                     continue;
@@ -832,7 +832,7 @@ public class MicroscopeConfigManager {
                 if (profModality == null) {
                     continue;
                 }
-                String profModStr = profModality.toString().toLowerCase();
+                String profModStr = profModality.toString().toLowerCase(Locale.ROOT);
                 int prefix = Math.min(2, Math.min(modalityLower.length(), profModStr.length()));
                 if (modalityLower.regionMatches(0, profModStr, 0, prefix)) {
                     return String.valueOf(entry.getKey());
@@ -1008,7 +1008,7 @@ public class MicroscopeConfigManager {
         if (raw == null) {
             return null;
         }
-        String v = raw.trim().toLowerCase();
+        String v = raw.trim().toLowerCase(Locale.ROOT);
         if (v.equals("positive") || v.equals("+1") || v.equals("1")) {
             return 1.0;
         }
@@ -2540,7 +2540,7 @@ public class MicroscopeConfigManager {
             return modality;
         }
         String modalityPrefix = modality + "_";
-        String objLower = (objective == null ? "" : objective).toLowerCase();
+        String objLower = (objective == null ? "" : objective).toLowerCase(Locale.ROOT);
 
         // Strategy 2: "<modality>_<suffix>" where suffix is a substring of the
         // objective id; prefer the longest matching suffix.
@@ -2551,7 +2551,7 @@ public class MicroscopeConfigManager {
                 continue;
             }
             String suffix = key.substring(modalityPrefix.length());
-            if (!suffix.isEmpty() && objLower.contains(suffix.toLowerCase()) && suffix.length() > bestLen) {
+            if (!suffix.isEmpty() && objLower.contains(suffix.toLowerCase(Locale.ROOT)) && suffix.length() > bestLen) {
                 bestLen = suffix.length();
                 bestKey = key;
             }
@@ -2561,13 +2561,13 @@ public class MicroscopeConfigManager {
         }
 
         // Strategy 3: case-insensitive prefix fallback.
-        String modalityPrefixLower = modalityPrefix.toLowerCase();
+        String modalityPrefixLower = modalityPrefix.toLowerCase(Locale.ROOT);
         for (String key : profiles.keySet()) {
-            if (!key.toLowerCase().startsWith(modalityPrefixLower)) {
+            if (!key.toLowerCase(Locale.ROOT).startsWith(modalityPrefixLower)) {
                 continue;
             }
             String suffix = key.substring(modalityPrefix.length());
-            if (!suffix.isEmpty() && objLower.contains(suffix.toLowerCase())) {
+            if (!suffix.isEmpty() && objLower.contains(suffix.toLowerCase(Locale.ROOT))) {
                 return key;
             }
         }
@@ -2616,11 +2616,12 @@ public class MicroscopeConfigManager {
                 }
             } else if (profModality != null) {
                 String modality = profModality.toString();
-                String suffix = profileKey.toLowerCase().startsWith(modality.toLowerCase() + "_")
+                String suffix = profileKey.toLowerCase(Locale.ROOT).startsWith(modality.toLowerCase(Locale.ROOT) + "_")
                         ? profileKey.substring(modality.length() + 1)
                         : "";
                 String fit = matchProfileKey(modality, objectiveId);
-                if (!suffix.isEmpty() && !objectiveId.toLowerCase().contains(suffix.toLowerCase())) {
+                if (!suffix.isEmpty()
+                        && !objectiveId.toLowerCase(Locale.ROOT).contains(suffix.toLowerCase(Locale.ROOT))) {
                     problems.add("is for a " + suffix + " objective");
                 } else if (fit != null && !fit.equals(profileKey)) {
                     problems.add("is not the profile for this objective (" + fit + " is)");
@@ -3270,7 +3271,7 @@ public class MicroscopeConfigManager {
             return null;
         }
         Object type = detectorData.get("camera_type");
-        return (type instanceof String) ? ((String) type).toLowerCase() : null;
+        return (type instanceof String) ? ((String) type).toLowerCase(Locale.ROOT) : null;
     }
 
     /**
@@ -3369,7 +3370,7 @@ public class MicroscopeConfigManager {
         }
 
         // Check by ID convention first (fast path)
-        if (detectorId.toUpperCase().contains("JAI")) {
+        if (detectorId.toUpperCase(Locale.ROOT).contains("JAI")) {
             logger.debug("Detector {} identified as JAI camera by ID convention", detectorId);
             return true;
         }
@@ -3843,11 +3844,11 @@ public class MicroscopeConfigManager {
             Object modalitiesObj = data.get("modalities");
             if (!(modalitiesObj instanceof Map)) return null;
             Map<String, Object> modalityBindings = (Map<String, Object>) modalitiesObj;
-            String modalityLower = modality.toLowerCase();
+            String modalityLower = modality.toLowerCase(Locale.ROOT);
             String bestMatchKey = null;
             int bestLen = 0;
             for (String key : modalityBindings.keySet()) {
-                String keyLower = key.toLowerCase();
+                String keyLower = key.toLowerCase(Locale.ROOT);
                 if (modalityLower.startsWith(keyLower) && keyLower.length() > bestLen) {
                     bestMatchKey = key;
                     bestLen = keyLower.length();

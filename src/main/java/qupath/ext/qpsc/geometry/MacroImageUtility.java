@@ -3,6 +3,7 @@ package qupath.ext.qpsc.geometry;
 import java.awt.*;
 import java.awt.image.BufferedImage;
 import java.io.File;
+import java.util.Locale;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -397,7 +398,7 @@ public class MacroImageUtility {
             // Find macro image key
             String macroKey = null;
             for (String name : associatedList) {
-                if (name.toLowerCase().contains("macro")) {
+                if (name.toLowerCase(Locale.ROOT).contains("macro")) {
                     macroKey = name;
                     break;
                 }
@@ -594,7 +595,7 @@ public class MacroImageUtility {
                 return null;
             }
             for (String name : associatedList) {
-                if (name.toLowerCase().contains("macro")) {
+                if (name.toLowerCase(Locale.ROOT).contains("macro")) {
                     Object image = server.getAssociatedImage(name);
                     if (image instanceof BufferedImage macro) {
                         return macro;
@@ -625,7 +626,7 @@ public class MacroImageUtility {
             var associatedImages = gui.getImageData().getServer().getAssociatedImageList();
             if (associatedImages != null
                     && associatedImages.stream()
-                            .anyMatch(name -> name.toLowerCase().contains("macro"))) {
+                            .anyMatch(name -> name.toLowerCase(Locale.ROOT).contains("macro"))) {
                 return true;
             }
         } catch (Exception e) {

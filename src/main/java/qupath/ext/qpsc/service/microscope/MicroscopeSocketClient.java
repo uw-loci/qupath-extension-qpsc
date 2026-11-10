@@ -9,6 +9,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.*;
@@ -488,7 +489,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
          * @return Parsed acquisition state
          */
         public static AcquisitionState fromString(String stateStr) {
-            String trimmed = stateStr.trim().toUpperCase();
+            String trimmed = stateStr.trim().toUpperCase(Locale.ROOT);
             try {
                 return AcquisitionState.valueOf(trimmed);
             } catch (IllegalArgumentException e) {

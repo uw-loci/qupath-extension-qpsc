@@ -6,6 +6,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -891,7 +892,7 @@ public final class ConfigYamlEditor {
         if (s == null) return "''";
         String trimmed = s.trim();
         if (trimmed.isEmpty()) return "''";
-        switch (trimmed.toLowerCase()) {
+        switch (trimmed.toLowerCase(Locale.ROOT)) {
             case "on":
             case "off":
             case "yes":

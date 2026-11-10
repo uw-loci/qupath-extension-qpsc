@@ -3,6 +3,7 @@ package qupath.ext.qpsc.controller;
 import java.awt.Desktop;
 import java.io.File;
 import java.io.IOException;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
@@ -457,7 +458,7 @@ public class TestAutofocusWorkflow {
         javafx.scene.control.Alert alert =
                 new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.INFORMATION);
         alert.setTitle("Autofocus Test Complete");
-        alert.setHeaderText(testType.substring(0, 1).toUpperCase() + testType.substring(1)
+        alert.setHeaderText(testType.substring(0, 1).toUpperCase(Locale.ROOT) + testType.substring(1)
                 + " autofocus test completed successfully!");
 
         // Build formatted message with larger, bold text

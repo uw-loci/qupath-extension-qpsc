@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeMap;
@@ -90,7 +91,7 @@ public final class LcPanelsDumpScenario {
             Thread.sleep(800);
             dumpCamera("camera tab modality=" + m, content, status);
         }
-        String lc = mods.stream().filter(m -> m.toLowerCase().startsWith("lc")).findFirst().orElse(null);
+        String lc = mods.stream().filter(m -> m.toLowerCase(Locale.ROOT).startsWith("lc")).findFirst().orElse(null);
         out.append("lc modality: ").append(lc).append('\n');
         if (lc != null) {
             onFx(() -> rebuild.invoke(panel, lc));

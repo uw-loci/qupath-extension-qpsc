@@ -10,6 +10,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.HashMap;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javafx.beans.value.ChangeListener;
@@ -1225,8 +1226,8 @@ public class QPProjectFunctions {
             ImageData<BufferedImage> imageData,
             qupath.ext.qpsc.modality.ModalityHandler modalityHandler) {
 
-        String fileName = imageFile.getName().toLowerCase();
-        String filePath = imageFile.getAbsolutePath().toLowerCase();
+        String fileName = imageFile.getName().toLowerCase(Locale.ROOT);
+        String filePath = imageFile.getAbsolutePath().toLowerCase(Locale.ROOT);
 
         // Check for birefringence images first (16-bit single-channel)
         // These need to be OTHER type, not BRIGHTFIELD_H_E

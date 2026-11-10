@@ -2219,7 +2219,7 @@ public class AutofocusEditorWorkflow {
             nameDialog.setHeaderText("Enter a name for the new strategy:");
             DialogOwner.own(nameDialog);
             nameDialog.showAndWait().ifPresent(name -> {
-                String key = name.trim().toLowerCase().replaceAll("\\s+", "_");
+                String key = name.trim().toLowerCase(Locale.ROOT).replaceAll("\\s+", "_");
                 if (key.isEmpty() || strategies.containsKey(key)) {
                     Dialogs.showWarningNotification("Invalid Name", "Name is empty or already exists: " + key);
                     return;
@@ -2630,7 +2630,7 @@ public class AutofocusEditorWorkflow {
             nameDialog.setHeaderText("Enter the modality key (e.g. bf, fluorescence, ppm):");
             DialogOwner.own(nameDialog);
             nameDialog.showAndWait().ifPresent(name -> {
-                String key = name.trim().toLowerCase();
+                String key = name.trim().toLowerCase(Locale.ROOT);
                 if (key.isEmpty()) {
                     Dialogs.showWarningNotification("Invalid Name", "Name cannot be empty");
                     return;

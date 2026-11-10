@@ -10,6 +10,7 @@ import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
@@ -489,7 +490,7 @@ public class StitchingHelper {
                 if (shortPrefix != null
                         && !shortPrefix.isBlank()
                         && parsedModality != null
-                        && parsedModality.toLowerCase().startsWith(shortPrefix.toLowerCase())) {
+                        && parsedModality.toLowerCase(Locale.ROOT).startsWith(shortPrefix.toLowerCase(Locale.ROOT))) {
                     mergedModality = shortPrefix;
                 }
             }
@@ -1863,7 +1864,9 @@ public class StitchingHelper {
                                 if (shortModalityPrefix != null
                                         && !shortModalityPrefix.isBlank()
                                         && parsedModality != null
-                                        && parsedModality.toLowerCase().startsWith(shortModalityPrefix.toLowerCase())) {
+                                        && parsedModality
+                                                .toLowerCase(Locale.ROOT)
+                                                .startsWith(shortModalityPrefix.toLowerCase(Locale.ROOT))) {
                                     mergedModality = shortModalityPrefix;
                                 }
                                 String sanitizedAnnotationName = ImageNameGenerator.sanitizeForFilename(annotationName);
@@ -2115,7 +2118,7 @@ public class StitchingHelper {
     private static List<Integer> getDefaultChannelColors(List<String> channelIds) {
         List<Integer> colors = new ArrayList<>();
         for (String id : channelIds) {
-            Integer color = DEFAULT_CHANNEL_COLORS.get(id.toLowerCase());
+            Integer color = DEFAULT_CHANNEL_COLORS.get(id.toLowerCase(Locale.ROOT));
             colors.add(color); // null is fine -- merger falls back to source color
         }
         return colors;

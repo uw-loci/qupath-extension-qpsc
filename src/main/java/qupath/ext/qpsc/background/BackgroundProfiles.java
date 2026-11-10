@@ -17,6 +17,7 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.regex.Pattern;
@@ -522,7 +523,7 @@ public final class BackgroundProfiles {
         if (s == null) {
             return null;
         }
-        String t = s.trim().toUpperCase();
+        String t = s.trim().toUpperCase(Locale.ROOT);
         return "A".equals(t) || "B".equals(t) ? t : null;
     }
 

@@ -3,6 +3,7 @@ package qupath.ext.qpsc.modality.widefield.ui;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.function.Supplier;
@@ -1263,12 +1264,12 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
         try {
             Object profiles = mgr.getConfigItem("acquisition_profiles");
             if (!(profiles instanceof Map<?, ?> profileMap) || profileMap.isEmpty()) return null;
-            String modalityLower = loadedModality.toLowerCase();
+            String modalityLower = loadedModality.toLowerCase(Locale.ROOT);
             for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
                 if (!(entry.getValue() instanceof Map<?, ?> profileCfg)) continue;
                 Object profModality = profileCfg.get("modality");
                 if (profModality == null) continue;
-                String profModStr = profModality.toString().toLowerCase();
+                String profModStr = profModality.toString().toLowerCase(Locale.ROOT);
                 int prefix = Math.min(2, Math.min(modalityLower.length(), profModStr.length()));
                 if (modalityLower.regionMatches(0, profModStr, 0, prefix)) {
                     return String.valueOf(entry.getKey());

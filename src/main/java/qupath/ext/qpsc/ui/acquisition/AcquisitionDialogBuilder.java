@@ -1100,7 +1100,7 @@ abstract class AcquisitionDialogBuilder<R> {
         if (modality == null) {
             return null;
         }
-        String norm = modality.toLowerCase();
+        String norm = modality.toLowerCase(Locale.ROOT);
         if (norm.startsWith("ppm")) {
             return PersistentPreferences.LOOP_ORDER_FAMILY_PPM;
         }

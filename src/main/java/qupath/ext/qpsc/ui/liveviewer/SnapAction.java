@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.ExecutorService;
 import java.util.function.Consumer;
@@ -302,8 +303,8 @@ public final class SnapAction {
             return;
         }
         // Ensure .tif extension
-        if (!chosen.getName().toLowerCase().endsWith(".tif")
-                && !chosen.getName().toLowerCase().endsWith(".tiff")) {
+        if (!chosen.getName().toLowerCase(Locale.ROOT).endsWith(".tif")
+                && !chosen.getName().toLowerCase(Locale.ROOT).endsWith(".tiff")) {
             chosen = new File(chosen.getParentFile(), chosen.getName() + ".tif");
         }
         File destination = chosen;

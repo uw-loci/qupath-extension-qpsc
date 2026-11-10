@@ -157,7 +157,7 @@ public class MacroImageAnalyzer {
 
         // Find which entry contains "macro"
         for (String name : associatedList) {
-            if (name.toLowerCase().contains("macro")) {
+            if (name.toLowerCase(Locale.ROOT).contains("macro")) {
                 macroName = name;
                 break;
             }
@@ -900,11 +900,11 @@ public class MacroImageAnalyzer {
 
                 // Try lowercase
                 try {
-                    BufferedImage img = (BufferedImage) server.getAssociatedImage(name.toLowerCase());
+                    BufferedImage img = (BufferedImage) server.getAssociatedImage(name.toLowerCase(Locale.ROOT));
                     if (img != null) {
                         logger.info(
                                 "  SUCCESS with lowercase: {} ({}x{})",
-                                name.toLowerCase(),
+                                name.toLowerCase(Locale.ROOT),
                                 img.getWidth(),
                                 img.getHeight());
                     }
