@@ -227,6 +227,8 @@ watched_symbols:
   - SunburstCalibrationWorkflow.run
   - PPMSensitivityTestWorkflow.run
 acknowledged_stale:
+  - "338322f4 -- Locale.ROOT on every no-argument toLowerCase()/toUpperCase() (SetupScope gained an import, so its line refs moved by one and were re-synced here). No dispatch/reads/writes change."
+  - "5307f18c -- Locale.ROOT on machine-read String.format calls (socket arguments, TileConfiguration, autofocus YAML, saved points, camera preset, prefilled TextFields); RPDSCAN/POLCAL message building moved into MicroscopeSocketClient.rapidScanMessage/polarizerCalibrationMessage. Bytes are what en-US already sent; no dispatch/reads/writes change."
   - "334f4fda/0f5a7980: W1 gained startAsync() (completion future for batch orchestration); MultiSlide Run button now awaits it. Map's dispatch/reads/writes unchanged."
   - "85b5f498: MultiSlide panel gained 'Run All Remaining' -- sequential auto-run over W1.startAsync() across slots (opens each entry, awaits completion, advances). Per-slide dispatch/reads/writes unchanged; still one W1 invocation per slot."
   - "ae3d7c2b: W1 gained startSetupAsync() and startAcquireAsync() for two-pass batch mode; MultiSlide panel dispatches 'Set Up All Remaining' over startSetupAsync() (no acquisition), then 'Acquire All Set-Up' over startAcquireAsync() (unattended replay). Per-slide alignment persists to disk between passes; reads/writes largely unchanged, just split across two invocations per slot."
@@ -328,7 +330,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ExistingImageWorkflowV2.java
 entry: start() | startAsync() -> CompletableFuture<WorkflowState> (full run; non-null = acquired, null = short-circuit/cancel/handled-error; never exceptional -- for batch orchestrators) | startSetupAsync() -> CompletableFuture<SetupResult> (setup-only: align + refine + tissue without acquisition, persists per-slide alignment JSON) | startAcquireAsync(SetupResult) -> AcquireHandle (acquire-only: replays captured config unattended against persisted alignment JSON; the handle also carries the stitching-settled future for the pipelined batch)
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition controls > Acquire from Existing Image (SetupScope.java:440, dispatch 'existingImage'; disabled with no open image)"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Acquire from Existing Image (SetupScope.java:441, dispatch 'existingImage'; disabled with no open image)"
   - "Wizard: Acquisition Wizard 'Existing Image Acquisition' button (AcquisitionWizardDialog.onExistingImageAcquisition)"
   - "Per-slot driver: MultiSlideExistingImageWorkflow shepherds one invocation per slide-carrier slot"
 dialogs:
@@ -441,7 +443,7 @@ entry: start() / startAsync()
 category: acquisition_shepherd
 status: experimental
 ui_entries:
-  - "Menu: Extensions > QP Scope > Multi-Slide Acquisition... (top level, directly under Acquisition Wizard; SetupScope.java:464, dispatch 'multiSlideExistingImage', which also auto-opens the Live Viewer and Stage Map; shown when the config defines a multi-slide holder; no preference toggle; disabled with no open project)"
+  - "Menu: Extensions > QP Scope > Multi-Slide Acquisition... (top level, directly under Acquisition Wizard; SetupScope.java:465, dispatch 'multiSlideExistingImage', which also auto-opens the Live Viewer and Stage Map; shown when the config defines a multi-slide holder; no preference toggle; disabled with no open project)"
 dispatches_to:
   - "W1 (per-slot ExistingImageWorkflowV2.startAsync / startSetupAsync / startAcquireAsync)"
   - "ModalityRegistry.getUi(modality).confirmBatch(slides) once per modality before a batch (LC-PolScope: the per-slide calibration reminder)"
@@ -532,7 +534,7 @@ file: src/main/java/qupath/ext/qpsc/controller/BoundedAcquisitionWorkflow.java
 entry: run()
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition controls > Bounded Acquisition (SetupScope.java:425, dispatch 'boundedAcquisition')"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Bounded Acquisition (SetupScope.java:426, dispatch 'boundedAcquisition')"
   - "Wizard: Acquisition Wizard 'Bounded Acquisition' button"
 reads:
   - DS3 (modality FOV, pixel size, detector dimensions; stage.limits.z_um for the dialog's Z range; stage.polarity)
@@ -583,7 +585,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MicroscopeAlignmentWorkflow.java
 entry: run()
 category: alignment
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Alignment (SetupScope.java:487, dispatch 'microscopeAlignment')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Alignment (SetupScope.java:488, dispatch 'microscopeAlignment')"
   - "Wizard: AcquisitionWizardDialog alignment step (startWorkflow('microscopeAlignment'))"
   - "Disabled unless MacroImageUtility.isMacroImageAvailable(qupath) returns true"
 reads:
@@ -619,7 +621,7 @@ file: src/main/java/qupath/ext/qpsc/controller/BackgroundCollectionWorkflow.java
 entry: run() / executeBackgroundAcquisitionDirect()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Collect Background Images (SetupScope.java:558, dispatch 'backgroundCollection')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Collect Background Images (SetupScope.java:559, dispatch 'backgroundCollection')"
   - "Wizard: AcquisitionWizardDialog background step"
   - "Offered after calibrations that invalidate a background set (BackgroundCollectionWorkflow.offerCollection / run(Preselection))"
 reads:
@@ -643,7 +645,7 @@ file: src/main/java/qupath/ext/qpsc/controller/AutofocusBenchmarkWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Parameter Benchmark... (SetupScope.java:665, dispatch 'autofocusBenchmark')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Parameter Benchmark... (SetupScope.java:666, dispatch 'autofocusBenchmark')"
 reads:
   - DS3 (autofocus YAML section)
   - DS17
@@ -662,7 +664,7 @@ file: src/main/java/qupath/ext/qpsc/controller/AutofocusEditorWorkflow.java
 entry: run() / showValidationResultStatic()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor... (SetupScope.java:597, dispatch 'autofocusEditor')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor... (SetupScope.java:598, dispatch 'autofocusEditor')"
 reads:
   - DS3 (autofocus YAML)
 writes:
@@ -707,7 +709,7 @@ file: src/main/java/qupath/ext/qpsc/controller/WhiteBalanceWorkflow.java
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI White Balance Calibration... (when hasJAICamera; SetupScope.java:864, dispatch 'whiteBalance')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI White Balance Calibration... (when hasJAICamera; SetupScope.java:865, dispatch 'whiteBalance')"
   - "Wizard: AcquisitionWizardDialog white-balance step"
 reads:
   - DS3 (pixel size)
@@ -727,7 +729,7 @@ file: src/main/java/qupath/ext/qpsc/controller/WBComparisonWorkflow.java
 entry: run()
 category: comparison
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test... (only when hasJAICamera; SetupScope.java:625, dispatch 'wbComparison')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test... (only when hasJAICamera; SetupScope.java:626, dispatch 'wbComparison')"
 reads:
   - DS3
   - DS21
@@ -765,7 +767,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ForwardPropagationWorkflow.java
 entry: run(qupath)
 category: propagation
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... (SetupScope.java:751, direct call, not via QPScopeController)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Propagation Manager... (SetupScope.java:752, direct call, not via QPScopeController)"
 reads:
   - DS5 (tier 1 lookup: macro-frame JSON via AlignmentHelper)
   - DS6 (tier 2 lookup: derived/ sub-frame JSON)
@@ -841,7 +843,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MakePortableWorkflow.java
 entry: run(qupath)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... (SetupScope.java:782, direct call)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Make Project Portable... (SetupScope.java:783, direct call)"
 reads:
   - DS27 (project image list; entries with .zarr backing)
   - DS28 (raw tile folders, when ZARR is absent)
@@ -863,7 +865,7 @@ file: src/main/java/qupath/ext/qpsc/controller/StitchingRecoveryWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... (SetupScope.java:759, dispatch 'stitchingRecovery')"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles... (SetupScope.java:760, dispatch 'stitchingRecovery')"
 reads:
   - DS28 (user-selected tile folder; TileConfiguration.txt)
   - DS25 (compression / output format)
@@ -903,7 +905,7 @@ file: src/main/java/qupath/ext/qpsc/ui/liveviewer/LiveViewerWindow.java
 entry: show() / hide() / lockControls(reason) / unlockControls() / beginExternalAutofocus(cancel) / endExternalAutofocus()
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition controls > Live Viewer (SetupScope.java:520, dispatch 'liveViewer')"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Live Viewer (SetupScope.java:521, dispatch 'liveViewer')"
   - "Auto-opened by Multi-Slide Acquisition (dispatch 'multiSlideExistingImage') and the Acquisition Wizard; reopened by Switch Microscope (W43) if it was open"
   - "Implicit: any workflow with primary-socket activity locks the live viewer (W1 acquisition)"
 reads:
@@ -934,7 +936,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ProbeStageAfWorkflow.java
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Re-probe Stage AF... (SetupScope.java:682, dispatch 'probeStageAf')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Re-probe Stage AF... (SetupScope.java:683, dispatch 'probeStageAf')"
 reads:
   - DS3 (stage YAML)
   - DS17 (live stage probe)
@@ -953,7 +955,7 @@ file: src/main/java/qupath/ext/qpsc/ui/stagemap/StageMapWindow.java
 entry: show() / hide() / setBoundingBoxPreview() / clearBoundingBoxPreview()
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition controls > Stage Map (SetupScope.java:511, direct StageMapWindow.show())"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Stage Map (SetupScope.java:512, direct StageMapWindow.show())"
   - "Auto-opened by Multi-Slide Acquisition; reopened by Switch Microscope (W43) if it was open"
 reads:
   - DS44 (StageInsertRegistry: carrier definitions)
@@ -982,8 +984,8 @@ file: src/main/java/qupath/ext/qpsc/ui/setupwizard/SetupWizardDialog.java
 entry: show()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... (SetupScope.java:821, dispatch 'setupWizard')"
-  - "Top-level when !configValid: 'Setup Wizard (Start Here)...' inserted before main wizard (SetupScope.java:945)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Setup Wizard... (SetupScope.java:822, dispatch 'setupWizard')"
+  - "Top-level when !configValid: 'Setup Wizard (Start Here)...' inserted before main wizard (SetupScope.java:946)"
 reads:
   - DS3 (loading existing config if any)
   - DS17 (server connection probe)
@@ -1069,7 +1071,7 @@ file: src/main/java/qupath/ext/qpsc/controller/NoiseCharacterizationWorkflow.jav
 entry: run()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI Noise Characterization... (when hasJAICamera; SetupScope.java:881, dispatch 'noiseCharacterization')"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > JAI Camera > JAI Noise Characterization... (when hasJAICamera; SetupScope.java:882, dispatch 'noiseCharacterization')"
 reads:
   - DS3
 writes:
@@ -1085,7 +1087,7 @@ file: src/main/java/qupath/ext/qpsc/ui/acquisition/AcquisitionWizardDialog.java
 entry: show()
 category: ui_router
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition Wizard... (top of menu, SetupScope.java:398, dispatch 'acquisitionWizard')"
+  - "Menu: Extensions > QP Scope > Acquisition Wizard... (top of menu, SetupScope.java:399, dispatch 'acquisitionWizard')"
 dispatches_to:
   - "W1 'Existing Image Acquisition' button (onExistingImageAcquisition)"
   - "W2 'Bounded Acquisition' button (onBoundedAcquisition)"
@@ -1110,7 +1112,7 @@ file: src/main/java/qupath/ext/qpsc/ui/connection/ServerConnectionController.jav
 entry: showDialog()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Communication Settings... (SetupScope.java:641, dispatch 'serverConnection')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Communication Settings... (SetupScope.java:642, dispatch 'serverConnection')"
 reads:
   - DS25 (server host/port preferences)
   - DS17 (connection probe)
@@ -1127,7 +1129,7 @@ file: src/main/java/qupath/ext/qpsc/ui/connection/CameraControlController.java
 entry: showCameraControlDialog()
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition controls > Camera Control... (SetupScope.java:718, dispatch 'cameraControl')"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Camera Control... (SetupScope.java:719, dispatch 'cameraControl')"
 reads:
   - DS3 (imaging profiles)
   - DS17 (live exposures/gains)
@@ -1144,7 +1146,7 @@ file: src/main/java/qupath/ext/qpsc/ui/calibration/ParfocalityCalibrationControl
 entry: show()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality... (SetupScope.java:700, dispatch 'parfocalityCalibration')"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Calibrate Parfocality... (SetupScope.java:701, dispatch 'parfocalityCalibration')"
 reads:
   - DS3
   - DS17 (current Z under each profile)
@@ -1161,7 +1163,7 @@ file: src/main/java/qupath/ext/qpsc/ui/acquisition/SinglePointAcquisitionControl
 entry: show()
 category: acquisition
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... (SetupScope.java:741, stackTimeLapseOption -> SinglePointAcquisitionController.show(), unconditional since W7 was removed)"
+  - "Menu: Extensions > QP Scope > Utilities > Z-Stack / Time-Lapse... (SetupScope.java:742, stackTimeLapseOption -> SinglePointAcquisitionController.show(), unconditional since W7 was removed)"
 reads:
   - DS3 (incl. stage.limits.z_um: the Z range maximum is getStageZTravelUm, 3074f504)
   - DS17
@@ -1199,7 +1201,7 @@ file: src/main/java/qupath/ext/qpsc/controller/FocusApproachValidationWorkflow.j
 entry: run()
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Focus Approach Validation... (SetupScope.java:614, direct call; disabled when the config is invalid or the scope is offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Focus Approach Validation... (SetupScope.java:615, direct call; disabled when the config is invalid or the scope is offline)"
 reads:
   - DS3 (stage YAML: safe Z per insert)
   - DS19 (modality config: objective, focus channel)
@@ -1222,7 +1224,7 @@ file: src/main/java/qupath/ext/qpsc/controller/RegisterObjectiveWorkflow.java
 entry: run(QuPathGUI)
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... (SetupScope.java:799, direct call; needs a writable config; disabled offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Register Current Objective... (SetupScope.java:800, direct call; needs a writable config; disabled offline)"
 reads:
   - DS17 (MicroManager: pixel size of the objective currently in the light path)
   - DS3 / DS19 (existing config files)
@@ -1266,7 +1268,7 @@ model: qupath.ext.qpsc.stitching.StitchingQueueModel (pure, unit-tested)
 entry: open() / enqueue(...) / show(operationId, label) / recordOutput(operationId, entry)
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition controls > Stitching queue (SetupScope.java:547, direct StitchingQueueWindow.open())"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Stitching queue (SetupScope.java:548, direct StitchingQueueWindow.open())"
   - "Implicit: AcquisitionManager.launchStitching enqueues each job (W1); StitchingHelper and StitchingRecoveryWorkflow (W16) report progress through show()"
 reads:
   - StitchingQueueModel (jobs of this QuPath session: QUEUED / RUNNING / DONE / FAILED, status line, elapsed, produced entries)
@@ -1287,7 +1289,7 @@ file: src/main/java/qupath/ext/qpsc/controller/workflow/AcquisitionManager.java
 entry: stopActiveAcquisition() (static)
 category: control
 ui_entries:
-  - "Menu: Extensions > QP Scope > Acquisition controls > Stop acquisition... (SetupScope.java:538 -> SetupScope.confirmAndStopAcquisition)"
+  - "Menu: Extensions > QP Scope > Acquisition controls > Stop acquisition... (SetupScope.java:539 -> SetupScope.confirmAndStopAcquisition)"
   - "Live Viewer red 'Stop acquisition' button while the stage is held (W19)"
   - "W1 validatePrerequisites offers it when a new run is refused because an acquisition is running"
 reads:
@@ -1310,7 +1312,7 @@ file: src/main/java/qupath/ext/qpsc/ui/background/BackgroundProfilesDialog.java
 entry: show(owner, baseFolder, onClosed)
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Background Profiles... (SetupScope.java:582, dispatch 'backgroundProfiles'; needs a valid config, works offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Background Profiles... (SetupScope.java:583, dispatch 'backgroundProfiles'; needs a valid config, works offline)"
 reads:
   - DS23 (<base>/profiles/<id>/profile.yml via BackgroundProfiles.list / find)
   - DS44 (current Stage Map insert, for the profile's expected setup)
@@ -1331,7 +1333,7 @@ file: src/main/java/qupath/ext/qpsc/ui/background/FlatfieldFitDialog.java
 entry: show(ownerStage)
 category: calibration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)... (SetupScope.java:573, direct call; needs a valid config)"
+  - "Menu: Extensions > QP Scope > Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)... (SetupScope.java:574, direct call; needs a valid config)"
 reads:
   - user-selected tile folder (must be visible from the server machine)
 writes:
@@ -1350,7 +1352,7 @@ file: src/main/java/qupath/ext/qpsc/display/orientation/OrientationColorViewWind
 entry: show(qupath)
 category: ui_singleton
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Orientation Color View... (SetupScope.java:773, direct call; no microscope)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Orientation Color View... (SetupScope.java:774, direct call; no microscope)"
 reads:
   - "stitched LC-PolScope orientation + retardance pyramids of the open image (OrientationPairing)"
 writes:
@@ -1369,7 +1371,7 @@ file: src/main/java/qupath/ext/qpsc/controller/ExportSpatialSceneWorkflow.java
 entry: run(qupath)
 category: utility
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... (SetupScope.java:790, direct call; offline)"
+  - "Menu: Extensions > QP Scope > Utilities > Project Tools > Export Spatial Relationships (OME-NGFF 0.6)... (SetupScope.java:791, direct call; offline)"
 reads:
   - DS5, DS6 (saved alignments), DS9 (XY offsets, stage bounds, light-path snapshot, isCameraView), DS27
 writes:
@@ -1388,7 +1390,7 @@ file: src/main/java/qupath/ext/qpsc/controller/MicroscopeSwitcher.java
 entry: switchTo(configPath, confirm)
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope... (SetupScope.java:655; applies the Microscope Config File preference)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Switch Microscope... (SetupScope.java:656; applies the Microscope Config File preference)"
   - "Called by W44 DemoMicroscope"
 reads:
   - DS25 (microscopeConfigFile)
@@ -1411,7 +1413,7 @@ file: src/main/java/qupath/ext/qpsc/controller/DemoMicroscope.java
 entry: connect()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Connect to a Demo Microscope... (SetupScope.java:414; always available)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Connect to a Demo Microscope... (SetupScope.java:415; always available)"
 reads:
   - "bundled demo config (BundledScopeInstaller.Bundle.DEMO)"
   - DS25 (server host / port, server launcher)
@@ -1431,7 +1433,7 @@ file: src/main/java/qupath/ext/qpsc/ui/alignment/LightPathSetupDialog.java
 entry: show()
 category: configuration
 ui_entries:
-  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Light Path Orientation... (SetupScope.java:810; needs a writable config)"
+  - "Menu: Extensions > QP Scope > Utilities > Microscope Configuration > Light Path Orientation... (SetupScope.java:811; needs a writable config)"
 reads:
   - DS3 (light_path block via LightPathModel)
 writes:
@@ -1449,7 +1451,7 @@ file: src/main/java/qupath/ext/qpsc/ui/connection/BugReportDialog.java
 entry: show()
 category: service
 ui_entries:
-  - "Menu: Extensions > QP Scope > Report a Bug... (SetupScope.java:1042; always available)"
+  - "Menu: Extensions > QP Scope > Report a Bug... (SetupScope.java:1043; always available)"
 writes:
   - "external: BugReportService -> Cloudflare Worker -> public GitHub issue (the Worker also pushes new issues to ntfy when its NTFY_TOPIC secret is set)"
 key_invariants:
