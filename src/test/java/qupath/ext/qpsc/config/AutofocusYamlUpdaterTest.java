@@ -298,7 +298,7 @@ class AutofocusYamlUpdaterTest {
 
                 assertThat(Files.readString(file))
                         .as("locale %s", locale)
-                        .contains("  search_range_um: 75.0\n")
+                        .containsPattern("  search_range_um: 75\\.0\\R")
                         .doesNotContain("75,0");
             }
         } finally {
