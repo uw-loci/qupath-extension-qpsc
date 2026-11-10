@@ -2,6 +2,7 @@ package qupath.ext.qpsc.ui.setupwizard;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.atomic.AtomicReference;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -236,7 +237,8 @@ public class ProbeStageAfStep implements WizardStep {
         enabledCheck.setSelected(result.enabled);
         speedPropertyField.setText(nullToBlank(result.speedProperty));
         slowValueField.setText(nullToBlank(result.slowSpeedValue));
-        slowUmPerSField.setText(result.slowSpeedUmPerS == null ? "" : String.format("%.3f", result.slowSpeedUmPerS));
+        slowUmPerSField.setText(
+                result.slowSpeedUmPerS == null ? "" : String.format(Locale.ROOT, "%.3f", result.slowSpeedUmPerS));
         normalValueField.setText(nullToBlank(result.normalSpeedValue));
     }
 
@@ -319,7 +321,7 @@ public class ProbeStageAfStep implements WizardStep {
             slowValueField.setText(data.streamingAfSlowSpeedValue);
         }
         if (data.streamingAfSlowSpeedUmPerS != null) {
-            slowUmPerSField.setText(String.format("%.3f", data.streamingAfSlowSpeedUmPerS));
+            slowUmPerSField.setText(String.format(Locale.ROOT, "%.3f", data.streamingAfSlowSpeedUmPerS));
         }
         if (data.streamingAfNormalSpeedValue != null) {
             normalValueField.setText(data.streamingAfNormalSpeedValue);

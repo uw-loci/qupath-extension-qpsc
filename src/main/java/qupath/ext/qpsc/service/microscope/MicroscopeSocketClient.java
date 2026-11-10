@@ -1646,7 +1646,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         // Target intensity for adaptive exposure (0 = use server default)
         String targetFlag = "";
         if (targetIntensity > 0) {
-            targetFlag = " --target-intensity " + String.format("%.0f", targetIntensity);
+            targetFlag = " --target-intensity " + String.format(Locale.ROOT, "%.0f", targetIntensity);
         }
         // Profile key drives the server's apply_profile_illumination; optional.
         String profileFlag = "";
@@ -2725,6 +2725,56 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * The RPDSCAN argument string. Numbers always use '.' as the decimal separator, whatever
+     * the default locale, because the server reads them with {@code float()}.
+     */
+    static String rapidScanMessage(
+            String outputFolder,
+            double centerX,
+            double centerY,
+            double width,
+            double height,
+            double overlapPercent,
+            double exposureMs,
+            double fovWidth,
+            double fovHeight) {
+        return String.format(
+                Locale.ROOT,
+                "--output %s --center-x %.3f --center-y %.3f --width %.3f --height %.3f "
+                        + "--overlap %.1f --exposure %.3f --fov-w %.3f --fov-h %.3f %s",
+                outputFolder,
+                centerX,
+                centerY,
+                width,
+                height,
+                overlapPercent,
+                exposureMs,
+                fovWidth,
+                fovHeight,
+                END_MARKER);
+    }
+
+    /** The POLCAL argument string, with the same locale-independent numbers as {@link #rapidScanMessage}. */
+    static String polarizerCalibrationMessage(
+            String yamlPath,
+            String outputPath,
+            double startAngle,
+            double endAngle,
+            double stepSize,
+            double exposureMs) {
+        return String.format(
+                Locale.ROOT,
+                "--yaml %s --output %s --start %.1f --end %.1f --step %.1f --exposure %.1f %s",
+                yamlPath,
+                outputPath,
+                startAngle,
+                endAngle,
+                stepSize,
+                exposureMs,
+                END_MARKER);
+    }
+
+    /**
      * Start a rapid scan acquisition over a rectangular region.
      *
      * <p>Fast tiled brightfield acquisition with no autofocus, no Z movement,
@@ -2755,19 +2805,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double fovHeight)
             throws IOException {
 
-        String message = String.format(
-                "--output %s --center-x %.3f --center-y %.3f --width %.3f --height %.3f "
-                        + "--overlap %.1f --exposure %.3f --fov-w %.3f --fov-h %.3f %s",
-                outputFolder,
-                centerX,
-                centerY,
-                width,
-                height,
-                overlapPercent,
-                exposureMs,
-                fovWidth,
-                fovHeight,
-                END_MARKER);
+        String message = rapidScanMessage(
+                outputFolder, centerX, centerY, width, height, overlapPercent, exposureMs, fovWidth, fovHeight);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending RPDSCAN command: {}", message);
@@ -3241,9 +3280,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throws IOException {
 
         // Build POLCAL-specific command message
-        String message = String.format(
-                "--yaml %s --output %s --start %.1f --end %.1f --step %.1f --exposure %.1f %s",
-                yamlPath, outputPath, startAngle, endAngle, stepSize, exposureMs, END_MARKER);
+        String message = polarizerCalibrationMessage(yamlPath, outputPath, startAngle, endAngle, stepSize, exposureMs);
         byte[] messageBytes = message.getBytes(StandardCharsets.UTF_8);
 
         logger.info("Sending polarizer calibration command:");

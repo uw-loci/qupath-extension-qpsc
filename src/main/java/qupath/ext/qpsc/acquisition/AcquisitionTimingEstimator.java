@@ -2,6 +2,7 @@ package qupath.ext.qpsc.acquisition;
 
 import java.util.Collections;
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Optional;
 import java.util.Set;
 import javafx.scene.control.Alert;
@@ -97,7 +98,8 @@ public final class AcquisitionTimingEstimator {
             return true;
         }
 
-        String key = String.format("%s|planes=%d|interval=%.3f", modalityKey, Math.max(1, zPlanes), intervalSec);
+        String key = String.format(
+                Locale.ROOT, "%s|planes=%d|interval=%.3f", modalityKey, Math.max(1, zPlanes), intervalSec);
         if (SUPPRESSED_KEYS.contains(key)) {
             logger.info("Slip warning suppressed for this session: {}", key);
             return true;

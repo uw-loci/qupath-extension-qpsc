@@ -156,16 +156,16 @@ public class RapidScanWorkflow {
         tileCountLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
 
         // Center X/Y
-        TextField centerXField = new TextField(String.format("%.1f", currentX));
+        TextField centerXField = new TextField(String.format(Locale.ROOT, "%.1f", currentX));
         centerXField.setPrefWidth(120);
-        TextField centerYField = new TextField(String.format("%.1f", currentY));
+        TextField centerYField = new TextField(String.format(Locale.ROOT, "%.1f", currentY));
         centerYField.setPrefWidth(120);
         Button usePositionBtn = new Button("Use Current Position");
         usePositionBtn.setOnAction(e -> {
             try {
                 double[] pos = mc.getSocketClient().getStageXYZ();
-                centerXField.setText(String.format("%.1f", pos[0]));
-                centerYField.setText(String.format("%.1f", pos[1]));
+                centerXField.setText(String.format(Locale.ROOT, "%.1f", pos[0]));
+                centerYField.setText(String.format(Locale.ROOT, "%.1f", pos[1]));
             } catch (Exception ex) {
                 UserErrors.show(logger, "Rapid Scan - Error", "Failed to read stage position: " + ex.getMessage());
             }

@@ -3,6 +3,7 @@ package qupath.ext.qpsc.ui.background;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -1072,7 +1073,7 @@ public class BackgroundCollectionController {
                             }
 
                             Label expLabel = new Label("Starting Exposure (ms):");
-                            TextField expField = new TextField(String.format("%.1f", defaultExp));
+                            TextField expField = new TextField(String.format(Locale.ROOT, "%.1f", defaultExp));
                             expField.setPrefWidth(100);
                             exposureFields.add(expField);
                             HBox expRow = new HBox(10, expLabel, expField, new Label("ms"));
@@ -1133,7 +1134,8 @@ public class BackgroundCollectionController {
                                     exposureGrid.add(angleTypeLabel, 3, gridRow);
                                 } else {
                                     // Camera AWB or Off: editable -- user controls these
-                                    TextField angleField = new TextField(String.format("%.1f", ae.ticks()));
+                                    TextField angleField =
+                                            new TextField(String.format(Locale.ROOT, "%.1f", ae.ticks()));
                                     angleField.setPrefWidth(80);
                                     TextField exposureField = new TextField(String.valueOf(ae.exposureMs()));
                                     exposureField.setPrefWidth(100);

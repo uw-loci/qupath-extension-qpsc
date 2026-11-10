@@ -1,5 +1,6 @@
 package qupath.ext.qpsc.modality.lcpolscope.ui;
 
+import java.util.Locale;
 import javafx.application.Platform;
 import javafx.geometry.Pos;
 import javafx.scene.Node;
@@ -367,6 +368,6 @@ public final class LCLiveCameraControls {
         if (v == Math.floor(v) && !Double.isInfinite(v)) {
             return Long.toString((long) v);
         }
-        return String.format("%.2f", v);
+        return String.format(Locale.ROOT, "%.2f", v);
     }
 }

@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
@@ -225,9 +226,8 @@ public class TilingUtilities {
         // First, name and lock all annotations
         for (PathObject annotation : request.getAnnotations()) {
             String name = String.format(
-                    "%d_%d",
-                    (int) annotation.getROI().getCentroidX(),
-                    (int) annotation.getROI().getCentroidY());
+                    Locale.ROOT, "%d_%d", (int) annotation.getROI().getCentroidX(), (int)
+                            annotation.getROI().getCentroidY());
             annotation.setName(name);
             annotation.setLocked(true);
         }
@@ -356,11 +356,19 @@ public class TilingUtilities {
                 // NOTE: These are in PIXELS, not microns! The transformation to stage coordinates
                 // happens later in TransformationFunctions.transformTileConfiguration()
                 configLinesForTransform.add(String.format(
-                        "%d.tif; ; (%.3f, %.3f)", tileIndex, tileROI.getCentroidX(), tileROI.getCentroidY()));
+                        Locale.ROOT,
+                        "%d.tif; ; (%.3f, %.3f)",
+                        tileIndex,
+                        tileROI.getCentroidX(),
+                        tileROI.getCentroidY()));
 
                 // 2. TileConfiguration_QP.txt - QuPath pixel coordinates (for stitching back into QuPath)
                 configLinesPixels.add(String.format(
-                        "%d.tif; ; (%.3f, %.3f)", tileIndex, tileROI.getCentroidX(), tileROI.getCentroidY()));
+                        Locale.ROOT,
+                        "%d.tif; ; (%.3f, %.3f)",
+                        tileIndex,
+                        tileROI.getCentroidX(),
+                        tileROI.getCentroidY()));
 
                 // Create QuPath detection object if requested
                 if (request.isCreateDetections()) {
@@ -368,7 +376,7 @@ public class TilingUtilities {
                             PathObjects.createDetectionObject(tileROI, QP.getPathClass(request.getModalityName()));
                     // Set name to include both tile number and annotation name
                     if (annotationName != null) {
-                        tile.setName(String.format("%d_%s", tileIndex, annotationName));
+                        tile.setName(String.format(Locale.ROOT, "%d_%s", tileIndex, annotationName));
                     } else {
                         tile.setName(String.valueOf(tileIndex));
                     }

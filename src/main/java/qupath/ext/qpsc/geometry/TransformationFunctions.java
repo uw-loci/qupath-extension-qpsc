@@ -938,7 +938,8 @@ public class TransformationFunctions {
                             "  Transform verification: stage_x/qp_x = {} um/pixel (should match transform scale)",
                             Math.abs(coords[0] / x));
                 }
-                String transformedLine = String.format("%s; ; (%.3f, %.3f)", filename, coords[0], coords[1]);
+                String transformedLine =
+                        String.format(Locale.ROOT, "%s; ; (%.3f, %.3f)", filename, coords[0], coords[1]);
                 out.add(transformedLine);
                 transformedCount++;
             } else {

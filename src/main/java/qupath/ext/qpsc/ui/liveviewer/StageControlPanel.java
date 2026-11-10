@@ -271,7 +271,8 @@ public class StageControlPanel extends VBox {
         public String toJson() {
             // Escape quotes in name for JSON safety
             String escapedName = name.replace("\\", "\\\\").replace("\"", "\\\"");
-            return String.format("{\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}", escapedName, x, y, z);
+            return String.format(
+                    Locale.ROOT, "{\"name\":\"%s\",\"x\":%.2f,\"y\":%.2f,\"z\":%.2f}", escapedName, x, y, z);
         }
 
         /**
@@ -785,7 +786,7 @@ public class StageControlPanel extends VBox {
         double seedZ = StagePositionManager.getInstance().getZ();
         if (!Double.isNaN(seedZ)) {
             zBarPanel.setCurrentZ(seedZ);
-            zField.setText(String.format("%.2f", seedZ));
+            zField.setText(String.format(Locale.ROOT, "%.2f", seedZ));
         }
 
         Label zBarLabel = new Label("Z Focus");
@@ -2393,7 +2394,7 @@ public class StageControlPanel extends VBox {
         double saved = qupath.ext.qpsc.preferences.PersistentPreferences.getLastUnifiedExposureMs();
         boolean usedSaved = false;
         if (saved > 0) {
-            expField.setText(String.format("%.1f", saved));
+            expField.setText(String.format(Locale.ROOT, "%.1f", saved));
             usedSaved = true;
             final float toApply = (float) saved;
             Thread t = new Thread(
@@ -2415,7 +2416,7 @@ public class StageControlPanel extends VBox {
             try {
                 var expResult =
                         MicroscopeController.getInstance().getSocketClient().getExposures();
-                expField.setText(String.format("%.1f", expResult.unified()));
+                expField.setText(String.format(Locale.ROOT, "%.1f", expResult.unified()));
             } catch (Exception ex) {
                 expField.setText("");
             }
@@ -2558,7 +2559,7 @@ public class StageControlPanel extends VBox {
             slider.setShowTickLabels(false);
             slider.setShowTickMarks(false);
 
-            TextField valueField = new TextField(String.format("%.0f", current));
+            TextField valueField = new TextField(String.format(Locale.ROOT, "%.0f", current));
             valueField.setPrefWidth(60);
             valueField.setStyle("-fx-font-size: 10px;");
 
@@ -2572,7 +2573,7 @@ public class StageControlPanel extends VBox {
                 sendIlluminationPower(power);
                 if (newVal && power > 0) {
                     slider.setValue(power);
-                    valueField.setText(String.format("%.0f", power));
+                    valueField.setText(String.format(Locale.ROOT, "%.0f", power));
                 }
             });
 
@@ -2580,14 +2581,14 @@ public class StageControlPanel extends VBox {
             slider.valueChangingProperty().addListener((obs, wasChanging, isChanging) -> {
                 if (!isChanging) {
                     float power = (float) slider.getValue();
-                    valueField.setText(String.format("%.0f", power));
+                    valueField.setText(String.format(Locale.ROOT, "%.0f", power));
                     sendIlluminationPower(power);
                 }
             });
             // Also update text field while dragging
             slider.valueProperty().addListener((obs, oldVal, newVal) -> {
                 if (slider.isValueChanging()) {
-                    valueField.setText(String.format("%.0f", newVal.floatValue()));
+                    valueField.setText(String.format(Locale.ROOT, "%.0f", newVal.floatValue()));
                 }
             });
 
@@ -3323,6 +3324,37 @@ public class StageControlPanel extends VBox {
         return mgr.findFirstProfileForModality(modality);
     }
 
+    /**
+     * The saved camera preset string, {@code profile|exp[,r,g,b]|gain,aR,aB|illum}.
+     *
+     * @param profileName acquisition profile to apply on load, or null
+     * @param exp exposures read from the camera
+     * @param gain gains read from the camera, or null when it has none (field left empty)
+     * @param illum illumination state; power 0 when unavailable
+     * @return the preset string; numbers always use '.' as the decimal separator
+     */
+    static String formatCameraPreset(
+            String profileName,
+            qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.ExposuresResult exp,
+            qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.GainsResult gain,
+            qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.IlluminationResult illum) {
+        StringBuilder sb = new StringBuilder();
+        sb.append(profileName != null ? profileName : "");
+        sb.append("|");
+        sb.append(String.format(Locale.ROOT, "%.2f", exp.unified()));
+        if (exp.isPerChannel()) {
+            sb.append(String.format(Locale.ROOT, ",%.2f,%.2f,%.2f", exp.red(), exp.green(), exp.blue()));
+        }
+        sb.append("|");
+        if (gain != null) {
+            sb.append(String.format(
+                    Locale.ROOT, "%.2f,%.2f,%.2f", gain.unifiedGain(), gain.analogRed(), gain.analogBlue()));
+        }
+        sb.append("|");
+        sb.append(illum.available() ? String.format(Locale.ROOT, "%.1f", illum.power()) : "0");
+        return sb.toString();
+    }
+
     /** Save current camera state (exposure + gain + illumination) as a preset. */
     private void saveCurrentPreset(String modality) {
         Thread t = new Thread(
@@ -3352,30 +3384,11 @@ public class StageControlPanel extends VBox {
                         // workflow last selected (often the wrong one,
                         // causing ERR_ILLM when the power value is out of
                         // range for that device).
-                        StringBuilder sb = new StringBuilder();
-                        String profileName = findFirstMatchingProfile(modality);
-                        sb.append(profileName != null ? profileName : "");
-                        sb.append("|");
-                        sb.append(String.format("%.2f", expResult.unified()));
-                        if (expResult.isPerChannel()) {
-                            sb.append(String.format(
-                                    ",%.2f,%.2f,%.2f", expResult.red(), expResult.green(), expResult.blue()));
-                        }
-                        sb.append("|");
-                        if (gainResult != null) {
-                            sb.append(String.format(
-                                    "%.2f,%.2f,%.2f",
-                                    gainResult.unifiedGain(), gainResult.analogRed(), gainResult.analogBlue()));
-                        }
-                        sb.append("|");
-                        if (illumResult.available()) {
-                            sb.append(String.format("%.1f", illumResult.power()));
-                        } else {
-                            sb.append("0");
-                        }
+                        String preset = formatCameraPreset(
+                                findFirstMatchingProfile(modality), expResult, gainResult, illumResult);
 
                         String presetKey = getPresetKey(modality);
-                        PersistentPreferences.setStringPreference(presetKey, sb.toString());
+                        PersistentPreferences.setStringPreference(presetKey, preset);
 
                         Platform.runLater(() -> {
                             cameraStatusLabel.setText("Preset saved");
@@ -3384,7 +3397,7 @@ public class StageControlPanel extends VBox {
                             // Re-enable load button
                             rebuildCameraModContent(modality);
                         });
-                        logger.info("Saved camera preset: {} -> {}", presetKey, sb);
+                        logger.info("Saved camera preset: {} -> {}", presetKey, preset);
                     } catch (Exception ex) {
                         logger.error("Failed to save preset: {}", ex.getMessage());
                         Platform.runLater(() -> {
@@ -3955,7 +3968,7 @@ public class StageControlPanel extends VBox {
                         double z = MicroscopeController.getInstance().getStagePositionZ();
                         Platform.runLater(() -> {
                             if (!zScrollInFlight) {
-                                zField.setText(String.format("%.2f", z));
+                                zField.setText(String.format(Locale.ROOT, "%.2f", z));
                             }
                             if (zBarPanel != null) {
                                 zBarPanel.setCurrentZ(z);
@@ -3987,7 +4000,7 @@ public class StageControlPanel extends VBox {
         lastScrollEventMs = System.currentTimeMillis();
         zScrollInFlight = true;
         Platform.runLater(() -> {
-            zField.setText(String.format("%.2f", target));
+            zField.setText(String.format(Locale.ROOT, "%.2f", target));
             zStatus.setText("Moving...");
         });
         boolean startWorker;
@@ -4034,8 +4047,8 @@ public class StageControlPanel extends VBox {
                     try {
                         double[] xy = MicroscopeController.getInstance().getStagePositionXY();
                         Platform.runLater(() -> {
-                            xField.setText(String.format("%.2f", xy[0]));
-                            yField.setText(String.format("%.2f", xy[1]));
+                            xField.setText(String.format(Locale.ROOT, "%.2f", xy[0]));
+                            yField.setText(String.format(Locale.ROOT, "%.2f", xy[1]));
                             joystickPosition.set(new double[] {xy[0], xy[1]});
                         });
                         logger.debug("Initialized XY fields with current position: X={}, Y={}", xy[0], xy[1]);
@@ -4046,7 +4059,7 @@ public class StageControlPanel extends VBox {
                     try {
                         double z = MicroscopeController.getInstance().getStagePositionZ();
                         Platform.runLater(() -> {
-                            zField.setText(String.format("%.2f", z));
+                            zField.setText(String.format(Locale.ROOT, "%.2f", z));
                             // The Z bars need this same value. StagePositionManager
                             // alone cannot feed them: its cache is NaN
                             // until its poller delivers, and its poller does not
@@ -4066,7 +4079,7 @@ public class StageControlPanel extends VBox {
                     if (MicroscopeController.getInstance().hasRotationStage()) {
                         try {
                             double r = MicroscopeController.getInstance().getStagePositionR();
-                            Platform.runLater(() -> rField.setText(String.format("%.2f", r)));
+                            Platform.runLater(() -> rField.setText(String.format(Locale.ROOT, "%.2f", r)));
                             logger.debug("Initialized R field with current position: {}", r);
                         } catch (Exception e) {
                             logger.debug("Failed to retrieve current R stage position: {}", e.getMessage());
@@ -4099,14 +4112,14 @@ public class StageControlPanel extends VBox {
 
         switch (evt.getPropertyName()) {
             case StagePositionManager.PROP_POS_X -> {
-                xField.setText(String.format("%.2f", newVal));
+                xField.setText(String.format(Locale.ROOT, "%.2f", newVal));
                 // Update joystick tracking
                 double[] current = joystickPosition.get();
                 joystickPosition.set(new double[] {newVal, current[1]});
                 checkFocusTraceXyReset(newVal, current[1]);
             }
             case StagePositionManager.PROP_POS_Y -> {
-                yField.setText(String.format("%.2f", newVal));
+                yField.setText(String.format(Locale.ROOT, "%.2f", newVal));
                 // Update joystick tracking
                 double[] current = joystickPosition.get();
                 joystickPosition.set(new double[] {current[0], newVal});
@@ -4117,13 +4130,13 @@ public class StageControlPanel extends VBox {
                 // to prevent the stale hardware position from rolling back
                 // the user's accumulated scroll target.
                 if (!zScrollInFlight) {
-                    zField.setText(String.format("%.2f", newVal));
+                    zField.setText(String.format(Locale.ROOT, "%.2f", newVal));
                 }
                 if (zBarPanel != null) {
                     zBarPanel.setCurrentZ(newVal);
                 }
             }
-            case StagePositionManager.PROP_POS_R -> rField.setText(String.format("%.2f", newVal));
+            case StagePositionManager.PROP_POS_R -> rField.setText(String.format(Locale.ROOT, "%.2f", newVal));
         }
     }
 
@@ -4418,7 +4431,7 @@ public class StageControlPanel extends VBox {
             // Optimistic UI update; the worker takes over the field with live
             // readings once it starts. zScrollInFlight suppresses the 500ms
             // position poller so it cannot roll the value back mid-gesture.
-            zField.setText(String.format("%.2f", candidate));
+            zField.setText(String.format(Locale.ROOT, "%.2f", candidate));
             zStatus.setText("Moving...");
             zScrollInFlight = true;
 
@@ -4483,7 +4496,7 @@ public class StageControlPanel extends VBox {
                 // Live position readback -- the user watches focus track here.
                 try {
                     double actual = MicroscopeController.getInstance().getStageZFast();
-                    Platform.runLater(() -> zField.setText(String.format("%.2f", actual)));
+                    Platform.runLater(() -> zField.setText(String.format(Locale.ROOT, "%.2f", actual)));
                 } catch (Exception ex) {
                     logger.debug("Z scroll position poll failed: {}", ex.getMessage());
                 }
@@ -4557,8 +4570,8 @@ public class StageControlPanel extends VBox {
             }
 
             // Update UI immediately with expected position
-            xField.setText(String.format("%.2f", newX));
-            yField.setText(String.format("%.2f", newY));
+            xField.setText(String.format(Locale.ROOT, "%.2f", newX));
+            yField.setText(String.format(Locale.ROOT, "%.2f", newY));
             joystickPosition.set(new double[] {newX, newY});
             xyStatus.setText("Moving...");
 
@@ -4617,8 +4630,8 @@ public class StageControlPanel extends VBox {
 
             MicroscopeController.getInstance().moveStageXY(targetX, targetY);
             Platform.runLater(() -> {
-                xField.setText(String.format("%.2f", targetX));
-                yField.setText(String.format("%.2f", targetY));
+                xField.setText(String.format(Locale.ROOT, "%.2f", targetX));
+                yField.setText(String.format(Locale.ROOT, "%.2f", targetY));
                 xyStatus.setText(String.format("Joystick -> (%.0f, %.0f)", targetX, targetY));
             });
         } catch (Exception ex) {
@@ -5027,8 +5040,8 @@ public class StageControlPanel extends VBox {
             return;
         }
 
-        xField.setText(String.format("%.2f", targetX));
-        yField.setText(String.format("%.2f", targetY));
+        xField.setText(String.format(Locale.ROOT, "%.2f", targetX));
+        yField.setText(String.format(Locale.ROOT, "%.2f", targetY));
         joystickPosition.set(new double[] {targetX, targetY});
         centroidStatus.setText("Moving...");
         xyStatus.setText("Moving to centroid...");
@@ -5129,10 +5142,10 @@ public class StageControlPanel extends VBox {
                         }
 
                         Platform.runLater(() -> {
-                            xField.setText(String.format("%.2f", targetX));
-                            yField.setText(String.format("%.2f", targetY));
+                            xField.setText(String.format(Locale.ROOT, "%.2f", targetX));
+                            yField.setText(String.format(Locale.ROOT, "%.2f", targetY));
                             if (targetZ != null) {
-                                zField.setText(String.format("%.2f", targetZ));
+                                zField.setText(String.format(Locale.ROOT, "%.2f", targetZ));
                             }
                             joystickPosition.set(new double[] {targetX, targetY});
                             savedPointsStatus.setText(String.format(

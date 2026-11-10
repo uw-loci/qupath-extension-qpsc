@@ -1117,9 +1117,9 @@ public class CameraControlController {
                     controller, src.device, toggle.isSelected() ? (float) maxPower : 0f, refreshHolder));
             row.getChildren().addAll(toggle, applyBtn, statusLabel);
         } else {
-            TextField field = new TextField(String.format("%.2f", src.currentPower));
+            TextField field = new TextField(String.format(Locale.ROOT, "%.2f", src.currentPower));
             field.setPrefWidth(80);
-            field.setPromptText(String.format("%.2f-%.2f", minPower, maxPower));
+            field.setPromptText(String.format(Locale.ROOT, "%.2f-%.2f", minPower, maxPower));
             Label rangeLabel = new Label(String.format("(%.0f-%.0f)", minPower, maxPower));
             rangeLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
             applyBtn.setOnAction(e -> {

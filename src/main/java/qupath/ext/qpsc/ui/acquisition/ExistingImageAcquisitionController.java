@@ -1245,7 +1245,7 @@ public class ExistingImageAcquisitionController {
             if (v == Math.rint(v) && !Double.isInfinite(v)) {
                 return Long.toString((long) v);
             }
-            return String.format("%.1f", v);
+            return String.format(Locale.ROOT, "%.1f", v);
         }
 
         private void updatePresetAgeLabel() {

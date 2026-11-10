@@ -5,6 +5,7 @@ import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -158,12 +159,15 @@ public class WBComparisonDialog {
         tissueZField.setPrefColumnCount(10);
 
         // Populate from preferences if valid
-        if (!Double.isNaN(blankXProp.get())) blankXField.setText(String.format("%.2f", blankXProp.get()));
-        if (!Double.isNaN(blankYProp.get())) blankYField.setText(String.format("%.2f", blankYProp.get()));
-        if (!Double.isNaN(blankZProp.get())) blankZField.setText(String.format("%.2f", blankZProp.get()));
-        if (!Double.isNaN(tissueXProp.get())) tissueXField.setText(String.format("%.2f", tissueXProp.get()));
-        if (!Double.isNaN(tissueYProp.get())) tissueYField.setText(String.format("%.2f", tissueYProp.get()));
-        if (!Double.isNaN(tissueZProp.get())) tissueZField.setText(String.format("%.2f", tissueZProp.get()));
+        if (!Double.isNaN(blankXProp.get())) blankXField.setText(String.format(Locale.ROOT, "%.2f", blankXProp.get()));
+        if (!Double.isNaN(blankYProp.get())) blankYField.setText(String.format(Locale.ROOT, "%.2f", blankYProp.get()));
+        if (!Double.isNaN(blankZProp.get())) blankZField.setText(String.format(Locale.ROOT, "%.2f", blankZProp.get()));
+        if (!Double.isNaN(tissueXProp.get()))
+            tissueXField.setText(String.format(Locale.ROOT, "%.2f", tissueXProp.get()));
+        if (!Double.isNaN(tissueYProp.get()))
+            tissueYField.setText(String.format(Locale.ROOT, "%.2f", tissueYProp.get()));
+        if (!Double.isNaN(tissueZProp.get()))
+            tissueZField.setText(String.format(Locale.ROOT, "%.2f", tissueZProp.get()));
 
         Button useCurrentBlank = new Button("Use Current Position");
         useCurrentBlank.setOnAction(e -> fillCurrentPosition(blankXField, blankYField, blankZField));
@@ -270,10 +274,10 @@ public class WBComparisonDialog {
         // === Advanced settings (collapsed) ===
         double defaultOverlap = QPPreferenceDialog.getTileOverlapPercentProperty();
 
-        TextField overlapField = new TextField(String.format("%.1f", defaultOverlap));
+        TextField overlapField = new TextField(String.format(Locale.ROOT, "%.1f", defaultOverlap));
         overlapField.setPrefColumnCount(6);
 
-        TextField targetIntensityField = new TextField(String.format("%.0f", targetIntensityProp.get()));
+        TextField targetIntensityField = new TextField(String.format(Locale.ROOT, "%.0f", targetIntensityProp.get()));
         targetIntensityField.setPrefColumnCount(6);
 
         Spinner<Integer> afTilesSpinner = new Spinner<>(1, 25, afTilesProp.get());
@@ -283,7 +287,7 @@ public class WBComparisonDialog {
         afTilesSpinner.setEditable(true);
         afStepsSpinner.setEditable(true);
 
-        TextField afRangeField = new TextField(String.format("%.0f", afRangeProp.get()));
+        TextField afRangeField = new TextField(String.format(Locale.ROOT, "%.0f", afRangeProp.get()));
         afRangeField.setPrefColumnCount(6);
 
         GridPane advGrid = new GridPane();
@@ -408,9 +412,9 @@ public class WBComparisonDialog {
             }
             double[] pos = mc.getStagePositionXY();
             double z = mc.getStagePositionZ();
-            xField.setText(String.format("%.2f", pos[0]));
-            yField.setText(String.format("%.2f", pos[1]));
-            zField.setText(String.format("%.2f", z));
+            xField.setText(String.format(Locale.ROOT, "%.2f", pos[0]));
+            yField.setText(String.format(Locale.ROOT, "%.2f", pos[1]));
+            zField.setText(String.format(Locale.ROOT, "%.2f", z));
             logger.info("Filled current stage position: ({}, {}, {})", pos[0], pos[1], z);
         } catch (Exception e) {
             logger.error("Failed to get current stage position", e);

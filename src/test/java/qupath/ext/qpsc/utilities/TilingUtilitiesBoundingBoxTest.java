@@ -2,16 +2,19 @@ package qupath.ext.qpsc.utilities;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
+import java.awt.geom.AffineTransform;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.acquisition.BoundingBox;
 import qupath.ext.qpsc.acquisition.TilingRequest;
 import qupath.ext.qpsc.acquisition.TilingUtilities;
 import qupath.ext.qpsc.acquisition.TilingUtilities.TileGrid;
+import qupath.ext.qpsc.geometry.TransformationFunctions;
 
 /** The tile grid for a bounding box, and that the file the server reads follows it. */
 class TilingUtilitiesBoundingBoxTest {
@@ -89,5 +92,48 @@ class TilingUtilitiesBoundingBoxTest {
         List<String> lines = tileLines(dir, 0, 0, 2000, 1000);
         assertEquals(24, lines.size());
         assertEquals("0.tif; ; (0.000, 0.000)", lines.get(0));
+    }
+
+    /**
+     * TileConfiguration lines are read by the server and by the stitcher. In a decimal-comma
+     * locale a default-locale format wrote {@code (1000,500, 2000,500)}: four numbers.
+     */
+    @Test
+    void tileConfigurationLinesUseADecimalPointInEveryLocale(@TempDir Path dir) throws IOException {
+        Locale previous = Locale.getDefault();
+        try {
+            for (Locale locale : List.of(Locale.forLanguageTag("tr-TR"), Locale.GERMANY)) {
+                Locale.setDefault(locale);
+                Path sub = Files.createDirectories(dir.resolve(locale.toLanguageTag()));
+                assertEquals(
+                        List.of("0.tif; ; (1000.500, 2000.500)"),
+                        tileLines(sub, 1000, 2000, 1001, 2001),
+                        "locale " + locale);
+            }
+        } finally {
+            Locale.setDefault(previous);
+        }
+    }
+
+    /** The pixel-to-stage rewrite of TileConfiguration.txt writes the same format. */
+    @Test
+    void transformedTileConfigurationUsesADecimalPointInEveryLocale(@TempDir Path dir) throws IOException {
+        Locale previous = Locale.getDefault();
+        try {
+            for (Locale locale : List.of(Locale.forLanguageTag("tr-TR"), Locale.GERMANY)) {
+                Locale.setDefault(locale);
+                Path region = Files.createDirectories(
+                        dir.resolve(locale.toLanguageTag()).resolve("bounds"));
+                Files.writeString(region.resolve("TileConfiguration.txt"), "dim = 2\n0.tif; ; (1000.500, 2000.250)\n");
+                TransformationFunctions.transformTileConfiguration(
+                        region.getParent().toString(), AffineTransform.getScaleInstance(0.5, 0.5));
+                assertEquals(
+                        List.of("dim = 2", "0.tif; ; (500.250, 1000.125)"),
+                        Files.readAllLines(region.resolve("TileConfiguration.txt")),
+                        "locale " + locale);
+            }
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 }

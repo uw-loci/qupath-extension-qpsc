@@ -163,7 +163,7 @@ public class QPScopeChecks {
                 detector,
                 String.format("%.4f", mmPixelSize),
                 String.format("%.2f", ratio * 100));
-        String key = objective + "|" + detector + "|" + String.format("%.4f", mmPixelSize);
+        String key = objective + "|" + detector + "|" + String.format(Locale.ROOT, "%.4f", mmPixelSize);
         if (!reportedDrift.add(key)) {
             return;
         }

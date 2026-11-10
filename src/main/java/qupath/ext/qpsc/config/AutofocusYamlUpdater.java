@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
@@ -446,7 +447,7 @@ public final class AutofocusYamlUpdater {
                 // Keep the ".0": these are declared as floats in the schema and the
                 // Python side reads them with float(), so the style is load-bearing
                 // documentation of the type even though YAML does not care.
-                return String.format("%.1f", d);
+                return String.format(Locale.ROOT, "%.1f", d);
             }
             String s = String.valueOf(d);
             return s;

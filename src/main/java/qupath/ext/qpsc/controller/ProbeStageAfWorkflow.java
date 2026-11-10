@@ -8,6 +8,7 @@ import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
@@ -161,8 +162,8 @@ public class ProbeStageAfWorkflow {
         enabledCheck.setSelected(result.enabled);
         TextField speedPropertyField = new TextField(nullToBlank(result.speedProperty));
         TextField slowValueField = new TextField(nullToBlank(result.slowSpeedValue));
-        TextField slowUmPerSField =
-                new TextField(result.slowSpeedUmPerS == null ? "" : String.format("%.3f", result.slowSpeedUmPerS));
+        TextField slowUmPerSField = new TextField(
+                result.slowSpeedUmPerS == null ? "" : String.format(Locale.ROOT, "%.3f", result.slowSpeedUmPerS));
         TextField normalValueField = new TextField(nullToBlank(result.normalSpeedValue));
 
         GridPane grid = new GridPane();

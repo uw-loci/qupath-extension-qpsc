@@ -9,6 +9,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -274,5 +275,34 @@ class AutofocusYamlUpdaterTest {
         String written = Files.readString(file);
         assertThat(written).startsWith("# ========== AUTOFOCUS CONFIGURATION ==========");
         assertThat(written).contains("schema_version: 2").contains("n_steps: 35");
+    }
+
+    /**
+     * Whole-number floats are written with ".0" for the server's {@code float()}. In a
+     * decimal-comma locale that came out as {@code 75,0}, which YAML reads as a string.
+     */
+    @Test
+    void aWholeNumberFloatIsWrittenWithADecimalPointInEveryLocale(@TempDir Path dir) throws Exception {
+        Locale previous = Locale.getDefault();
+        try {
+            for (Locale locale : List.of(Locale.forLanguageTag("tr-TR"), Locale.GERMANY)) {
+                Locale.setDefault(locale);
+                Path file = Files.createDirectories(dir.resolve(locale.toLanguageTag()));
+                file = fixture(file);
+                Map<String, Object> root = desired(35);
+                @SuppressWarnings("unchecked")
+                Map<String, Object> tenX = ((List<Map<String, Object>>) root.get("autofocus_settings")).get(0);
+                tenX.put("search_range_um", 75.0);
+
+                AutofocusYamlUpdater.update(file, HEADER, root);
+
+                assertThat(Files.readString(file))
+                        .as("locale %s", locale)
+                        .contains("  search_range_um: 75.0\n")
+                        .doesNotContain("75,0");
+            }
+        } finally {
+            Locale.setDefault(previous);
+        }
     }
 }

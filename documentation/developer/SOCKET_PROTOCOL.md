@@ -142,6 +142,12 @@ While an acquisition runs, the client polls these best-effort channels on the pr
 
 ### Acquisition Message Format
 
+**Numbers in every flag-based payload use `.` as the decimal separator**, whatever QuPath's
+language or "Dates & numbers" setting is: the server reads them with Python `float()`. Build
+them with `String.valueOf(double)` or `String.format(Locale.ROOT, ...)`, never with a
+default-locale `String.format` (which gives `1234,500` in de-DE, fr-FR, tr-TR, ...).
+`SocketMessageLocaleTest` checks the RPDSCAN, POLCAL and `--hint-z` arguments under tr-TR and de-DE.
+
 The ACQUIRE payload is a flag-based string:
 
 ```

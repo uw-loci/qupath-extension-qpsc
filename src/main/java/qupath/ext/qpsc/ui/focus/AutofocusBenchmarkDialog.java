@@ -3,6 +3,7 @@ package qupath.ext.qpsc.ui.focus;
 import java.io.File;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import javafx.application.Platform;
@@ -116,9 +117,9 @@ public class AutofocusBenchmarkDialog {
 
                 // Initialize with current Z or last used value
                 if (currentZ != null && currentZ != 0.0) {
-                    referenceZField.setText(String.format("%.2f", currentZ));
+                    referenceZField.setText(String.format(Locale.ROOT, "%.2f", currentZ));
                 } else if (referenceZProperty.get() != 0.0) {
-                    referenceZField.setText(String.format("%.2f", referenceZProperty.get()));
+                    referenceZField.setText(String.format(Locale.ROOT, "%.2f", referenceZProperty.get()));
                 }
 
                 Button useCurrentZButton = new Button("Use Current Z");
@@ -126,7 +127,7 @@ public class AutofocusBenchmarkDialog {
                         + "Make sure the sample is in focus before clicking."));
                 useCurrentZButton.setOnAction(e -> {
                     if (currentZ != null) {
-                        referenceZField.setText(String.format("%.2f", currentZ));
+                        referenceZField.setText(String.format(Locale.ROOT, "%.2f", currentZ));
                     }
                 });
 

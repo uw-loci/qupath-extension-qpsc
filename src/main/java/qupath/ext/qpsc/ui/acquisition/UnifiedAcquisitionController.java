@@ -516,8 +516,8 @@ public class UnifiedAcquisitionController {
                     if (MicroscopeController.getInstance().isConnected()) {
                         double[] coords = MicroscopeController.getInstance().getStagePositionXY();
                         if (coords != null && coords.length >= 2) {
-                            savedCenterX = String.format("%.2f", coords[0]);
-                            savedCenterY = String.format("%.2f", coords[1]);
+                            savedCenterX = String.format(Locale.ROOT, "%.2f", coords[0]);
+                            savedCenterY = String.format(Locale.ROOT, "%.2f", coords[1]);
                             logger.info(
                                     "Initialized center from current stage position: {}, {}",
                                     savedCenterX,
@@ -555,8 +555,8 @@ public class UnifiedAcquisitionController {
                 try {
                     double[] coords = MicroscopeController.getInstance().getStagePositionXY();
                     if (coords != null && coords.length >= 2) {
-                        startXField.setText(String.format("%.2f", coords[0]));
-                        startYField.setText(String.format("%.2f", coords[1]));
+                        startXField.setText(String.format(Locale.ROOT, "%.2f", coords[0]));
+                        startYField.setText(String.format(Locale.ROOT, "%.2f", coords[1]));
                         logger.info("Updated center position from stage: X={}, Y={}", coords[0], coords[1]);
                         if (widthField.getText().trim().isEmpty()) widthField.setText("2000");
                         if (heightField.getText().trim().isEmpty()) heightField.setText("2000");
@@ -607,8 +607,8 @@ public class UnifiedAcquisitionController {
                 try {
                     double[] coords = MicroscopeController.getInstance().getStagePositionXY();
                     if (coords != null && coords.length >= 2) {
-                        corner1XField.setText(String.format("%.2f", coords[0]));
-                        corner1YField.setText(String.format("%.2f", coords[1]));
+                        corner1XField.setText(String.format(Locale.ROOT, "%.2f", coords[0]));
+                        corner1YField.setText(String.format(Locale.ROOT, "%.2f", coords[1]));
                         logger.info("Updated corner 1 from stage: X={}, Y={}", coords[0], coords[1]);
                     }
                 } catch (Exception ex) {
@@ -622,8 +622,8 @@ public class UnifiedAcquisitionController {
                 try {
                     double[] coords = MicroscopeController.getInstance().getStagePositionXY();
                     if (coords != null && coords.length >= 2) {
-                        endXField.setText(String.format("%.2f", coords[0]));
-                        endYField.setText(String.format("%.2f", coords[1]));
+                        endXField.setText(String.format(Locale.ROOT, "%.2f", coords[0]));
+                        endYField.setText(String.format(Locale.ROOT, "%.2f", coords[1]));
                         logger.info("Updated corner 2 from stage: X={}, Y={}", coords[0], coords[1]);
                     }
                 } catch (Exception ex) {
@@ -1337,7 +1337,8 @@ public class UnifiedAcquisitionController {
                 }
 
                 saveSelections("Unified acquisition", sampleName, modality, objective, detector);
-                PersistentPreferences.setBoundingBoxString(String.format("%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));
+                PersistentPreferences.setBoundingBoxString(
+                        String.format(Locale.ROOT, "%.2f,%.2f,%.2f,%.2f", x1, y1, x2, y2));
 
                 String afStrategyProtocol = saveAfStrategyChoice();
 

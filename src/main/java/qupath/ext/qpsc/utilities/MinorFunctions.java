@@ -152,7 +152,7 @@ public class MinorFunctions {
         if (v == Math.floor(v) && !Double.isInfinite(v)) {
             return Long.toString((long) v);
         }
-        return String.format("%.1f", v);
+        return String.format(Locale.ROOT, "%.1f", v);
     }
 
     /**
@@ -275,8 +275,8 @@ public class MinorFunctions {
         try (BufferedWriter w = Files.newBufferedWriter(Paths.get(out), StandardCharsets.UTF_8)) {
             List<Double> min = extremes.get(0);
             List<Double> max = extremes.get(1);
-            w.write(String.format("%f, %f%n", min.get(0), min.get(1)));
-            w.write(String.format("%f, %f%n", max.get(0), max.get(1)));
+            w.write(String.format(Locale.ROOT, "%f, %f%n", min.get(0), min.get(1)));
+            w.write(String.format(Locale.ROOT, "%f, %f%n", max.get(0), max.get(1)));
         } catch (IOException e) {
             logger.error("Failed writing extremes file", e);
         }
@@ -489,7 +489,7 @@ public class MinorFunctions {
             Files.createDirectories(acquisitionDir);
 
             // Create filename with timestamp
-            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String timestamp = new SimpleDateFormat("yyyyMMdd_HHmmss", Locale.ROOT).format(new Date());
             String filename = String.format("acquisition_command_%s.txt", timestamp);
             Path commandFile = acquisitionDir.resolve(filename);
 

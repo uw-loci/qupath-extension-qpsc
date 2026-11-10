@@ -1117,7 +1117,7 @@ public class AcquisitionCommandBuilder {
 
         // Add Z-focus hint from tilt prediction model
         if (hintZ != null) {
-            args.addAll(Arrays.asList("--hint-z", String.format("%.2f", hintZ)));
+            args.addAll(Arrays.asList("--hint-z", String.format(Locale.ROOT, "%.2f", hintZ)));
         }
 
         // Add birefringence minimum intensity threshold
