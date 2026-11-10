@@ -284,7 +284,9 @@ public class TileProcessingUtilities {
         // Z-plane spacing for OME metadata. Only meaningful when the Z-stack is
         // preserved (projection "None"); a projected mosaic is 2D so the value is
         // unused. Source it from the same Z-stack preferences the acquisition used.
-        double zSpacingUm = 1.0;
+        // 0 = unknown: tiles-to-pyramid then reads the step from the acquisition's
+        // acquisition_metadata.json, or writes no z spacing rather than a made-up 1 um.
+        double zSpacingUm = 0.0;
         if (PersistentPreferences.isZStackEnabled() && "None".equals(PersistentPreferences.getZStackProjection())) {
             double step = PersistentPreferences.getZStackStep();
             if (step > 0) {

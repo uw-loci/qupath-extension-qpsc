@@ -575,7 +575,7 @@ public class StitchingRecoveryWorkflow {
                     pixelSize,
                     1, // downsample
                     ".", // match everything in this single-angle directory
-                    1.0, // zSpacingMicrons
+                    0.0, // zSpacingMicrons unknown: read from acquisition_metadata.json, else not written
                     outputFormat);
             config.outputFilename = ImageNameGenerator.sanitizeForFilename(finalSampleName);
             // The mode the barrier chose for this angle: solve on the first, apply on the
