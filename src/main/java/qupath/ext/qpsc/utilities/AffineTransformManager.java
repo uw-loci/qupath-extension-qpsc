@@ -1243,6 +1243,12 @@ public class AffineTransformManager {
      * @param objective objective in use when it was measured; tilt is geometric and
      *     carries across objectives, but z0 does not
      * @param measuredAt ISO-8601 instant, so a stale surface can be recognized
+     * @param qxxUmPerMm2 curvature term in X^2 (um per mm^2); 0 for a plane
+     * @param qxyUmPerMm2 twist term in X*Y; 0 for a plane
+     * @param qyyUmPerMm2 curvature term in Y^2; 0 for a plane
+     * @param boundsUm {xmin, xmax, ymin, ymax} stage um of the points a curved surface was
+     *     fitted to, or null for a plane. Outside it the surface continues in a straight
+     *     line along its slope at the edge, as the server's surface does.
      */
     public record SlideFocusSurface(
             double z0Um,
@@ -1253,13 +1259,64 @@ public class AffineTransformManager {
             int pointCount,
             double rmsUm,
             String objective,
-            String measuredAt) {
+            String measuredAt,
+            double qxxUmPerMm2,
+            double qxyUmPerMm2,
+            double qyyUmPerMm2,
+            double[] boundsUm) {
+
+        /** A plane. */
+        public SlideFocusSurface(
+                double z0Um,
+                double tiltXUmPerMm,
+                double tiltYUmPerMm,
+                double centreXUm,
+                double centreYUm,
+                int pointCount,
+                double rmsUm,
+                String objective,
+                String measuredAt) {
+            this(
+                    z0Um,
+                    tiltXUmPerMm,
+                    tiltYUmPerMm,
+                    centreXUm,
+                    centreYUm,
+                    pointCount,
+                    rmsUm,
+                    objective,
+                    measuredAt,
+                    0,
+                    0,
+                    0,
+                    null);
+        }
+
+        /** Whether this is a curved (quadratic) surface rather than a plane. */
+        public boolean curved() {
+            return boundsUm != null && boundsUm.length == 4;
+        }
 
         /** Focus Z this surface predicts at a stage position. */
         public double predict(double stageXUm, double stageYUm) {
-            return z0Um
-                    + tiltXUmPerMm * (stageXUm - centreXUm) / 1000.0
-                    + tiltYUmPerMm * (stageYUm - centreYUm) / 1000.0;
+            if (!curved()) {
+                return z0Um
+                        + tiltXUmPerMm * (stageXUm - centreXUm) / 1000.0
+                        + tiltYUmPerMm * (stageYUm - centreYUm) / 1000.0;
+            }
+            double xc = Math.min(Math.max(stageXUm, boundsUm[0]), boundsUm[1]);
+            double yc = Math.min(Math.max(stageYUm, boundsUm[2]), boundsUm[3]);
+            double u = (xc - centreXUm) / 1000.0;
+            double v = (yc - centreYUm) / 1000.0;
+            double z = z0Um
+                    + tiltXUmPerMm * u
+                    + tiltYUmPerMm * v
+                    + qxxUmPerMm2 * u * u
+                    + qxyUmPerMm2 * u * v
+                    + qyyUmPerMm2 * v * v;
+            double gx = tiltXUmPerMm + 2 * qxxUmPerMm2 * u + qxyUmPerMm2 * v;
+            double gy = tiltYUmPerMm + qxyUmPerMm2 * u + 2 * qyyUmPerMm2 * v;
+            return z + gx * (stageXUm - xc) / 1000.0 + gy * (stageYUm - yc) / 1000.0;
         }
 
         /** Tilt magnitude, um per mm. */
@@ -1359,6 +1416,18 @@ public class AffineTransformManager {
             record.put("objective", surface.objective());
         }
         record.put("measuredAt", surface.measuredAt());
+        if (surface.curved()) {
+            record.put("qxxUmPerMm2", surface.qxxUmPerMm2());
+            record.put("qxyUmPerMm2", surface.qxyUmPerMm2());
+            record.put("qyyUmPerMm2", surface.qyyUmPerMm2());
+            record.put(
+                    "boundsUm",
+                    List.of(
+                            surface.boundsUm()[0],
+                            surface.boundsUm()[1],
+                            surface.boundsUm()[2],
+                            surface.boundsUm()[3]));
+        }
         if (points != null) {
             List<List<Double>> savedPoints = new ArrayList<>();
             for (double[] p : points) {
@@ -1371,7 +1440,8 @@ public class AffineTransformManager {
             String json = new GsonBuilder().setPrettyPrinting().create().toJson(data);
             Files.write(file.toPath(), json.getBytes(StandardCharsets.UTF_8));
             logger.info(
-                    "Saved focus surface for '{}': {} points, tilt {} um/mm, z0 {} um, RMS {}",
+                    "Saved {} focus surface for '{}': {} points, tilt {} um/mm, z0 {} um, RMS {}",
+                    surface.curved() ? "curved" : "plane",
                     sampleName,
                     surface.pointCount(),
                     String.format("%.2f", surface.tiltUmPerMm()),
@@ -1490,11 +1560,66 @@ public class AffineTransformManager {
                     (int) asDouble(record.get("pointCount"), 0),
                     asDouble(record.get("rmsUm"), Double.NaN),
                     record.get("objective") instanceof String o ? o : null,
-                    record.get("measuredAt") instanceof String t ? t : null);
+                    record.get("measuredAt") instanceof String t ? t : null,
+                    asDouble(record.get("qxxUmPerMm2"), 0),
+                    asDouble(record.get("qxyUmPerMm2"), 0),
+                    asDouble(record.get("qyyUmPerMm2"), 0),
+                    asBounds(record.get("boundsUm")));
         } catch (Exception e) {
             logger.debug("Could not read focus surface for '{}': {}", sampleName, e.getMessage());
             return null;
         }
+    }
+
+    private static double[] asBounds(Object raw) {
+        if (!(raw instanceof List<?> list) || list.size() != 4) {
+            return null;
+        }
+        double[] b = new double[4];
+        for (int i = 0; i < 4; i++) {
+            if (!(list.get(i) instanceof Number n)) {
+                return null;
+            }
+            b[i] = n.doubleValue();
+        }
+        return b;
+    }
+
+    /**
+     * The surface the server fitted through one region's autofocus results, from the
+     * {@code focus_surface.json} it writes beside the tiles.
+     *
+     * @param record the parsed JSON object
+     * @param objective objective the region was acquired with
+     * @return the surface, or null when the record is not licensed or is incomplete
+     */
+    public static SlideFocusSurface fromServerFocusSurface(Map<String, Object> record, String objective) {
+        if (record == null || !Boolean.TRUE.equals(record.get("licensed"))) {
+            return null;
+        }
+        double z0 = asDouble(record.get("z0_um"), Double.NaN);
+        if (Double.isNaN(z0)) {
+            return null;
+        }
+        boolean curved = "quadratic".equals(record.get("model"));
+        double[] bounds = curved ? asBounds(record.get("bounds_um")) : null;
+        if (curved && bounds == null) {
+            return null;
+        }
+        return new SlideFocusSurface(
+                z0,
+                asDouble(record.get("tilt_x_um_per_mm"), 0),
+                asDouble(record.get("tilt_y_um_per_mm"), 0),
+                asDouble(record.get("centre_x_um"), 0),
+                asDouble(record.get("centre_y_um"), 0),
+                (int) asDouble(record.get("inliers"), 0),
+                asDouble(record.get("inlier_rms_um"), Double.NaN),
+                objective,
+                java.time.Instant.now().toString(),
+                curved ? asDouble(record.get("qxx_um_per_mm2"), 0) : 0,
+                curved ? asDouble(record.get("qxy_um_per_mm2"), 0) : 0,
+                curved ? asDouble(record.get("qyy_um_per_mm2"), 0) : 0,
+                bounds);
     }
 
     /** Alignment-JSON key: where this slide's image center sits on the stage, um. */

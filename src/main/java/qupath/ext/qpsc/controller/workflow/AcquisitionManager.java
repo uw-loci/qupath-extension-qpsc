@@ -943,17 +943,15 @@ public class AcquisitionManager {
                                         zForMda = finalZ;
 
                                         if (state.transform != null) {
+                                            // The final Z is the stage height at the region's LAST
+                                            // tile, so it is recorded there. Paired with the centroid
+                                            // it was off by the slide's tilt times the distance (on
+                                            // 2026-11-06, -48.8 um booked at a centroid whose focus
+                                            // was near -34 um).
+                                            double[] lastTilePx = lastTilePixel(annotation);
                                             double[] stageCoords =
                                                     TransformationFunctions.transformQuPathFullResToStage(
-                                                            new double[] {
-                                                                annotation
-                                                                        .getROI()
-                                                                        .getCentroidX(),
-                                                                annotation
-                                                                        .getROI()
-                                                                        .getCentroidY()
-                                                            },
-                                                            state.transform);
+                                                            lastTilePx, state.transform);
                                             zFocusModel.addDataPoint(stageCoords[0], stageCoords[1], finalZ);
                                             logger.info(
                                                     "Updated Z-focus model: {} points, residual error: {} um",
@@ -963,6 +961,10 @@ public class AcquisitionManager {
                                     }
                                     // Clear for next acquisition
                                     socketClient.clearLastAcquisitionFinalZ();
+
+                                    // Keep the surface the server fitted through this region's
+                                    // autofocus results as the slide's focus surface.
+                                    adoptRegionFocusSurface(annotation);
 
                                     // Backfill the achieved focal plane into the MDA position list,
                                     // which was written up-front with Z=0 before AF ran.
@@ -1235,14 +1237,42 @@ public class AcquisitionManager {
                     mdaSettingsPath = null;
                 }
 
-                // Apply Z-focus prediction if model is ready (tilt correction)
+                // Tissue scoring thresholds, the macro-image scan and the preferred first
+                // autofocus tile. Computed before the Z hint because the hint is applied at
+                // that tile.
+                double wsiTissueThreshold = 0.15;
+                int wsiWhiteThreshold = 230;
+                int wsiDarkThreshold = 20;
+                WsiTileScan afScan = null;
+                int afPreferredTile = -1;
+                if (!QPPreferenceDialog.getDisableAllAutofocus()) {
+                    try {
+                        Map<String, Object> afParams = configManager.getAutofocusParams(state.sample.objective());
+                        if (afParams != null) {
+                            if (afParams.get("wsi_tissue_threshold") instanceof Number)
+                                wsiTissueThreshold = ((Number) afParams.get("wsi_tissue_threshold")).doubleValue();
+                            if (afParams.get("wsi_tissue_white_threshold") instanceof Number)
+                                wsiWhiteThreshold = ((Number) afParams.get("wsi_tissue_white_threshold")).intValue();
+                            if (afParams.get("wsi_tissue_dark_threshold") instanceof Number)
+                                wsiDarkThreshold = ((Number) afParams.get("wsi_tissue_dark_threshold")).intValue();
+                        }
+                        // One macro-image scan serves the preferred tile, the allow-list and
+                        // the survey.
+                        afScan = prepareWsiTileScan(annotation);
+                        afPreferredTile =
+                                findBestAfTileFromWSI(afScan, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                    } catch (Exception e) {
+                        logger.debug("WSI tissue scoring skipped: {}", e.getMessage());
+                    }
+                }
+
+                // Apply Z-focus prediction if model is ready (tilt correction). The server
+                // applies the hint at its first autofocus tile, so predict there; the
+                // annotation's centroid can be many millimetres away on a large region.
                 if (state.transform != null) {
-                    double[] stageCoords = TransformationFunctions.transformQuPathFullResToStage(
-                            new double[] {
-                                annotation.getROI().getCentroidX(),
-                                annotation.getROI().getCentroidY()
-                            },
-                            state.transform);
+                    double[] hintPx = firstAutofocusPixel(afScan, afPreferredTile, annotation);
+                    double[] stageCoords =
+                            TransformationFunctions.transformQuPathFullResToStage(hintPx, state.transform);
                     double distFromLast = zFocusModel.distanceFromLastPoint(stageCoords[0], stageCoords[1]);
 
                     if (zFocusModel.canPredict(distFromLast)) {
@@ -1324,24 +1354,8 @@ public class AcquisitionManager {
                 // use this to avoid focusing on blank/white regions.
                 if (!QPPreferenceDialog.getDisableAllAutofocus()) {
                     try {
-                        // Read WSI tissue scoring thresholds from autofocus config
-                        Map<String, Object> afParams = configManager.getAutofocusParams(state.sample.objective());
-                        double wsiTissueThreshold = 0.15;
-                        int wsiWhiteThreshold = 230;
-                        int wsiDarkThreshold = 20;
-                        if (afParams != null) {
-                            if (afParams.get("wsi_tissue_threshold") instanceof Number)
-                                wsiTissueThreshold = ((Number) afParams.get("wsi_tissue_threshold")).doubleValue();
-                            if (afParams.get("wsi_tissue_white_threshold") instanceof Number)
-                                wsiWhiteThreshold = ((Number) afParams.get("wsi_tissue_white_threshold")).intValue();
-                            if (afParams.get("wsi_tissue_dark_threshold") instanceof Number)
-                                wsiDarkThreshold = ((Number) afParams.get("wsi_tissue_dark_threshold")).intValue();
-                        }
-                        // One macro-image scan serves the preferred tile, the allow-list and
-                        // the survey.
-                        WsiTileScan scan = prepareWsiTileScan(annotation);
-                        int preferredTile =
-                                findBestAfTileFromWSI(scan, wsiTissueThreshold, wsiWhiteThreshold, wsiDarkThreshold);
+                        WsiTileScan scan = afScan;
+                        int preferredTile = afPreferredTile;
                         if (preferredTile >= 0) {
                             config.commandBuilder().preferredAfTile(preferredTile);
                             logger.info(
@@ -2890,6 +2904,66 @@ public class AcquisitionManager {
      * with -- so using it would hand the server a hint that is wrong by exactly the
      * amount nobody has measured.
      */
+    /**
+     * Store the focus surface the server fitted through a finished region
+     * ({@code focus_surface.json} beside its tiles) as this slide's surface, when it is
+     * licensed and has at least as many points as the one already stored. The next region
+     * then approaches from hundreds of measurements instead of the two or three taken at
+     * alignment, and so does a later run on the same mount.
+     */
+    private void adoptRegionFocusSurface(PathObject annotation) {
+        try {
+            Path file = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName())
+                    .resolve("focus_surface.json");
+            if (!Files.exists(file)) {
+                return;
+            }
+            java.lang.reflect.Type mapType = new com.google.gson.reflect.TypeToken<Map<String, Object>>() {}.getType();
+            Map<String, Object> record =
+                    new com.google.gson.Gson().fromJson(Files.readString(file, StandardCharsets.UTF_8), mapType);
+            var surface = AffineTransformManager.fromServerFocusSurface(record, state.sample.objective());
+            if (surface == null) {
+                logger.info(
+                        "Region {} focus surface not kept: {}",
+                        annotation.getName(),
+                        record == null ? "unreadable" : record.getOrDefault("unlicensed_reason", "incomplete record"));
+                return;
+            }
+            var project = gui.getProject();
+            String lookupKey = surfaceLookupKey();
+            if (project == null || lookupKey == null) {
+                return;
+            }
+            var existing = AffineTransformManager.loadSlideFocusSurface(project, lookupKey);
+            if (existing != null && existing.pointCount() > surface.pointCount()) {
+                logger.info(
+                        "Region {} focus surface ({} points) not kept: the slide already has one from {} points",
+                        annotation.getName(),
+                        surface.pointCount(),
+                        existing.pointCount());
+                return;
+            }
+            // Saving is unconditional; using it for the next region's hint follows the same
+            // preference as loadSlideFocusSurface.
+            if (AffineTransformManager.saveSlideFocusSurface(project, lookupKey, surface, null)
+                    && !"off".equals(QPPreferenceDialog.getFocusSurfaceMode())) {
+                slideFocusSurface = surface;
+            }
+        } catch (Exception e) {
+            logger.warn("Could not keep the focus surface of {}: {}", annotation.getName(), e.getMessage());
+        }
+    }
+
+    /** The macro lookup key the slide's alignment (and focus surface) is stored under. */
+    private String surfaceLookupKey() {
+        var project = gui.getProject();
+        if (project == null || capturedImageData == null) {
+            return null;
+        }
+        String imageName = QPProjectFunctions.getActualImageFileName(capturedImageData);
+        return imageName == null ? null : AlignmentHelper.resolveMacroLookupKey(project, capturedImageData, imageName);
+    }
+
     private void loadSlideFocusSurface() {
         slideFocusSurface = null;
         // Measuring a surface is unconditional -- it writes an additive record and costs
@@ -2949,6 +3023,49 @@ public class AcquisitionManager {
      *
      * @param stageCoords stage {x, y} in um, as sent to the server
      */
+    /**
+     * Full-resolution pixel center of the region's last tile in acquisition order (the last
+     * entry of its TileConfiguration_QP.txt), or the annotation's centroid when that file
+     * cannot be read.
+     */
+    private double[] lastTilePixel(PathObject annotation) {
+        try {
+            Path file = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName())
+                    .resolve("TileConfiguration_QP.txt");
+            double[] last = TileConfigurationQp.lastTileCenter(Files.readAllLines(file));
+            if (last != null) {
+                return last;
+            }
+        } catch (Exception e) {
+            logger.debug("Could not read the last tile of {}: {}", annotation.getName(), e.getMessage());
+        }
+        logger.info("Last tile of {} unknown; recording the final Z at the annotation centroid", annotation.getName());
+        return new double[] {
+            annotation.getROI().getCentroidX(), annotation.getROI().getCentroidY()
+        };
+    }
+
+    /**
+     * Full-resolution pixel where the server will run this region's first autofocus (see
+     * {@link FirstAutofocusSite}), or the annotation's centroid when the tiles are unknown.
+     */
+    private static double[] firstAutofocusPixel(WsiTileScan scan, int preferredTile, PathObject annotation) {
+        if (scan != null && scan.sites() != null && !scan.sites().isEmpty()) {
+            List<FirstAutofocusSite.Site> sites = new ArrayList<>(scan.sites().size());
+            for (TileSite t : scan.sites()) {
+                sites.add(new FirstAutofocusSite.Site(t.index(), t.cx(), t.cy()));
+            }
+            FirstAutofocusSite.Site first = FirstAutofocusSite.of(sites, preferredTile, scan.frameW(), scan.frameH());
+            if (first != null) {
+                logger.info("First autofocus for {} expected at tile {}", annotation.getName(), first.index());
+                return new double[] {first.x(), first.y()};
+            }
+        }
+        return new double[] {
+            annotation.getROI().getCentroidX(), annotation.getROI().getCentroidY()
+        };
+    }
+
     private Double slideFocusHint(double[] stageCoords) {
         if (slideFocusSurface == null || stageCoords == null || stageCoords.length < 2) {
             return null;

@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A region's fitted focus surface becomes the slide's focus surface.** After each region QPSC reads the `focus_surface.json` the server now writes beside the tiles; a licensed surface replaces the slide's stored one (unless the stored one has more points), so the next region on the slide, and a later run on the same mount, approach from hundreds of autofocus results instead of the two or three measured at alignment. The stored surface can be curved: three curvature terms and the box its points spanned, continued in a straight line beyond it, exactly as the server predicts. Needs a command server that writes `focus_surface.json`.
+
 - **The stitching queue says how long stitching has left.** A **Time left** column, and a window title with when the whole queue should be done ("all done in about 3 h 20 min (around 17:55)"). A running job's time comes from each angle or channel's own progress, which tiles-to-pyramid now reports (tile headers, overlap measurement, and every pyramid level, at the speed it measures), scheduled on the stitching pool the way the job runs; a target still waiting is costed from its tile folder (tiles, image size, channels, bit depth, compression) at the speed this computer reached in earlier stitches, scaled by how much slower the running ones are going than predicted. A queued job is predicted the same way from its tile folders the moment the acquisition hands it over, so a multi-slide run shows when its last stitch should land. Needs a tiles-to-pyramid with progress reporting (its next release); with an older one the column stays empty and nothing else changes.
 
 ### Changed
@@ -18,6 +20,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Auto-Align (SIFT) tries a fast search first.** Before the configured search, it matches against a region twice the field of view around the tile, at the fine resolution only, and keeps the result when it reaches the confidence threshold. On PPM at 20x with a 1 mm margin a match took about 4 s end to end, 1.3 s of it reading the 2.3 mm region from the slide image, and a coarse pass that missed fell through to a 6 s full-resolution pass; most matches were within 40 um of the prediction. The configured search, and **Search wider**, still run when the fast one finds nothing. Applies to the check after the stage move too. Not done when the configured margin is already about that small.
 
 ### Fixed
+
+- **A region's starting Z is predicted where the server starts focusing.** The Z hint from the slide's focus surface (and from the in-run Z model) was evaluated at the annotation's centroid, while the server applies it at its first autofocus tile, which on 2026-11-06 was a corner 10 mm away: the hint was -39.69 um and focus there was -15.45 um. It is now evaluated at that tile (the tissue-scored tile QPSC sends, or the server's own pick when none is sent).
+- **The Z model records a region's final Z where it was measured.** The final Z is the stage height at the region's last tile; it was booked at the annotation's centroid (on 2026-11-06, -48.8 um at a centroid whose focus was near -34 um). It is now recorded at the last tile.
 
 - **Collect Regions enables as soon as a matching annotation is drawn.** In the Annotation Acquisition dialog the count updated ("1 annotation will be acquired") but the button stayed disabled until a class was toggled, because it only re-checked when the class selection changed. It now re-checks whenever the count does.
 
