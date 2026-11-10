@@ -31,8 +31,8 @@ When you start a multi-annotation acquisition, QPSC sorts annotations by **spati
 Before each annotation's autofocus runs, the system provides a **Z-focus hint** -- an estimate of where focus should be. This centers the AF search range so it covers the correct Z neighborhood.
 
 The hint comes from (in order of preference):
-1. **Focus surface** (experimental, opt-in, if available) -- When the **"Focus surface"** preference is not `off`, and the slide carries a surface measured at a previous refinement with the same objective, it predicts Z from the target annotation's XY position. A focus plane is more spatially aware than a scalar, so position-dependent Z variation across the slide is captured rather than averaged. See [Focus Surface Measurement](#focus-surface-measurement-experimental) for details.
-2. **Tilt prediction model** -- After 6+ completed annotations, a least-squares plane fit predicts Z based on the target annotation's XY position (see [Tilt Prediction](#z-focus-tilt-prediction))
+1. **Focus surface** (experimental, opt-in, if available) -- When the **"Focus surface"** preference is not `off`, and the slide carries a surface measured at a previous refinement with the same objective, it predicts Z at the tile where the region's first autofocus runs (the tissue-scored tile QPSC sends, or the server's own choice), which on a large region can be millimeters from the annotation's center. A focus surface is more spatially aware than a scalar, so position-dependent Z variation across the slide is captured rather than averaged. See [Focus Surface Measurement](#focus-surface-measurement-experimental) for details.
+2. **Tilt prediction model** -- After 6+ completed annotations, a least-squares plane fit predicts Z at the same first-autofocus tile (see [Tilt Prediction](#z-focus-tilt-prediction)). Each completed annotation adds its final Z at the position of its last tile, where that Z was measured.
 3. **Last acquisition Z** -- The final Z from the previous annotation (good for nearby annotations thanks to proximity ordering)
 4. **First-annotation starting Z** -- for the very first annotation, before any acquisition or tilt data exists:
    - **Persisted focus-Z seed** -- when an alignment is reused and its JSON carries a focus Z captured during a previous refinement, that value seeds the first annotation's AF so it starts near focus instead of searching from scratch (a meaningful saving at high magnification).
@@ -264,7 +264,7 @@ The tilt model is most valuable when proximity ordering must eventually jump bac
 
 ## Focus Surface Measurement (Experimental)
 
-A **focus surface** is a tilted plane fitted to focus measurements, capturing how the focal plane varies across a slide. Once measured on a slide, it persists in the alignment record and is reused on subsequent acquisitions to provide spatially-aware Z-focus hints.
+A **focus surface** is a tilted plane (or, when the points show curvature clearly, a gently curved surface) fitted to focus measurements, capturing how the focal plane varies across a slide. Once measured on a slide, it persists in the alignment record and is reused on subsequent acquisitions to provide spatially-aware Z-focus hints.
 
 ### Why It Helps
 
@@ -284,6 +284,7 @@ On subsequent acquisitions of the same slide (with the same objective):
 
 1. **On first annotation of a run:** The surface predicts Z for each region's first autofocus, replacing the generic scalar hint with a position-specific one. The wide initial search still runs, but from the right starting height.
 2. **Inherited hint chain:** If no focus surface is available, the tilt model takes over (after 6+ annotations). Both sources describe position-dependent focus, but the surface draws from a previous session's direct measurement while the tilt model is built fresh from this run's AF results.
+3. **Region to region:** After each region, the server fits a surface through that region's own autofocus results and writes `focus_surface.json` beside its tiles. When that surface is licensed and has at least as many points as the one the slide already has, QPSC keeps it as the slide's surface, so the next region on the slide (and a later run on the same mount) starts from hundreds of measurements rather than the two or three taken at alignment. Using it still follows the **"Focus surface"** preference below.
 
 The surface is only ever used to **approach** a region at roughly the right height; it never overrules a measurement. A measurement from an autofocus search is authoritative; the surface is an initial guess.
 
