@@ -25,6 +25,7 @@ import javafx.scene.paint.Color;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
 import javafx.util.Duration;
+import qupath.ext.qpsc.model.TimeLapseEstimate;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.ManualFocusHandler;
 import qupath.ext.qpsc.ui.QpscWindows;
@@ -110,11 +111,32 @@ public final class WorkflowDialogs {
             int timeoutMs,
             boolean showCancelButton,
             int stepsPerPosition) {
+        return showProgressBarAsync(progressCounter, totalFiles, timeoutMs, showCancelButton, stepsPerPosition, 1, 0.0);
+    }
+
+    /**
+     * As {@link #showProgressBarAsync(AtomicInteger, int, int, boolean, int)} for a time-lapse:
+     * {@code totalFiles} covers every timepoint, and the time left counts the interval between
+     * timepoint starts (see {@link TimeLapseEstimate}).
+     *
+     * @param timepoints timepoints; 1 when not a time-lapse
+     * @param intervalSec interval between timepoint starts, in seconds
+     */
+    public static ProgressHandle showProgressBarAsync(
+            AtomicInteger progressCounter,
+            int totalFiles,
+            int timeoutMs,
+            boolean showCancelButton,
+            int stepsPerPosition,
+            int timepoints,
+            double intervalSec) {
 
         final ProgressHandle[] handleHolder = new ProgressHandle[1];
         final CountDownLatch handleReady = new CountDownLatch(1);
         final int stepsPerPositionFinal = Math.max(1, stepsPerPosition);
-        final int totalPositions = totalFiles / stepsPerPositionFinal;
+        final int timepointsFinal = Math.max(1, timepoints);
+        final int filesPerTimepoint = Math.max(1, totalFiles / timepointsFinal);
+        final int totalPositions = filesPerTimepoint / stepsPerPositionFinal;
 
         Platform.runLater(() -> {
             logger.info(
@@ -180,6 +202,12 @@ public final class WorkflowDialogs {
             AtomicLong startTime = new AtomicLong(0);
             AtomicLong lastProgressTime = new AtomicLong(System.currentTimeMillis());
             AtomicInteger lastSeenProgress = new AtomicInteger(0);
+            // Time-lapse: the timepoint in progress, when it was first seen, and the file count
+            // then, so the time per file is measured within a timepoint (never across a wait).
+            AtomicInteger timepointSeen = new AtomicInteger(-1);
+            AtomicLong timepointStart = new AtomicLong(0);
+            AtomicInteger timepointStartFiles = new AtomicInteger(0);
+            double[] msPerFile = {0.0};
 
             // Build the Timeline
             final Timeline timeline = new Timeline();
@@ -218,8 +246,13 @@ public final class WorkflowDialogs {
                 // movement cadence rather than the image-write cadence.
                 double fraction = totalFiles > 0 ? current / (double) totalFiles : 0.0;
                 progressBar.setProgress(fraction);
-                int positionsDone = current / stepsPerPositionFinal;
-                progressLabel.setText("Positions acquired: " + positionsDone + " of " + totalPositions);
+                int timepoint = TimeLapseEstimate.timepointOf(current, totalFiles, timepointsFinal);
+                int positionsDone =
+                        Math.min(totalPositions, (current - timepoint * filesPerTimepoint) / stepsPerPositionFinal);
+                progressLabel.setText("Positions acquired: " + positionsDone + " of " + totalPositions
+                        + (timepointsFinal > 1
+                                ? " (timepoint " + (timepoint + 1) + " of " + timepointsFinal + ")"
+                                : ""));
 
                 // Update status message based on progress
                 if (current == 0) {
@@ -234,6 +267,26 @@ public final class WorkflowDialogs {
                 if (startTime.get() > 0 && current > 0 && current < totalFiles) {
                     long elapsed = now - startTime.get();
                     long remMs = (long) ((elapsed / (double) current) * (totalFiles - current));
+                    if (timepointsFinal > 1) {
+                        if (timepoint != timepointSeen.get()) {
+                            timepointSeen.set(timepoint);
+                            timepointStart.set(now);
+                            timepointStartFiles.set(current);
+                        }
+                        int filesInTimepoint = current - timepointStartFiles.get();
+                        if (filesInTimepoint > 0) {
+                            msPerFile[0] = (now - timepointStart.get()) / (double) filesInTimepoint;
+                        } else if (msPerFile[0] <= 0) {
+                            msPerFile[0] = elapsed / (double) current;
+                        }
+                        remMs = TimeLapseEstimate.remainingMs(
+                                timepointsFinal,
+                                intervalSec,
+                                filesPerTimepoint,
+                                current,
+                                msPerFile[0],
+                                now - timepointStart.get());
+                    }
 
                     // Format time more nicely
                     long remSec = remMs / 1000;
@@ -277,7 +330,10 @@ public final class WorkflowDialogs {
                 // AND we haven't reached completion
                 if (!complete && current > 0) {
                     long timeSinceProgress = now - lastProgressTime.get();
-                    stalled = timeSinceProgress > timeoutMs;
+                    // A time-lapse writes nothing while it waits for the next timepoint,
+                    // which can be longer than the timeout.
+                    long allowedMs = timeoutMs + (timepointsFinal > 1 ? Math.round(intervalSec * 1000.0) : 0L);
+                    stalled = timeSinceProgress > allowedMs;
 
                     if (stalled) {
                         logger.warn(

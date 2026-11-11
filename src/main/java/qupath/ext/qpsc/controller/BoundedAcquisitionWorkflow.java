@@ -501,10 +501,19 @@ public class BoundedAcquisitionWorkflow {
                                         expectedFilesPerTile *= nZPlanes;
                                     }
                                 }
+                                // A time-lapse repeats every position at each timepoint, and
+                                // the server counts every file; same preferences as the
+                                // command's --timepoints/--interval.
+                                int timepoints = PersistentPreferences.isTimeLapseEnabled()
+                                        ? Math.max(1, PersistentPreferences.getTimeLapseTimepoints())
+                                        : 1;
+                                double intervalSec =
+                                        timepoints > 1 ? PersistentPreferences.getTimeLapseIntervalSec() : 0.0;
                                 int expectedFiles = MinorFunctions.countTifEntriesInTileConfig(
                                                 List.of(Paths.get(tempTileDir, boundsMode)
                                                         .toString()))
-                                        * expectedFilesPerTile;
+                                        * expectedFilesPerTile
+                                        * timepoints;
 
                                 AtomicInteger progressCounter = new AtomicInteger(0);
 
@@ -516,7 +525,13 @@ public class BoundedAcquisitionWorkflow {
                                     // widefield IF with 10 tiles this shows "10 of 10
                                     // positions", not "40 of 40".
                                     progressHandle = WorkflowDialogs.showProgressBarAsync(
-                                            progressCounter, expectedFiles, 300000, true, expectedFilesPerTile);
+                                            progressCounter,
+                                            expectedFiles,
+                                            300000,
+                                            true,
+                                            expectedFilesPerTile,
+                                            timepoints,
+                                            intervalSec);
 
                                     final WorkflowDialogs.ProgressHandle finalHandle = progressHandle;
                                     progressHandle.setCancelCallback(v -> {

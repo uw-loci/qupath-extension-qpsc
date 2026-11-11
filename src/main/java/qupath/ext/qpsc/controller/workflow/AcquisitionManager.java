@@ -1647,13 +1647,23 @@ public class AcquisitionManager {
             }
         }
         final int stepsPerPositionForProgress = stepsPerPositionTmp;
-        final int expectedFiles = tilesPerAngle * stepsPerPositionForProgress;
+        // A time-lapse repeats every position at each timepoint, and the server counts
+        // every one of those files. Read from the same preferences as the command's
+        // --timepoints/--interval (AcquisitionConfigurationBuilder).
+        final int timepointsForProgress = PersistentPreferences.isTimeLapseEnabled()
+                ? Math.max(1, PersistentPreferences.getTimeLapseTimepoints())
+                : 1;
+        final double intervalSecForProgress =
+                timepointsForProgress > 1 ? PersistentPreferences.getTimeLapseIntervalSec() : 0.0;
+        final int expectedFiles = tilesPerAngle * stepsPerPositionForProgress * timepointsForProgress;
 
         logger.info(
-                "Expected files: {} ({} tiles x {} steps/position; angles={}, channels={}, z_planes={})",
+                "Expected files: {} ({} tiles x {} steps/position x {} timepoints; angles={}, channels={},"
+                        + " z_planes={})",
                 expectedFiles,
                 tilesPerAngle,
                 stepsPerPositionForProgress,
+                timepointsForProgress,
                 numAnglesForProgress,
                 numChannelsForProgress,
                 nZPlanesForProgress);
@@ -1673,6 +1683,7 @@ public class AcquisitionManager {
             final Path mdaPathForUi = mdaSettingsPath;
             Platform.runLater(() -> {
                 progressDialog.setStepsPerPosition(stepsPerPositionForProgress);
+                progressDialog.setTimeLapse(timepointsForProgress, intervalSecForProgress);
                 progressDialog.startAnnotation(annotation.getName(), expectedFiles);
                 progressDialog.setAcquisitionPlan(planForUi);
                 progressDialog.setLastMdaPath(mdaPathForUi);

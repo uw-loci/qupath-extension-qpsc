@@ -26,6 +26,7 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.AcquisitionPlan;
+import qupath.ext.qpsc.model.TimeLapseEstimate;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.autofocus.AutofocusFeed;
 import qupath.ext.qpsc.service.mda.LiveDimensionDecomposer;
@@ -70,6 +71,15 @@ public class DualProgressDialog {
     // Current annotation tracking
     private volatile String currentAnnotationName = "";
     private volatile int currentAnnotationExpectedFiles = 0;
+
+    // Time-lapse of the current run: timepoints per region and the interval between
+    // timepoint starts (s). 1 and 0 when it is not a time-lapse. The expected files of a
+    // region then cover all its timepoints.
+    private volatile int timeLapseTimepoints = 1;
+    private volatile double timeLapseIntervalSec = 0.0;
+    // Timepoint the current region is in, and when its first file completed.
+    private volatile int currentTimepoint = 0;
+    private final AtomicLong currentTimepointStartTime = new AtomicLong(0);
     private final AtomicInteger currentAnnotationProgress = new AtomicInteger(0);
     private final AtomicLong currentAnnotationStartTime = new AtomicLong(0);
 
@@ -417,6 +427,8 @@ public class DualProgressDialog {
 
         // Reset first tile flag for this annotation to detect full autofocus time
         this.firstTileProcessed.set(false);
+        this.currentTimepoint = 0;
+        this.currentTimepointStartTime.set(now);
 
         drifted = false;
         Platform.runLater(() -> {
@@ -446,6 +458,15 @@ public class DualProgressDialog {
         if (filesCompleted > previousProgress) {
             // One or more files completed since the last poll
             long lastCompletion = lastTileCompletionTime.get();
+            // A time-lapse waits between timepoints; the first files of a new timepoint
+            // carry that wait, which is not time per file.
+            int timepoint =
+                    TimeLapseEstimate.timepointOf(filesCompleted, currentAnnotationExpectedFiles, timeLapseTimepoints);
+            boolean newTimepoint = timepoint != currentTimepoint;
+            if (newTimepoint) {
+                currentTimepoint = timepoint;
+                currentTimepointStartTime.set(now);
+            }
             if (lastCompletion > 0) {
                 long tileTime = now - lastCompletion;
                 int files = filesCompleted - previousProgress;
@@ -458,6 +479,13 @@ public class DualProgressDialog {
                     logger.info(
                             "First update ({} files, includes full AF + settling): {} ms -- excluded from mean",
                             files,
+                            tileTime);
+                } else if (newTimepoint) {
+                    logger.info(
+                            "Timepoint {} of {} started; {} ms since the last file (includes the wait) -- excluded"
+                                    + " from mean",
+                            timepoint + 1,
+                            timeLapseTimepoints,
                             tileTime);
                 } else {
                     addFileTimes(allTileTimes, tileTime, files, MAX_FILE_TIME_SAMPLES);
@@ -607,6 +635,18 @@ public class DualProgressDialog {
      * Files still to write: the rest of the current annotation plus every later annotation's
      * positions times the steps per position.
      */
+    /**
+     * Sets the time-lapse of the run, so the time left counts every remaining timepoint and
+     * the interval between them. Call before the first region starts.
+     *
+     * @param timepoints timepoints per region; 1 when not a time-lapse
+     * @param intervalSec interval between timepoint starts, in seconds; 0 for back to back
+     */
+    public void setTimeLapse(int timepoints, double intervalSec) {
+        this.timeLapseTimepoints = Math.max(1, timepoints);
+        this.timeLapseIntervalSec = Math.max(0.0, intervalSec);
+    }
+
     static int filesRemaining(
             int currentExpectedFiles, int currentProgress, List<Integer> futurePositions, int stepsPerPosition) {
         int current = Math.max(0, currentExpectedFiles - currentProgress);
@@ -844,6 +884,32 @@ public class DualProgressDialog {
                     + remainingAnnotations * avgFilesPerAnnotation;
         }
         long totalRemainingMs = (long) (avgMsPerTile * totalTilesRemaining);
+        int timepoints = timeLapseTimepoints;
+        if (timepoints > 1) {
+            // Every region runs all its timepoints, the interval apart. Future regions'
+            // position counts are per timepoint.
+            int perTpCurrent = Math.max(1, currentAnnotationExpectedFiles / timepoints);
+            totalRemainingMs = TimeLapseEstimate.remainingMs(
+                    timepoints,
+                    timeLapseIntervalSec,
+                    perTpCurrent,
+                    currentProgress,
+                    avgMsPerTile,
+                    now - currentTimepointStartTime.get());
+            int remainingAnnotations = Math.max(0, totalAnnotations - completed - 1);
+            List<Integer> future;
+            synchronized (futurePositionCounts) {
+                future = new ArrayList<>(futurePositionCounts);
+            }
+            int futureFiles = 0;
+            for (int i = 0; i < remainingAnnotations; i++) {
+                int files = i < future.size() ? future.get(i) * Math.max(1, steps) : perTpCurrent;
+                totalRemainingMs +=
+                        TimeLapseEstimate.remainingMs(timepoints, timeLapseIntervalSec, files, 0, avgMsPerTile, 0);
+                futureFiles += files * timepoints;
+            }
+            totalTilesRemaining = Math.max(0, currentAnnotationExpectedFiles - currentProgress) + futureFiles;
+        }
         long remainingSec = totalRemainingMs / 1000;
 
         String estimate = formatTime(remainingSec);
