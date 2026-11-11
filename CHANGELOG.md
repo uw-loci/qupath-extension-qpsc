@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **PPM Mean/Sum time projections write a second birefringence image.** Needs the server change of the same date. Beside `_biref` (the average of each timepoint's birefringence) the run now imports `_biref_from_angles`, the birefringence of the time-averaged +/- angles, in which per-frame noise largely cancels instead of leaving a positive floor. Both are kept for comparison.
+
 - **Bounded Acquisition shows when the stage has moved off the typed center.** **Use Current Position as Center** gets a red halo while the stage is more than 1 um from the Center X / Y in the dialog, read from the stage poll the Live Viewer uses.
 
 - **Choose where a time-lapse's timepoints go.** Needs the server change of the same date. An **Order** choice in the time-lapse options: **Across the region** (as before: each timepoint visits every position and takes its Z-stack, for example repeated rounds over a well plate), **Per position** (each position runs all its timepoints, then the next position) or **Per Z plane** (each plane runs all its timepoints before Z moves on, so no Z move falls between frames; needs the Z projection **None**). The single-point dialog offers the plane order when Z and time-lapse are both on. The progress windows now name the tile, the Z plane and the timepoint together, in the run's order, and the time left follows it.

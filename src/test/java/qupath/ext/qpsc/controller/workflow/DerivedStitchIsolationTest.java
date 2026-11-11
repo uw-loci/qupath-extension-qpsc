@@ -145,6 +145,18 @@ class DerivedStitchIsolationTest {
     }
 
     @Test
+    void ppmFindsBothBirefringenceFolders() throws Exception {
+        folder("7.0");
+        folder("-7.0");
+        folder("7.0.biref");
+        folder("7.0.biref_from_angles");
+        assertEquals(
+                List.of("7.0.biref", "7.0.biref_from_angles"),
+                StitchingHelper.findDerivedDirectories(
+                        new qupath.ext.qpsc.modality.ppm.PPMModalityHandler(), base, List.of("7.0", "-7.0")));
+    }
+
+    @Test
     void noSuffixesMeansNoDerivedFolders() throws Exception {
         folder("State0");
         assertEquals(List.of(), StitchingHelper.findDerivedDirectories(null, base, List.of("State0")));

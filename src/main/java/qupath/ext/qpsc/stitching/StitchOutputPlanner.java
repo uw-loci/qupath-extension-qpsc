@@ -207,12 +207,20 @@ public final class StitchOutputPlanner {
     }
 
     /**
+     * The folder the server writes with a Mean or Sum time projection of PPM: the
+     * birefringence of the time-averaged +/- angle tiles ({@code 7.0.biref_from_angles}),
+     * beside the average of each timepoint's birefringence ({@code 7.0.biref}).
+     */
+    public static final String BIREF_FROM_ANGLES = ".biref_from_angles";
+
+    /**
      * The suffix of a derived folder, as the import site derives it: {@code 7.0.biref} is the
      * angle's suffix plus {@code _biref}, {@code 7.0.sum} likewise, anything else (LC-PolScope's
      * {@code retardance}) is used as it is.
      */
     static String derivedSuffix(Inputs in, String dir) {
-        for (String tail : new String[] {".biref", ".sum"}) {
+        // Checked before ".biref": "7.0.biref_from_angles" is not a ".biref" folder.
+        for (String tail : new String[] {BIREF_FROM_ANGLES, ".biref", ".sum"}) {
             if (dir.endsWith(tail)) {
                 String base = dir.substring(0, dir.length() - tail.length());
                 String baseSuffix = in.angleSuffix() != null ? in.angleSuffix().apply(base) : null;
