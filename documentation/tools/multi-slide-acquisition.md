@@ -443,6 +443,20 @@ and treated as invalid, and the dialog recommends fresh refinement.
 > saved alignment places the slide in a different slot. See
 > [Preferences](../PREFERENCES.md) for when to enable it.
 
+## Stage limits and stopped slides
+
+During **Set Up All**, once a slide's alignment is saved, its tile grid is checked against the
+stage limits (`stage.limits`). If a region reaches past them, a dialog names it and asks whether
+to continue; **Cancel** leaves that slot to fix (move or shrink the annotation). A slot near the
+end of the stage can be partly unreachable: on the PPM quad_v holder, slot 4 extends to stage X
+-60207 um while the stage stops at -56723 um. The acquire pass repeats the check without a
+dialog and only logs and notifies.
+
+If a slide still stops part way, the batch moves on to the next slide and the stopped region's
+tiles are held, not deleted: a notification and a **Held tiles** window ask whether to stitch
+them like a normal acquisition or delete them. See TROUBLESHOOTING, "Tiles held after a run
+stopped".
+
 ## Estimated run time
 
 The panel shows a live whole-batch time estimate. Before setup it reads "set up

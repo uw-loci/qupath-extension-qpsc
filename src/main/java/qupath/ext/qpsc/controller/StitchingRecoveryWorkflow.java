@@ -63,7 +63,19 @@ public class StitchingRecoveryWorkflow {
      * Entry point - shows dialog and runs stitching recovery.
      */
     public static void run() {
-        logger.info("Starting stitching recovery workflow");
+        run(null, null);
+    }
+
+    /**
+     * Opens the recovery dialog on a given tile folder (for tiles held after a failed run).
+     *
+     * @param tileFolder the folder to fill in, or null to let the operator browse
+     * @param onFinished called with true once every angle stitched and imported, false when the
+     *     dialog is canceled or anything failed; may be null
+     */
+    public static void run(File tileFolder, java.util.function.Consumer<Boolean> onFinished) {
+        java.util.function.Consumer<Boolean> done = onFinished != null ? onFinished : ok -> {};
+        logger.info("Starting stitching recovery workflow{}", tileFolder == null ? "" : " for " + tileFolder);
 
         QuPathGUI gui = QuPathGUI.getInstance();
         Project<BufferedImage> project = gui.getProject();
@@ -74,13 +86,18 @@ public class StitchingRecoveryWorkflow {
                     "No Project Open",
                     "Please open or create a QuPath project first.\n"
                             + "The stitched images will be added to the current project.");
+            done.accept(false);
             return;
         }
 
-        Platform.runLater(() -> showRecoveryDialog(gui, project));
+        Platform.runLater(() -> showRecoveryDialog(gui, project, tileFolder, done));
     }
 
-    private static void showRecoveryDialog(QuPathGUI gui, Project<BufferedImage> project) {
+    private static void showRecoveryDialog(
+            QuPathGUI gui,
+            Project<BufferedImage> project,
+            File prefillFolder,
+            java.util.function.Consumer<Boolean> onFinished) {
         Dialog<ButtonType> dialog = new Dialog<>();
         dialog.setTitle("Re-stitch Tiles");
         dialog.setHeaderText("Recover a failed stitching step by re-stitching existing tiles");
@@ -119,6 +136,29 @@ public class StitchingRecoveryWorkflow {
         metadataLabel.setWrapText(true);
         metadataLabel.setStyle("-fx-font-size: 0.85em;");
 
+        // What choosing a folder does, by browsing or when the dialog opens on a held folder.
+        java.util.function.Consumer<File> applyFolder = selected -> {
+            folderField.setText(selected.getAbsolutePath());
+            // Resolve pixel size: acquisition_info.txt -> microscope config -> tile metadata.
+            PixelSizeResolution ps = resolveRecoveryPixelSize(selected);
+            if (ps != null) {
+                pixelField.setText(String.valueOf(ps.micronsPerPixel()));
+                pixelSourceLabel.setText(ps.source());
+                logger.info("Resolved recovery pixel size: {} um {}", ps.micronsPerPixel(), ps.source());
+            }
+            // Show acquisition metadata status
+            Properties info = readAcquisitionInfo(selected);
+            if (info != null) {
+                metadataLabel.setText("Sample: " + info.getProperty("sample_name", "?")
+                        + " | Modality: " + info.getProperty("modality", "?")
+                        + " | Objective: " + info.getProperty("objective", "?"));
+                metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
+            } else {
+                metadataLabel.setText("No acquisition metadata found -- will use folder name");
+                metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.WARNING + ";");
+            }
+        };
+
         browseButton.setOnAction(e -> {
             DirectoryChooser chooser = new DirectoryChooser();
             chooser.setTitle("Select Tile Folder");
@@ -135,25 +175,7 @@ public class StitchingRecoveryWorkflow {
 
             File selected = chooser.showDialog(dialog.getOwner());
             if (selected != null) {
-                folderField.setText(selected.getAbsolutePath());
-                // Resolve pixel size: acquisition_info.txt -> microscope config -> tile metadata.
-                PixelSizeResolution ps = resolveRecoveryPixelSize(selected);
-                if (ps != null) {
-                    pixelField.setText(String.valueOf(ps.micronsPerPixel()));
-                    pixelSourceLabel.setText(ps.source());
-                    logger.info("Resolved recovery pixel size: {} um {}", ps.micronsPerPixel(), ps.source());
-                }
-                // Show acquisition metadata status
-                Properties info = readAcquisitionInfo(selected);
-                if (info != null) {
-                    metadataLabel.setText("Sample: " + info.getProperty("sample_name", "?")
-                            + " | Modality: " + info.getProperty("modality", "?")
-                            + " | Objective: " + info.getProperty("objective", "?"));
-                    metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
-                } else {
-                    metadataLabel.setText("No acquisition metadata found -- will use folder name");
-                    metadataLabel.setStyle("-fx-font-size: 0.85em; -fx-text-fill: " + ThemeColors.WARNING + ";");
-                }
+                applyFolder.accept(selected);
             }
         });
 
@@ -256,8 +278,16 @@ public class StitchingRecoveryWorkflow {
             okButton.setDisable(!valid);
         });
 
+        if (prefillFolder != null && prefillFolder.isDirectory()) {
+            applyFolder.accept(prefillFolder);
+        }
+
         DialogOwner.own(dialog);
-        dialog.showAndWait().ifPresent(result -> {
+        var answer = dialog.showAndWait();
+        if (answer.isEmpty() || answer.get() != ButtonType.OK) {
+            onFinished.accept(false);
+        }
+        answer.ifPresent(result -> {
             if (result == ButtonType.OK) {
                 String tileFolder = folderField.getText().trim();
                 double pixelSize;
@@ -265,6 +295,7 @@ public class StitchingRecoveryWorkflow {
                     pixelSize = Double.parseDouble(pixelField.getText().trim());
                 } catch (NumberFormatException e) {
                     UserErrors.show(logger, "Invalid Pixel Size", "Please enter a valid number for pixel size.");
+                    onFinished.accept(false);
                     return;
                 }
                 // Remember for next time
@@ -284,8 +315,13 @@ public class StitchingRecoveryWorkflow {
                 // Run stitching in background
                 final String finalMatch = matchingString;
                 Thread stitchThread = new Thread(() -> {
-                    executeRecoveryStitching(
-                            tileFolder, pixelSize, compression, finalMatch, outputFormat, parallel, gui, project);
+                    boolean allOk = false;
+                    try {
+                        allOk = executeRecoveryStitching(
+                                tileFolder, pixelSize, compression, finalMatch, outputFormat, parallel, gui, project);
+                    } finally {
+                        onFinished.accept(allOk);
+                    }
                 });
                 stitchThread.setDaemon(true);
                 stitchThread.setName("StitchingRecovery");
@@ -344,7 +380,8 @@ public class StitchingRecoveryWorkflow {
         return null;
     }
 
-    private static void executeRecoveryStitching(
+    /** @return true when every angle stitched and imported */
+    private static boolean executeRecoveryStitching(
             String tileFolder,
             double pixelSize,
             String compression,
@@ -438,7 +475,7 @@ public class StitchingRecoveryWorkflow {
             logger.error("Failed to create output directory: {}", outputFolder);
             Platform.runLater(() ->
                     UserErrors.show(logger, "Directory Error", "Failed to create output directory: " + outputFolder));
-            return;
+            return false;
         }
 
         logger.info("Output directory: {}", outputFolder);
@@ -471,7 +508,7 @@ public class StitchingRecoveryWorkflow {
                         logger,
                         "No Tiles Found",
                         "No TileConfiguration.txt files found in the selected folder or its subdirectories."));
-                return;
+                return false;
             }
         }
 
@@ -749,6 +786,7 @@ public class StitchingRecoveryWorkflow {
                             NotificationPriority.HIGH,
                             NotificationEvent.STITCHING_ERROR);
         }
+        return finalSuccess > 0 && finalFailure == 0;
     }
 
     /**

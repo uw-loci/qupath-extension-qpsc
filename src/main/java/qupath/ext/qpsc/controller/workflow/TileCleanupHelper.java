@@ -1,9 +1,16 @@
 package qupath.ext.qpsc.controller.workflow;
 
 import java.io.File;
+import java.io.IOException;
+import java.nio.file.FileVisitResult;
+import java.nio.file.Files;
+import java.nio.file.Path;
+import java.nio.file.SimpleFileVisitor;
+import java.nio.file.attribute.BasicFileAttributes;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -98,31 +105,76 @@ public class TileCleanupHelper {
     }
 
     /**
-     * Cleans up after a canceled or failed run without touching regions that finished.
+     * Cleans up after a canceled or failed run without destroying acquired images.
      *
      * <p>A run's tile directory holds one folder per region. A region the server reported
-     * COMPLETED has its stitch queued or running, and its tiles are finished data, so a cancel
-     * later in the run must not delete them (deleting the whole run folder would destroy
-     * images a stitch is still reading). Finished regions are left in place; only the folders
-     * of regions that never completed are removed. With no finished region the whole folder
-     * goes.
+     * COMPLETED has its stitch queued or running, and its tiles are finished data, so they are
+     * left in place. A region that did not finish is deleted only when it holds no tile images
+     * (its tile grid, or a refinement that never led to an acquisition). A region that stopped
+     * part way holds real images -- on 2026-11-10 one stopped at the stage limit after 741
+     * positions and ten hours, and its 2964 images were deleted -- so it is kept and returned,
+     * and the caller asks the operator whether to stitch or delete it. With no finished and no
+     * held region the whole run folder goes, as before.
      *
      * @param tempTileDir     the run's tile directory (one sub-folder per region)
      * @param regionNames     every region of the run, by annotation name
      * @param acquiredRegions the regions the server reported COMPLETED
+     * @return the folders kept because they hold acquired images; empty when none
      */
-    public static void cleanupAfterFailedRun(
+    public static List<File> cleanupAfterFailedRun(
             String tempTileDir, Collection<String> regionNames, Set<String> acquiredRegions) {
-        if (acquiredRegions.isEmpty()) {
-            performCleanup(tempTileDir, true);
-            return;
-        }
         for (String region : acquiredRegions) {
             logger.info("Keeping tiles of finished region {} (stitched or stitching)", region);
         }
+        List<File> held = new ArrayList<>();
         for (String dir : incompleteRegionDirs(tempTileDir, regionNames, acquiredRegions)) {
-            performCleanup(dir, true);
+            int images = countTileImages(new File(dir).toPath());
+            if (images > 0) {
+                logger.warn("Keeping {} tile image(s) of unfinished region {} until the operator decides", images, dir);
+                held.add(new File(dir));
+            } else {
+                performCleanup(dir, true);
+            }
         }
+        if (acquiredRegions.isEmpty() && held.isEmpty()) {
+            performCleanup(tempTileDir, true);
+        }
+        return held;
+    }
+
+    /**
+     * Tile images (.tif / .tiff) under a region folder: the folder, its angle or channel
+     * folders, and z/t folders below those. Unreadable folders are skipped, not fatal.
+     */
+    public static int countTileImages(Path regionDir) {
+        int[] count = {0};
+        if (regionDir == null || !Files.isDirectory(regionDir)) {
+            return 0;
+        }
+        try {
+            Files.walkFileTree(
+                    regionDir,
+                    java.util.EnumSet.noneOf(java.nio.file.FileVisitOption.class),
+                    4,
+                    new SimpleFileVisitor<>() {
+                        @Override
+                        public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
+                            String name = file.getFileName().toString().toLowerCase(Locale.ROOT);
+                            if (attrs.isRegularFile() && (name.endsWith(".tif") || name.endsWith(".tiff"))) {
+                                count[0]++;
+                            }
+                            return FileVisitResult.CONTINUE;
+                        }
+
+                        @Override
+                        public FileVisitResult visitFileFailed(Path file, IOException exc) {
+                            return FileVisitResult.CONTINUE;
+                        }
+                    });
+        } catch (IOException e) {
+            logger.warn("Could not count tile images in {}: {}", regionDir, e.getMessage());
+        }
+        return count[0];
     }
 
     /** The folders of the regions that did not finish, which exist on disk. */

@@ -539,6 +539,37 @@ public class ExistingImageWorkflowV2 {
         }
 
         /**
+         * Setup pass of a multi-slide batch: checks the slide's tile grid, mapped through the
+         * alignment just saved, against the stage limits, and asks the operator while they are
+         * still there. The acquire pass runs unattended and only notifies. The grid is the one
+         * refinement wrote (TileConfiguration_QP.txt); a slide set up without refinement has
+         * none yet and is checked when its acquisition starts.
+         *
+         * @return false when the operator chose to cancel this slide's setup
+         */
+        private boolean confirmStageLimitsAtSetup(WorkflowState state) {
+            if (state.transform == null || state.projectInfo == null || state.annotations == null) {
+                return true;
+            }
+            double[] limits = qupath.ext.qpsc.ui.acquisition.StageLimitPrompt.configuredLimits();
+            if (limits == null) {
+                return true;
+            }
+            List<String> regions = new ArrayList<>();
+            for (PathObject annotation : state.annotations) {
+                regions.add(annotation.getName());
+            }
+            var overruns = StageLimitCheck.checkRegionDirs(
+                    java.nio.file.Paths.get(state.projectInfo.getTempTileDirectory()),
+                    regions,
+                    state.transform,
+                    limits);
+            return overruns.isEmpty()
+                    || qupath.ext.qpsc.ui.acquisition.StageLimitPrompt.askToContinue(
+                            overruns, "while setting up this slide");
+        }
+
+        /**
          * In SETUP_ONLY, stop here: the per-slide alignment JSON has already been
          * persisted by the alignment path, so the acquire pass can replay it. In FULL /
          * ACQUIRE_ONLY, run the acquisition + wait for stitching.
@@ -546,6 +577,9 @@ public class ExistingImageWorkflowV2 {
         private CompletableFuture<WorkflowState> maybeAcquire(WorkflowState state) {
             if (mode == Mode.SETUP_ONLY) {
                 if (state != null) {
+                    if (!confirmStageLimitsAtSetup(state)) {
+                        throw new CancellationException("Setup canceled: tiles past the stage limit");
+                    }
                     logger.info("SETUP_ONLY: alignment prepared and persisted; skipping acquisition");
                 }
                 return CompletableFuture.completedFuture(state);
@@ -3337,13 +3371,12 @@ public class ExistingImageWorkflowV2 {
             // Clear preserved annotations on error to prevent stale data
             state.annotationPreservation.clearPreservedAnnotations();
 
-            // Force-delete temporary tiles on error so a failed run does not
-            // leave them on disk even when the user's preference is "Keep" (Keep is for
-            // diagnostics on success; on error the tiles are usually incomplete /
-            // corrupt). cleanupTilesAfterStitching honors the preference and runs only
-            // on the success branch; this is the error-path equivalent. Regions that
-            // finished earlier in the run are kept: their tiles are complete and may be
-            // stitching right now.
+            // Clean up after the failed run without destroying acquired images. Regions that
+            // finished are kept (their tiles may be stitching right now); an unfinished region
+            // with no images (just its tile grid) is deleted; an unfinished region that holds
+            // images is HELD: kept, with a notification and a non-blocking window asking whether
+            // to stitch it like a normal acquisition or delete it. Nothing here waits on that
+            // answer, so a multi-slide batch moves on to its next slide.
             try {
                 if (state != null && state.projectInfo != null) {
                     String tempTileDir = state.projectInfo.getTempTileDirectory();
@@ -3352,7 +3385,18 @@ public class ExistingImageWorkflowV2 {
                         for (PathObject annotation : state.annotations) {
                             regionNames.add(annotation.getName());
                         }
-                        TileCleanupHelper.cleanupAfterFailedRun(tempTileDir, regionNames, state.regionsAcquired);
+                        List<java.io.File> held = TileCleanupHelper.cleanupAfterFailedRun(
+                                tempTileDir, regionNames, state.regionsAcquired);
+                        String heldSample = state.sample != null ? state.sample.sampleName() : "Unknown";
+                        String heldReason = cause.getMessage() != null ? cause.getMessage() : cause.toString();
+                        for (java.io.File folder : held) {
+                            qupath.ext.qpsc.ui.acquisition.HeldTilesWindow.hold(
+                                    new qupath.ext.qpsc.ui.acquisition.HeldTilesWindow.HeldRegion(
+                                            folder,
+                                            heldSample,
+                                            TileCleanupHelper.countTileImages(folder.toPath()),
+                                            heldReason));
+                        }
                     }
                 }
             } catch (Exception cleanupEx) {

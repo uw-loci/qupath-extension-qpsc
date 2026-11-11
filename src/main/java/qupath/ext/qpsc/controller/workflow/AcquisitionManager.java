@@ -385,6 +385,7 @@ public class AcquisitionManager {
                 })
                 .thenCompose(this::prepareForAcquisition)
                 .thenCompose(this::checkDiskSpace)
+                .thenCompose(this::checkStageLimits)
                 .thenCompose(this::checkBackgroundIllumination)
                 .thenCompose(this::processAnnotations)
                 .thenApply(success -> {
@@ -634,6 +635,42 @@ public class AcquisitionManager {
 
             if (!result.proceed()) {
                 logger.warn("Acquisition canceled by user after low-disk-space warning");
+                return null;
+            }
+            return angleExposures;
+        });
+    }
+
+    /**
+     * Checks every tile of every region against the stage limits before anything moves. With an
+     * operator present, asks whether to continue; in a multi-slide acquire pass, where nobody
+     * is watching and the operator was asked during setup, logs and notifies and continues.
+     * Returns {@code null} to cancel, like {@link #checkDiskSpace}.
+     */
+    private CompletableFuture<List<AngleExposure>> checkStageLimits(List<AngleExposure> angleExposures) {
+        if (angleExposures == null || state.annotations == null || state.annotations.isEmpty()) {
+            return CompletableFuture.completedFuture(angleExposures);
+        }
+        return CompletableFuture.supplyAsync(() -> {
+            double[] limits = qupath.ext.qpsc.ui.acquisition.StageLimitPrompt.configuredLimits();
+            if (limits == null) {
+                return angleExposures;
+            }
+            List<String> regions = new ArrayList<>();
+            for (PathObject ann : state.annotations) {
+                regions.add(ann.getName());
+            }
+            var overruns = StageLimitCheck.checkRegionDirs(
+                    Paths.get(state.projectInfo.getTempTileDirectory()), regions, null, limits);
+            if (overruns.isEmpty()) {
+                return angleExposures;
+            }
+            if (state.batchAcquire) {
+                qupath.ext.qpsc.ui.acquisition.StageLimitPrompt.warnUnattended(overruns);
+                return angleExposures;
+            }
+            if (!qupath.ext.qpsc.ui.acquisition.StageLimitPrompt.askToContinue(overruns, "before acquiring")) {
+                logger.warn("Acquisition canceled by the operator: tiles past the stage limit");
                 return null;
             }
             return angleExposures;
@@ -3032,7 +3069,7 @@ public class AcquisitionManager {
         try {
             Path file = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName())
                     .resolve("TileConfiguration_QP.txt");
-            double[] last = TileConfigurationQp.lastTileCenter(Files.readAllLines(file));
+            double[] last = TileConfigurationFile.lastTileCenter(Files.readAllLines(file));
             if (last != null) {
                 return last;
             }

@@ -1862,14 +1862,45 @@ QPSC shows a **Microscope config refused** notification with the file name and t
 
 ### Acquisition Errors
 
-#### "Stage position exceeds limits"
+#### "Stage position exceeds limits" / "Position out of range"
 
-**Meaning:** Requested position is outside stage travel range
+**Meaning:** A tile is outside the stage's configured travel (`stage.limits` in the microscope
+configuration). The server cannot move there, so the acquisition stops at that tile.
+
+**Before the run:** QPSC checks every tile against `stage.limits` before acquiring, and a
+multi-slide batch checks each slide during its setup pass. The **Tiles past the stage limit**
+dialog names each region, how many tiles are outside, how far the worst one is, and the tile
+the run would stop at, for example "Region '42606_60590': 2 of 4418 tiles are past the stage
+limit, up to 67 um past X -56723 um. The acquisition would stop at tile 741.tif." Choose
+**Cancel** and move or shrink the annotation, or **Continue anyway**. In the unattended acquire
+pass of a batch there is no dialog: the warning is logged and sent as a notification.
+
+**If a run stops there anyway:** the tiles acquired up to that point are kept, not deleted;
+see "Tiles held after a run stopped" below.
 
 **Solution:**
-1. Check stage_limits in microscope config
-2. Reduce acquisition region size
-3. Verify you're not trying to acquire off the slide
+1. Check `stage.limits` in the microscope config against the stage's real travel
+2. Move or shrink the annotation so its tiles stay inside
+3. On a multi-slide holder, a slot near the end of the stage may be partly unreachable: keep
+   regions on that slide away from the outer edge
+
+#### Tiles held after a run stopped
+
+**Meaning:** A region stopped part way (an error, or a cancel) after acquiring tiles. Those
+tiles are kept until you decide, instead of being deleted with the failed run.
+
+**What you see:** a notification ("Tiles held: <region>"), and the **Held tiles** window, one
+block per region, with the number of tile images, why the run stopped, and the folder. The
+window does not block anything: a multi-slide batch carries on to its next slide. For each
+region:
+- **Stitch as a normal acquisition...** opens **Re-stitch Tiles** on that folder. Missing tiles
+  are left as gaps. When every angle is stitched and imported, the tiles are then handled by
+  your tile-handling preference (Delete / Zip / Keep), as after any acquisition.
+- **Delete tiles...** deletes them after you confirm.
+
+Closing the window without choosing keeps the tiles on disk; **Re-stitch Tiles** can still
+stitch the folder later. Regions that finished are never touched, and an unfinished region
+with no tile images (only its tile grid) is deleted as before.
 
 #### "Target position is outside stage limits" -- every Stage Map move rejected
 

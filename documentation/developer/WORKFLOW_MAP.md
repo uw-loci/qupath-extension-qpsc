@@ -2455,7 +2455,7 @@ writes DS Y consumed by Consumer Z."
 | W21 StageMapWindow | DS44 (stage map state) | -- (display-only) | Reads DS9 ancestry; never overwrites SOURCE_MICROSCOPE |
 | W14 (StitchingHelper) | DS6 (sub-frame JSON) | W19 Go-To-Centroid, W12/W13 tier 2 | Filename encodes scope (parsed by getDerivedAlignmentMicroscope) |
 | AcquisitionWizardDialog (W28) | DS24 (last modality/objective) | W1, W2 on next launch | Re-seeds dialogs |
-| W1 | DS28 (tile cleanup) | DS27 (less data on disk) | TileCleanupHelper.performCleanup; force-delete on error (Phase 11) |
+| W1 | DS28 (tile cleanup) | DS27 (less data on disk) | TileCleanupHelper.performCleanup; on error cleanupAfterFailedRun deletes unfinished regions without images and holds those with images (HeldTilesWindow) |
 | W1 setCurrentTransform | DS17 | All subsequent stage commands during this workflow | MUST be AFTER validateAndFlipIfNeeded |
 | W1 saveRefinedAlignment | DS5 (overwrites on accept) | W1 next launch, W12/W13 | Short-circuits for sub-acquisitions (H2/H3) |
 | W3 saveGeneralTransform | DS5 (entry-flip-read for save) | W1 alignment lookup | flipFrameVerified=true post-2026-05-19 |

@@ -5,7 +5,7 @@ import static org.junit.jupiter.api.Assertions.*;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
-class TileConfigurationQpTest {
+class TileConfigurationFileTest {
 
     @Test
     void lastEntryInFileOrder() {
@@ -16,12 +16,12 @@ class TileConfigurationQpTest {
                 "1.tif; ; (110.5, 20.25)",
                 "2.tif; ; (110.5, 120.0)",
                 "");
-        assertArrayEquals(new double[] {110.5, 120.0}, TileConfigurationQp.lastTileCenter(lines));
+        assertArrayEquals(new double[] {110.5, 120.0}, TileConfigurationFile.lastTileCenter(lines));
     }
 
     @Test
     void nothingParsableGivesNull() {
-        assertNull(TileConfigurationQp.lastTileCenter(List.of("dim = 2", "x.tif; ; (a, b)")));
-        assertNull(TileConfigurationQp.lastTileCenter(null));
+        assertNull(TileConfigurationFile.lastTileCenter(List.of("dim = 2", "x.tif; ; (a, b)")));
+        assertNull(TileConfigurationFile.lastTileCenter(null));
     }
 }
