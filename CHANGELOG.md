@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Bounded Acquisition shows when the stage has moved off the typed center.** **Use Current Position as Center** gets a red halo while the stage is more than 1 um from the Center X / Y in the dialog, read from the stage poll the Live Viewer uses.
+
 - **Choose where a time-lapse's timepoints go.** Needs the server change of the same date. An **Order** choice in the time-lapse options: **Across the region** (as before: each timepoint visits every position and takes its Z-stack, for example repeated rounds over a well plate), **Per position** (each position runs all its timepoints, then the next position) or **Per Z plane** (each plane runs all its timepoints before Z moves on, so no Z move falls between frames; needs the Z projection **None**). The single-point dialog offers the plane order when Z and time-lapse are both on. The progress windows now name the tile, the Z plane and the timepoint together, in the run's order, and the time left follows it.
 
 - **A region's fitted focus surface becomes the slide's focus surface.** After each region QPSC reads the `focus_surface.json` the server now writes beside the tiles; a licensed surface replaces the slide's stored one (unless the stored one has more points), so the next region on the slide, and a later run on the same mount, approach from hundreds of autofocus results instead of the two or three measured at alignment. The stored surface can be curved: three curvature terms and the box its points spanned, continued in a straight line beyond it, exactly as the server predicts. Needs a command server that writes `focus_surface.json`.

@@ -547,8 +547,13 @@ public class UnifiedAcquisitionController {
             heightField.setTooltip(new Tooltip("Total height of the acquisition region in micrometers."));
 
             Button getStartPosBtn = new Button("Use Current Position as Center");
-            getStartPosBtn.setTooltip(new Tooltip("Set the center of the acquisition region to the current\n"
-                    + "stage position (center of the Live Viewer field of view)."));
+            // Red halo while the stage is somewhere other than the center typed here.
+            StagePositionHalo.attach(
+                    getStartPosBtn,
+                    startXField,
+                    startYField,
+                    "Set the center of the acquisition region to the current\n"
+                            + "stage position (center of the Live Viewer field of view).");
             getStartPosBtn.setOnAction(e -> {
                 try {
                     double[] coords = MicroscopeController.getInstance().getStagePositionXY();
