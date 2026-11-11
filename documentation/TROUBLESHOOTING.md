@@ -1867,8 +1867,9 @@ QPSC shows a **Microscope config refused** notification with the file name and t
 **Meaning:** A tile is outside the stage's configured travel (`stage.limits` in the microscope
 configuration). The server cannot move there, so the acquisition stops at that tile.
 
-**Before the run:** QPSC checks every tile against `stage.limits` before acquiring, and a
-multi-slide batch checks each slide during its setup pass. The **Tiles past the stage limit**
+**Before the run:** Existing Image Acquisition checks every tile against `stage.limits` before
+acquiring, and a multi-slide batch checks each slide during its setup pass. Bounded Acquisition
+is not checked. The **Tiles past the stage limit**
 dialog names each region, how many tiles are outside, how far the worst one is, and the tile
 the run would stop at, for example "Region '42606_60590': 2 of 4418 tiles are past the stage
 limit, up to 67 um past X -56723 um. The acquisition would stop at tile 741.tif." Choose
@@ -1886,8 +1887,8 @@ see "Tiles held after a run stopped" below.
 
 #### Tiles held after a run stopped
 
-**Meaning:** A region stopped part way (an error, or a cancel) after acquiring tiles. Those
-tiles are kept until you decide, instead of being deleted with the failed run.
+**Meaning:** A region of an Existing Image Acquisition (or of a multi-slide slide) stopped part
+way (an error, or a cancel) after acquiring tiles. Those tiles are kept until you decide, instead of being deleted with the failed run.
 
 **What you see:** a notification ("Tiles held: <region>"), and the **Held tiles** window, one
 block per region, with the number of tile images, why the run stopped, and the folder. The

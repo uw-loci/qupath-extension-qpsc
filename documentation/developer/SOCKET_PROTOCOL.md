@@ -114,6 +114,8 @@ The move commands (`MOVE`, `MOVEZ`, `MOVZNW`, `MOVEXYZ`, `MOVER`) are ignored un
 |---------|------------|---------|----------|
 | ACQUIRE | `acquire_` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED, or `BUSY:ACQUIRING` when any client's acquisition is still RUNNING/CANCELLING (the server then reads and discards the message body, which the client has already sent) |
 | BGACQUIRE | `bgacquir` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
+| ZSTACK | `zstack__` | `--output --z-start --z-end --z-step [--modality --angles --wb-mode --yaml --objective --detector --projection --bg-correction true --bg-folder --bg-method --flatfield-folder --timepoints --interval]` + ENDOFSTR | `STARTED`, then the final reply (single-point stack at the current position) |
+| TLAPSE | `tlapse__` | `--output --timepoints --interval [--modality --angles --wb-mode --yaml --objective --detector --bg-correction true --bg-folder --bg-method --flatfield-folder]` + ENDOFSTR | `STARTED`, then the final reply |
 | STATUS | `status__` | none | state name padded to 16 bytes; or `COMPLETED\|final_z:<z>`, optionally followed by `\|sat:<summary>`; or `FAILED: <message>`, space-padded to at least 32 bytes and at most 500 |
 | PROGRESS | `progress` | none | 8 bytes: images done and images total as two big-endian unsigned 32-bit integers |
 | CANCEL | `cancel__` | none | `ACK` (3 bytes) |
@@ -166,6 +168,7 @@ The ACQUIRE payload is a flag-based string:
 --bg-folder /path/to/backgrounds/profiles/carrier4/LOCI_DETECTOR_JAI_001/ppm/20x/per_angle
 --bg-profile carrier4
 --wb-mode per_angle
+--wb-folder /path/to/backgrounds/profiles/carrier4/LOCI_DETECTOR_JAI_001/ppm/20x/per_angle
 --processing "(debayer,background_correction,white_balance)"
 --af-tiles 9
 --af-steps 20
@@ -182,6 +185,7 @@ The ACQUIRE payload is a flag-based string:
 --inner-axis channel
 --timepoints 5
 --interval 60.0
+--t-projection mean
 --save-raw true
 ENDOFSTR
 ```
@@ -189,6 +193,10 @@ ENDOFSTR
 `--flatfield-folder <folder>` is emitted only when the run's flat-field correction is a BaSiC profile (monochrome detectors, laser-scanning or widefield modalities other than BF+IF). It is never sent together with `--bg-correction true`: a run takes background images or a BaSiC profile, not both. The folder holds one profile, or one subfolder per channel.
 
 `--timepoints` / `--interval` are emitted by `AcquisitionCommandBuilder` only when the user enables the Time-Lapse Options pane in the acquisition dialog (`timepoints > 1`). `--interval` is the seconds between the *start* of consecutive timepoints. Omitting both flags yields a single-timepoint acquisition (byte-identical to pre-time-lapse builds). The server's main multi-tile workflow loops over timepoints with a drift-corrected scheduler; see the `REQTWARN` poll below for the falling-behind warning channel.
+
+Every timepoint is written to its own folder, `{group}/t{tt}/{filename}` (with preserved Z planes, `{group}/t{tt}/z{zz}/{filename}`), so no timepoint overwrites another. `--t-projection mean|max|min|sum|std` reduces the timepoints once the last one is acquired, the way `--z-projection` reduces planes: each tile becomes `{group}/{filename}` (or `{group}/z{zz}/{filename}`), and the `t{tt}/` folders move under the raw folder with `--save-raw true` or are removed otherwise. LC-PolScope `orientation/` and `orientation_color/` keep their timepoints. `AcquisitionCommandBuilder` sends the flag only when `timepoints > 1` and the dialog's **Timepoint projection** is not **None** (display names map through `AcquisitionConfigurationBuilder.timeProjectionCode`); absent, every timepoint is kept. The server records the choice as `time_lapse.projection` in `acquisition_metadata.json`.
+
+`--wb-folder <folder>` names the active background profile's folder for the WB mode (`<base>/profiles/<id>/<detector>/ppm/<mag>/per_angle` or `.../simple`, from `ProfileWhiteBalance.folder`). The server reads that folder's `white_balance.yml` in place of the scope-wide `imaging_profiles.<modality>.<objective>.<detector>` block of the imageprocessing YAML, and records which it used as `wb_source` in `acquisition_metadata.json`. QPSC sends it on ACQUIRE and BGACQUIRE only for PPM per-angle or simple WB and only when the profile has the file; otherwise `ProfileWhiteBalanceGate` asks the operator first and the flag is left out (the server then uses the scope-wide block). The server also accepts it on ZSTACK and TLAPSE, but QPSC's single-point stack commands do not send it.
 
 `--display-colormap <uniform|ppm|hsv>` (LC-PolScope only) is the acquisition panel's **Orientation color image** choice. It overrides `reconstruction.display_colormap` for this run and changes only the display-only `orientation_color` tiles. The flag is omitted when the panel says "As in the config", or when it says PPM and the config has no `display_hue_calibration`.
 
@@ -219,8 +227,11 @@ flag-based string ending in `ENDOFSTR`:
 --target-intensity 51200
 --profile Brightfield_10x
 --channels DAPI,FITC,TRITC
+--wb-folder /path/to/backgrounds/profiles/carrier4/LOCI_DETECTOR_JAI_001/ppm/20x/per_angle
 ENDOFSTR
 ```
+
+`--wb-folder` (see ACQUIRE above) is sent last: the server reads each BGACQUIRE value up to the next flag it knows, and lists this one last.
 
 `--profile` is optional: the server applies that acquisition profile's
 `illumination_intensity` before collecting, and reports the value back. When
@@ -351,13 +362,15 @@ The Live Viewer's right-click "Apply background correction" menu item routes thr
 | SBCALIB | `sbcalib_` | params + ENDOFSTR | calibration result |
 | PPMSENS | `ppmsens_` | `--yaml <path> --output <path> --test-type <t> --base-angle <f> --repeats <n>` + ENDOFSTR | `STARTED:`, then `SUCCESS:<output dir>` or `FAILED:<reason>`. Sends no progress; the client allows one hour |
 | POLCAL | `polcal__` | `--yaml <path> --output <path> --start <deg> --end <deg> --step <deg> --exposure <ms>` + ENDOFSTR | `STARTED:`, then `SUCCESS:<report path>` or `FAILED:<reason>`. Sends no progress; the client allows one hour |
-| WBSIMPLE | `wbsimple` | params + ENDOFSTR | WB result |
-| WBPPM | `wbppm___` | params + ENDOFSTR | WB result |
+| WBSIMPLE | `wbsimple` | params + ENDOFSTR, optionally `--wb-folder <folder>` | WB result |
+| WBPPM | `wbppm___` | params + ENDOFSTR, optionally `--wb-folder <folder>` | `STARTED:<output>`, then one `PROGRESS:<n>:<of>:<angle deg>` per angle just before it is calibrated, then the WB result |
 | PROBEZ | `probez__` | none | `PROBEZOK` or `PROBEZFL` (logs to server_session) |
 | STRMAFZ | `strmafz_` | `--yaml <path> [--objective <id>] [--range <um>] ENDOFSTR` | `SUCCESS:<i>:<f>:<shift>:<n>:<span>` / `UNAVAILABLE:<reason>` / `ABORTED:<reason>` / `FAILED:<reason>` |
 | ABORTAF | `abortaf_` | none | `ACK` |
 | AFTRACE | `aftrace_` | 8-byte big-endian last-seen sequence number | 4-byte big-endian length + UTF-8 JSON (see below) |
 | FINDTISS | `findtiss` | `--yaml <path> [--modality <name>] [--objective <id>] [--dir <dx>,<dy>] [--step <um>] [--max-attempts <n>] ENDOFSTR` | `FOUND:<x>:<y>:<attempt>:<of>` / `NOTFOUND:<x>:<y>:<of>` / `ABORTED:<x>:<y>:<done>` / `FAILED:<reason>` |
+
+**WBSIMPLE / WBPPM `--wb-folder`.** After writing the calibration to the scope-wide imageprocessing YAML, the server also copies it to `<folder>/white_balance.yml` (a `white_balance` block with `exposures_ms`, `gains`, `wb_last_modified`, and for simple `simple_wb`). QPSC sends the active background profile's folder for the mode (`WhiteBalanceWorkflow.profileWhiteBalanceFolder`); without an active profile the flag is omitted and the calibration is stored scope-wide only. The WBPPM `PROGRESS` messages are read by `readStartedThenResult` and highlight the angle in the calibration window; an older server sends none.
 
 #### PROBEZ
 

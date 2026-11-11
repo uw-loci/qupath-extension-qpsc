@@ -137,6 +137,8 @@ sequenceDiagram
 7. Triggers stitching via `StitchingHelper`
 8. Writes metadata via `ImageMetadataManager`
 
+Before the first region it also runs two pre-flight checks: `StageLimitCheck` (pure: every tile of each region's `TileConfiguration.txt` against `stage.limits`, asked through `ui/acquisition/StageLimitPrompt`) and the background profile's white balance (`ui/background/ProfileWhiteBalanceGate`). When a run fails or is canceled, `TileCleanupHelper.cleanupAfterFailedRun` keeps the unfinished regions that hold tile images and `ExistingImageWorkflowV2` hands them to `ui/acquisition/HeldTilesWindow`, which stitches them through `StitchingRecoveryWorkflow` or deletes them on the operator's word.
+
 The manager anchors the run to the entry `ExistingImageWorkflowV2` pinned at routing time (`WorkflowState.sourceEntry` / `sourceImageData`), not to the viewer: annotations, the tile hierarchy and the pre- and post-region `saveImageData` all go through that entry. The one active manager registers itself in a static so `AcquisitionManager.stopActiveAcquisition()` (QP Scope > Stop acquisition, the Live Viewer button) can reach it without the dialog; the dialog's Cancel no longer closes the dialog, `acknowledgeCancelled` from the chain's completion does.
 
 **Stitching runs detached.** Every stitch import (`TileProcessingUtilities.stitchImagesAndUpdateProject`, `StitchingHelper.importMergedImageOnly`, the per-channel fallback) adds the entry, stamps metadata and calls `gui.refreshProject()`, and nothing else: no `openImageEntry`, no save of the viewer's image data, no `setProject`. The entries it adds are appended to `WorkflowState.importedEntries` through `StitchingHelper.ImportContext`, which the run reports when it finishes. The only remaining mode flag is the pipelined multi-slide pass, which also suppresses the browser refresh and the toast. Before a job runs, `StitchingHelper.reserveOutputs` asks the pure `StitchOutputPlanner` which entries the job will produce (keyed by the stitch target token the import site will see: angle sub-folder, derived folder, channel id, `merged`, or the annotation name) and `ProjectEntryReservation.reserve` adds them to the project on the FX thread, pointed at `StitchPlaceholderImage` (`<project>/qpsc/stitching-pending.tif`, a Bio-Formats-readable baseline TIFF) with full metadata and `qpsc_stitch_status=pending`. The reservation rides in `stitchParams` under `reservation`; an import site that finds a reservation for its key calls `fill` (`updateURIs` to the real file, image type, channel names, display ranges, `saveImageData`, thumbnail) instead of adding an entry, and the job's completion calls `dropUnfilled` (prediction wrong or output absent) or `failUnfilled` (job failed; entries kept with the reason). Each job is enqueued in `StitchingQueueWindow` from `AcquisitionManager.launchStitching` (so it is visible as QUEUED while the single `stitching-queue` thread is busy with an earlier region), started, updated and completed by `StitchingHelper`, and its outputs are recorded from the import sites by operation id.
@@ -245,9 +247,10 @@ See [PPM_MODALITY.md](PPM_MODALITY.md) for the full PPM implementation.
 | `geometry/` | Transforms between image, macro and stage, flips and polarity, the light path model, macro image analysis |
 | `acquisition/` | Acquisition settings built from config, tiling, time and disk estimates, stage position tracking |
 | `stitching/` | Stitch output naming, the stitch queue model, tile registration, post-stitch processing |
-| `background/` | Background profiles and settings, flat-field profiles and method, illumination checks |
+| `background/` | Background profiles and settings, flat-field profiles and method, illumination checks; `ProfileWhiteBalance` (the PPM white balance each profile keeps as `white_balance.yml` beside its backgrounds, read in place of the scope-wide calibration) |
 | `focus/` | Focus metrics and profiles, focus approach records, Z prediction, safe-Z monitoring |
 | `project/` | Image naming, project entries and their reservation, the project log, NGFF scene export |
+| `model/` | Plain data and estimates shared by controllers and dialogs, e.g. `TimeLapseEstimate` (time left in a time-lapse, counting the waits between timepoints, for the progress windows) |
 | `utilities/` | `AffineTransformManager`, `ImageMetadataManager`, `DocumentationHelper`, `MinorFunctions`, `ImageProcessing` |
 
 `utilities/` keeps the classes that `qupath-extension-ppm` imports, so that extension builds
@@ -363,6 +366,9 @@ subpackages by topic: `acquisition/`, `alignment/`, `background/`, `calibration/
 | `AcquisitionWizardDialog` | Multi-step guided acquisition setup |
 | `LiveViewerWindow` | Floating live camera feed with focus controls |
 | `DualProgressDialog` | Progress bars for the acquisition; closes when the acquisition ends |
+| `HeldTilesWindow` | Non-modal window listing regions whose run stopped part way: stitch their kept tiles like a normal acquisition, or delete them |
+| `StageLimitPrompt` | Continue/Cancel dialog (or unattended notification) for tiles past `stage.limits` |
+| `ProfileWhiteBalanceGate` | Asks before a run whose background profile has no white balance of its own: use the scope-wide one, or cancel |
 | `StitchingQueueWindow` | Non-modal table of the session's stitch jobs (`StitchingQueueModel`), with Open on finished rows; replaced the window-modal always-on-top blocking dialog |
 | `StageMapWindow` | Top-down stage position visualization |
 | `StageControlPanel` | XYZ joystick/button controls |

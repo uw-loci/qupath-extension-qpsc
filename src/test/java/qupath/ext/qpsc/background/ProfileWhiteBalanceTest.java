@@ -128,4 +128,13 @@ class ProfileWhiteBalanceTest {
                     .contains("ProfileWhiteBalanceGate.confirm");
         }
     }
+
+    @Test
+    void noActiveProfileMeansNoQuestion() {
+        // With no profile selected the run uses the scope-wide white balance by definition, so
+        // the gate must not ask (it would name profile "(none)" on every PPM run).
+        assertThat(qupath.ext.qpsc.ui.background.ProfileWhiteBalanceGate.confirmForProfile(
+                        null, null, "ppm", "20x", "JAI", "per_angle", "Acquisition", false))
+                .isTrue();
+    }
 }

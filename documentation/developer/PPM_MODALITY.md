@@ -181,6 +181,16 @@ imaging_profiles:
 
 The `PPMPreferences.loadExposuresForProfile()` method reads this structure and extracts the green channel value (median channel, matches background collection) as the per-angle exposure default.
 
+### White balance per background profile
+
+The scope-wide block above holds the latest calibration of any background profile. Each background profile also keeps its own PPM white balance as `white_balance.yml` in its folder for the WB mode, beside the backgrounds collected with it: `<base>/profiles/<id>/<detector>/ppm/<mag>/per_angle/` or `.../simple/` (`background/ProfileWhiteBalance`). Its `white_balance` block has the same keys (`exposures_ms`, `gains`, `wb_last_modified`, and `simple_wb` for simple).
+
+- **Written** by the server after WBPPM / WBSIMPLE when QPSC sends `--wb-folder` (the active profile's folder for the mode), or by **Background Profiles > Copy scope-wide white balance** (`ProfileWhiteBalance.copyScopeWide`, which never overwrites an existing file).
+- **Read** first: `MicroscopeConfigManager.getProfileSetting` serves the white-balance keys (`exposures_ms`, `gains`, `simple_wb`, `wb_last_modified`) from the active profile's file for the last-used WB mode, and falls back to the scope-wide block. Acquisitions and background collection pass the folder to the server as `--wb-folder` so it reads the same file.
+- **Missing**: `ui/background/ProfileWhiteBalanceGate` asks before the run (**Use scope-wide white balance** / **Cancel**); an unattended batch acquire uses the scope-wide block and notifies.
+
+Only PPM per-angle and simple WB are kept per profile (`ProfileWhiteBalance.appliesTo`).
+
 ## Exposure Priority Chain
 
 When resolving exposure for a PPM angle, the system checks in order:
@@ -280,6 +290,8 @@ tiles/
     Region_1.sum/             # Sum of angle images
       tile_000.tif
 ```
+
+**Z-stacks.** With the Z projection set to **none** (every plane kept), the server writes a birefringence plane for every Z (and timepoint) from the smallest positive and the largest negative angle, in the same layout as the angles: `<positive angle>.biref/[t<tt>/]z<zz>/<tile>`, with the positive angle's `TileConfiguration.txt` at the top of that folder. With a projection, birefringence is computed from the projected angle images. The single-point stack command (ZSTACK / TLAPSE) also writes `zstack_biref.ome.tiff` (`zstack_t_biref.ome.tiff` with timepoints) beside the per-angle `zstack_angle<N>.ome.tiff` files.
 
 The `.biref` and `.sum` directories are discovered by `StitchingHelper.findDerivedDirectories` via `PPMModalityHandler.getPostProcessingDirectorySuffixes()` before any angle is stitched, and stitched as additional output images on the angles' pool (`StitchingRegistration.Extras`), queued behind the angles and with the angles' registration solution. With the **Stitch derived outputs concurrently** preference off, their start gate (`Extras.start`) is held until the last angle is done (`StitchingHelper.awaitDerived` releases it), so they run after the angles, still on that pool.
 

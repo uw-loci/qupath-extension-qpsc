@@ -76,7 +76,10 @@ public final class ProfileWhiteBalanceGate {
             String wbMode,
             String what,
             boolean unattended) {
-        if (!ProfileWhiteBalance.appliesTo(modality, wbMode)
+        // No profile selected: there is no profile white balance to miss, and the scope-wide
+        // one is what a run without a profile uses.
+        if (profileFolder == null
+                || !ProfileWhiteBalance.appliesTo(modality, wbMode)
                 || ProfileWhiteBalance.exists(profileFolder, modality, objective, detector, wbMode)) {
             return true;
         }

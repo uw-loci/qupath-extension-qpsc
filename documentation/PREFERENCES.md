@@ -1482,6 +1482,8 @@ Replayed over all 34 available server logs, the surface becomes licensed after a
 
 If three consecutive rejected results agree with *each other* and not with the surface, the surface treats the sample as having moved and rebuilds from them. Scattered rejections, which are failed autofocus attempts, do not trigger that.
 
+A surface built from faint peaks does not get to overrule clear ones: when two rejected standard autofocus results at different places each have a clearer peak (higher prominence) than any point the surface rests on, and agree within the gate on how far it is off, the surface is rebuilt from those two. The server log says `FOCUS SURFACE RESET: two autofocus results found clearer peaks`, and the region's summary counts `clearer_peak_resets`. Drift sweeps and manual focus carry no prominence and are not weighed this way.
+
 Sent to the server as `--focus-surface <mode>`. Not sent when [Disable All Autofocus](#disable-all-autofocus-danger) is on, since there would be no measurements to fit.
 
 **This preference also governs the per-slide surface** saved by multi-tile refinement (see [AUTOFOCUS.md](AUTOFOCUS.md#focus-surface-measurement-experimental)). While it is `off`, a saved surface is not read, so an update is inert even on a slide that already carries one. Measurement is separate and unconditional: once a slide has three or more focus points (refinement's, plus the point the alignment check focuses and confirms before an unattended acquire), its surface is always recorded, because writing the record costs nothing and acting on it is the part worth gating.

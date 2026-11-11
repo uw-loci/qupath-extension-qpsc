@@ -203,6 +203,23 @@ reserves its project entries before it runs (`StitchOutputPlanner` +
 `qpsc_stitch_status=pending`) and fills them in place when the OME-TIFF lands; an entry whose
 status is `failed` is a stitch that did not finish, with the reason in its description.
 
+**Pre-acquisition gates in `AcquisitionManager` (after the disk-space check, before the
+first region).** `checkStageLimits` reads each region's `TileConfiguration.txt` (stage um)
+and runs `StageLimitCheck` against `stage.limits.{x,y}_um.{low,high}`; any tile outside opens
+`StageLimitPrompt` (**Continue anyway** / **Cancel**), or, in an unattended batch acquire,
+only logs and notifies. `checkProfileWhiteBalance` then runs `ProfileWhiteBalanceGate.confirm`:
+for PPM per-angle or simple WB, when the active background profile has no
+`white_balance.yml` for the mode, the operator chooses **Use scope-wide white balance** or
+**Cancel** (unattended: scope-wide, with a notification). `AcquisitionConfigurationBuilder`
+sends `--wb-folder` only when that file exists.
+
+**A failed or canceled run holds its tiles.** On error, `TileCleanupHelper.cleanupAfterFailedRun`
+deletes the folders of unfinished regions that hold no tile images, keeps finished regions,
+and returns the unfinished folders that hold images; each goes to `HeldTilesWindow.hold`
+(non-modal), whose **Stitch as a normal acquisition...** opens `StitchingRecoveryWorkflow.run`
+on the folder and applies the tile-handling preference once every angle is stitched and
+imported, and whose **Delete tiles...** deletes after confirmation.
+
 ### Multi-Slide Acquisition (`MultiSlideExistingImageWorkflow`)
 
 | Step | What |
@@ -210,7 +227,7 @@ status is `failed` is a stitch that did not finish, with the reason in its descr
 | Read | Carrier registry (`StageInsertRegistry.getAvailableInserts()` filtered to multi-slot `SLIDE_HOLDER` carriers); project macro entries (those without `base_image` set); per-entry `slide_position` metadata to pre-fill the assignment dialog |
 | Compare | None of its own. Each per-slot single-slide invocation runs the full `ExistingImageWorkflowV2` validation chain (objective pixel size, camera ROI, alignment pixel frame) independently. |
 | Write | Per-assigned-entry metadata: `slide_position` (1..N), `slide_carrier` (carrier id like `quad_v`), `ms_run_id` (UUID). Stored via `ImageMetadataManager.setSlideAssignment`. Project synced once after assignment. |
-| Gate | Same gates as the single-slide workflow, one set per invoked slot. The MS controller adds no new gates. |
+| Gate | Same gates as the single-slide workflow, one set per invoked slot. In the two-pass batch, the setup pass (`SETUP_ONLY`) asks the stage-limit and profile-white-balance questions while the operator is there: `confirmStageLimitsAtSetup` maps each region's `TileConfiguration_QP.txt` (full-resolution pixels) through the slide's transform, then `ProfileWhiteBalanceGate.confirm`; Cancel cancels that slot's setup. The acquire pass repeats both checks unattended (log + notification, no dialog). |
 
 Notes: this is a shepherding layer over `ExistingImageWorkflowV2`. The MS panel does not modify the underlying acquisition or alignment logic; it tracks which carrier slot each project entry maps to and walks the user through running the single-slide workflow on each one. The menu entry only appears when the active microscope config defines a multi-slide holder (carrier); there is no preference toggle.
 
@@ -221,7 +238,7 @@ Notes: this is a shepherding layer over `ExistingImageWorkflowV2`. The MS panel 
 | Read | `SampleSetupResult` (objective+detector+modality+sample name); FoV from config |
 | Compare | YAML pixel size for chosen objective vs MM live (5% threshold) |
 | Write | Tile config in stage-micron coords (single bounding box); acquisition command |
-| Gate | `validateObjectivePixelSize` (line 227) -- after sample-setup dialog, after FoV lookup, **before** `TilingUtilities.createTiles` |
+| Gate | `validateObjectivePixelSize` (line 227) -- after sample-setup dialog, after FoV lookup, **before** `TilingUtilities.createTiles`; `ProfileWhiteBalanceGate.confirm` before the acquisition starts. No stage-limit check and no held tiles: those are `AcquisitionManager` / `ExistingImageWorkflowV2` only. |
 
 This is the cleanest gate point of the bunch -- the check runs before any
 disk I/O.
@@ -284,7 +301,7 @@ the wrong key.
 |---|---|
 | Read | `WhiteBalanceDialog.SimpleWBParams` / `PPMWBParams` (objective, detector, exposures); modality resolved from config |
 | Compare | YAML pixel size for chosen objective vs MM live (5% threshold) |
-| Write | `imaging_profiles.<modality>.<objective>.<detector>.exposures_ms.*` in `white_balance_calibration/` YAML; black-level entries; gain entries |
+| Write | `imaging_profiles.<modality>.<objective>.<detector>.exposures_ms.*` in `white_balance_calibration/` YAML; black-level entries; gain entries; for PPM per-angle and simple, also `white_balance.yml` in the active background profile's folder for the mode (server-side, via `--wb-folder` from `profileWhiteBalanceFolder`) |
 | Gate | `validateObjectiveBeforeCalibration` (calls `validateObjectivePixelSize`) inside `confirm.showAndWait().ifPresent(...)`, before `runSimpleCalibration` / `runPPMCalibration` |
 
 ### Background Collection (`BackgroundCollectionWorkflow`)
@@ -300,7 +317,7 @@ will then load the wrong correction TIFFs.
 
 | Step | What |
 |---|---|
-| Read | `BackgroundCollectionController` result (modality, objective, detector, angle/exposure pairs, base folder, background profile, wbMode); pixel size from config |
+| Read | `BackgroundCollectionController` result (modality, objective, detector, angle/exposure pairs, base folder, background profile, wbMode); pixel size from config; the profile's `white_balance.yml` in the output folder for PPM per-angle / simple (sent as `--wb-folder`; when absent, `ProfileWhiteBalanceGate.confirmForProfile` asks before collecting) |
 | Compare | YAML pixel size for chosen objective vs MM live (5% threshold) |
 | Write | Background TIFFs at `<base>/profiles/<profile>/<detector>/<modality>/<mag>/[<wbMode>]/`; `background_settings.yml` with a `context` block (profile, insert, slide placement, stage position, `collected_at`); `background_correction.base_folder` and `<modality>.enabled` in the imageprocessing YAML |
 | Gate | `validateObjectivePixelSize` at top of `executeBackgroundAcquisition`, before any socket call |

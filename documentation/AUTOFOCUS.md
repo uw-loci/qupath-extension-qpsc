@@ -288,7 +288,9 @@ On subsequent acquisitions of the same slide (with the same objective):
 2. **Inherited hint chain:** If no focus surface is available, the tilt model takes over (after 6+ annotations). Both sources describe position-dependent focus, but the surface draws from a previous session's direct measurement while the tilt model is built fresh from this run's AF results.
 3. **Region to region:** After each region, the server fits a surface through that region's own autofocus results and writes `focus_surface.json` beside its tiles. When that surface is licensed and has at least as many points as the one the slide already has, QPSC keeps it as the slide's surface, so the next region on the slide (and a later run on the same mount) starts from hundreds of measurements rather than the two or three taken at alignment. Using it still follows the **"Focus surface"** preference below.
 
-The surface is only ever used to **approach** a region at roughly the right height; it never overrules a measurement. A measurement from an autofocus search is authoritative; the surface is an initial guess.
+4. **Clearer peaks win:** within a run, the server's surface remembers the peak prominence of each standard autofocus it rests on (drift sweeps and manual focus carry none). When two results at different places both disagree with the surface, both have a clearer peak than any of its points, and both say it is off by about the same amount (within the gate), the surface is rebuilt from those two (server log `FOCUS SURFACE RESET: two autofocus results found clearer peaks`). One such result alone is still judged against the surface. Needs a `microscope_control` that reports `last_autofocus_validation`; without it no point has a prominence and this rule never fires.
+
+The slide surface is only ever used to **approach** a region at roughly the right height; it never overrules a measurement. A measurement from an autofocus search is authoritative; the surface is an initial guess.
 
 ### Caveats
 
@@ -298,7 +300,7 @@ The surface is only ever used to **approach** a region at roughly the right heig
 
 ### Enabling Focus Surface Optimization
 
-Measurement needs no preference: a multi-tile refinement with three or more points always saves its surface. Nothing reads it while **"Focus surface"** is `off`, which is the default, so an update is inert even on a slide that has already accumulated a record.
+Measurement needs no preference: once a slide has three or more focus points (see [When It's Measured](#when-its-measured)), its surface is always saved. Nothing reads it while **"Focus surface"** is `off`, which is the default, so an update is inert even on a slide that has already accumulated a record.
 
 Set **"Focus surface"** to `observe` or `enforce` to use it ([Preferences: Focus surface](PREFERENCES.md#focus-surface-experimental)). The same preference governs the in-acquisition surface the server fits from this run's own autofocus results, because they are two uses of one idea and splitting them into two switches would invite turning on half of it.
 
@@ -658,7 +660,13 @@ This can be disabled with the **"No Manual Autofocus"** preference (Extensions >
 
 ## Disable All Autofocus
 
-The **"Disable All Autofocus"** preference (Extensions > QP Scope > Preferences > "Disable All Autofocus (Danger)") suppresses *every* AF call for an acquisition, not just manual fallback. When ticked, the Java side emits `--af-disabled` on the wire (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile sweep autofocus, no manual-focus prompts. Use only when Z drift over the acquisition window is known to be small or you're staging a hint-Z manually. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start.
+The **"Disable All Autofocus"** preference (Extensions > QP Scope > Preferences > "Disable All Autofocus (Danger)") suppresses *every* AF call for an acquisition, not just manual fallback. When ticked, the Java side emits `--af-disabled` on the wire (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile sweep autofocus, no manual-focus prompts. Use only when Z drift over the acquisition window is known to be small or you're staging a hint-Z manually. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start. The acquisition progress dialogs then show "Off: Disable All Autofocus is on in Preferences, so no focus searches run in this acquisition." and draw no focus curve.
+
+## Canceling during autofocus
+
+A cancel during an acquisition's autofocus (the pre-acquisition search, a focus survey point, a per-tile standard search or a drift sweep) does not wait for the search to finish. The server checks for the cancel between Z steps, moves Z back to where the search started and ends the acquisition as canceled.
+
+If the server restarts or the connection drops in the middle of a search, the search's end never arrives. The Live Viewer and the progress dialogs then show that search as "interrupted" instead of still running; if the search was in fact still running on the same server, it is shown again from its start once the connection is back.
 
 ## Last-Tile AF Skip
 
