@@ -1,7 +1,14 @@
 package qupath.ext.qpsc.service.mda;
 
 import qupath.ext.qpsc.model.AcquisitionPlan;
+import qupath.ext.qpsc.model.TimeLapseOrder;
 
+/**
+ * Which position, timepoint, Z plane and angle or channel the server is on, from the live
+ * count of images acquired and the plan's loop order (its inner axis, and its time order:
+ * every timepoint visiting every position, each position's timepoints back to back, or each
+ * Z plane's timepoints back to back).
+ */
 public final class LiveDimensionDecomposer {
 
     private LiveDimensionDecomposer() {}
@@ -66,31 +73,62 @@ public final class LiveDimensionDecomposer {
             return new Decomposition(0, 0, 0, 0, 0, true);
         }
 
-        int tIdx = (int) (k / imagesPerTimepoint);
-        long kT = k % imagesPerTimepoint;
-        int posIdx = (int) (kT / imagesPerPosition);
-        long kP = kT % imagesPerPosition;
-        int outerIdx = (int) (kP / innerCount);
-        int innerIdx = (int) (kP % innerCount);
-
         int chIdx = 0;
         int zIdx = 0;
         int angleIdx = 0;
-        if (plan.ppm()) {
-            if (innerIsZ) {
-                angleIdx = outerIdx;
-                zIdx = innerIdx;
+        int tIdx;
+        int posIdx;
+        TimeLapseOrder order = plan.timeOrder() == null ? TimeLapseOrder.REGION : plan.timeOrder();
+        if (order == TimeLapseOrder.PLANE && plan.timepoints() > 1) {
+            // for position: for plane: for timepoint: the angles or channels of that plane.
+            int perVisit = plan.ppm() ? Math.max(1, plan.angleCount()) : Math.max(1, plan.chCount());
+            long perPlane = (long) plan.timepoints() * perVisit;
+            long perPos = perPlane * plan.zCount();
+            posIdx = (int) (k / perPos);
+            long kP = k % perPos;
+            zIdx = (int) (kP / perPlane);
+            long kZ = kP % perPlane;
+            tIdx = (int) (kZ / perVisit);
+            int visitIdx = (int) (kZ % perVisit);
+            if (plan.ppm()) {
+                angleIdx = visitIdx;
             } else {
-                zIdx = outerIdx;
-                angleIdx = innerIdx;
+                chIdx = visitIdx;
             }
         } else {
-            if (innerIsChannel) {
-                zIdx = outerIdx;
-                chIdx = innerIdx;
+            long kP;
+            if (order == TimeLapseOrder.POSITION) {
+                // for position: for timepoint: the position's images.
+                long perPosSeries = (long) plan.timepoints() * imagesPerPosition;
+                posIdx = (int) (k / perPosSeries);
+                long kS = k % perPosSeries;
+                tIdx = (int) (kS / imagesPerPosition);
+                kP = kS % imagesPerPosition;
             } else {
-                chIdx = outerIdx;
-                zIdx = innerIdx;
+                // for timepoint: for position: the position's images.
+                tIdx = (int) (k / imagesPerTimepoint);
+                long kT = k % imagesPerTimepoint;
+                posIdx = (int) (kT / imagesPerPosition);
+                kP = kT % imagesPerPosition;
+            }
+            int outerIdx = (int) (kP / innerCount);
+            int innerIdx = (int) (kP % innerCount);
+            if (plan.ppm()) {
+                if (innerIsZ) {
+                    angleIdx = outerIdx;
+                    zIdx = innerIdx;
+                } else {
+                    zIdx = outerIdx;
+                    angleIdx = innerIdx;
+                }
+            } else {
+                if (innerIsChannel) {
+                    zIdx = outerIdx;
+                    chIdx = innerIdx;
+                } else {
+                    chIdx = outerIdx;
+                    zIdx = innerIdx;
+                }
             }
         }
 

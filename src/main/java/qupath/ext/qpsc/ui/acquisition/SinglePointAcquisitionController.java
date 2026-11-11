@@ -16,6 +16,7 @@ import javafx.scene.control.Label;
 import javafx.scene.control.Spinner;
 import javafx.scene.control.TextField;
 import javafx.scene.control.TitledPane;
+import javafx.scene.control.Tooltip;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.Priority;
@@ -27,6 +28,7 @@ import qupath.ext.qpsc.acquisition.AcquisitionTimingEstimator;
 import qupath.ext.qpsc.background.FlatfieldProfiles;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.model.SampleSetupResult;
+import qupath.ext.qpsc.model.TimeLapseOrder;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.OutputFormat;
@@ -55,6 +57,9 @@ import qupath.lib.gui.QuPathGUI;
 public class SinglePointAcquisitionController {
 
     private static final Logger logger = LoggerFactory.getLogger(SinglePointAcquisitionController.class);
+
+    static final String ORDER_STACK_PER_TIMEPOINT = "Z-stack at each timepoint";
+    static final String ORDER_SERIES_PER_PLANE = "All timepoints at each Z plane";
 
     private SinglePointAcquisitionController() {}
 
@@ -256,6 +261,23 @@ public class SinglePointAcquisitionController {
             tGrid.add(new Label("Interval (sec):"), 0, 1);
             tGrid.add(tIntervalSpinner, 1, 1);
             tGrid.add(tInfoLabel, 0, 2, 2, 1);
+            // With both Z and T: the stack at each timepoint, or each plane's timepoints back
+            // to back (no Z move between the frames of a plane).
+            ComboBox<String> tOrderCombo = new ComboBox<>();
+            tOrderCombo.getItems().addAll(ORDER_STACK_PER_TIMEPOINT, ORDER_SERIES_PER_PLANE);
+            tOrderCombo.setValue(
+                    PersistentPreferences.getTimeLapseOrder() == TimeLapseOrder.PLANE
+                            ? ORDER_SERIES_PER_PLANE
+                            : ORDER_STACK_PER_TIMEPOINT);
+            tOrderCombo.setTooltip(new Tooltip("With a Z-stack: take the whole stack at every timepoint, or take all "
+                    + "timepoints at one Z plane before moving to the next plane. The second never moves Z "
+                    + "between the frames of a plane, so short intervals are reachable; each plane's interval "
+                    + "counts from that plane's first frame."));
+            tOrderCombo
+                    .disableProperty()
+                    .bind(zEnableCheckbox.selectedProperty().not());
+            tGrid.add(new Label("Order:"), 0, 3);
+            tGrid.add(tOrderCombo, 1, 3);
             tGrid.disableProperty().bind(tEnableCheckbox.selectedProperty().not());
             TitledPane tPane = new TitledPane("Time-lapse", new VBox(6, tEnableCheckbox, tGrid));
             tPane.setCollapsible(false);
@@ -396,6 +418,7 @@ public class SinglePointAcquisitionController {
                             tEnableCheckbox.isSelected(),
                             tpSpinner.getValue(),
                             tIntervalSpinner.getValue(),
+                            ORDER_SERIES_PER_PLANE.equals(tOrderCombo.getValue()) ? "plane" : "region",
                             outputFormatCombo.getValue(),
                             outputFolderField.getText(),
                             future);
@@ -454,6 +477,7 @@ public class SinglePointAcquisitionController {
             boolean tEnabled,
             int timepoints,
             double intervalSec,
+            String timeOrder,
             OutputFormat outputFormat,
             String outputFolder,
             CompletableFuture<Void> future) {
@@ -513,7 +537,8 @@ public class SinglePointAcquisitionController {
                                                 null,
                                                 flatfieldFolder,
                                                 tpForZ,
-                                                intervalForZ);
+                                                intervalForZ,
+                                                tEnabled ? timeOrder : null);
                             } else {
                                 response = mc.getSocketClient()
                                         .startTimeLapse(

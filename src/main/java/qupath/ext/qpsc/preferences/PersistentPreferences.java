@@ -1842,6 +1842,8 @@ public class PersistentPreferences {
             PathPrefs.createPersistentPreference("qpscTimeLapseIntervalSec", 60.0);
     private static final StringProperty timeLapseProjectionProperty =
             PathPrefs.createPersistentPreference("qpscTimeLapseProjection", "None");
+    private static final StringProperty timeLapseOrderProperty =
+            PathPrefs.createPersistentPreference("qpscTimeLapseOrder", "region");
 
     public static boolean isTimeLapseEnabled() {
         return timeLapseEnabledProperty.get();
@@ -1869,6 +1871,18 @@ public class PersistentPreferences {
 
     public static void setTimeLapseProjection(String v) {
         timeLapseProjectionProperty.set(v);
+    }
+
+    /**
+     * Where the timepoint loop sits, as a {@link qupath.ext.qpsc.model.TimeLapseOrder} code:
+     * "region" (default), "position" or "plane".
+     */
+    public static qupath.ext.qpsc.model.TimeLapseOrder getTimeLapseOrder() {
+        return qupath.ext.qpsc.model.TimeLapseOrder.fromCode(timeLapseOrderProperty.get());
+    }
+
+    public static void setTimeLapseOrder(qupath.ext.qpsc.model.TimeLapseOrder order) {
+        timeLapseOrderProperty.set((order == null ? qupath.ext.qpsc.model.TimeLapseOrder.REGION : order).code());
     }
 
     public static double getTimeLapseIntervalSec() {

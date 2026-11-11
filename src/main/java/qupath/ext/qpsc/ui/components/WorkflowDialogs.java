@@ -130,6 +130,33 @@ public final class WorkflowDialogs {
             int stepsPerPosition,
             int timepoints,
             double intervalSec) {
+        return showProgressBarAsync(
+                progressCounter,
+                totalFiles,
+                timeoutMs,
+                showCancelButton,
+                stepsPerPosition,
+                timepoints,
+                intervalSec,
+                null);
+    }
+
+    /**
+     * As above, with the acquisition's plan: the window then names the tile, Z plane and
+     * timepoint the server is on, decoded in the plan's loop order, and the time left follows
+     * that order (each position's or plane's timepoints back to back, or the whole region's).
+     *
+     * @param plan the plan of this acquisition, or null for positions and timepoint only
+     */
+    public static ProgressHandle showProgressBarAsync(
+            AtomicInteger progressCounter,
+            int totalFiles,
+            int timeoutMs,
+            boolean showCancelButton,
+            int stepsPerPosition,
+            int timepoints,
+            double intervalSec,
+            qupath.ext.qpsc.model.AcquisitionPlan plan) {
 
         final ProgressHandle[] handleHolder = new ProgressHandle[1];
         final CountDownLatch handleReady = new CountDownLatch(1);
@@ -137,6 +164,11 @@ public final class WorkflowDialogs {
         final int timepointsFinal = Math.max(1, timepoints);
         final int filesPerTimepoint = Math.max(1, totalFiles / timepointsFinal);
         final int totalPositions = filesPerTimepoint / stepsPerPositionFinal;
+        final TimeLapseEstimate.Series series = TimeLapseEstimate.series(
+                plan == null ? qupath.ext.qpsc.model.TimeLapseOrder.REGION : plan.timeOrder(),
+                filesPerTimepoint,
+                stepsPerPositionFinal,
+                plan == null ? 1 : plan.zCount());
 
         Platform.runLater(() -> {
             logger.info(
@@ -246,13 +278,9 @@ public final class WorkflowDialogs {
                 // movement cadence rather than the image-write cadence.
                 double fraction = totalFiles > 0 ? current / (double) totalFiles : 0.0;
                 progressBar.setProgress(fraction);
-                int timepoint = TimeLapseEstimate.timepointOf(current, totalFiles, timepointsFinal);
-                int positionsDone =
-                        Math.min(totalPositions, (current - timepoint * filesPerTimepoint) / stepsPerPositionFinal);
-                progressLabel.setText("Positions acquired: " + positionsDone + " of " + totalPositions
-                        + (timepointsFinal > 1
-                                ? " (timepoint " + (timepoint + 1) + " of " + timepointsFinal + ")"
-                                : ""));
+                int timepoint = TimeLapseEstimate.timepointOf(current, series, timepointsFinal);
+                progressLabel.setText(whereText(
+                        plan, current, totalFiles, totalPositions, stepsPerPositionFinal, timepoint, timepointsFinal));
 
                 // Update status message based on progress
                 if (current == 0) {
@@ -280,9 +308,9 @@ public final class WorkflowDialogs {
                             msPerFile[0] = elapsed / (double) current;
                         }
                         remMs = TimeLapseEstimate.remainingMs(
+                                series,
                                 timepointsFinal,
                                 intervalSec,
-                                filesPerTimepoint,
                                 current,
                                 msPerFile[0],
                                 now - timepointStart.get());
@@ -408,6 +436,44 @@ public final class WorkflowDialogs {
      * and angle-based (PPM) callers should use the 5-arg form above to
      * get accurate position counts in the progress label.
      */
+    /**
+     * The progress line: with a plan, "Tile 3 of 12, Z 4 of 9, Timepoint 2 of 30" (each part
+     * only when that axis has more than one step); without one, positions done and the
+     * timepoint. Package-visible for tests.
+     */
+    static String whereText(
+            qupath.ext.qpsc.model.AcquisitionPlan plan,
+            int filesDone,
+            int totalFiles,
+            int totalPositions,
+            int stepsPerPosition,
+            int timepoint,
+            int timepoints) {
+        if (plan != null && filesDone > 0) {
+            var d = qupath.ext.qpsc.service.mda.LiveDimensionDecomposer.decompose(filesDone, plan);
+            if (!d.drifted()) {
+                java.util.List<String> parts = new java.util.ArrayList<>();
+                parts.add("Tile " + (d.posIdx() + 1) + " of " + plan.nPositions());
+                if (plan.zCount() > 1) {
+                    parts.add("Z " + (d.zIdx() + 1) + " of " + plan.zCount());
+                }
+                if (plan.timepoints() > 1) {
+                    parts.add("Timepoint " + (d.tIdx() + 1) + " of " + plan.timepoints());
+                }
+                return String.join(", ", parts);
+            }
+        }
+        int filesPerTimepoint = Math.max(1, totalFiles / Math.max(1, timepoints));
+        int positionsDone = timepoints > 1
+                ? Math.min(totalPositions, (filesDone % filesPerTimepoint) / Math.max(1, stepsPerPosition))
+                : Math.min(totalPositions, filesDone / Math.max(1, stepsPerPosition));
+        if (timepoints > 1 && filesDone >= totalFiles) {
+            positionsDone = totalPositions;
+        }
+        return "Positions acquired: " + positionsDone + " of " + totalPositions
+                + (timepoints > 1 ? " (timepoint " + (timepoint + 1) + " of " + timepoints + ")" : "");
+    }
+
     public static ProgressHandle showProgressBarAsync(
             AtomicInteger progressCounter, int totalFiles, int timeoutMs, boolean showCancelButton) {
         return showProgressBarAsync(progressCounter, totalFiles, timeoutMs, showCancelButton, 1);

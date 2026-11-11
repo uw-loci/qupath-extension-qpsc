@@ -114,7 +114,7 @@ The move commands (`MOVE`, `MOVEZ`, `MOVZNW`, `MOVEXYZ`, `MOVER`) are ignored un
 |---------|------------|---------|----------|
 | ACQUIRE | `acquire_` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED, or `BUSY:ACQUIRING` when any client's acquisition is still RUNNING/CANCELLING (the server then reads and discards the message body, which the client has already sent) |
 | BGACQUIRE | `bgacquir` | flag-based string + ENDOFSTR | STARTED -> SUCCESS/FAILED |
-| ZSTACK | `zstack__` | `--output --z-start --z-end --z-step [--modality --angles --wb-mode --yaml --objective --detector --projection --bg-correction true --bg-folder --bg-method --flatfield-folder --timepoints --interval]` + ENDOFSTR | `STARTED`, then the final reply (single-point stack at the current position) |
+| ZSTACK | `zstack__` | `--output --z-start --z-end --z-step [--modality --angles --wb-mode --yaml --objective --detector --projection --bg-correction true --bg-folder --bg-method --flatfield-folder --timepoints --interval --t-order plane]` + ENDOFSTR | `STARTED`, then the final reply (single-point stack at the current position) |
 | TLAPSE | `tlapse__` | `--output --timepoints --interval [--modality --angles --wb-mode --yaml --objective --detector --bg-correction true --bg-folder --bg-method --flatfield-folder]` + ENDOFSTR | `STARTED`, then the final reply |
 | STATUS | `status__` | none | state name padded to 16 bytes; or `COMPLETED\|final_z:<z>`, optionally followed by `\|sat:<summary>`; or `FAILED: <message>`, space-padded to at least 32 bytes and at most 500 |
 | PROGRESS | `progress` | none | 8 bytes: images done and images total as two big-endian unsigned 32-bit integers |
@@ -186,6 +186,7 @@ The ACQUIRE payload is a flag-based string:
 --timepoints 5
 --interval 60.0
 --t-projection mean
+--t-order position
 --save-raw true
 ENDOFSTR
 ```
@@ -195,6 +196,8 @@ ENDOFSTR
 `--timepoints` / `--interval` are emitted by `AcquisitionCommandBuilder` only when the user enables the Time-Lapse Options pane in the acquisition dialog (`timepoints > 1`). `--interval` is the seconds between the *start* of consecutive timepoints. Omitting both flags yields a single-timepoint acquisition (byte-identical to pre-time-lapse builds). The server's main multi-tile workflow loops over timepoints with a drift-corrected scheduler; see the `REQTWARN` poll below for the falling-behind warning channel.
 
 Every timepoint is written to its own folder, `{group}/t{tt}/{filename}` (with preserved Z planes, `{group}/t{tt}/z{zz}/{filename}`), so no timepoint overwrites another. `--t-projection mean|max|min|sum|std` reduces the timepoints once the last one is acquired, the way `--z-projection` reduces planes: each tile becomes `{group}/{filename}` (or `{group}/z{zz}/{filename}`), and the `t{tt}/` folders move under the raw folder with `--save-raw true` or are removed otherwise. LC-PolScope `orientation/` and `orientation_color/` keep their timepoints. `AcquisitionCommandBuilder` sends the flag only when `timepoints > 1` and the dialog's **Timepoint projection** is not **None** (display names map through `AcquisitionConfigurationBuilder.timeProjectionCode`); absent, every timepoint is kept. The server records the choice as `time_lapse.projection` in `acquisition_metadata.json`.
+
+`--t-order region|position|plane` says where the timepoint loop sits. `region` (the default, and what an absent flag means): each timepoint visits every position, taking its Z planes there. `position`: each position runs all its timepoints, each with every plane, before the next position. `plane`: each Z plane of a position runs all its timepoints before Z moves to the next plane; it needs `--z-projection none` (the server refuses it otherwise, since one plane at a time cannot be projected), and without a Z-stack it runs as `position`. In `position` and `plane`, each series of timepoints is paced from its own first timepoint, and only a position's first visit moves the stage and autofocuses. The file layout is the same for all three. `AcquisitionCommandBuilder.timeOrder` sends it only with `timepoints > 1` and an order other than `region`, from the dialog's **Order** (`PersistentPreferences.getTimeLapseOrder`); the server records it as `time_lapse.order`. The progress windows decode the live image count in the same order (`LiveDimensionDecomposer`, `TimeLapseEstimate.series`).
 
 `--wb-folder <folder>` names the active background profile's folder for the WB mode (`<base>/profiles/<id>/<detector>/ppm/<mag>/per_angle` or `.../simple`, from `ProfileWhiteBalance.folder`). The server reads that folder's `white_balance.yml` in place of the scope-wide `imaging_profiles.<modality>.<objective>.<detector>` block of the imageprocessing YAML, and records which it used as `wb_source` in `acquisition_metadata.json`. QPSC sends it on ACQUIRE and BGACQUIRE only for PPM per-angle or simple WB and only when the profile has the file; otherwise `ProfileWhiteBalanceGate` asks the operator first and the flag is left out (the server then uses the scope-wide block). The server also accepts it on ZSTACK and TLAPSE, but QPSC's single-point stack commands do not send it.
 

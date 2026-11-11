@@ -140,7 +140,8 @@ public final class MdaRequestBuilder {
                 innerAxis,
                 ppm,
                 channelLabels,
-                angleLabels);
+                angleLabels,
+                qupath.ext.qpsc.model.TimeLapseOrder.fromCode(commandBuilder.getTimeOrder()));
 
         return new Built(request, plan);
     }

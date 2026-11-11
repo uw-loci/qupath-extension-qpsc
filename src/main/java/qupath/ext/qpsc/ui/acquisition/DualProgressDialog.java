@@ -77,6 +77,8 @@ public class DualProgressDialog {
     // region then cover all its timepoints.
     private volatile int timeLapseTimepoints = 1;
     private volatile double timeLapseIntervalSec = 0.0;
+    private volatile qupath.ext.qpsc.model.TimeLapseOrder timeLapseOrder = qupath.ext.qpsc.model.TimeLapseOrder.REGION;
+    private volatile int timeLapseZPlanes = 1;
     // Timepoint the current region is in, and when its first file completed.
     private volatile int currentTimepoint = 0;
     private final AtomicLong currentTimepointStartTime = new AtomicLong(0);
@@ -164,6 +166,7 @@ public class DualProgressDialog {
     private final Label angleLabel;
     private final Label zLabel;
     private final Label tileLabel;
+    private final Label timepointLabel;
     // Fill bar for the Tile (positions) axis. The other per-axis counters
     // (Channel, Angle, Z) are intentionally bar-less -- those counts are
     // typically small (<10) so a label suffices and bars would be visual
@@ -245,7 +248,8 @@ public class DualProgressDialog {
         angleLabel = new Label("");
         zLabel = new Label("");
         tileLabel = new Label("");
-        perAxisRow = new HBox(12, channelLabel, angleLabel, zLabel, tileLabel);
+        timepointLabel = new Label("");
+        perAxisRow = new HBox(12, channelLabel, angleLabel, zLabel, tileLabel, timepointLabel);
         perAxisRow.setAlignment(Pos.CENTER_LEFT);
         timepointProgressBar = new ProgressBar(0);
         sizeProgressBar(timepointProgressBar);
@@ -460,8 +464,7 @@ public class DualProgressDialog {
             long lastCompletion = lastTileCompletionTime.get();
             // A time-lapse waits between timepoints; the first files of a new timepoint
             // carry that wait, which is not time per file.
-            int timepoint =
-                    TimeLapseEstimate.timepointOf(filesCompleted, currentAnnotationExpectedFiles, timeLapseTimepoints);
+            int timepoint = TimeLapseEstimate.timepointOf(filesCompleted, currentSeries(), timeLapseTimepoints);
             boolean newTimepoint = timepoint != currentTimepoint;
             if (newTimepoint) {
                 currentTimepoint = timepoint;
@@ -643,8 +646,25 @@ public class DualProgressDialog {
      * @param intervalSec interval between timepoint starts, in seconds; 0 for back to back
      */
     public void setTimeLapse(int timepoints, double intervalSec) {
+        setTimeLapse(timepoints, intervalSec, qupath.ext.qpsc.model.TimeLapseOrder.REGION, 1);
+    }
+
+    /**
+     * As {@link #setTimeLapse(int, double)} with the order the timepoints run in and the Z
+     * planes per position, so the time left follows each position's or plane's series.
+     */
+    public void setTimeLapse(
+            int timepoints, double intervalSec, qupath.ext.qpsc.model.TimeLapseOrder order, int zPlanes) {
         this.timeLapseTimepoints = Math.max(1, timepoints);
         this.timeLapseIntervalSec = Math.max(0.0, intervalSec);
+        this.timeLapseOrder = order == null ? qupath.ext.qpsc.model.TimeLapseOrder.REGION : order;
+        this.timeLapseZPlanes = Math.max(1, zPlanes);
+    }
+
+    /** The current region's timepoint series (see {@link TimeLapseEstimate#series}). */
+    private TimeLapseEstimate.Series currentSeries() {
+        int perTp = Math.max(1, currentAnnotationExpectedFiles / Math.max(1, timeLapseTimepoints));
+        return TimeLapseEstimate.series(timeLapseOrder, perTp, Math.max(1, stepsPerPosition.get()), timeLapseZPlanes);
     }
 
     static int filesRemaining(
@@ -890,9 +910,9 @@ public class DualProgressDialog {
             // position counts are per timepoint.
             int perTpCurrent = Math.max(1, currentAnnotationExpectedFiles / timepoints);
             totalRemainingMs = TimeLapseEstimate.remainingMs(
+                    currentSeries(),
                     timepoints,
                     timeLapseIntervalSec,
-                    perTpCurrent,
                     currentProgress,
                     avgMsPerTile,
                     now - currentTimepointStartTime.get());
@@ -904,8 +924,13 @@ public class DualProgressDialog {
             int futureFiles = 0;
             for (int i = 0; i < remainingAnnotations; i++) {
                 int files = i < future.size() ? future.get(i) * Math.max(1, steps) : perTpCurrent;
-                totalRemainingMs +=
-                        TimeLapseEstimate.remainingMs(timepoints, timeLapseIntervalSec, files, 0, avgMsPerTile, 0);
+                totalRemainingMs += TimeLapseEstimate.remainingMs(
+                        TimeLapseEstimate.series(timeLapseOrder, files, Math.max(1, steps), timeLapseZPlanes),
+                        timepoints,
+                        timeLapseIntervalSec,
+                        0,
+                        avgMsPerTile,
+                        0);
                 futureFiles += files * timepoints;
             }
             totalTilesRemaining = Math.max(0, currentAnnotationExpectedFiles - currentProgress) + futureFiles;
@@ -1243,6 +1268,8 @@ public class DualProgressDialog {
                 zLabel.setManaged(false);
                 tileLabel.setVisible(false);
                 tileLabel.setManaged(false);
+                timepointLabel.setVisible(false);
+                timepointLabel.setManaged(false);
                 perAxisRow.setVisible(false);
                 perAxisRow.setManaged(false);
                 driftNotice.setText("Dimension counters out of sync; showing aggregate only");
@@ -1267,6 +1294,7 @@ public class DualProgressDialog {
             }
             if (plan.timepoints() > 1) {
                 timepointProgressBar.setProgress((decomp.tIdx() + 1.0) / plan.timepoints());
+                timepointLabel.setText("Timepoint " + (decomp.tIdx() + 1) + "/" + plan.timepoints());
             }
         };
         if (Platform.isFxApplicationThread()) {
@@ -1393,6 +1421,11 @@ public class DualProgressDialog {
         } else {
             tileLabel.setText("");
         }
+
+        boolean showT = plan.timepoints() > 1;
+        timepointLabel.setVisible(showT);
+        timepointLabel.setManaged(showT);
+        timepointLabel.setText(showT ? "Timepoint 1/" + plan.timepoints() : "");
         logger.debug(
                 "applyPlanVisibility: nPositions={}, ch={}, angle={}, z={}, tp={} -> showTile={}; "
                         + "dimensionPanel visible={} managed={}",

@@ -30,6 +30,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Timepoints](#time-lapse-options) | Integer | 1 | Number of times full acquisition is repeated |
 | [Interval (s)](#time-lapse-options) | Double | 60.0 | Seconds between start of consecutive timepoints |
 | [Timepoint projection](#time-lapse-options) | Choice | None | How timepoints are combined: None keeps every timepoint, or Mean, Max/Min Intensity, Sum, Std Deviation |
+| [Order](#time-lapse-options) | Choice | Across the region | Where the timepoints go: across the region, per position, or per Z plane |
 | [Tile Handling Method](#tile-handling-method) | Choice | None | How to handle intermediate tiles |
 | [Tile Overlap Percent](#tile-overlap-percent) | Double | 10.0 | Overlap between adjacent tiles |
 | [Compression type](#compression-type) | Choice | LZW | OME pyramid compression |
@@ -702,6 +703,7 @@ Tilt alone is not a reason to lower this. Like the window, the default has not b
 | Timepoints | Integer | 1 |
 | Interval (s) | Double | 60.0 |
 | Timepoint projection | Choice | None |
+| Order | Choice | Across the region |
 
 **Description:**
 Time-lapse settings are configured per-acquisition in the acquisition dialog under **TIME-LAPSE OPTIONS**. When enabled, the full region acquisition repeats over multiple timepoints at a fixed interval.
@@ -712,6 +714,7 @@ Time-lapse settings are configured per-acquisition in the acquisition dialog und
 | **Timepoints** | 1-10000 | Number of times the full acquisition is repeated. |
 | **Interval (s)** | 0.0+ | Seconds between the *start* of consecutive timepoints. |
 | **Timepoint projection** | None, Mean, Max Intensity, Min Intensity, Sum, Std Deviation | How the timepoints are combined. **None** keeps every timepoint as a time series; the others reduce each tile to one image after the last timepoint. Disabled while time-lapse is off. |
+| **Order** | Across the region, Per position, Per Z plane | Where the timepoint loop sits. **Across the region** repeats every position at each timepoint; **Per position** runs each position's timepoints back to back; **Per Z plane** runs each Z plane's timepoints back to back and needs the Z projection **None**. Saved as `qpscTimeLapseOrder` (`region`, `position`, `plane`). |
 
 **Behavior:**
 - If a timepoint takes longer than the requested interval, remaining timepoints start late and the acquisition continues.

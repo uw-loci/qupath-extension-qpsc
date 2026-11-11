@@ -488,11 +488,14 @@ public class AcquisitionConfigurationBuilder {
             acquisitionBuilder.timeLapse(timepoints, intervalSec);
             String timeProjection = timeProjectionCode(PersistentPreferences.getTimeLapseProjection());
             acquisitionBuilder.timeProjection(timeProjection);
+            qupath.ext.qpsc.model.TimeLapseOrder order = PersistentPreferences.getTimeLapseOrder();
+            acquisitionBuilder.timeOrder(order.code());
             logger.info(
-                    "Time-lapse enabled: timepoints={}, interval={} s, projection={}",
+                    "Time-lapse enabled: timepoints={}, interval={} s, projection={}, order={}",
                     timepoints,
                     intervalSec,
-                    timeProjection == null ? "none (every timepoint kept)" : timeProjection);
+                    timeProjection == null ? "none (every timepoint kept)" : timeProjection,
+                    order.code());
         }
 
         return new AcquisitionConfiguration(

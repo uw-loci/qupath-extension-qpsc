@@ -7367,7 +7367,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 null,
                 null,
                 1,
-                0.0);
+                0.0,
+                null);
     }
 
     /**
@@ -7408,7 +7409,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 bgMethod,
                 null,
                 1,
-                0.0);
+                0.0,
+                null);
     }
 
     /**
@@ -7427,6 +7429,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param intervalSec Seconds between timepoint START times when
      *     {@code timepoints > 1}. Pacing is anchored to t0 so slow
      *     iterations don't accumulate drift.
+     * @param timeOrder "plane" to take all timepoints of each Z plane before the next plane
+     *     ({@code --t-order plane}); null or "region" for the Z-stack at every timepoint.
      */
     public String startZStack(
             String outputFolder,
@@ -7445,7 +7449,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String bgMethod,
             String flatfieldFolder,
             int timepoints,
-            double intervalSec)
+            double intervalSec,
+            String timeOrder)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--output ").append(outputFolder);
@@ -7470,6 +7475,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (timepoints > 1) {
             msg.append(" --timepoints ").append(timepoints);
             if (intervalSec > 0) msg.append(" --interval ").append(intervalSec);
+            if (timeOrder != null && !"region".equals(timeOrder)) {
+                msg.append(" --t-order ").append(timeOrder);
+            }
         }
         msg.append(" ENDOFSTR");
 

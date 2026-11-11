@@ -149,6 +149,7 @@ public class AcquisitionCommandBuilder {
     private double intervalSec = 0.0;
     // Time projection ("mean", "max", "min", "sum", "std"); null keeps every timepoint.
     private String timeProjection;
+    private String timeOrder;
 
     // Optional output format selector for the Z/T/single-point refactor.
     // Null = unset; buildSocketMessage emits --output-format only when set.
@@ -615,6 +616,25 @@ public class AcquisitionCommandBuilder {
     /** The time projection, or null when every timepoint is kept. */
     public String getTimeProjection() {
         return timeProjection;
+    }
+
+    /**
+     * Where the timepoint loop sits: "region" (every timepoint visits every position, the
+     * default), "position" (each position's timepoints back to back) or "plane" (each Z
+     * plane's timepoints back to back; needs the Z projection "none"). {@code --t-order} is
+     * emitted only with more than one timepoint and an order other than "region".
+     *
+     * @param order a {@link qupath.ext.qpsc.model.TimeLapseOrder} code, or null for "region"
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder timeOrder(String order) {
+        this.timeOrder = order;
+        return this;
+    }
+
+    /** The time order code, or null for the default ("region"). */
+    public String getTimeOrder() {
+        return timeOrder;
     }
 
     /**
@@ -1217,6 +1237,9 @@ public class AcquisitionCommandBuilder {
         }
         if (timepoints > 1 && timeProjection != null && !"none".equals(timeProjection)) {
             args.addAll(Arrays.asList("--t-projection", timeProjection));
+        }
+        if (timepoints > 1 && timeOrder != null && !"region".equals(timeOrder)) {
+            args.addAll(Arrays.asList("--t-order", timeOrder));
         }
         if (outputFormat != null) {
             args.addAll(Arrays.asList("--output-format", outputFormat.toWireValue()));

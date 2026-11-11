@@ -24,6 +24,7 @@ import qupath.ext.qpsc.controller.workflow.TileCleanupHelper;
 import qupath.ext.qpsc.geometry.StagePolarity;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.model.AcquisitionPlan;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
@@ -504,13 +505,16 @@ public class BoundedAcquisitionWorkflow {
                                 int expectedFilesPerTile = !channelExposures.isEmpty()
                                         ? channelExposures.size()
                                         : Math.max(1, angleExposures.size());
+                                final int filesPerPlane = expectedFilesPerTile;
                                 // Z-stack multiplier: each tile captures N Z-planes
+                                int zPlanesForPlan = 1;
                                 if (PersistentPreferences.isZStackEnabled()) {
                                     double zRange = PersistentPreferences.getZStackRange();
                                     double zStep = PersistentPreferences.getZStackStep();
                                     if (zStep > 0) {
                                         int nZPlanes = (int) Math.ceil(zRange / zStep) + 1;
                                         expectedFilesPerTile *= nZPlanes;
+                                        zPlanesForPlan = nZPlanes;
                                     }
                                 }
                                 // A time-lapse repeats every position at each timepoint, and
@@ -521,11 +525,30 @@ public class BoundedAcquisitionWorkflow {
                                         : 1;
                                 double intervalSec =
                                         timepoints > 1 ? PersistentPreferences.getTimeLapseIntervalSec() : 0.0;
-                                int expectedFiles = MinorFunctions.countTifEntriesInTileConfig(
-                                                List.of(Paths.get(tempTileDir, boundsMode)
-                                                        .toString()))
-                                        * expectedFilesPerTile
-                                        * timepoints;
+                                int regionTiles = MinorFunctions.countTifEntriesInTileConfig(List.of(
+                                        Paths.get(tempTileDir, boundsMode).toString()));
+                                int expectedFiles = regionTiles * expectedFilesPerTile * timepoints;
+                                // The plan lets the progress window name the tile, Z plane and
+                                // timepoint in the order the server visits them.
+                                AcquisitionPlan progressPlan = null;
+                                if (regionTiles > 0) {
+                                    boolean ppmPlan = channelExposures.isEmpty() && !angleExposures.isEmpty();
+                                    String axis = config.commandBuilder().getInnerAxis();
+                                    if (axis == null || axis.isBlank()) {
+                                        axis = ppmPlan ? "angle" : "z";
+                                    }
+                                    progressPlan = AcquisitionPlan.compute(
+                                            regionTiles,
+                                            ppmPlan ? 0 : filesPerPlane,
+                                            zPlanesForPlan,
+                                            ppmPlan ? filesPerPlane : 0,
+                                            timepoints,
+                                            axis,
+                                            ppmPlan,
+                                            List.of(),
+                                            List.of(),
+                                            PersistentPreferences.getTimeLapseOrder());
+                                }
 
                                 AtomicInteger progressCounter = new AtomicInteger(0);
 
@@ -543,7 +566,8 @@ public class BoundedAcquisitionWorkflow {
                                             true,
                                             expectedFilesPerTile,
                                             timepoints,
-                                            intervalSec);
+                                            intervalSec,
+                                            progressPlan);
 
                                     final WorkflowDialogs.ProgressHandle finalHandle = progressHandle;
                                     progressHandle.setCancelCallback(v -> {

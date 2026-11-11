@@ -116,6 +116,8 @@ abstract class AcquisitionDialogBuilder<R> {
     private Spinner<Integer> timeLapseTimepointsSpinner;
     private Spinner<Double> timeLapseIntervalSpinner;
     private ComboBox<String> timeLapseProjectionCombo;
+    private ComboBox<qupath.ext.qpsc.model.TimeLapseOrder> timeLapseOrderCombo;
+    private Label timeLapseOrderNote;
     private ComboBox<String> outputOrganizationCombo;
     private RadioButton loopOrderInnerZRadio;
     private RadioButton loopOrderInnerAltRadio;
@@ -972,6 +974,35 @@ abstract class AcquisitionDialogBuilder<R> {
             }
         });
 
+        timeLapseOrderCombo = new ComboBox<>(
+                javafx.collections.FXCollections.observableArrayList(qupath.ext.qpsc.model.TimeLapseOrder.values()));
+        timeLapseOrderCombo.setValue(PersistentPreferences.getTimeLapseOrder());
+        timeLapseOrderCombo.setTooltip(new Tooltip("Where the timepoints go relative to positions and Z planes.\n"
+                + "Across the region: each timepoint visits every position and takes its Z-stack there, "
+                + "then the next timepoint starts (for example a well plate's rounds).\n"
+                + "Per position: each position runs all its timepoints, each a full Z-stack, then the "
+                + "stage moves on. The interval counts from that position's first timepoint.\n"
+                + "Per Z plane: each Z plane runs all its timepoints before Z moves to the next plane, so "
+                + "no Z move falls between frames. Needs the Z projection set to None.\n"
+                + "Only the first visit to a position autofocuses; later timepoints there image where it "
+                + "focused. The stitched result is the same layout for all three."));
+        timeLapseOrderCombo
+                .disableProperty()
+                .bind(timeLapseEnableCheck.selectedProperty().not());
+        timeLapseOrderNote = new Label();
+        timeLapseOrderNote.setWrapText(true);
+        timeLapseOrderNote.setMaxWidth(420);
+        timeLapseOrderNote.setStyle("-fx-text-fill: #b35900;");
+        timeLapseOrderNote.managedProperty().bind(timeLapseOrderNote.visibleProperty());
+        timeLapseOrderCombo.valueProperty().addListener((obs, o, n) -> {
+            if (n != null) {
+                PersistentPreferences.setTimeLapseOrder(n);
+            }
+            refreshTimeLapseOrderNote();
+            updatePreviewPanel();
+        });
+        timeLapseEnableCheck.selectedProperty().addListener((obs, o, n) -> refreshTimeLapseOrderNote());
+
         GridPane grid = new GridPane();
         grid.setHgap(10);
         grid.setVgap(8);
@@ -982,8 +1013,11 @@ abstract class AcquisitionDialogBuilder<R> {
         grid.add(timeLapseIntervalSpinner, 1, 1);
         grid.add(new Label("Timepoint projection:"), 0, 2);
         grid.add(timeLapseProjectionCombo, 1, 2);
+        grid.add(new Label("Order:"), 0, 3);
+        grid.add(timeLapseOrderCombo, 1, 3);
+        refreshTimeLapseOrderNote();
 
-        VBox content = new VBox(8, timeLapseEnableCheck, grid);
+        VBox content = new VBox(8, timeLapseEnableCheck, grid, timeLapseOrderNote);
         content.setPadding(new Insets(5));
 
         TitledPane pane = new TitledPane("TIME-LAPSE OPTIONS", content);
@@ -991,6 +1025,39 @@ abstract class AcquisitionDialogBuilder<R> {
         pane.setAnimated(false);
         pane.setStyle("-fx-font-weight: bold;");
         return pane;
+    }
+
+    /**
+     * Shows why the chosen order cannot run as set: "Per Z plane" acquires one plane at a time,
+     * so it needs a Z-stack with the projection None. Read from the saved preferences, which
+     * both sections write as they change.
+     */
+    protected void refreshTimeLapseOrderNote() {
+        if (timeLapseOrderNote == null || timeLapseOrderCombo == null) {
+            return;
+        }
+        String note = timeLapseOrderNoteText(
+                PersistentPreferences.isTimeLapseEnabled(),
+                timeLapseOrderCombo.getValue(),
+                PersistentPreferences.isZStackEnabled(),
+                PersistentPreferences.getZStackProjection());
+        timeLapseOrderNote.setText(note == null ? "" : note);
+        timeLapseOrderNote.setVisible(note != null);
+    }
+
+    /** The note for {@link #refreshTimeLapseOrderNote}, or null. Package-visible for tests. */
+    static String timeLapseOrderNoteText(
+            boolean timeLapse, qupath.ext.qpsc.model.TimeLapseOrder order, boolean zStack, String zProjection) {
+        if (!timeLapse || order != qupath.ext.qpsc.model.TimeLapseOrder.PLANE) {
+            return null;
+        }
+        if (!zStack) {
+            return "Per Z plane without a Z-stack runs each position's timepoints (as Per position).";
+        }
+        if (!"None".equals(zProjection)) {
+            return "Per Z plane keeps every plane: set the Z-stack projection to None, or the run is refused.";
+        }
+        return null;
     }
 
     // ==================== Z-stack section ====================
@@ -1081,6 +1148,7 @@ abstract class AcquisitionDialogBuilder<R> {
         // Save to preferences on change, and refresh the preview, whose image count and time include the Z planes.
         enableCheck.selectedProperty().addListener((obs, o, n) -> {
             PersistentPreferences.setZStackEnabled(n);
+            refreshTimeLapseOrderNote();
             triggerPreviewUpdate();
         });
         rangeSpinner.valueProperty().addListener((obs, o, n) -> {
@@ -1093,6 +1161,7 @@ abstract class AcquisitionDialogBuilder<R> {
         });
         projectionCombo.valueProperty().addListener((obs, o, n) -> {
             if (n != null) PersistentPreferences.setZStackProjection(n);
+            refreshTimeLapseOrderNote();
         });
 
         // Stitched-output organization. Independent of Z-stack, so not

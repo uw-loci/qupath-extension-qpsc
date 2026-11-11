@@ -61,10 +61,11 @@ class TimeLapseEstimateTest {
         String manager =
                 Files.readString(Path.of("src/main/java/qupath/ext/qpsc/controller/workflow/AcquisitionManager.java"));
         assertThat(manager).contains("tilesPerAngle * stepsPerPositionForProgress * timepointsForProgress");
-        assertThat(manager).contains("progressDialog.setTimeLapse(timepointsForProgress, intervalSecForProgress);");
+        assertThat(manager).contains("progressDialog.setTimeLapse(");
+        assertThat(manager).contains("PersistentPreferences.getTimeLapseOrder(),");
         String bounded =
                 Files.readString(Path.of("src/main/java/qupath/ext/qpsc/controller/BoundedAcquisitionWorkflow.java"));
-        assertThat(bounded).contains("* timepoints;");
+        assertThat(bounded).contains("regionTiles * expectedFilesPerTile * timepoints;");
         String dialogs = Files.readString(Path.of("src/main/java/qupath/ext/qpsc/ui/components/WorkflowDialogs.java"));
         assertThat(dialogs).contains("long allowedMs = timeoutMs + (timepointsFinal > 1");
     }

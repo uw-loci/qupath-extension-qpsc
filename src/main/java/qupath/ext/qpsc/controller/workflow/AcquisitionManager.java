@@ -1668,6 +1668,7 @@ public class AcquisitionManager {
             }
         }
         final int stepsPerPositionForProgress = stepsPerPositionTmp;
+        final int zPlanesForProgress = nZPlanesForProgress;
         // A time-lapse repeats every position at each timepoint, and the server counts
         // every one of those files. Read from the same preferences as the command's
         // --timepoints/--interval (AcquisitionConfigurationBuilder).
@@ -1704,7 +1705,11 @@ public class AcquisitionManager {
             final Path mdaPathForUi = mdaSettingsPath;
             Platform.runLater(() -> {
                 progressDialog.setStepsPerPosition(stepsPerPositionForProgress);
-                progressDialog.setTimeLapse(timepointsForProgress, intervalSecForProgress);
+                progressDialog.setTimeLapse(
+                        timepointsForProgress,
+                        intervalSecForProgress,
+                        PersistentPreferences.getTimeLapseOrder(),
+                        zPlanesForProgress);
                 progressDialog.startAnnotation(annotation.getName(), expectedFiles);
                 progressDialog.setAcquisitionPlan(planForUi);
                 progressDialog.setLastMdaPath(mdaPathForUi);
