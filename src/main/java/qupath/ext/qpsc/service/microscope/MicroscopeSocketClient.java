@@ -3751,20 +3751,61 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @throws ServerAnswerException if the server rejected the command or reports failure
      */
     private String readStartedThenResult(String what) throws IOException {
+        return readStartedThenResult(what, null);
+    }
+
+    /**
+     * As {@link #readStartedThenResult(String)}, handing each {@code PROGRESS:<n>:<of>:<text>}
+     * the server sends meanwhile to {@code onProgress} (null to ignore them).
+     */
+    private String readStartedThenResult(String what, BenchmarkProgressListener onProgress) throws IOException {
         String reply = readReply(what);
+        reportProgress(reply, onProgress);
         if (reply.startsWith(FAILED_PREFIX)) {
             String reason = reply.substring(FAILED_PREFIX.length()).trim();
             throw new ServerAnswerException("Server rejected " + what + ": " + reason, reason);
         }
         String result = finalReplyIn(reply);
         while (result == null) {
-            result = finalReplyIn(readReply(what));
+            String more = readReply(what);
+            reportProgress(more, onProgress);
+            result = finalReplyIn(more);
         }
         if (result.startsWith(FAILED_PREFIX)) {
             String reason = result.substring(FAILED_PREFIX.length()).trim();
             throw new ServerAnswerException(what + " failed: " + reason, reason);
         }
         return result;
+    }
+
+    private static final java.util.regex.Pattern PROGRESS_MESSAGE = java.util.regex.Pattern.compile(
+            "PROGRESS:(\\d+):(\\d+):(.*?)(?=PROGRESS:|STARTED:|SUCCESS:|FAILED:|CANCELLED:|$)",
+            java.util.regex.Pattern.DOTALL);
+
+    /**
+     * The {@code PROGRESS:<n>:<of>:<text>} messages in text from the server, in order. Several
+     * can arrive in one read, and the final reply can follow them in the same read.
+     */
+    public static List<String[]> progressMessagesIn(String text) {
+        List<String[]> out = new java.util.ArrayList<>();
+        java.util.regex.Matcher m = PROGRESS_MESSAGE.matcher(text);
+        while (m.find()) {
+            out.add(new String[] {m.group(1), m.group(2), m.group(3).trim()});
+        }
+        return out;
+    }
+
+    private static void reportProgress(String text, BenchmarkProgressListener onProgress) {
+        if (onProgress == null) {
+            return;
+        }
+        for (String[] p : progressMessagesIn(text)) {
+            try {
+                onProgress.onProgress(Integer.parseInt(p[0]), Integer.parseInt(p[1]), p[2]);
+            } catch (RuntimeException e) {
+                logger.debug("Progress listener failed: {}", e.getMessage());
+            }
+        }
     }
 
     /**
@@ -5459,7 +5500,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double gainAnalogRbMax,
             String yamlPath,
             String objective,
-            String detector)
+            String detector,
+            BenchmarkProgressListener onAngle)
             throws IOException {
 
         // Build WBPPM command message
@@ -5523,7 +5565,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         // PPM calibration involves 4 angles and can take 10-15 minutes.
         String finalResponse = exchange("PPM white balance", 900000, () -> {
             send(Command.WBPPM, messageBytes);
-            return readStartedThenResult("PPM white balance");
+            // The server reports each angle as it starts: PROGRESS:<n>:<of>:<angle deg>.
+            return readStartedThenResult("PPM white balance", onAngle);
         });
         logger.info("Received final response: {}", finalResponse);
         if (finalResponse.startsWith("SUCCESS:")) {

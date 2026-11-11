@@ -431,6 +431,57 @@ public class WhiteBalanceWorkflow {
         calibrationThread.start();
     }
 
+    /** Where one PPM angle is in a white balance calibration. */
+    enum AngleState {
+        WAITING,
+        CALIBRATING,
+        DONE
+    }
+
+    /**
+     * The row of the angle the server reported, matched by its degrees, or -1 when it matches
+     * none (an older server sends no progress at all).
+     */
+    static int angleRowFor(double[] rowDegrees, String reported) {
+        double deg;
+        try {
+            deg = Double.parseDouble(reported.trim());
+        } catch (RuntimeException e) {
+            return -1;
+        }
+        for (int i = 0; i < rowDegrees.length; i++) {
+            if (Math.abs(rowDegrees[i] - deg) < 0.05) {
+                return i;
+            }
+        }
+        return -1;
+    }
+
+    /** The text and style of one angle's line in the PPM calibration window. */
+    static void showAngleRow(Label row, String name, double degrees, AngleState state) {
+        String label = String.format("%s (%s deg)", name, formatDegrees(degrees));
+        switch (state) {
+            case CALIBRATING -> {
+                row.setText(label + "  <- calibrating now");
+                row.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: " + ThemeColors.INFO + ";");
+            }
+            case DONE -> {
+                row.setText(label + "  - done");
+                row.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
+            }
+            default -> {
+                row.setText(label);
+                row.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+            }
+        }
+    }
+
+    private static String formatDegrees(double degrees) {
+        return degrees == Math.rint(degrees)
+                ? String.valueOf((long) degrees)
+                : String.format(java.util.Locale.ROOT, "%.1f", degrees);
+    }
+
     /**
      * Runs PPM white balance calibration (4 angles).
      */
@@ -457,12 +508,33 @@ public class WhiteBalanceWorkflow {
         ProgressIndicator progress = new ProgressIndicator();
         progress.setStyle("-fx-min-width: 50px; -fx-min-height: 50px;");
 
-        Label detailLabel = new Label("Calibrating 4 PPM angles:\n"
-                + "Positive (7 deg) -> Negative (-7 deg) -> Crossed (0 deg) -> Uncrossed (90 deg)");
-        detailLabel.setStyle("-fx-font-size: 11px; -fx-text-fill: " + ThemeColors.MUTED + ";");
-        detailLabel.setWrapText(true);
+        // One line per angle, in calibration order; the angle being calibrated is highlighted.
+        String[] angleNames = {"Positive", "Negative", "Crossed", "Uncrossed"};
+        double[] angleDegrees = {
+            params.positiveAngle(), params.negativeAngle(), params.crossedAngle(), params.uncrossedAngle()
+        };
+        Label[] angleRows = new Label[angleNames.length];
+        VBox angleList = new VBox(4);
+        angleList.setAlignment(Pos.CENTER_LEFT);
+        for (int i = 0; i < angleNames.length; i++) {
+            angleRows[i] = new Label();
+            showAngleRow(angleRows[i], angleNames[i], angleDegrees[i], AngleState.WAITING);
+            angleList.getChildren().add(angleRows[i]);
+        }
+        MicroscopeSocketClient.BenchmarkProgressListener onAngle = (n, total, reported) -> {
+            int row = angleRowFor(angleDegrees, reported);
+            Platform.runLater(() -> {
+                for (int i = 0; i < angleRows.length; i++) {
+                    AngleState state = row < 0
+                            ? AngleState.WAITING
+                            : i < row ? AngleState.DONE : i == row ? AngleState.CALIBRATING : AngleState.WAITING;
+                    showAngleRow(angleRows[i], angleNames[i], angleDegrees[i], state);
+                }
+                statusLabel.setText(String.format("Calibrating angle %d of %d...", n, total));
+            });
+        };
 
-        root.getChildren().addAll(statusLabel, progress, detailLabel);
+        root.getChildren().addAll(statusLabel, progress, angleList);
 
         Scene scene = new Scene(root);
         progressStage.setScene(scene);
@@ -512,7 +584,8 @@ public class WhiteBalanceWorkflow {
                                 advanced.gainAnalogRbMax(),
                                 yamlPath,
                                 params.objective(),
-                                params.detector());
+                                params.detector(),
+                                onAngle);
 
                         // Reload config so the Java side picks up the new
                         // calibration values written by the Python server

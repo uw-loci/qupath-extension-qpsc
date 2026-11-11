@@ -606,7 +606,8 @@ public class WBComparisonWorkflow {
                         adv.gainAnalogRbMax(),
                         configPath,
                         objective,
-                        detector);
+                        detector,
+                        null);
                 logger.info("[per_angle] PPM white balance calibration complete");
             }
             default -> logger.warn("Unknown WB mode for calibration: {}", wbMode);
