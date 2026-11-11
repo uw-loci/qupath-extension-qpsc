@@ -29,6 +29,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [Enable time-lapse acquisition](#time-lapse-options) | Boolean | OFF | Repeat acquisition over multiple timepoints at fixed interval |
 | [Timepoints](#time-lapse-options) | Integer | 1 | Number of times full acquisition is repeated |
 | [Interval (s)](#time-lapse-options) | Double | 60.0 | Seconds between start of consecutive timepoints |
+| [Timepoint projection](#time-lapse-options) | Choice | None | How timepoints are combined: None keeps every timepoint, or Mean, Max/Min Intensity, Sum, Std Deviation |
 | [Tile Handling Method](#tile-handling-method) | Choice | None | How to handle intermediate tiles |
 | [Tile Overlap Percent](#tile-overlap-percent) | Double | 10.0 | Overlap between adjacent tiles |
 | [Compression type](#compression-type) | Choice | LZW | OME pyramid compression |
@@ -700,6 +701,7 @@ Tilt alone is not a reason to lower this. Like the window, the default has not b
 | Enable time-lapse acquisition | Boolean | OFF |
 | Timepoints | Integer | 1 |
 | Interval (s) | Double | 60.0 |
+| Timepoint projection | Choice | None |
 
 **Description:**
 Time-lapse settings are configured per-acquisition in the acquisition dialog under **TIME-LAPSE OPTIONS**. When enabled, the full region acquisition repeats over multiple timepoints at a fixed interval.
@@ -709,6 +711,7 @@ Time-lapse settings are configured per-acquisition in the acquisition dialog und
 | **Enable** | ON / OFF | Turns time-lapse loop on/off. When OFF, acquisition runs once (backward-compatible). |
 | **Timepoints** | 1-10000 | Number of times the full acquisition is repeated. |
 | **Interval (s)** | 0.0+ | Seconds between the *start* of consecutive timepoints. |
+| **Timepoint projection** | None, Mean, Max Intensity, Min Intensity, Sum, Std Deviation | How the timepoints are combined. **None** keeps every timepoint as a time series; the others reduce each tile to one image after the last timepoint. Disabled while time-lapse is off. |
 
 **Behavior:**
 - If a timepoint takes longer than the requested interval, remaining timepoints start late and the acquisition continues.
