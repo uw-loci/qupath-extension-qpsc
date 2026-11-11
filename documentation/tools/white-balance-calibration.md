@@ -88,6 +88,9 @@ When PPM mode is selected, individual targets can be configured for each angle:
 5. Click Start.
 6. The system iteratively adjusts R, G, B exposure times for each channel
    independently until all channels reach the target intensity within tolerance.
+   In PPM mode the progress window lists the four angles in calibration order, marks
+   the one being calibrated ("<- calibrating now"), and marks finished angles "done".
+   The list needs the matching server; with an older server it stays unmarked.
 7. Both modes produce per-angle exposure settings for all angles.
 8. Calibration values are automatically saved.
 
