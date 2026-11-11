@@ -819,4 +819,19 @@ public class UIFunctions {
             return false;
         }
     }
+
+    /**
+     * Keeps Enter from pressing a button that starts a run.
+     *
+     * <p>JavaFX makes an {@code OK_DONE} button the dialog's default button, so Enter in any
+     * text field of the dialog presses it: on 2026-11-11 Enter in an acquisition setup field
+     * started the run. Starting hardware must take a click (or Space with the button focused).
+     *
+     * @param button the button that starts the run, as {@code lookupButton} returns it
+     */
+    public static void neverDefaultButton(javafx.scene.Node button) {
+        if (button instanceof Button b) {
+            b.setDefaultButton(false);
+        }
+    }
 }

@@ -263,6 +263,7 @@ public class UnifiedAcquisitionController {
             ButtonType okType = new ButtonType("Start Acquisition", ButtonBar.ButtonData.OK_DONE);
             ButtonType cancelType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
             dialog.getDialogPane().getButtonTypes().addAll(okType, cancelType);
+            UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(okType));
 
             startButton = (Button) dialog.getDialogPane().lookupButton(okType);
             startButton.setDisable(true); // Start disabled until validation passes

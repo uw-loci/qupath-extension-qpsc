@@ -18,6 +18,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.QuPathGUI;
@@ -321,6 +322,7 @@ public class WBComparisonDialog {
         // Buttons
         ButtonType runButton = new ButtonType("Run Comparison", ButtonBar.ButtonData.OK_DONE);
         dialog.getDialogPane().getButtonTypes().addAll(runButton, ButtonType.CANCEL);
+        UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(runButton));
 
         // Result converter
         dialog.setResultConverter(buttonType -> {

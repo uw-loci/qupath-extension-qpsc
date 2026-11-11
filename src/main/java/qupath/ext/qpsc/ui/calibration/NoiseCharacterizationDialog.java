@@ -18,6 +18,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.prefs.PathPrefs;
 
@@ -155,6 +156,7 @@ public class NoiseCharacterizationDialog {
                 ButtonType runButton = new ButtonType("Run Characterization", ButtonBar.ButtonData.OK_DONE);
                 ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
                 dialog.getDialogPane().getButtonTypes().addAll(runButton, cancelButton);
+                UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(runButton));
                 dialog.getDialogPane().setContent(content);
 
                 // Get UI references for result conversion

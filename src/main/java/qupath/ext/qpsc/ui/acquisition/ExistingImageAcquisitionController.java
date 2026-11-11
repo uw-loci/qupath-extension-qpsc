@@ -491,6 +491,7 @@ public class ExistingImageAcquisitionController {
             ButtonType saveMdaType = new ButtonType("Save MDA...", ButtonBar.ButtonData.LEFT);
             ButtonType cancelType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
             dialog.getDialogPane().getButtonTypes().addAll(saveMdaType, startType, cancelType);
+            UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(startType));
 
             startButton = (Button) dialog.getDialogPane().lookupButton(startType);
             startButton.setDisable(true);

@@ -22,6 +22,7 @@ import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -326,6 +327,7 @@ public class AutofocusBenchmarkDialog {
                 ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
 
                 dialog.getDialogPane().getButtonTypes().addAll(runButton, restoreDefaultsButton, cancelButton);
+                UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(runButton));
                 dialog.getDialogPane().setContent(content);
 
                 // Handle restore defaults button

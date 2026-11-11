@@ -321,6 +321,7 @@ public class SinglePointAcquisitionController {
             dialog.getDialogPane().setPrefHeight(620);
             ButtonType startButtonType = new ButtonType("Start", ButtonBar.ButtonData.OK_DONE);
             dialog.getDialogPane().getButtonTypes().addAll(startButtonType, ButtonType.CANCEL);
+            UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(startButtonType));
 
             // Validation on Start
             Button startBtn = (Button) dialog.getDialogPane().lookupButton(startButtonType);

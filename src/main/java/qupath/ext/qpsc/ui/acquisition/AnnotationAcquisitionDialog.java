@@ -16,6 +16,7 @@ import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.objects.PathObject;
 import qupath.lib.objects.hierarchy.events.PathObjectHierarchyEvent;
@@ -140,6 +141,7 @@ public class AnnotationAcquisitionDialog {
             ButtonType collectButton = new ButtonType("Collect Regions", ButtonBar.ButtonData.OK_DONE);
             ButtonType cancelButton = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
             dialog.getDialogPane().getButtonTypes().addAll(collectButton, cancelButton);
+            UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(collectButton));
 
             // Style the collect button
             Node collectNode = dialog.getDialogPane().lookupButton(collectButton);

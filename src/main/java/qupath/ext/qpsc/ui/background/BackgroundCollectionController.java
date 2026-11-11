@@ -35,6 +35,7 @@ import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.calibration.CalibrationAdviceDialog;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
@@ -188,6 +189,7 @@ public class BackgroundCollectionController {
                 // Add buttons
                 ButtonType okButtonType = new ButtonType("Acquire Backgrounds", ButtonBar.ButtonData.OK_DONE);
                 dialog.getDialogPane().getButtonTypes().addAll(okButtonType, ButtonType.CANCEL);
+                UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(okButtonType));
 
                 // Disable OK button initially
                 Button okButton = (Button) dialog.getDialogPane().lookupButton(okButtonType);

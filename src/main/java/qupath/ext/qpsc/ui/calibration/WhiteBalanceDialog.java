@@ -27,6 +27,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -330,6 +331,7 @@ public class WhiteBalanceDialog {
                 ButtonType cancelButton = new ButtonType("Close", ButtonBar.ButtonData.CANCEL_CLOSE);
 
                 dialog.getDialogPane().getButtonTypes().addAll(runSimpleButton, runPPMButton, cancelButton);
+                UIFunctions.neverDefaultButton(dialog.getDialogPane().lookupButton(runSimpleButton));
                 // Hide the dialog-bar run buttons (they're triggered by inline buttons)
                 dialog.getDialogPane().lookupButton(runSimpleButton).setVisible(false);
                 dialog.getDialogPane().lookupButton(runSimpleButton).setManaged(false);
