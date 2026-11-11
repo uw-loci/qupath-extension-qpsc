@@ -580,6 +580,17 @@ public class ExistingImageWorkflowV2 {
                     if (!confirmStageLimitsAtSetup(state)) {
                         throw new CancellationException("Setup canceled: tiles past the stage limit");
                     }
+                    // Ask now, while the operator is here: the acquire pass runs unattended.
+                    if (state.sample != null
+                            && !qupath.ext.qpsc.ui.background.ProfileWhiteBalanceGate.confirm(
+                                    state.sample.modality(),
+                                    state.sample.objective(),
+                                    state.sample.detector(),
+                                    state.wbMode,
+                                    "This slide's acquisition",
+                                    false)) {
+                        throw new CancellationException("Setup canceled: the background profile has no white balance");
+                    }
                     logger.info("SETUP_ONLY: alignment prepared and persisted; skipping acquisition");
                 }
                 return CompletableFuture.completedFuture(state);

@@ -670,7 +670,7 @@ public class BackgroundSettingsReader {
      * on-disk family form. Delegates to {@link HardwareKey#stripMagnificationSuffix}
      * so the regex lives in one place across the codebase.
      */
-    private static String modalityFamily(String modality) {
+    static String modalityFamily(String modality) {
         return HardwareKey.stripMagnificationSuffix(modality);
     }
 

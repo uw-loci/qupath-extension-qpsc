@@ -352,6 +352,18 @@ public class AcquisitionConfigurationBuilder {
             acquisitionBuilder.autofocus(afTiles, afSteps, afRange);
         }
 
+        // The background profile's own white balance for this mode, when it keeps one. Without
+        // it the server applies the scope-wide calibration; the operator was asked about that
+        // before the run (ProfileWhiteBalanceGate).
+        if (wbMode != null && configManager.hasProfileWhiteBalance(wbMode, baseModality, objective, detector)) {
+            String wbFolder = qupath.ext.qpsc.background.ProfileWhiteBalance.folder(
+                    configManager.getBackgroundProfileFolder(), baseModality, objective, detector, wbMode);
+            if (wbFolder != null) {
+                acquisitionBuilder.wbFolder(wbFolder);
+                logger.info("White balance from the background profile: {}", wbFolder);
+            }
+        }
+
         // Only add background correction if enabled and configured
         if (bgEnabled && bgMethod != null && bgFolder != null) {
             // Perform background validation to determine which angles should have correction disabled.

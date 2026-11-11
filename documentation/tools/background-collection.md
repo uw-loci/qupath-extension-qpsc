@@ -153,6 +153,8 @@ Backgrounds are filed by background profile, then hardware: `<base>/profiles/<pr
 - **Monochrome / no white balance (`off`)** -- saved to the **flat** `.../<detector>/<modality>/<mag>/` folder (e.g. `.../profiles/carrier4/HAMAMATSU_DCAM_01/Brightfield/10x/background.tif`). There is **no** `off` subfolder.
 - **Color WB modes (`simple`, `per_angle`, `camera_awb`)** -- saved under a `<wbMode>/` subfolder so the modes coexist.
 
+For PPM per-angle and simple white balance, that subfolder also holds the profile's own white balance, `white_balance.yml` (written by White Balance Calibration). Collection applies it before taking the backgrounds; when the profile has none, QPSC asks whether to use the scope-wide calibration or cancel and calibrate first. See [White Balance Calibration](white-balance-calibration.md#stored-with-the-background-profile).
+
 Collection and acquisition resolve this path through the same helper, so a freshly collected background lands exactly where acquisition reads it. (A prior bug filed monochrome backgrounds in a stray `off/` subfolder while acquisition kept reading the flat path and silently reused a stale background -- fixed; re-collect once to overwrite any stale flat-folder file.)
 
 ### Angle-Based Modalities

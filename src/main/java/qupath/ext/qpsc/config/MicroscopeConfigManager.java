@@ -13,6 +13,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.yaml.snakeyaml.Yaml;
 import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.ProfileWhiteBalance;
 import qupath.ext.qpsc.modality.Channel;
 import qupath.ext.qpsc.modality.PresetRef;
 import qupath.ext.qpsc.modality.PropertyRef;
@@ -1211,6 +1212,17 @@ public class MicroscopeConfigManager {
      */
     @SuppressWarnings("unchecked")
     public Object getProfileSetting(String modality, String objective, String detector, String... settingPath) {
+        // White balance keys come from the active background profile's white balance for the
+        // selected white balance mode when it has one; the scope-wide values below otherwise.
+        if (settingPath.length > 0 && ProfileWhiteBalance.isWhiteBalanceKey(settingPath[0])) {
+            String mode = qupath.ext.qpsc.modality.WbMode.fromDisplayName(
+                            qupath.ext.qpsc.preferences.PersistentPreferences.getLastWhiteBalanceMode())
+                    .getProtocolName();
+            Object fromProfile = getProfileWhiteBalanceSetting(mode, modality, objective, detector, settingPath);
+            if (fromProfile != null) {
+                return fromProfile;
+            }
+        }
         if (imageprocessingData == null || !imageprocessingData.containsKey("imaging_profiles")) {
             logger.debug(
                     "Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
@@ -2004,6 +2016,45 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * The scope-wide {@code imaging_profiles.<modality>} block of the imageprocessing YAML
+     * (objective -> detector -> settings), or an empty map. Read-only view for copying the
+     * scope-wide white balance into a background profile.
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getScopeWideImagingProfiles(String modality) {
+        if (imageprocessingData == null || !(imageprocessingData.get("imaging_profiles") instanceof Map<?, ?> all)) {
+            return Map.of();
+        }
+        Object block = ((Map<String, Object>) all).get(modality);
+        return block instanceof Map<?, ?> m ? java.util.Collections.unmodifiableMap((Map<String, Object>) m) : Map.of();
+    }
+
+    /**
+     * A white balance value from the active background profile for one white balance mode,
+     * or null when the profile keeps none (see {@link ProfileWhiteBalance}).
+     *
+     * @param wbMode "per_angle" or "simple"
+     * @param settingPath the same path as in the imageprocessing YAML, e.g. "exposures_ms", "positive"
+     */
+    public Object getProfileWhiteBalanceSetting(
+            String wbMode, String modality, String objective, String detector, String... settingPath) {
+        java.io.File file =
+                ProfileWhiteBalance.file(getBackgroundProfileFolder(), modality, objective, detector, wbMode);
+        return file == null ? null : ProfileWhiteBalance.value(file, settingPath);
+    }
+
+    /**
+     * Whether the active background profile keeps its own white balance for this mode, or the
+     * scope-wide one is used. Always true for a mode or modality that keeps none per profile.
+     */
+    public boolean hasProfileWhiteBalance(String wbMode, String modality, String objective, String detector) {
+        if (!ProfileWhiteBalance.appliesTo(modality, wbMode)) {
+            return true;
+        }
+        return ProfileWhiteBalance.exists(getBackgroundProfileFolder(), modality, objective, detector, wbMode);
+    }
+
+    /**
      * Check if background correction is enabled for a modality.
      * Reads from imageprocessing_{microscope}.yml -> background_correction -> modality -> enabled
      * Falls back to the family key (e.g. "ppm" for "ppm_20x") if the exact modality key is absent.
@@ -2053,6 +2104,11 @@ public class MicroscopeConfigManager {
         }
 
         try {
+            // The background profile's own white balance for this mode, when it has one.
+            Object profileTs = getProfileWhiteBalanceSetting(wbMode, modality, objective, detector, "wb_last_modified");
+            if (profileTs != null) {
+                return profileTs.toString();
+            }
             // Primary: global wb_last_modified at detector profile level
             // Set by ANY WB calibration (per-angle or simple)
             Object globalTs = getProfileSetting(modality, objective, detector, "wb_last_modified");

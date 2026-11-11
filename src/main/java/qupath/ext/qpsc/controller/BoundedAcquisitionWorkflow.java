@@ -365,6 +365,18 @@ public class BoundedAcquisitionWorkflow {
                         // Warn if the flat-field background was collected at a different lamp
                         // level than the profile about to be used (silent flat-field artifacts).
                         // Only relevant when correction will actually run.
+                        // First: the background profile keeps its own white balance; without
+                        // one, the operator chooses to use the scope-wide one or cancel.
+                        if (!qupath.ext.qpsc.ui.background.ProfileWhiteBalanceGate.confirm(
+                                result.modality(),
+                                result.objective(),
+                                result.detector(),
+                                result.wbMode(),
+                                "This acquisition",
+                                false)) {
+                            logger.warn("Acquisition canceled: the background profile has no white balance");
+                            return;
+                        }
                         if (AcquisitionConfigurationBuilder.isBackgroundCorrectionEffectivelyEnabled(
                                 configManager, result.modality(), result.detector())) {
                             String bgBaseFolder = configManager.getBackgroundProfileFolder();

@@ -1629,6 +1629,37 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double targetIntensity,
             String profileKey)
             throws IOException {
+        return startBackgroundAcquisition(
+                yamlPath,
+                outputPath,
+                modality,
+                angles,
+                exposures,
+                wbMode,
+                objective,
+                detector,
+                targetIntensity,
+                profileKey,
+                null);
+    }
+
+    /**
+     * As above, applying the white balance stored in {@code wbFolder} (a background profile's
+     * {@code white_balance.yml}) before collecting; null uses the scope-wide calibration.
+     */
+    public BackgroundAcquisitionResult startBackgroundAcquisition(
+            String yamlPath,
+            String outputPath,
+            String modality,
+            String angles,
+            String exposures,
+            String wbMode,
+            String objective,
+            String detector,
+            double targetIntensity,
+            String profileKey,
+            String wbFolder)
+            throws IOException {
 
         // Build BGACQUIRE-specific command message
         String wbFlags = "";
@@ -1653,8 +1684,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
         if (profileKey != null && !profileKey.isEmpty()) {
             profileFlag = " --profile " + profileKey;
         }
+        // Last: the server reads each value up to the next flag it knows, and --wb-folder is
+        // the last one it lists.
+        String wbFolderFlag = wbFolder != null && !wbFolder.isEmpty() ? " --wb-folder " + wbFolder : "";
         String message = String.format(
-                "--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s%s%s %s",
+                "--yaml %s --output %s --modality %s --angles %s --exposures %s%s%s%s%s%s %s",
                 yamlPath,
                 outputPath,
                 modality,
@@ -1664,6 +1698,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 hwFlags,
                 targetFlag,
                 profileFlag,
+                wbFolderFlag,
                 END_MARKER);
         String finalResponse = sendBgAcquireCommand(message);
 
@@ -5384,6 +5419,56 @@ public class MicroscopeSocketClient implements AutoCloseable {
             double negativeTarget,
             double crossedTarget)
             throws IOException {
+        return runSimpleWhiteBalance(
+                outputPath,
+                initialExposureMs,
+                targetIntensity,
+                tolerance,
+                maxGainDb,
+                gainThresholdRatio,
+                maxIterations,
+                calibrateBlackLevel,
+                baseGain,
+                exposureSoftCapMs,
+                boostedMaxGainDb,
+                gainAnalogRbMax,
+                yamlPath,
+                objective,
+                detector,
+                modality,
+                positiveTarget,
+                negativeTarget,
+                crossedTarget,
+                null);
+    }
+
+    /**
+     * As above, also storing the result with a background profile: {@code wbFolder} is the
+     * profile's folder for simple white balance, where the server writes
+     * {@code white_balance.yml}. Null stores it scope-wide only.
+     */
+    public WhiteBalanceResult runSimpleWhiteBalance(
+            String outputPath,
+            double initialExposureMs,
+            double targetIntensity,
+            double tolerance,
+            double maxGainDb,
+            double gainThresholdRatio,
+            int maxIterations,
+            boolean calibrateBlackLevel,
+            double baseGain,
+            double exposureSoftCapMs,
+            double boostedMaxGainDb,
+            double gainAnalogRbMax,
+            String yamlPath,
+            String objective,
+            String detector,
+            String modality,
+            double positiveTarget,
+            double negativeTarget,
+            double crossedTarget,
+            String wbFolder)
+            throws IOException {
 
         // Build WBSIMPLE command message
         StringBuilder message = new StringBuilder();
@@ -5400,6 +5485,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
             message.append("--modality ").append(modality).append(" ");
         }
         message.append("--output ").append(outputPath);
+        if (wbFolder != null && !wbFolder.isEmpty()) {
+            message.append(" --wb-folder ").append(wbFolder);
+        }
         message.append(" --exposure ").append(initialExposureMs);
         message.append(" --target ").append(targetIntensity);
         message.append(" --tolerance ").append(tolerance);
@@ -5501,7 +5589,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String yamlPath,
             String objective,
             String detector,
-            BenchmarkProgressListener onAngle)
+            BenchmarkProgressListener onAngle,
+            String wbFolder)
             throws IOException {
 
         // Build WBPPM command message
@@ -5516,6 +5605,11 @@ public class MicroscopeSocketClient implements AutoCloseable {
             message.append("--detector ").append(detector).append(" ");
         }
         message.append("--output ").append(outputPath);
+        // The background profile's folder for per-angle white balance: the server stores the
+        // calibration there too (white_balance.yml). Null stores it scope-wide only.
+        if (wbFolder != null && !wbFolder.isEmpty()) {
+            message.append(" --wb-folder ").append(wbFolder);
+        }
         message.append(" --positive_angle ").append(positiveAngle);
         message.append(" --positive_exp ").append(positiveExposure);
         message.append(" --target_positive ").append(positiveTarget);

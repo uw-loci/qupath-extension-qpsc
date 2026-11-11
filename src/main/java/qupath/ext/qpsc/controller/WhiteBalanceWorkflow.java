@@ -370,7 +370,9 @@ public class WhiteBalanceWorkflow {
                                 modality,
                                 posTarget,
                                 negTarget,
-                                crossTarget);
+                                crossTarget,
+                                profileWhiteBalanceFolder(
+                                        yamlPath, modality, params.objective(), params.detector(), "simple"));
 
                         // Reload config so the Java side picks up the new
                         // calibration values written by the Python server
@@ -429,6 +431,32 @@ public class WhiteBalanceWorkflow {
                 "WhiteBalanceCalibration");
         calibrationThread.setDaemon(true);
         calibrationThread.start();
+    }
+
+    /**
+     * The active background profile's folder for this white balance mode, where the server
+     * also stores the calibration ({@code white_balance.yml}), or null to store it scope-wide
+     * only. A profile's white balance belongs with the backgrounds collected for the same setup.
+     */
+    static String profileWhiteBalanceFolder(
+            String yamlPath, String modality, String objective, String detector, String wbMode) {
+        try {
+            var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath);
+            String folder = qupath.ext.qpsc.background.ProfileWhiteBalance.folder(
+                    mgr.getBackgroundProfileFolder(), modality, objective, detector, wbMode);
+            if (folder != null) {
+                logger.info(
+                        "White balance will also be stored with background profile '{}': {}",
+                        qupath.ext.qpsc.background.BackgroundProfiles.activeId(),
+                        folder);
+            } else {
+                logger.info("No active background profile: white balance is stored scope-wide only");
+            }
+            return folder;
+        } catch (RuntimeException e) {
+            logger.warn("Could not resolve the background profile for white balance: {}", e.getMessage());
+            return null;
+        }
     }
 
     /** Where one PPM angle is in a white balance calibration. */
@@ -585,7 +613,13 @@ public class WhiteBalanceWorkflow {
                                 yamlPath,
                                 params.objective(),
                                 params.detector(),
-                                onAngle);
+                                onAngle,
+                                profileWhiteBalanceFolder(
+                                        yamlPath,
+                                        calibratedModality,
+                                        params.objective(),
+                                        params.detector(),
+                                        "per_angle"));
 
                         // Reload config so the Java side picks up the new
                         // calibration values written by the Python server

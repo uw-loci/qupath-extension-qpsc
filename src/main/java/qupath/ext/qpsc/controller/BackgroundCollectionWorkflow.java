@@ -437,6 +437,25 @@ public class BackgroundCollectionWorkflow {
 
             logger.info("Starting background acquisition with angles: {}, exposures: {}", angles, exposures);
 
+            // The white balance kept with this profile's backgrounds for this mode, applied
+            // before collecting. Without one the operator chooses the scope-wide one or cancels.
+            String wbFolder = null;
+            if (qupath.ext.qpsc.background.ProfileWhiteBalance.exists(
+                    profileFolder, modality, objective, detector, wbMode)) {
+                wbFolder = finalOutputPath;
+            } else if (!qupath.ext.qpsc.ui.background.ProfileWhiteBalanceGate.confirmForProfile(
+                    profileFolder,
+                    backgroundProfile,
+                    modality,
+                    objective,
+                    detector,
+                    wbMode,
+                    "Background collection",
+                    false)) {
+                logger.info("Background collection canceled: the profile has no white balance");
+                return;
+            }
+
             // Call the synchronous background acquisition method.
             // Returns final exposures plus the lamp intensity the server applied.
             MicroscopeSocketClient.BackgroundAcquisitionResult bgResult = socketClient.startBackgroundAcquisition(
@@ -449,7 +468,8 @@ public class BackgroundCollectionWorkflow {
                     objective,
                     detector,
                     targetIntensity,
-                    effectiveProfileKey);
+                    effectiveProfileKey,
+                    wbFolder);
             Map<Double, Double> finalExposures = bgResult.finalExposures();
 
             logger.info(

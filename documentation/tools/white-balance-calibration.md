@@ -113,6 +113,28 @@ imaging_profiles:
         wb_last_modified: '2026-10-21T14:09:33'
 ```
 
+### Stored with the background profile
+
+The same calibration is also stored with the **active background profile**, as
+`white_balance.yml` in the profile's folder for the mode, beside the backgrounds
+collected with it: `<base>/profiles/<profile id>/<detector>/ppm/<mag>/per_angle/` for
+PPM white balance, `.../simple/` for Simple. A white balance depends on the setup on the
+stage (carrier, slide glass, medium) as much as a background does, so each profile keeps
+its own:
+
+- Acquisitions, background collection and the Live Viewer's per-angle presets use the
+  active profile's white balance for the chosen mode.
+- When the profile has none, the scope-wide values above are used. Those are the latest
+  calibration of any profile. Before an acquisition or a background collection QPSC asks
+  first: **Use scope-wide white balance**, or **Cancel** and calibrate the profile. A
+  multi-slide batch asks during **Set Up All**; its unattended acquire pass uses the
+  scope-wide values and sends a notification.
+- Utilities > Image Quality > Background Profiles... > **Copy scope-wide white balance**
+  gives an existing profile the calibration in use today, without recalibrating. It
+  never overwrites a profile's own white balance.
+
+The run's `acquisition_metadata.json` records which was used as `wb_source`.
+
 The next background collection bakes these exposures into its set, and acquisitions
 then use the set's exposures. Every set collected before the calibration is stale, in
 every background profile, so the results dialog ends with **Collect background now...**:

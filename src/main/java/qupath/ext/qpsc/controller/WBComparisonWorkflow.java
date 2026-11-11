@@ -607,6 +607,7 @@ public class WBComparisonWorkflow {
                         configPath,
                         objective,
                         detector,
+                        null,
                         null);
                 logger.info("[per_angle] PPM white balance calibration complete");
             }

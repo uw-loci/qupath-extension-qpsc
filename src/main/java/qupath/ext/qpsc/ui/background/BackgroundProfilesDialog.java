@@ -179,22 +179,30 @@ public final class BackgroundProfilesDialog {
         });
         Button deleteButton = new Button("Delete...");
         deleteButton.setOnAction(e -> delete(selected()));
+        Button copyWbButton = new Button("Copy scope-wide white balance");
+        copyWbButton.setTooltip(new Tooltip("Each profile keeps its own PPM white balance beside its backgrounds."
+                + " This copies the scope-wide calibration (the one in use when a profile has none) into the"
+                + " selected profile, for every objective and camera that has one. White balance the profile"
+                + " already has is kept."));
+        copyWbButton.setOnAction(e -> copyScopeWideWhiteBalance(selected()));
         adoptButton.setTooltip(new Tooltip("Background folders directly under the background folder come from"
                 + " before profiles existed and are not read. Move them into a profile."));
         adoptButton.setOnAction(e -> adopt(win));
-        for (Button b : List.of(editButton, activateButton, openButton, deleteButton)) {
+        for (Button b : List.of(editButton, activateButton, openButton, deleteButton, copyWbButton)) {
             b.disableProperty()
                     .bind(list.getSelectionModel().selectedItemProperty().isNull());
         }
         HBox buttons = new HBox(8, newButton, editButton, activateButton, openButton, deleteButton, adoptButton);
         buttons.setAlignment(Pos.CENTER_LEFT);
+        HBox wbRow = new HBox(8, copyWbButton);
+        wbRow.setAlignment(Pos.CENTER_LEFT);
 
         Button close = new Button("Close");
         close.setOnAction(e -> win.close());
         HBox closeRow = new HBox(close);
         closeRow.setAlignment(Pos.CENTER_RIGHT);
 
-        VBox root = new VBox(10, intro, baseRow, list, detail, buttons, closeRow);
+        VBox root = new VBox(10, intro, baseRow, list, detail, buttons, wbRow, closeRow);
         root.setPadding(new Insets(12));
         VBox.setVgrow(list, Priority.ALWAYS);
         win.setScene(new Scene(root, 600, 560));
@@ -206,6 +214,38 @@ public final class BackgroundProfilesDialog {
         });
         refresh();
         return win;
+    }
+
+    private void copyScopeWideWhiteBalance(BackgroundProfile profile) {
+        if (profile == null) {
+            return;
+        }
+        Alert confirm = new Alert(Alert.AlertType.CONFIRMATION);
+        confirm.setTitle("Copy scope-wide white balance");
+        confirm.setHeaderText("Copy the scope-wide white balance into '" + profile.id() + "'?");
+        qupath.ext.qpsc.ui.UIFunctions.setWrappedContent(
+                confirm,
+                "The scope-wide PPM white balance (per-angle and simple, for every objective and camera that"
+                        + " has one) is copied into this profile, so it is used with this profile's backgrounds."
+                        + " White balance the profile already has is kept. The scope-wide values are the latest"
+                        + " calibration of any profile; if they were made with another carrier, glass or medium,"
+                        + " calibrate this profile instead.",
+                480);
+        qupath.ext.qpsc.ui.DialogOwner.own(confirm);
+        if (confirm.showAndWait().filter(ButtonType.OK::equals).isEmpty()) {
+            return;
+        }
+        var written = qupath.ext.qpsc.background.ProfileWhiteBalance.copyScopeWide(
+                qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(configPath)
+                        .getScopeWideImagingProfiles("ppm"),
+                profile.folder().toString());
+        logger.info("Copied {} scope-wide white balance file(s) into profile '{}'", written.size(), profile.id());
+        Dialogs.showInfoNotification(
+                "Background profiles",
+                written.isEmpty()
+                        ? "Nothing copied: the profile already has every white balance, or there is no scope-wide one."
+                        : "Copied " + written.size() + " white balance file(s) into '" + profile.id() + "'.");
+        showDetail(profile);
     }
 
     private BackgroundProfile selected() {

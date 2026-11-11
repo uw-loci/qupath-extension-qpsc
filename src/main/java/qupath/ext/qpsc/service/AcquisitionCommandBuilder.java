@@ -93,6 +93,8 @@ public class AcquisitionCommandBuilder {
     // White balance mode: "camera_awb", "simple", "per_angle", "off"
     // Single source of truth -- no separate boolean fields.
     private String wbMode = null;
+    // Background profile folder holding white_balance.yml for wbMode; null = scope-wide.
+    private String wbFolder;
 
     // Autofocus parameters
     private Integer autofocusNTiles;
@@ -439,6 +441,16 @@ public class AcquisitionCommandBuilder {
      *
      * @param mode White balance mode string
      */
+    /**
+     * The active background profile's folder for the white balance mode, whose
+     * {@code white_balance.yml} the server applies instead of the scope-wide calibration.
+     * Null (the default) sends nothing.
+     */
+    public AcquisitionCommandBuilder wbFolder(String folder) {
+        this.wbFolder = folder;
+        return this;
+    }
+
     public AcquisitionCommandBuilder wbMode(String mode) {
         this.wbMode = mode;
         if (!"off".equals(mode) && !processingSteps.contains("white_balance")) {
@@ -1042,6 +1054,11 @@ public class AcquisitionCommandBuilder {
         // Add white balance mode (single source of truth)
         if (wbMode != null) {
             args.addAll(Arrays.asList("--wb-mode", wbMode));
+        }
+        // The background profile's white balance for that mode (white_balance.yml in this
+        // folder); absent, the server uses the scope-wide calibration.
+        if (wbFolder != null && wbMode != null && !"off".equals(wbMode)) {
+            args.addAll(Arrays.asList("--wb-folder", wbFolder));
         }
 
         // Add autofocus parameters

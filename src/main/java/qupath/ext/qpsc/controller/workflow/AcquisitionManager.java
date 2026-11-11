@@ -386,6 +386,7 @@ public class AcquisitionManager {
                 .thenCompose(this::prepareForAcquisition)
                 .thenCompose(this::checkDiskSpace)
                 .thenCompose(this::checkStageLimits)
+                .thenCompose(this::checkProfileWhiteBalance)
                 .thenCompose(this::checkBackgroundIllumination)
                 .thenCompose(this::processAnnotations)
                 .thenApply(success -> {
@@ -647,6 +648,26 @@ public class AcquisitionManager {
      * is watching and the operator was asked during setup, logs and notifies and continues.
      * Returns {@code null} to cancel, like {@link #checkDiskSpace}.
      */
+    /**
+     * When the active background profile has no white balance of its own for this run, asks
+     * whether to use the scope-wide one (a multi-slide acquire pass uses it and notifies).
+     * Returns {@code null} to cancel, like {@link #checkDiskSpace}.
+     */
+    private CompletableFuture<List<AngleExposure>> checkProfileWhiteBalance(List<AngleExposure> angleExposures) {
+        if (angleExposures == null || state.sample == null) {
+            return CompletableFuture.completedFuture(angleExposures);
+        }
+        return CompletableFuture.supplyAsync(() -> qupath.ext.qpsc.ui.background.ProfileWhiteBalanceGate.confirm(
+                        state.sample.modality(),
+                        state.sample.objective(),
+                        state.sample.detector(),
+                        state.wbMode,
+                        "This acquisition",
+                        state.batchAcquire)
+                ? angleExposures
+                : null);
+    }
+
     private CompletableFuture<List<AngleExposure>> checkStageLimits(List<AngleExposure> angleExposures) {
         if (angleExposures == null || state.annotations == null || state.annotations.isEmpty()) {
             return CompletableFuture.completedFuture(angleExposures);
