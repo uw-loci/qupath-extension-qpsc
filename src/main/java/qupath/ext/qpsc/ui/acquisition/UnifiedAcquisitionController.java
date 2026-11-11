@@ -190,10 +190,6 @@ public class UnifiedAcquisitionController {
         private CheckBox alreadyInFocusCheck;
 
         // UI Components - Time-lapse Section
-        private CheckBox timeLapseEnableCheck;
-        private Spinner<Integer> timeLapseTimepointsSpinner;
-        private Spinner<Double> timeLapseIntervalSpinner;
-        private ComboBox<String> timeLapseProjectionCombo;
 
         // TitledPanes for section management
         private TitledPane regionPane;
@@ -823,88 +819,6 @@ public class UnifiedAcquisitionController {
             advancedContent.getChildren().add(modalityContent);
 
             createAdvancedPane(advancedContent);
-        }
-
-        private TitledPane createTimeLapseSection() {
-            timeLapseEnableCheck = new CheckBox("Enable time-lapse acquisition");
-            timeLapseEnableCheck.setTooltip(
-                    new Tooltip("Repeat the full acquisition over multiple timepoints at a fixed interval. "
-                            + "The interval is the time between the start of consecutive timepoints."));
-            timeLapseEnableCheck.setSelected(PersistentPreferences.isTimeLapseEnabled());
-
-            timeLapseTimepointsSpinner = new Spinner<>(1, 10000, PersistentPreferences.getTimeLapseTimepoints(), 1);
-            timeLapseTimepointsSpinner.setEditable(true);
-            timeLapseTimepointsSpinner.setPrefWidth(100);
-            timeLapseTimepointsSpinner.setTooltip(new Tooltip("Number of times the full acquisition is repeated."));
-
-            timeLapseIntervalSpinner =
-                    new Spinner<>(0.0, Double.MAX_VALUE, PersistentPreferences.getTimeLapseIntervalSec(), 10.0);
-            timeLapseIntervalSpinner.setEditable(true);
-            timeLapseIntervalSpinner.setPrefWidth(100);
-            timeLapseIntervalSpinner.setTooltip(
-                    new Tooltip("Seconds between the start of consecutive timepoints. If a timepoint takes "
-                            + "longer than this, remaining timepoints start late and a warning is shown."));
-
-            timeLapseTimepointsSpinner
-                    .disableProperty()
-                    .bind(timeLapseEnableCheck.selectedProperty().not());
-            timeLapseIntervalSpinner
-                    .disableProperty()
-                    .bind(timeLapseEnableCheck.selectedProperty().not());
-
-            timeLapseEnableCheck.selectedProperty().addListener((obs, o, n) -> {
-                PersistentPreferences.setTimeLapseEnabled(n);
-                updatePreviewPanel();
-            });
-            timeLapseTimepointsSpinner.valueProperty().addListener((obs, o, n) -> {
-                if (n != null) {
-                    PersistentPreferences.setTimeLapseTimepoints(n);
-                    updatePreviewPanel();
-                }
-            });
-            timeLapseIntervalSpinner.valueProperty().addListener((obs, o, n) -> {
-                if (n != null) {
-                    PersistentPreferences.setTimeLapseIntervalSec(n);
-                    updatePreviewPanel();
-                }
-            });
-
-            timeLapseProjectionCombo = new ComboBox<>(javafx.collections.FXCollections.observableArrayList(
-                    "None", "Mean", "Max Intensity", "Min Intensity", "Sum", "Std Deviation"));
-            timeLapseProjectionCombo.setValue(PersistentPreferences.getTimeLapseProjection());
-            timeLapseProjectionCombo.setTooltip(new Tooltip("How to combine the timepoints, as the Z projection "
-                    + "combines Z planes. None keeps every timepoint, and the stitched image is a time series. "
-                    + "Mean averages each tile over the timepoints (for example to reduce noise), and the "
-                    + "stitched image is one timepoint; with Save raw tiles the timepoints are kept in the "
-                    + "raw folder."));
-            timeLapseProjectionCombo
-                    .disableProperty()
-                    .bind(timeLapseEnableCheck.selectedProperty().not());
-            timeLapseProjectionCombo.valueProperty().addListener((obs, o, n) -> {
-                if (n != null) {
-                    PersistentPreferences.setTimeLapseProjection(n);
-                }
-            });
-
-            GridPane grid = new GridPane();
-            grid.setHgap(10);
-            grid.setVgap(8);
-            grid.setPadding(new Insets(10));
-            grid.add(new Label("Timepoints:"), 0, 0);
-            grid.add(timeLapseTimepointsSpinner, 1, 0);
-            grid.add(new Label("Interval (s):"), 0, 1);
-            grid.add(timeLapseIntervalSpinner, 1, 1);
-            grid.add(new Label("Timepoint projection:"), 0, 2);
-            grid.add(timeLapseProjectionCombo, 1, 2);
-
-            VBox content = new VBox(8, timeLapseEnableCheck, grid);
-            content.setPadding(new Insets(5));
-
-            TitledPane pane = new TitledPane("TIME-LAPSE OPTIONS", content);
-            pane.setExpanded(false);
-            pane.setAnimated(false);
-            pane.setStyle("-fx-font-weight: bold;");
-            return pane;
         }
 
         /**

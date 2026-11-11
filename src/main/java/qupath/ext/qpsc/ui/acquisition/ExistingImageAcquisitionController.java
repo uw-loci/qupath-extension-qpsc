@@ -518,6 +518,7 @@ public class ExistingImageAcquisitionController {
             createRefinementSection();
             createAdvancedSection();
             TitledPane zStackPane = createZStackSection();
+            TitledPane timeLapsePane = createTimeLapseSection();
             createPreviewPanel();
             createErrorSummaryPanel();
 
@@ -536,6 +537,7 @@ public class ExistingImageAcquisitionController {
                     autofocusPane,
                     advancedPane,
                     zStackPane,
+                    timeLapsePane,
                     createPreviewSection());
             mainContent.setPadding(new Insets(0));
 
@@ -1636,8 +1638,25 @@ public class ExistingImageAcquisitionController {
 
                 int totalImages = totalTiles * imagesPerTile * zPlanes;
 
+                // Time-lapse multiplier, timed as in Bounded Acquisition: an interval-bound
+                // run takes (N-1) intervals to start the last timepoint, plus its acquisition.
+                int timepoints = 1;
+                double intervalSec = 0.0;
+                if (PersistentPreferences.isTimeLapseEnabled()) {
+                    timepoints = Math.max(1, PersistentPreferences.getTimeLapseTimepoints());
+                    intervalSec = Math.max(0.0, PersistentPreferences.getTimeLapseIntervalSec());
+                }
+                double perTimepointAcqSec = estimatedAcquisitionSec(totalImages);
+                totalImages *= timepoints;
+                double estimatedSec = timepoints > 1
+                        ? Math.max(
+                                estimatedAcquisitionSec(totalImages),
+                                (timepoints - 1) * intervalSec + perTimepointAcqSec)
+                        : perTimepointAcqSec;
+
                 // Update labels with actual counts
-                String zSuffix = zPlanes > 1 ? String.format(" x %d Z-planes", zPlanes) : "";
+                String zSuffix = (zPlanes > 1 ? String.format(" x %d Z-planes", zPlanes) : "")
+                        + (timepoints > 1 ? String.format(" x %d timepoints", timepoints) : "");
                 if (imagesPerTile > 1) {
                     String unit = isMultiAngle(modality) ? "angles" : "channels";
                     previewTilesLabel.setText(String.format(
@@ -1648,7 +1667,7 @@ public class ExistingImageAcquisitionController {
                             String.format("Tiles: %,d%s = %,d images", totalTiles, zSuffix, totalImages));
                 }
 
-                String timeEstimate = formatTimeEstimate(estimatedAcquisitionSec(totalImages));
+                String timeEstimate = formatTimeEstimate(estimatedSec);
                 previewTimeLabel.setText("Estimated Time: " + timeEstimate);
 
                 // Storage estimate: ~4 MB per image
