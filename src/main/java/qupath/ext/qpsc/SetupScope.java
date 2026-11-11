@@ -8,7 +8,6 @@ import javafx.application.Platform;
 import javafx.beans.binding.Bindings;
 import javafx.scene.control.Alert;
 import javafx.scene.control.ButtonType;
-import javafx.scene.control.Label;
 import javafx.scene.control.Menu;
 import javafx.scene.control.MenuItem;
 import javafx.scene.control.SeparatorMenuItem;
@@ -40,6 +39,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.ProjectLogger;
 import qupath.ext.qpsc.service.SessionLogBuffer;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.acquisition.SinglePointAcquisitionController;
 import qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow;
 import qupath.ext.qpsc.ui.alignment.LightPathSetupDialog;
@@ -188,24 +188,23 @@ public class SetupScope implements QuPathExtension, GitHubProject {
                 Alert alert = new Alert(Alert.AlertType.WARNING);
                 alert.setTitle(EXTENSION_NAME + " - Stitching unavailable");
                 alert.setHeaderText("Final images cannot be created");
-                alert.setContentText("The qupath-extension-tiles-to-pyramid extension was not found. "
-                        + "It is a separate extension (not bundled in QuPath SCope) that turns acquired "
-                        + "tiles into final stitched images.\n\n"
-                        + "QuPath SCope has loaded and analysis, utilities, and offline mode all work, "
-                        + "but WITHOUT tiles-to-pyramid no final stitched image will be produced: "
-                        + "acquisition cannot assemble its tiles into a mosaic, stitching recovery is "
-                        + "unavailable, and the stitching output-format preference is hidden.\n\n"
-                        + "To enable image creation, install the tiles-to-pyramid extension alongside "
-                        + "QuPath SCope and restart QuPath. Both are offered by the QPSC extension "
-                        + "catalog, so installing from the catalog keeps them together. (If you just "
-                        + "added it, restart once more so both extensions load together.)\n\n"
-                        + "Download: https://github.com/uw-loci/qupath-extension-tiles-to-pyramid");
+                UIFunctions.setWrappedContent(
+                        alert,
+                        "The qupath-extension-tiles-to-pyramid extension was not found. "
+                                + "It is a separate extension (not bundled in QuPath SCope) that turns acquired "
+                                + "tiles into final stitched images.\n\n"
+                                + "QuPath SCope has loaded and analysis, utilities, and offline mode all work, "
+                                + "but WITHOUT tiles-to-pyramid no final stitched image will be produced: "
+                                + "acquisition cannot assemble its tiles into a mosaic, stitching recovery is "
+                                + "unavailable, and the stitching output-format preference is hidden.\n\n"
+                                + "To enable image creation, install the tiles-to-pyramid extension alongside "
+                                + "QuPath SCope and restart QuPath. Both are offered by the QPSC extension "
+                                + "catalog, so installing from the catalog keeps them together. (If you just "
+                                + "added it, restart once more so both extensions load together.)\n\n"
+                                + "Download: https://github.com/uw-loci/qupath-extension-tiles-to-pyramid",
+                        480);
                 alert.getButtonTypes().setAll(ButtonType.OK);
                 alert.getDialogPane().setMinWidth(520);
-                Label content = (Label) alert.getDialogPane().lookup(".content");
-                if (content != null) {
-                    content.setWrapText(true);
-                }
                 showStartupAlert(qupath, alert);
             });
         }
@@ -1173,16 +1172,14 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle(EXTENSION_NAME + " - restart recommended");
         alert.setHeaderText(EXTENSION_NAME + " " + installed + " is installed");
-        alert.setContentText(
+        UIFunctions.setWrappedContent(
+                alert,
                 "QuPath is still running " + EXTENSION_NAME + " " + running
                         + ". Restart QuPath before you use it, so the new version loads; until then old "
-                        + "and new code can mix and cause confusing errors.\n\nIf you are also updating companion extensions (e.g. tiles-to-pyramid) or QuPath itself, finish those first, then restart once.");
+                        + "and new code can mix and cause confusing errors.\n\nIf you are also updating companion extensions (e.g. tiles-to-pyramid) or QuPath itself, finish those first, then restart once.",
+                460);
         alert.getButtonTypes().setAll(ButtonType.OK);
         alert.getDialogPane().setMinWidth(500);
-        Label content = (Label) alert.getDialogPane().lookup(".content");
-        if (content != null) {
-            content.setWrapText(true);
-        }
         showStartupAlert(qupath, alert);
     }
 

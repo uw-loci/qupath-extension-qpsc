@@ -454,19 +454,13 @@ public class QPScopeChecks {
         Alert alert = new Alert(Alert.AlertType.WARNING);
         alert.setTitle(title);
         alert.setHeaderText(header);
-        alert.setContentText(body);
         alert.getButtonTypes().setAll(ButtonType.OK);
 
         alert.getDialogPane().setMinWidth(620);
         alert.getDialogPane().setPrefWidth(720);
         alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
 
-        Label contentLabel = (Label) alert.getDialogPane().lookup(".content");
-        if (contentLabel != null) {
-            contentLabel.setWrapText(true);
-            contentLabel.setMaxWidth(680);
-            contentLabel.setStyle("-fx-font-family: 'monospace';");
-        }
+        qupath.ext.qpsc.ui.UIFunctions.setWrappedContent(alert, body, 680).setStyle("-fx-font-family: 'monospace';");
         Label headerLabel = (Label) alert.getDialogPane().lookup(".header-panel .label");
         if (headerLabel != null) {
             headerLabel.setWrapText(true);

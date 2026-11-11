@@ -541,18 +541,12 @@ public final class ImageFlipHelper {
                     new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
             alert.setTitle(title);
             alert.setHeaderText(header);
-            alert.setContentText(body.toString());
             alert.getButtonTypes().setAll(javafx.scene.control.ButtonType.OK);
             alert.getDialogPane().setMinWidth(620);
             alert.getDialogPane().setPrefWidth(720);
             alert.getDialogPane().setMinHeight(javafx.scene.layout.Region.USE_PREF_SIZE);
-            javafx.scene.control.Label contentLabel =
-                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
-            if (contentLabel != null) {
-                contentLabel.setWrapText(true);
-                contentLabel.setMaxWidth(680);
-                contentLabel.setStyle("-fx-font-family: 'monospace';");
-            }
+            qupath.ext.qpsc.ui.UIFunctions.setWrappedContent(alert, body.toString(), 680)
+                    .setStyle("-fx-font-family: 'monospace';");
             javafx.scene.control.Label headerLabel =
                     (javafx.scene.control.Label) alert.getDialogPane().lookup(".header-panel .label");
             if (headerLabel != null) {

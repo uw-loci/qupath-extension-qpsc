@@ -18,6 +18,7 @@ import javafx.scene.control.Button;
 import javafx.scene.control.Label;
 import javafx.scene.control.Separator;
 import javafx.scene.layout.HBox;
+import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
@@ -43,6 +44,32 @@ public class UIFunctions {
     private static Stage progressBarStage;
 
     /**
+     * Puts {@code text} into the dialog as a wrapping label, and lets the dialog grow tall
+     * enough to show all of it.
+     *
+     * <p>Use this instead of {@code setContentText} plus {@code lookup(".content")}: the
+     * dialog creates its own content label only when it is first laid out, so that lookup
+     * returns null before {@code show}, the wrap is never applied, and a long message ends
+     * in "..." (seen 2026-11-11 on "Acquisition failed for ..."). A label we create is there
+     * from the start.
+     *
+     * @param dialog the dialog
+     * @param text the message
+     * @param widthPx the width the text wraps at
+     * @return the label, for callers that style it (e.g. a monospace font)
+     */
+    public static Label setWrappedContent(Dialog<?> dialog, String text, double widthPx) {
+        Label label = new Label(text);
+        label.setWrapText(true);
+        label.setPrefWidth(widthPx);
+        label.setMaxWidth(widthPx);
+        label.setMinHeight(Region.USE_PREF_SIZE);
+        dialog.getDialogPane().setContent(label);
+        dialog.getDialogPane().setMinHeight(Region.USE_PREF_SIZE);
+        return label;
+    }
+
+    /**
      * Shows an error dialog on the JavaFX thread with proper text wrapping.
      *
      * @param heading shown as the dialog's heading, as given. Callers pass a label such as
@@ -54,20 +81,10 @@ public class UIFunctions {
             Alert alert = new Alert(Alert.AlertType.ERROR);
             alert.setTitle("Error");
             alert.setHeaderText(heading);
-            alert.setContentText(message);
             alert.initModality(Modality.APPLICATION_MODAL);
-
-            // Enable text wrapping and set reasonable dialog width for long messages
             alert.getDialogPane().setMinWidth(500);
             alert.getDialogPane().setPrefWidth(600);
-
-            // Force content text to wrap
-            javafx.scene.control.Label contentLabel =
-                    (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
-            if (contentLabel != null) {
-                contentLabel.setWrapText(true);
-                contentLabel.setMaxWidth(550);
-            }
+            setWrappedContent(alert, message, 550);
 
             UserErrors.logAlert(logger, alert);
             DialogOwner.own(alert);

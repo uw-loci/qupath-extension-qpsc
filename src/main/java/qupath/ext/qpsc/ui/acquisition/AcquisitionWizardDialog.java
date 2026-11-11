@@ -1609,7 +1609,6 @@ public class AcquisitionWizardDialog {
         Alert alert = new Alert(Alert.AlertType.CONFIRMATION);
         alert.setTitle("Alignment Warning");
         alert.setHeaderText("Microscope alignment is not ready");
-        alert.setContentText(msg.toString());
         alert.getButtonTypes().setAll(ButtonType.YES, ButtonType.CANCEL);
 
         // Default Alert width truncates the wrapped content past the
@@ -1617,12 +1616,7 @@ public class AcquisitionWizardDialog {
         // uses so the multi-line warning fits without clipping.
         alert.getDialogPane().setMinWidth(500);
         alert.getDialogPane().setPrefWidth(600);
-        javafx.scene.control.Label contentLabel =
-                (javafx.scene.control.Label) alert.getDialogPane().lookup(".content");
-        if (contentLabel != null) {
-            contentLabel.setWrapText(true);
-            contentLabel.setMaxWidth(550);
-        }
+        UIFunctions.setWrappedContent(alert, msg.toString(), 550);
 
         // Wizard is always-on-top; helper parents + raises the alert.
         var result = UIFunctions.showAlertOverParent(alert, wizardStage);
