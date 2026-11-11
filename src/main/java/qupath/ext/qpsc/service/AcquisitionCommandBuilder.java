@@ -145,6 +145,8 @@ public class AcquisitionCommandBuilder {
     // buildSocketMessage emits --timepoints when > 1 and --interval when > 0.
     private int timepoints = 1;
     private double intervalSec = 0.0;
+    // Time projection ("mean", "max", "min", "sum", "std"); null keeps every timepoint.
+    private String timeProjection;
 
     // Optional output format selector for the Z/T/single-point refactor.
     // Null = unset; buildSocketMessage emits --output-format only when set.
@@ -580,6 +582,27 @@ public class AcquisitionCommandBuilder {
         this.timepoints = timepoints;
         this.intervalSec = intervalSec;
         return this;
+    }
+
+    /**
+     * Reduces a time-lapse's timepoints to one image per tile on the server, the way a Z
+     * projection reduces planes.
+     *
+     * <p>{@code buildSocketMessage} emits {@code --t-projection} only with more than one
+     * timepoint and a projection other than "none"; without it every timepoint is kept,
+     * in {@code t{tt}/} folders, for a time-series mosaic.
+     *
+     * @param projection "mean", "max", "min", "sum", "std", or null / "none" to keep every timepoint
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder timeProjection(String projection) {
+        this.timeProjection = projection;
+        return this;
+    }
+
+    /** The time projection, or null when every timepoint is kept. */
+    public String getTimeProjection() {
+        return timeProjection;
     }
 
     /**
@@ -1174,6 +1197,9 @@ public class AcquisitionCommandBuilder {
         }
         if (intervalSec > 0.0) {
             args.addAll(Arrays.asList("--interval", String.valueOf(intervalSec)));
+        }
+        if (timepoints > 1 && timeProjection != null && !"none".equals(timeProjection)) {
+            args.addAll(Arrays.asList("--t-projection", timeProjection));
         }
         if (outputFormat != null) {
             args.addAll(Arrays.asList("--output-format", outputFormat.toWireValue()));

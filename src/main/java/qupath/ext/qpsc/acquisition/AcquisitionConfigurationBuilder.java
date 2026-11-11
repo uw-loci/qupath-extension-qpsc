@@ -474,7 +474,13 @@ public class AcquisitionConfigurationBuilder {
             int timepoints = PersistentPreferences.getTimeLapseTimepoints();
             double intervalSec = PersistentPreferences.getTimeLapseIntervalSec();
             acquisitionBuilder.timeLapse(timepoints, intervalSec);
-            logger.info("Time-lapse enabled: timepoints={}, interval={} s", timepoints, intervalSec);
+            String timeProjection = timeProjectionCode(PersistentPreferences.getTimeLapseProjection());
+            acquisitionBuilder.timeProjection(timeProjection);
+            logger.info(
+                    "Time-lapse enabled: timepoints={}, interval={} s, projection={}",
+                    timepoints,
+                    intervalSec,
+                    timeProjection == null ? "none (every timepoint kept)" : timeProjection);
         }
 
         return new AcquisitionConfiguration(
@@ -538,5 +544,23 @@ public class AcquisitionConfigurationBuilder {
             qupath.ext.qpsc.ui.DialogOwner.own(warning);
             warning.showAndWait();
         });
+    }
+
+    /**
+     * The server's time projection for the time-lapse preference's display name, or null
+     * to keep every timepoint.
+     */
+    public static String timeProjectionCode(String displayName) {
+        if (displayName == null) {
+            return null;
+        }
+        return switch (displayName) {
+            case "Mean" -> "mean";
+            case "Max Intensity" -> "max";
+            case "Min Intensity" -> "min";
+            case "Sum" -> "sum";
+            case "Std Deviation" -> "std";
+            default -> null;
+        };
     }
 }

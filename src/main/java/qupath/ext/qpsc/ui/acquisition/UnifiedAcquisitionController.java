@@ -193,6 +193,7 @@ public class UnifiedAcquisitionController {
         private CheckBox timeLapseEnableCheck;
         private Spinner<Integer> timeLapseTimepointsSpinner;
         private Spinner<Double> timeLapseIntervalSpinner;
+        private ComboBox<String> timeLapseProjectionCombo;
 
         // TitledPanes for section management
         private TitledPane regionPane;
@@ -868,6 +869,23 @@ public class UnifiedAcquisitionController {
                 }
             });
 
+            timeLapseProjectionCombo = new ComboBox<>(javafx.collections.FXCollections.observableArrayList(
+                    "None", "Mean", "Max Intensity", "Min Intensity", "Sum", "Std Deviation"));
+            timeLapseProjectionCombo.setValue(PersistentPreferences.getTimeLapseProjection());
+            timeLapseProjectionCombo.setTooltip(new Tooltip("How to combine the timepoints, as the Z projection "
+                    + "combines Z planes. None keeps every timepoint, and the stitched image is a time series. "
+                    + "Mean averages each tile over the timepoints (for example to reduce noise), and the "
+                    + "stitched image is one timepoint; with Save raw tiles the timepoints are kept in the "
+                    + "raw folder."));
+            timeLapseProjectionCombo
+                    .disableProperty()
+                    .bind(timeLapseEnableCheck.selectedProperty().not());
+            timeLapseProjectionCombo.valueProperty().addListener((obs, o, n) -> {
+                if (n != null) {
+                    PersistentPreferences.setTimeLapseProjection(n);
+                }
+            });
+
             GridPane grid = new GridPane();
             grid.setHgap(10);
             grid.setVgap(8);
@@ -876,6 +894,8 @@ public class UnifiedAcquisitionController {
             grid.add(timeLapseTimepointsSpinner, 1, 0);
             grid.add(new Label("Interval (s):"), 0, 1);
             grid.add(timeLapseIntervalSpinner, 1, 1);
+            grid.add(new Label("Timepoint projection:"), 0, 2);
+            grid.add(timeLapseProjectionCombo, 1, 2);
 
             VBox content = new VBox(8, timeLapseEnableCheck, grid);
             content.setPadding(new Insets(5));

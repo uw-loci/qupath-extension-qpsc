@@ -150,6 +150,9 @@ A collapsible **TIME-LAPSE OPTIONS** pane repeats the entire acquisition over mu
 | Enable time-lapse acquisition | CheckBox | Turns the time-lapse loop on. When off, the acquisition runs once (no behavior change from earlier builds). |
 | Timepoints | Spinner | Number of times the full region acquisition is repeated. |
 | Interval (s) | Spinner | Seconds between the *start* of consecutive timepoints. |
+| Timepoint projection | Dropdown | How the timepoints are combined, as the Z projection combines Z planes. **None** (default) keeps every timepoint: the stitched image is a time series. **Mean**, **Max Intensity**, **Min Intensity**, **Sum** or **Std Deviation** reduce each tile over the timepoints after the last one (for example **Mean** to average out noise), and the stitched image has one timepoint. With **Save raw tiles** on, the individual timepoints are kept in the raw folder; otherwise they are removed once the projection is written. LC-PolScope orientation images are never averaged (orientations are angles) and keep their timepoints. |
+
+Every timepoint is written to its own `t000/`, `t001/`, ... folder inside the angle or channel folder. Before 2026-11-11 each timepoint overwrote the same tile file, so only the last timepoint was kept.
 
 The Acquisition Preview folds the timepoint count into **Total Images** and the **Est. Time** estimate (an interval-bound run is timed as the time to start the last timepoint plus that timepoint's acquisition).
 

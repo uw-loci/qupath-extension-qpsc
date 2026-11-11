@@ -1840,6 +1840,8 @@ public class PersistentPreferences {
             PathPrefs.createPersistentPreference("qpscTimeLapseTimepoints", 1);
     private static final DoubleProperty timeLapseIntervalSecProperty =
             PathPrefs.createPersistentPreference("qpscTimeLapseIntervalSec", 60.0);
+    private static final StringProperty timeLapseProjectionProperty =
+            PathPrefs.createPersistentPreference("qpscTimeLapseProjection", "None");
 
     public static boolean isTimeLapseEnabled() {
         return timeLapseEnabledProperty.get();
@@ -1855,6 +1857,18 @@ public class PersistentPreferences {
 
     public static void setTimeLapseTimepoints(int v) {
         timeLapseTimepointsProperty.set(v);
+    }
+
+    /**
+     * How a time-lapse's timepoints are combined: "None" keeps every timepoint (a time
+     * series), or "Mean", "Max Intensity", "Min Intensity", "Sum", "Std Deviation".
+     */
+    public static String getTimeLapseProjection() {
+        return timeLapseProjectionProperty.get();
+    }
+
+    public static void setTimeLapseProjection(String v) {
+        timeLapseProjectionProperty.set(v);
     }
 
     public static double getTimeLapseIntervalSec() {

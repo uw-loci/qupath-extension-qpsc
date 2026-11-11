@@ -475,7 +475,7 @@ public class MockMicroscopeServer implements AutoCloseable {
         }
 
         private void maybeInjectError(String operation) throws IOException {
-            if (injectErrors && Math.random() < errorProbability) {
+            if (injectErrors && errorRandom.nextDouble() < errorProbability) {
                 logger.warn("Injecting error for operation: {}", operation);
                 throw new IOException("Simulated error in " + operation);
             }
@@ -585,7 +585,14 @@ public class MockMicroscopeServer implements AutoCloseable {
     public void setErrorInjection(boolean inject, double probability) {
         this.injectErrors = inject;
         this.errorProbability = Math.max(0.0, Math.min(1.0, probability));
+        // Seeded, so a test sees the same errors every run: with Math.random a 50% rate
+        // over 10 calls came out all-success or all-error about once in 500 runs and
+        // failed a build at random.
+        this.errorRandom = new java.util.Random(ERROR_SEED);
     }
+
+    private static final long ERROR_SEED = 20261111L;
+    private java.util.Random errorRandom = new java.util.Random(ERROR_SEED);
 
     /**
      * Gets the number of active client connections.
