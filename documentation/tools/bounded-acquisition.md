@@ -155,6 +155,8 @@ The Acquisition Preview folds the timepoint count into **Total Images** and the 
 
 If a timepoint takes longer than the requested interval, the remaining timepoints start late. The first time this happens the server reports a one-time "falling behind" warning: QPSC shows a modal dialog over the progress monitor and -- if push notifications are configured -- sends an alert. The acquisition continues to completion; the warning is informational. The warning channel is best-effort and auto-disables against older servers that do not support it.
 
+While a time-lapse runs, the progress window counts every timepoint. The positions line says which timepoint is in progress (for example "Positions acquired: 3 of 10 (timepoint 2 of 5)"), and the time left includes the waits between timepoints, not just the time per file. The wait is not counted as acquisition time. The stall check also allows for the interval, so a wait longer than the usual five-minute stall timeout does not close the window as stalled.
+
 ### Autofocus (Collapsed by Default)
 
 Its own section between Acquisition Region and Modality-Specific Options, because every modality autofocuses.
