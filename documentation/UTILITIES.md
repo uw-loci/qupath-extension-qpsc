@@ -466,6 +466,8 @@ Re-run stitching on previously acquired tiles when the initial stitching failed 
 
 **Access:** Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles...
 
+**Held tiles:** when an acquisition run stops part way, its tiles are kept, and the **Held tiles** window offers **Stitch as a normal acquisition...** (this tool, opened on that folder) or **Delete tiles...**. See [TROUBLESHOOTING](TROUBLESHOOTING.md#tiles-held-after-a-run-stopped).
+
 **Tile Recovery After Crashes:**
 
 When parallel stitching exits unexpectedly, angles/channels are temporarily isolated into `_temp_<angle>_<hash>` folders. If stitching crashes before cleanup, tiles remain stuck there. To recover:

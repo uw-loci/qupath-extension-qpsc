@@ -384,7 +384,7 @@ steps:
   - { num: 12, name: performAcquisition,                     file_line: "3098-3130", reads: ["state.tilesByAnnotation", "DS17.currentTransform"], writes: ["DS17 (acquisitionActive=true)", "DS45 (socket: ACQUIRE)"], gate: "validateMMAgainstSelection final backstop; CancelGate consulted before each region, before awaitServerIdle and before startAcquisition" }
   - { num: 13, name: waitForCompletion / showSuccessNotification, file_line: "3131-3252", reads: ["AcquisitionMonitorService events"], writes: [], gate: "showSuccessNotification short-circuits on null state (Phase 3 H5)" }
   - { num: 14, name: stitch + autoRegisterBoundsTransformIfAvailable, file_line: "via AcquisitionManager.launchStitching -> StitchingHelper", reads: ["DS28"], writes: ["DS48 (reserve, then fill)", "DS30", "DS6 (sub-frame JSON)", "DS9 (full metadata stamp on new entries)"], gate: "job enqueued in StitchingQueueWindow (W37); stitching errors -> StitchingRecoveryWorkflow path" }
-  - { num: 15, name: cleanup + cleanupTilesAfterStitching,   file_line: "3154-3202", reads: ["DS49"], writes: ["DS17.currentTransform = null (H6) and acquisitionActive=false (Phase 11), ONLY while this run holds the DS49 slot", "DS49 (release)", "DS28 (tile handling per preference, success path)"], gate: "force-delete tile dir even on error (Phase 11)" }
+  - { num: 15, name: cleanup + cleanupTilesAfterStitching,   file_line: "3154-3202", reads: ["DS49"], writes: ["DS17.currentTransform = null (H6) and acquisitionActive=false (Phase 11), ONLY while this run holds the DS49 slot", "DS49 (release)", "DS28 (tile handling per preference, success path)"], gate: "on error, cleanupAfterFailedRun deletes unfinished regions without tile images and holds those with images (HeldTilesWindow); finished regions are kept" }
 key_invariants:
   - "ImageFlipHelper.validateAndFlipIfNeeded MUST run BEFORE MicroscopeController.setCurrentTransform (M11 deferred install)"
   - "cleanup() clears MicroscopeController.currentTransform (H6 fix) only while this run holds the WorkflowRegistry slot (DS49). Run N's stitching outlives its acquisition and run N+1 may already have set its own transform; run N's cleanup nulled run N+1's transform on 2026-10-27 before this guard."
@@ -2259,7 +2259,7 @@ read_by:
   - "W16 StitchingRecoveryWorkflow"
 lifecycle:
   created_when: "before acquisition launches"
-  destroyed_when: "TileCleanupHelper.performCleanup per QPPreferenceDialog.getTileHandlingMethodProperty (Delete / Zip / Keep; _protected folders are kept); force-delete on workflow error (Phase 11)"
+  destroyed_when: "TileCleanupHelper.performCleanup per QPPreferenceDialog.getTileHandlingMethodProperty (Delete / Zip / Keep; _protected folders are kept); on workflow error, unfinished regions without tile images are deleted and those with images are held until the operator chooses (HeldTilesWindow)"
 invariants:
   - "The modality folder includes the objective suffix (e.g. 'Fluorescence_10x') via ObjectiveUtils.createEnhancedFolderName; the acquisition folder adds the run index (GLOSSARY.md)."
   - "TileConfiguration.txt is in MICRONS (stage); _QP.txt is in QuPath full-res PIXELS."
