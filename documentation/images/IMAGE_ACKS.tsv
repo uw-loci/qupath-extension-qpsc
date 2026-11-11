@@ -24,6 +24,6 @@ Docs_BackgroundCollection.png	b7b77040710c4f9c7a5071f1e224732c6019a376	2026-11-1
 Docs_CameraControl.png	b7b77040710c4f9c7a5071f1e224732c6019a376	2026-11-10	locale fix 5307f18c: setText/TextField prefills use Locale.ROOT; identical in en-US, no visible change
 Docs_WBComparisonTest.png	b7b77040710c4f9c7a5071f1e224732c6019a376	2026-11-10	locale fix 5307f18c: setText/TextField prefills use Locale.ROOT; identical in en-US, no visible change
 Docs_AcquisitionWizard.png	c01d5638a3c416ef0977a5a3372ef795e3543446	2026-11-11	Only the "Microscope alignment is not ready" warning's text wrapping changed; the wizard window shown in the figure is unchanged
-Docs_BoundedAcquisition.png	d7fc50a814f0e046d0b0acf79aed2989bf3ee935	2026-11-11	Order row added inside the collapsed TIME-LAPSE OPTIONS pane; the figure shows the pane collapsed, so nothing visible changed
 Docs_BackgroundProfiles.png	0f56ecf693a9ffc2de278f4c225fda89461fab1a	2026-11-11	New 'Copy scope-wide white balance' button row not in the figure; recapture queued in MANUAL_TEST_QUEUE
 Docs_AcquisitionWorkflowProgress.png	fe130ce07178602969906afe72e53ae9b16b505c	2026-11-11	Per-axis row gained a Timepoint label, shown only for time-lapse runs; the figure shows a run without one, so nothing visible changed
+Docs_BoundedAcquisition.png	a544fed002540586a25e192d7295b2f307b12b03	2026-11-11	Halo on the center button shows only with a connected stage away from the typed center; the figure shows neither
