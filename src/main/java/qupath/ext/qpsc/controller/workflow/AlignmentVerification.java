@@ -107,6 +107,10 @@ public final class AlignmentVerification {
      * @param confidence confidence of the match used, 0 when nothing matched
      * @param attempts   how many points were tried
      * @param message    operator-facing sentence, suitable for a dialog
+     * @param focusedZUm the Z the last successful refocus found, or null when none did
+     * @param confirmedFocus where focus was found at the point that confirmed the
+     *     alignment, or null: a stage position whose camera image both focused and matched
+     *     the macro image, which makes it a measured point of the slide's focus surface
      */
     public record Verdict(
             Status status,
@@ -115,7 +119,20 @@ public final class AlignmentVerification {
             double confidence,
             int attempts,
             String message,
-            Double focusedZUm) {
+            Double focusedZUm,
+            FocusPoint confirmedFocus) {
+
+        /** A verdict with no confirmed focus point. */
+        public Verdict(
+                Status status,
+                double offsetUm,
+                int inliers,
+                double confidence,
+                int attempts,
+                String message,
+                Double focusedZUm) {
+            this(status, offsetUm, inliers, confidence, attempts, message, focusedZUm, null);
+        }
 
         /** Convenience for the cases that never focused. */
         static Verdict of(Status status, double offsetUm, int inliers, double confidence, int attempts, String msg) {
@@ -125,6 +142,21 @@ public final class AlignmentVerification {
         /** True when the run should not continue on this alignment. */
         public boolean shouldStop() {
             return status == Status.MISALIGNED || status == Status.INCONCLUSIVE;
+        }
+    }
+
+    /**
+     * A focus measured at a stage position, in um.
+     *
+     * @param stageXUm stage X
+     * @param stageYUm stage Y
+     * @param zUm focus Z
+     */
+    public record FocusPoint(double stageXUm, double stageYUm, double zUm) {
+
+        /** As {stageX, stageY, focusZ}, the form the slide focus surface is fitted from. */
+        public double[] toArray() {
+            return new double[] {stageXUm, stageYUm, zUm};
         }
     }
 
@@ -244,6 +276,9 @@ public final class AlignmentVerification {
                     mc.moveStageZ(focusZUm);
                 }
                 Double focused = refocusBeforeMatching(modalityForServer, objectiveId);
+                FocusPoint focusHere = focused != null && Double.isFinite(focused)
+                        ? new FocusPoint(predicted[0], predicted[1], focused)
+                        : null;
                 if (focused != null) {
                     // The acquisition must start from the focus we just MEASURED, not the one
                     // stored during setup hours ago. Carrying the stale value forward would
@@ -268,6 +303,8 @@ public final class AlignmentVerification {
                 int inliers = (int) measurement[2];
                 double confidence = measurement[3];
                 if (status == Status.CONFIRMED) {
+                    // Focus found here and the in-focus field matched the macro image: a
+                    // measured point of this slide's focus surface, at a known position.
                     return new Verdict(
                             status,
                             offset,
@@ -279,7 +316,8 @@ public final class AlignmentVerification {
                                             + "tolerance of one camera field diagonal (%d inliers, "
                                             + "confidence %.3f).",
                                     offset, maxOffsetUm, inliers, confidence),
-                            focusedZUm);
+                            focusedZUm,
+                            focusHere);
                 }
                 return new Verdict(
                         status,

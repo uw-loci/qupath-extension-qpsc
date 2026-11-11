@@ -2630,6 +2630,7 @@ public class ExistingImageWorkflowV2 {
                 }
                 state.seedZ = verdict.focusedZUm();
             }
+            recordConfirmedFocusPoint(state, verdict);
 
             if (!verdict.shouldStop()) {
                 logger.info("Alignment check for {} (camera at {}): {}", slide, cameraState, verdict.message());
@@ -2648,6 +2649,48 @@ public class ExistingImageWorkflowV2 {
             logger.error("Alignment check for {} (camera at {}) FAILED: {}", slide, cameraState, verdict.message());
             AlignmentVerificationGate.record(slide, verdict);
             return new CancellationException("Alignment could not be confirmed for " + slide);
+        }
+
+        /**
+         * Adds the point where the alignment check focused and matched to the slide's focus
+         * points, so the acquisition's first hint comes from a plane through all of them
+         * rather than from this one Z carried to wherever the first autofocus tile is.
+         *
+         * <p>The seed Z alone is right only near where it was measured: on 2026-11-10 it was
+         * 70 um off at a first autofocus tile 21 mm away on a slide tilted 7.5 um/mm.
+         */
+        private void recordConfirmedFocusPoint(WorkflowState state, AlignmentVerification.Verdict verdict) {
+            AlignmentVerification.FocusPoint point = verdict.confirmedFocus();
+            if (point == null) {
+                return;
+            }
+            try {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = state.projectInfo != null
+                        ? (Project<BufferedImage>) state.projectInfo.getCurrentProject()
+                        : gui.getProject();
+                ImageData<BufferedImage> imageData =
+                        state.sourceImageData != null ? state.sourceImageData : gui.getImageData();
+                if (project == null || imageData == null) {
+                    return;
+                }
+                String imageName = QPProjectFunctions.getActualImageFileName(imageData);
+                String lookupKey =
+                        imageName != null ? AlignmentHelper.resolveMacroLookupKey(project, imageData, imageName) : null;
+                if (lookupKey == null) {
+                    return;
+                }
+                String objective = state.sample != null ? state.sample.objective() : state.objective;
+                logger.info(
+                        "Alignment check focus point for the slide's focus surface: X={} Y={} Z={} um",
+                        String.format("%.0f", point.stageXUm()),
+                        String.format("%.0f", point.stageYUm()),
+                        String.format("%.2f", point.zUm()));
+                AffineTransformManager.recordSlideFocusPoints(
+                        project, lookupKey, List.of(point.toArray()), objective, false);
+            } catch (Exception e) {
+                logger.warn("Could not record the alignment check's focus point: {}", e.getMessage());
+            }
         }
 
         /**
@@ -3110,16 +3153,19 @@ public class ExistingImageWorkflowV2 {
                         refinedFocusZ == null ? "n/a" : String.format("%.2f", refinedFocusZ));
 
                 // Multi-tile refinement autofocused at every point it visited -- two or
-                // three places millimetres apart on this slide, each one looked at by a
-                // human. Fit a plane through them and keep it, so a later pass over this
-                // slide can approach each region at roughly the right height instead of
-                // from wherever the stage is. Consumed (not read) so these heights cannot
-                // reach a different slide. Single-tile refinement yields one point, which
-                // is the focusZ scalar above and not a surface.
+                // three places millimeters apart on this slide, each one looked at by a
+                // human. Keep them on the slide's record, however few, and fit a plane once
+                // there are three, so a later pass over this slide can approach each region
+                // at roughly the right height instead of from wherever the stage is. The
+                // alignment check before an unattended acquire adds the point it focuses
+                // and confirms. A refinement is a new placement, so it starts the slide's
+                // points afresh even when it measured none (single-tile refinement yields
+                // only the focusZ scalar above). Consumed (not read) so these heights
+                // cannot reach a different slide.
                 List<double[]> focusPoints = MultiTileRefinement.consumeFocusPoints();
+                AffineTransformManager.SlideFocusSurface surface = AffineTransformManager.recordSlideFocusPoints(
+                        project, lookupKey, focusPoints, state.objective, true);
                 if (focusPoints.size() >= 3) {
-                    AffineTransformManager.SlideFocusSurface surface = AffineTransformManager.saveSlideFocusSurface(
-                            project, lookupKey, focusPoints, state.objective);
                     if (surface != null) {
                         HolderTiltRegistry.record(lookupKey, surface);
                         if (!surface.hasRedundancy()) {
@@ -3167,8 +3213,9 @@ public class ExistingImageWorkflowV2 {
                     }
                     if (!inherited) {
                         logger.info(
-                                "{} refinement focus point(s) measured -- a plane needs 3, so no focus "
-                                        + "surface was saved for this slide",
+                                "{} refinement focus point(s) measured and kept -- a plane needs 3. The "
+                                        + "alignment check before an unattended acquire adds the point it "
+                                        + "focuses and confirms.",
                                 focusPoints.size());
                     }
                 }

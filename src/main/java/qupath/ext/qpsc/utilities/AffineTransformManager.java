@@ -1017,11 +1017,12 @@ public class AffineTransformManager {
                 alignmentData.put("focusZ", focusZ);
             }
 
-            // Carry over the measured focus surface. It is written by
-            // saveSlideFocusSurface after this method has run, so without this a later
-            // re-save of the alignment would silently delete it -- the same way the
-            // Autofocus Editor used to delete keys it did not model. Unconditional,
-            // because a re-save with a new macro image is still a re-save.
+            // Carry over the measured focus surface and the focus points behind it. They
+            // are written by saveSlideFocusSurface / recordSlideFocusPoints after this
+            // method has run, so without this a later re-save of the alignment would
+            // silently delete them -- the same way the Autofocus Editor used to delete
+            // keys it did not model. Unconditional, because a re-save with a new macro
+            // image is still a re-save.
             if (alignmentFile.exists()) {
                 try {
                     String existingJson =
@@ -1031,6 +1032,10 @@ public class AffineTransformManager {
                     if (existingData != null && existingData.get("focusSurface") != null) {
                         alignmentData.put("focusSurface", existingData.get("focusSurface"));
                         logger.debug("Preserved focusSurface from existing alignment JSON");
+                    }
+                    if (existingData != null && existingData.get("focusPoints") != null) {
+                        alignmentData.put("focusPoints", existingData.get("focusPoints"));
+                        logger.debug("Preserved focusPoints from existing alignment JSON");
                     }
                 } catch (Exception e) {
                     logger.debug("Could not preserve focusSurface: {}", e.getMessage());
@@ -1371,6 +1376,142 @@ public class AffineTransformManager {
             return null;
         }
         return writeFocusSurfaceRecord(file, sampleName, surface, points) ? surface : null;
+    }
+
+    /**
+     * Record focus points measured on this slide, and fit a plane once there are three.
+     *
+     * <p>Every in-focus point measured at a known stage position is kept on the slide's
+     * alignment record, however few there are: the points refinement measured, and later
+     * the point the alignment check focuses and matches before an unattended acquire.
+     * On 2026-11-10 (PPM, a slide tilted 7.5 um/mm) refinement measured two points, too
+     * few for a plane, and they were dropped. The alignment check then measured a third,
+     * but only its Z was carried, to a first autofocus tile 21 mm away: the hint was 70 um
+     * off and the region was imaged out of focus. The three points together predicted that
+     * tile to within 4 um of the clear autofocus peaks found later.
+     *
+     * <p>{@code startNew} marks a new placement (a refinement): earlier points are
+     * dropped, and so is a stored surface when new points arrive, since neither describes
+     * the slide as it now sits. Points measured with another objective are dropped too,
+     * because the parfocal offset between objectives is not known.
+     *
+     * <p>A surface already stored from more points than these (a region's server-fitted
+     * surface) is kept rather than replaced by a fit through fewer.
+     *
+     * @param project the open project
+     * @param sampleName the macro lookup key
+     * @param points the new points as {stageX, stageY, focusZ} in um
+     * @param objective objective in use while measuring
+     * @param startNew true when these points start a new placement of the slide
+     * @return the surface fitted and saved from the points, or null when none was
+     */
+    public static SlideFocusSurface recordSlideFocusPoints(
+            Project<BufferedImage> project,
+            String sampleName,
+            List<double[]> points,
+            String objective,
+            boolean startNew) {
+        File file = resolveAlignmentFile(project, sampleName);
+        Map<String, Object> data = readAlignmentJson(file);
+        if (data == null) {
+            logger.debug("Not recording focus points for '{}': no alignment record to attach them to", sampleName);
+            return null;
+        }
+        List<double[]> all = new ArrayList<>();
+        if (!startNew) {
+            all.addAll(storedFocusPoints(data, objective));
+        }
+        List<double[]> fresh = points == null ? List.of() : points;
+        all.addAll(fresh);
+
+        Map<String, Object> record = new LinkedHashMap<>();
+        if (objective != null) {
+            record.put("objective", objective);
+        }
+        List<List<Double>> saved = new ArrayList<>();
+        for (double[] p : all) {
+            saved.add(List.of(p[0], p[1], p[2]));
+        }
+        record.put("points", saved);
+        record.put("updatedAt", java.time.Instant.now().toString());
+        data.put("focusPoints", record);
+        boolean droppedSurface = startNew && !fresh.isEmpty() && data.remove("focusSurface") != null;
+        if (!writeAlignmentJson(file, sampleName, data)) {
+            return null;
+        }
+        if (droppedSurface) {
+            logger.info(
+                    "Dropped the focus surface stored for '{}': the slide was placed again, and the "
+                            + "surface does not describe it as it now sits",
+                    sampleName);
+        }
+        logger.info(
+                "Focus points for '{}': {} kept ({} new){}",
+                sampleName,
+                all.size(),
+                fresh.size(),
+                all.size() < 3 ? "; a plane needs 3" : "");
+        if (all.size() < 3) {
+            return null;
+        }
+        if (!startNew) {
+            SlideFocusSurface existing = loadSlideFocusSurface(project, sampleName);
+            if (existing != null && existing.pointCount() > all.size()) {
+                logger.info(
+                        "Kept the focus surface stored for '{}' ({} points) rather than a fit through {}",
+                        sampleName,
+                        existing.pointCount(),
+                        all.size());
+                return null;
+            }
+        }
+        SlideFocusSurface surface = fitFocusSurface(all, objective);
+        if (surface == null) {
+            return null;
+        }
+        return writeFocusSurfaceRecord(file, sampleName, surface, all) ? surface : null;
+    }
+
+    /** The focus points stored for a slide, or an empty list (none, or another objective). */
+    public static List<double[]> loadSlideFocusPoints(
+            Project<BufferedImage> project, String sampleName, String objective) {
+        Map<String, Object> data = readAlignmentJson(resolveAlignmentFile(project, sampleName));
+        return data == null ? List.of() : storedFocusPoints(data, objective);
+    }
+
+    private static List<double[]> storedFocusPoints(Map<String, Object> data, String objective) {
+        if (!(data.get("focusPoints") instanceof Map<?, ?> record)) {
+            return List.of();
+        }
+        Object storedObjective = record.get("objective");
+        if (objective != null && storedObjective instanceof String o && !o.equals(objective)) {
+            return List.of();
+        }
+        if (!(record.get("points") instanceof List<?> raw)) {
+            return List.of();
+        }
+        List<double[]> out = new ArrayList<>();
+        for (Object item : raw) {
+            if (item instanceof List<?> xyz
+                    && xyz.size() == 3
+                    && xyz.get(0) instanceof Number x
+                    && xyz.get(1) instanceof Number y
+                    && xyz.get(2) instanceof Number z) {
+                out.add(new double[] {x.doubleValue(), y.doubleValue(), z.doubleValue()});
+            }
+        }
+        return out;
+    }
+
+    private static boolean writeAlignmentJson(File file, String sampleName, Map<String, Object> data) {
+        try {
+            String json = new GsonBuilder().setPrettyPrinting().create().toJson(data);
+            Files.write(file.toPath(), json.getBytes(StandardCharsets.UTF_8));
+            return true;
+        } catch (Exception e) {
+            logger.warn("Could not save focus points for '{}': {}", sampleName, e.getMessage());
+            return false;
+        }
     }
 
     /**
