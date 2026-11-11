@@ -1356,7 +1356,7 @@ When enabled, the manual autofocus dialog never appears. If autofocus fails, the
 **Description:**
 **WARNING:** Enabling this means *no* autofocus will run on the acquisition. Z drift will not be corrected. Use only when you've manually staged a known-good Z (or when running a fast scan over a sample whose drift over the acquisition window is negligible).
 
-When enabled, the Java side emits `--af-disabled` on the ACQUIRE wire payload (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile sweep autofocus, no manual-focus prompts. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start.
+When enabled, the Java side emits `--af-disabled` on the ACQUIRE wire payload (in place of the `--af-tiles`/`--af-steps`/`--af-range` triplet). The server's `_configure_autofocus` short-circuits on this flag: no autofocus YAML load required, no AF positions scheduled, no pre-acquisition AF, no per-tile sweep autofocus, no manual-focus prompts. Server log shows a single `Autofocus DISABLED for this acquisition` line at workflow start. The acquisition progress dialogs show an "Off: Disable All Autofocus is on in Preferences..." line in place of the focus curve, rather than replaying an earlier search.
 
 This is broader than [No Manual Autofocus](#no-manual-autofocus-danger): No-Manual still runs AF and only suppresses the user prompt on failure; Disable-All-Autofocus skips AF entirely.
 
