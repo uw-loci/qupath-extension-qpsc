@@ -7,6 +7,7 @@ import java.util.List;
 import java.util.function.DoubleConsumer;
 import javafx.application.Platform;
 import javafx.geometry.Insets;
+import javafx.scene.Node;
 import javafx.scene.control.Label;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.Pane;
@@ -52,6 +53,13 @@ public class AutofocusCurvePane extends VBox {
     private AutofocusEvent start;
     private Double resultZ;
     private boolean resultOk;
+    private final BorderPane axis = new BorderPane();
+    /** True once {@link #showAutofocusOff()} has been called: events are ignored. */
+    private boolean autofocusOff;
+
+    /** What the pane says when the acquisition runs no autofocus at all. */
+    public static final String AUTOFOCUS_OFF_TEXT =
+            "Off: Disable All Autofocus is on in Preferences, so no focus searches run in this acquisition.";
 
     /**
      * Stage Z, pushed to a listener from any thread.
@@ -112,7 +120,6 @@ public class AutofocusCurvePane extends VBox {
         for (Label l : new Label[] {zLowLabel, zHighLabel}) {
             l.setStyle("-fx-font-size: 9px; -fx-text-fill: " + ThemeColors.MUTED + ";");
         }
-        BorderPane axis = new BorderPane();
         axis.setLeft(zLowLabel);
         axis.setRight(zHighLabel);
         axis.setMaxWidth(PLOT_WIDTH);
@@ -172,8 +179,36 @@ public class AutofocusCurvePane extends VBox {
         liveZLabel.setManaged(false);
     }
 
+    /**
+     * Shows that this acquisition runs no autofocus, in place of a curve, and ignores the feed
+     * from then on (FX thread). Without it, the feed's replay of an earlier search (from the
+     * Live Viewer or an earlier run) is drawn as if it were this acquisition's focus.
+     */
+    public void showAutofocusOff() {
+        autofocusOff = true;
+        endLiveZ();
+        samples.clear();
+        start = null;
+        resultZ = null;
+        plot.getChildren().clear();
+        for (Node n : new Node[] {plot, axis}) {
+            n.setVisible(false);
+            n.setManaged(false);
+        }
+        statusLabel.setText(AUTOFOCUS_OFF_TEXT);
+        statusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.MUTED + ";");
+    }
+
+    /** Whether {@link #showAutofocusOff()} has been called. */
+    public boolean isAutofocusOff() {
+        return autofocusOff;
+    }
+
     /** Takes one event of the feed (FX thread). */
     public void accept(AutofocusEvent e) {
+        if (autofocusOff) {
+            return;
+        }
         if (e.isStart()) {
             start = e;
             samples.clear();

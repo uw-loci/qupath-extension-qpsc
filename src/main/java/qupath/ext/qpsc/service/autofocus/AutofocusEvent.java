@@ -40,7 +40,11 @@ public final class AutofocusEvent {
     public Double spread;
 
     // end
-    /** {@code ok}, {@code failed}, {@code aborted}, {@code error} or {@code unavailable}. */
+    /**
+     * {@code ok}, {@code failed}, {@code aborted}, {@code error} or {@code unavailable}; or
+     * {@code interrupted}, which the server never sends: {@link AutofocusFeed} ends a search
+     * with it when the server restarts or the connection is lost before the search ended.
+     */
     public String status;
 
     public Double elapsedS;
@@ -85,6 +89,7 @@ public final class AutofocusEvent {
             }
             case "failed" -> what + ": no focus found" + reason + time;
             case "aborted" -> what + ": canceled" + time;
+            case "interrupted" -> what + ": interrupted" + reason;
             case "unavailable" -> what + ": not run" + reason;
             default -> what + ": stopped with an error" + reason + time;
         };

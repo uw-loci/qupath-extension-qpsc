@@ -26,6 +26,7 @@ import javafx.util.Duration;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.model.AcquisitionPlan;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.autofocus.AutofocusFeed;
 import qupath.ext.qpsc.service.mda.LiveDimensionDecomposer;
 import qupath.ext.qpsc.ui.QpscWindows;
@@ -310,9 +311,18 @@ public class DualProgressDialog {
 
         // Show the microscope's autofocus while the dialog is up: the initial focus and focus
         // survey can take minutes before the first tile, with nothing else moving here.
-        autofocusPane.setVisible(false);
-        autofocusPane.setManaged(false);
+        // With every autofocus disabled, say so instead: the feed would otherwise replay the
+        // last search it saw (from the Live Viewer or an earlier run) as if it were this one.
+        boolean autofocusOff = QPPreferenceDialog.getDisableAllAutofocus();
+        autofocusPane.setVisible(autofocusOff);
+        autofocusPane.setManaged(autofocusOff);
+        if (autofocusOff) {
+            autofocusPane.showAutofocusOff();
+        }
         stage.showingProperty().addListener((obs, was, showing) -> {
+            if (autofocusOff) {
+                return;
+            }
             if (showing && autofocusFeedUnsubscribe == null) {
                 autofocusFeedUnsubscribe = AutofocusFeed.getInstance().subscribe(e -> {
                     if (!autofocusPane.isVisible()) {

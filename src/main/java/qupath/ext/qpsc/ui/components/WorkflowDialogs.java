@@ -133,8 +133,13 @@ public final class WorkflowDialogs {
             // The microscope's autofocus searches, drawn as they run: the initial focus can take
             // minutes before the first position, with nothing else moving here.
             AutofocusCurvePane autofocusPane = new AutofocusCurvePane();
-            autofocusPane.setVisible(false);
-            autofocusPane.setManaged(false);
+            // With every autofocus disabled, say so instead of replaying an earlier search.
+            boolean autofocusOff = qupath.ext.qpsc.preferences.QPPreferenceDialog.getDisableAllAutofocus();
+            autofocusPane.setVisible(autofocusOff);
+            autofocusPane.setManaged(autofocusOff);
+            if (autofocusOff) {
+                autofocusPane.showAutofocusOff();
+            }
 
             VBox vbox = new VBox(10, progressBar, progressLabel, timeLabel, statusLabel, autofocusPane);
             vbox.setStyle("-fx-padding: 10;");
@@ -156,15 +161,17 @@ public final class WorkflowDialogs {
             stage.setAlwaysOnTop(true);
             stage.show();
 
-            Runnable stopAutofocusFeed = qupath.ext.qpsc.service.autofocus.AutofocusFeed.getInstance()
-                    .subscribe(e -> {
-                        if (!autofocusPane.isVisible()) {
-                            autofocusPane.setVisible(true);
-                            autofocusPane.setManaged(true);
-                            stage.sizeToScene();
-                        }
-                        autofocusPane.accept(e);
-                    });
+            Runnable stopAutofocusFeed = autofocusOff
+                    ? () -> {}
+                    : qupath.ext.qpsc.service.autofocus.AutofocusFeed.getInstance()
+                            .subscribe(e -> {
+                                if (!autofocusPane.isVisible()) {
+                                    autofocusPane.setVisible(true);
+                                    autofocusPane.setManaged(true);
+                                    stage.sizeToScene();
+                                }
+                                autofocusPane.accept(e);
+                            });
             stage.showingProperty().addListener((obs, was, showing) -> {
                 if (!showing) stopAutofocusFeed.run();
             });

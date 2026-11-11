@@ -129,6 +129,7 @@ public final class AutofocusFeed {
     private void poll() throws IOException {
         MicroscopeController mc = MicroscopeController.getInstance();
         if (mc == null || !mc.isConnected()) {
+            endOpenSearch("the connection to the microscope server was lost");
             return;
         }
         MicroscopeSocketClient client = mc.getSocketClient();
@@ -144,8 +145,10 @@ public final class AutofocusFeed {
                 return;
             }
             if (reply.seq < lastSeq) {
-                // The server restarted: its numbering began again.
+                // The server restarted: its numbering began again, and a search it was
+                // running will never report its end.
                 lastSeq = -1;
+                endOpenSearch("the microscope server restarted");
                 return;
             }
             if (reply.first > lastSeq + 1 && lastSeq > 0) {
@@ -209,6 +212,51 @@ public final class AutofocusFeed {
             }
             activeSearch.set(active);
         });
+    }
+
+    /**
+     * Ends, for every display, a search whose end the server can no longer report.
+     *
+     * <p>Without this, a search interrupted by a server restart stays "running" in every
+     * display: the Live Viewer's Autofocus button stays disabled as "Autofocusing...", its
+     * focus trace stays frozen on the search's curve, and a progress dialog keeps saying it
+     * is searching. If the search did carry on (the connection came back to the same
+     * server), the resync replays it from its start.
+     */
+    private void endOpenSearch(String reason) {
+        runOnFx(() -> {
+            AutofocusEvent end = interruptedEnd(currentRun, reason);
+            if (end == null) {
+                activeSearch.set(null);
+                return;
+            }
+            currentRun.add(end);
+            for (Consumer<AutofocusEvent> l : listeners) {
+                deliver(l, end);
+            }
+            activeSearch.set(null);
+        });
+    }
+
+    /**
+     * The end event that closes the search in {@code run}, or null when it is already closed.
+     *
+     * @param run the latest search's events, in order
+     * @param reason why it ended
+     */
+    static AutofocusEvent interruptedEnd(List<AutofocusEvent> run, String reason) {
+        if (run.isEmpty() || !run.get(0).isStart() || run.get(run.size() - 1).isEnd()) {
+            return null;
+        }
+        AutofocusEvent start = run.get(0);
+        AutofocusEvent end = new AutofocusEvent();
+        end.type = "end";
+        end.status = "interrupted";
+        end.reason = reason;
+        end.run = start.run;
+        end.method = start.method;
+        end.seq = run.get(run.size() - 1).seq;
+        return end;
     }
 
     private static boolean sameRun(AutofocusEvent a, AutofocusEvent b) {
