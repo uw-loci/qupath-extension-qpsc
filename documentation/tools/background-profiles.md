@@ -58,6 +58,7 @@ When you change the **Insert** in the Stage Map and exactly one profile declares
 | New... | Opens with suggested values from the setup on the stage: **Expected insert** from the Stage Map, **Slide in holder** from the open image (else the scope's default), and a name, id and description built from them, plus `slide_source` when the open image records its scanner. The placement is named by where the label is, as the Stage Map captions it, once the Stage Map has drawn a slide on that insert; until then it reads "placement A" or "placement B" with no side, since which side A is depends on the scanner and the microscope. A line at the top says where each value came from. The name, id and description follow the insert and slide-in-holder choices until you type in them; clearing the id brings the suggestion back. The id (a folder name: letters, digits, `-`, `_`) is checked as you type: a bad character or an id already in use is shown below the form and **OK** stays disabled, so nothing typed is lost. An insert not in this microscope's configuration and attribute lines that are not `key: value` are shown as warnings. **Make this the active background profile** is ticked by default. With no background folder set yet, New... asks for one first. |
 | Edit... | The same form, id fixed. |
 | Set active | Makes the selected profile the active one. |
+| Copy scope-wide white balance | Copies the scope-wide PPM white balance (per-angle and simple, for every objective and camera that has one) into the selected profile, as that profile's own white balance. Use it for an existing profile that has none; white balance the profile already has is kept. See [White Balance Calibration](white-balance-calibration.md#stored-with-the-background-profile). |
 | Open folder | Opens the profile folder in the file browser. |
 | Delete... | Removes the profile folder and every background in it, after confirmation. |
 | Adopt old folders... | Shown only when folders from before profiles exist under the background folder: moves the ticked ones into a profile. |
@@ -72,6 +73,7 @@ Before an acquisition locks the stage, the usual background check (lamp level, e
 
 Recorded:
 
+- PPM per-angle and simple white balance are kept per profile, in `white_balance.yml` beside the profile's backgrounds (see [White Balance Calibration](white-balance-calibration.md#stored-with-the-background-profile));
 - the acquisition command carries `--bg-profile <id>` beside `--bg-folder`;
 - the project entry gets `background_profile`;
 - the stitch record's `[acquisition]` section has `background profile:` and `background folder:` lines;
