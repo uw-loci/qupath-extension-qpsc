@@ -161,11 +161,9 @@ class MicroscopeSocketClientTest {
         client.connect();
         client.moveStageXY(500.0, 750.0);
 
-        // Give mock server time to update
-        Thread.sleep(50);
-
-        // Verify position changed
-        double[] newPos = mockServer.getPosition();
+        // The mock applies the move after its delay; wait for it rather than a fixed sleep,
+        // which a loaded CI runner can outlast.
+        double[] newPos = awaitAxis(1, 750.0);
         assertEquals(500.0, newPos[0], 0.01);
         assertEquals(750.0, newPos[1], 0.01);
     }
@@ -178,9 +176,7 @@ class MicroscopeSocketClientTest {
         client.connect();
         client.moveStageZ(-100.0);
 
-        Thread.sleep(50);
-
-        double[] newPos = mockServer.getPosition();
+        double[] newPos = awaitAxis(2, -100.0);
         assertEquals(-100.0, newPos[2], 0.01);
     }
 
@@ -192,10 +188,19 @@ class MicroscopeSocketClientTest {
         client.connect();
         client.moveStageR(90.0);
 
-        Thread.sleep(50);
-
-        double[] newPos = mockServer.getPosition();
+        double[] newPos = awaitAxis(3, 90.0);
         assertEquals(90.0, newPos[3], 0.01);
+    }
+
+    /** The mock's position once {@code axis} reaches {@code target}, or after 5 s, whichever is first. */
+    private double[] awaitAxis(int axis, double target) throws InterruptedException {
+        long deadline = System.nanoTime() + 5_000_000_000L;
+        double[] pos = mockServer.getPosition();
+        while (Math.abs(pos[axis] - target) > 0.01 && System.nanoTime() < deadline) {
+            Thread.sleep(10);
+            pos = mockServer.getPosition();
+        }
+        return pos;
     }
 
     @Test
