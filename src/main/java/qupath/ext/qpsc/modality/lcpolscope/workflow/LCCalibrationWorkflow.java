@@ -1134,10 +1134,6 @@ public class LCCalibrationWorkflow {
         Map<String, List<Map<String, Object>>> otherDevices = otherDeviceProperties(configPath, states, device);
 
         List<String> summary = new ArrayList<>();
-        List<String> comment = List.of(
-                "LC calibration " + calibratedAt + ", extinction ratio " + extinction + ".",
-                "Retardance in WAVES; the " + device + " adapter converts to volts at its Wavelength,",
-                "which is set first so the palette replays as measured. Written by QPSC.");
         for (String state : states) {
             JsonArray pair = palette.getAsJsonArray(state);
             double lcaWaves = pair.get(0).getAsDouble();
@@ -1149,8 +1145,9 @@ public class LCCalibrationWorkflow {
             items.add(propertyWrite(device, propertyNames.get("LCA"), lcaWaves));
             items.add(propertyWrite(device, propertyNames.get("LCB"), lcbWaves));
             items.addAll(otherDevices.getOrDefault(state, List.of()));
-            ConfigYamlEditor.replaceChannelListField(
-                    configPath, MODALITY_KEY, state, "device_properties", items, comment);
+            // No comment lines: the calibration's time, extinction ratio and file are recorded once
+            // under reconstruction; the editor still removes the tagged lines earlier versions wrote.
+            ConfigYamlEditor.replaceChannelListField(configPath, MODALITY_KEY, state, "device_properties", items, null);
             ConfigYamlEditor.replaceChannelListField(configPath, MODALITY_KEY, state, "mm_setup_presets", null, null);
             summary.add(String.format("%-8s LC-A %.4f  LC-B %.4f waves", state, lcaWaves, lcbWaves));
         }

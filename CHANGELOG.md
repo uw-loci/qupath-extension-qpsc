@@ -23,6 +23,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **Apply to acquisition** in Calibrate Liquid Crystals no longer writes three comment lines above every state in the microscope YAML; the calibration's time, extinction ratio and file are recorded once under `reconstruction`. Lines an earlier version wrote are removed on the next Apply.
+
 - LC-PolScope background prompts say to defocus "as needed" instead of a fixed 10-20 um. The right amount depends on the objective, and the fixed range did not suit some, such as 63x oil or 4x air.
 
 - **Angles no longer wait for the reference angle's whole stitch.** With **Register tiles on image content** on, the tile positions were solved inside the reference angle's own stitch (90 degrees on PPM), so the other angles and the derived outputs started only after that angle's whole pyramid was written. On 2026-11-06 a 2,381-tile PPM region solved in 12 minutes and then had a single writer busy for 4 hours before the other three outputs began. The solve now runs first, on its own, and every angle (the reference included) and derived output then stitches in parallel up to **Stitching concurrency**, as fluorescence channels already did. Needs tiles-to-pyramid 0.7.0 or later; an older one keeps the previous order.
