@@ -347,9 +347,7 @@ public class PPMModalityHandler implements ModalityHandler {
      */
     @Override
     public List<String> getPostProcessingDirectorySuffixes() {
-        // .biref_from_angles: written with a Mean or Sum time projection, the birefringence of
-        // the time-averaged +/- angles, beside .biref (the average of each timepoint's).
-        return List.of(".biref", ".sum", ".biref_from_angles");
+        return List.of(".biref", ".sum");
     }
 
     /**

@@ -562,21 +562,8 @@ public class TileProcessingUtilities {
                 // This is angle-based stitching - format the angle appropriately
                 angleSuffix = matchingString;
 
-                // Birefringence of the time-averaged angles (Mean/Sum time projection):
-                // "7.0.biref_from_angles" -> the angle's suffix + "_biref_from_angles".
-                if (matchingString.endsWith(StitchOutputPlanner.BIREF_FROM_ANGLES)) {
-                    String baseAngle = matchingString.substring(
-                            0, matchingString.length() - StitchOutputPlanner.BIREF_FROM_ANGLES.length());
-                    try {
-                        angleSuffix = modalityHandler == null
-                                ? matchingString.replace(".", "_")
-                                : modalityHandler.getAngleSuffix(Double.parseDouble(baseAngle)) + "_biref_from_angles";
-                    } catch (NumberFormatException ignored) {
-                        angleSuffix = matchingString.replace(".", "_");
-                    }
-                }
                 // Handle birefringence images specially
-                else if (matchingString.contains(".biref")) {
+                if (matchingString.contains(".biref")) {
                     String baseAngle = matchingString.replace(".biref", "");
                     if (modalityHandler != null) {
                         try {

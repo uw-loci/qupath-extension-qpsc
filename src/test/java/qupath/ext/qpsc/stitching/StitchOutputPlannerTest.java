@@ -40,16 +40,6 @@ class StitchOutputPlannerTest {
     }
 
     @Test
-    void theBirefFromAveragedAnglesIsItsOwnOutput() {
-        // A Mean or Sum time projection writes both; each gets its own entry and name.
-        List<ReservedOutput> plan = StitchOutputPlanner.plan(
-                ppm(List.of("-7.0", "7.0"), List.of("7.0.biref", "7.0.biref_from_angles"), Set.of()));
-        assertEquals("7.0_biref", plan.get(2).angleSuffix());
-        assertEquals("7.0_biref_from_angles", plan.get(3).angleSuffix());
-        assertTrue(plan.stream().map(ReservedOutput::fileName).distinct().count() == 4, "names are distinct");
-    }
-
-    @Test
     void ppmFiveAnglesPlusBirefAndSum() {
         List<ReservedOutput> plan = StitchOutputPlanner.plan(
                 ppm(List.of("-7.0", "-3.5", "0.0", "3.5", "7.0"), List.of("7.0.biref", "7.0.sum"), Set.of()));

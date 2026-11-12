@@ -9,7 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
-- **PPM Mean/Sum time projections write a second birefringence image.** Needs the server change of the same date. Beside `_biref` (the average of each timepoint's birefringence) the run now imports `_biref_from_angles`, the birefringence of the time-averaged +/- angles, in which per-frame noise largely cancels instead of leaving a positive floor. Both are kept for comparison.
+- **PPM Mean/Sum time projections take birefringence from the averaged angles.** Needs the server change of the same date. The birefringence of a time-averaged run is computed once from the averaged +/- angle images instead of averaging each timepoint's birefringence, whose noise stays as a positive floor. Both ways were tested on four PPM 40x runs: same structure, about 18% lower background floor. Max, Min and Std Deviation still reduce each timepoint's birefringence.
 
 - **Bounded Acquisition shows when the stage has moved off the typed center.** **Use Current Position as Center** gets a red halo while the stage is more than 1 um from the Center X / Y in the dialog, read from the stage poll the Live Viewer uses.
 
