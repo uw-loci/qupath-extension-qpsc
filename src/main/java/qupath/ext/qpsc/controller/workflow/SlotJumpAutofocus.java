@@ -67,6 +67,13 @@ public final class SlotJumpAutofocus {
      */
     private static final int SLOT_JUMP_MAX_AF_ATTEMPTS = 6;
 
+    /**
+     * Attempt budget once focus is already known on this slide (a later refinement point): the
+     * server's own default. Its focus is microns from the one measured, so a scan that has not
+     * found it in three narrow steps is marching away from it, not toward it.
+     */
+    private static final int SAME_SLIDE_MAX_AF_ATTEMPTS = 3;
+
     /** Sink for the AF-phase status line (Section B of the multi-slide panel). */
     public interface StatusSink {
         /**
@@ -1027,7 +1034,9 @@ public final class SlotJumpAutofocus {
                                             modalityForServer,
                                             Double.NaN,
                                             false,
-                                            SLOT_JUMP_MAX_AF_ATTEMPTS,
+                                            focusZThisSlide != null
+                                                    ? SAME_SLIDE_MAX_AF_ATTEMPTS
+                                                    : SLOT_JUMP_MAX_AF_ATTEMPTS,
                                             plan.safeZUm(),
                                             plan.approachMaxUm(),
                                             plan.requireTissueGate());

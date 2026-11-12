@@ -186,6 +186,10 @@ public class MultiTileRefinement {
                                 .getSocketClient()
                                 .getStageXYZ();
                         focusPointsThisRun.add(new double[] {xyz[0], xyz[1], xyz[2]});
+                        // The operator accepted this point in focus, whether autofocus found it
+                        // or they focused by hand, so the next point on this slide starts from
+                        // here with the short scan instead of a full retract-and-approach.
+                        SlotJumpAutofocus.noteFocusOnThisSlide(xyz[2]);
                         logger.info(
                                 "Multi-tile point {}: captured in focus at X={}, Y={}, Z={} um (kept for the "
                                         + "slide's focus surface)",
