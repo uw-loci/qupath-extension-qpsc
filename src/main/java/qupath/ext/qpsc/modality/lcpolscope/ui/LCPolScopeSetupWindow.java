@@ -63,7 +63,7 @@ public final class LCPolScopeSetupWindow {
                         LCCalibrationWorkflow::applySaved),
                 step(
                         "3. Background, after every calibration",
-                        "Move to an empty area of the slide, defocus 10-20 um, and collect the background for "
+                        "Move to an empty area of the slide, defocus as needed, and collect the background for "
                                 + "each LC-PolScope profile you will acquire with (one per objective, such as "
                                 + "lcpolscope_20x). The acquisition refuses a background taken before the latest "
                                 + "calibration.",

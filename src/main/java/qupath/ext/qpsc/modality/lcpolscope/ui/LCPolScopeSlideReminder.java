@@ -91,7 +91,7 @@ public final class LCPolScopeSlideReminder {
         sb.append("The calibration and the background describe the slide they were measured on: its glass, "
                 + "coverslip and mountant add retardance of their own. For a new slide:\n\n"
                 + "  1. Calibrate Liquid Crystals on a clear area of THIS slide, near the region, then Apply.\n"
-                + "  2. Collect the background on a clear area of this slide, defocused 10-20 um.\n\n"
+                + "  2. Collect the background on a clear area of this slide, defocused as needed.\n\n"
                 + "Both are in LC-PolScope Setup. A calibration or background from another slide gives wrong "
                 + "retardance and orientation, and the tiles still join cleanly, so nothing looks wrong.");
         appendState(sb, state);

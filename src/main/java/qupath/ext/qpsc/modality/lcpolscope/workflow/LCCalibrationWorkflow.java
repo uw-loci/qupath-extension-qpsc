@@ -890,7 +890,7 @@ public class LCCalibrationWorkflow {
     public static void startBackgroundCollection() {
         Alert prepare = new Alert(Alert.AlertType.CONFIRMATION);
         prepare.setTitle("LC-PolScope background");
-        prepare.setHeaderText("Move to a specimen-free area, then defocus 10-20 um");
+        prepare.setHeaderText("Move to a specimen-free area, then defocus as needed");
         prepare.getDialogPane()
                 .setContent(copyableBody(
                         "The background is the five states on an empty field, taken slightly out of focus so\n"

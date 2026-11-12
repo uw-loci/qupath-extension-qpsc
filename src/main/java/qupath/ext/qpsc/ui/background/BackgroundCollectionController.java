@@ -1327,7 +1327,7 @@ public class BackgroundCollectionController {
         showBackgroundValidationMessage(
                 "LC-PolScope: all five states at " + exposures.iterator().next() + " ms (the acquisition exposure), "
                         + frameText + " frames averaged per state. Use a clear, specimen-free area, defocused "
-                        + "10-20 um. Collect again after every calibration or exposure change.",
+                        + "as needed. Collect again after every calibration or exposure change.",
                 "-fx-text-fill: " + ThemeColors.INFO + "; -fx-font-weight: bold;");
     }
 
