@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **Stage Map warns when the slide image and the slide outline disagree.** When the macro leaves more than 5 mm of the slide outline uncovered, a line under the map gives the distance and the date of the alignment that placed it. On the LC-PolScope on 2026-11-12 the stage's zero had moved about 13 mm in X since the slide's 29 October alignment, so the image sat 13 mm from the outline drawn from the corrected stage limits, and an acquisition from that alignment would have missed by as much.
+
 - **PPM Mean/Sum time projections take birefringence from the averaged angles.** Needs the server change of the same date. The birefringence of a time-averaged run is computed once from the averaged +/- angle images instead of averaging each timepoint's birefringence, whose noise stays as a positive floor. Both ways were tested on four PPM 40x runs: same structure, about 18% lower background floor. Max, Min and Std Deviation still reduce each timepoint's birefringence.
 
 - **Bounded Acquisition shows when the stage has moved off the typed center.** **Use Current Position as Center** gets a red halo while the stage is more than 1 um from the Center X / Y in the dialog, read from the stage poll the Live Viewer uses.

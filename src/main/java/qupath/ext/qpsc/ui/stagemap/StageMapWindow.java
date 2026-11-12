@@ -105,6 +105,13 @@ public class StageMapWindow {
     private Label targetLabel;
     private Label statusLabel;
     private Label movementWarningLabel;
+    /** Shown when the macro and the slide outline disagree about where the slide is. */
+    private Label slideFrameWarningLabel;
+    /** The last uncovered margin warned about, mm, so a resize does not log it again. */
+    private long lastSlideFrameWarningMm = 0;
+
+    /** A slide image leaving this much of the outline uncovered (um) is treated as misplaced. */
+    static final double SLIDE_FRAME_WARNING_UM = 5000;
 
     // ========== State ==========
     private ScheduledExecutorService positionPoller;
@@ -134,6 +141,8 @@ public class StageMapWindow {
      */
     /** Where this slide's own alignment puts its image center, stage um; null without one. */
     private double[] currentMacroSlideCentreUm = null;
+    /** Timestamp of the alignment that placed {@link #currentMacroSlideCentreUm}; null without one. */
+    private String currentMacroAlignmentDate = null;
     /** Center of this slide's green box on the displayed macro, macro px; null if not found. */
     private double[] currentMacroGreenBoxCentre = null;
 
@@ -622,7 +631,14 @@ public class StageMapWindow {
         // Bottom status bar
         HBox bottomBar = buildBottomBar();
 
-        root.getChildren().addAll(topBar, scrollPane, bottomBar);
+        slideFrameWarningLabel = new Label();
+        slideFrameWarningLabel.setWrapText(true);
+        slideFrameWarningLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + "; -fx-font-weight: bold;");
+        slideFrameWarningLabel.setVisible(false);
+        slideFrameWarningLabel.setManaged(false);
+        canvas.setMacroCoverageListener(gap -> Platform.runLater(() -> updateSlideFrameWarning(gap)));
+
+        root.getChildren().addAll(topBar, scrollPane, slideFrameWarningLabel, bottomBar);
 
         Scene scene = new Scene(root, WINDOW_WIDTH, WINDOW_HEIGHT);
         scene.getStylesheets()
@@ -953,6 +969,50 @@ public class StageMapWindow {
                         resetViewButton,
                         helpButton);
         return topBar;
+    }
+
+    /**
+     * Warns when the drawn macro leaves several mm of the slide outline uncovered. The outline
+     * follows the stage limits in today's stage frame; the macro follows the slide's alignment
+     * (or the preset), which is in the frame of the day it was saved. When the stage's zero has
+     * moved since, by a power cycle or a re-home, the two separate and acquisitions from that
+     * alignment go to the wrong place.
+     */
+    private void updateSlideFrameWarning(double[] gapUm) {
+        if (slideFrameWarningLabel == null || gapUm == null) {
+            return;
+        }
+        double gap = Math.max(gapUm[0], gapUm[1]);
+        if (gap < SLIDE_FRAME_WARNING_UM) {
+            slideFrameWarningLabel.setVisible(false);
+            slideFrameWarningLabel.setManaged(false);
+            lastSlideFrameWarningMm = 0;
+            return;
+        }
+        String axis = gapUm[0] >= gapUm[1] ? "X" : "Y";
+        String source = currentMacroSlideCentreUm != null
+                ? "this slide's alignment"
+                        + (currentMacroAlignmentDate != null ? " (saved " + currentMacroAlignmentDate + ")" : "")
+                : "the preset '" + (activePreset != null ? activePreset.getName() : "?") + "'";
+        String text = String.format(
+                "The slide image is %.1f mm off the slide outline in %s. The outline comes from the stage "
+                        + "limits; the image from %s. If the stage was powered off or re-homed since then, "
+                        + "its coordinates have moved and acquisitions from that alignment will miss: "
+                        + "realign the slide, or set the stage's zero back.",
+                gap / 1000.0, axis, source);
+        slideFrameWarningLabel.setText(text);
+        slideFrameWarningLabel.setVisible(true);
+        slideFrameWarningLabel.setManaged(true);
+        long mm = Math.round(gap / 1000.0);
+        if (mm != lastSlideFrameWarningMm) {
+            lastSlideFrameWarningMm = mm;
+            logger.warn(
+                    "Stage Map: the macro leaves {} um of the slide outline uncovered in X and {} um in Y; "
+                            + "placed from {}",
+                    String.format("%.0f", gapUm[0]),
+                    String.format("%.0f", gapUm[1]),
+                    source);
+        }
     }
 
     /**
@@ -2578,6 +2638,7 @@ public class StageMapWindow {
             logger.info("Checking macro overlay availability...");
             currentMacroImage = null;
             currentMacroSlideCentreUm = null;
+            currentMacroAlignmentDate = null;
             currentMacroGreenBoxCentre = null;
             if (canvas != null) canvas.setNoAlignmentMessageVisible(false);
             currentMacroTransform = null;
@@ -2675,6 +2736,7 @@ public class StageMapWindow {
 
             logger.info("Macro overlay: resolved sample name '{}', loading data...", sampleName);
             currentMacroSlideCentreUm = AffineTransformManager.loadSlideCentre(project, sampleName);
+            currentMacroAlignmentDate = AffineTransformManager.getSlideAlignmentDate(project, sampleName);
 
             // Re-resolve activePreset from disk: AffineTransformManager is not a
             // singleton, so the saved-transforms file can change underneath us

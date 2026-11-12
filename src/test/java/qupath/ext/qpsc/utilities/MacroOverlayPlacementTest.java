@@ -85,4 +85,45 @@ class MacroOverlayPlacementTest {
         assertNull(AffineTransformManager.parsePoint(java.util.List.of(Double.NaN, 1.0)));
         assertNull(AffineTransformManager.parsePoint("1,2"));
     }
+
+    @Test
+    void aMacroCoveringTheOutlineLeavesNothingUncovered() {
+        // Outline 75 x 25 mm at 0.01 px/um; macro 76 x 25.3 mm drawn around it.
+        double scale = 0.01;
+        double[] slide = {100, 50, 750, 250};
+        double[] macro = {95, 48.5, 760, 253};
+        assertArrayEquals(new double[] {0, 0}, MacroOverlayPlacement.uncoveredSlideUm(slide, macro, scale), 1e-9);
+    }
+
+    @Test
+    void aMacroShiftedByAStageReZeroLeavesTheShiftUncovered() {
+        // The LC-PolScope case of 2026-11-12: outline from the stage limits, macro from an
+        // alignment saved before the stage's zero moved about 13.4 mm in X.
+        double scale = 0.01;
+        double[] slide = {100, 50, 750, 250};
+        double[] macro = {100 + 134, 50, 760, 253};
+        double[] gap = MacroOverlayPlacement.uncoveredSlideUm(slide, macro, scale);
+        assertEquals(13400, gap[0], 1e-6);
+        assertEquals(0, gap[1], 1e-9);
+    }
+
+    @Test
+    void theWiderSideCountsAndYIsMeasuredToo() {
+        double scale = 0.02;
+        double[] slide = {0, 0, 1500, 500};
+        double[] macro = {-20, 60, 1500, 500}; // 20 px short on the right, 60 px short at the top
+        double[] gap = MacroOverlayPlacement.uncoveredSlideUm(slide, macro, scale);
+        assertEquals(1000, gap[0], 1e-6);
+        assertEquals(3000, gap[1], 1e-6);
+    }
+
+    @Test
+    void missingInputsReportNothing() {
+        assertArrayEquals(
+                new double[] {0, 0}, MacroOverlayPlacement.uncoveredSlideUm(null, new double[] {0, 0, 1, 1}, 1), 1e-9);
+        assertArrayEquals(
+                new double[] {0, 0},
+                MacroOverlayPlacement.uncoveredSlideUm(new double[] {0, 0, 1, 1}, new double[] {5, 5, 1, 1}, 0),
+                1e-9);
+    }
 }

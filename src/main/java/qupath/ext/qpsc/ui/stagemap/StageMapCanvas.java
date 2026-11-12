@@ -134,6 +134,25 @@ public class StageMapCanvas extends StackPane {
         }
     }
 
+    /**
+     * Told, whenever the overlay is placed on a single-slide insert, how much of the slide
+     * outline the macro leaves uncovered ({X, Y} um, see
+     * {@link qupath.ext.qpsc.geometry.MacroOverlayPlacement#uncoveredSlideUm}), and {0, 0}
+     * when the overlay is cleared.
+     */
+    private java.util.function.Consumer<double[]> macroCoverageListener;
+
+    public void setMacroCoverageListener(java.util.function.Consumer<double[]> listener) {
+        this.macroCoverageListener = listener;
+    }
+
+    private void noteMacroCoverage(double[] slideRect, double[] macroRect) {
+        if (macroCoverageListener != null) {
+            macroCoverageListener.accept(
+                    qupath.ext.qpsc.geometry.MacroOverlayPlacement.uncoveredSlideUm(slideRect, macroRect, scale));
+        }
+    }
+
     private int macroWidth, macroHeight;
     private boolean macroOverlayVisible = false;
 
@@ -1928,6 +1947,9 @@ public class StageMapCanvas extends StackPane {
         anchorStageY = Double.NaN;
         macroOverlayView.setVisible(false);
         macroOverlayView.setImage(null);
+        if (macroCoverageListener != null) {
+            macroCoverageListener.accept(new double[] {0, 0});
+        }
         if (wasVisible) {
             logger.info("Macro overlay cleared");
         }
@@ -2092,6 +2114,10 @@ public class StageMapCanvas extends StackPane {
                 macroOverlayView.setScaleX(sX >= 0 ? 1.0 : -1.0);
                 macroOverlayView.setScaleY(sY >= 0 ? 1.0 : -1.0);
                 noteMacroSign(sX, sY);
+                if (slides.size() == 1) {
+                    noteMacroCoverage(
+                            new double[] {sx, sy, sw, sh}, new double[] {overlayX, overlayY, overlayW, overlayH});
+                }
                 return;
             }
         }
@@ -2172,6 +2198,9 @@ public class StageMapCanvas extends StackPane {
         macroOverlayView.setScaleX(sX >= 0 ? 1.0 : -1.0);
         macroOverlayView.setScaleY(sY >= 0 ? 1.0 : -1.0);
         noteMacroSign(sX, sY);
+        if (slides.size() == 1) {
+            noteMacroCoverage(new double[] {sx, sy, sw, sh}, new double[] {overlayX, overlayY, overlayW, overlayH});
+        }
     }
 
     // ========== Size Handling ==========

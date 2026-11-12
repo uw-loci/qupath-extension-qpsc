@@ -55,4 +55,28 @@ public final class MacroOverlayPlacement {
             slideCentreStage[0] - presetGreenBoxCentreStage[0], slideCentreStage[1] - presetGreenBoxCentreStage[1]
         };
     }
+
+    /**
+     * How much of the slide outline the drawn macro leaves uncovered, in um: the widest uncovered
+     * margin along X and along Y, each zero when the macro covers that side. The macro shows the
+     * whole slide, so on a correct alignment it covers the outline to within the slide's
+     * placement error. A margin of several mm means the two disagree about where the slide is,
+     * most often because the stage's zero moved (a power cycle or re-home) after the alignment
+     * was saved, while the outline follows the stage limits in today's frame.
+     *
+     * <p>Both rectangles are in the canvas's screen pixels ({@code x, y, width, height}), and
+     * {@code scale} is screen pixels per um.
+     */
+    public static double[] uncoveredSlideUm(double[] slideRect, double[] macroRect, double scale) {
+        if (slideRect == null || macroRect == null || !(scale > 0)) {
+            return new double[] {0, 0};
+        }
+        double gapX = Math.max(
+                Math.max(0, macroRect[0] - slideRect[0]),
+                Math.max(0, (slideRect[0] + slideRect[2]) - (macroRect[0] + macroRect[2])));
+        double gapY = Math.max(
+                Math.max(0, macroRect[1] - slideRect[1]),
+                Math.max(0, (slideRect[1] + slideRect[3]) - (macroRect[1] + macroRect[3])));
+        return new double[] {gapX / scale, gapY / scale};
+    }
 }
