@@ -1012,7 +1012,7 @@ driver starts ("Set Up All Remaining" / "Acquire All Set-Up"), so changing it mi
 no effect until the next driver run. Per-row single-slot buttons always stay manual.
 
 **Which button gets confirmed:** only the primary/confirm control — "Collect Regions",
-"Start Acquisition", "Current Position is Accurate", "Continue". Never Cancel, never Back,
+"Set Up This Slide..." (or "Align and Acquire..."), "Current Position is Accurate", "Continue". Never Cancel, never Back,
 and never a secondary action such as "Save MDA...". If the primary button is *disabled*
 (for example "Collect Regions" with no annotations matching the selected classes), the
 countdown stops instead of firing, and that slide is handed back to you.

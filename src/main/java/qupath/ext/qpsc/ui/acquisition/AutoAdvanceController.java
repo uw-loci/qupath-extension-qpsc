@@ -269,7 +269,7 @@ public final class AutoAdvanceController {
      * and notified.
      *
      * <p>Distinct from {@link #attach}, and deliberately so. A countdown is right for a dialog
-     * whose default answer is the one you want -- "Collect Regions", "Start Acquisition".
+     * whose default answer is the one you want -- "Collect Regions", "Set Up This Slide...".
      * These are the opposite: advisories that exist because something does not add up (the
      * saved alignment was built at another objective, its flip frame is unknown, the source
      * scanner does not match). Counting one of those down to "Continue" would accept an

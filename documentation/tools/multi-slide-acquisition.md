@@ -187,8 +187,8 @@ confirm each setup dialog for you:
 | `FULLY_AUTOMATIC` | Each dialog confirms its primary action after 1 second; interacting with a dialog does **not** pause it. |
 | `AUTOMATIC_WITH_OVERRIDE` | Each dialog counts down -- the primary button shows the seconds remaining, e.g. **Continue (auto 7s)** -- then confirms. Clicking or typing in the dialog cancels the countdown and gives the **rest of that slide** back to you; the next slide resumes automatically. |
 
-Only the confirm control is ever pressed ("Collect Regions", "Start Acquisition",
-"Current Position is Accurate", "Continue") -- never Cancel, Back, or "Save MDA...".
+Only the confirm control is ever pressed ("Collect Regions", "Set Up This Slide..." or
+"Align and Acquire...", "Current Position is Accurate", "Continue") -- never Cancel, Back, or "Save MDA...".
 If that control is disabled, the countdown stops rather than firing and the slide
 is handed back to you.
 

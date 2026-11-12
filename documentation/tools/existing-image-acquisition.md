@@ -11,7 +11,9 @@ Acquire high-resolution images of specific regions annotated on an existing macr
 
 The acquisition dialog consolidates all options in a single scrollable panel. You may need to scroll to see all options on smaller screens.
 
-The dialog does not block the rest of QuPath. Only one copy can be open at a time; choosing the menu item again brings the open one to the front. The dialog is built for the image that was open when it appeared: if you open another image or project while it is up, **Start Acquisition** is disabled with a message saying so. Cancel, open the image to acquire from, and start again.
+The dialog does not block the rest of QuPath. Only one copy can be open at a time; choosing the menu item again brings the open one to the front. The dialog is built for the image that was open when it appeared: if you open another image or project while it is up, the start button is disabled with a message saying so. Cancel, open the image to acquire from, and start again.
+
+The start button is named for what follows, because acquisition is the last step, not the first: **Align and Acquire...** on a single slide, and **Set Up This Slide...** in a multi-slide batch's set-up pass, which aligns and refines the slide but acquires nothing until **Step 2: Acquire All Set-Up**. A line above the buttons spells the steps out from the choices in the dialog, for example *Next: place the slide with the preset 'Ocus40_to_PPM', refine on one tile, then acquire 3 regions.* It changes as you change the alignment or refinement choice.
 
 ![Existing Image Acquisition dialog -- top section](../images/Docs_ExistingImage_ConsolidatedDialog.png)
 
@@ -173,7 +175,7 @@ On **Export**, the button writes one MDA file set per selected annotation:
 
 The exported `.pos` file uses the same stage-coordinate transform used by the acquisition workflow itself, so hand-off execution in MicroManager will place tiles at the same stage positions.
 
-The dialog remains open after export, so you can still Start Acquisition or Cancel as needed.
+The dialog remains open after export, so you can still start the run or Cancel as needed.
 
 The same MDA export action is also available in the per-modality hardware configuration panels (in the modality TitledPane), but the footer button provides a more discoverable entry point.
 

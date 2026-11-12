@@ -113,7 +113,7 @@ Y-bands need re-measuring against the new capture.
 | 3 | White Balance | Checklist row + Calibrate... |
 | 4 | Background Correction | Checklist row + Collect... |
 | 5 | Microscope Alignment | Checklist row + Align... |
-| 6 | Start Acquisition | Bounded Acquisition / Existing Image Acquisition buttons |
+| 6 | Start Acquisition / Align and Acquire... | Bounded Acquisition / Existing Image Acquisition buttons |
 
 (There is also an "Autofocus ... Validate AF" row between #5 and #6; the script
 does not number it. Add a target if you want it labeled.)

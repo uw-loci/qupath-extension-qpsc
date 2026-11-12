@@ -1162,6 +1162,26 @@ public class ImageMetadataManager {
     }
 
     /**
+     * Whether this entry is a QPSC sub-acquisition: an image acquired from a region of another
+     * one, which knows its own stage position (a non-zero xy_offset) and whose base_image names
+     * a different image. Such an image is targeted from that position, with no slide alignment.
+     */
+    public static boolean isSubAcquisition(ProjectImageEntry<?> entry) {
+        if (entry == null) {
+            return false;
+        }
+        double[] offset = getXYOffset(entry);
+        if (offset[0] == 0 && offset[1] == 0) {
+            return false;
+        }
+        String baseImage = getBaseImage(entry);
+        if (baseImage == null || baseImage.isEmpty()) {
+            return false;
+        }
+        return !baseImage.equals(GeneralTools.stripExtension(entry.getImageName()));
+    }
+
+    /**
      * Gets the base image name from an image entry.
      *
      * <p>The base image is the original source image from which this image

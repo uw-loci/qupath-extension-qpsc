@@ -37,7 +37,6 @@ import qupath.ext.qpsc.ui.alignment.RefinementSelectionController;
 import qupath.ext.qpsc.ui.components.WorkflowDialogs;
 import qupath.ext.qpsc.utilities.*;
 import qupath.fx.dialogs.Dialogs;
-import qupath.lib.common.GeneralTools;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.images.ImageData;
 import qupath.lib.objects.PathObject;
@@ -509,7 +508,10 @@ public class ExistingImageWorkflowV2 {
                             List<PathObject> selectedAnnotations =
                                     getAnnotationsForClasses(annotationResult.selectedClasses);
                             return ExistingImageAcquisitionController.showDialog(
-                                    defaultSampleName, selectedAnnotations, forceFreshAlignment);
+                                    defaultSampleName,
+                                    selectedAnnotations,
+                                    forceFreshAlignment,
+                                    mode == Mode.SETUP_ONLY);
                         })
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
@@ -526,7 +528,7 @@ public class ExistingImageWorkflowV2 {
                 List<PathObject> emptyAnnotations = new ArrayList<>();
 
                 CompletableFuture<WorkflowState> chain = ExistingImageAcquisitionController.showDialog(
-                                defaultSampleName, emptyAnnotations, forceFreshAlignment)
+                                defaultSampleName, emptyAnnotations, forceFreshAlignment, mode == Mode.SETUP_ONLY)
                         .thenCompose(this::initializeFromConfig)
                         .thenCompose(this::checkExistingSlideAlignment)
                         .thenCompose(this::routeSubWorkflow)
@@ -2256,27 +2258,9 @@ public class ExistingImageWorkflowV2 {
             if (gui.getProject() == null || gui.getImageData() == null) {
                 return false;
             }
-
+            @SuppressWarnings("unchecked")
             Project<BufferedImage> project = (Project<BufferedImage>) gui.getProject();
-            ProjectImageEntry<BufferedImage> entry = project.getEntry(gui.getImageData());
-            if (entry == null) {
-                return false;
-            }
-
-            // Must have non-zero xy_offset
-            double[] offset = ImageMetadataManager.getXYOffset(entry);
-            if (offset[0] == 0 && offset[1] == 0) {
-                return false;
-            }
-
-            // base_image must differ from own name (i.e., this is derived, not the root)
-            String baseImage = ImageMetadataManager.getBaseImage(entry);
-            if (baseImage == null || baseImage.isEmpty()) {
-                return false;
-            }
-
-            String ownName = GeneralTools.stripExtension(entry.getImageName());
-            return !baseImage.equals(ownName);
+            return ImageMetadataManager.isSubAcquisition(project.getEntry(gui.getImageData()));
         }
 
         /**

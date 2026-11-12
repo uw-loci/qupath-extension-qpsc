@@ -158,16 +158,18 @@ public class ExistingImageAcquisitionController {
      */
     public static CompletableFuture<ExistingImageAcquisitionConfig> showDialog(
             String defaultSampleName, List<PathObject> annotations) {
-        return showDialog(defaultSampleName, annotations, false);
+        return showDialog(defaultSampleName, annotations, false, false);
     }
 
     /**
      * @param forceFreshAlignment when true (multi-slide batch), a saved slide alignment is
      *     ignored (it was built for a different stage insert) and the refinement recommendation
      *     defaults to single-tile re-alignment instead of "proceed without refinement"
+     * @param setupOnly true in a multi-slide batch's set-up pass, which aligns and refines
+     *     this slide but acquires nothing until Step 2; the start button says so
      */
     public static CompletableFuture<ExistingImageAcquisitionConfig> showDialog(
-            String defaultSampleName, List<PathObject> annotations, boolean forceFreshAlignment) {
+            String defaultSampleName, List<PathObject> annotations, boolean forceFreshAlignment, boolean setupOnly) {
 
         CompletableFuture<ExistingImageAcquisitionConfig> future = new CompletableFuture<>();
 
@@ -183,7 +185,7 @@ public class ExistingImageAcquisitionController {
                     return;
                 }
                 ConsolidatedDialogBuilder builder =
-                        new ConsolidatedDialogBuilder(defaultSampleName, annotations, forceFreshAlignment);
+                        new ConsolidatedDialogBuilder(defaultSampleName, annotations, forceFreshAlignment, setupOnly);
                 Optional<ExistingImageAcquisitionConfig> result = builder.buildAndShow();
 
                 if (result.isPresent()) {
@@ -234,6 +236,49 @@ public class ExistingImageAcquisitionController {
     /**
      * Internal builder class that constructs and manages the consolidated dialog.
      */
+    /**
+     * The "Next:" line above the dialog's buttons: what pressing the start button sets off, in
+     * order. Mirrors the workflow's routing: a sub-acquisition is targeted from its own stage
+     * position; otherwise a slide-specific alignment, when one is saved, is used before the
+     * alignment chosen here; manual alignment has no refinement step.
+     */
+    static String nextStepsText(
+            boolean subAcquisition,
+            boolean manualAlignment,
+            boolean slideAlignmentSaved,
+            String presetName,
+            RefinementChoice refinement,
+            int regionCount,
+            boolean setupOnly) {
+        List<String> steps = new ArrayList<>();
+        if (subAcquisition) {
+            steps.add("place the regions from this image's recorded stage position");
+        } else if (slideAlignmentSaved) {
+            steps.add("use this slide's saved alignment");
+        } else if (manualAlignment) {
+            steps.add("align the slide by hand");
+        } else if (presetName != null) {
+            steps.add("place the slide with the preset '" + presetName + "'");
+        } else {
+            steps.add("place the slide with a scanner preset");
+        }
+        switch (refinement == null ? RefinementChoice.NONE : refinement) {
+            case SINGLE_TILE -> steps.add("refine on one tile");
+            case MULTI_TILE -> steps.add("refine on two or more tiles");
+            case FULL_MANUAL -> steps.add("realign it by hand");
+            case NONE -> {}
+        }
+        String regions = regionCount == 1 ? "1 region" : regionCount + " regions";
+        String last = setupOnly
+                ? "save it for Step 2: Acquire All Set-Up (nothing is acquired now)"
+                : (regionCount > 0 ? "acquire " + regions : "acquire");
+        StringBuilder sb = new StringBuilder("Next: ");
+        for (int i = 0; i < steps.size(); i++) {
+            sb.append(i == 0 ? "" : ", ").append(steps.get(i));
+        }
+        return sb.append(", then ").append(last).append('.').toString();
+    }
+
     private static class ConsolidatedDialogBuilder extends AcquisitionDialogBuilder<ExistingImageAcquisitionConfig> {
         private final String defaultSampleName;
         private final List<PathObject> annotations;
@@ -247,6 +292,13 @@ public class ExistingImageAcquisitionController {
         // (e.g. a single-slide layout) and must not be trusted. Suppresses hasSlideAlignment and
         // makes the refinement recommendation default to re-aligning rather than "proceed without".
         private final boolean forceFreshAlignment;
+        /** Multi-slide set-up pass: this slide is aligned and refined now, acquired in Step 2. */
+        private final boolean setupOnly;
+        /** One line above the buttons saying what pressing the start button will do. */
+        private Label nextStepsLabel;
+        /** The open image was itself acquired from a region; see ImageMetadataManager#isSubAcquisition. */
+        private final boolean subAcquisition;
+
         private boolean hasMacroImage; // True if a macro image is reachable from this entry
         private final Project<?> openedProject;
         private final qupath.lib.images.ImageData<?> openedImageData;
@@ -290,8 +342,13 @@ public class ExistingImageAcquisitionController {
         private TitledPane alignmentPane;
         private TitledPane refinementPane;
 
-        ConsolidatedDialogBuilder(String defaultSampleName, List<PathObject> annotations, boolean forceFreshAlignment) {
+        ConsolidatedDialogBuilder(
+                String defaultSampleName,
+                List<PathObject> annotations,
+                boolean forceFreshAlignment,
+                boolean setupOnly) {
             this.forceFreshAlignment = forceFreshAlignment;
+            this.setupOnly = setupOnly;
             this.defaultSampleName = defaultSampleName;
             this.annotations = annotations != null ? annotations : new ArrayList<>();
             this.annotationCount = this.annotations.size();
@@ -311,6 +368,7 @@ public class ExistingImageAcquisitionController {
                 projectFolder = openedProject.getPath().toFile().getParentFile();
             }
             this.hasOpenProject = projectFolder != null;
+            this.subAcquisition = openImageIsSubAcquisition(openedProject, openedImageData);
             this.existingProjectFolder = projectFolder;
             this.existingProjectName = projectFolder != null ? projectFolder.getName() : null;
             if (hasOpenProject) {
@@ -487,7 +545,10 @@ public class ExistingImageAcquisitionController {
             // expose the same action, but the modality TitledPane is easy to
             // overlook when scrolling -- the footer button makes it
             // unmistakable that MDA export is a first-class exit path.
-            ButtonType startType = new ButtonType("Start Acquisition", ButtonBar.ButtonData.OK_DONE);
+            // Named for what follows: an alignment and usually a refinement come before any
+            // tile, and in a multi-slide set-up pass nothing is acquired until Step 2.
+            ButtonType startType = new ButtonType(
+                    setupOnly ? "Set Up This Slide..." : "Align and Acquire...", ButtonBar.ButtonData.OK_DONE);
             ButtonType saveMdaType = new ButtonType("Save MDA...", ButtonBar.ButtonData.LEFT);
             ButtonType cancelType = new ButtonType("Cancel", ButtonBar.ButtonData.CANCEL_CLOSE);
             dialog.getDialogPane().getButtonTypes().addAll(saveMdaType, startType, cancelType);
@@ -503,7 +564,7 @@ public class ExistingImageAcquisitionController {
                     + "acquisition to Micro-Manager directly."));
             saveMdaButton.addEventFilter(javafx.event.ActionEvent.ACTION, evt -> {
                 // Consume the event so the dialog does not close. The user
-                // should still be able to either Cancel or Start Acquisition
+                // should still be able to either Cancel or start the run
                 // after exporting.
                 evt.consume();
                 onSaveMdaFromFooter();
@@ -547,7 +608,13 @@ public class ExistingImageAcquisitionController {
             scrollPane.setPrefViewportHeight(650);
             scrollPane.setPrefViewportWidth(650);
 
-            dialog.getDialogPane().setContent(scrollPane);
+            nextStepsLabel = new Label();
+            nextStepsLabel.setWrapText(true);
+            nextStepsLabel.setPadding(new Insets(6, 2, 0, 2));
+            nextStepsLabel.setStyle(subtleTextStyle());
+            refreshNextSteps();
+            VBox.setVgrow(scrollPane, javafx.scene.layout.Priority.ALWAYS);
+            dialog.getDialogPane().setContent(new VBox(4, scrollPane, nextStepsLabel));
             dialog.getDialogPane().setPrefWidth(700);
             dialog.getDialogPane().setPrefHeight(750);
 
@@ -1388,6 +1455,7 @@ public class ExistingImageAcquisitionController {
             transformCombo.valueProperty().addListener((obs, old, preset) -> {
                 updatePresetAgeLabel();
                 updateRefinementRecommendation();
+                refreshNextSteps();
                 if (preset != null) {
                     PersistentPreferences.setLastSelectedTransform(preset.getName());
                 }
@@ -1404,7 +1472,35 @@ public class ExistingImageAcquisitionController {
                 refinementBox.setManaged(selected);
                 PersistentPreferences.setUseExistingAlignment(selected);
                 triggerPreviewUpdate();
+                refreshNextSteps();
             });
+            refinementGroup.selectedToggleProperty().addListener((obs, old, now) -> refreshNextSteps());
+        }
+
+        @SuppressWarnings({"unchecked", "rawtypes"})
+        private static boolean openImageIsSubAcquisition(Project<?> project, qupath.lib.images.ImageData<?> data) {
+            if (project == null || data == null) {
+                return false;
+            }
+            return qupath.ext.qpsc.utilities.ImageMetadataManager.isSubAcquisition(
+                    ((Project) project).getEntry((qupath.lib.images.ImageData) data));
+        }
+
+        /** Rewrites the "Next:" line from the alignment and refinement now selected. */
+        private void refreshNextSteps() {
+            if (nextStepsLabel == null || useExistingRadio == null || noRefineRadio == null) {
+                return;
+            }
+            boolean manual = !useExistingRadio.isSelected();
+            AffineTransformManager.TransformPreset preset = transformCombo != null ? transformCombo.getValue() : null;
+            nextStepsLabel.setText(nextStepsText(
+                    subAcquisition,
+                    manual,
+                    hasSlideAlignment,
+                    preset != null ? preset.getName() : null,
+                    manual ? RefinementChoice.NONE : selectedRefinement(),
+                    annotationCount,
+                    setupOnly));
         }
 
         /**
