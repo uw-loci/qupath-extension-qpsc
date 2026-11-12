@@ -50,7 +50,7 @@ If you see a dialog titled "Sub-image Objective Mismatch," the sub-image was acq
 | Option | Type | Required | Description |
 |--------|------|----------|-------------|
 | Sample Name | TextField | Yes | Name for acquired images. Defaults to current image name. |
-| Projects Folder | Directory Picker | Yes* | Root folder for new projects, as in Bounded Acquisition. Must be a full path. Only required if no project is currently open; with no project open, Start stays disabled until the folder is valid. |
+| Projects Folder | Directory Picker | Yes* | Root folder for new projects, as in Bounded Acquisition. Must be a full path. Only required if no project is currently open; with no project open, the start button stays disabled until the folder is valid. |
 | Use Existing Project | Auto | - | If a project is open, images are added to the current project. If no project is open, you will be prompted to create or select one. |
 
 ### Alignment Selection
