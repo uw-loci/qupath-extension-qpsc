@@ -190,6 +190,12 @@ public class MultiTileRefinement {
                         // or they focused by hand, so the next point on this slide starts from
                         // here with the short scan instead of a full retract-and-approach.
                         SlotJumpAutofocus.noteFocusOnThisSlide(xyz[2]);
+                        // And to the safe-Z clearance check: a focus found by hand is still
+                        // a measured sample plane, and it is what lets the next slide's
+                        // approach be refused when the stage's Z zero has moved since the
+                        // approach was validated (PPM 2026-11-12: focus 30 um below a safe Z
+                        // validated 443 um above it, and the approach ran 520 um past focus).
+                        qupath.ext.qpsc.focus.SafeZClearanceMonitor.recordFocus(xyz[2]);
                         logger.info(
                                 "Multi-tile point {}: captured in focus at X={}, Y={}, Z={} um (kept for the "
                                         + "slide's focus surface)",
