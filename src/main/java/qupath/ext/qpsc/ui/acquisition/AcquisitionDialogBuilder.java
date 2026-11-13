@@ -146,6 +146,12 @@ abstract class AcquisitionDialogBuilder<R> {
     protected Dialog<R> dialog;
     protected Button startButton;
 
+    /**
+     * Seconds one timepoint's acquisition takes, from the last preview update (the same
+     * per-image timing as the time estimate); NaN until a preview has run.
+     */
+    protected double lastPerTimepointSec = Double.NaN;
+
     /** The operator's choices on the modality panel, with nulls replaced by empty collections. */
     protected record ModalityPanelSelections(
             Map<String, Double> angleOverrides,
@@ -1487,6 +1493,68 @@ abstract class AcquisitionDialogBuilder<R> {
      * acquisitions, which already includes autofocus overhead at its actual frequency, else
      * a conservative 2 seconds per image.
      */
+    /**
+     * Whether a time-lapse cannot keep its interval: one timepoint takes longer than the
+     * interval, so timepoints run back to back.
+     */
+    static boolean timeLapseFallsBehind(int timepoints, double intervalSec, double perTimepointSec) {
+        return timepoints > 1 && !Double.isNaN(perTimepointSec) && perTimepointSec > intervalSec;
+    }
+
+    /**
+     * Asks before starting when a time-lapse is on and one timepoint takes longer than its
+     * interval. Call once {@link #startButton} exists. On 2026-11-13 a time-lapse left on from
+     * an earlier run, 4 timepoints at 0.1 s, made a whole-slide acquisition take 17 hours,
+     * with only a warning in the log after the first 4-hour timepoint.
+     */
+    protected void guardStartAgainstSlowTimeLapse() {
+        startButton.addEventFilter(javafx.event.ActionEvent.ACTION, evt -> {
+            if (!confirmTimeLapseKeepsUp()) {
+                evt.consume();
+            }
+        });
+    }
+
+    private boolean confirmTimeLapseKeepsUp() {
+        if (!PersistentPreferences.isTimeLapseEnabled()) {
+            return true;
+        }
+        int timepoints = Math.max(1, PersistentPreferences.getTimeLapseTimepoints());
+        double intervalSec = Math.max(0.0, PersistentPreferences.getTimeLapseIntervalSec());
+        if (!timeLapseFallsBehind(timepoints, intervalSec, lastPerTimepointSec)) {
+            return true;
+        }
+        javafx.scene.control.Alert alert = new javafx.scene.control.Alert(javafx.scene.control.Alert.AlertType.WARNING);
+        alert.setTitle("Time-lapse cannot keep its interval");
+        alert.setHeaderText("Each timepoint takes longer than the interval");
+        alert.setContentText(String.format(
+                "Each timepoint images the whole region, which takes %s. The interval is %s s, so the "
+                        + "%d timepoints will run back to back and the run will take %s.%n%n"
+                        + "If the time-lapse was left on from an earlier run, turn it off under "
+                        + "TIME-LAPSE OPTIONS.",
+                formatTime(lastPerTimepointSec),
+                intervalSec < 10 ? String.format("%.1f", intervalSec) : String.format("%.0f", intervalSec),
+                timepoints,
+                formatTime(lastPerTimepointSec * timepoints)));
+        javafx.scene.control.ButtonType change = new javafx.scene.control.ButtonType(
+                "Change settings", javafx.scene.control.ButtonBar.ButtonData.CANCEL_CLOSE);
+        javafx.scene.control.ButtonType start =
+                new javafx.scene.control.ButtonType("Start anyway", javafx.scene.control.ButtonBar.ButtonData.OK_DONE);
+        alert.getButtonTypes().setAll(change, start);
+        javafx.stage.Window owner =
+                startButton.getScene() != null ? startButton.getScene().getWindow() : null;
+        boolean go = qupath.ext.qpsc.ui.UIFunctions.showAlertOverParent(alert, owner)
+                .map(b -> b == start)
+                .orElse(false);
+        logger.info(
+                "Time-lapse interval check: {} timepoints, interval {} s, about {} s per timepoint -- {}",
+                timepoints,
+                intervalSec,
+                Math.round(lastPerTimepointSec),
+                go ? "started anyway" : "back to the settings");
+        return go;
+    }
+
     protected double estimatedAcquisitionSec(int images) {
         if (PersistentPreferences.hasTimingData()) {
             return PersistentPreferences.estimateAcquisitionTime(images) / 1000.0;

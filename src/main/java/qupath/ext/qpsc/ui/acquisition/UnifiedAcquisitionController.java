@@ -264,6 +264,7 @@ public class UnifiedAcquisitionController {
 
             startButton = (Button) dialog.getDialogPane().lookupButton(okType);
             startButton.setDisable(true); // Start disabled until validation passes
+            guardStartAgainstSlowTimeLapse();
 
             // Build error summary panel FIRST - other sections may trigger validation during init
             createErrorSummaryPanel();
@@ -1077,6 +1078,7 @@ public class UnifiedAcquisitionController {
                 }
 
                 double perTimepointAcqSec = estimatedAcquisitionSec(totalImages);
+                lastPerTimepointSec = perTimepointAcqSec;
                 totalImages *= timepoints;
                 // If the interval exceeds per-timepoint acquisition the run is interval-bound:
                 // (N-1) intervals to start the last timepoint, plus that timepoint's acquisition.

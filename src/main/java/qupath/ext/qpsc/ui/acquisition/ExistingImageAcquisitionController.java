@@ -556,6 +556,7 @@ public class ExistingImageAcquisitionController {
 
             startButton = (Button) dialog.getDialogPane().lookupButton(startType);
             startButton.setDisable(true);
+            guardStartAgainstSlowTimeLapse();
 
             Button saveMdaButton = (Button) dialog.getDialogPane().lookupButton(saveMdaType);
             saveMdaButton.setTooltip(new Tooltip("Write Micro-Manager-compatible MDA file sets\n"
@@ -1743,6 +1744,7 @@ public class ExistingImageAcquisitionController {
                     intervalSec = Math.max(0.0, PersistentPreferences.getTimeLapseIntervalSec());
                 }
                 double perTimepointAcqSec = estimatedAcquisitionSec(totalImages);
+                lastPerTimepointSec = perTimepointAcqSec;
                 totalImages *= timepoints;
                 double estimatedSec = timepoints > 1
                         ? Math.max(

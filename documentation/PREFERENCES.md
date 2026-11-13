@@ -706,7 +706,7 @@ Tilt alone is not a reason to lower this. Like the window, the default has not b
 | Order | Choice | Across the region |
 
 **Description:**
-Time-lapse settings are configured per-acquisition in the acquisition dialog under **TIME-LAPSE OPTIONS**. When enabled, the full region acquisition repeats over multiple timepoints at a fixed interval. The setting persists between sessions, and the section's title bar is blue while it is enabled, even collapsed.
+Time-lapse settings are configured per-acquisition in the acquisition dialog under **TIME-LAPSE OPTIONS**. When enabled, the full region acquisition repeats over multiple timepoints at a fixed interval. The setting persists between sessions, and the section's title bar is blue while it is enabled, even collapsed. If one timepoint takes longer than the interval, the start button asks first (see [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md)).
 
 | Setting | Range | Purpose |
 |---------|-------|---------|

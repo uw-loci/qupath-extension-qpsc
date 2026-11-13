@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **The acquisition dialogs ask before starting a time-lapse that cannot keep its interval.** When one timepoint of the region takes longer than the interval, pressing the start button shows both times and the run's total and offers **Change settings** or **Start anyway**. Last night's whole-slide run (4 timepoints at 0.1 s, about 4.3 h per timepoint) would have been stopped at the set-up dialog.
+
 - **A Z-stack or time-lapse that is switched on shows a blue title bar** in the acquisition dialogs, even with its section collapsed. Both settings persist between sessions, and on 2026-11-13 a time-lapse left on from an earlier run turned a whole-slide acquisition into 17 hours.
 
 - **Acquire from Existing Image says what its start button will do.** The button is **Align and Acquire...** on a single slide and **Set Up This Slide...** in a multi-slide set-up pass (which acquires nothing until Step 2), instead of **Start Acquisition**, and a line above the buttons lists the steps from the dialog's choices, for example *Next: place the slide with the preset 'Ocus40_to_PPM', refine on one tile, then acquire 3 regions.* Bounded Acquisition keeps **Start Acquisition**.

@@ -82,6 +82,8 @@ The estimate is conservative and intended to catch order-of-magnitude misconfigu
 
 For example, a 21-plane PPM Z-stack with 4 angles requires ~25 seconds per timepoint, so an interval of 10 seconds would trigger the warning.
 
+**Region acquisitions (Bounded and Existing Image).** The acquisition dialogs run the same kind of check when you press the start button, using the dialog's own time estimate for one timepoint (every tile of the region, at the per-image time measured on earlier runs). If one timepoint takes longer than the interval, a warning gives both times and the run's total, and offers **Change settings** or **Start anyway**. A typical cause is a time-lapse left on from an earlier run; the **TIME-LAPSE OPTIONS** title bar is blue whenever it is on. In a multi-slide batch the check runs in the set-up dialog, before any slide is acquired.
+
 **What happens if you proceed:**
 
 The time-lapse will run, but each timepoint will overlap the next—the system cannot keep pace with the interval and will log a warning on the server. After acquisition completes, a post-acquisition dialog shows details of how far behind the run fell.
