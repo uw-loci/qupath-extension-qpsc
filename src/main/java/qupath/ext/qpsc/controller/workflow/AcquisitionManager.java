@@ -307,9 +307,11 @@ public class AcquisitionManager {
             logger.warn("Stop acquisition requested from outside the progress dialog");
             active.state.cancelRequested.set(true);
             DualProgressDialog dialog = active.dualProgressDialog;
-            if (dialog != null) {
+            if (dialog != null && !dialog.isCancelled()) {
                 dialog.requestCancel();
             } else {
+                // No dialog, or its Cancel was already pressed: the dialog ignores a second
+                // cancel, so a later Stop would reach nothing. Send CANCEL again directly.
                 sendCancelOnWorker();
             }
             return true;
@@ -631,8 +633,13 @@ public class AcquisitionManager {
             long bytesPerTile =
                     AcquisitionSpaceCheck.estimateBytesPerTilePerAngle(configManager, state.sample.detector());
 
+            // Z planes and timepoints multiply the files written; on 2026-11-13 a time-lapse left
+            // on over a whole slide wrote 4x what this check counted.
             AcquisitionSpaceCheck.Result result = AcquisitionSpaceCheck.checkAndWarn(
-                    Paths.get(tempTileDir), totalTiles, angleExposures.size(), bytesPerTile);
+                    Paths.get(tempTileDir),
+                    totalTiles,
+                    AcquisitionSpaceCheck.filesPerTileFromPreferences(angleExposures.size()),
+                    bytesPerTile);
 
             if (!result.proceed()) {
                 logger.warn("Acquisition canceled by user after low-disk-space warning");

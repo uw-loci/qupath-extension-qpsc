@@ -35,6 +35,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The disk-space check counts Z-stacks and time-lapses.** It estimated tiles x angles only, so a time-lapse or Z-stack left on multiplied the files written without the check knowing. On 2026-11-13 a 4-timepoint time-lapse left on over a whole slide wrote 22,272 images where the check counted 5,568. It now counts angles or channels x Z planes x timepoints, plus the projected images, in both Bounded and Existing Image acquisitions.
+- **Stop acquisition no longer looks pressable while it waits, and pressing it again works.** After a stop, the Live Viewer's button stayed red but disabled, and a second press (or the menu item) went to a progress dialog that ignores a second cancel, so nothing was sent. The button now reads **Stopping...** in gray, turns red again if the run is still going 30 s later, and a repeat press sends the stop to the microscope directly.
+
 - **A refinement point focused by hand now counts toward the approach scan's safety check.** The approach-from-safe-Z scan is refused once a focus measured this run disagrees with its validation by more than 250 um, but only autofocus results were counted. On PPM on 2026-11-12 the stage's Z zero had moved about 400 um since the validation: focus sat 30 um below the safe Z instead of 443 um, the operator focused the first point by hand, and the next point's approach ran 520 um past focus before it was canceled.
 - **Multi-slide refinement no longer runs the long approach scan at its second point after the first point was focused by hand.** Only a successful autofocus counted as "focus known on this slide", so when the first point's autofocus failed and the operator focused and accepted it, the next point retracted and drove hundreds of um through the sample plane again. An accepted point now counts, and once focus is known on a slide its scans get 3 attempts instead of 6.
 

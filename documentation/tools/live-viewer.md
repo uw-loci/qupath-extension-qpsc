@@ -69,7 +69,7 @@ The status bar reports a clickable "Show in folder" link after each successful s
 
 ### Stop acquisition
 
-While an acquisition holds the stage, a red **Stop acquisition** button appears on the toolbar (next to the live toggle) and disappears when the stage is released. It stops the running acquisition after the current tile, the same as **Extensions > QP Scope > Acquisition controls > Stop acquisition...**; already-acquired regions are kept and stitched. It is there for the case where the acquisition's own progress dialog is gone.
+While an acquisition holds the stage, a red **Stop acquisition** button appears on the toolbar (next to the live toggle) and disappears when the stage is released. It stops the running acquisition after the current tile, the same as **Extensions > QP Scope > Acquisition controls > Stop acquisition...**; already-acquired regions are kept and stitched. It is there for the case where the acquisition's own progress dialog is gone. Once pressed it turns gray and reads **Stopping...** until the stage is released; if the acquisition is still running 30 s later, it turns red again so you can press it once more, which sends the stop to the microscope again (the server can be busy finishing writes or a time projection and answer late).
 
 ### Focus Controls Toolbar
 

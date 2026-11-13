@@ -3,7 +3,6 @@ package qupath.ext.qpsc.acquisition;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
-import java.nio.file.Paths;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.atomic.AtomicBoolean;
 import javafx.application.Platform;
@@ -17,6 +16,7 @@ import javafx.scene.layout.VBox;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.ui.DialogOwner;
 
@@ -146,18 +146,20 @@ public class AcquisitionSpaceCheck {
      *
      * @param outputPath directory where tiles will be written
      * @param totalTileCount number of unique tile positions across all annotations
-     * @param angleCount number of angles per tile (1 for single-angle modalities)
-     * @param bytesPerTilePerAngle estimated bytes written per tile per angle
+     * @param filesPerTile images written per tile position: angles or channels, times Z planes
+     *     and timepoints, plus projections ({@link #filesPerTileFromPreferences})
+     * @param bytesPerTilePerAngle estimated bytes of one image
      * @return result indicating whether the caller should proceed
      */
-    public static Result checkAndWarn(Path outputPath, long totalTileCount, int angleCount, long bytesPerTilePerAngle) {
+    public static Result checkAndWarn(
+            Path outputPath, long totalTileCount, long filesPerTile, long bytesPerTilePerAngle) {
         if (!QPPreferenceDialog.getWarnOnLowDiskSpace()) {
             logger.info("Disk space warning disabled by preference -- skipping check");
             return new Result(true, -1, -1);
         }
 
-        long effectiveAngles = Math.max(1, angleCount);
-        long rawEstimate = Math.max(0L, totalTileCount) * bytesPerTilePerAngle * effectiveAngles;
+        long effectiveFiles = Math.max(1, filesPerTile);
+        long rawEstimate = Math.max(0L, totalTileCount) * bytesPerTilePerAngle * effectiveFiles;
         long estimatedBytes = (long) (rawEstimate * HEADROOM);
 
         long usableBytes = -1;
@@ -171,11 +173,11 @@ public class AcquisitionSpaceCheck {
         }
 
         logger.info(
-                "Disk space check: estimated {} ({} tiles x {} angles x {} bytes, x{} headroom), "
+                "Disk space check: estimated {} ({} tiles x {} images per tile x {} bytes, x{} headroom), "
                         + "available {} at {}",
                 formatBytes(estimatedBytes),
                 totalTileCount,
-                effectiveAngles,
+                effectiveFiles,
                 bytesPerTilePerAngle,
                 HEADROOM,
                 usableBytes < 0 ? "unknown" : formatBytes(usableBytes),
@@ -277,9 +279,54 @@ public class AcquisitionSpaceCheck {
         return String.format("%.0f KB", kb);
     }
 
-    /** Convenience for callers that have a String path. */
-    public static Result checkAndWarn(
-            String outputPath, long totalTileCount, int angleCount, long bytesPerTilePerAngle) {
-        return checkAndWarn(Paths.get(outputPath), totalTileCount, angleCount, bytesPerTilePerAngle);
+    /**
+     * Images written per tile position: every angle or channel at every Z plane and every
+     * timepoint, plus one projected set per angle for each timepoint when a Z projection is on,
+     * and one more when a time projection is on. Raw planes and timepoints are counted even
+     * when a projection is chosen, since they are written before they are projected.
+     */
+    static long filesPerTile(
+            int sequenceSteps, int zPlanes, int timepoints, boolean zProjected, boolean timeProjected) {
+        long steps = Math.max(1, sequenceSteps);
+        long z = Math.max(1, zPlanes);
+        long t = Math.max(1, timepoints);
+        long files = steps * z * t;
+        if (zProjected && z > 1) {
+            files += steps * t;
+        }
+        if (timeProjected && t > 1) {
+            files += steps;
+        }
+        return files;
+    }
+
+    /**
+     * {@link #filesPerTile} from the Z-stack and time-lapse preferences the acquisition command
+     * is built from, counting Z planes as the progress meter does.
+     */
+    public static long filesPerTileFromPreferences(int sequenceSteps) {
+        int zPlanes = 1;
+        if (PersistentPreferences.isZStackEnabled() && PersistentPreferences.getZStackStep() > 0) {
+            zPlanes =
+                    (int) Math.ceil(PersistentPreferences.getZStackRange() / PersistentPreferences.getZStackStep()) + 1;
+        }
+        int timepoints = PersistentPreferences.isTimeLapseEnabled()
+                ? Math.max(1, PersistentPreferences.getTimeLapseTimepoints())
+                : 1;
+        boolean zProjected = !"None".equalsIgnoreCase(PersistentPreferences.getZStackProjection());
+        boolean timeProjected = !"None".equalsIgnoreCase(PersistentPreferences.getTimeLapseProjection());
+        long files = filesPerTile(sequenceSteps, zPlanes, timepoints, zProjected, timeProjected);
+        if (zPlanes > 1 || timepoints > 1) {
+            logger.info(
+                    "Disk space check counts {} images per tile: {} angle(s)/channel(s) x {} Z plane(s) x {} "
+                            + "timepoint(s), plus projections (Z: {}, time: {})",
+                    files,
+                    Math.max(1, sequenceSteps),
+                    zPlanes,
+                    timepoints,
+                    zProjected && zPlanes > 1 ? PersistentPreferences.getZStackProjection() : "none",
+                    timeProjected && timepoints > 1 ? PersistentPreferences.getTimeLapseProjection() : "none");
+        }
+        return files;
     }
 }

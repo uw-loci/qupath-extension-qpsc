@@ -333,7 +333,8 @@ public class BoundedAcquisitionWorkflow {
                                 : Math.max(1, angleExposures.size());
 
                         // Disk space pre-check -- warn if estimated output exceeds free space at save location.
-                        // The estimate is approximate (detector dims x 3 bytes x tiles x sequence-steps x headroom);
+                        // The estimate is approximate (detector dims x bytes/px x tiles x sequence-steps x Z planes
+                        // x timepoints, plus projections, x headroom);
                         // actual size varies with modality, compression, and stitched output.
                         long tileCount = MinorFunctions.countTifEntriesInTileConfig(
                                 List.of(Paths.get(tempTileDir, boundsMode).toString()));
@@ -341,7 +342,10 @@ public class BoundedAcquisitionWorkflow {
                             long bytesPerTile = AcquisitionSpaceCheck.estimateBytesPerTilePerAngle(
                                     configManager, result.detector());
                             AcquisitionSpaceCheck.Result spaceResult = AcquisitionSpaceCheck.checkAndWarn(
-                                    Paths.get(tempTileDir), tileCount, sequenceSteps, bytesPerTile);
+                                    Paths.get(tempTileDir),
+                                    tileCount,
+                                    AcquisitionSpaceCheck.filesPerTileFromPreferences(sequenceSteps),
+                                    bytesPerTile);
                             if (!spaceResult.proceed()) {
                                 logger.warn("Acquisition canceled by user after low-disk-space warning");
                                 return;

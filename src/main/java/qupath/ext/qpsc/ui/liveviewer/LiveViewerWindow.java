@@ -99,6 +99,12 @@ public class LiveViewerWindow {
     // Configuration dialog and read from PersistentPreferences at click time.
     private Button autofocusButton;
     private Button stopAcquisitionButton;
+    /** When Stop was pressed and the run has not ended yet, ms; 0 otherwise. */
+    private long stopPendingSinceMs = 0;
+    /** How long the Stop button waits for the run to end before it can be pressed again. */
+    private static final long STOP_RETRY_AFTER_MS = 30_000;
+
+    private static final String STOP_READY_STYLE = "-fx-base: #b00020; -fx-text-fill: white;";
     private javafx.animation.Timeline acquisitionWatch;
 
     /** Stops the autofocus feed when the window closes. */
@@ -1158,7 +1164,7 @@ public class LiveViewerWindow {
         // Shown only while an acquisition holds the stage: the one control in this window
         // that reaches a run whose progress dialog is gone.
         stopAcquisitionButton = new Button("Stop acquisition");
-        stopAcquisitionButton.setStyle("-fx-base: #b00020; -fx-text-fill: white;");
+        stopAcquisitionButton.setStyle(STOP_READY_STYLE);
         stopAcquisitionButton.setTooltip(
                 new Tooltip("Stop the running acquisition. The current tile finishes, then the microscope stops; "
                         + "already-acquired data is kept."));
@@ -1166,7 +1172,7 @@ public class LiveViewerWindow {
         stopAcquisitionButton.setManaged(false);
         stopAcquisitionButton.setOnAction(e -> {
             logger.warn("Stop acquisition pressed in the Live Viewer");
-            stopAcquisitionButton.setDisable(true);
+            showStopPending();
             new Thread(
                             () -> {
                                 AcquisitionManager.stopActiveAcquisition();
@@ -1183,7 +1189,16 @@ public class LiveViewerWindow {
                     if (active != stopAcquisitionButton.isVisible()) {
                         stopAcquisitionButton.setVisible(active);
                         stopAcquisitionButton.setManaged(active);
-                        stopAcquisitionButton.setDisable(false);
+                        showStopReady();
+                    } else if (active
+                            && stopPendingSinceMs > 0
+                            && System.currentTimeMillis() - stopPendingSinceMs > STOP_RETRY_AFTER_MS) {
+                        // Still running long after the stop was sent (the server can be busy
+                        // writing or projecting and answer late): offer the button again.
+                        logger.warn(
+                                "Acquisition still active {} s after Stop; the Stop button is available again",
+                                STOP_RETRY_AFTER_MS / 1000);
+                        showStopReady();
                     }
                 }));
         acquisitionWatch.setCycleCount(javafx.animation.Timeline.INDEFINITE);
@@ -2874,6 +2889,22 @@ public class LiveViewerWindow {
 
     private static int clamp(int value, int min, int max) {
         return Math.max(min, Math.min(max, value));
+    }
+
+    /** Stop was pressed: say so and gray the button out until the run ends or the retry wait passes. */
+    private void showStopPending() {
+        stopPendingSinceMs = System.currentTimeMillis();
+        stopAcquisitionButton.setDisable(true);
+        stopAcquisitionButton.setText("Stopping...");
+        stopAcquisitionButton.setStyle("");
+    }
+
+    /** The red, pressable Stop button. */
+    private void showStopReady() {
+        stopPendingSinceMs = 0;
+        stopAcquisitionButton.setDisable(false);
+        stopAcquisitionButton.setText("Stop acquisition");
+        stopAcquisitionButton.setStyle(STOP_READY_STYLE);
     }
 
     private void updateStatus(String text) {
