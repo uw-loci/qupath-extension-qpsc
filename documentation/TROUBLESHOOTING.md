@@ -686,6 +686,14 @@ Prior versions crashed with "Macro image pixel size is not set" when the prefere
 
 **Alternative:** If you don't know the original source microscope, open the parent macro entry (overview image) instead of a sub-image and re-run the workflow on that.
 
+#### Q: Some slides in the multi-slide Stage Map are shifted, with a dark band at the top
+
+**A:** Those slides are probably recorded as coming from the microscope (for example `source_microscope` = PPM) instead of the scanner that made them. The slot preview crops each macro by its scanner's settings, and a microscope has none, so the whole uncropped macro is drawn and the slide looks shifted. The wrong label also makes the alignment preset and macro flip resolve for the wrong (scanner, microscope) pair. Older QPSC versions could record the active microscope as the source.
+
+The log line `Scanner 'PPM' does not require cropping, returning original image` during the multi-slide set-up confirms it.
+
+**To fix:** run [`scripts/fix_source_microscope.groovy`](../scripts/fix_source_microscope.groovy) in the project. Edit `WRONG_SOURCE` and `CORRECT_SOURCE` at the top, run it once with `DRY_RUN = true` to see the list, then again with `DRY_RUN = false`. It changes only images whose file has a macro image and that carry no `acquired_on_microscope`, so tiles acquired on the microscope keep their label.
+
 #### Q: "Objective Pixel-Size Mismatch -- Workflow Canceled" error
 
 **A:** The dialog shows that MicroManager's active objective does not match the wizard's selection. The tile grid is planned for the wizard's objective; if the actual objective in MicroManager is different, tiles will be spaced incorrectly and the mosaic will not be usable.
