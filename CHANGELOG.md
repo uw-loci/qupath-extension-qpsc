@@ -9,6 +9,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 
+- **A Z-stack or time-lapse that is switched on shows a blue title bar** in the acquisition dialogs, even with its section collapsed. Both settings persist between sessions, and on 2026-11-13 a time-lapse left on from an earlier run turned a whole-slide acquisition into 17 hours.
+
 - **Acquire from Existing Image says what its start button will do.** The button is **Align and Acquire...** on a single slide and **Set Up This Slide...** in a multi-slide set-up pass (which acquires nothing until Step 2), instead of **Start Acquisition**, and a line above the buttons lists the steps from the dialog's choices, for example *Next: place the slide with the preset 'Ocus40_to_PPM', refine on one tile, then acquire 3 regions.* Bounded Acquisition keeps **Start Acquisition**.
 
 - **Stage Map warns when the slide image and the slide outline disagree.** When the macro leaves more than 5 mm of the slide outline uncovered, a line under the map gives the distance and the date of the alignment that placed it. On the LC-PolScope on 2026-11-12 the stage's zero had moved about 13 mm in X since the slide's 29 October alignment, so the image sat 13 mm from the outline drawn from the corrected stage limits, and an acquisition from that alignment would have missed by as much.

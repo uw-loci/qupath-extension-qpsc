@@ -913,6 +913,26 @@ abstract class AcquisitionDialogBuilder<R> {
      * Builds the time-lapse controls: timepoints, interval and timepoint projection. Shared by
      * Bounded and Existing Image acquisition, which read the same time-lapse preferences.
      */
+    /** Title-bar color of an optional section that is switched on. */
+    static final String SECTION_ON_TITLE_STYLE = "-fx-base: #2f6fd6;";
+
+    /**
+     * Colors {@code pane}'s title bar blue while {@code on} is true, so a Z-stack or time-lapse
+     * left switched on shows even with its section collapsed (a time-lapse left on over a whole
+     * slide on 2026-11-13 took 17 hours). The title node exists only once the skin does.
+     */
+    static void highlightTitleWhenOn(TitledPane pane, javafx.beans.value.ObservableBooleanValue on) {
+        Runnable apply = () -> {
+            javafx.scene.Node title = pane.lookup(".title");
+            if (title != null) {
+                title.setStyle(on.get() ? SECTION_ON_TITLE_STYLE : "");
+            }
+        };
+        on.addListener((obs, was, now) -> apply.run());
+        pane.skinProperty().addListener((obs, was, now) -> javafx.application.Platform.runLater(apply));
+        apply.run();
+    }
+
     protected TitledPane createTimeLapseSection() {
         timeLapseEnableCheck = new CheckBox("Enable time-lapse acquisition");
         timeLapseEnableCheck.setTooltip(
@@ -1024,6 +1044,7 @@ abstract class AcquisitionDialogBuilder<R> {
         pane.setExpanded(false);
         pane.setAnimated(false);
         pane.setStyle("-fx-font-weight: bold;");
+        highlightTitleWhenOn(pane, timeLapseEnableCheck.selectedProperty());
         return pane;
     }
 
@@ -1249,6 +1270,7 @@ abstract class AcquisitionDialogBuilder<R> {
         pane.setExpanded(false);
         pane.setAnimated(false);
         pane.setStyle("-fx-font-weight: bold;");
+        highlightTitleWhenOn(pane, zStackEnableCheck.selectedProperty());
         return pane;
     }
 

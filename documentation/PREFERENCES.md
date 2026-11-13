@@ -626,7 +626,7 @@ Settings that control image acquisition and stitching behavior.
 
 ### Z-Stack Options
 
-Z-stack settings (enable, range, step, projection) are configured per-acquisition in the acquisition dialog under **Z-STACK OPTIONS**. These settings persist between sessions. See [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) for details.
+Z-stack settings (enable, range, step, projection) are configured per-acquisition in the acquisition dialog under **Z-STACK OPTIONS**. These settings persist between sessions, so the section's title bar turns blue while a Z-stack is enabled, even when the section is collapsed. See [Z-Stack / Time-Lapse](tools/z-stack-timelapse.md) for details.
 
 ---
 
@@ -706,7 +706,7 @@ Tilt alone is not a reason to lower this. Like the window, the default has not b
 | Order | Choice | Across the region |
 
 **Description:**
-Time-lapse settings are configured per-acquisition in the acquisition dialog under **TIME-LAPSE OPTIONS**. When enabled, the full region acquisition repeats over multiple timepoints at a fixed interval.
+Time-lapse settings are configured per-acquisition in the acquisition dialog under **TIME-LAPSE OPTIONS**. When enabled, the full region acquisition repeats over multiple timepoints at a fixed interval. The setting persists between sessions, and the section's title bar is blue while it is enabled, even collapsed.
 
 | Setting | Range | Purpose |
 |---------|-------|---------|
