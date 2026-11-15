@@ -9,6 +9,7 @@ import java.io.File;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.CleanupMode;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.geometry.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
@@ -25,7 +26,9 @@ import qupath.lib.projects.Projects;
  */
 class CameraViewCompanionRotationTest {
 
-    @TempDir
+    // Not deleted afterwards: the duplicate helpers keep the image readers open, and Windows
+    // refuses to delete a file that is still open.
+    @TempDir(cleanup = CleanupMode.NEVER)
     Path tmp;
 
     @Test
