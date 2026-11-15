@@ -1767,7 +1767,7 @@ Notification settings are in a separate preference category: **QuPath SCope Aler
 | ntfy.sh server | String | https://ntfy.sh | Server URL (change for self-hosted) |
 | Notify on: Acquisition complete | Boolean | ON | Send notification on acquisition success |
 | Notify on: Stitching complete | Boolean | ON | Send notification on stitching success |
-| Notify on: Errors | Boolean | ON | Send notification on workflow errors |
+| Notify on: Errors | Boolean | ON | Send notification on workflow errors, when a multi-slide run stops early, and when the microscope server stops answering |
 
 ### Setting Up Phone Notifications
 

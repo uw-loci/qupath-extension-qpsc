@@ -2599,7 +2599,7 @@ public class ExistingImageWorkflowV2 {
                 AlignmentVerificationGate.record(
                         slide,
                         new AlignmentVerification.Verdict(
-                                AlignmentVerification.Status.INCONCLUSIVE, Double.NaN, 0, 0.0, 0, why, null));
+                                AlignmentVerification.Status.NOT_MEASURED, Double.NaN, 0, 0.0, 0, why, null));
                 return new CancellationException("Alignment could not be confirmed for " + slide);
             }
 

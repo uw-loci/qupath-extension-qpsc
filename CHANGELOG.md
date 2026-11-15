@@ -45,6 +45,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **A multi-slide run that stops sends a phone notification at once.** When the unattended acquire pass halted (alignment not confirmed, or the stage origin moved), only a dialog on the microscope PC said so, and the batch notification came after every pending stitch had finished, two hours later on 2026-11-13, reading "Run Complete". The halt now sends an urgent ntfy alert, and a batch that did not acquire every slide is reported as "Finished Early". QPSC also sends an urgent alert when the microscope server stops answering commands, which before showed only the "Microscope Server Unresponsive" dialog.
+
+- **An alignment check that could not reach the microscope no longer blames the slide.** On 2026-11-13 the server stopped answering during slide 2's check, and the run stopped with "a slide displaced by more than a field looks like this", although nothing had been compared. The check now says it could not run, and the multi-slide dialog says to get the microscope answering and run Acquire All Set-Up again, without setting the slides up again.
+
+- **Camera View copies of rotated slides are no longer duplicated.** A Camera View copy made from a "(rotated N)" entry was recorded as unrotated, so neither the single-slide nor the multi-slide lookup found it, and every run built another (three for one slide in MH_PPM). Copies built before this fix are still unrecognized; see TROUBLESHOOTING, "A slide has several (Camera View) entries".
+
 - **The disk-space check counts Z-stacks and time-lapses.** It estimated tiles x angles only, so a time-lapse or Z-stack left on multiplied the files written without the check knowing. On 2026-11-13 a 4-timepoint time-lapse left on over a whole slide wrote 22,272 images where the check counted 5,568. It now counts angles or channels x Z planes x timepoints, plus the projected images, in both Bounded and Existing Image acquisitions.
 - **Stop acquisition no longer looks pressable while it waits, and pressing it again works.** After a stop, the Live Viewer's button stayed red but disabled, and a second press (or the menu item) went to a progress dialog that ignores a second cancel, so nothing was sent. The button now reads **Stopping...** in gray, turns red again if the run is still going 30 s later, and a repeat press sends the stop to the microscope directly.
 

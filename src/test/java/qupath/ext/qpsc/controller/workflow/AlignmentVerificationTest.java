@@ -108,6 +108,9 @@ class AlignmentVerificationTest {
         // thirty hours of slide label, since a slide that far off cannot be matched.
         assertThat(Verdict.of(Status.INCONCLUSIVE, Double.NaN, 0, 0, 3, "").shouldStop())
                 .isTrue();
+        // A check that never reached the microscope proves nothing either way, so it stops too.
+        assertThat(Verdict.of(Status.NOT_MEASURED, Double.NaN, 0, 0, 3, "").shouldStop())
+                .isTrue();
     }
 
     // ----------------------------------------------------------------------

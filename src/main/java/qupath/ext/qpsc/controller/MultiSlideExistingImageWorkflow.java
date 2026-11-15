@@ -1442,7 +1442,11 @@ public final class MultiSlideExistingImageWorkflow {
         alignmentWarned = true;
         AlignmentVerification.Verdict verdict = AlignmentVerificationGate.lastVerdict();
         String advice;
-        if (verdict != null && verdict.status() == AlignmentVerification.Status.MISALIGNED) {
+        if (verdict != null && verdict.status() == AlignmentVerification.Status.NOT_MEASURED) {
+            advice = "The check did not get as far as looking at the slide, so it says nothing against the alignment. "
+                    + "Get the microscope answering again (check Micro-Manager and the server window), then "
+                    + "run Acquire All Set-Up again; the slides do not need setting up again.";
+        } else if (verdict != null && verdict.status() == AlignmentVerification.Status.MISALIGNED) {
             advice = "The camera matched the macro image, but at a distance: the sample is not where this "
                     + "slide's alignment says it is. The remaining slides were aligned in the same frame, so "
                     + "they are suspect too. Set the slides up again before acquiring.";
@@ -1452,6 +1456,7 @@ public final class MultiSlideExistingImageWorkflow {
                     + "field looks the same. Check the live image first: if it is in focus and on tissue, the "
                     + "stage is not where it reports, and the slides need setting up again.";
         }
+        notifyRunHalted("Alignment could not be confirmed.");
         Platform.runLater(() -> UserErrors.show(
                 logger,
                 "Alignment could not be confirmed",
@@ -1475,6 +1480,7 @@ public final class MultiSlideExistingImageWorkflow {
             return;
         }
         frameSuspectWarned = true;
+        notifyRunHalted("The stage position is not trustworthy.");
         Platform.runLater(() -> UserErrors.show(
                 logger,
                 "Stage position is not trustworthy",
@@ -1766,18 +1772,34 @@ public final class MultiSlideExistingImageWorkflow {
     }
 
     /**
+     * Push alert sent the moment the unattended acquire pass halts. The dialog alone reaches
+     * nobody who is away from the scope, and the batch-complete push waits for every pending
+     * stitch, which can be hours after the halt.
+     */
+    private static void notifyRunHalted(String reason) {
+        NotificationService.getInstance()
+                .notify(
+                        "Multi-Slide Run Stopped",
+                        reason + " The remaining slides were not acquired; the details are in the dialog on the "
+                                + "microscope PC.",
+                        NotificationPriority.URGENT,
+                        NotificationEvent.ACQUISITION_ERROR);
+    }
+
+    /**
      * Batch-complete alert once every slot's stitching has drained. Sent in addition to the per-slide
      * alerts so an operator away from the scope gets one "batch done" ping with the tally.
      */
     private static void notifyBatchComplete(StageInsert carrier, List<SlotState> states, String runId) {
         long done = states.stream().filter(st -> st.status == Status.DONE).count();
+        boolean allDone = done == states.size();
         NotificationService.getInstance()
                 .notify(
-                        "Multi-Slide Run Complete",
+                        allDone ? "Multi-Slide Run Complete" : "Multi-Slide Run Finished Early",
                         carrier.getName() + ": " + done + " of " + states.size() + " slide(s) acquired (run " + runId
                                 + ")",
-                        NotificationPriority.DEFAULT,
-                        NotificationEvent.ALL_ANGLES_COMPLETE);
+                        allDone ? NotificationPriority.DEFAULT : NotificationPriority.HIGH,
+                        allDone ? NotificationEvent.ALL_ANGLES_COMPLETE : NotificationEvent.ACQUISITION_ERROR);
     }
 
     private static void showSummary(QuPathGUI gui, StageInsert carrier, List<SlotState> states, String runId) {

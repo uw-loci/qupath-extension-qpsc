@@ -840,6 +840,10 @@ public class QPProjectFunctions {
                 flipX,
                 flipY, // Mark which axes are flipped
                 sampleName);
+        // The mirror keeps whatever rotation the original's pixels already carry. Without this
+        // a Camera View copy of a "(rotated N)" entry reads as unrotated, so the companion
+        // lookups (which match on base_image + rotation) never find it and build another.
+        ImageMetadataManager.setRotationDeg(flippedEntry, ImageMetadataManager.getRotationDeg(originalEntry));
 
         // Save the flipped image data to persist the hierarchy and image type
         flippedEntry.saveImageData(flippedData);

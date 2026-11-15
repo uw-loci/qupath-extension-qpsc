@@ -45,6 +45,10 @@ import qupath.lib.roi.interfaces.ROI;
  *       nothing to match -- but it is ALSO what defocus or a blank field looks like. So
  *       several points are tried before concluding it, and the caller is told which
  *       outcome it got so the operator can be told the difference.</li>
+ *   <li>{@link Status#NOT_MEASURED} -- the check never got as far as matching, because the
+ *       microscope did not answer or the camera could not be set up. It says nothing about
+ *       the slide, so the operator is told to restore the microscope, not to set the slides
+ *       up again.</li>
  * </ul>
  *
  * @since 0.9.3
@@ -94,6 +98,11 @@ public final class AlignmentVerification {
         MISALIGNED,
         /** Nothing could be matched, so the alignment is unconfirmed either way. */
         INCONCLUSIVE,
+        /**
+         * The check could not run at any point (the microscope did not answer, or the camera
+         * could not be set up), so nothing was compared against the macro image.
+         */
+        NOT_MEASURED,
         /** Not attempted (disabled, or nothing to check against). */
         SKIPPED
     }
@@ -141,7 +150,7 @@ public final class AlignmentVerification {
 
         /** True when the run should not continue on this alignment. */
         public boolean shouldStop() {
-            return status == Status.MISALIGNED || status == Status.INCONCLUSIVE;
+            return status == Status.MISALIGNED || status == Status.INCONCLUSIVE || status == Status.NOT_MEASURED;
         }
     }
 
@@ -244,6 +253,8 @@ public final class AlignmentVerification {
 
         MicroscopeController mc = MicroscopeController.getInstance();
         int attempt = 0;
+        int measured = 0;
+        String lastError = null;
         Double focusedZUm = null;
         for (double[] centre : points) {
             if (attempt >= MAX_ATTEMPTS) {
@@ -287,6 +298,7 @@ public final class AlignmentVerification {
                 }
 
                 double[] measurement = SiftAutoAlignHelper.measureOffsetWithoutMoving(gui, patch);
+                measured++;
                 Status status = judge(measurement, maxOffsetUm);
                 if (status == Status.INCONCLUSIVE) {
                     logger.warn(
@@ -334,7 +346,23 @@ public final class AlignmentVerification {
                         focusedZUm);
             } catch (Exception e) {
                 logger.warn("Alignment check {} could not be completed: {}", attempt, e.getMessage());
+                lastError = e.getMessage();
             }
+        }
+
+        if (measured == 0 && lastError != null) {
+            return new Verdict(
+                    Status.NOT_MEASURED,
+                    Double.NaN,
+                    0,
+                    0,
+                    attempt,
+                    String.format(
+                            "The alignment check could not be completed at any of %d points, so nothing was "
+                                    + "compared against the macro image and this says nothing about where the slide "
+                                    + "is. Last error: %s",
+                            attempt, lastError),
+                    focusedZUm);
         }
 
         return new Verdict(

@@ -694,6 +694,12 @@ The log line `Scanner 'PPM' does not require cropping, returning original image`
 
 **To fix:** run [`scripts/fix_source_microscope.groovy`](../scripts/fix_source_microscope.groovy) in the project. Edit `WRONG_SOURCE` and `CORRECT_SOURCE` at the top, run it once with `DRY_RUN = true` to see the list, then again with `DRY_RUN = false`. It changes only images whose file has a macro image and that carry no `acquired_on_microscope`, so tiles acquired on the microscope keep their label.
 
+#### Q: A slide has several (Camera View) entries
+
+**A:** For example, three `MetroHealth_370.svs (rotated 270) (Camera View)` entries under one slide. Versions before 2026-11-15 built the Camera View of a `(rotated N)` entry without recording its rotation, so later runs could not find it and built another. Current versions record the rotation, so no new copies appear, but the old ones stay in the project until you remove them.
+
+**To fix:** open an image that is not a Camera View entry, then run [`scripts/fix_camera_view_duplicates.groovy`](../scripts/fix_camera_view_duplicates.groovy) in the project, once with `DRY_RUN = true` to see the list and again with `DRY_RUN = false`. It records the missing rotation, keeps one copy of each view (the one most acquisitions were made from), moves acquisitions made from the other copies onto it, and deletes the extra entries. The slide files are not touched.
+
 #### Q: "Objective Pixel-Size Mismatch -- Workflow Canceled" error
 
 **A:** The dialog shows that MicroManager's active objective does not match the wizard's selection. The tile grid is planned for the wizard's objective; if the actual objective in MicroManager is different, tiles will be spaced incorrectly and the mosaic will not be usable.

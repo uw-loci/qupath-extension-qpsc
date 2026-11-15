@@ -4058,6 +4058,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
                             lastUnresponsiveModalNanos = System.nanoTime();
                             showServerUnresponsiveModal(lastFailureMessage);
                         }
+                        // The modal reaches only someone at the PC; an unattended run that has
+                        // just lost its microscope must also reach the operator's phone.
+                        qupath.ext.qpsc.service.notification.NotificationService.getInstance()
+                                .notify(
+                                        "Microscope Server Unresponsive",
+                                        "The microscope server stopped answering commands. Any running "
+                                                + "acquisition has stopped. Check Micro-Manager and the server "
+                                                + "window.",
+                                        qupath.ext.qpsc.service.notification.NotificationPriority.URGENT,
+                                        qupath.ext.qpsc.service.notification.NotificationEvent.ACQUISITION_ERROR);
                     } else {
                         logger.error(
                                 "Failed to reconnect after {} attempts (next health check in ~{}s may retry)",
