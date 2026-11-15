@@ -561,6 +561,12 @@ are suspect.
   field). Check the live image first: if it is in focus and on tissue, the stage
   is not where it reports. If it is blank or defocused, check the stage and
   objective. Either way, set the slides up again.
+- **"The alignment check could not be completed at any of ... points ... this says nothing about where the slide is. Last error: ..."** — The check
+  failed with an error at every point before it compared anything, most often
+  because the microscope stopped answering. The slide was not judged, so the
+  alignment is neither confirmed nor refuted. Get the microscope answering again
+  (Micro-Manager and the server window), then run **Acquire All Set-Up** again. The
+  slides do not need setting up again.
 - **"The alignment check could not set up the camera: ..."** — Nothing was
   snapped. Before its snaps the check starts the Live Viewer and applies the
   modality's alignment state (on PPM, the uncrossed angle and its exposures and

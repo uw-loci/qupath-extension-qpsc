@@ -475,7 +475,10 @@ saved in the project.
 
 Per-slide completion alerts (system beep + toast) are sent as each slide
 finishes, and a batch-complete push notification is sent once all stitching is
-done. Push notifications require ntfy.sh configured in
+done. If the run stops early (an alignment check fails or the stage position is
+not trustworthy), an urgent push, "Multi-Slide Run Stopped", is sent at once. A
+batch that did not acquire every slide reports "Finished Early" instead of "Run
+Complete". Push notifications require ntfy.sh configured in
 [Communication Settings](server-connection.md); see
 [Alerts](../PREFERENCES.md#alerts-qupath-scope-alerts).
 
@@ -525,13 +528,14 @@ clean counter over 34 hours while three of four slides came out offset by
 millimetres. Nothing that asks the controller where it is can see that; only
 matching against the sample can.
 
-**Three outcomes:**
+**Four outcomes:**
 
 | Outcome | Meaning | Action |
 |---------|---------|--------|
 | **Confirmed** | Matched within one camera field diagonal | Acquire normally |
 | **Misaligned** | Matched, but further than one field diagonal away | Stop the batch; the sample is not where this alignment says it is |
 | **Unconfirmed** | Could not match at any of three points | Stop the batch; nothing recognizable is under the objective (consistent with a large displacement, but also with a blank or badly defocused field) |
+| **Not checked** | The check failed with an error at every point before it measured anything (for example, the microscope stopped answering) | Stop the batch; this says nothing about the alignment. Get the microscope answering again and run **Acquire All Set-Up** again. The slides do not need setting up again |
 
 The tolerance is one camera field diagonal, computed from the FOV the microscope
 config declares for the objective in use -- about 446 µm at 20x on PPM. Beyond one
