@@ -372,7 +372,8 @@ Validating the worst case licenses the rest.
 4. The stage retracts to the safe Z and scans in, continuing ~30 um past your focus so the far
    side of the peak is captured. A window stays up for the whole traverse with a vertical
    focus-metric plot and a red **CANCEL** button, which aborts the scan and returns the stage to
-   the safe Z.
+   the safe Z. The window stays on top but does not block QuPath, so the log and the Live Viewer
+   can be read during the scan. Do not move the stage from the Live Viewer while it runs.
    
    **The plot:**
    - **Vertical orientation** -- The plot fills from top to bottom as the stage moves toward the

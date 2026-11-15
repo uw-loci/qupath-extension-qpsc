@@ -31,6 +31,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The Focus Approach Validation progress window no longer blocks QuPath.** It stays on top with its CANCEL button, but the log and the Live Viewer can be read while the stage traverses.
+
+- **The end-of-acquisition retraction uses the mounted insert's safe Z.** Acquisitions send `--safe-z` with the safe Z for the Stage Map's insert and the active modality, falling back to the scope-level `stage.safe_z_um`. Before, the server could only read the scope-level value; on the PPM after the 2026-11-13 Z re-zero that was 0, about 26 um above focus, while the four-slide holder declares 200.
+
 - **Apply to acquisition** in Calibrate Liquid Crystals no longer writes three comment lines above every state in the microscope YAML; the calibration's time, extinction ratio and file are recorded once under `reconstruction`. Lines an earlier version wrote are removed on the next Apply.
 
 - LC-PolScope background prompts say to defocus "as needed" instead of a fixed 10-20 um. The right amount depends on the objective, and the fixed range did not suit some, such as 63x oil or 4x air.

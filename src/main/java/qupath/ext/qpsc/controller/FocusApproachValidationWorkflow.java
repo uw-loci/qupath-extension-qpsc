@@ -477,7 +477,13 @@ public final class FocusApproachValidationWorkflow {
 
         Stage progress = new Stage();
         QpscWindows.track(progress);
-        progress.initModality(Modality.APPLICATION_MODAL);
+        // Non-modal so the log and the Live Viewer stay reachable during the traverse; the
+        // window stays on top so CANCEL is always in view.
+        progress.initModality(Modality.NONE);
+        QuPathGUI owner = QuPathGUI.getInstance();
+        if (owner != null && owner.getStage() != null) {
+            progress.initOwner(owner.getStage());
+        }
         progress.setTitle("Focus Approach Validation - Progress");
         progress.setAlwaysOnTop(true);
 
@@ -667,9 +673,6 @@ public final class FocusApproachValidationWorkflow {
      * would sit waiting for an action it had made impossible. {@link Modality#NONE} still lets
      * {@code showAndWait} block this workflow's own flow while leaving the rest of the UI live,
      * which is the same pattern {@code WorkflowDialogs.stageAlignmentConfirmAsync} uses.
-     *
-     * <p>The scan progress window is deliberately NOT made non-blocking: nothing should be
-     * driving the stage while a scan is traversing toward the sample.
      */
     private static void makeNonBlocking(Alert alert) {
         alert.initModality(Modality.NONE);

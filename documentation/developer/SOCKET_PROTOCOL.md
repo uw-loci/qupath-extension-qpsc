@@ -177,6 +177,7 @@ The ACQUIRE payload is a flag-based string:
 --af-tissue-tiles "2,5,9,14"
 --af-disabled
 --hint-z -3245.5
+--safe-z 200.00
 --z-stack
 --z-start -5.0
 --z-end 5.0
@@ -190,6 +191,8 @@ The ACQUIRE payload is a flag-based string:
 --save-raw true
 ENDOFSTR
 ```
+
+`--safe-z <um>` is the safe Z for the Stage Map's insert and the active modality (`MicroscopeConfigManager.getSafeZUm`, which falls back to the scope-level `stage.safe_z_um`); it is omitted when neither is declared. The server retracts to it at the end of the acquisition, after the same direction check it applies to the scope-level value.
 
 `--flatfield-folder <folder>` is emitted only when the run's flat-field correction is a BaSiC profile (monochrome detectors, laser-scanning or widefield modalities other than BF+IF). It is never sent together with `--bg-correction true`: a run takes background images or a BaSiC profile, not both. The folder holds one profile, or one subfolder per channel.
 

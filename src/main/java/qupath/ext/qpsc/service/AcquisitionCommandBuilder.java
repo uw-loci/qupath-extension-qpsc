@@ -885,6 +885,19 @@ public class AcquisitionCommandBuilder {
      * Builds the message string for socket communication
      * @return Message string with flag-based format
      */
+    /** Safe Z for the Stage Map's insert and the active modality, or null when none is declared. */
+    private static Double safeZForMountedInsert(String yamlPath) {
+        try {
+            String insertId = qupath.ext.qpsc.preferences.PersistentPreferences.getStageMapInsert();
+            String modality = qupath.ext.qpsc.state.ModalityState.getInstance().getModality();
+            return qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath)
+                    .getSafeZUm(insertId, modality);
+        } catch (RuntimeException e) {
+            logger.warn("Could not resolve the safe Z for the acquisition: {}", e.getMessage());
+            return null;
+        }
+    }
+
     public String buildSocketMessage() {
         validate();
 
@@ -1178,6 +1191,14 @@ public class AcquisitionCommandBuilder {
         // Add Z-focus hint from tilt prediction model
         if (hintZ != null) {
             args.addAll(Arrays.asList("--hint-z", String.format(Locale.ROOT, "%.2f", hintZ)));
+        }
+
+        // The server retracts to the safe Z at the end of each acquisition, but its YAML
+        // cannot say which insert is mounted, so send the value for this insert and modality
+        // (falling back to the scope-level stage.safe_z_um, as getSafeZUm does).
+        Double safeZ = safeZForMountedInsert(yamlPath);
+        if (safeZ != null) {
+            args.addAll(Arrays.asList("--safe-z", String.format(Locale.ROOT, "%.2f", safeZ)));
         }
 
         // Add birefringence minimum intensity threshold
