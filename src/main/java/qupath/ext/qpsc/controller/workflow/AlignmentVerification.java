@@ -172,6 +172,26 @@ public final class AlignmentVerification {
     private AlignmentVerification() {}
 
     /**
+     * The Z a check point starts its refocus from: the focus measured at an earlier point of
+     * this check when there is one, otherwise the slide's stored focus. The stored value can be
+     * hours old; on 2026-11-16 it was 45 um from the focus the first point found, and the next
+     * two points, sent back to it, refocused on nothing and could not match.
+     *
+     * @param storedZUm  the slide's focus Z from setup, or null
+     * @param measuredZUm the focus found at an earlier point of this check, or null
+     * @return the Z to move to, or null to leave Z where it is
+     */
+    static Double startZForPoint(Double storedZUm, Double measuredZUm) {
+        if (measuredZUm != null && Double.isFinite(measuredZUm)) {
+            return measuredZUm;
+        }
+        if (storedZUm != null && Double.isFinite(storedZUm)) {
+            return storedZUm;
+        }
+        return null;
+    }
+
+    /**
      * Decides what one SIFT measurement means. Pure, so it can be tested without hardware.
      *
      * @param measurement {@code [offsetX, offsetY, inliers, confidence]} from
@@ -212,7 +232,8 @@ public final class AlignmentVerification {
      * @param annotation the region about to be acquired, used to choose where to look
      * @param transform  the alignment being checked (QuPath full-res to stage)
      * @param focusZUm   the slide's focus Z from setup, used as the starting point for the
-     *                   refocus below; null to start from wherever Z is
+     *                   first refocus (later points start from the focus an earlier point
+     *                   found); null to start from wherever Z is
      * @param fovWidthUm  camera field width (um), for the size of the matched patch
      * @param fovHeightUm camera field height (um)
      * @param modalityForServer modality name the server resolves autofocus settings by, or
@@ -283,8 +304,9 @@ public final class AlignmentVerification {
                         String.format("%.1f", predicted[1]),
                         annotation.getName());
                 mc.moveStageXY(predicted[0], predicted[1]);
-                if (focusZUm != null && Double.isFinite(focusZUm)) {
-                    mc.moveStageZ(focusZUm);
+                Double startZ = startZForPoint(focusZUm, focusedZUm);
+                if (startZ != null) {
+                    mc.moveStageZ(startZ);
                 }
                 Double focused = refocusBeforeMatching(modalityForServer, objectiveId);
                 FocusPoint focusHere = focused != null && Double.isFinite(focused)

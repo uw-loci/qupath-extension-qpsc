@@ -113,6 +113,16 @@ class AlignmentVerificationTest {
                 .isTrue();
     }
 
+    @Test
+    void laterPointsStartFromTheFocusAnEarlierPointFound() {
+        // 2026-11-16, MetroHealth_189: stored 72.6, first point focused at 27.6.
+        assertThat(AlignmentVerification.startZForPoint(72.6, null)).isEqualTo(72.6);
+        assertThat(AlignmentVerification.startZForPoint(72.6, 27.6)).isEqualTo(27.6);
+        assertThat(AlignmentVerification.startZForPoint(null, 27.6)).isEqualTo(27.6);
+        assertThat(AlignmentVerification.startZForPoint(null, null)).isNull();
+        assertThat(AlignmentVerification.startZForPoint(Double.NaN, Double.NaN)).isNull();
+    }
+
     // ----------------------------------------------------------------------
     // the gate
     // ----------------------------------------------------------------------

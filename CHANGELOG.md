@@ -45,6 +45,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **The alignment check refocuses each point from the focus it just found.** Every check point moved Z back to the focus stored at set-up before refocusing. On 2026-11-16 that value was 45 um from the slide's focus: the first point refocused and matched, but the next two started 45 um away, found nothing to focus on, and the run stopped with "slide displaced" on a slide that was where its alignment said. Later points now start from the focus an earlier point measured.
+
 - **A multi-slide run that stops sends a phone notification at once.** When the unattended acquire pass halted (alignment not confirmed, or the stage origin moved), only a dialog on the microscope PC said so, and the batch notification came after every pending stitch had finished, two hours later on 2026-11-13, reading "Run Complete". The halt now sends an urgent ntfy alert, and a batch that did not acquire every slide is reported as "Finished Early". QPSC also sends an urgent alert when the microscope server stops answering commands, which before showed only the "Microscope Server Unresponsive" dialog.
 
 - **An alignment check that could not reach the microscope no longer blames the slide.** On 2026-11-13 the server stopped answering during slide 2's check, and the run stopped with "a slide displaced by more than a field looks like this", although nothing had been compared. The check now says it could not run, and the multi-slide dialog says to get the microscope answering and run Acquire All Set-Up again, without setting the slides up again.
