@@ -43,7 +43,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Auto-Align (SIFT) tries a fast search first.** Before the configured search, it matches against a region twice the field of view around the tile, at the fine resolution only, and keeps the result when it reaches the confidence threshold. On PPM at 20x with a 1 mm margin a match took about 4 s end to end, 1.3 s of it reading the 2.3 mm region from the slide image, and a coarse pass that missed fell through to a 6 s full-resolution pass; most matches were within 40 um of the prediction. The configured search, and **Search wider**, still run when the fast one finds nothing. Applies to the check after the stage move too. Not done when the configured margin is already about that small.
 
+- **OME-ZARR stitch outputs get the same reserved project entries as OME-TIFF.** Each pending entry appears in the project browser as soon as the stitch is queued and is filled in place when the file lands, as OME-TIFF outputs already were. Before, a zarr job added its entries only when it finished.
+
 ### Fixed
+
+- **Re-stitch Tiles fills the placeholder an earlier run left unfilled.** A stitch that failed or was stopped leaves a pending or failed entry for each output. Re-stitching those tiles used to add a second entry beside it; now the matching entry (same sample, region, angle and objective) is filled in place, and when more than one could match, the output is imported as a new entry as before.
 
 - **The alignment check refocuses each point from the focus it just found.** Every check point moved Z back to the focus stored at set-up before refocusing. On 2026-11-16 that value was 45 um from the slide's focus: the first point refocused and matched, but the next two started 45 um away, found nothing to focus on, and the run stopped with "slide displaced" on a slide that was where its alignment said. Later points now start from the focus an earlier point measured.
 

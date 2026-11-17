@@ -362,7 +362,7 @@ writes:
   - DS17 (MicroscopeController.currentTransform -- set after validateAndFlipIfNeeded, cleared in cleanup() only while this run holds the DS49 slot)
   - DS28 (TileConfiguration.txt and _QP.txt under <project>/<sample>/<acquisitionFolder>/<region>/)
   - DS30 (stitched OME-TIFF or ZARR plus pyramid)
-  - DS48 (reserved project entries, qpsc_stitch_status=pending, added before each stitch job and filled in place when it lands; OME-TIFF only)
+  - DS48 (reserved project entries, qpsc_stitch_status=pending, added before each stitch job and filled in place when it lands; OME-TIFF and OME-ZARR)
   - DS9 (new sub-image entry metadata at stitch import or reservation: base_image, original_image_id, modality, objective, detector_id, xy_offset, source_microscope, acquired_on_microscope, fov_x_um, fov_y_um, source_roi_*, stage_bounds_*, white_balance, background_profile, flatfield_profile via StitchingHelper / StitchInfoSupport)
   - DS19 (calls only -- e.g. acquisition command file)
   - DS27 (project sync; new ProjectImageEntry per acquired sub-image; imports never open an image, save the viewer's image data or re-set the project)
@@ -546,7 +546,7 @@ reads:
 writes:
   - DS27 (project: createAndOpenQuPathProject OR use existing)
   - DS28 (TileConfiguration.txt in stage-micron coords; modality folder includes objective suffix)
-  - DS48 (reserved entries for each stitch job, OME-TIFF only)
+  - DS48 (reserved entries for each stitch job, OME-TIFF and OME-ZARR)
   - DS30 (stitched output -- post-acquisition)
   - DS19 (acquisition command file via AcquisitionCommandBuilder)
   - DS9 (new entry metadata after stitching)
@@ -826,7 +826,7 @@ key_invariants:
   - "autoRegisterBoundsTransformIfAvailable stamps STAGE_BOUNDS_* on the entry alongside the derived/ JSON so Move-to-Centroid works even if JSON lookup fails."
   - "STITCHER_FLIP_X/Y are recorded so Move-to-Centroid can rebuild pixel->stage from scratch."
   - "Imports only add the entry, stamp metadata and refreshProject(); they never open an entry in the viewer, save the viewer's image data or call setProject (4c841bf5). Added entries are collected through StitchingHelper.ImportContext (by operation id) for the completion toast and StitchingQueueWindow.recordOutput."
-  - "Reservation is OME-TIFF only: a ZARR job gets an empty plan and imports the ordinary way. A wrong prediction costs only a placeholder entry, dropped when the job finishes."
+  - "Reservation covers OME-TIFF and OME-ZARR alike (StitchOutputPlanner.plan returns an empty plan for any other extension, which imports the ordinary way). A wrong prediction costs only a placeholder entry, dropped when the job finishes."
   - "Derived outputs (getPostProcessingDirectorySuffixes: LC-PolScope retardance/orientation/orientation_color, PPM .biref/.sum) are found by findDerivedDirectories before any target is isolated and stitch on the targets' bounded pool as StitchingRegistration.Extras: after the registration solve, with the targets' apply mode and flips, queued behind the targets. The call returns when the targets are done, so the channel merge runs while derived outputs may still stitch; the job awaits them before dropUnfilled / completeOperation, also on failure, so the next job never overlaps them. Each derived output imports when it finishes (reserved entries keep list order and names independent of timing)."
   - "stitchDerivedConcurrently (DS25, default true) gates the derived outputs through Extras.start: false holds them until StitchingHelper.awaitDerived (after the channel merge, or after the last angle) or awaitDerivedAfterFailure releases the gate; they then run on the same pool with the same mode. One scheduling path; every await releases first, so a held gate can never hang a job."
   - "StitchMemoryCheck runs once per job in stitchTargetsBounded (job thread, never FX) before the pool starts: measured per-stitch / merge / solve terms, compared with 80% of Runtime.maxMemory() and with committed heap + physical RAM available; a warning is a non-modal owned Alert plus a StitchJobStatus note and a log line, never a change to the job. Unknown physical RAM never triggers it."
@@ -2317,13 +2317,14 @@ fields:
   metadata: "the full DS9 bundle the ordinary import would stamp (parent, offsets, sample, modality, objective, angle, annotation, index, acquiring microscope)"
 written_by:
   - "StitchingHelper.reserveOutputs (W14) for W1 and W2: StitchOutputPlanner predicts one entry per output (angles plus biref/sum, LC-PolScope merge plus retardance / orientation / orientation_color, split IF channels plus the merge, the single brightfield file); ProjectEntryReservation.reserve runs synchronously on the FX thread before the job is queued; the reservation rides in stitchParams"
-  - "ProjectEntryReservation.fill when the OME-TIFF lands (updateURIs -- no new entry, no reordering; sets image type, channel names, display ranges, saves image data and thumbnail; closes the Bio-Formats reader, 532e509d)"
+  - "ProjectEntryReservation.fill when the OME-TIFF or OME-ZARR lands (updateURIs -- no new entry, no reordering; sets image type, channel names, display ranges, saves image data and thumbnail; closes the Bio-Formats reader, 532e509d)"
   - "ProjectEntryReservation.fail / dropUnfilled when the job ends"
+  - "StitchingRecoveryWorkflow (Re-stitch Tiles) fills an unfilled entry (pending or failed) left by an earlier run through ProjectEntryReservation.fillEntry, matched by sample, region, angle and objective (findUnfilledReservation); when zero or several match, it adds a new entry as before"
 read_by:
   - "TileProcessingUtilities, StitchingHelper.importMergedImageOnly / importPerChannelFallback (fill when they hold a reservation for their key)"
   - "QuPath project browser (puzzle thumbnail from the moment the region is handed to the stitching queue)"
 lifecycle:
-  created_when: "a stitch job is queued (OME-TIFF output only; a ZARR job reserves nothing)"
+  created_when: "a stitch job is queued (OME-TIFF and OME-ZARR output; any other format reserves nothing)"
   destroyed_when: "dropUnfilled for outputs that never arrived (the real file, if any, is imported the ordinary way)"
 invariants:
   - "Never opened in the viewer, filled or not."
@@ -2479,7 +2480,7 @@ writes DS Y consumed by Consumer Z."
 | W33 NotificationService | external (ntfy.sh) | -- | Best-effort; failures not workflow-fatal |
 | Setup time | DS3 (microscope.name) | DS9 (SOURCE_MICROSCOPE / ACQUIRED_ON_MICROSCOPE stamping) | Source-of-truth for both fields at stamping time |
 | W28 AcquisitionWizardDialog | (calls W1) | W1 | The entry point for guided existing-image acquisition |
-| W14 StitchingHelper.reserveOutputs (W1, W2) | DS48 (reserved entries) | Project browser; filled by TileProcessingUtilities / importMergedImageOnly / importPerChannelFallback | OME-TIFF only; never opened in the viewer |
+| W14 StitchingHelper.reserveOutputs (W1, W2) | DS48 (reserved entries) | Project browser; filled by TileProcessingUtilities / importMergedImageOnly / importPerChannelFallback / Re-stitch Tiles | OME-TIFF and OME-ZARR; never opened in the viewer |
 | W1 execute / cleanup | DS49 (WorkflowRegistry slot) | W1 cleanup of the older run | Guards DS17 against an overlapping run's cleanup |
 | AcquisitionManager.launchStitching | W37 StitchingQueueWindow rows | Operator (Open on finished rows) | Non-modal; the only place a stitched image is opened |
 | W38 stopActiveAcquisition | DS45 (CANCEL), active run's cancelRequested | W1 / W2 CancelGate | Reachable from the menu, the Live Viewer and W1's refusal |
@@ -2819,7 +2820,7 @@ two lines.
 
 - **reserved entry** -- DS48. A project entry added before its stitch runs,
   pointing at a placeholder image with `qpsc_stitch_status=pending`, filled
-  in place when the OME-TIFF lands.
+  in place when the OME-TIFF or OME-ZARR lands.
 
 - **StageImageTransform** -- Composite of stage polarity and camera
   orientation (DS3 `stage.polarity` + DS25 cameraOrientation -> DS26). Single source of truth for all
