@@ -118,7 +118,7 @@ public class StageMapWindow {
     private volatile boolean isPolling = false;
     private volatile boolean dialogShowing = false; // Pause updates while dialogs are shown
     private volatile int consecutiveErrors = 0; // Track polling failures
-    private static final int MAX_CONSECUTIVE_ERRORS = 10; // Pause polling after this many errors
+    static final int MAX_CONSECUTIVE_ERRORS = 10; // Slow polling down after this many errors
     private static boolean movementWarningShownThisSession = false;
     // Once-per-session acknowledgement for clicking past the imaging well into
     // the surrounding dish body (inserts that declare an outer outline, e.g. a
@@ -174,6 +174,8 @@ public class StageMapWindow {
         buildUI();
         loadInsertConfigurations();
         loadTransformPresets();
+        // A reconnect: poll at full rate again at once rather than at the paused rate.
+        qupath.ext.qpsc.service.microscope.MicroscopeSocketClient.addConfiguredListener(this::resetPollingErrors);
     }
 
     /**
@@ -2231,8 +2233,9 @@ public class StageMapWindow {
             return;
         }
 
-        // Skip if too many consecutive errors (microscope likely disconnected)
-        if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        // After too many consecutive errors (microscope off or disconnected), try only every few
+        // seconds instead of every tick, so polling comes back by itself when the microscope does.
+        if (!shouldPoll(consecutiveErrors, ++pollTick)) {
             return;
         }
 
@@ -2242,6 +2245,9 @@ public class StageMapWindow {
 
             if (pos != null && pos.length >= 2) {
                 // Reset error counter on success
+                if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+                    logger.info("Stage Map position polling resumed: the stage answers again");
+                }
                 consecutiveErrors = 0;
 
                 Platform.runLater(() -> {
@@ -2320,7 +2326,7 @@ public class StageMapWindow {
                     // suppress. Hiding the canvas wiped the macro overlay,
                     // slide rect, and insert outline -- exactly what the user
                     // wants to keep seeing when live position polling breaks.
-                    statusLabel.setText("Position polling paused - see log");
+                    statusLabel.setText("Stage not answering - retrying every few seconds");
                     statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
                 }
             });
@@ -2338,9 +2344,19 @@ public class StageMapWindow {
         return false;
     }
 
+    /** Polls between pauses: every tick while healthy, one tick in {@link #PAUSED_PROBE_EVERY} after them. */
+    static boolean shouldPoll(int consecutiveErrors, long tick) {
+        return consecutiveErrors < MAX_CONSECUTIVE_ERRORS || tick % PAUSED_PROBE_EVERY == 0;
+    }
+
+    /** Ticks between tries while paused (25 x 200 ms = 5 s). */
+    static final int PAUSED_PROBE_EVERY = 25;
+
+    private long pollTick = 0;
+
     /**
-     * Resets the error counter and resumes polling.
-     * Call this when reconnecting to the microscope.
+     * Resets the error counter and resumes polling at full rate. Called when the server accepts
+     * the configuration again (a reconnect).
      */
     public void resetPollingErrors() {
         consecutiveErrors = 0;
