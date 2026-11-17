@@ -75,6 +75,12 @@ public class AffineTransformManager {
         /** Source scanner that produced the macro image, e.g. "Ocus40" (null = old preset). */
         private final String sourceScanner;
 
+        /**
+         * The camera the alignment was made with, stamped by {@link #savePreset}. On a microscope
+         * with two cameras only the camera in use's presets are offered; null = any camera.
+         */
+        private String detector;
+
         // ---- Anchor metadata ----------------------------------------------
         // The Stage Map macro overlay is placed on screen by anchoring on the
         // alignment build point: the green-box center on the displayed-flipped
@@ -205,6 +211,11 @@ public class AffineTransformManager {
 
         public String getMicroscope() {
             return microscope;
+        }
+
+        /** The camera this preset was made with, or null when not recorded. */
+        public String getDetector() {
+            return detector;
         }
 
         public String getMountingMethod() {
@@ -440,6 +451,9 @@ public class AffineTransformManager {
      * @param preset The transform preset to save
      */
     public void savePreset(TransformPreset preset) {
+        if (preset.detector == null) {
+            preset.detector = MicroscopeConfigManager.activeDetectorForWriting();
+        }
         transforms.put(preset.getName(), preset);
         persistTransforms(); // renamed from saveTransforms
         logger.info("Saved transform preset: {}", preset.getName());
@@ -476,8 +490,17 @@ public class AffineTransformManager {
     public List<TransformPreset> getTransformsForMicroscope(String microscope) {
         return transforms.values().stream()
                 .filter(t -> microscope != null && microscope.equals(t.getMicroscope()))
+                .filter(AffineTransformManager::fitsCameraInUse)
                 .sorted(Comparator.comparing(TransformPreset::getName))
                 .toList();
+    }
+
+    /**
+     * False for a preset made with another camera of a microscope that has several (their ports
+     * do not share an optical axis, so the other camera's alignment is millimeters off).
+     */
+    private static boolean fitsCameraInUse(TransformPreset preset) {
+        return otherCamera(preset.getDetector()) == null;
     }
 
     /**
@@ -491,6 +514,7 @@ public class AffineTransformManager {
         if (targetMicroscope == null) return List.of();
         return transforms.values().stream()
                 .filter(t -> targetMicroscope.equals(t.getMicroscope()))
+                .filter(AffineTransformManager::fitsCameraInUse)
                 .map(TransformPreset::getSourceScanner)
                 .filter(s -> s != null && !s.isEmpty())
                 .distinct()
@@ -511,6 +535,7 @@ public class AffineTransformManager {
         if (sourceScanner == null || targetMicroscope == null) return null;
         return transforms.values().stream()
                 .filter(t -> targetMicroscope.equals(t.getMicroscope()) && sourceScanner.equals(t.getSourceScanner()))
+                .filter(AffineTransformManager::fitsCameraInUse)
                 .max(Comparator.comparing(
                         TransformPreset::getCreatedDate, Comparator.nullsFirst(Comparator.naturalOrder())))
                 .orElse(null);
@@ -565,9 +590,12 @@ public class AffineTransformManager {
         String name = requested;
         for (int n = 2; ; n++) {
             TransformPreset holder = existing.get(name);
+            // Same pair = same scanner, same microscope and, on a two-camera microscope, the same
+            // camera: the other camera's preset with this name is not replaced.
             if (holder == null
                     || (Objects.equals(holder.getMicroscope(), targetMicroscope)
-                            && Objects.equals(holder.getSourceScanner(), sourceScanner))) {
+                            && Objects.equals(holder.getSourceScanner(), sourceScanner)
+                            && otherCamera(holder.getDetector()) == null)) {
                 return name;
             }
             name = requested + "_" + n;
@@ -1186,11 +1214,38 @@ public class AffineTransformManager {
         if (activeMicroscope != null) {
             File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
             if (scoped.exists()) {
-                return scoped;
+                return otherCameraOf(readAlignmentJson(scoped)) == null ? scoped : null;
             }
         }
         File legacy = new File(alignmentDir, sampleName + "_alignment.json");
         return legacy.exists() ? legacy : null;
+    }
+
+    /**
+     * The camera an alignment record was made with when that is not the camera in use, on a
+     * microscope with more than one camera; null otherwise (one camera, the same camera, or
+     * either not known). The camera ports of such a microscope do not share an optical axis, so
+     * one camera's alignment puts the other millimeters off.
+     */
+    static String otherCameraOf(Map<String, Object> data) {
+        if (data == null) {
+            return null;
+        }
+        Object recorded = data.get("detector");
+        return otherCamera(recorded == null ? null : recorded.toString());
+    }
+
+    /** {@code recorded} when it is a camera other than the one in use on a multi-camera microscope, else null. */
+    static String otherCamera(String recorded) {
+        if (recorded == null || recorded.isBlank()) {
+            return null;
+        }
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        if (mgr == null || mgr.getHardwareDetectors().size() < 2) {
+            return null;
+        }
+        String active = MicroscopeConfigManager.activeDetectorForWriting();
+        return active != null && !active.equals(recorded) ? recorded : null;
     }
 
     /** Parse an alignment JSON into a mutable map, or null when unreadable. */
@@ -2156,6 +2211,16 @@ public class AffineTransformManager {
                             activeMicroscope);
                     return null;
                 }
+                String otherCamera = otherCameraOf(data);
+                if (otherCamera != null) {
+                    logger.warn(
+                            "Ignoring slide alignment {} -- made with camera {}, not the camera in use ({}); the "
+                                    + "two camera ports do not share an optical axis.",
+                            alignmentFile.getName(),
+                            otherCamera,
+                            MicroscopeConfigManager.activeDetectorForWriting());
+                    return null;
+                }
             }
 
             SlideAlignmentResult result = alignmentResultFromData(data);
@@ -2411,7 +2476,7 @@ public class AffineTransformManager {
         File alignmentFile = null;
         if (activeMicroscope != null && !activeMicroscope.isEmpty() && !"Unknown".equals(activeMicroscope)) {
             File scoped = new File(alignmentDir, sampleName + "_" + activeMicroscope + "_alignment.json");
-            if (scoped.exists()) {
+            if (scoped.exists() && otherCameraOf(readAlignmentJson(scoped)) == null) {
                 alignmentFile = scoped;
             }
         }
