@@ -29,6 +29,8 @@ import qupath.ext.qpsc.background.FlatfieldProfiles;
 import qupath.ext.qpsc.background.ProfileWhiteBalance;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
+import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.model.TimeLapseOrder;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -497,7 +499,6 @@ public class SinglePointAcquisitionController {
             CompletableFuture<Void> future) {
 
         String modality = sample.modality() != null ? sample.modality() : "brightfield";
-        String wbMode = "off";
         String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
 
         logger.info(
@@ -521,6 +522,13 @@ public class SinglePointAcquisitionController {
                         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
                         String objective = TestAutofocusWorkflow.getCurrentObjective(mgr);
                         String detector = mgr.getActiveDetector();
+                        // Same white balance the other acquisitions use: on a JAI camera with a
+                        // modality that has one, the last mode chosen in an acquisition dialog
+                        // (else the modality's default); "off" otherwise.
+                        String wbMode = wbModeForRun(
+                                mgr.isJAICamera(detector),
+                                ModalityRegistry.getHandler(modality).getDefaultWbMode(),
+                                PersistentPreferences.getLastWhiteBalanceMode());
                         String flatfieldFolder = flatfieldFolder(modality, objective, detector);
                         String wbFolder = ProfileWhiteBalance.folder(
                                 mgr.getBackgroundProfileFolder(), modality, objective, detector, wbMode);
@@ -635,5 +643,30 @@ public class SinglePointAcquisitionController {
                 "SinglePoint-Acquire");
         worker.setDaemon(true);
         worker.start();
+    }
+
+    /**
+     * The white balance mode a single-point run sends, chosen as the acquisition dialogs choose
+     * it: "off" unless the camera is a JAI and the modality uses white balance; then the mode last
+     * picked in an acquisition dialog (a display name), or the modality's default when none is
+     * saved or it is not a known mode (pure; tested).
+     *
+     * @param jaiCamera whether the camera in use is a JAI camera
+     * @param modalityDefault the modality handler's default mode (protocol name, "off" for none)
+     * @param lastChosenDisplayName {@code PersistentPreferences.getLastWhiteBalanceMode()}
+     * @return the protocol name to send
+     */
+    static String wbModeForRun(boolean jaiCamera, String modalityDefault, String lastChosenDisplayName) {
+        if (!jaiCamera || modalityDefault == null || "off".equals(modalityDefault)) {
+            return "off";
+        }
+        if (lastChosenDisplayName != null) {
+            for (WbMode m : WbMode.values()) {
+                if (m.getDisplayName().equals(lastChosenDisplayName)) {
+                    return m.getProtocolName();
+                }
+            }
+        }
+        return modalityDefault;
     }
 }
