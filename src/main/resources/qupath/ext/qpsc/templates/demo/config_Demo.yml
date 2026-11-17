@@ -41,7 +41,7 @@ microscope:
   demo: true
   # Raised whenever the bundle changes in a way an old copy cannot follow
   # (new modalities, devices, cameras). Leave it alone.
-  bundle_version: 3
+  bundle_version: 4
   detector_in_use: null
   objective_in_use: null
   modality: null
@@ -322,6 +322,11 @@ hardware:
   detectors:
     - DEMO_CAMERA
     - DEMO_MONO_CAMERA
+  # How each camera's image sits relative to the sample (Live Viewer > Calibrate
+  # Directions writes it, per camera). The simulated cameras are not flipped.
+  camera_orientation:
+    DEMO_CAMERA: NORMAL
+    DEMO_MONO_CAMERA: NORMAL
 
 # The detector, objective and stage are defined in the sibling
 # resources/resources_LOCI.yml that ships with this bundle. The command

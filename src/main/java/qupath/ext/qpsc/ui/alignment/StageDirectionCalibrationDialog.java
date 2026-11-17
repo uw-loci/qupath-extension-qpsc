@@ -27,9 +27,9 @@ import javafx.stage.Window;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.geometry.CameraOrientation;
+import qupath.ext.qpsc.geometry.CameraOrientationSetting;
 import qupath.ext.qpsc.geometry.StageImageTransform;
 import qupath.ext.qpsc.geometry.StagePolarity;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -373,10 +373,10 @@ public final class StageDirectionCalibrationDialog {
         }
 
         phaseHeader.setText("Camera orientation result");
-        CameraOrientation before = QPPreferenceDialog.getCameraOrientationProperty();
+        CameraOrientation before = CameraOrientationSetting.current();
         String change = changeWarning(before, solved.orientation());
         phaseInstructions.setText((change == null ? "" : change + "\n\n")
-                + "Apply to write the camera orientation to your preferences. "
+                + "Apply to write the camera orientation for the camera in use to the microscope config. "
                 + "Stage polarity is left unchanged. Use Manual override if you need to edit "
                 + "both polarity and orientation together.");
         if (change != null) {
@@ -424,8 +424,7 @@ public final class StageDirectionCalibrationDialog {
 
         manualOrientationCombo = new ComboBox<>();
         manualOrientationCombo.getItems().setAll(CameraOrientation.values());
-        manualOrientationCombo.setValue(
-                solved == null ? QPPreferenceDialog.getCameraOrientationProperty() : solved.orientation());
+        manualOrientationCombo.setValue(solved == null ? CameraOrientationSetting.current() : solved.orientation());
 
         TextArea preview = new TextArea();
         preview.setEditable(false);
@@ -470,7 +469,8 @@ public final class StageDirectionCalibrationDialog {
                 // Polarity is a fact about this microscope's stage: stage.polarity in its config.
                 StagePolarity.save(result.polarity());
             }
-            QPPreferenceDialog.setCameraOrientationProperty(result.orientation());
+            // Camera orientation is a fact about the camera in use: hardware.camera_orientation in the config.
+            CameraOrientationSetting.save(result.orientation());
             logger.info(
                     "Stage direction calibration applied: {}",
                     new StageImageTransform(result.polarity(), result.orientation()).describe());

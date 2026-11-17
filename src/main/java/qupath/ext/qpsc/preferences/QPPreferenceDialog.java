@@ -11,7 +11,6 @@ import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.geometry.CameraOrientation;
 import qupath.ext.qpsc.geometry.StagePolarity;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
@@ -27,7 +26,7 @@ import qupath.lib.images.writers.ome.OMEPyramidWriter;
  * <p>Registers and exposes the subset of extension preferences you
  * want in QuPath's Preferences Pane:
  *   - Camera orientation, script paths, directories, compression, overlap, etc.
- *   - Provides typed getters so other code can simply call getCameraOrientationProperty(), etc.
+ *   - Provides typed getters so other code can simply call getMicroscopeConfigFileProperty(), etc.
  *
  * <p><b>Terminology (see CLAUDE.md "COORDINATE SYSTEM TERMINOLOGY"):</b>
  * <ul>
@@ -60,14 +59,8 @@ public class QPPreferenceDialog {
 
     // Stage axis inversion is not a preference: it is stage.polarity in the microscope config
     // (StagePolarity.current()), so a QuPath that switches microscopes does not carry it along.
-    // Camera orientation: 8-element dihedral group describing how the displayed
-    // image is oriented relative to the sample frame. Distinct from stage polarity
-    // (which is hardware wiring) and distinct from macro-image flip (which is a
-    // property of loaded overview images). Stored as a string to persist the enum
-    // name across sessions; parsed into a {@link qupath.ext.qpsc.geometry.CameraOrientation}
-    // in {@link #getCameraOrientationProperty()}.
-    private static final StringProperty cameraOrientationProperty =
-            PathPrefs.createPersistentPreference("cameraOrientationProperty", "NORMAL");
+    // Camera orientation is not a preference either: it is hardware.camera_orientation.<detector> in
+    // the microscope config (CameraOrientationSetting), one value per camera.
     private static final StringProperty microscopeServerHostProperty =
             PathPrefs.createPersistentPreference("microscope.server.host", "127.0.0.1");
 
@@ -311,52 +304,6 @@ public class QPPreferenceDialog {
         // Camera orientation enum (8-element dihedral group). Combines with the
         // stage polarity (stage.polarity in the microscope config) via StageImageTransform to produce a
         // single consistent relationship between user gestures and stage commands.
-        List<String> cameraOrientationChoices = new ArrayList<>();
-        for (CameraOrientation o : CameraOrientation.values()) {
-            cameraOrientationChoices.add(o.name());
-        }
-        items.add(new PropertyItemBuilder<>(cameraOrientationProperty, String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.CHOICE)
-                .name("Camera orientation")
-                .category(CATEGORY)
-                .choices(cameraOrientationChoices)
-                .description("Describes the NET OPTICAL RELATIONSHIP between your sample and the displayed image.\n"
-                        + "Composes with Inverted X/Y stage to form the full stage <-> image coordinate transform\n"
-                        + "used by arrow buttons, joystick, double-click-to-center, and the stitcher.\n"
-                        + "\n"
-                        + "IMPORTANT: This is NOT a command to flip or rotate your Live Viewer image. The Live\n"
-                        + "Viewer keeps displaying exactly the same pixels regardless of this setting. What\n"
-                        + "changes is how the software interprets direction signs for stage moves and tile\n"
-                        + "placement. This setting is also NOT about whether you physically rotated the camera\n"
-                        + "hardware -- your scope may have an image flip inherent to its optics (a dichroic, a\n"
-                        + "mirror, an adapter, or sensor wiring) that you never installed.\n"
-                        + "\n"
-                        + "Axis-aligned values (fully supported by all subsystems including the stitcher):\n"
-                        + "  NORMAL          - sample +X -> display right, sample +Y -> display down\n"
-                        + "  FLIP_H          - net horizontal flip in optical path (sample +X -> display LEFT)\n"
-                        + "  FLIP_V          - net vertical flip (sample +Y -> display UP)\n"
-                        + "  ROT_180         - image is upside-down relative to the stage frame\n"
-                        + "\n"
-                        + "Rotation / transpose values (arrows + joystick + click work, BUT the stitcher logs\n"
-                        + "an error and falls back to an axis-aligned approximation -- use only if your camera\n"
-                        + "sensor is physically rotated 90 degrees):\n"
-                        + "  ROT_90_CW / ROT_90_CCW / TRANSPOSE / ANTI_TRANSPOSE\n"
-                        + "\n"
-                        + "How to configure:\n"
-                        + "  1. Start with NORMAL.\n"
-                        + "  2. Test the four gestures in the Live Viewer: arrows, joystick, double-click,\n"
-                        + "     and a small 2x2 stitched acquisition.\n"
-                        + "  3. If the live gestures work but only stitched X is mirrored, try FLIP_H.\n"
-                        + "     If only stitched Y is mirrored, try FLIP_V. If both, try ROT_180.\n"
-                        + "  4. Changing this value does NOT change what the Live Viewer shows -- it only\n"
-                        + "     affects the sign math. Do not hesitate to pick FLIP_H just because 'nothing\n"
-                        + "     looks flipped' in the live image.\n"
-                        + "\n"
-                        + "Diagnostic: QPSC logs 'Live-view coordinate transform at startup: ...' to the\n"
-                        + "QuPath log at extension load time. Check Help -> Show Log to see the current\n"
-                        + "effective transform and the resulting stitcher flip flags.")
-                .build());
-
         items.add(new PropertyItemBuilder<>(microscopeConfigFileProperty, String.class)
                 .propertyType(PropertyItemBuilder.PropertyType.FILE)
                 .name("Microscope Config File")
@@ -860,36 +807,6 @@ public class QPPreferenceDialog {
 
     // --- Typed getters for use throughout your code ---
     // (Flip macro X/Y getters removed -- read flip via FlipResolver instead.)
-
-    /**
-     * Returns the persisted {@link CameraOrientation}. Falls back to
-     * {@link CameraOrientation#NORMAL} if the stored value is missing or
-     * unrecognised (e.g. after a rollback or enum rename), so no upgrade
-     * path can leave the preference in an invalid state.
-     */
-    public static CameraOrientation getCameraOrientationProperty() {
-        String stored = cameraOrientationProperty.get();
-        if (stored == null || stored.isEmpty()) {
-            return CameraOrientation.NORMAL;
-        }
-        try {
-            return CameraOrientation.valueOf(stored);
-        } catch (IllegalArgumentException e) {
-            return CameraOrientation.NORMAL;
-        }
-    }
-
-    /** Setter used by the preferences dialog UI. */
-    public static void setCameraOrientationProperty(CameraOrientation orientation) {
-        if (orientation != null) {
-            cameraOrientationProperty.set(orientation.name());
-        }
-    }
-
-    /** Observable view of the camera orientation preference for change listeners. */
-    public static StringProperty cameraOrientationObservable() {
-        return cameraOrientationProperty;
-    }
 
     public static String getMicroscopeServerHost() {
         return microscopeServerHostProperty.get();

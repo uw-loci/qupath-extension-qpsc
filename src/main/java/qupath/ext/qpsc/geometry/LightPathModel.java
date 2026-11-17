@@ -8,7 +8,6 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.ConfigYamlEditor;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.utilities.AffineTransformManager.TransformPreset;
 import qupath.lib.projects.ProjectImageEntry;
 
@@ -42,7 +41,7 @@ import qupath.lib.projects.ProjectImageEntry;
  *       (e.g. PPM's objective inversion = 180/XY); it feeds the Stage Map Camera View, display only.
  *       The per-detector {@code flip_x/flip_y} remains for macro-image resolution.</li>
  *   <li><b>Camera orientation</b> -- the camera's mounting rotation on the port,
- *       {@link CameraOrientation} via {@link QPPreferenceDialog#getCameraOrientationProperty()}.</li>
+ *       {@link CameraOrientation} via {@link CameraOrientationSetting#current()} (per camera, in the config).</li>
  *   <li><b>Stage polarity</b> -- which way the stage physically moves for a {@code +X/+Y} command,
  *       {@link StagePolarity} via {@link StagePolarity#current()} (stage.polarity in the microscope config). This is the
  *       <em>net</em> of any MicroManager-level axis inversion (e.g. OWS3 inverts X in MM) plus the
@@ -526,11 +525,11 @@ public final class LightPathModel {
                 .append(System.lineSeparator());
         sb.append("  3. Camera orientation : ")
                 .append(camera)
-                .append("  [pref CameraOrientation]")
+                .append("  [YAML hardware.camera_orientation.<camera>]")
                 .append(System.lineSeparator());
         sb.append("  4. Stage polarity     : ")
                 .append(polarity)
-                .append("  [pref StagePolarity; net of MM invert + wiring]")
+                .append("  [YAML stage.polarity; net of MM invert + wiring]")
                 .append(System.lineSeparator());
         sb.append("  +  Macro image flip   : ")
                 .append(macroFlip)

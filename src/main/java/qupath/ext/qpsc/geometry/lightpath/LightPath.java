@@ -55,7 +55,7 @@ public class LightPath {
     private final String stagePolarityName;
     private final Parity opticalFlip;
     private final Parity stagePolarity;
-    private final Parity cameraOrientation; // shared default; per-detector override via detectorGeometry
+    private final Parity cameraOrientation; // the camera in use; another camera's via detectorGeometry
 
     protected LightPath(
             String scopeType,
@@ -131,9 +131,14 @@ public class LightPath {
                 detFlip = new Parity(mgr.getDetectorFlipX(detectorId), mgr.getDetectorFlipY(detectorId));
             }
         }
-        // Camera orientation is shared across detectors today; a multi-camera scope
-        // overrides this per detector (the documented extension point).
-        return new DetectorGeometry(detectorId, detFlip, cameraOrientation);
+        // Each camera has its own orientation (hardware.camera_orientation.<detector>).
+        Parity orientation = detectorId == null || detectorId.isBlank()
+                ? cameraOrientation
+                : Parity.of(new qupath.ext.qpsc.geometry.StageImageTransform(
+                                qupath.ext.qpsc.geometry.StagePolarity.current(),
+                                qupath.ext.qpsc.geometry.CameraOrientationSetting.forDetector(detectorId))
+                        .cameraFlipFlags());
+        return new DetectorGeometry(detectorId, detFlip, orientation);
     }
 
     /**

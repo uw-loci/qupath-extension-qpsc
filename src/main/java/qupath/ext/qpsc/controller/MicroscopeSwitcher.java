@@ -243,11 +243,6 @@ public final class MicroscopeSwitcher {
                     })
                     .whenComplete((v, err) -> Platform.runLater(() -> {
                         try {
-                            // Leaving the demo puts back the stage and camera orientation it
-                            // replaced (FX thread: they are bound preferences).
-                            if (err == null && DemoOrientation.restoreIfLeaving(newPath)) {
-                                LightPathModel.logCurrent("Orientation stack restored after the demo");
-                            }
                             // 7. Rebuild what the UI shows, against whichever config is now active.
                             SetupScope.reloadForNewConfig();
                             if (err == null) {

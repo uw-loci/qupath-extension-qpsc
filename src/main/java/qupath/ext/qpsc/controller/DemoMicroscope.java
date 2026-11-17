@@ -170,8 +170,6 @@ public final class DemoMicroscope {
      * because the loaded copy is the old one.
      */
     private static void activate(Path config, Path setAside, ServerOutcome outcome, int port) {
-        // Before anything reads the orientation (the switch logs it, the viewer uses it).
-        String orientationNote = DemoOrientation.adopt();
         if (outcome.alreadyRunning()) {
             logger.info("Demo microscope: using the server already listening on port {}", port);
         } else {
@@ -193,8 +191,7 @@ public final class DemoMicroscope {
                             + (setAside == null
                                     ? ""
                                     : "\nThe demo was updated (it now offers Brightfield, Fluorescence and "
-                                            + "LC-PolScope); your previous demo files are in " + setAside + ".")
-                            + (orientationNote == null ? "" : "\n" + orientationNote));
+                                            + "LC-PolScope); your previous demo files are in " + setAside + "."));
         };
 
         MicroscopeController controller = MicroscopeController.getInstance();

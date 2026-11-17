@@ -732,7 +732,7 @@ public class StageControlPanel extends VBox {
         Button calibrateDirectionsBtn = new Button("Calibrate Directions...");
         Tooltip calibrateTooltip =
                 new Tooltip("Jog the stage and confirm which way the image pans to back-solve the correct\n"
-                        + "stage polarity and camera orientation preferences.");
+                        + "stage polarity and camera orientation in the microscope config.");
         calibrateTooltip.setShowDelay(Duration.millis(300));
         Tooltip.install(calibrateDirectionsBtn, calibrateTooltip);
         calibrateDirectionsBtn.setOnAction(e -> qupath.ext.qpsc.ui.alignment.StageDirectionCalibrationDialog.show(

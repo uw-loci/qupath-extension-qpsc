@@ -1936,9 +1936,8 @@ public class StageMapWindow {
         // Polarity is stage.polarity in the microscope config: a switch rebuilds the map, and
         // Calibrate Directions' manual override notifies here after writing it.
         StagePolarity.addChangeListener(() -> Platform.runLater(() -> syncApplyFlipsFromHardware("stage polarity")));
-        QPPreferenceDialog.cameraOrientationObservable()
-                .addListener(
-                        (obs, was, now) -> Platform.runLater(() -> syncApplyFlipsFromHardware("camera orientation")));
+        qupath.ext.qpsc.geometry.CameraOrientationSetting.addChangeListener(
+                () -> Platform.runLater(() -> syncApplyFlipsFromHardware("camera orientation")));
     }
 
     /**

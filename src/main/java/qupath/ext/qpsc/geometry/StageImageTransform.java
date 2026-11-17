@@ -2,7 +2,6 @@ package qupath.ext.qpsc.geometry;
 
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 
 /**
  * Composes {@link StagePolarity} and {@link CameraOrientation} into a single
@@ -91,7 +90,7 @@ public class StageImageTransform {
      */
     public static StageImageTransform current() {
         StagePolarity polarity = StagePolarity.current();
-        CameraOrientation orientation = QPPreferenceDialog.getCameraOrientationProperty();
+        CameraOrientation orientation = CameraOrientationSetting.current();
         return new StageImageTransform(polarity, orientation);
     }
 

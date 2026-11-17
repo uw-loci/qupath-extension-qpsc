@@ -38,6 +38,8 @@ hardware:
         OFFLINE_CAMERA: 0.5
   detectors:
     - OFFLINE_CAMERA
+  camera_orientation:
+    OFFLINE_CAMERA: NORMAL
 
 # Detector defined inline so this config is fully self-contained and does
 # not depend on the contents of resources/resources_LOCI.yml.
