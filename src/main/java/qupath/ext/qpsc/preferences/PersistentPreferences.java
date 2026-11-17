@@ -748,6 +748,11 @@ public class PersistentPreferences {
         lastDetectorSaved.setValue(detector);
     }
 
+    /** The camera recorded as in use; the config re-reads its per-camera values when it changes. */
+    public static StringProperty lastDetectorProperty() {
+        return lastDetectorSaved;
+    }
+
     // ================== TRANSFORM SETTINGS ==================
     private static final StringProperty saveTransformDefaultSaved =
             PathPrefs.createPersistentPreference("SaveTransformDefault", "true");

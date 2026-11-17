@@ -82,10 +82,12 @@ public class MicroscopeConfigManager {
 
     private MicroscopeConfigManager(String configPath) {
         this.configPath = configPath;
-        this.configData = loadConfig(configPath);
+        Map<String, Object> raw = loadConfig(configPath);
         // One-shot migration of pre-v3 configs (stage.streaming_af missing).
-        // Mutates configData in place + writes the migrated YAML to disk.
-        migrateStreamingAfIfNeeded(configPath, this.configData);
+        // Mutates the map in place + writes the migrated YAML to disk, so it runs on the
+        // values read from disk, before the camera overlay.
+        migrateStreamingAfIfNeeded(configPath, raw);
+        this.configData = DetectorOverlay.apply(raw, overlayDetector(raw));
         String resPath = computeResourcePath(configPath);
         this.resourceData = loadConfig(resPath);
 
@@ -130,6 +132,7 @@ public class MicroscopeConfigManager {
         }
         if (instance == null || (instance.configPath == null || instance.configPath.isBlank())) {
             instance = new MicroscopeConfigManager(configPath);
+            watchActiveDetector();
         } else if (!configPath.equals(instance.configPath)) {
             logger.info("Config path changed from {} to {} -- reloading", instance.configPath, configPath);
             instance.reload(configPath);
@@ -249,10 +252,11 @@ public class MicroscopeConfigManager {
         // Atomic swap: build new maps first, then assign all at once.
         // This prevents a race where a reader sees an empty map between
         // clear() and putAll() on a concurrent thread.
-        Map<String, Object> newConfig = loadConfig(configPath);
+        Map<String, Object> raw = loadConfig(configPath);
         // Migrate before any reader sees the new config (idempotent on
-        // already-migrated v3 files).
-        migrateStreamingAfIfNeeded(configPath, newConfig);
+        // already-migrated v3 files), and before the camera overlay.
+        migrateStreamingAfIfNeeded(configPath, raw);
+        Map<String, Object> newConfig = DetectorOverlay.apply(raw, overlayDetector(raw));
         String resPath = computeResourcePath(configPath);
         Map<String, Object> newResources = loadConfig(resPath);
         Map<String, Map<String, Object>> newAutofocus = loadAutofocusConfig(configPath);
@@ -278,6 +282,62 @@ public class MicroscopeConfigManager {
 
         logger.debug("Reloaded all config data from: {}", configPath);
     }
+
+    /**
+     * The camera whose {@code per_detector} values apply: the only one the config declares, or,
+     * when it declares several, the one recorded as in use ({@code LastDetector}, which
+     * {@code ActiveDetectorSync} sets from the server's camera on connect). Null when that is
+     * not known yet; the shared values then stand.
+     */
+    static String overlayDetector(Map<String, Object> rawConfig) {
+        List<String> declared = new ArrayList<>();
+        if (rawConfig != null
+                && rawConfig.get("hardware") instanceof Map<?, ?> hw
+                && hw.get("detectors") instanceof List<?> l) {
+            for (Object o : l) {
+                if (o instanceof String id) {
+                    declared.add(id);
+                }
+            }
+        }
+        if (declared.size() == 1) {
+            return declared.get(0);
+        }
+        try {
+            String last = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
+            if (last != null && declared.contains(last)) {
+                return last;
+            }
+        } catch (RuntimeException | LinkageError e) {
+            logger.debug("No recorded detector for the config overlay: {}", e.getMessage());
+        }
+        return null;
+    }
+
+    /**
+     * Re-resolves the config when the camera in use changes, so per-camera values follow it.
+     * Registered once, on the first config load.
+     */
+    private static void watchActiveDetector() {
+        if (!detectorWatchRegistered.compareAndSet(false, true)) {
+            return;
+        }
+        try {
+            qupath.ext.qpsc.preferences.PersistentPreferences.lastDetectorProperty()
+                    .addListener((obs, oldV, newV) -> {
+                        MicroscopeConfigManager current = instance;
+                        if (current != null && current.configPath != null && !Objects.equals(oldV, newV)) {
+                            logger.info("Camera in use is now '{}'; re-reading the config for its values", newV);
+                            current.reload();
+                        }
+                    });
+        } catch (RuntimeException | LinkageError e) {
+            logger.debug("Could not watch the detector preference: {}", e.getMessage());
+        }
+    }
+
+    private static final java.util.concurrent.atomic.AtomicBoolean detectorWatchRegistered =
+            new java.util.concurrent.atomic.AtomicBoolean(false);
 
     /**
      * Retrieves a section from the resources file directly.
@@ -826,7 +886,8 @@ public class MicroscopeConfigManager {
             }
             String modalityLower = modality.toLowerCase(Locale.ROOT);
             for (Map.Entry<?, ?> entry : profileMap.entrySet()) {
-                if (!(entry.getValue() instanceof Map<?, ?> profileCfg)) {
+                if (!(entry.getValue() instanceof Map<?, ?> profileCfg)
+                        || !profileFitsDetector(profileCfg, activeDetectorQuietly())) {
                     continue;
                 }
                 Object profModality = profileCfg.get("modality");
@@ -2557,11 +2618,13 @@ public class MicroscopeConfigManager {
      * stay algorithmically identical so the {@code --profile} arg Java sends and
      * the fallback Python derives agree.
      *
-     * <p>Java passes the bare modality name and the full objective id; profiles
-     * are keyed {@code <modality>_<objective-suffix>}. The match walks the
-     * profiles, prefers an exact modality-only key, then the longest
-     * {@code <modality>_<suffix>} whose suffix is a substring of the objective id
-     * (case-insensitive).
+     * <p>Java passes the bare modality name and the full objective id. The candidates are
+     * the profiles for the camera in use (its {@code detector} field) plus those that name
+     * no camera; all profiles when the camera is not known. Among them the first whose
+     * {@code modality} field equals the modality (ignoring case) and whose {@code objective}
+     * field equals the objective wins. Otherwise the key decides: an exact modality-only
+     * key, then the longest {@code <modality>_<suffix>} whose suffix is a substring of the
+     * objective id (case-insensitive), then a case-insensitive prefix match.
      *
      * @param modality  the bare modality name (e.g. {@code "Brightfield"})
      * @param objective the full objective id
@@ -2584,12 +2647,57 @@ public class MicroscopeConfigManager {
 
     /** {@link #resolveProfileKey} without the warning, for callers that only ask. */
     private String matchProfileKey(String modality, String objective) {
-        if (modality == null || modality.isEmpty()) {
+        return matchProfileKey(getSection("acquisition_profiles"), modality, objective, activeDetectorQuietly());
+    }
+
+    /**
+     * The camera in use for config writers, or null when no config is loaded or the camera is
+     * not known (a writer then edits the shared values). Never warns.
+     */
+    public static String activeDetectorForWriting() {
+        MicroscopeConfigManager m = instance;
+        return m == null ? null : m.activeDetectorQuietly();
+    }
+
+    /** The camera in use as {@link #getActiveDetector} resolves it, without its warning. */
+    private String activeDetectorQuietly() {
+        Set<String> detectors = getHardwareDetectors();
+        if (detectors.size() == 1) {
+            return detectors.iterator().next();
+        }
+        String last = qupath.ext.qpsc.preferences.PersistentPreferences.getLastDetector();
+        return last != null && detectors.contains(last) ? last : null;
+    }
+
+    /** True when a profile is for {@code detector}, names no camera, or the camera is not known. */
+    private static boolean profileFitsDetector(Object profile, String detector) {
+        if (detector == null || !(profile instanceof Map<?, ?> p)) {
+            return true;
+        }
+        Object declared = p.get("detector");
+        return declared == null || detector.equals(declared.toString());
+    }
+
+    /** The resolution rule of {@link #resolveProfileKey}, on given profiles and camera (pure; tested). */
+    static String matchProfileKey(Map<String, Object> allProfiles, String modality, String objective, String detector) {
+        if (modality == null || modality.isEmpty() || allProfiles == null || allProfiles.isEmpty()) {
             return null;
         }
-        Map<String, Object> profiles = getSection("acquisition_profiles");
-        if (profiles == null || profiles.isEmpty()) {
-            return null;
+        Map<String, Object> profiles = new LinkedHashMap<>();
+        for (Map.Entry<String, Object> e : allProfiles.entrySet()) {
+            if (profileFitsDetector(e.getValue(), detector)) {
+                profiles.put(e.getKey(), e.getValue());
+            }
+        }
+        // Strategy 0: the profile's own modality and objective fields.
+        for (Map.Entry<String, Object> e : profiles.entrySet()) {
+            if (e.getValue() instanceof Map<?, ?> p
+                    && p.get("modality") != null
+                    && p.get("objective") != null
+                    && modality.equalsIgnoreCase(p.get("modality").toString())
+                    && p.get("objective").toString().equals(objective)) {
+                return e.getKey();
+            }
         }
         // Strategy 1: exact match on modality alone.
         if (profiles.containsKey(modality)) {

@@ -2279,7 +2279,11 @@ public class StageControlPanel extends VBox {
                             Double exp = expSnap.get(id);
                             if (exp != null) {
                                 var r = qupath.ext.qpsc.config.ConfigYamlEditor.setChannelExposureMs(
-                                        path, modality, id, exp);
+                                        path,
+                                        modality,
+                                        id,
+                                        exp,
+                                        qupath.ext.qpsc.config.MicroscopeConfigManager.activeDetectorForWriting());
                                 if (r.changed) writes++;
                                 summary.append(id)
                                         .append(" exp ")
@@ -2297,7 +2301,8 @@ public class StageControlPanel extends VBox {
                                         id,
                                         ch.intensityProperty().device(),
                                         ch.intensityProperty().property(),
-                                        valueStr);
+                                        valueStr,
+                                        qupath.ext.qpsc.config.MicroscopeConfigManager.activeDetectorForWriting());
                                 if (r.changed) writes++;
                                 summary.append(id)
                                         .append(" int ")

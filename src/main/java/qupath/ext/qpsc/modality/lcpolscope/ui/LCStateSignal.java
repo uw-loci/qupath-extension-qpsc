@@ -9,6 +9,7 @@ import java.util.Collection;
 import java.util.List;
 import java.util.Locale;
 import qupath.ext.qpsc.config.ConfigYamlEditor;
+import qupath.ext.qpsc.config.MicroscopeConfigManager;
 
 /**
  * The LC-PolScope exposure, read and written as ONE value: the server's per-state signal report
@@ -131,7 +132,8 @@ public final class LCStateSignal {
         }
         int changed = 0;
         for (String id : stateIds) {
-            ConfigYamlEditor.Result r = ConfigYamlEditor.setChannelExposureMs(configPath, modality, id, ms);
+            ConfigYamlEditor.Result r = ConfigYamlEditor.setChannelExposureMs(
+                    configPath, modality, id, ms, MicroscopeConfigManager.activeDetectorForWriting());
             if (r.changed) {
                 changed++;
             }

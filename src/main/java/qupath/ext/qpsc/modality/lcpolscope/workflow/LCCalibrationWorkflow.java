@@ -1036,7 +1036,7 @@ public class LCCalibrationWorkflow {
     /** Writes reconstruction.black_level; returns the summary line. */
     static String applyBlackLevel(Path configPath, double blackLevel) throws IOException {
         ConfigYamlEditor.setNestedChildScalar(
-                configPath, RECONSTRUCTION_BLOCK, "black_level", formatCounts(blackLevel));
+                configPath, reconstructionBlockFor(configPath, "black_level"), "black_level", formatCounts(blackLevel));
         return "Black level " + formatCounts(blackLevel) + " counts written to reconstruction.black_level.";
     }
 
@@ -1147,8 +1147,11 @@ public class LCCalibrationWorkflow {
             items.addAll(otherDevices.getOrDefault(state, List.of()));
             // No comment lines: the calibration's time, extinction ratio and file are recorded once
             // under reconstruction; the editor still removes the tagged lines earlier versions wrote.
-            ConfigYamlEditor.replaceChannelListField(configPath, MODALITY_KEY, state, "device_properties", items, null);
-            ConfigYamlEditor.replaceChannelListField(configPath, MODALITY_KEY, state, "mm_setup_presets", null, null);
+            String detector = MicroscopeConfigManager.activeDetectorForWriting();
+            ConfigYamlEditor.replaceChannelListField(
+                    configPath, MODALITY_KEY, state, "device_properties", items, null, detector);
+            ConfigYamlEditor.replaceChannelListField(
+                    configPath, MODALITY_KEY, state, "mm_setup_presets", null, null, detector);
             summary.add(String.format("%-8s LC-A %.4f  LC-B %.4f waves", state, lcaWaves, lcbWaves));
         }
 
@@ -1158,12 +1161,19 @@ public class LCCalibrationWorkflow {
         summary.add("");
         summary.add("state_order " + order + (orderResult.changed ? "  (changed)" : "  (unchanged)"));
         ConfigYamlEditor.setNestedChildScalar(
-                configPath, RECONSTRUCTION_BLOCK, "lc_calibrated_at", "'" + calibratedAt + "'");
-        ConfigYamlEditor.setNestedChildScalar(configPath, RECONSTRUCTION_BLOCK, "lc_extinction_ratio", extinction);
+                configPath,
+                reconstructionBlockFor(configPath, "lc_calibrated_at"),
+                "lc_calibrated_at",
+                "'" + calibratedAt + "'");
+        ConfigYamlEditor.setNestedChildScalar(
+                configPath,
+                reconstructionBlockFor(configPath, "lc_extinction_ratio"),
+                "lc_extinction_ratio",
+                extinction);
         if (metadataPath != null) {
             ConfigYamlEditor.setNestedChildScalar(
                     configPath,
-                    RECONSTRUCTION_BLOCK,
+                    reconstructionBlockFor(configPath, "lc_calibration_file"),
                     "lc_calibration_file",
                     "'" + metadataPath.replace("'", "''") + "'");
         }
@@ -1177,6 +1187,15 @@ public class LCCalibrationWorkflow {
         summary.add("Micro-Manager Channel presets are no longer applied by these states.");
         summary.add("Written to " + configPath);
         return summary;
+    }
+
+    /**
+     * The reconstruction block a camera-specific value is written to: the camera in use's
+     * {@code per_detector} block when the config keeps that value per camera, else the shared one.
+     */
+    private static String[] reconstructionBlockFor(Path configPath, String field) throws IOException {
+        return ConfigYamlEditor.blockPathFor(
+                configPath, RECONSTRUCTION_BLOCK, field, MicroscopeConfigManager.activeDetectorForWriting());
     }
 
     private static Map<String, Object> propertyWrite(String device, String property, double valueWaves) {

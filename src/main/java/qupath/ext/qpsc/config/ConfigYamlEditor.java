@@ -174,11 +174,16 @@ public final class ConfigYamlEditor {
     /**
      * Update {@code exposure_ms} on a single channel under
      * {@code modalities.<modalityKey>.channels}. The channel must already
-     * exist; this method does not create channels.
+     * exist; this method does not create channels. On a config that keeps the
+     * exposure per camera, the value goes into the channel's
+     * {@code per_detector.<detectorId>} block (see {@link #channelFieldScope}).
+     *
+     * @param detectorId the camera in use, or null for a single-camera config
      */
-    public static Result setChannelExposureMs(Path configPath, String modalityKey, String channelId, double exposureMs)
+    public static Result setChannelExposureMs(
+            Path configPath, String modalityKey, String channelId, double exposureMs, String detectorId)
             throws IOException {
-        return setChannelScalar(configPath, modalityKey, channelId, "exposure_ms", exposureMs);
+        return setChannelScalar(configPath, modalityKey, channelId, "exposure_ms", exposureMs, detectorId);
     }
 
     /**
@@ -192,19 +197,67 @@ public final class ConfigYamlEditor {
      * decide where they go.
      */
     public static Result setChannelDevicePropertyValue(
-            Path configPath, String modalityKey, String channelId, String device, String property, String valueStr)
+            Path configPath,
+            String modalityKey,
+            String channelId,
+            String device,
+            String property,
+            String valueStr,
+            String detectorId)
             throws IOException {
         List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
         int[] channelRange = locateChannelBlock(lines, modalityKey, channelId);
         if (channelRange == null) {
             return new Result(false, "Channel '" + channelId + "' not found under modalities." + modalityKey);
         }
+        // The camera's own entry first, when its per_detector block lists this property.
+        int[] own = detectorBlock(lines, channelRange[0], channelRange[1], detectorId);
+        if (own != null) {
+            Result r = setDevicePropertyIn(
+                    configPath, lines, own[0], own[1], own[2], modalityKey, channelId, device, property, valueStr);
+            if (r != null) {
+                return r;
+            }
+        }
         int chStart = channelRange[0];
-        int chEnd = channelRange[1];
+        Result r = setDevicePropertyIn(
+                configPath,
+                lines,
+                chStart,
+                channelRange[1],
+                leadingSpaces(lines.get(chStart)).length() + 2,
+                modalityKey,
+                channelId,
+                device,
+                property,
+                valueStr);
+        return r != null
+                ? r
+                : new Result(
+                        false,
+                        "device_properties entry " + device + "." + property + " not found on channel '" + channelId
+                                + "'");
+    }
 
-        // Find device_properties: header inside the channel block.
+    /**
+     * Sets {@code device.property}'s value in the {@code device_properties} list found at
+     * {@code channelFieldIndent} inside [{@code chStart}, {@code chEnd}), or returns null when
+     * that list has no such entry.
+     */
+    private static Result setDevicePropertyIn(
+            Path configPath,
+            List<String> lines,
+            int chStart,
+            int chEnd,
+            int channelFieldIndent,
+            String modalityKey,
+            String channelId,
+            String device,
+            String property,
+            String valueStr)
+            throws IOException {
+        // Find device_properties: header inside the block.
         int dpHeader = -1;
-        int channelFieldIndent = leadingSpaces(lines.get(chStart)).length() + 2;
         for (int i = chStart + 1; i < chEnd; i++) {
             if (matchesKey(lines.get(i), channelFieldIndent, "device_properties")) {
                 dpHeader = i;
@@ -212,7 +265,7 @@ public final class ConfigYamlEditor {
             }
         }
         if (dpHeader < 0) {
-            return new Result(false, "device_properties not declared on channel '" + channelId + "'");
+            return null;
         }
         // Like the channels list, device_properties items align at
         // channelFieldIndent in compact YAML. Scan forward to the first
@@ -283,9 +336,7 @@ public final class ConfigYamlEditor {
             }
             i = itemEnd - 1; // continue scanning the next list item
         }
-        return new Result(
-                false,
-                "device_properties entry " + device + "." + property + " not found on channel '" + channelId + "'");
+        return null;
     }
 
     /**
@@ -558,16 +609,18 @@ public final class ConfigYamlEditor {
             String channelId,
             String fieldName,
             List<Map<String, Object>> items,
-            List<String> commentLines)
+            List<String> commentLines,
+            String detectorId)
             throws IOException {
         List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
         int[] channelRange = locateChannelBlock(lines, modalityKey, channelId);
         if (channelRange == null) {
             return new Result(false, "Channel '" + channelId + "' not found under modalities." + modalityKey);
         }
-        int chStart = channelRange[0];
-        int chEnd = channelRange[1];
-        int fieldIndent = leadingSpaces(lines.get(chStart)).length() + 2;
+        int[] scope = channelFieldScope(lines, channelRange[0], channelRange[1], detectorId, fieldName);
+        int chStart = scope[0];
+        int chEnd = scope[1];
+        int fieldIndent = scope[2];
 
         int header = -1;
         for (int i = chStart + 1; i < chEnd; i++) {
@@ -632,7 +685,83 @@ public final class ConfigYamlEditor {
         return new Result(true, channelId + "." + fieldName + " " + what);
     }
 
+    /**
+     * The key path a camera-specific value under {@code blockPath} is written at: the block's
+     * {@code per_detector.<detectorId>} child when that already holds {@code field}, else
+     * {@code blockPath} itself. A value the config keeps per camera is written for the camera in
+     * use; a shared value stays shared.
+     *
+     * @param detectorId the camera in use, or null
+     */
+    public static String[] blockPathFor(Path configPath, String[] blockPath, String field, String detectorId)
+            throws IOException {
+        if (detectorId == null || detectorId.isBlank()) {
+            return blockPath;
+        }
+        String[] own = java.util.Arrays.copyOf(blockPath, blockPath.length + 2);
+        own[blockPath.length] = DetectorOverlay.KEY;
+        own[blockPath.length + 1] = detectorId;
+        List<String> lines = Files.readAllLines(configPath, StandardCharsets.UTF_8);
+        int ownLine = navigatePath(lines, own);
+        if (ownLine < 0) {
+            return blockPath;
+        }
+        int ownIndent = leadingSpaces(lines.get(ownLine)).length();
+        int childIndent = detectChildIndent(lines, ownLine, ownIndent);
+        int end = findBlockEnd(lines, ownLine + 1, ownIndent);
+        for (int i = ownLine + 1; i < end; i++) {
+            if (matchesKey(lines.get(i), childIndent, field)) {
+                return own;
+            }
+        }
+        return blockPath;
+    }
+
     // ---------- internals ----------
+
+    /**
+     * The channel's {@code per_detector.<detectorId>} block as {line, end, child indent}, or
+     * null when the channel has none for that camera.
+     */
+    private static int[] detectorBlock(List<String> lines, int chStart, int chEnd, String detectorId) {
+        if (detectorId == null || detectorId.isBlank()) {
+            return null;
+        }
+        int fieldIndent = leadingSpaces(lines.get(chStart)).length() + 2;
+        for (int i = chStart + 1; i < chEnd; i++) {
+            if (!matchesKey(lines.get(i), fieldIndent, DetectorOverlay.KEY)) {
+                continue;
+            }
+            int camIndent = detectChildIndent(lines, i, fieldIndent);
+            int blocksEnd = Math.min(chEnd, findBlockEnd(lines, i + 1, fieldIndent));
+            for (int j = i + 1; j < blocksEnd; j++) {
+                if (matchesKey(lines.get(j), camIndent, detectorId)) {
+                    int end = Math.min(blocksEnd, findBlockEnd(lines, j + 1, camIndent));
+                    return new int[] {j, end, detectChildIndent(lines, j, camIndent)};
+                }
+            }
+            return null;
+        }
+        return null;
+    }
+
+    /**
+     * Where a channel's {@code fieldName} is written for this camera, as {start, end, field
+     * indent}: the channel's {@code per_detector.<detectorId>} block when that already holds the
+     * field, else the channel's own block.
+     */
+    private static int[] channelFieldScope(
+            List<String> lines, int chStart, int chEnd, String detectorId, String fieldName) {
+        int[] own = detectorBlock(lines, chStart, chEnd, detectorId);
+        if (own != null) {
+            for (int i = own[0] + 1; i < own[1]; i++) {
+                if (matchesKey(lines.get(i), own[2], fieldName)) {
+                    return own;
+                }
+            }
+        }
+        return new int[] {chStart, chEnd, leadingSpaces(lines.get(chStart)).length() + 2};
+    }
 
     /** Walk a key path, returning the line index of the deepest key, or -1. */
     private static int navigatePath(List<String> lines, String[] path) {
@@ -684,15 +813,17 @@ public final class ConfigYamlEditor {
     }
 
     private static Result setChannelScalar(
-            Path configPath, String modalityKey, String channelId, String fieldName, double value) throws IOException {
+            Path configPath, String modalityKey, String channelId, String fieldName, double value, String detectorId)
+            throws IOException {
         List<String> lines = new ArrayList<>(Files.readAllLines(configPath, StandardCharsets.UTF_8));
         int[] channelRange = locateChannelBlock(lines, modalityKey, channelId);
         if (channelRange == null) {
             return new Result(false, "Channel '" + channelId + "' not found under modalities." + modalityKey);
         }
-        int chStart = channelRange[0];
-        int chEnd = channelRange[1];
-        int fieldIndent = leadingSpaces(lines.get(chStart)).length() + 2;
+        int[] scope = channelFieldScope(lines, channelRange[0], channelRange[1], detectorId, fieldName);
+        int chStart = scope[0];
+        int chEnd = scope[1];
+        int fieldIndent = scope[2];
         String formatted = formatScalar(value);
         for (int i = chStart + 1; i < chEnd; i++) {
             if (matchesKey(lines.get(i), fieldIndent, fieldName)) {

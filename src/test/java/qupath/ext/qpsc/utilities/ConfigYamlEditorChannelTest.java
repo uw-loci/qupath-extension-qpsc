@@ -110,7 +110,8 @@ public class ConfigYamlEditorChannelTest {
                 "State0",
                 "device_properties",
                 List.of(write("Retardance LC-A [in waves]", 0.2534), write("Retardance LC-B [in waves]", 0.4412)),
-                List.of("LC calibration test"));
+                List.of("LC calibration test"),
+                null);
         assertTrue(r.changed);
 
         List<Map<String, Object>> props =
@@ -137,12 +138,14 @@ public class ConfigYamlEditorChannelTest {
         Path f = dir.resolve("c.yml");
         Files.writeString(f, CONFIG);
         List<Map<String, Object>> items = List.of(write("Retardance LC-A [in waves]", 0.25));
-        ConfigYamlEditor.replaceChannelListField(f, "lcpolscope", "State0", "device_properties", items, List.of("one"));
+        ConfigYamlEditor.replaceChannelListField(
+                f, "lcpolscope", "State0", "device_properties", items, List.of("one"), null);
         ConfigYamlEditor.Result again = ConfigYamlEditor.replaceChannelListField(
-                f, "lcpolscope", "State0", "device_properties", items, List.of("one"));
+                f, "lcpolscope", "State0", "device_properties", items, List.of("one"), null);
         assertFalse(again.changed);
         // A rewrite with a different comment replaces our own comment rather than adding to it.
-        ConfigYamlEditor.replaceChannelListField(f, "lcpolscope", "State0", "device_properties", items, List.of("two"));
+        ConfigYamlEditor.replaceChannelListField(
+                f, "lcpolscope", "State0", "device_properties", items, List.of("two"), null);
         String text = Files.readString(f);
         assertEquals(
                 1, text.split(java.util.regex.Pattern.quote(ConfigYamlEditor.EDITOR_COMMENT_TAG), -1).length - 1, text);
@@ -153,15 +156,15 @@ public class ConfigYamlEditorChannelTest {
     void nullItemsRemovesTheField(@TempDir Path dir) throws Exception {
         Path f = dir.resolve("c.yml");
         Files.writeString(f, CONFIG);
-        ConfigYamlEditor.Result r =
-                ConfigYamlEditor.replaceChannelListField(f, "lcpolscope", "State1", "mm_setup_presets", null, null);
+        ConfigYamlEditor.Result r = ConfigYamlEditor.replaceChannelListField(
+                f, "lcpolscope", "State1", "mm_setup_presets", null, null, null);
         assertTrue(r.changed);
         assertNull(channel(f, "State1").get("mm_setup_presets"));
         assertNotNull(channel(f, "State1").get("device_properties"), "the following field is kept");
         assertEquals(50, channel(f, "State1").get("settle_ms"));
         assertNotNull(channel(f, "State0").get("mm_setup_presets"), "only the named channel changes");
-        ConfigYamlEditor.Result again =
-                ConfigYamlEditor.replaceChannelListField(f, "lcpolscope", "State1", "mm_setup_presets", null, null);
+        ConfigYamlEditor.Result again = ConfigYamlEditor.replaceChannelListField(
+                f, "lcpolscope", "State1", "mm_setup_presets", null, null, null);
         assertFalse(again.changed);
     }
 
@@ -169,12 +172,12 @@ public class ConfigYamlEditorChannelTest {
     void addsTheFieldWhenTheChannelLacksIt(@TempDir Path dir) throws Exception {
         Path f = dir.resolve("c.yml");
         Files.writeString(f, CONFIG);
-        ConfigYamlEditor.replaceChannelListField(f, "lcpolscope", "State1", "mm_setup_presets", null, null);
+        ConfigYamlEditor.replaceChannelListField(f, "lcpolscope", "State1", "mm_setup_presets", null, null, null);
         Map<String, Object> preset = new LinkedHashMap<>();
         preset.put("group", "Channel");
         preset.put("preset", "State1");
         ConfigYamlEditor.Result r = ConfigYamlEditor.replaceChannelListField(
-                f, "lcpolscope", "State1", "mm_setup_presets", List.of(preset), null);
+                f, "lcpolscope", "State1", "mm_setup_presets", List.of(preset), null, null);
         assertTrue(r.changed);
         assertNotNull(channel(f, "State1").get("mm_setup_presets"));
         assertEquals(50, channel(f, "State1").get("settle_ms"));
@@ -185,7 +188,7 @@ public class ConfigYamlEditorChannelTest {
         Path f = dir.resolve("c.yml");
         Files.writeString(f, CONFIG);
         ConfigYamlEditor.Result r = ConfigYamlEditor.replaceChannelListField(
-                f, "lcpolscope", "State9", "device_properties", List.of(write("x", 1)), null);
+                f, "lcpolscope", "State9", "device_properties", List.of(write("x", 1)), null, null);
         assertFalse(r.changed);
         assertTrue(r.message.contains("State9"));
         assertEquals(CONFIG, Files.readString(f));

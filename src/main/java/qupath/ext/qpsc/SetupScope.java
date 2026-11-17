@@ -19,6 +19,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.config.BundledScopeInstaller;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.controller.ActiveDetectorSync;
 import qupath.ext.qpsc.controller.DemoMicroscope;
 import qupath.ext.qpsc.controller.ExportSpatialSceneWorkflow;
 import qupath.ext.qpsc.controller.FocusApproachValidationWorkflow;
@@ -139,6 +140,7 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         // Keep Micro-Manager's objective preset in step with the objective chosen in QPSC
         // (only objectives that declare mm_preset in the microscope YAML).
         ObjectivePresetActuator.ensureRegistered();
+        ActiveDetectorSync.ensureRegistered();
 
         // Let the hardware facade pause and resume the Live Viewer around camera operations.
         MicroscopeController.registerLiveStream(new MicroscopeController.LiveStream() {
