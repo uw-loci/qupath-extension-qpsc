@@ -44,4 +44,18 @@ class StageLimitCheckTest {
         assertEquals("Y", r.worstAxis());
         assertEquals(174, r.overshootUm(), 1e-9);
     }
+
+    @Test
+    void anUnnamedRegionHasNoTilesYetAndIsSkipped() {
+        // Multi-slide set-up without refinement, 2026-11-17: the slide's one annotation had no
+        // name yet (names are given when tiles are made) and the check threw a NullPointerException.
+        java.nio.file.Path dir = java.nio.file.Path.of("no-such-tile-dir");
+        java.util.List<String> regions = new java.util.ArrayList<>();
+        regions.add(null);
+        regions.add("  ");
+        regions.add("Tissue_1");
+        assertTrue(StageLimitCheck.checkRegionDirs(
+                        dir, regions, new java.awt.geom.AffineTransform(), new double[] {-1, 1, -1, 1})
+                .isEmpty());
+    }
 }

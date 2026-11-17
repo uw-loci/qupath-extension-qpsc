@@ -134,12 +134,18 @@ public final class StageLimitCheck {
      *     the acquisition transformed it); otherwise TileConfiguration_QP.txt is read in
      *     full-resolution pixels and mapped through this transform (setup, before acquisition)
      * @param limits stage limits, see {@link #check}
-     * @return the regions with tiles past the limits; regions without a readable file are skipped
+     * @return the regions with tiles past the limits; regions without a name or a readable file are
+     *     skipped
      */
     public static List<RegionOverrun> checkRegionDirs(
             Path tileDir, List<String> regions, AffineTransform pixelToStage, double[] limits) {
         List<RegionOverrun> out = new ArrayList<>();
         for (String region : regions) {
+            // A region gets its name, and with it its tile folder, when its tiles are made: an
+            // unnamed one (a set-up without refinement) has no tiles to check yet.
+            if (region == null || region.isBlank()) {
+                continue;
+            }
             Path file = tileDir.resolve(region)
                     .resolve(pixelToStage == null ? "TileConfiguration.txt" : "TileConfiguration_QP.txt");
             if (!Files.isRegularFile(file)) {
