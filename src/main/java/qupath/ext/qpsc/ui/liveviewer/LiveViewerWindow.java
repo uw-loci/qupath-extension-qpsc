@@ -206,6 +206,11 @@ public class LiveViewerWindow {
 
     // Thread pools
     private ScheduledExecutorService framePoller;
+    private ScheduledExecutorService hardwareStatusPoller;
+    private Label hardwareBanner;
+    /** False once the server has not answered HWSTAT (one older than the command): stop asking. */
+    private volatile boolean hardwareStatusSupported = true;
+
     private ExecutorService histogramExecutor;
 
     /**
@@ -1360,7 +1365,17 @@ public class LiveViewerWindow {
 
         // Bottom pane: the status bar only, full width. The histo/noise group docks under the
         // image (imageColumn) or in the right column, so the tabs keep the full height.
-        bottomPane = new VBox(statusBar);
+        // Red banner naming the part of the microscope that is not answering (HWSTAT); hidden
+        // while everything answers.
+        hardwareBanner = new Label();
+        hardwareBanner.setWrapText(true);
+        hardwareBanner.setStyle("-fx-text-fill: white; -fx-background-color: " + ThemeColors.ERROR
+                + "; -fx-padding: 3 6 3 6; -fx-font-weight: bold;");
+        hardwareBanner.setVisible(false);
+        hardwareBanner.setManaged(false);
+        hardwareBanner.setMaxWidth(Double.MAX_VALUE);
+        bottomPane = new VBox(hardwareBanner, statusBar);
+        startHardwareStatusPolling();
         imageColumn = new VBox(scrollPane);
         VBox.setVgrow(scrollPane, Priority.ALWAYS);
 
@@ -3024,8 +3039,53 @@ public class LiveViewerWindow {
         });
     }
 
+    /** Asks the server every 5 s which part of the microscope is not answering, and shows it. */
+    private void startHardwareStatusPolling() {
+        hardwareStatusPoller = Executors.newSingleThreadScheduledExecutor(r -> {
+            Thread t = new Thread(r, "qpsc-hardware-status");
+            t.setDaemon(true);
+            return t;
+        });
+        hardwareStatusPoller.scheduleWithFixedDelay(this::pollHardwareStatus, 2, 5, TimeUnit.SECONDS);
+    }
+
+    private void pollHardwareStatus() {
+        if (!hardwareStatusSupported) {
+            return;
+        }
+        String text = null;
+        try {
+            MicroscopeController c = MicroscopeController.getInstance();
+            if (c != null && c.isConnected()) {
+                java.util.Optional<com.google.gson.JsonObject> report = c.getHardwareStatus();
+                if (report.isEmpty()) {
+                    hardwareStatusSupported = false;
+                    logger.info("The server does not report hardware status (HWSTAT); no banner");
+                    return;
+                }
+                text = HardwareStatusText.describe(report.get(), java.time.ZoneId.systemDefault());
+            }
+        } catch (Exception e) {
+            logger.debug("Hardware status not read: {}", e.getMessage());
+            return;
+        }
+        String shown = text;
+        Platform.runLater(() -> {
+            if (hardwareBanner == null) {
+                return;
+            }
+            hardwareBanner.setText(shown == null ? "" : shown);
+            hardwareBanner.setVisible(shown != null);
+            hardwareBanner.setManaged(shown != null);
+        });
+    }
+
     private void stopAndDispose() {
         polling = false;
+        if (hardwareStatusPoller != null) {
+            hardwareStatusPoller.shutdownNow();
+            hardwareStatusPoller = null;
+        }
         logger.info("Stopping live viewer...");
         if (acquisitionWatch != null) {
             acquisitionWatch.stop();

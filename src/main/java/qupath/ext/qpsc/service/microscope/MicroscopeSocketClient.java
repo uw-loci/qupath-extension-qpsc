@@ -295,6 +295,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         LCSIGNAL("lcsignal"),
         /** Read or apply one Micro-Manager ConfigGroup preset (length-prefixed JSON both ways). */
         MMPRESET("mmpreset"),
+        /** Which part of the microscope is not answering (length-prefixed JSON reply). */
+        HWSTAT("hwstat__"),
         /** Simple white balance calibration at single exposure */
         WBSIMPLE("wbsimple"),
         /** PPM white balance calibration at 4 angles */
@@ -1160,6 +1162,17 @@ public class MicroscopeSocketClient implements AutoCloseable {
         payload.putDouble(exposureMs);
         payload.putDouble(targetFraction);
         return requestJsonReport(Command.LCSIGNAL, payload.array(), 60_000);
+    }
+
+    /**
+     * Which part of the microscope is not answering: the reply has {@code stage},
+     * {@code camera} and {@code micromanager}, each {@code {ok, since, message, failures}},
+     * from failures the server has already seen (it probes nothing, so it answers at once).
+     *
+     * @return the reply, or empty when the server did not answer (one older than the command)
+     */
+    public Optional<com.google.gson.JsonObject> getHardwareStatus() throws IOException {
+        return requestJsonReport(Command.HWSTAT, null, 3_000);
     }
 
     /**

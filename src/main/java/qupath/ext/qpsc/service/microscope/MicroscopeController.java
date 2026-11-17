@@ -912,6 +912,11 @@ public class MicroscopeController implements StagePositionProvider {
 
     // ==================== Camera Control Methods ====================
 
+    /** Which part of the microscope is not answering; empty from a server older than HWSTAT. */
+    public java.util.Optional<com.google.gson.JsonObject> getHardwareStatus() throws IOException {
+        return socketClient.getHardwareStatus();
+    }
+
     /**
      * Gets the current camera name from the microscope.
      *
