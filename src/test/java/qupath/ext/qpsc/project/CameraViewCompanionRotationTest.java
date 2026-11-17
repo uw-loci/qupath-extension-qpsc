@@ -9,13 +9,13 @@ import java.io.File;
 import java.nio.file.Path;
 import javax.imageio.ImageIO;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.io.CleanupMode;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.geometry.ImageFlipHelper;
 import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.lib.images.servers.ImageServer;
 import qupath.lib.images.servers.ImageServers;
 import qupath.lib.images.servers.RotatedImageServer;
+import qupath.lib.images.servers.WrappedBufferedImageServer;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectImageEntry;
 import qupath.lib.projects.Projects;
@@ -26,9 +26,9 @@ import qupath.lib.projects.Projects;
  */
 class CameraViewCompanionRotationTest {
 
-    // Not deleted afterwards: the duplicate helpers keep the image readers open, and Windows
-    // refuses to delete a file that is still open.
-    @TempDir(cleanup = CleanupMode.NEVER)
+    // Deleted afterwards like any temp folder: the duplicate helpers close their image readers,
+    // so Windows can delete the image file.
+    @TempDir
     Path tmp;
 
     @Test
@@ -67,5 +67,22 @@ class CameraViewCompanionRotationTest {
         assertNull(
                 ImageFlipHelper.findFlippedSibling(project, base, true, true),
                 "the unrotated original does not pick up the rotated companion");
+    }
+
+    @Test
+    void closingAWrapperClosesTheServerItWraps() {
+        boolean[] closed = {false};
+        BufferedImage img = new BufferedImage(8, 6, BufferedImage.TYPE_INT_RGB);
+        ImageServer<BufferedImage> inner = new WrappedBufferedImageServer("inner", img) {
+            @Override
+            public void close() {
+                closed[0] = true;
+            }
+        };
+        ImageServer<BufferedImage> rotated = new RotatedImageServer(inner, RotatedImageServer.Rotation.ROTATE_90);
+
+        QPProjectFunctions.closeServerChain(rotated);
+
+        assertTrue(closed[0], "the file reader under a rotation wrapper is closed too");
     }
 }

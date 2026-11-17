@@ -4,14 +4,18 @@ import java.awt.geom.AffineTransform;
 import java.awt.image.BufferedImage;
 import java.io.File;
 import java.io.IOException;
+import java.lang.reflect.Method;
 import java.net.URI;
 import java.net.URISyntaxException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.util.Collections;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.Locale;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import javafx.beans.value.ChangeListener;
 import javafx.beans.value.ObservableValue;
@@ -31,6 +35,7 @@ import qupath.lib.images.servers.ImageServerMetadata;
 import qupath.lib.images.servers.ImageServers;
 import qupath.lib.images.servers.RotatedImageServer;
 import qupath.lib.images.servers.TransformedServerBuilder;
+import qupath.lib.images.servers.TransformingImageServer;
 import qupath.lib.projects.Project;
 import qupath.lib.projects.ProjectIO;
 import qupath.lib.projects.ProjectImageEntry;
@@ -718,143 +723,148 @@ public class QPProjectFunctions {
         // Load the original image data to get hierarchy and server
         ImageData<BufferedImage> originalData = originalEntry.readImageData();
         ImageServer<BufferedImage> originalServer = originalData.getServer();
+        try {
 
-        // Get image dimensions for transform calculations
-        int imageWidth = originalServer.getWidth();
-        int imageHeight = originalServer.getHeight();
+            // Get image dimensions for transform calculations
+            int imageWidth = originalServer.getWidth();
+            int imageHeight = originalServer.getHeight();
 
-        // Get the original image type. readImageData() above returns the
-        // PERSISTED state on disk, but QuPath's first-open "Set image type"
-        // prompt writes only to the in-memory ImageData until the entry is
-        // saved. If this original entry is the one currently open in the viewer
-        // and its persisted type is UNSET, prefer the live type so the flipped
-        // sibling does not inherit "Not set" -- which makes stain-based tissue
-        // detection throw ("Cannot set color deconvolution stains for image type
-        // Not set"). Mirrors the live-vs-persisted handling ImageFlipHelper
-        // already applies when mirroring annotations to the sibling.
-        ImageData.ImageType imageType = originalData.getImageType();
-        if (imageType == null || imageType == ImageData.ImageType.UNSET) {
-            try {
-                QuPathGUI gui = QuPathGUI.getInstance();
-                if (gui != null && gui.getImageData() != null && gui.getProject() == project) {
-                    ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
-                    if (openEntry == originalEntry) {
-                        ImageData.ImageType liveType = gui.getImageData().getImageType();
-                        if (liveType != null && liveType != ImageData.ImageType.UNSET) {
-                            logger.info(
-                                    "Original entry's persisted image type is UNSET but the live viewer has "
-                                            + "type {}; using the live type for the flipped duplicate",
-                                    liveType);
-                            imageType = liveType;
+            // Get the original image type. readImageData() above returns the
+            // PERSISTED state on disk, but QuPath's first-open "Set image type"
+            // prompt writes only to the in-memory ImageData until the entry is
+            // saved. If this original entry is the one currently open in the viewer
+            // and its persisted type is UNSET, prefer the live type so the flipped
+            // sibling does not inherit "Not set" -- which makes stain-based tissue
+            // detection throw ("Cannot set color deconvolution stains for image type
+            // Not set"). Mirrors the live-vs-persisted handling ImageFlipHelper
+            // already applies when mirroring annotations to the sibling.
+            ImageData.ImageType imageType = originalData.getImageType();
+            if (imageType == null || imageType == ImageData.ImageType.UNSET) {
+                try {
+                    QuPathGUI gui = QuPathGUI.getInstance();
+                    if (gui != null && gui.getImageData() != null && gui.getProject() == project) {
+                        ProjectImageEntry<BufferedImage> openEntry = project.getEntry(gui.getImageData());
+                        if (openEntry == originalEntry) {
+                            ImageData.ImageType liveType = gui.getImageData().getImageType();
+                            if (liveType != null && liveType != ImageData.ImageType.UNSET) {
+                                logger.info(
+                                        "Original entry's persisted image type is UNSET but the live viewer has "
+                                                + "type {}; using the live type for the flipped duplicate",
+                                        liveType);
+                                imageType = liveType;
+                            }
                         }
                     }
+                } catch (Exception e) {
+                    logger.debug("Could not consult live image type for flipped duplicate: {}", e.getMessage());
                 }
-            } catch (Exception e) {
-                logger.debug("Could not consult live image type for flipped duplicate: {}", e.getMessage());
             }
+
+            // Build the transformed server using the correct transform order for TransformedServerBuilder
+            // Based on QuPath forum example: https://forum.image.sc/t/flipping-an-image-in-qupaths-gui/85110
+            // Order: scale first, then translate
+            TransformedServerBuilder builder = new TransformedServerBuilder(originalServer);
+
+            if (flipX && flipY) {
+                // Both flips
+                AffineTransform transform = new AffineTransform();
+                transform.scale(-1.0, -1.0);
+                transform.translate(-imageWidth, -imageHeight);
+                builder = builder.transform(transform);
+            } else if (flipX) {
+                // Horizontal flip only
+                AffineTransform transform = new AffineTransform();
+                transform.scale(-1.0, 1.0);
+                transform.translate(-imageWidth, 0);
+                builder = builder.transform(transform);
+            } else if (flipY) {
+                // Vertical flip only
+                AffineTransform transform = new AffineTransform();
+                transform.scale(1.0, -1.0);
+                transform.translate(0, -imageHeight);
+                builder = builder.transform(transform);
+            }
+
+            // Build the transformed server
+            ImageServer<BufferedImage> flippedServer = builder.build();
+
+            // Add the flipped server to the project
+            ProjectImageEntry<BufferedImage> flippedEntry = project.addImage(flippedServer.getBuilder());
+
+            // Single uniform companion name -- the flip axes are recorded in metadata
+            // (light-path baked parity), so the name does not encode them.
+            String baseName = originalEntry.getImageName();
+            String flippedName = baseName + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
+            flippedEntry.setImageName(flippedName);
+
+            // Image data for the new entry, built on the server in hand rather than
+            // entry.readImageData(), which would open a second reader on the same file.
+            ImageData<BufferedImage> flippedData = new ImageData<>(flippedServer);
+
+            // Set the image type to match the original
+            flippedData.setImageType(imageType);
+
+            // CRITICAL: Verify and log pixel calibration
+            // TransformedServerBuilder should preserve calibration, but let's verify
+            double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+            double flippedPixelSize = flippedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+
+            logger.info("Pixel calibration check:");
+            logger.info("  Original: {} um/pixel", originalPixelSize);
+            logger.info("  Flipped:  {} um/pixel", flippedPixelSize);
+
+            if (Math.abs(originalPixelSize - flippedPixelSize) > 0.001) {
+                logger.warn("CRITICAL: Pixel calibration mismatch detected!");
+                logger.warn("  This will cause incorrect tile sizes during acquisition");
+                logger.warn("  Original={} um/px, Flipped={} um/px", originalPixelSize, flippedPixelSize);
+            }
+
+            // Annotations are intentionally NOT transferred here. The flipped sibling
+            // is a derived mirror of the base; its annotation set is populated (and
+            // re-populated on every run-from-base) by
+            // ImageFlipHelper.mirrorAnnotationsToSibling, which reads the base's LIVE
+            // hierarchy. Transferring here as well -- from the persisted .qpdata --
+            // would (a) miss unsaved annotations and (b) double up with the mirror
+            // step, producing duplicate annotations on the sibling.
+
+            // Ensure original entry has base_image set before we inherit from it
+            // This ensures both original and flipped entries share the same base_image
+            Map<String, String> originalMetadata = originalEntry.getMetadata();
+            if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
+                String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
+                originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
+                logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
+            }
+
+            // Apply metadata - get offsets from original
+            double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
+            ImageMetadataManager.applyImageMetadata(
+                    project,
+                    flippedEntry,
+                    originalEntry, // Use original as parent to inherit collection and base_image
+                    offsets[0],
+                    offsets[1],
+                    flipX,
+                    flipY, // Mark which axes are flipped
+                    sampleName);
+            // The mirror keeps whatever rotation the original's pixels already carry. Without this
+            // a Camera View copy of a "(rotated N)" entry reads as unrotated, so the companion
+            // lookups (which match on base_image + rotation) never find it and build another.
+            ImageMetadataManager.setRotationDeg(flippedEntry, ImageMetadataManager.getRotationDeg(originalEntry));
+
+            // Save the flipped image data to persist the hierarchy and image type
+            flippedEntry.saveImageData(flippedData);
+            logger.info("Saved flipped image data with transformed hierarchy and image type");
+
+            // Save project changes
+            project.syncChanges();
+            logger.info("Synced project changes for flipped duplicate");
+
+            logger.info("Successfully created flipped duplicate: {}", flippedName);
+            return flippedEntry;
+        } finally {
+            closeServerChain(originalServer);
         }
-
-        // Build the transformed server using the correct transform order for TransformedServerBuilder
-        // Based on QuPath forum example: https://forum.image.sc/t/flipping-an-image-in-qupaths-gui/85110
-        // Order: scale first, then translate
-        TransformedServerBuilder builder = new TransformedServerBuilder(originalServer);
-
-        if (flipX && flipY) {
-            // Both flips
-            AffineTransform transform = new AffineTransform();
-            transform.scale(-1.0, -1.0);
-            transform.translate(-imageWidth, -imageHeight);
-            builder = builder.transform(transform);
-        } else if (flipX) {
-            // Horizontal flip only
-            AffineTransform transform = new AffineTransform();
-            transform.scale(-1.0, 1.0);
-            transform.translate(-imageWidth, 0);
-            builder = builder.transform(transform);
-        } else if (flipY) {
-            // Vertical flip only
-            AffineTransform transform = new AffineTransform();
-            transform.scale(1.0, -1.0);
-            transform.translate(0, -imageHeight);
-            builder = builder.transform(transform);
-        }
-
-        // Build the transformed server
-        ImageServer<BufferedImage> flippedServer = builder.build();
-
-        // Add the flipped server to the project
-        ProjectImageEntry<BufferedImage> flippedEntry = project.addImage(flippedServer.getBuilder());
-
-        // Single uniform companion name -- the flip axes are recorded in metadata
-        // (light-path baked parity), so the name does not encode them.
-        String baseName = originalEntry.getImageName();
-        String flippedName = baseName + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
-        flippedEntry.setImageName(flippedName);
-
-        // Read the flipped image data
-        ImageData<BufferedImage> flippedData = flippedEntry.readImageData();
-
-        // Set the image type to match the original
-        flippedData.setImageType(imageType);
-
-        // CRITICAL: Verify and log pixel calibration
-        // TransformedServerBuilder should preserve calibration, but let's verify
-        double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
-        double flippedPixelSize = flippedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
-
-        logger.info("Pixel calibration check:");
-        logger.info("  Original: {} um/pixel", originalPixelSize);
-        logger.info("  Flipped:  {} um/pixel", flippedPixelSize);
-
-        if (Math.abs(originalPixelSize - flippedPixelSize) > 0.001) {
-            logger.warn("CRITICAL: Pixel calibration mismatch detected!");
-            logger.warn("  This will cause incorrect tile sizes during acquisition");
-            logger.warn("  Original={} um/px, Flipped={} um/px", originalPixelSize, flippedPixelSize);
-        }
-
-        // Annotations are intentionally NOT transferred here. The flipped sibling
-        // is a derived mirror of the base; its annotation set is populated (and
-        // re-populated on every run-from-base) by
-        // ImageFlipHelper.mirrorAnnotationsToSibling, which reads the base's LIVE
-        // hierarchy. Transferring here as well -- from the persisted .qpdata --
-        // would (a) miss unsaved annotations and (b) double up with the mirror
-        // step, producing duplicate annotations on the sibling.
-
-        // Ensure original entry has base_image set before we inherit from it
-        // This ensures both original and flipped entries share the same base_image
-        Map<String, String> originalMetadata = originalEntry.getMetadata();
-        if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
-            String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
-            originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
-            logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
-        }
-
-        // Apply metadata - get offsets from original
-        double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
-        ImageMetadataManager.applyImageMetadata(
-                project,
-                flippedEntry,
-                originalEntry, // Use original as parent to inherit collection and base_image
-                offsets[0],
-                offsets[1],
-                flipX,
-                flipY, // Mark which axes are flipped
-                sampleName);
-        // The mirror keeps whatever rotation the original's pixels already carry. Without this
-        // a Camera View copy of a "(rotated N)" entry reads as unrotated, so the companion
-        // lookups (which match on base_image + rotation) never find it and build another.
-        ImageMetadataManager.setRotationDeg(flippedEntry, ImageMetadataManager.getRotationDeg(originalEntry));
-
-        // Save the flipped image data to persist the hierarchy and image type
-        flippedEntry.saveImageData(flippedData);
-        logger.info("Saved flipped image data with transformed hierarchy and image type");
-
-        // Save project changes
-        project.syncChanges();
-        logger.info("Synced project changes for flipped duplicate");
-
-        logger.info("Successfully created flipped duplicate: {}", flippedName);
-        return flippedEntry;
     }
 
     /**
@@ -879,6 +889,40 @@ public class QPProjectFunctions {
      * @param sampleName the sample name for metadata
      * @return the new rotated entry, or null on failure / no-op
      */
+    /**
+     * Closes a server and every server it wraps. QuPath's wrapper servers (rotation, affine
+     * transform) close nothing they wrap, so closing only the outer one leaves the file reader
+     * open, and on Windows an open reader keeps the image file locked.
+     */
+    static void closeServerChain(ImageServer<?> server) {
+        Set<ImageServer<?>> seen = Collections.newSetFromMap(new IdentityHashMap<>());
+        ImageServer<?> current = server;
+        while (current != null && seen.add(current)) {
+            ImageServer<?> wrapped = wrappedServerOf(current);
+            try {
+                current.close();
+            } catch (Exception e) {
+                logger.debug("Could not close image server {}: {}", current.getPath(), e.getMessage());
+            }
+            current = wrapped;
+        }
+    }
+
+    /** The server a {@link TransformingImageServer} wraps, or null (its accessor is protected). */
+    private static ImageServer<?> wrappedServerOf(ImageServer<?> server) {
+        if (!(server instanceof TransformingImageServer<?>)) {
+            return null;
+        }
+        try {
+            Method accessor = TransformingImageServer.class.getDeclaredMethod("getWrappedServer");
+            accessor.setAccessible(true);
+            return (ImageServer<?>) accessor.invoke(server);
+        } catch (ReflectiveOperationException | RuntimeException e) {
+            logger.debug("Could not reach the server wrapped by {}: {}", server.getPath(), e.getMessage());
+            return null;
+        }
+    }
+
     /** Maps a {@link RotatedImageServer.Rotation} to its degree measure (0/90/180/270). */
     private static int rotationDegOf(RotatedImageServer.Rotation rotation) {
         if (rotation == null) return 0;
@@ -910,62 +954,66 @@ public class QPProjectFunctions {
 
         ImageData<BufferedImage> originalData = originalEntry.readImageData();
         ImageServer<BufferedImage> originalServer = originalData.getServer();
-        ImageData.ImageType imageType = originalData.getImageType();
+        try {
+            ImageData.ImageType imageType = originalData.getImageType();
 
-        // Native rotation -- no hand-rolled affine (contrast with createFlippedDuplicate).
-        ImageServer<BufferedImage> rotatedServer = new RotatedImageServer(originalServer, rotation);
-        ProjectImageEntry<BufferedImage> rotatedEntry = project.addImage(rotatedServer.getBuilder());
+            // Native rotation -- no hand-rolled affine (contrast with createFlippedDuplicate).
+            ImageServer<BufferedImage> rotatedServer = new RotatedImageServer(originalServer, rotation);
+            ProjectImageEntry<BufferedImage> rotatedEntry = project.addImage(rotatedServer.getBuilder());
 
-        String suffix =
-                switch (rotation) {
-                    case ROTATE_90 -> " (rotated 90)";
-                    case ROTATE_180 -> " (rotated 180)";
-                    case ROTATE_270 -> " (rotated 270)";
-                    default -> " (rotated)";
-                };
-        String rotatedName = originalEntry.getImageName() + suffix;
-        rotatedEntry.setImageName(rotatedName);
+            String suffix =
+                    switch (rotation) {
+                        case ROTATE_90 -> " (rotated 90)";
+                        case ROTATE_180 -> " (rotated 180)";
+                        case ROTATE_270 -> " (rotated 270)";
+                        default -> " (rotated)";
+                    };
+            String rotatedName = originalEntry.getImageName() + suffix;
+            rotatedEntry.setImageName(rotatedName);
 
-        ImageData<BufferedImage> rotatedData = rotatedEntry.readImageData();
-        rotatedData.setImageType(imageType);
+            ImageData<BufferedImage> rotatedData = new ImageData<>(rotatedServer);
+            rotatedData.setImageType(imageType);
 
-        double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
-        double rotatedPixelSize = rotatedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
-        if (Math.abs(originalPixelSize - rotatedPixelSize) > 0.001) {
-            logger.warn(
-                    "Rotated duplicate pixel-size mismatch: original={} um/px, rotated={} um/px",
-                    originalPixelSize,
-                    rotatedPixelSize);
+            double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+            double rotatedPixelSize = rotatedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+            if (Math.abs(originalPixelSize - rotatedPixelSize) > 0.001) {
+                logger.warn(
+                        "Rotated duplicate pixel-size mismatch: original={} um/px, rotated={} um/px",
+                        originalPixelSize,
+                        rotatedPixelSize);
+            }
+
+            // Share base_image with the original so downstream lookups resolve to the same macro.
+            Map<String, String> originalMetadata = originalEntry.getMetadata();
+            if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
+                String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
+                originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
+                logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
+            }
+
+            double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
+            ImageMetadataManager.applyImageMetadata(
+                    project,
+                    rotatedEntry,
+                    originalEntry, // inherit collection + base_image from the original
+                    offsets[0],
+                    offsets[1],
+                    false, // rotation is not a flip; no flip axes are set
+                    false,
+                    sampleName);
+            // Record the baked rotation in metadata (the source of truth for the angle;
+            // the "(rotated N)" name token is user-reference only). Code reads this, not
+            // the name.
+            ImageMetadataManager.setRotationDeg(rotatedEntry, rotationDegOf(rotation));
+
+            rotatedEntry.saveImageData(rotatedData);
+            project.syncChanges();
+
+            logger.info("Successfully created rotated duplicate: {}", rotatedName);
+            return rotatedEntry;
+        } finally {
+            closeServerChain(originalServer);
         }
-
-        // Share base_image with the original so downstream lookups resolve to the same macro.
-        Map<String, String> originalMetadata = originalEntry.getMetadata();
-        if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
-            String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
-            originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
-            logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
-        }
-
-        double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
-        ImageMetadataManager.applyImageMetadata(
-                project,
-                rotatedEntry,
-                originalEntry, // inherit collection + base_image from the original
-                offsets[0],
-                offsets[1],
-                false, // rotation is not a flip; no flip axes are set
-                false,
-                sampleName);
-        // Record the baked rotation in metadata (the source of truth for the angle;
-        // the "(rotated N)" name token is user-reference only). Code reads this, not
-        // the name.
-        ImageMetadataManager.setRotationDeg(rotatedEntry, rotationDegOf(rotation));
-
-        rotatedEntry.saveImageData(rotatedData);
-        project.syncChanges();
-
-        logger.info("Successfully created rotated duplicate: {}", rotatedName);
-        return rotatedEntry;
     }
 
     /**
@@ -1039,82 +1087,87 @@ public class QPProjectFunctions {
 
         ImageData<BufferedImage> originalData = originalEntry.readImageData();
         ImageServer<BufferedImage> originalServer = originalData.getServer();
-        ImageData.ImageType imageType = originalData.getImageType();
+        try {
+            ImageData.ImageType imageType = originalData.getImageType();
 
-        // Rotate first (native), then flip against the ROTATED dimensions -- identical to
-        // the previous createRotatedDuplicate -> createFlippedDuplicate chain, minus the
-        // persisted intermediate.
-        ImageServer<BufferedImage> rotatedServer = new RotatedImageServer(originalServer, rotation);
-        int rotatedWidth = rotatedServer.getWidth();
-        int rotatedHeight = rotatedServer.getHeight();
+            // Rotate first (native), then flip against the ROTATED dimensions -- identical to
+            // the previous createRotatedDuplicate -> createFlippedDuplicate chain, minus the
+            // persisted intermediate.
+            ImageServer<BufferedImage> rotatedServer = new RotatedImageServer(originalServer, rotation);
+            int rotatedWidth = rotatedServer.getWidth();
+            int rotatedHeight = rotatedServer.getHeight();
 
-        AffineTransform flip = new AffineTransform();
-        if (flipX && flipY) {
-            flip.scale(-1.0, -1.0);
-            flip.translate(-rotatedWidth, -rotatedHeight);
-        } else if (flipX) {
-            flip.scale(-1.0, 1.0);
-            flip.translate(-rotatedWidth, 0);
-        } else {
-            flip.scale(1.0, -1.0);
-            flip.translate(0, -rotatedHeight);
+            AffineTransform flip = new AffineTransform();
+            if (flipX && flipY) {
+                flip.scale(-1.0, -1.0);
+                flip.translate(-rotatedWidth, -rotatedHeight);
+            } else if (flipX) {
+                flip.scale(-1.0, 1.0);
+                flip.translate(-rotatedWidth, 0);
+            } else {
+                flip.scale(1.0, -1.0);
+                flip.translate(0, -rotatedHeight);
+            }
+            ImageServer<BufferedImage> composedServer =
+                    new TransformedServerBuilder(rotatedServer).transform(flip).build();
+
+            ProjectImageEntry<BufferedImage> composedEntry = project.addImage(composedServer.getBuilder());
+
+            String rotSuffix =
+                    switch (rotation) {
+                        case ROTATE_90 -> " (rotated 90)";
+                        case ROTATE_180 -> " (rotated 180)";
+                        case ROTATE_270 -> " (rotated 270)";
+                        default -> " (rotated)";
+                    };
+            String composedName =
+                    originalEntry.getImageName() + rotSuffix + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
+            composedEntry.setImageName(composedName);
+
+            ImageData<BufferedImage> composedData = new ImageData<>(composedServer);
+            composedData.setImageType(imageType);
+
+            double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+            double composedPixelSize = composedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
+            if (Math.abs(originalPixelSize - composedPixelSize) > 0.001) {
+                logger.warn(
+                        "Rotated+flipped duplicate pixel-size mismatch: original={} um/px, composed={} um/px",
+                        originalPixelSize,
+                        composedPixelSize);
+            }
+
+            // Share base_image with the original so downstream lookups resolve to the same macro.
+            Map<String, String> originalMetadata = originalEntry.getMetadata();
+            if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
+                String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
+                originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
+                logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
+            }
+
+            double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
+            ImageMetadataManager.applyImageMetadata(
+                    project,
+                    composedEntry,
+                    originalEntry, // inherit collection + base_image from the original
+                    offsets[0],
+                    offsets[1],
+                    flipX, // record the flip axes so the frame is unambiguous downstream
+                    flipY,
+                    sampleName);
+            // Record the baked rotation in metadata (source of truth for the angle; the
+            // "(rotated N)" name token is user-reference only). The caller
+            // (MultiSlideAssignmentDialog) stamps the light-path snapshot (camera_view flag
+            // + baked parity) on top of this.
+            ImageMetadataManager.setRotationDeg(composedEntry, rotationDegOf(rotation));
+
+            composedEntry.saveImageData(composedData);
+            project.syncChanges();
+
+            logger.info("Successfully created rotated+flipped duplicate: {}", composedName);
+            return composedEntry;
+        } finally {
+            closeServerChain(originalServer);
         }
-        ImageServer<BufferedImage> composedServer =
-                new TransformedServerBuilder(rotatedServer).transform(flip).build();
-
-        ProjectImageEntry<BufferedImage> composedEntry = project.addImage(composedServer.getBuilder());
-
-        String rotSuffix =
-                switch (rotation) {
-                    case ROTATE_90 -> " (rotated 90)";
-                    case ROTATE_180 -> " (rotated 180)";
-                    case ROTATE_270 -> " (rotated 270)";
-                    default -> " (rotated)";
-                };
-        String composedName = originalEntry.getImageName() + rotSuffix + " " + ImageMetadataManager.CAMERA_VIEW_SUFFIX;
-        composedEntry.setImageName(composedName);
-
-        ImageData<BufferedImage> composedData = composedEntry.readImageData();
-        composedData.setImageType(imageType);
-
-        double originalPixelSize = originalServer.getPixelCalibration().getAveragedPixelSizeMicrons();
-        double composedPixelSize = composedServer.getPixelCalibration().getAveragedPixelSizeMicrons();
-        if (Math.abs(originalPixelSize - composedPixelSize) > 0.001) {
-            logger.warn(
-                    "Rotated+flipped duplicate pixel-size mismatch: original={} um/px, composed={} um/px",
-                    originalPixelSize,
-                    composedPixelSize);
-        }
-
-        // Share base_image with the original so downstream lookups resolve to the same macro.
-        Map<String, String> originalMetadata = originalEntry.getMetadata();
-        if (originalMetadata.get(ImageMetadataManager.BASE_IMAGE) == null) {
-            String baseImage = qupath.lib.common.GeneralTools.stripExtension(originalEntry.getImageName());
-            originalMetadata.put(ImageMetadataManager.BASE_IMAGE, baseImage);
-            logger.info("Set base_image='{}' on original entry: {}", baseImage, originalEntry.getImageName());
-        }
-
-        double[] offsets = ImageMetadataManager.getXYOffset(originalEntry);
-        ImageMetadataManager.applyImageMetadata(
-                project,
-                composedEntry,
-                originalEntry, // inherit collection + base_image from the original
-                offsets[0],
-                offsets[1],
-                flipX, // record the flip axes so the frame is unambiguous downstream
-                flipY,
-                sampleName);
-        // Record the baked rotation in metadata (source of truth for the angle; the
-        // "(rotated N)" name token is user-reference only). The caller
-        // (MultiSlideAssignmentDialog) stamps the light-path snapshot (camera_view flag
-        // + baked parity) on top of this.
-        ImageMetadataManager.setRotationDeg(composedEntry, rotationDegOf(rotation));
-
-        composedEntry.saveImageData(composedData);
-        project.syncChanges();
-
-        logger.info("Successfully created rotated+flipped duplicate: {}", composedName);
-        return composedEntry;
     }
 
     /**
@@ -1440,100 +1493,104 @@ public class QPProjectFunctions {
         // Build an ImageServer for the image file
         String imageUri = imageFile.toURI().toString();
         ImageServer<BufferedImage> server = buildServerWithRetry(imageUri, imageFile);
+        try {
 
-        // Check if we need to apply any transformations
-        if (!isSlideFlippedX && !isSlideFlippedY) {
-            // === PATH 1: No transformations needed ===
-            // This is the preferred path as it preserves all image metadata and associated images
-            logger.info("No flips needed, adding image directly to preserve associated images");
+            // Check if we need to apply any transformations
+            if (!isSlideFlippedX && !isSlideFlippedY) {
+                // === PATH 1: No transformations needed ===
+                // This is the preferred path as it preserves all image metadata and associated images
+                logger.info("No flips needed, adding image directly to preserve associated images");
 
-            // Add the image using its original builder
-            ProjectImageEntry<BufferedImage> entry = project.addImage(server.getBuilder());
+                // Add the image using its original builder
+                ProjectImageEntry<BufferedImage> entry = project.addImage(server.getBuilder());
 
-            // Read the image data and set up basic properties
-            ImageData<BufferedImage> imageData = entry.readImageData();
+                // Image data on the server in hand; entry.readImageData() would open a second reader.
+                ImageData<BufferedImage> imageData = new ImageData<>(server);
+
+                // Determine and set the image type using our unified method
+                var imageType = determineImageType(imageFile, server, imageData, modalityHandler);
+                imageData.setImageType(imageType);
+
+                // Apply modality-driven channel name override (e.g. ".biref" -> "PPM Subtracted").
+                // Persists across project re-opens because saveImageData stores the
+                // server metadata snapshot in the entry's .qpdata.
+                applyChannelNameOverride(imageData, imageFile, modalityHandler);
+                applyDisplayRangeOverride(imageData, imageFile, modalityHandler);
+
+                // Set a user-friendly name for the image in the project
+                entry.setImageName(imageFile.getName());
+
+                // Save the image data to persist the image type setting
+                entry.saveImageData(imageData);
+
+                // Sync changes
+                project.syncChanges();
+
+                logger.info("Successfully added image to project with all associated images");
+                return true;
+            }
+
+            // === PATH 2: Transformations needed ===
+            // We need to flip the image, which requires creating a transformed server
+            logger.warn("Applying flips to image - associated images (macro) will not be preserved in the project");
+
+            // Create an affine transformation for the flipping
+            AffineTransform transform = new AffineTransform();
+
+            // Calculate scale factors:
+            // - For flipping horizontally (around Y-axis): scale X by -1
+            // - For flipping vertically (around X-axis): scale Y by -1
+            // - No flipping: scale by 1 (identity)
+            double scaleX = isSlideFlippedX ? -1 : 1;
+            double scaleY = isSlideFlippedY ? -1 : 1;
+
+            // Apply the scaling transformation
+            // This creates a flip around the origin (0,0)
+            transform.scale(scaleX, scaleY);
+
+            // CRITICAL: After flipping, we need to translate the image back into view
+            // When we flip horizontally (scaleX = -1), the image moves to negative X coordinates
+            // We must translate by the full width to bring it back to positive coordinates
+            if (isSlideFlippedX) {
+                transform.translate(-server.getWidth(), 0);
+            }
+
+            // Similarly for vertical flipping, translate by the full height
+            if (isSlideFlippedY) {
+                transform.translate(0, -server.getHeight());
+            }
+
+            // Create a transformed server that applies our affine transformation
+            ImageServer<BufferedImage> flipped =
+                    new TransformedServerBuilder(server).transform(transform).build();
+
+            // Add the transformed server to the project
+            ProjectImageEntry<BufferedImage> entry = project.addImage(flipped.getBuilder());
+
+            // Set up the image data on the server in hand (no second reader).
+            ImageData<BufferedImage> imageData = new ImageData<>(flipped);
 
             // Determine and set the image type using our unified method
-            var imageType = determineImageType(imageFile, server, imageData, modalityHandler);
+            var imageType = determineImageType(imageFile, flipped, imageData, modalityHandler);
             imageData.setImageType(imageType);
 
-            // Apply modality-driven channel name override (e.g. ".biref" -> "PPM Subtracted").
-            // Persists across project re-opens because saveImageData stores the
-            // server metadata snapshot in the entry's .qpdata.
+            // Apply modality-driven channel name override on the flipped path too.
             applyChannelNameOverride(imageData, imageFile, modalityHandler);
             applyDisplayRangeOverride(imageData, imageFile, modalityHandler);
 
-            // Set a user-friendly name for the image in the project
             entry.setImageName(imageFile.getName());
 
             // Save the image data to persist the image type setting
             entry.saveImageData(imageData);
 
-            // Sync changes
+            // Save the changes
             project.syncChanges();
 
-            logger.info("Successfully added image to project with all associated images");
+            logger.info("Successfully added flipped image to project (associated images not preserved)");
             return true;
+        } finally {
+            closeServerChain(server);
         }
-
-        // === PATH 2: Transformations needed ===
-        // We need to flip the image, which requires creating a transformed server
-        logger.warn("Applying flips to image - associated images (macro) will not be preserved in the project");
-
-        // Create an affine transformation for the flipping
-        AffineTransform transform = new AffineTransform();
-
-        // Calculate scale factors:
-        // - For flipping horizontally (around Y-axis): scale X by -1
-        // - For flipping vertically (around X-axis): scale Y by -1
-        // - No flipping: scale by 1 (identity)
-        double scaleX = isSlideFlippedX ? -1 : 1;
-        double scaleY = isSlideFlippedY ? -1 : 1;
-
-        // Apply the scaling transformation
-        // This creates a flip around the origin (0,0)
-        transform.scale(scaleX, scaleY);
-
-        // CRITICAL: After flipping, we need to translate the image back into view
-        // When we flip horizontally (scaleX = -1), the image moves to negative X coordinates
-        // We must translate by the full width to bring it back to positive coordinates
-        if (isSlideFlippedX) {
-            transform.translate(-server.getWidth(), 0);
-        }
-
-        // Similarly for vertical flipping, translate by the full height
-        if (isSlideFlippedY) {
-            transform.translate(0, -server.getHeight());
-        }
-
-        // Create a transformed server that applies our affine transformation
-        ImageServer<BufferedImage> flipped =
-                new TransformedServerBuilder(server).transform(transform).build();
-
-        // Add the transformed server to the project
-        ProjectImageEntry<BufferedImage> entry = project.addImage(flipped.getBuilder());
-
-        // Set up the image data
-        ImageData<BufferedImage> imageData = entry.readImageData();
-
-        // Determine and set the image type using our unified method
-        var imageType = determineImageType(imageFile, flipped, imageData, modalityHandler);
-        imageData.setImageType(imageType);
-
-        // Apply modality-driven channel name override on the flipped path too.
-        applyChannelNameOverride(imageData, imageFile, modalityHandler);
-        applyDisplayRangeOverride(imageData, imageFile, modalityHandler);
-
-        entry.setImageName(imageFile.getName());
-
-        // Save the image data to persist the image type setting
-        entry.saveImageData(imageData);
-
-        // Save the changes
-        project.syncChanges();
-
-        logger.info("Successfully added flipped image to project (associated images not preserved)");
-        return true;
     }
 
     /**
