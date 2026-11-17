@@ -398,7 +398,7 @@ public class QPScopeChecks {
         body.append("Wizard selection:\n");
         body.append(String.format("  Objective:           %s%n", objective));
         if (magnification != null) {
-            body.append(String.format("  Magnification:       %sx%n", magnification));
+            body.append(String.format("  Magnification:       %s%n", magnification));
         }
         body.append(String.format("  Modality:            %s%n", modality));
         body.append(String.format("  Detector:            %s%n", detector));
@@ -408,7 +408,7 @@ public class QPScopeChecks {
         if (inferredId != null && inferredPixelSize != null) {
             body.append(String.format(
                     "  Closest configured:  %s%s (%.4f um/px)%n",
-                    inferredId, inferredMag != null ? " (" + inferredMag + "x)" : "", inferredPixelSize));
+                    inferredId, inferredMag != null ? " (" + inferredMag + ")" : "", inferredPixelSize));
         }
         body.append(String.format("  Difference:          %.1f%%%n%n", ratio * 100));
         body.append("Tile spacing for this acquisition will be planned for the wizard's selected objective. ");

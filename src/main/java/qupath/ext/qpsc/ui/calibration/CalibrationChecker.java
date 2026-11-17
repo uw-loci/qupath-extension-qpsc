@@ -178,10 +178,8 @@ public class CalibrationChecker {
                 return new StepStatus(Status.READY, "Flat-field correction is off");
             }
             if (method == FlatfieldMethod.BASIC) {
-                String folder = PersistentPreferences.getFlatfieldProfileFolder();
-                return new StepStatus(
-                        FlatfieldProfiles.covered(folder).isEmpty() ? Status.WARNING : Status.READY,
-                        FlatfieldProfiles.describe(folder));
+                return checkFlatfieldProfile(
+                        mgr, PersistentPreferences.getFlatfieldProfileFolder(), modality, objective, detector);
             }
 
             String bgFolder = mgr.getBackgroundProfileFolder();
@@ -519,6 +517,38 @@ public class CalibrationChecker {
      *       changed after collection (non-blocking)</li>
      * </ul>
      */
+    /**
+     * The Background Correction row for a BaSiC profile: ready only when the profile covers
+     * every in-use channel of the acquisition profile and was fitted on this objective and
+     * detector (when it recorded them).
+     */
+    static StepStatus checkFlatfieldProfile(
+            MicroscopeConfigManager mgr, String folder, String modality, String objective, String detector) {
+        if (FlatfieldProfiles.covered(folder).isEmpty()) {
+            return new StepStatus(Status.WARNING, FlatfieldProfiles.describe(folder));
+        }
+        java.util.List<String> channelIds = java.util.List.of();
+        String profileKey = mgr == null ? null : mgr.resolveProfileKey(modality, objective);
+        if (profileKey != null) {
+            channelIds = mgr.getChannelsForProfile(profileKey).stream()
+                    .filter(qupath.ext.qpsc.modality.Channel::isInUse)
+                    .map(qupath.ext.qpsc.modality.Channel::id)
+                    .toList();
+        }
+        java.util.List<String> uncovered = FlatfieldProfiles.uncoveredChannels(folder, channelIds);
+        if (!uncovered.isEmpty()) {
+            return new StepStatus(
+                    Status.WARNING,
+                    FlatfieldProfiles.describe(folder) + "; not " + String.join(", ", uncovered)
+                            + " (acquired uncorrected)");
+        }
+        java.util.List<String> mismatches = FlatfieldProfiles.hardwareMismatches(folder, objective, detector);
+        if (!mismatches.isEmpty()) {
+            return new StepStatus(Status.WARNING, String.join(" ", mismatches));
+        }
+        return new StepStatus(Status.READY, FlatfieldProfiles.describe(folder));
+    }
+
     private static StepStatus checkChannelBackgrounds(
             String bgFolder,
             String modality,

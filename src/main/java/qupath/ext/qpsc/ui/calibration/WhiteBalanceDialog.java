@@ -20,6 +20,8 @@ import javafx.scene.layout.*;
 import javafx.stage.Modality;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import qupath.ext.qpsc.background.BackgroundProfiles;
+import qupath.ext.qpsc.background.ProfileWhiteBalance;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -29,6 +31,7 @@ import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
 import qupath.ext.qpsc.ui.UserErrors;
+import qupath.ext.qpsc.ui.background.BackgroundProfileSelector;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.lib.gui.prefs.PathPrefs;
 
@@ -866,10 +869,58 @@ public class WhiteBalanceDialog {
         grid.add(detectorLabel, 0, row);
         grid.add(detectorCombo, 1, row);
         grid.add(detectorNote, 2, row);
+        row++;
+
+        // Background profile: a PPM white balance is stored with the active profile's
+        // backgrounds, so say which one this run writes to (and let it be changed here).
+        addBackgroundProfileRow(grid, row);
 
         TitledPane pane = new TitledPane("Shared Settings", grid);
         pane.setCollapsible(true);
         return pane;
+    }
+
+    /**
+     * Adds the "Background profile:" selector and a line saying where the calibration is
+     * stored: in the active profile, or scope-wide when no profile is active or the modality
+     * keeps no white balance per profile.
+     */
+    private static void addBackgroundProfileRow(GridPane grid, int row) {
+        String configPath = QPPreferenceDialog.getMicroscopeConfigFileProperty();
+        if (configPath == null || configPath.isEmpty()) {
+            return;
+        }
+        MicroscopeConfigManager configManager;
+        String modality;
+        try {
+            configManager = MicroscopeConfigManager.getInstance(configPath);
+            modality = qupath.ext.qpsc.controller.WhiteBalanceWorkflow.resolveMultiAngleModality(configPath);
+        } catch (RuntimeException e) {
+            logger.warn("Could not set up the background profile row: {}", e.getMessage());
+            return;
+        }
+        Label destination = new Label();
+        destination.setWrapText(true);
+        destination.setStyle("-fx-font-size: 11px;");
+        Runnable update = () -> {
+            String name = BackgroundProfiles.active(configManager.getBackgroundBaseFolder())
+                    .map(BackgroundProfiles.BackgroundProfile::displayName)
+                    .orElse(null);
+            destination.setText(ProfileWhiteBalance.destination(modality, WbMode.PER_ANGLE.getProtocolName(), name));
+        };
+        BackgroundProfileSelector selector =
+                new BackgroundProfileSelector(configManager::getBackgroundBaseFolder, update);
+        selector.setStatusVisible(false);
+        // A change made in another dialog updates the line too. The preference holds the
+        // listener weakly; the label keeps it alive for as long as this dialog exists.
+        javafx.beans.value.ChangeListener<String> listener = (obs, was, now) -> Platform.runLater(update);
+        destination.getProperties().put("backgroundProfileListener", listener);
+        PersistentPreferences.activeBackgroundProfileProperty()
+                .addListener(new javafx.beans.value.WeakChangeListener<>(listener));
+        update.run();
+
+        grid.add(selector, 0, row, 3, 1);
+        grid.add(destination, 0, row + 1, 3, 1);
     }
 
     /**

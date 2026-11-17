@@ -229,8 +229,8 @@ Shows the current hardware and provides modality-dependent camera controls.
 
 | Option | Type | Description |
 |--------|------|-------------|
-| WB Angle Presets | Buttons | One button per calibrated angle (e.g., "Uncrossed (90 deg)"). Clicking applies the per-channel exposures, gains, and rotates the polarizer. Exposure and gain details shown below each button. The values come from the active [background profile](background-profiles.md)'s white balance when it has one, otherwise from the scope-wide calibration. |
-| Simple WB Preset | Button | Applies the Simple WB base exposures and gains at the uncrossed angle (blue text, shown only if Simple WB has been calibrated) |
+| WB Angle Presets | Buttons | One button per calibrated angle (e.g., "Uncrossed (90 deg)"). Clicking applies the per-channel exposures, gains, and rotates the polarizer. Exposure and gain details shown below each button. The values come from the active [background profile](background-profiles.md)'s per-angle white balance when it has one, otherwise from the scope-wide calibration, whatever WB mode the last acquisition used. The buttons are rebuilt when the active profile changes. |
+| Simple WB Preset | Button | Applies the Simple WB base exposures and gains at the uncrossed angle (blue text, shown only if Simple WB has been calibrated). Read from the active background profile's simple white balance when it has one, otherwise scope-wide. |
 
 **Brightfield modality content:**
 

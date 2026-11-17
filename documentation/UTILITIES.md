@@ -45,7 +45,7 @@ The **QP Scope** entry in the menu bar shows a colored dot so it stands out when
 | **Utilities > Image Quality** | | |
 | [Background Collection](tools/background-collection.md) | Capture flat-field correction images | Extensions > QP Scope > Utilities > Image Quality > Collect Background Images |
 | [Background Profiles](tools/background-profiles.md) | One set of backgrounds per sample setup (carrier, slide source, orientation, medium); choose the active one | Extensions > QP Scope > Utilities > Image Quality > Background Profiles... |
-| Estimate Flat-Field from Tiles (BaSiC)... | Fits the uneven brightness of a PMT or laser scanner from a folder of tiles, for detectors with no background image, and saves a profile for [an acquisition](tools/background-profiles.md#basic-profiles-when-there-is-no-background-image) or for Tiles to Pyramid's **Correct uneven brightness with a flat-field profile** option. Use at least 40 tissue tiles, raw or averaged, not max projections. A profile fits one detector, objective, zoom and channel. Needs the microscope server, and the folder must be visible from that machine. | Extensions > QP Scope > Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)... |
+| Estimate Flat-Field from Tiles (BaSiC)... | Fits the uneven brightness of a PMT or laser scanner from a folder of tiles, for detectors with no background image, and saves a profile for [an acquisition](tools/background-profiles.md#basic-profiles-when-there-is-no-background-image) or for Tiles to Pyramid's **Correct uneven brightness with a flat-field profile** option. Use at least 40 tissue tiles, raw or averaged, not max projections. A profile fits one detector, objective, zoom and channel; for QPSC tiles it records the objective and detector, and an acquisition on other hardware warns. Needs the microscope server, and the folder must be visible from that machine. | Extensions > QP Scope > Utilities > Image Quality > Estimate Flat-Field from Tiles (BaSiC)... |
 | [WB Comparison Test](tools/wb-comparison-test.md) | Compare white balance modes side-by-side (JAI cameras only) | Extensions > QP Scope > Utilities > Image Quality > WB Comparison Test... |
 | [Autofocus Editor](tools/autofocus-editor.md) | Configure per-objective autofocus parameters | Extensions > QP Scope > Utilities > Image Quality > Autofocus Configuration Editor... |
 | [Autofocus Benchmark](tools/autofocus-benchmark.md) | Find optimal autofocus settings systematically | Extensions > QP Scope > Utilities > Image Quality > Autofocus Parameter Benchmark... |
@@ -91,7 +91,7 @@ Real-time camera feed with integrated stage control, histogram, noise statistics
 
 ### [Camera Control](tools/camera-control.md)
 
-View and test camera exposure and gain settings loaded from calibration profiles. Particularly useful for JAI 3-CCD camera white balance troubleshooting. Displays per-angle cards with exposure, gain, and an Apply button that sets camera settings and rotates the polarizer.
+View and test camera exposure and gain settings loaded from calibration profiles. Particularly useful for JAI 3-CCD camera white balance troubleshooting. Displays per-angle cards with exposure, gain, and an Apply button that sets camera settings and rotates the polarizer. The cards show the per-angle calibration of the active background profile when it has one, otherwise the scope-wide one.
 
 ### [Stage Map](tools/stage-map.md)
 
@@ -180,7 +180,7 @@ Guided setup wizard that walks new users through the complete first-time configu
 
 ### [White Balance Calibration](tools/white-balance-calibration.md)
 
-Calibrate per-channel (R, G, B) exposure times for JAI 3-CCD prism cameras. Supports Simple (single angle) and PPM (4 angles) modes. Results are saved to YAML and used automatically by background collection and acquisition.
+Calibrate per-channel (R, G, B) exposure times for JAI 3-CCD prism cameras. Supports Simple (single angle) and PPM (4 angles) modes. Results are saved to YAML and used automatically by background collection and acquisition. The dialog has a **Background profile** row: a PPM calibration is also stored with that profile, and the dialog and the results say which profile, or that it is stored scope-wide only.
 
 ### [WB Comparison Test](tools/wb-comparison-test.md)
 

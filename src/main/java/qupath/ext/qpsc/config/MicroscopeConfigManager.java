@@ -1271,19 +1271,55 @@ public class MicroscopeConfigManager {
      * @param settingPath Path to the setting within the profile
      * @return The setting value, or null if not found
      */
-    @SuppressWarnings("unchecked")
     public Object getProfileSetting(String modality, String objective, String detector, String... settingPath) {
         // White balance keys come from the active background profile's white balance for the
-        // selected white balance mode when it has one; the scope-wide values below otherwise.
+        // mode they belong to when it has one; the scope-wide values below otherwise.
         if (settingPath.length > 0 && ProfileWhiteBalance.isWhiteBalanceKey(settingPath[0])) {
-            String mode = qupath.ext.qpsc.modality.WbMode.fromDisplayName(
-                            qupath.ext.qpsc.preferences.PersistentPreferences.getLastWhiteBalanceMode())
-                    .getProtocolName();
-            Object fromProfile = getProfileWhiteBalanceSetting(mode, modality, objective, detector, settingPath);
-            if (fromProfile != null) {
-                return fromProfile;
-            }
+            String mode = whiteBalanceModeFor(
+                    settingPath[0], qupath.ext.qpsc.preferences.PersistentPreferences.getLastWhiteBalanceMode());
+            return getWhiteBalanceSetting(mode, modality, objective, detector, settingPath);
         }
+        return getScopeWideSetting(modality, objective, detector, settingPath);
+    }
+
+    /**
+     * The white balance mode a white balance key is read for when the caller names none:
+     * {@code simple_wb} exists only in the simple calibration, so it is always read from
+     * there; every other key follows the white balance mode selected for acquisition.
+     *
+     * @param key the first element of the setting path
+     * @param selectedModeDisplayName the selected mode's display name (the last-used preference)
+     * @return the mode's protocol name ("per_angle" or "simple")
+     */
+    static String whiteBalanceModeFor(String key, String selectedModeDisplayName) {
+        if ("simple_wb".equals(key)) {
+            return qupath.ext.qpsc.modality.WbMode.SIMPLE.getProtocolName();
+        }
+        return qupath.ext.qpsc.modality.WbMode.fromDisplayName(selectedModeDisplayName)
+                .getProtocolName();
+    }
+
+    /**
+     * A white balance value for one named white balance mode: the active background profile's
+     * own calibration for that mode when it has one, the scope-wide value otherwise. Use this
+     * where the mode is known from what is shown or applied: the Live Viewer's per-angle
+     * presets are per-angle values whatever mode the last acquisition used.
+     *
+     * @param wbMode "per_angle" or "simple"
+     * @param settingPath the same path as in the imageprocessing YAML, e.g. "exposures_ms"
+     */
+    public Object getWhiteBalanceSetting(
+            String wbMode, String modality, String objective, String detector, String... settingPath) {
+        Object fromProfile = getProfileWhiteBalanceSetting(wbMode, modality, objective, detector, settingPath);
+        if (fromProfile != null) {
+            return fromProfile;
+        }
+        return getScopeWideSetting(modality, objective, detector, settingPath);
+    }
+
+    /** The value from {@code imaging_profiles} of the imageprocessing YAML, ignoring background profiles. */
+    @SuppressWarnings("unchecked")
+    private Object getScopeWideSetting(String modality, String objective, String detector, String... settingPath) {
         if (imageprocessingData == null || !imageprocessingData.containsKey("imaging_profiles")) {
             logger.debug(
                     "Setting not found: {} for {}/{}/{}", Arrays.toString(settingPath), modality, objective, detector);
@@ -1375,6 +1411,18 @@ public class MicroscopeConfigManager {
     }
 
     /**
+     * Exposure settings for one named white balance mode (see {@link #getWhiteBalanceSetting}).
+     *
+     * @param wbMode "per_angle" or "simple"
+     * @return Map of exposure settings, or null if not found
+     */
+    @SuppressWarnings("unchecked")
+    public Map<String, Object> getModalityExposures(String modality, String objective, String detector, String wbMode) {
+        Object exposures = getWhiteBalanceSetting(wbMode, modality, objective, detector, "exposures_ms");
+        return (exposures instanceof Map<?, ?>) ? (Map<String, Object>) exposures : null;
+    }
+
+    /**
      * Get gain settings for a specific modality/objective/detector combination.
      *
      * @param modality The modality name
@@ -1384,6 +1432,16 @@ public class MicroscopeConfigManager {
      */
     public Object getModalityGains(String modality, String objective, String detector) {
         return getProfileSetting(modality, objective, detector, "gains");
+    }
+
+    /**
+     * Gain settings for one named white balance mode (see {@link #getWhiteBalanceSetting}).
+     *
+     * @param wbMode "per_angle" or "simple"
+     * @return Map of gain settings, single gain value, or null if not found
+     */
+    public Object getModalityGains(String modality, String objective, String detector, String wbMode) {
+        return getWhiteBalanceSetting(wbMode, modality, objective, detector, "gains");
     }
 
     /**

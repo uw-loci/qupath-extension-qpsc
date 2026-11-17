@@ -104,11 +104,17 @@ public class AcquisitionConfigurationBuilder {
     /**
      * The BaSiC profile folder this run should send to the server.
      *
+     * <p>Logs a WARN for each profile that recorded a different objective or detector than the
+     * run's: a flat-field profile is good for one detector, objective and zoom. The run still
+     * uses it.
+     *
+     * @param objective objective id in use; null when the caller has not resolved one (not compared)
+     * @param detector detector id in use; null when the caller has not resolved one
      * @return the folder, or null when the run does not use a profile. It is sent even when this
      *     machine cannot see it: the server reads it, and warns if it holds no profile.
      */
     public static String flatfieldFolderForRun(
-            MicroscopeConfigManager configManager, String baseModality, String detector) {
+            MicroscopeConfigManager configManager, String baseModality, String objective, String detector) {
         if (effectiveFlatfieldMethod(configManager, baseModality, detector) != FlatfieldMethod.BASIC) {
             return null;
         }
@@ -116,6 +122,10 @@ public class AcquisitionConfigurationBuilder {
         if (folder == null || folder.isBlank()) {
             logger.warn("BaSiC correction chosen but no profile folder is set; acquiring uncorrected");
             return null;
+        }
+        for (String mismatch :
+                qupath.ext.qpsc.background.FlatfieldProfiles.hardwareMismatches(folder, objective, detector)) {
+            logger.warn("{} Folder: {}", mismatch, folder);
         }
         return folder;
     }
@@ -431,7 +441,7 @@ public class AcquisitionConfigurationBuilder {
             acquisitionBuilder.backgroundCorrection(true, bgMethod, bgFolder, disabledAngles);
             acquisitionBuilder.backgroundProfile(bgProfileId);
         }
-        acquisitionBuilder.flatfieldFolder(flatfieldFolderForRun(configManager, baseModality, detector));
+        acquisitionBuilder.flatfieldFolder(flatfieldFolderForRun(configManager, baseModality, objective, detector));
 
         // Z-stack configuration from persistent preferences
         if (PersistentPreferences.isZStackEnabled()) {

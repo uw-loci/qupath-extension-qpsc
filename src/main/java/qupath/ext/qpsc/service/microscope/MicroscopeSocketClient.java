@@ -7389,6 +7389,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 null,
                 null,
                 null,
+                null,
                 1,
                 0.0,
                 null);
@@ -7431,6 +7432,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 bgFolder,
                 bgMethod,
                 null,
+                null,
                 1,
                 0.0,
                 null);
@@ -7446,6 +7448,10 @@ public class MicroscopeSocketClient implements AutoCloseable {
      *     when {@code bgCorrectionEnabled} is false.
      * @param bgMethod "divide" (flat-field) or "subtract"; null means
      *     server default (divide).
+     * @param flatfieldFolder BaSiC flat-field profile folder, or null.
+     * @param wbFolder the background profile's white balance folder for {@code wbMode}
+     *     ({@code --wb-folder}), or null for the scope-wide calibration. Not sent when
+     *     {@code wbMode} is null or "off".
      * @param timepoints Number of timepoints to repeat the Z-stack (1 = pure
      *     Z-stack). When &gt; 1, the server runs a T-outer / Z-inner loop
      *     and emits a single OME-TIFF per angle with both SizeT and SizeZ.
@@ -7471,6 +7477,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String bgFolder,
             String bgMethod,
             String flatfieldFolder,
+            String wbFolder,
             int timepoints,
             double intervalSec,
             String timeOrder)
@@ -7495,6 +7502,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (flatfieldFolder != null)
             msg.append(" --flatfield-folder \"").append(flatfieldFolder).append('"');
+        appendWbFolder(msg, wbMode, wbFolder);
         if (timepoints > 1) {
             msg.append(" --timepoints ").append(timepoints);
             if (intervalSec > 0) msg.append(" --interval ").append(intervalSec);
@@ -7546,14 +7554,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
                 false,
                 null,
                 null,
+                null,
                 null);
     }
 
     /**
      * Start a time-lapse acquisition with background-correction parameters.
      * See {@link #startZStack(String, double, double, double, String, String,
-     * String, String, String, String, String, boolean, String, String)} for
-     * the {@code bg*} parameter semantics.
+     * String, String, String, String, String, boolean, String, String, String, String, int,
+     * double, String)} for the {@code bg*}, {@code flatfieldFolder} and {@code wbFolder}
+     * parameter semantics.
      */
     public String startTimeLapse(
             String outputFolder,
@@ -7568,7 +7578,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             boolean bgCorrectionEnabled,
             String bgFolder,
             String bgMethod,
-            String flatfieldFolder)
+            String flatfieldFolder,
+            String wbFolder)
             throws IOException {
         StringBuilder msg = new StringBuilder();
         msg.append("--output ").append(outputFolder);
@@ -7587,9 +7598,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
         }
         if (flatfieldFolder != null)
             msg.append(" --flatfield-folder \"").append(flatfieldFolder).append('"');
+        appendWbFolder(msg, wbMode, wbFolder);
         msg.append(" ENDOFSTR");
 
         return executeChunkedCommand(Command.TLAPSE, msg.toString(), "TLAPSE");
+    }
+
+    /**
+     * Appends {@code --wb-folder} (the background profile's white balance) when a white balance
+     * mode is in use; with no mode the server loads no white balance, so the folder means nothing.
+     */
+    static void appendWbFolder(StringBuilder msg, String wbMode, String wbFolder) {
+        if (wbFolder != null && wbMode != null && !"off".equals(wbMode)) {
+            msg.append(" --wb-folder \"").append(wbFolder).append('"');
+        }
     }
 
     /**
@@ -7716,11 +7738,20 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param channel MicroManager channel index, or null for every plane
      * @param offset measured detector offset, or null to read it from the empty tiles
      * @param label description recorded in the profile
+     * @param objective objective the tiles were acquired with, recorded in the profile; null when unknown
+     * @param detector detector the tiles were acquired with, recorded in the profile; null when unknown
      * @return what the fit found, one entry per profile: a folder of channel folders gives one each
      * @throws IOException if communication fails or the fit fails
      */
     public List<FlatfieldFit> fitFlatfield(
-            String tilesFolder, String profileFolder, Integer channel, Double offset, String label) throws IOException {
+            String tilesFolder,
+            String profileFolder,
+            Integer channel,
+            Double offset,
+            String label,
+            String objective,
+            String detector)
+            throws IOException {
         // JSON, because a folder path can hold spaces
         com.google.gson.JsonObject request = new com.google.gson.JsonObject();
         request.addProperty("tiles", tilesFolder);
@@ -7728,6 +7759,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         request.addProperty("channel", channel);
         request.addProperty("offset", offset);
         request.addProperty("label", label);
+        request.addProperty("objective", objective);
+        request.addProperty("detector", detector);
         String message = new Gson().newBuilder().serializeNulls().create().toJson(request) + " ENDOFSTR";
 
         ensureConnected();

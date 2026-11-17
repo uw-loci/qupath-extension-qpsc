@@ -214,6 +214,31 @@ public final class StitchInfoSupport {
         return commandFlag(tileFolder, FLATFIELD_FLAG);
     }
 
+    /**
+     * The objective an acquisition ran with: the {@code --objective} value in the newest
+     * acquisition command in this folder, or in its parent when the folder is one channel of a
+     * multichannel region. Null when there is none. Never throws.
+     */
+    public static String acquiredObjective(File tileFolder) {
+        return commandFlagHereOrParent(tileFolder, OBJECTIVE_FLAG);
+    }
+
+    /** The detector an acquisition ran with ({@code --detector}); see {@link #acquiredObjective}. */
+    public static String acquiredDetector(File tileFolder) {
+        return commandFlagHereOrParent(tileFolder, DETECTOR_FLAG);
+    }
+
+    private static String commandFlagHereOrParent(File tileFolder, java.util.regex.Pattern flag) {
+        if (tileFolder == null) {
+            return null;
+        }
+        String value = commandFlag(tileFolder, flag);
+        if (value == null && tileFolder.getParentFile() != null) {
+            value = commandFlag(tileFolder.getParentFile(), flag);
+        }
+        return value;
+    }
+
     /** One flag's value from the newest acquisition command beside the tiles; null when absent. */
     private static String commandFlag(File tileFolder, java.util.regex.Pattern flag) {
         try {
@@ -236,6 +261,10 @@ public final class StitchInfoSupport {
             java.util.regex.Pattern.compile("--bg-profile\\s+(\\S+)");
     private static final java.util.regex.Pattern FLATFIELD_FLAG = java.util.regex.Pattern.compile(
             "--flatfield-folder\\s+\"?([^\"\\r\\n]+?)\"?(?:\\s+--|\\s+\\\\|\\s*$)", java.util.regex.Pattern.MULTILINE);
+    private static final java.util.regex.Pattern OBJECTIVE_FLAG =
+            java.util.regex.Pattern.compile("--objective\\s+\"?([^\"\\s\\\\]+)");
+    private static final java.util.regex.Pattern DETECTOR_FLAG =
+            java.util.regex.Pattern.compile("--detector\\s+\"?([^\"\\s\\\\]+)");
     private static final java.util.regex.Pattern BG_FOLDER_FLAG =
             java.util.regex.Pattern.compile("--bg-folder\\s+(\\S+)");
 

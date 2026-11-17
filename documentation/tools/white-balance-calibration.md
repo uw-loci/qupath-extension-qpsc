@@ -46,6 +46,7 @@ Common controls (Shared Settings panel, applies to every mode):
 | Tolerance | Spinner | 5 | Acceptable deviation from target intensity |
 | Output Folder | Path | From config | Where calibration files are written |
 | Objective / Detector | Read-only labels | From hardware | Confirms which calibration set will be updated |
+| Background profile | Drop-down + Manage... | Active profile | The profile this calibration is stored with. Changing it here changes the active profile everywhere. The line below it says where the calibration goes: the named profile, or scope-wide only when no profile is active or the modality keeps no white balance per profile. |
 
 Mode-specific controls (Simple example):
 
@@ -122,8 +123,14 @@ PPM white balance, `.../simple/` for Simple. A white balance depends on the setu
 stage (carrier, slide glass, medium) as much as a background does, so each profile keeps
 its own:
 
-- Acquisitions, background collection and the Live Viewer's per-angle presets use the
-  active profile's white balance for the chosen mode.
+- Acquisitions and background collection use the active profile's white balance for the
+  chosen mode.
+- The Live Viewer and Camera Control read the mode a value belongs to, whatever mode the
+  last acquisition used: the per-angle presets read the profile's per-angle calibration,
+  and **Uncrossed (Simple WB)** reads its simple one. They are rebuilt when the active
+  profile changes.
+- Only PPM keeps a white balance per profile. For any other modality the calibration is
+  stored scope-wide only, and the dialog and the results say so.
 - When the profile has none, the scope-wide values above are used. Those are the latest
   calibration of any profile. Before an acquisition or a background collection QPSC asks
   first: **Use scope-wide white balance**, or **Cancel** and calibrate the profile. A
@@ -137,7 +144,8 @@ The run's `acquisition_metadata.json` records which was used as `wb_source`.
 
 The next background collection bakes these exposures into its set, and acquisitions
 then use the set's exposures. Every set collected before the calibration is stale, in
-every background profile, so the results dialog ends with **Collect background now...**:
+every background profile. The results dialog names the profile the calibration was stored
+with and ends with **Collect background now...**:
 it opens Background Collection on this objective, detector and WB mode. The Wizard's
 Background Correction row shows the staleness for the active profile only.
 

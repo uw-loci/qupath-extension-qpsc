@@ -221,14 +221,16 @@ public class PPMModalityHandler implements ModalityHandler {
             throw new IllegalStateException("no 'uncrossed' angle configured for PPM");
         }
 
-        var exposures = mgr.getModalityExposures(modality, objective, detector);
+        // The same per-angle preset the Live Viewer's "Uncrossed" button applies.
+        String perAngle = qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getProtocolName();
+        var exposures = mgr.getModalityExposures(modality, objective, detector, perAngle);
         Object uncrossedExp = (exposures == null) ? null : exposures.get("uncrossed");
         float[] expArray = parseExposureEntry(uncrossedExp);
         if (expArray == null) {
             throw new IllegalStateException("no uncrossed exposure calibrated for " + objective + " / " + detector
                     + " -- run PPM white balance");
         }
-        float[] gainArray = parseGainEntry(mgr.getModalityGains(modality, objective, detector));
+        float[] gainArray = parseGainEntry(mgr.getModalityGains(modality, objective, detector, perAngle));
 
         var controller = qupath.ext.qpsc.service.microscope.MicroscopeController.getInstance();
         final double deg = uncrossedDeg;

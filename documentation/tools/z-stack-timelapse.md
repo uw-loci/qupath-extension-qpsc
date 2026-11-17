@@ -30,7 +30,9 @@ At the top of the dialog, a **Setup** panel configures the microscope hardware s
 
 **Error state:** If required controls are not set, the status label will display "Pick a modality, profile, and channel (if shown) in Setup first." Configure the Setup row and try again.
 
-**Flat-field correction:** the dialog uses the flat-field correction last chosen in an acquisition dialog. When that is a **BaSiC profile** on a monochrome detector, a line under Setup names the profile's coverage (for example "BaSiC profile covers every image"), and the Z-stack or time-lapse is corrected per plane with it. It needs a profile covering every image: a profile split into one subfolder per channel is not applied here, and the line under Setup says so. See [Background Profiles](background-profiles.md#basic-profiles-when-there-is-no-background-image).
+**Flat-field correction:** the dialog uses the flat-field correction last chosen in an acquisition dialog. When that is a **BaSiC profile** on a monochrome detector, a line under Setup names the profile's coverage (for example "BaSiC profile covers every image"), and the Z-stack or time-lapse is corrected per plane with it. It needs a profile covering every image: a profile split into one subfolder per channel is not applied here, and the line under Setup says so. See [Background Profiles](background-profiles.md#basic-profiles-when-there-is-no-background-image). When the profile records a different objective or detector from the session's, the line says so.
+
+**Hardware sent to the server:** the run sends the mounted objective (from MicroManager's pixel size) and the active detector, so the saved images carry the real pixel size. The dialog still sends `--wb-mode off`, so no white balance calibration (scope-wide or from the background profile) is applied.
 
 ## Z-Stack
 

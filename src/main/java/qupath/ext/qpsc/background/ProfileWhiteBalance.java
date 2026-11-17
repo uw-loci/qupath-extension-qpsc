@@ -58,6 +58,27 @@ public final class ProfileWhiteBalance {
     }
 
     /**
+     * One plain sentence saying where a white balance calibration is stored, for the
+     * calibration dialog and its result.
+     *
+     * @param modality the modality being calibrated (may be null)
+     * @param wbMode the white balance mode's protocol name
+     * @param profileName the active background profile's display name, or null when none is
+     *     active (or the active one does not exist)
+     */
+    public static String destination(String modality, String wbMode, String profileName) {
+        if (!appliesTo(modality, wbMode)) {
+            return "Stored scope-wide, not in a background profile: "
+                    + (modality == null ? "this modality" : modality)
+                    + " keeps no white balance per profile.";
+        }
+        if (profileName == null || profileName.isBlank()) {
+            return "No background profile is active: stored scope-wide only.";
+        }
+        return "Stored in background profile '" + profileName + "' (and as the scope-wide latest calibration).";
+    }
+
+    /**
      * The folder a profile keeps this white balance in (the backgrounds' folder for the mode),
      * or null when it does not apply or the profile folder is unknown.
      *

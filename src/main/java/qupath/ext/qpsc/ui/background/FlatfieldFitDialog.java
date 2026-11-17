@@ -25,6 +25,7 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.stitching.StitchInfoSupport;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.UserErrors;
 
@@ -159,12 +160,20 @@ public final class FlatfieldFitDialog {
         }
 
         String label = labelField.getText().trim();
+        // The acquisition command QPSC saves beside its tiles names the objective and detector;
+        // the profile records them so a run on other hardware warns. Zoom stays in the label.
+        File tilesDir = new File(tiles);
+        String objective = StitchInfoSupport.acquiredObjective(tilesDir);
+        String detector = StitchInfoSupport.acquiredDetector(tilesDir);
+        logger.info("Flat-field fit from {}: objective={}, detector={}", tiles, objective, detector);
         fitButton.setDisable(true);
         previews.getChildren().clear();
         statusLabel.setText("Fitting... A few hundred tiles take under a minute.");
         CompletableFuture.supplyAsync(() -> {
                     try {
-                        return controller.getSocketClient().fitFlatfield(tiles, profile, channel, offset, label);
+                        return controller
+                                .getSocketClient()
+                                .fitFlatfield(tiles, profile, channel, offset, label, objective, detector);
                     } catch (IOException e) {
                         throw new java.io.UncheckedIOException(e);
                     }

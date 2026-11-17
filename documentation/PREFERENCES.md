@@ -1613,7 +1613,7 @@ scarce.
 
 | Key | Type | Default | Description |
 |---|---|---|---|
-| `activeBackgroundProfile` | String | `""` | The id of the active [background profile](tools/background-profiles.md): the set of flat-field backgrounds for the sample setup on the stage now. QuPath-wide, because it describes the stage, not a project. Set from the **Background profile** combo in the Bounded, Existing Image and Background Collection dialogs and the Acquisition Wizard, or in Utilities > Image Quality > Background Profiles.... Empty means none: backgrounds are neither collected nor applied, with the usual "no background" warnings. |
+| `activeBackgroundProfile` | String | `""` | The id of the active [background profile](tools/background-profiles.md): the set of flat-field backgrounds for the sample setup on the stage now. QuPath-wide, because it describes the stage, not a project. Set from the **Background profile** combo in the Bounded, Existing Image and Background Collection dialogs and the Acquisition Wizard, the White Balance Calibration dialog, or in Utilities > Image Quality > Background Profiles.... Empty means none: backgrounds are neither collected nor applied, with the usual "no background" warnings. A PPM white balance calibration is also stored with this profile, and the Live Viewer's white balance presets are rebuilt when it changes. |
 
 ---
 

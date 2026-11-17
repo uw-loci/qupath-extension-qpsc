@@ -51,6 +51,12 @@ public class CameraControlController {
 
     private static final Logger logger = LoggerFactory.getLogger(CameraControlController.class);
 
+    /**
+     * The per-angle fields show the per-angle calibration: the active background profile's
+     * when it has one, whatever white balance mode the last acquisition used.
+     */
+    private static final String PER_ANGLE = qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getProtocolName();
+
     /** Singleton instance tracking - ensures only one dialog is open at a time */
     private static Dialog<Void> activeDialog = null;
 
@@ -1395,7 +1401,7 @@ public class CameraControlController {
             // Check exposure structure from first available angle
             boolean hasPerChannelExposures = false;
 
-            Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", objective, detector);
+            Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", objective, detector, PER_ANGLE);
             if (exposuresMap != null) {
                 for (String angleName : angleFieldsMap.keySet()) {
                     Object angleExp = exposuresMap.get(angleName);
@@ -1454,7 +1460,7 @@ public class CameraControlController {
         try {
             // Get exposures for this modality/objective/detector/angle
             // Expected structure: imaging_profiles.ppm.{objective}.{detector}.exposures_ms.{angle}
-            Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", objective, detector);
+            Map<String, Object> exposuresMap = mgr.getModalityExposures("ppm", objective, detector, PER_ANGLE);
 
             if (exposuresMap == null) {
                 logger.debug("No exposures found for ppm/{}/{}", objective, detector);
@@ -1490,7 +1496,7 @@ public class CameraControlController {
             }
 
             // Get gains for this specific angle
-            Object gainsObj = mgr.getProfileSetting("ppm", objective, detector, "gains", angleName);
+            Object gainsObj = mgr.getWhiteBalanceSetting(PER_ANGLE, "ppm", objective, detector, "gains", angleName);
             if (gainsObj instanceof Map<?, ?>) {
                 Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
 
@@ -1548,7 +1554,7 @@ public class CameraControlController {
         String wbMethod = null;
         Map<String, Double> angles = loadPpmAngles(mgr);
         for (String angleName : angles.keySet()) {
-            Object gainsObj = mgr.getProfileSetting("ppm", objective, detector, "gains", angleName);
+            Object gainsObj = mgr.getWhiteBalanceSetting(PER_ANGLE, "ppm", objective, detector, "gains", angleName);
             if (gainsObj instanceof Map<?, ?>) {
                 Map<String, Object> gainValues = (Map<String, Object>) gainsObj;
                 Object method = gainValues.get("wb_method");

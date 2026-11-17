@@ -31,6 +31,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **The White Balance Calibration dialog says which background profile it writes to.** A **Background profile** row in Shared Settings shows the active profile (and can change it), with a line saying where the calibration goes. The results name the profile, and say plainly when the calibration is stored scope-wide only: no profile is active, or the modality keeps no white balance per profile.
+
+- **BaSiC profiles record the objective and detector.** The fit reads them from the acquisition command QPSC saves beside the tiles and stores them in `profile.yml` (needs the command server change of the same date). An acquisition with a different objective or detector still uses the profile but logs a warning, and the Wizard's Background Correction row and the Z-Stack / Time-Lapse dialog name the difference. Zoom cannot be read from tiles; keep it in the label.
+
+- **The Z-Stack / Time-Lapse dialog sends the mounted objective and detector.** The server no longer falls back to a placeholder 1.0 um/px pixel size for those images. The dialog still runs with white balance off.
+
 - **The Focus Approach Validation progress window no longer blocks QuPath.** It stays on top with its CANCEL button, but the log and the Live Viewer can be read while the stage traverses.
 
 - **The end-of-acquisition retraction uses the mounted insert's safe Z.** Acquisitions send `--safe-z` with the safe Z for the Stage Map's insert and the active modality, falling back to the scope-level `stage.safe_z_um`. Before, the server could only read the scope-level value; on the PPM after the 2026-11-13 Z re-zero that was 0, about 26 um above focus, while the four-slide holder declares 200.
@@ -46,6 +52,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **OME-ZARR stitch outputs get the same reserved project entries as OME-TIFF.** Each pending entry appears in the project browser as soon as the stitch is queued and is filled in place when the file lands, as OME-TIFF outputs already were. Before, a zarr job added its entries only when it finished.
 
 ### Fixed
+
+- **Live Viewer white balance presets follow the active background profile in either mode.** The per-angle presets read the profile's per-angle calibration and **Uncrossed (Simple WB)** its simple one, whatever mode the last acquisition used; before, a profile's calibration was used only for the last-used mode. The Camera Control per-angle cards and PPM's alignment reference state read the same values, and the Live Viewer rebuilds its presets when the active profile changes.
+
+- **The Wizard's Background Correction row is green only when the BaSiC profile covers every in-use channel.** It turned green when any channel was covered; it now names the channels that would be acquired uncorrected.
+
+- **"Magnification: 10xx"** in the objective pixel-size mismatch dialog now reads "10x", and so does the closest configured objective's magnification.
+
+- The PPM white balance results dialog now shows its note about stale backgrounds; it was added after the text was set.
 
 - **Re-stitch Tiles fills the placeholder an earlier run left unfilled.** A stitch that failed or was stopped leaves a pending or failed entry for each output. Re-stitching those tiles used to add a second entry beside it; now the matching entry (same sample, region, angle and objective) is filled in place, and when more than one could match, the output is imported as a new entry as before.
 

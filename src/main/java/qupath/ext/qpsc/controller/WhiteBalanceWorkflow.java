@@ -217,7 +217,7 @@ public class WhiteBalanceWorkflow {
      * Resolves the first multi-angle modality from the config, used so PPM white
      * balance can look up its acquisition profile. Returns null if none is found.
      */
-    private static String resolveMultiAngleModality(String yamlPath) {
+    public static String resolveMultiAngleModality(String yamlPath) {
         try {
             var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath);
             for (String m : mgr.getAvailableModalities()) {
@@ -350,6 +350,7 @@ public class WhiteBalanceWorkflow {
                                 crossTarget);
 
                         applyProfileLampForWb(client, yamlPath, modality, params.objective());
+                        final String profileName = activeProfileName(yamlPath);
 
                         MicroscopeSocketClient.WhiteBalanceResult result = client.runSimpleWhiteBalance(
                                 params.outputPath(),
@@ -401,7 +402,8 @@ public class WhiteBalanceWorkflow {
                                             calibratedModality,
                                             params.objective(),
                                             params.detector(),
-                                            qupath.ext.qpsc.modality.WbMode.SIMPLE));
+                                            qupath.ext.qpsc.modality.WbMode.SIMPLE),
+                                    profileName);
                         });
                         qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
 
@@ -449,6 +451,10 @@ public class WhiteBalanceWorkflow {
                         "White balance will also be stored with background profile '{}': {}",
                         qupath.ext.qpsc.background.BackgroundProfiles.activeId(),
                         folder);
+            } else if (!qupath.ext.qpsc.background.ProfileWhiteBalance.appliesTo(modality, wbMode)) {
+                logger.info(
+                        "Modality '{}' keeps no white balance per background profile: stored scope-wide only",
+                        modality);
             } else {
                 logger.info("No active background profile: white balance is stored scope-wide only");
             }
@@ -585,6 +591,7 @@ public class WhiteBalanceWorkflow {
 
                         final String calibratedModality = resolveMultiAngleModality(yamlPath);
                         applyProfileLampForWb(client, yamlPath, calibratedModality, params.objective());
+                        final String profileName = activeProfileName(yamlPath);
 
                         Map<String, MicroscopeSocketClient.WhiteBalanceResult> results = client.runPPMWhiteBalance(
                                 params.outputPath(),
@@ -647,7 +654,8 @@ public class WhiteBalanceWorkflow {
                                             calibratedModality,
                                             params.objective(),
                                             params.detector(),
-                                            qupath.ext.qpsc.modality.WbMode.PER_ANGLE));
+                                            qupath.ext.qpsc.modality.WbMode.PER_ANGLE),
+                                    profileName);
                         });
                         qupath.ext.qpsc.ui.acquisition.AcquisitionWizardDialog.notifyCalibrationChanged();
 
@@ -690,7 +698,8 @@ public class WhiteBalanceWorkflow {
     private static void showSimpleResults(
             MicroscopeSocketClient.WhiteBalanceResult result,
             String outputPath,
-            BackgroundCollectionWorkflow.Preselection calibrated) {
+            BackgroundCollectionWorkflow.Preselection calibrated,
+            String profileName) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("Simple White Balance Complete");
         alert.setHeaderText(
@@ -717,7 +726,7 @@ public class WhiteBalanceWorkflow {
 
         content.append(String.format("\nAll angles converged: %s\n", result.converged ? "Yes" : "No"));
         content.append("\nPer-angle exposures have been saved to the imaging profile.\n");
-        content.append(STALE_BACKGROUNDS_NOTE);
+        content.append(whereStored(calibrated, profileName));
 
         alert.setContentText(content.toString());
 
@@ -732,7 +741,8 @@ public class WhiteBalanceWorkflow {
     private static void showPPMResults(
             Map<String, MicroscopeSocketClient.WhiteBalanceResult> results,
             String outputPath,
-            BackgroundCollectionWorkflow.Preselection calibrated) {
+            BackgroundCollectionWorkflow.Preselection calibrated,
+            String profileName) {
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
         alert.setTitle("PPM White Balance Complete");
 
@@ -772,9 +782,9 @@ public class WhiteBalanceWorkflow {
             }
         }
 
+        content.append("\n").append(whereStored(calibrated, profileName));
         alert.setContentText(content.toString());
 
-        content.append("\n").append(STALE_BACKGROUNDS_NOTE);
         // Use a monospace font for the table
         alert.getDialogPane().lookup(".content.label").setStyle("-fx-font-family: monospace;");
 
@@ -785,13 +795,44 @@ public class WhiteBalanceWorkflow {
     }
 
     /**
-     * Every background set for this objective and detector was collected at the exposures this
-     * calibration just replaced, in every background profile. The Wizard shows that as a stale
-     * Background Correction row for the active profile only.
+     * Where the calibration was stored, and the backgrounds it made stale. Every background set
+     * for this objective and detector was collected at the exposures this calibration just
+     * replaced, in every background profile. The Wizard shows that as a stale Background
+     * Correction row for the active profile only.
+     *
+     * @param profileName the active background profile's display name, or null for none
      */
-    private static final String STALE_BACKGROUNDS_NOTE =
-            "Backgrounds collected before this calibration are stale, in every background profile.\n" + "Press "
-                    + BackgroundCollectionWorkflow.COLLECT_NOW + " to re-collect them for the active profile.";
+    static String whereStored(BackgroundCollectionWorkflow.Preselection calibrated, String profileName) {
+        String mode = calibrated.wbMode() == null ? null : calibrated.wbMode().getProtocolName();
+        StringBuilder note = new StringBuilder(
+                qupath.ext.qpsc.background.ProfileWhiteBalance.destination(calibrated.modality(), mode, profileName));
+        note.append("\nBackgrounds collected before this calibration are stale, in every background profile.\n");
+        if (profileName == null) {
+            note.append("Choose a background profile, then press ")
+                    .append(BackgroundCollectionWorkflow.COLLECT_NOW)
+                    .append(" to re-collect them.");
+        } else {
+            note.append("Press ")
+                    .append(BackgroundCollectionWorkflow.COLLECT_NOW)
+                    .append(" to re-collect them for profile '")
+                    .append(profileName)
+                    .append("'.");
+        }
+        return note.toString();
+    }
+
+    /** The active background profile's display name, or null when none is active or it does not exist. */
+    private static String activeProfileName(String yamlPath) {
+        try {
+            var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(yamlPath);
+            return qupath.ext.qpsc.background.BackgroundProfiles.active(mgr.getBackgroundBaseFolder())
+                    .map(qupath.ext.qpsc.background.BackgroundProfiles.BackgroundProfile::displayName)
+                    .orElse(null);
+        } catch (RuntimeException e) {
+            logger.warn("Could not resolve the active background profile: {}", e.getMessage());
+            return null;
+        }
+    }
 
     /**
      * Configures a WB result dialog to be non-modal with Close, Open Folder and Collect background

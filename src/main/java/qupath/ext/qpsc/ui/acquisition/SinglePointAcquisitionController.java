@@ -26,7 +26,9 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.acquisition.AcquisitionTimingEstimator;
 import qupath.ext.qpsc.background.FlatfieldProfiles;
+import qupath.ext.qpsc.background.ProfileWhiteBalance;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.model.SampleSetupResult;
 import qupath.ext.qpsc.model.TimeLapseOrder;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
@@ -37,6 +39,7 @@ import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
 import qupath.ext.qpsc.state.ModalityState;
+import qupath.ext.qpsc.state.ObjectiveState;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -170,17 +173,27 @@ public class SinglePointAcquisitionController {
             Label flatfieldLabel = new Label();
             flatfieldLabel.setWrapText(true);
             Runnable updateFlatfieldLabel = () -> {
-                String folder = flatfieldFolder(modalityCombo.getValue());
+                MicroscopeConfigManager labelMgr =
+                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty());
+                // The session's objective and the configured camera: cheap, and enough to say
+                // when the profile was fitted on other hardware. The run resolves the mounted ones.
+                String selectedObjective = ObjectiveState.getInstance().getObjective();
+                String activeDetector = labelMgr.getActiveDetector();
+                String folder = flatfieldFolder(modalityCombo.getValue(), null, null);
                 String chosen = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
-                        MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty()),
+                        labelMgr,
                         modalityCombo.getValue() != null ? modalityCombo.getValue() : "brightfield",
+                        null,
                         null);
                 boolean perChannelOnly = chosen != null && folder == null;
+                java.util.List<String> mismatches =
+                        FlatfieldProfiles.hardwareMismatches(folder, selectedObjective, activeDetector);
                 flatfieldLabel.setText(
                         perChannelOnly
                                 ? "Flat-field correction: not applied here. This dialog needs a BaSiC profile"
                                         + " covering every image, not one per channel."
-                                : "Flat-field correction: " + FlatfieldProfiles.describe(folder));
+                                : "Flat-field correction: " + FlatfieldProfiles.describe(folder)
+                                        + (mismatches.isEmpty() ? "" : "\n" + String.join(" ", mismatches)));
                 flatfieldLabel.setVisible(chosen != null);
                 flatfieldLabel.setManaged(chosen != null);
             };
@@ -435,11 +448,12 @@ public class SinglePointAcquisitionController {
     }
 
     /** The BaSiC profile folder for this dialog's run, or null when it has none it can use. */
-    private static String flatfieldFolder(String modality) {
+    private static String flatfieldFolder(String modality, String objective, String detector) {
         String folder = AcquisitionConfigurationBuilder.flatfieldFolderForRun(
                 MicroscopeConfigManager.getInstance(QPPreferenceDialog.getMicroscopeConfigFileProperty()),
                 modality != null ? modality : "brightfield",
-                null);
+                objective,
+                detector);
         return folder != null && FlatfieldProfiles.coversSinglePosition(folder) ? folder : null;
     }
 
@@ -497,11 +511,25 @@ public class SinglePointAcquisitionController {
                 intervalSec,
                 outputFormat);
 
-        String flatfieldFolder = flatfieldFolder(modality);
-
         Thread worker = new Thread(
                 () -> {
                     try {
+                        // The mounted objective and camera: the server needs them for the pixel
+                        // size (it writes a placeholder 1.0 um/px without them) and for the
+                        // per-objective white balance. Resolved here, off the FX thread, because
+                        // the objective comes from asking MicroManager for its pixel size.
+                        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
+                        String objective = TestAutofocusWorkflow.getCurrentObjective(mgr);
+                        String detector = mgr.getActiveDetector();
+                        String flatfieldFolder = flatfieldFolder(modality, objective, detector);
+                        String wbFolder = ProfileWhiteBalance.folder(
+                                mgr.getBackgroundProfileFolder(), modality, objective, detector, wbMode);
+                        logger.info(
+                                "Single-point hardware: objective={}, detector={}, wbMode={}, wbFolder={}",
+                                objective,
+                                detector,
+                                wbMode,
+                                wbFolder);
                         // Use the shared live-mode wrapper so the Live Viewer
                         // button state stays in sync with actual streaming.
                         // Calling stopContinuousAcquisition() on the socket
@@ -529,13 +557,14 @@ public class SinglePointAcquisitionController {
                                                 null,
                                                 wbMode,
                                                 configPath,
-                                                null,
-                                                null,
+                                                objective,
+                                                detector,
                                                 zProjection,
                                                 false,
                                                 null,
                                                 null,
                                                 flatfieldFolder,
+                                                wbFolder,
                                                 tpForZ,
                                                 intervalForZ,
                                                 tEnabled ? timeOrder : null);
@@ -549,12 +578,13 @@ public class SinglePointAcquisitionController {
                                                 null,
                                                 wbMode,
                                                 configPath,
-                                                null,
-                                                null,
+                                                objective,
+                                                detector,
                                                 false,
                                                 null,
                                                 null,
-                                                flatfieldFolder);
+                                                flatfieldFolder,
+                                                wbFolder);
                             }
                             logger.info("Single-point acquisition complete: {}", response);
                         });

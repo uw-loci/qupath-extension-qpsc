@@ -130,6 +130,16 @@ class ProfileWhiteBalanceTest {
     }
 
     @Test
+    void theCalibrationSaysWhereItIsStored() {
+        assertThat(ProfileWhiteBalance.destination("ppm", "per_angle", "Gel slides"))
+                .contains("background profile 'Gel slides'");
+        assertThat(ProfileWhiteBalance.destination("ppm", "simple", null)).contains("scope-wide only");
+        assertThat(ProfileWhiteBalance.destination("brightfield", "per_angle", "Gel slides"))
+                .startsWith("Stored scope-wide, not in a background profile")
+                .doesNotContain("Gel slides");
+    }
+
+    @Test
     void noActiveProfileMeansNoQuestion() {
         // With no profile selected the run uses the scope-wide white balance by definition, so
         // the gate must not ask (it would name profile "(none)" on every PPM run).

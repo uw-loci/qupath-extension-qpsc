@@ -1263,6 +1263,16 @@ public class StageControlPanel extends VBox {
             if (onModalityChanged != null) onModalityChanged.run();
         };
         modalityState.modalityProperty().addListener(stateListener);
+        // The white balance presets come from the active background profile when it has its
+        // own calibration, so a profile change elsewhere rebuilds them.
+        javafx.beans.value.ChangeListener<String> backgroundProfileListener =
+                (obs, oldV, newV) -> Platform.runLater(() -> {
+                    if (currentCameraModality != null) {
+                        rebuildCameraModContent(currentCameraModality);
+                    }
+                });
+        qupath.ext.qpsc.preferences.PersistentPreferences.activeBackgroundProfileProperty()
+                .addListener(backgroundProfileListener);
         modalityCombo.setOnAction(e -> {
             cameraStatusLabel.setText("");
             currentCameraModality = modalityCombo.getValue();
@@ -1278,6 +1288,8 @@ public class StageControlPanel extends VBox {
         cameraContent.sceneProperty().addListener((obs, oldScene, newScene) -> {
             if (newScene == null) {
                 modalityState.modalityProperty().removeListener(stateListener);
+                qupath.ext.qpsc.preferences.PersistentPreferences.activeBackgroundProfileProperty()
+                        .removeListener(backgroundProfileListener);
                 actuatorUnsub.run();
             }
         });
@@ -1459,8 +1471,11 @@ public class StageControlPanel extends VBox {
         try {
             String det = resolveDetector(modality);
             java.util.Map<String, Double> ppmAngles = loadPpmAnglesLocal(mgr);
-            var exposures = mgr.getModalityExposures(modality, currentCameraObjectiveId, det);
-            var gainsObj = mgr.getModalityGains(modality, currentCameraObjectiveId, det);
+            // Per-angle presets are per-angle calibration values, whatever white balance mode
+            // the last acquisition used.
+            String perAngle = qupath.ext.qpsc.modality.WbMode.PER_ANGLE.getProtocolName();
+            var exposures = mgr.getModalityExposures(modality, currentCameraObjectiveId, det, perAngle);
+            var gainsObj = mgr.getModalityGains(modality, currentCameraObjectiveId, det, perAngle);
             java.util.Map<String, Object> gains =
                     (gainsObj instanceof java.util.Map<?, ?>) ? (java.util.Map<String, Object>) gainsObj : null;
 
@@ -1491,7 +1506,12 @@ public class StageControlPanel extends VBox {
             // for accurate white balance. Other angles use the per-angle presets
             // above (from PPM WB) or the acquisition workflow switches to unified
             // exposure mode with the analog gains from uncrossed.
-            Object simpleWb = mgr.getProfileSetting(modality, currentCameraObjectiveId, det, "simple_wb");
+            Object simpleWb = mgr.getWhiteBalanceSetting(
+                    qupath.ext.qpsc.modality.WbMode.SIMPLE.getProtocolName(),
+                    modality,
+                    currentCameraObjectiveId,
+                    det,
+                    "simple_wb");
             if (simpleWb instanceof java.util.Map<?, ?> simpleMap) {
                 Object baseExp = simpleMap.get("base_exposures_ms");
                 Object baseGains = simpleMap.get("base_gains");
