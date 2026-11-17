@@ -173,7 +173,7 @@ class StitchOutputPlannerTest {
     }
 
     @Test
-    void zarrOutputIsNotReserved() {
+    void zarrOutputIsReservedLikeTiff() {
         Inputs in = new Inputs(
                 "L004",
                 "ppm_20x_3",
@@ -186,6 +186,10 @@ class StitchOutputPlannerTest {
                 Set.of(),
                 null,
                 Set.of());
-        assertTrue(StitchOutputPlanner.plan(in).isEmpty());
+        List<StitchOutputPlanner.ReservedOutput> plan = StitchOutputPlanner.plan(in);
+        assertEquals(1, plan.size());
+        assertEquals(
+                ImageNameGenerator.generateImageName("L004", 3, "ppm", "20x", "Tissue_1", "7.0", ".ome.zarr"),
+                plan.get(0).fileName());
     }
 }

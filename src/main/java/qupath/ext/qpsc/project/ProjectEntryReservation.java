@@ -204,6 +204,36 @@ public final class ProjectEntryReservation {
         if (entry == null) {
             throw new IOException("No reserved entry for stitch target '" + key + "'");
         }
+        fillEntry(entry, placeholderUri, stitchedFile, handler);
+        filled.add(key);
+        project.syncChanges();
+        logger.info("Filled reserved entry '{}' from stitch target '{}'", stitchedFile.getName(), key);
+        return entry;
+    }
+
+    /**
+     * True when {@code entry} is a reserved placeholder still waiting for its stitch, or one
+     * whose stitch failed: Re-stitch Tiles fills these instead of adding a second entry.
+     */
+    public static boolean isUnfilled(ProjectImageEntry<?> entry) {
+        String status = entry == null ? null : entry.getMetadata().get(STATUS_KEY);
+        return STATUS_PENDING.equals(status) || STATUS_FAILED.equals(status);
+    }
+
+    /**
+     * Points a placeholder entry at a stitched file and finishes it as the ordinary import
+     * would: image type, channel names, display ranges, thumbnail, status cleared. Used by
+     * {@link #fill} and by Re-stitch Tiles for an entry an earlier run reserved. FX thread.
+     *
+     * @param entry the placeholder entry
+     * @param placeholderUri the placeholder picture's URI the entry points at now
+     * @param stitchedFile the file, already at its final name
+     * @param handler the modality handler for image type, channel names and display ranges
+     * @throws IOException when the file cannot be read or the entry cannot be saved
+     */
+    public static void fillEntry(
+            ProjectImageEntry<BufferedImage> entry, URI placeholderUri, File stitchedFile, ModalityHandler handler)
+            throws IOException {
         URI target = stitchedFile.toURI();
         if (!entry.updateURIs(Map.of(placeholderUri, target))) {
             throw new IOException("The reserved entry's URI could not be updated to " + target);
@@ -233,10 +263,6 @@ public final class ProjectEntryReservation {
         }
         entry.getMetadata().remove(STATUS_KEY);
         entry.setDescription("");
-        filled.add(key);
-        project.syncChanges();
-        logger.info("Filled reserved entry '{}' from stitch target '{}'", stitchedFile.getName(), key);
-        return entry;
     }
 
     /** Marks the reserved entry failed with {@code reason}; the entry stays, so the operator sees it. FX thread. */

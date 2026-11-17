@@ -14,7 +14,8 @@ import qupath.ext.qpsc.project.ImageNameGenerator;
  * {@code TileProcessingUtilities.stitchImagesAndUpdateProject} and the merged-channel path in
  * {@code StitchingHelper} apply when the file lands; a prediction that turns out wrong costs
  * only a placeholder entry, which the job drops when it finishes (the real file is imported
- * the ordinary way). OME-TIFF only: a zarr job gets an empty plan.
+ * the ordinary way). OME-TIFF and OME-ZARR are planned alike; Bio-Formats opens both, so a
+ * reserved entry fills the same way whichever the job writes.
  */
 public final class StitchOutputPlanner {
 
@@ -81,10 +82,11 @@ public final class StitchOutputPlanner {
 
     /**
      * @param in the facts
-     * @return the entries the job will produce, in import order; empty for zarr output
+     * @return the entries the job will produce, in import order; empty for any other format
      */
     public static List<ReservedOutput> plan(Inputs in) {
-        if (in.extension() == null || !in.extension().equals(".ome.tif")) {
+        if (in.extension() == null
+                || !(in.extension().equals(".ome.tif") || in.extension().equals(".ome.zarr"))) {
             return List.of();
         }
         String[] parts = ImageNameGenerator.parseImagingMode(in.modeWithIndex());

@@ -4,11 +4,13 @@ import java.awt.image.BufferedImage;
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.IOException;
+import java.net.URI;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.DirectoryStream;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Locale;
 import java.util.Properties;
 import java.util.concurrent.atomic.AtomicInteger;
 import javafx.application.Platform;
@@ -29,15 +31,18 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.preferences.StitchingFormatPreference;
 import qupath.ext.qpsc.project.ImageNameGenerator;
+import qupath.ext.qpsc.project.ProjectEntryReservation;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.stitching.StitchPlaceholderImage;
 import qupath.ext.qpsc.stitching.TileFolderInspector;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.acquisition.StitchingQueueWindow;
+import qupath.ext.qpsc.utilities.ImageMetadataManager;
 import qupath.ext.qpsc.utilities.MinorFunctions;
 import qupath.fx.dialogs.Dialogs;
 import qupath.lib.gui.QuPathGUI;
@@ -451,11 +456,12 @@ public class StitchingRecoveryWorkflow {
         final ModalityHandler modalityHandler =
                 (modality != null && !modality.isBlank()) ? ModalityRegistry.getHandler(modality) : null;
 
-        // Compute the next available image index for this sample
+        // Compute the next available image index for this sample. Placeholders an earlier run
+        // reserved and never filled do not count: this re-stitch fills them instead.
         int imageIndex = 1;
         for (ProjectImageEntry<BufferedImage> entry : project.getImageList()) {
             String name = entry.getImageName();
-            if (name != null && name.startsWith(sampleName)) {
+            if (name != null && name.startsWith(sampleName) && !ProjectEntryReservation.isUnfilled(entry)) {
                 imageIndex++;
             }
         }
@@ -636,14 +642,24 @@ public class StitchingRecoveryWorkflow {
             }
 
             String extension = stitchedOutPath.endsWith(".ome.zarr") ? ".ome.zarr" : ".ome.tif";
-            String desiredName = ImageNameGenerator.generateImageName(
+            // An entry an earlier run reserved for this output and never filled (its stitch failed
+            // or the run stopped): fill it, under its own name, rather than add a second entry.
+            final ProjectImageEntry<BufferedImage> reserved = findUnfilledReservation(
+                    project.getImageList(),
                     finalSampleName,
-                    finalImageIndex,
-                    finalModality,
-                    finalObjective,
                     finalAnnotationName,
-                    isRootDir ? null : angleName,
-                    extension);
+                    isRootDir ? List.of() : angleTokens(angleName, modalityHandler),
+                    finalObjective);
+            String desiredName = reserved != null
+                    ? reserved.getImageName()
+                    : ImageNameGenerator.generateImageName(
+                            finalSampleName,
+                            finalImageIndex,
+                            finalModality,
+                            finalObjective,
+                            finalAnnotationName,
+                            isRootDir ? null : angleName,
+                            extension);
             final String outPath = renameStitchedOutput(stitchedOutPath, desiredName, extension);
             java.util.Map<String, String> recovered = new java.util.LinkedHashMap<>();
             recovered.put("produced by", "Stitching Recovery (re-stitch of existing tiles)");
@@ -663,6 +679,24 @@ public class StitchingRecoveryWorkflow {
             Platform.runLater(() -> {
                 try {
                     File outputFile = new File(outPath);
+                    if (reserved != null) {
+                        URI placeholder = StitchPlaceholderImage.ensure(
+                                        project.getPath().getParent())
+                                .toUri();
+                        ProjectEntryReservation.fillEntry(reserved, placeholder, outputFile, modalityHandler);
+                        project.syncChanges();
+                        gui.refreshProject();
+                        logger.info(
+                                "Filled the reserved entry '{}' for angle '{}' ({}/{})",
+                                reserved.getImageName(),
+                                finalAngle,
+                                angleNum,
+                                total);
+                        Dialogs.showInfoNotification(
+                                "Angle Imported",
+                                String.format(Locale.ROOT, "Filled %s (%d/%d)", outputFile.getName(), angleNum, total));
+                        return;
+                    }
                     QPProjectFunctions.addImageToProjectWithMetadata(
                             project,
                             outputFile,
@@ -1045,6 +1079,79 @@ public class StitchingRecoveryWorkflow {
             }
         }
         return null;
+    }
+
+    /**
+     * The angle tokens a reserved entry may carry for an angle folder: the folder name itself
+     * and, for a numeric angle, the modality's suffix for it (what the acquisition path records).
+     */
+    static List<String> angleTokens(String angleFolder, ModalityHandler handler) {
+        List<String> tokens = new java.util.ArrayList<>();
+        if (angleFolder == null || angleFolder.isBlank()) {
+            return tokens;
+        }
+        tokens.add(angleFolder);
+        if (handler != null) {
+            try {
+                String suffix = handler.getAngleSuffix(Double.parseDouble(angleFolder));
+                if (suffix != null && !suffix.isBlank() && !tokens.contains(suffix)) {
+                    tokens.add(suffix);
+                }
+            } catch (NumberFormatException e) {
+                // A named folder (a channel, a derived output) is recorded under its own name.
+            }
+        }
+        return tokens;
+    }
+
+    /**
+     * The one pending or failed placeholder that belongs to this output: same sample and region,
+     * an angle among {@code angleTokens} (none when the list is empty), and the same objective
+     * when both record one. Null when there is none, or more than one (then nothing is guessed
+     * and the output is imported as a new entry).
+     */
+    static <T> ProjectImageEntry<T> findUnfilledReservation(
+            List<ProjectImageEntry<T>> entries,
+            String sample,
+            String annotation,
+            List<String> angleTokens,
+            String objective) {
+        ProjectImageEntry<T> match = null;
+        for (ProjectImageEntry<T> e : entries) {
+            if (!ProjectEntryReservation.isUnfilled(e)) {
+                continue;
+            }
+            var md = e.getMetadata();
+            if (!java.util.Objects.equals(blankToNull(md.get(ImageMetadataManager.SAMPLE_NAME)), blankToNull(sample))
+                    || !java.util.Objects.equals(
+                            blankToNull(md.get(ImageMetadataManager.ANNOTATION_NAME)), blankToNull(annotation))) {
+                continue;
+            }
+            String angle = blankToNull(md.get(ImageMetadataManager.ANGLE));
+            boolean angleMatches = angleTokens.isEmpty() ? angle == null : angleTokens.contains(angle);
+            if (!angleMatches) {
+                continue;
+            }
+            String entryObjective = blankToNull(md.get(ImageMetadataManager.OBJECTIVE));
+            if (entryObjective != null && blankToNull(objective) != null && !entryObjective.equals(objective)) {
+                continue;
+            }
+            if (match != null) {
+                logger.warn(
+                        "More than one unfilled placeholder matches sample '{}', region '{}', angle {}; "
+                                + "importing as a new entry",
+                        sample,
+                        annotation,
+                        angleTokens);
+                return null;
+            }
+            match = e;
+        }
+        return match;
+    }
+
+    private static String blankToNull(String s) {
+        return s == null || s.isBlank() ? null : s;
     }
 
     private static String renameStitchedOutput(String stitchedPath, String desiredName, String extension) {

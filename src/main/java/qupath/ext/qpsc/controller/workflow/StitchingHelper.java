@@ -431,7 +431,7 @@ public class StitchingHelper {
 
     /**
      * Plans this job's outputs and reserves a project entry for each, synchronously on the FX
-     * thread. Returns null when nothing is reserved (zarr output, no project path, or a
+     * thread. Returns null when nothing is reserved (no project path, or a
      * failure, all logged), in which case every import adds its entry when the file lands.
      */
     private static ProjectEntryReservation reserveOutputs(
