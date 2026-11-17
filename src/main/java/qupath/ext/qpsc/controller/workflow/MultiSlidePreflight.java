@@ -121,4 +121,40 @@ public final class MultiSlidePreflight {
             return null;
         }
     }
+
+    /**
+     * How far apart (um) the focus Z values of {@code points} ({stageX, stageY, z}) are; 0 for
+     * fewer than two.
+     */
+    public static double focusSpreadUm(List<double[]> points) {
+        if (points == null || points.size() < 2) {
+            return 0.0;
+        }
+        double min = Double.POSITIVE_INFINITY;
+        double max = Double.NEGATIVE_INFINITY;
+        for (double[] p : points) {
+            if (p != null && p.length >= 3 && Double.isFinite(p[2])) {
+                min = Math.min(min, p[2]);
+                max = Math.max(max, p[2]);
+            }
+        }
+        return max > min ? max - min : 0.0;
+    }
+
+    /**
+     * The slides whose set-up focus points disagree by more than {@code limitUm}, as one line
+     * each ("slot 4 (MetroHealth_189): 51.8 um apart"), in the given order. With autofocus off
+     * every tile is taken at the set-up focus, so such a slide is acquired out of focus.
+     */
+    public static List<String> slidesWithFocusSpread(
+            java.util.Map<String, List<double[]>> pointsBySlide, double limitUm) {
+        List<String> out = new ArrayList<>();
+        for (var e : pointsBySlide.entrySet()) {
+            double spread = focusSpreadUm(e.getValue());
+            if (spread > limitUm) {
+                out.add(String.format(java.util.Locale.ROOT, "%s: %.1f um apart", e.getKey(), spread));
+            }
+        }
+        return out;
+    }
 }

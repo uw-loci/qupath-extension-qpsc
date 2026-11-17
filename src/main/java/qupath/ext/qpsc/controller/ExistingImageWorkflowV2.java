@@ -158,7 +158,10 @@ public class ExistingImageWorkflowV2 {
      *     the current stage Z). Used to seed the acquire pass's first-annotation AF.
      */
     public record SetupResult(
-            ExistingImageAcquisitionConfig config, List<String> selectedAnnotationClasses, Double focusZ) {}
+            ExistingImageAcquisitionConfig config,
+            List<String> selectedAnnotationClasses,
+            Double focusZ,
+            java.time.Instant setupAt) {}
 
     /**
      * Runs the interactive setup half of the workflow -- alignment (manual / existing,
@@ -198,7 +201,8 @@ public class ExistingImageWorkflowV2 {
             if (st == null || o.capturedConfig == null) {
                 return null;
             }
-            return new SetupResult(o.capturedConfig, o.state.selectedAnnotationClasses, o.capturedFocusZ);
+            return new SetupResult(
+                    o.capturedConfig, o.state.selectedAnnotationClasses, o.capturedFocusZ, java.time.Instant.now());
         });
     }
 
@@ -246,6 +250,7 @@ public class ExistingImageWorkflowV2 {
         // setup pass just re-derived for this mount (via processSlideSpecificAlignment).
         WorkflowOrchestrator o = new WorkflowOrchestrator(
                 Mode.ACQUIRE_ONLY, setup.config(), setup.selectedAnnotationClasses(), setup.focusZ(), false);
+        o.presetSetupAt = setup.setupAt();
         o.state.cancellationToken = cancellationToken;
         o.state.pipelinedBatchAcquire = pipelined;
         // ACQUIRE_ONLY is reached only from the multi-slide driver, pipelined or one
@@ -302,6 +307,8 @@ public class ExistingImageWorkflowV2 {
         private final List<String> presetClasses;
         /** Focused Z (um) captured during setup, to seed the ACQUIRE_ONLY first-annotation AF. */
         private final Double presetSeedZ;
+        /** When the set-up pass ran; a focus an alignment check saved after it is newer than presetSeedZ. */
+        private java.time.Instant presetSetupAt;
         /** Captured in SETUP_ONLY when initializeFromConfig runs, for the acquire pass to replay. */
         private ExistingImageAcquisitionConfig capturedConfig;
         /** Captured in SETUP_ONLY at the terminal when refinement ran, to seed the acquire pass. */
@@ -2603,6 +2610,18 @@ public class ExistingImageWorkflowV2 {
                 return new CancellationException("Alignment could not be confirmed for " + slide);
             }
 
+            // A rerun of the batch: an earlier alignment check on this slide measured its focus
+            // after the set-up did, so start from that rather than the set-up value.
+            Double checkedSeed = newerCheckedSeed(state);
+            if (checkedSeed != null) {
+                logger.info(
+                        "Alignment check for {} starts from the focus the previous check saved: {} um (set-up: {})",
+                        slide,
+                        String.format(java.util.Locale.ROOT, "%.2f", checkedSeed),
+                        state.seedZ == null ? "none" : String.format(java.util.Locale.ROOT, "%.2f", state.seedZ));
+                state.seedZ = checkedSeed;
+            }
+
             AlignmentVerification.Verdict verdict = AlignmentVerification.verify(
                     QuPathGUI.getInstance(),
                     state.annotations.get(0),
@@ -2624,6 +2643,7 @@ public class ExistingImageWorkflowV2 {
                             String.format("%.2f", verdict.focusedZUm()));
                 }
                 state.seedZ = verdict.focusedZUm();
+                persistRefocusedSeed(state, verdict.focusedZUm());
             }
             recordConfirmedFocusPoint(state, verdict);
 
@@ -2654,6 +2674,65 @@ public class ExistingImageWorkflowV2 {
          * <p>The seed Z alone is right only near where it was measured: on 2026-11-10 it was
          * 70 um off at a first autofocus tile 21 mm away on a slide tilted 7.5 um/mm.
          */
+        /**
+         * Saves the check's refocused Z as the slide's focus seed, so the next run that reuses
+         * this alignment (a rerun of the batch) starts from it instead of the set-up value. On
+         * 2026-11-16 the stored set-up seed was 45 um from the slide's focus and every rerun
+         * started from it again.
+         */
+        private void persistRefocusedSeed(WorkflowState state, double focusedZUm) {
+            String lookupKey = alignmentLookupKey(state);
+            if (lookupKey == null) {
+                return;
+            }
+            try {
+                @SuppressWarnings("unchecked")
+                Project<BufferedImage> project = state.projectInfo != null
+                        ? (Project<BufferedImage>) state.projectInfo.getCurrentProject()
+                        : gui.getProject();
+                AffineTransformManager.updateSlideFocusZ(project, lookupKey, focusedZUm);
+                SlotJumpAutofocus.noteFocusOnThisSlide(focusedZUm);
+            } catch (Exception e) {
+                logger.warn("Could not save the alignment check's focus as the slide's seed: {}", e.getMessage());
+            }
+        }
+
+        /** The focus an alignment check saved for this slide after its set-up pass, or null. */
+        private Double newerCheckedSeed(WorkflowState state) {
+            if (presetSetupAt == null) {
+                return null;
+            }
+            String lookupKey = alignmentLookupKey(state);
+            if (lookupKey == null) {
+                return null;
+            }
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = state.projectInfo != null
+                    ? (Project<BufferedImage>) state.projectInfo.getCurrentProject()
+                    : gui.getProject();
+            try {
+                return AffineTransformManager.loadSlideFocusZCheckedSince(project, lookupKey, presetSetupAt);
+            } catch (Exception e) {
+                logger.debug("No saved alignment-check focus for {}: {}", lookupKey, e.getMessage());
+                return null;
+            }
+        }
+
+        /** The slide's alignment-record key, as the save sites resolve it; null when there is no image. */
+        private String alignmentLookupKey(WorkflowState state) {
+            @SuppressWarnings("unchecked")
+            Project<BufferedImage> project = state.projectInfo != null
+                    ? (Project<BufferedImage>) state.projectInfo.getCurrentProject()
+                    : gui.getProject();
+            ImageData<BufferedImage> imageData =
+                    state.sourceImageData != null ? state.sourceImageData : gui.getImageData();
+            if (project == null || imageData == null) {
+                return null;
+            }
+            String imageName = QPProjectFunctions.getActualImageFileName(imageData);
+            return imageName != null ? AlignmentHelper.resolveMacroLookupKey(project, imageData, imageName) : null;
+        }
+
         private void recordConfirmedFocusPoint(WorkflowState state, AlignmentVerification.Verdict verdict) {
             AlignmentVerification.FocusPoint point = verdict.confirmedFocus();
             if (point == null) {

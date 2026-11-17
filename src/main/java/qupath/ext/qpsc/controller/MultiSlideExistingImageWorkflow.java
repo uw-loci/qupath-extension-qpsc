@@ -845,6 +845,10 @@ public final class MultiSlideExistingImageWorkflow {
                     return;
                 }
             }
+            if (!confirmFocusWithAutofocusOff(gui, states)) {
+                logger.info("MS workflow: Acquire All canceled at the autofocus-off focus check, runId={}", runId);
+                return;
+            }
             stopAfterCurrent.setSelected(false);
             setBusy.accept(true);
             // Keep the panel visible for the whole unattended pass (see autoCollapseEnabled above).
@@ -1678,6 +1682,66 @@ public final class MultiSlideExistingImageWorkflow {
                         + "detect a region, so it will not finish unattended.\n\n"
                         + "Draw the regions first, or start anyway and handle those slides as they "
                         + "come up.");
+    }
+
+    /**
+     * With "Disable All Autofocus" on, every tile is taken at the focus found at set-up, so a
+     * slide whose set-up focus points disagree is acquired out of focus (2026-11-12 to 16: four
+     * PPM runs with autofocus off, one slide's points 52 um apart). Asks once before the pass
+     * when any slide's points are further apart than half the objective's autofocus search
+     * range. Says nothing when autofocus is on.
+     */
+    private static boolean confirmFocusWithAutofocusOff(QuPathGUI gui, List<SlotState> states) {
+        if (!QPPreferenceDialog.getDisableAllAutofocus()) {
+            return true;
+        }
+        @SuppressWarnings("unchecked")
+        qupath.lib.projects.Project<java.awt.image.BufferedImage> project =
+                (qupath.lib.projects.Project<java.awt.image.BufferedImage>) gui.getProject();
+        if (project == null) {
+            return true;
+        }
+        MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstanceIfAvailable();
+        java.util.Map<String, List<double[]>> points = new java.util.LinkedHashMap<>();
+        double limit = Double.POSITIVE_INFINITY;
+        for (SlotState s : states) {
+            if (s.status != Status.SET_UP || s.setup == null) {
+                continue;
+            }
+            String objective = s.setup.config().objective();
+            var entry = s.assignment.entry();
+            String base = qupath.ext.qpsc.utilities.ImageMetadataManager.getBaseImage(entry);
+            String key = base != null && !base.isEmpty()
+                    ? base
+                    : qupath.lib.common.GeneralTools.stripExtension(entry.getImageName());
+            points.put(
+                    s.assignment.slotLabel() + " (" + entry.getImageName() + ")",
+                    qupath.ext.qpsc.utilities.AffineTransformManager.loadSlideFocusPoints(project, key, objective));
+            Integer range =
+                    mgr != null && objective != null ? mgr.getAutofocusIntParam(objective, "search_range_um") : null;
+            if (range != null && range > 0) {
+                limit = Math.min(limit, range / 2.0);
+            }
+        }
+        if (!Double.isFinite(limit)) {
+            limit = 15.0;
+        }
+        List<String> spread =
+                qupath.ext.qpsc.controller.workflow.MultiSlidePreflight.slidesWithFocusSpread(points, limit);
+        if (spread.isEmpty()) {
+            return true;
+        }
+        logger.warn("Autofocus is off and set-up focus points disagree by more than {} um on: {}", limit, spread);
+        return Dialogs.showConfirmDialog(
+                "Autofocus is off",
+                "Preferences > Disable All Autofocus (Danger) is on, so every tile is taken at the focus "
+                        + "found while setting up. On these slides the set-up focus points disagree:\n\n    "
+                        + String.join("\n    ", spread)
+                        + String.format(
+                                java.util.Locale.ROOT,
+                                "%n%n(more than %.0f um, half the autofocus search range).",
+                                limit)
+                        + "\n\nTurn autofocus back on, or start anyway.");
     }
 
     /**

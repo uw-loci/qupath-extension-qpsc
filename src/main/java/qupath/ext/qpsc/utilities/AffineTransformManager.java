@@ -1284,6 +1284,59 @@ public class AffineTransformManager {
     }
 
     /**
+     * Replaces the persisted focus-Z seed of a slide's alignment record with a focus measured
+     * since, for example by the unattended alignment check. A later run that reuses the
+     * alignment then starts its first autofocus from where the slide is in focus now, not from
+     * where it was at set-up. Leaves the rest of the record alone.
+     *
+     * @return true when the record was found and written
+     */
+    /** When {@link #updateSlideFocusZ} last replaced the seed, as an ISO-8601 instant. */
+    static final String FOCUS_Z_CHECKED_AT = "focusZCheckedAt";
+
+    /**
+     * The focus seed {@link #updateSlideFocusZ} saved after {@code since}, or null when there is
+     * none that recent (a set-up after the check has measured the slide again).
+     */
+    public static Double loadSlideFocusZCheckedSince(
+            Project<BufferedImage> project, String sampleName, java.time.Instant since) {
+        Map<String, Object> data = readAlignmentJson(resolveAlignmentFile(project, sampleName));
+        if (data == null || since == null || !(data.get("focusZ") instanceof Number z)) {
+            return null;
+        }
+        try {
+            java.time.Instant at = java.time.Instant.parse(String.valueOf(data.get(FOCUS_Z_CHECKED_AT)));
+            return at.isAfter(since) ? z.doubleValue() : null;
+        } catch (java.time.format.DateTimeParseException e) {
+            return null;
+        }
+    }
+
+    public static boolean updateSlideFocusZ(Project<BufferedImage> project, String sampleName, double focusZUm) {
+        if (!Double.isFinite(focusZUm)) {
+            return false;
+        }
+        File file = resolveAlignmentFile(project, sampleName);
+        Map<String, Object> data = readAlignmentJson(file);
+        if (data == null) {
+            logger.debug("No alignment record for '{}' to update the focus seed in", sampleName);
+            return false;
+        }
+        Object old = data.get("focusZ");
+        data.put("focusZ", focusZUm);
+        data.put(FOCUS_Z_CHECKED_AT, java.time.Instant.now().toString());
+        if (!writeAlignmentJson(file, sampleName, data)) {
+            return false;
+        }
+        logger.info(
+                "Saved focus seed for '{}': {} -> {} um",
+                sampleName,
+                old instanceof Number n ? String.format(java.util.Locale.ROOT, "%.2f", n.doubleValue()) : "(none)",
+                String.format(java.util.Locale.ROOT, "%.2f", focusZUm));
+        return true;
+    }
+
+    /**
      * A focus surface measured on one slide: a plane in stage coordinates, plus the
      * evidence behind it.
      *
