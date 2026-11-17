@@ -456,7 +456,8 @@ public class StageMapCanvas extends StackPane {
             if (panning) {
                 return;
             }
-            if (positionPick != null && e.getClickCount() == 1 && currentInsert != null) {
+            // The pick is a Shift+click, so a double-click still moves the stage while it is armed.
+            if (positionPick != null && e.getClickCount() == 1 && e.isShiftDown() && currentInsert != null) {
                 double[] stageCoords = screenToStage(e.getX(), e.getY());
                 if (stageCoords != null) {
                     java.util.function.Consumer<double[]> pick = positionPick;
@@ -611,8 +612,8 @@ public class StageMapCanvas extends StackPane {
     }
 
     /**
-     * Arms (non-null) or clears (null) a one-shot pick: the next single click on the map hands its
-     * stage point to {@code pick} and does not move the stage.
+     * Arms (non-null) or clears (null) a one-shot pick: the next Shift+click on the map hands its
+     * stage point to {@code pick} and does not move the stage. Other clicks work as usual.
      */
     public void setPositionPick(java.util.function.Consumer<double[]> pick) {
         this.positionPick = pick;

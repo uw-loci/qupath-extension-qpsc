@@ -2387,15 +2387,15 @@ public class StageMapWindow {
     }
 
     /**
-     * Makes the next single click on the Stage Map (if it is open) report the stage point under
-     * the cursor to {@code pick} rather than move there. Used by the one-click rough alignment.
+     * Makes the next Shift+click on the Stage Map (if it is open) report the stage point under the
+     * cursor to {@code pick} rather than move there; double-clicks still move the stage. Used by the one-click rough alignment.
      */
     public static void armPositionPick(java.util.function.Consumer<double[]> pick) {
         Platform.runLater(() -> {
             StageMapWindow w = instance;
             if (w != null && w.canvas != null) {
                 w.canvas.setPositionPick(pick);
-                w.statusLabel.setText("Click the spot the stage is on, on the slide overview");
+                w.statusLabel.setText("Shift+click the spot the stage is on, on the slide overview");
                 w.statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
             }
         });

@@ -77,21 +77,29 @@ public final class ClickPositionRefinement {
         }
         Label text = new Label("1. Move the stage (Live Viewer or Stage Map) to a spot you can find on the slide "
                 + "image: a tissue corner, a scratch, an edge.\n"
-                + "2. Click that same spot on the slide image in QuPath (most precise), or on the Stage "
-                + "Map's slide overview.\n\n"
+                + "2. Shift+click that same spot on the slide image in QuPath (most precise), or on the "
+                + "Stage Map's slide overview. Ordinary clicks and double-clicks work as usual.\n"
+                + "3. Check the shift shown below, then press Use this. Shift+click again to try another "
+                + "spot.\n\n"
                 + "The click corrects where the slide is; rotation and scale come from the scanner "
                 + "alignment.");
         text.setWrapText(true);
         text.setMaxWidth(440);
-        Label status = new Label("Waiting for a click...");
+        Label status = new Label("Waiting for a Shift+click...");
+        status.setWrapText(true);
+        status.setMaxWidth(440);
+        Button use = new Button("Use this");
+        use.setDisable(true);
         Button skip = new Button("Skip (keep the current alignment)");
         Button cancel = new Button("Cancel");
-        HBox buttons = new HBox(8, skip, cancel);
+        HBox buttons = new HBox(8, use, skip, cancel);
         VBox root = new VBox(10, text, status, buttons);
         root.setPadding(new Insets(12));
         stage.setScene(new Scene(root));
 
         AtomicBoolean done = new AtomicBoolean(false);
+        java.util.concurrent.atomic.AtomicReference<AffineTransform> pending =
+                new java.util.concurrent.atomic.AtomicReference<>();
         QuPathViewer viewer = gui != null ? gui.getViewer() : null;
         java.util.concurrent.atomic.AtomicReference<EventHandler<MouseEvent>> viewerHandler =
                 new java.util.concurrent.atomic.AtomicReference<>();
@@ -111,24 +119,29 @@ public final class ClickPositionRefinement {
         };
 
         viewerHandler.set(e -> {
-            if (e.getButton() != MouseButton.PRIMARY || e.getClickCount() != 1 || !e.isStillSincePress()) {
+            if (e.getButton() != MouseButton.PRIMARY
+                    || e.getClickCount() != 1
+                    || !e.isShiftDown()
+                    || !e.isStillSincePress()) {
                 return;
             }
             e.consume();
             Point2D p = viewer.componentPointToImagePoint(e.getX(), e.getY(), null, true);
-            onPixel(new double[] {p.getX(), p.getY()}, "slide image", initialTransform, status, finish);
+            onPixel(new double[] {p.getX(), p.getY()}, "slide image", initialTransform, status, use, pending);
         });
         if (viewer != null) {
             viewer.getView().addEventFilter(MouseEvent.MOUSE_CLICKED, viewerHandler.get());
         }
-        StageMapWindow.armPositionPick(mapStage -> Platform.runLater(() -> {
-            double[] pixel = pixelForStagePoint(initialTransform, mapStage);
-            if (pixel == null) {
-                status.setText("That Stage Map point could not be placed on the slide image; click again.");
-                return;
+        armStageMap(initialTransform, status, use, pending, done);
+
+        use.setOnAction(e -> {
+            AffineTransform refined = pending.get();
+            if (refined != null) {
+                Dialogs.showInfoNotification(
+                        "Click the stage position", "Alignment corrected and saved for this slide.");
+                finish.accept(SingleTileRefinement.RefinementResult.accepted(refined, null));
             }
-            onPixel(pixel, "Stage Map", initialTransform, status, finish);
-        }));
+        });
 
         skip.setOnAction(e -> finish.accept(SingleTileRefinement.RefinementResult.skipped(initialTransform, null)));
         cancel.setOnAction(e -> finish.accept(SingleTileRefinement.RefinementResult.cancelled(initialTransform, null)));
@@ -137,12 +150,43 @@ public final class ClickPositionRefinement {
         stage.show();
     }
 
+    /** Arms the Stage Map's one-shot Shift+click pick, re-arming after each pick until the window closes. */
+    private static void armStageMap(
+            AffineTransform initialTransform,
+            Label status,
+            Button use,
+            java.util.concurrent.atomic.AtomicReference<AffineTransform> pending,
+            AtomicBoolean done) {
+        if (done.get()) {
+            return;
+        }
+        StageMapWindow.armPositionPick(mapStage -> Platform.runLater(() -> {
+            if (done.get()) {
+                return;
+            }
+            double[] pixel = pixelForStagePoint(initialTransform, mapStage);
+            if (pixel == null) {
+                status.setText("That Stage Map point could not be placed on the slide image; Shift+click again.");
+            } else {
+                onPixel(pixel, "Stage Map", initialTransform, status, use, pending);
+            }
+            armStageMap(initialTransform, status, use, pending, done);
+        }));
+    }
+
+    /**
+     * Reads the stage, computes the corrected alignment for the clicked pixel and offers it;
+     * nothing is saved until Use this.
+     */
     private static void onPixel(
             double[] pixel,
             String where,
             AffineTransform initialTransform,
             Label status,
-            java.util.function.Consumer<SingleTileRefinement.RefinementResult> finish) {
+            Button use,
+            java.util.concurrent.atomic.AtomicReference<AffineTransform> pending) {
+        use.setDisable(true);
+        pending.set(null);
         status.setText("Reading the stage position...");
         Thread t = new Thread(
                 () -> {
@@ -152,7 +196,7 @@ public final class ClickPositionRefinement {
                     } catch (Exception ex) {
                         logger.warn("Click position refinement: could not read the stage: {}", ex.getMessage());
                         Platform.runLater(() -> status.setText(
-                                "Could not read the stage position (" + ex.getMessage() + "); click again."));
+                                "Could not read the stage position (" + ex.getMessage() + "); Shift+click again."));
                         return;
                     }
                     AffineTransform refined = refine(initialTransform, pixel, stage);
@@ -171,14 +215,18 @@ public final class ClickPositionRefinement {
                             fmt(stage[0] - before[0]),
                             fmt(stage[1] - before[1]));
                     Platform.runLater(() -> {
-                        Dialogs.showInfoNotification(
-                                "Click the stage position",
-                                String.format(
-                                        Locale.ROOT,
-                                        "Alignment moved by %.0f, %.0f um and saved for this slide.",
-                                        stage[0] - before[0],
-                                        stage[1] - before[1]));
-                        finish.accept(SingleTileRefinement.RefinementResult.accepted(refined, null));
+                        pending.set(refined);
+                        use.setDisable(false);
+                        status.setText(String.format(
+                                Locale.ROOT,
+                                "From the %s click, the slide is %.0f um in X and %.0f um in Y from where the "
+                                        + "alignment had it (stage now at %.0f, %.0f um). Use this, or Shift+click "
+                                        + "another spot.",
+                                where,
+                                stage[0] - before[0],
+                                stage[1] - before[1],
+                                stage[0],
+                                stage[1]));
                     });
                 },
                 "qpsc-click-position");
