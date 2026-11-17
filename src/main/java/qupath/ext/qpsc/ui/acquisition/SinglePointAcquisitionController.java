@@ -529,6 +529,16 @@ public class SinglePointAcquisitionController {
                                 mgr.isJAICamera(detector),
                                 ModalityRegistry.getHandler(modality).getDefaultWbMode(),
                                 PersistentPreferences.getLastWhiteBalanceMode());
+                        if ("off".equals(wbMode)
+                                && mgr.isJAICamera(detector)
+                                && !"off"
+                                        .equals(ModalityRegistry.getHandler(modality)
+                                                .getDefaultWbMode())) {
+                            logger.info(
+                                    "Single-point run without white balance: the last chosen mode ({}) is not "
+                                            + "Per-angle, the only one Z-stack / time-lapse applies",
+                                    PersistentPreferences.getLastWhiteBalanceMode());
+                        }
                         String flatfieldFolder = flatfieldFolder(modality, objective, detector);
                         String wbFolder = ProfileWhiteBalance.folder(
                                 mgr.getBackgroundProfileFolder(), modality, objective, detector, wbMode);
@@ -649,7 +659,9 @@ public class SinglePointAcquisitionController {
      * The white balance mode a single-point run sends, chosen as the acquisition dialogs choose
      * it: "off" unless the camera is a JAI and the modality uses white balance; then the mode last
      * picked in an acquisition dialog (a display name), or the modality's default when none is
-     * saved or it is not a known mode (pure; tested).
+     * saved or it is not a known mode. The server's Z-stack / time-lapse path applies per-angle
+     * calibration only (it loads per-angle values for any mode), so any other mode is sent as
+     * "off" rather than have per-angle values read from a Simple or Camera AWB setup (pure; tested).
      *
      * @param jaiCamera whether the camera in use is a JAI camera
      * @param modalityDefault the modality handler's default mode (protocol name, "off" for none)
@@ -660,13 +672,14 @@ public class SinglePointAcquisitionController {
         if (!jaiCamera || modalityDefault == null || "off".equals(modalityDefault)) {
             return "off";
         }
+        String chosen = modalityDefault;
         if (lastChosenDisplayName != null) {
             for (WbMode m : WbMode.values()) {
                 if (m.getDisplayName().equals(lastChosenDisplayName)) {
-                    return m.getProtocolName();
+                    chosen = m.getProtocolName();
                 }
             }
         }
-        return modalityDefault;
+        return WbMode.PER_ANGLE.getProtocolName().equals(chosen) ? chosen : "off";
     }
 }

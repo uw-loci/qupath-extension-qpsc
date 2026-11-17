@@ -11,9 +11,13 @@ class SinglePointWbModeTest {
     @Test
     void aJaiCameraWithAWhiteBalancedModalityUsesTheLastChosenMode() {
         String perAngle = WbMode.PER_ANGLE.getProtocolName();
-        String simple = WbMode.SIMPLE.getProtocolName();
         assertEquals(
-                simple, SinglePointAcquisitionController.wbModeForRun(true, perAngle, WbMode.SIMPLE.getDisplayName()));
+                "off",
+                SinglePointAcquisitionController.wbModeForRun(true, perAngle, WbMode.SIMPLE.getDisplayName()),
+                "the Z-stack path applies per-angle calibration only");
+        assertEquals(
+                perAngle,
+                SinglePointAcquisitionController.wbModeForRun(true, perAngle, WbMode.PER_ANGLE.getDisplayName()));
         assertEquals(
                 perAngle,
                 SinglePointAcquisitionController.wbModeForRun(true, perAngle, null),

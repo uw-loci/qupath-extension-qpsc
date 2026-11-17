@@ -413,7 +413,7 @@ public final class StageDirectionCalibrationDialog {
         phaseHeader.setText("Manual override");
         phaseInstructions.setText("Pick the stage polarity and camera orientation you want to "
                 + "save. Polarity is written to this microscope's config (stage.polarity); the camera "
-                + "orientation to your preferences. Polarity is a hardware-wiring fact -- only change it if you have verified "
+                + "orientation to the same config, for the camera in use (hardware.camera_orientation). Polarity is a hardware-wiring fact -- only change it if you have verified "
                 + "via direct stage observation (e.g. via the MicroManager-script procedure in "
                 + "PREFERENCES.md) that positive commands move the stage carrier the wrong way. "
                 + "The preview below shows the resulting screen <-> stage sign math.");
