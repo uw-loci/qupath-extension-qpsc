@@ -175,6 +175,22 @@ Front-load your decisions in the setup pass, then leave it running.
 > focus Z it establishes seeds that slot's first-tile autofocus in the acquire
 > pass, so acquisition starts near focus instead of hunting.
 
+**The alignment check's focus is kept.** When the alignment check before a
+slide refocuses, the Z it found is written to the slide's alignment record and
+used as the seed for that slide's acquisition. If you run **Step 2: Acquire All
+Set-Up** again without setting the slides up again (for example after a stop),
+the check starts from that saved Z rather than from the one found at set-up.
+Setting a slide up again measures its focus afresh and replaces it.
+
+**With autofocus off.** When **Disable All Autofocus (Danger)** is on in
+Preferences, every tile is taken at the focus found during set-up. Before the
+unattended pass starts, **Acquire All Set-Up** compares each set-up slide's
+focus points; if any slide's points are further apart than half the
+objective's autofocus search range (`search_range_um`; 15 um when it is not
+configured), an **Autofocus is off** dialog lists those slides, for example
+`slot 4 (MetroHealth_189): 51.8 um apart`. Confirm to start anyway, or cancel
+and turn autofocus back on. With autofocus on, nothing is asked.
+
 ### Automating the setup pass (experimental)
 
 The setup pass is the part that still needs an operator. The preference

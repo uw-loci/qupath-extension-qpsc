@@ -32,6 +32,10 @@ Double-click on the camera image to center the stage at that position. Like the 
 
 A **green border** is drawn around the image whenever Live is ON, as an at-a-glance indicator that the feed is streaming (it clears when Live is OFF).
 
+### Hardware status line
+
+While the server is connected but a part of the microscope behind it is failing, a **red line** appears above the status bar naming the part and when it started, for example *Server connected; Stage not responding since 12:40*. The parts are **Stage not responding**, **Camera snaps failing** and **Micro-Manager not answering**; several can be listed at once, separated by semicolons. The Live Viewer asks the server every 5 seconds, and the line disappears once every part answers again. The server reports only failures it has already met on snaps and stage reads, so a camera that failed stays listed until the next snap. A server older than this check is asked once and never shows the line. What to do for each part: [TROUBLESHOOTING](../TROUBLESHOOTING.md#q-the-live-viewer-shows-a-red-line-such-as-server-connected-stage-not-responding-since-1240).
+
 ### Position Overlay
 
 The **XYZ** toggle button on the toolbar overlays the current stage position on a
@@ -190,7 +194,7 @@ This safety gate ensures you can see the stage move before issuing commands.
 | — Z Step Control | TextField | Step size in micrometers used by every mousewheel scroll-as-focus-knob target: the Z position field, the Move Z button, the step field itself, and now the coarse and fine bars. |
 | — Go to Z / Move Z | TextField + Button | Under the step field. Type an absolute Z (um) and press Enter or **Move Z** to move there. Scrolling over either one steps Z by the step size. |
 | Polarizer Controls | Spinner | Rotation angle control (PPM modality only) |
-| **Calibrate Directions...** | Button | Opens an interactive dialog that jogs the stage in +X and +Y, asks which way the tissue in the image appeared to move across the screen (the opposite of the view's pan), and solves for the camera orientation (optical flip/rotation) under your current stage polarity setting. Non-blocking: saves your original position and restores it when closing. The same calibration dialog is available in the Setup Wizard as an optional step. Note: stage polarity is treated as a hardware-wiring fact and is not changed by this tool — use the MicroManager-script procedure in [PREFERENCES.md](../PREFERENCES.md#stage-polarity-in-the-microscope-config-not-a-preference) to verify polarity if needed. See that same section for the coordinate frame details. |
+| **Calibrate Directions...** | Button | Opens an interactive dialog that jogs the stage in +X and +Y, asks which way the tissue in the image appeared to move across the screen (the opposite of the view's pan), and solves for the camera orientation (optical flip/rotation) under your current stage polarity setting. Apply writes it to the microscope config for the camera in use (`hardware.camera_orientation.<camera>`), so each camera of a two-camera microscope keeps its own; see [PREFERENCES.md](../PREFERENCES.md#camera-orientation-in-the-microscope-config-not-a-preference). Non-blocking: saves your original position and restores it when closing. The same calibration dialog is available in the Setup Wizard as an optional step. Note: stage polarity is treated as a hardware-wiring fact and is not changed by this tool — use the MicroManager-script procedure in [PREFERENCES.md](../PREFERENCES.md#stage-polarity-in-the-microscope-config-not-a-preference) to verify polarity if needed. See that same section for the coordinate frame details. |
 
 **Move to Position:**
 
@@ -311,7 +315,7 @@ The Live Viewer does not produce persistent output files. It provides real-time 
 - **No image displayed**: Verify server connection and that Micro-Manager has initialized the camera
 - **Image is black**: Check illumination source, lamp power, and exposure settings
 - **Image is saturated**: Reduce exposure time or lamp intensity; check the per-channel saturation indicators
-- **Stage does not move**: Check hardware initialization in Micro-Manager
+- **Stage does not move**: Check hardware initialization in Micro-Manager, and look for the red [hardware status line](#hardware-status-line) above the status bar
 - The dialog is a singleton -- opening it again brings the existing window to front
 - Live streaming pauses automatically during acquisition, camera operations, and WB preset application, then resumes afterward
 - During an acquisition the stage controls (Z and XY) are locked, so a stray click cannot move the stage off the tile being acquired. The exception is a manual-focus pause, when the server is waiting for you to focus by hand: then Z and XY are both unlocked, and the server returns the stage to the tile afterwards and finds Z for it. See [Autofocus](../AUTOFOCUS.md#manual-focus-fallback)

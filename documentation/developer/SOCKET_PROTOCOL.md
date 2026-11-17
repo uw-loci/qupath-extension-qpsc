@@ -86,6 +86,8 @@ sequenceDiagram
     end
 ```
 
+**After CFG___OK on a two-camera config.** When the microscope config declares two or more detectors, QPSC (`ActiveDetectorSync`, on the configured listener) sends `GETCAM` and records the detector whose `id_detector.<id>.device` matches the camera Micro-Manager has loaded as the camera in use; a change re-reads the config with that camera's `per_detector` values. The server makes the same match during CONFIG for its own copy of the config. See `HARDWARE_ABSTRACTION.md`, "Two cameras, one config".
+
 ## Command Reference
 
 ### Stage Control
@@ -715,6 +717,7 @@ See `handlers/streaming_focus.py` for the implementation.
 | LCSWEEP | `lcsweep_` | Flag string `--output ... [--modality --axes LCA,LCB --start-v --stop-v --step-v --exposure-ms --roi-fraction]` + `ENDOFSTR` | As LCCALIB; the JSON is the sweep summary (`axes`, `palette`, `palette_lines`, `metadata_path`, `curve_csv_path`) |
 | LCSIGNAL | `lcsignal` | 32-byte profile name (null-padded UTF-8) + 8-byte double `exposure_ms` + 8-byte double target fraction (big-endian) | 4-byte big-endian length + UTF-8 JSON: `states[]` (id, mean, p999, max, saturated_fraction, extinction), `full_scale`, `brightest_state`, `brightest_fraction`, `clipped`, `suggested_exposure_ms`, camera problems; or `error` |
 | MMPRESET | `mmpreset` | 4-byte big-endian length + UTF-8 JSON `{"action": "get" or "set", "group", "preset"}` | 4-byte big-endian length + UTF-8 JSON: `current`, `group_exists`, `preset_exists`, `presets` (or `groups` when the group is missing); for a set also `applied`, `previous`, `pixel_size_um`; a refusal is `error` |
+| HWSTAT | `hwstat__` | none | 4-byte big-endian length + UTF-8 JSON `{stage, camera, micromanager}`, each `{ok, since, message, failures}`; `stage` also has `known`. A server error is `{error}` |
 
 #### GETLOG
 
@@ -744,6 +747,27 @@ LC-PolScope state signal for the Live Viewer Camera tab. Applies every state of 
 #### MMPRESET
 
 Reads or applies one Micro-Manager ConfigGroup preset. QPSC's `ObjectivePresetActuator` uses it to select the objective's preset in Micro-Manager when an objective is chosen, for objectives that declare `mm_preset: {group, preset, motorized}` in the microscope YAML (names are whatever that lab's Micro-Manager config uses, so nothing happens without the entry). A labeling device (`motorized: false`) is applied silently on selection and after every CONFIG; a motorized turret (or `motorized` absent) only after the operator confirms in `ObjectivePresetConfirmDialog`, and never on connect. The server refuses a set while an acquisition thread runs or before CONFIG; a set to the current preset changes nothing. The client allows 30 s, since a turret may be turning.
+
+#### HWSTAT
+
+Which part of the microscope is not answering. No payload. The reply is a 4-byte big-endian length and UTF-8 JSON:
+
+```json
+{
+  "stage":        {"ok": false, "since": 1763404800.2, "message": "...", "failures": 14, "known": true},
+  "camera":       {"ok": true,  "since": null, "message": "", "failures": 0},
+  "micromanager": {"ok": true,  "since": null, "message": "", "failures": 0}
+}
+```
+
+- `ok`: false while the part is failing (from its first failure after a success until its next success).
+- `since`: wall-clock epoch seconds of the first failure, or null.
+- `message`: the last failure's first line; `failures`: how many in a row.
+- `known` (stage only): false when the server has no stage position cache, so the stage state says nothing.
+
+The server builds it from failures it has already seen (`microscope_control.hardware.health`: camera snaps, Micro-Manager bridge timeouts on snaps and stage reads, and the stage cache's own down state) and probes no device, so it answers at once even while a part hangs. If building the report fails, the reply is `{"error": "..."}`.
+
+QPSC (`MicroscopeSocketClient.getHardwareStatus`) sends it on the **primary** socket with a 3 s read timeout. A server that predates the command sends nothing; the client then returns empty and that Live Viewer window stops asking. The Live Viewer polls every 5 s while connected and turns the reply into its red banner (`ui/liveviewer/HardwareStatusText`: *Server connected; Stage not responding since 12:40*), listing Micro-Manager, stage and camera in that order.
 
 ## Acquisition Lifecycle
 

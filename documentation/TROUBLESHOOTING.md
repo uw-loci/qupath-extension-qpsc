@@ -207,9 +207,8 @@ the offer QPSC makes, or choose **Extensions > QP Scope > Utilities > Microscope
 Configuration > Switch Microscope...**. If the demo changed the server host to `localhost`,
 set **Host** back under **Communication Settings...**. The demo also set the Live Viewer's
 remembered exposure to its 10 ms; if your first live frame on the real scope is dark, set
-**Exposure (ms)** again on the Camera tab. It also set the camera orientation
-preference to the demo's (NORMAL); switching to your microscope puts your own value back. The
-stage polarity comes with the demo's config. A demo server that QPSC started stops when
+**Exposure (ms)** again on the Camera tab. The camera orientation and the stage polarity come
+with each microscope's config, so nothing needs to be put back. A demo server that QPSC started stops when
 QuPath exits; one you started yourself keeps running until you close its window, and while
 it runs nothing else can use the server port (5000 by default), so your real server will
 not start on this computer.
@@ -266,6 +265,24 @@ If the field is empty or shows a missing file, use "Browse" to select your confi
 3. Verify changes in Edit > Preferences > QPSC
 
 Some settings (like exposure times for backgrounds) are saved separately and need to be updated via the background collection workflow.
+
+#### Q: Microscope config file not found after the LC-PolScope configs were merged
+
+**A:** The LC-PolScope had one config per camera, `config_LCPolScope.yml` (FLIR Oryx) and `config_LCPolScope_Hamamatsu.yml`. They are now one file, `config_LCPolScope.yml`, which holds both cameras; the Hamamatsu file is gone from `microscope_configurations`.
+
+1. Pull `microscope_configurations`.
+2. Edit > Preferences > QuPath SCope > **Microscope Config File**: choose `config_LCPolScope.yml`, and accept the offer to switch.
+3. Start Micro-Manager with the camera you want and connect. QPSC takes the camera in use from the camera Micro-Manager has loaded; nothing else needs to be chosen. The QuPath log says `Camera in use: <detector> (Micro-Manager camera '<name>')`.
+4. For each project with slides aligned or acquired under the old Hamamatsu config, run `scripts/migrate_lcpolscope_merge.groovy` once (below). Without it, QPSC does not find those slide alignments.
+
+**Running `migrate_lcpolscope_merge.groovy`:**
+
+1. Open the project in QuPath. Close the Stage Map and any QPSC workflow.
+2. **Automate > Script editor**, open or paste the script, and leave `DRY_RUN = true`.
+3. **Run.** The output lists what would change: each `<slide>_LCPolScope_Hamamatsu_alignment.json` to be renamed `<slide>_LCPolScope_alignment.json`, and each image whose `source_microscope` or `acquired_on_microscope` would change from `LCPolScope_Hamamatsu` to `LCPolScope`. Where an Oryx alignment of the same slide already has the new name, it is kept beside it as `.oryx-bak`.
+4. Set `DRY_RUN = false` and run again to apply the changes and save the project.
+
+The scanner presets (`saved_transforms.json`) were migrated in `microscope_configurations` itself; the script does not touch them. On a two-camera microscope, a preset or slide alignment made with the other camera is not used: the two camera ports are millimeters apart, so align each slide with the camera you will acquire with.
 
 ### Python Server
 
@@ -374,6 +391,16 @@ If you still see the symptom:
 3. **Micro-Manager needs restart:** It sometimes gets stuck - restart helps
 4. **Not enough memory:** Check if Micro-Manager is set to circular buffer mode with reasonable size
 
+#### Q: The Live Viewer shows a red line such as "Server connected; Stage not responding since 12:40"
+
+**A:** The server is answering, but one part of the microscope behind it is not. The Live Viewer asks the server every 5 seconds and names the part that is failing, with the time it started:
+
+- **Stage not responding** -- the server's stage position reads have failed repeatedly. The stage controller may be off, unplugged or hung. Check its power and cable, and whether Micro-Manager can move it.
+- **Camera snaps failing** -- the last snaps failed. Check the camera's power and cable, and whether Micro-Manager's Snap works.
+- **Micro-Manager not answering** -- calls to Micro-Manager timed out. Micro-Manager may be busy with a dialog, frozen, or closed. Bring it to the front, close any dialog, or restart it and reconnect.
+
+The line goes away by itself once the part answers again. The server reports only failures it has already met on snaps and stage reads, so a part nobody has used since it failed can stay listed until something tries it. A server older than this check gets asked once and never shows the line.
+
 #### Q: Stage doesn't move even though everything else works
 
 **A:** Check in this order:
@@ -421,9 +448,9 @@ Observe which direction the physical stage actually moves. If it moves in the la
 **A:** This is the "stage-vs-image sign math" problem. Starting with commit `e3cb133` (2026-04-09), all three of these — plus the stitcher's tile placement — go through a single `StageImageTransform` that composes two independent settings:
 
 1. **Stage polarity** (`stage.polarity` in the microscope config) — hardware wiring
-2. **Camera orientation** — how the camera mounts / optical path flips the image
+2. **Camera orientation** (`hardware.camera_orientation.<camera>` in the microscope config, one value per camera) — how the camera mounts / optical path flips the image
 
-**Quick fix (try first):** Open the Live Viewer → Navigate tab → click **Calibrate Directions...** (also available as an optional step in the Setup Wizard). The dialog jogs the stage in +X then +Y, asks which direction the tissue in the image moved across the screen (the opposite of the view's pan), and writes the correct `Camera orientation` for you under your current polarity. Polarity itself is treated as a hardware-wiring fact and is NOT changed by the tool — if the dialog reports "no camera orientation matches," that is a signal that your polarity may be wrong; verify polarity by direct stage observation (MicroManager-script procedure above) before retrying.
+**Quick fix (try first):** Open the Live Viewer → Navigate tab → click **Calibrate Directions...** (also available as an optional step in the Setup Wizard). The dialog jogs the stage in +X then +Y, asks which direction the tissue in the image moved across the screen (the opposite of the view's pan), and writes the correct `Camera orientation` for you under your current polarity, to `hardware.camera_orientation.<camera>` in the microscope config, for the camera in use. Polarity itself is treated as a hardware-wiring fact and is NOT changed by the tool — if the dialog reports "no camera orientation matches," that is a signal that your polarity may be wrong; verify polarity by direct stage observation (MicroManager-script procedure above) before retrying.
 
 **Manual diagnosis procedure (when the tool isn't applicable, e.g. server not connected):**
 
@@ -451,7 +478,7 @@ Observe which direction the physical stage actually moves. If it moves in the la
 
 4. Acquire a small 2×2 bounding box test. Place it on a recognizable feature, run the acquisition, and look at the stitched output. Compare corner-by-corner against what you see in the live view at each stage position. **Do this step even if the Live Viewer gestures all look correct** — it's possible for gestures to look right while stitching is wrong (OWS3 showed exactly this during the 2026-04-09 refactor test).
 
-5. If the stitched output is wrong, the fix is in `Camera orientation`:
+5. If the stitched output is wrong, the fix is in `Camera orientation` (`hardware.camera_orientation.<camera>` in the microscope config; set it with Calibrate Directions > **Manual override**, or edit the file and restart QuPath):
    - **Only stitched X mirrored** → set `Camera orientation` to `FLIP_H`
    - **Only stitched Y mirrored** → set `Camera orientation` to `FLIP_V`
    - **Both axes mirrored (180° rotation)** → set `Camera orientation` to `ROT_180`
@@ -1110,7 +1137,7 @@ If you have *old* stitched files with black upper levels from before this fix, r
 
 The **Stitching queue** window (Extensions > QP Scope > Acquisition controls > Stitching queue) opens and shows one row per angle (for PPM) or channel (for fluorescence) as it is stitched, with its status ("solving registration...", "stitching...") and elapsed time. For large acquisitions this can take several minutes. The window is non-modal: you can keep working in QuPath while it runs, and the stitched images are not opened when they finish; use the row's **Open** button or the project browser.
 
-The stitched images will be created in `<projectDir>/SlideImages` (project-anchored, matching the regular acquisition path) and automatically imported into your project. Filenames follow your configured naming pattern (respecting Objective, Annotation, Angle, and other preferences).
+The stitched images will be created in `<projectDir>/SlideImages` (project-anchored, matching the regular acquisition path) and automatically imported into your project. When the failed run left a pending or failed placeholder entry for an output (same sample, region, angle and objective), that entry is filled in place under its own name instead of a second entry being added; when more than one placeholder could match, the output is added as a new entry. Filenames follow your configured naming pattern (respecting Objective, Annotation, Angle, and other preferences).
 
 ### Stitch record: how an image was produced
 
@@ -2151,6 +2178,10 @@ python -m microscope_command_server.server --port 5000
 - Verify NI DAQ analog output channels are correctly assigned
 
 ### Stage Map
+
+**Problem:** The Stage Map's status says **Stage not answering - retrying every few seconds**, and the position marker does not move.
+
+The last ten position reads failed: the microscope, the stage controller or the server is off or not answering. You do not need to close the map. It tries again every 5 seconds and returns to normal polling on the first good read; reconnecting to the server also restarts it at full rate. The QuPath log says `Stage Map position polling resumed: the stage answers again` when it comes back. If the message stays while the Live Viewer moves the stage, check the server console for errors on stage reads.
 
 **Problem:** Cursor lands outside the green box on the macro overlay even when the stage is inside the alignment annotation; cursor appears mirrored from the actual physical position.
 

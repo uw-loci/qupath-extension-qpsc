@@ -227,6 +227,16 @@ watched_symbols:
   - SunburstCalibrationWorkflow.run
   - PPMSensitivityTestWorkflow.run
 acknowledged_stale:
+  - "b9976659 -- QPProjectFunctions duplicate helpers / addImageToProject close their image readers. No dispatch/reads/writes change."
+  - "67c7a758 -- Re-stitch fills an unfilled placeholder; OME-ZARR reserved. Documented in W16/DS48 by bb044b7a."
+  - "ffd0e792 -- per_detector overlay (DetectorOverlay), ActiveDetectorSync, profile choice by camera, per_detector writers. Recorded in DS3, DS24 and the Section 1 lookup row."
+  - "8acc5d54 -- camera orientation moved from DS25 to DS3 hardware.camera_orientation (CameraOrientationSetting); DemoOrientation removed. DS3/DS25/DS26 and the W3/W21 reads updated."
+  - "6f3444e4 -- presets and slide alignments record the camera; another camera's skipped. DS4/DS5 updated."
+  - "89138ea3 -- alignment-check focus persisted as the slide seed (DS5 focusZ/focusZCheckedAt); W1b autofocus-off focus-spread question."
+  - "a07a1440 -- CLICK_POSITION refinement (ClickPositionRefinement via handleRefinement step 11); Stage Map one-shot position pick (W21)."
+  - "5a403917 -- Stage Map polling resumes (W21 invariant, DS44)."
+  - "5dbe9f53 -- Live Viewer HWSTAT banner (W19 invariant, DS45 command list)."
+  - "ad50fcd4 -- white balance / BaSiC profile record; its own docs commit covered the user docs. No dispatch change."
   - "338322f4 -- Locale.ROOT on every no-argument toLowerCase()/toUpperCase() (SetupScope gained an import, so its line refs moved by one and were re-synced here). No dispatch/reads/writes change."
   - "5307f18c -- Locale.ROOT on machine-read String.format calls (socket arguments, TileConfiguration, autofocus YAML, saved points, camera preset, prefilled TextFields); RPDSCAN/POLCAL message building moved into MicroscopeSocketClient.rapidScanMessage/polarizerCalibrationMessage. Bytes are what en-US already sent; no dispatch/reads/writes change."
   - "334f4fda/0f5a7980: W1 gained startAsync() (completion future for batch orchestration); MultiSlide Run button now awaits it. Map's dispatch/reads/writes unchanged."
@@ -287,7 +297,8 @@ surfaces, and cross-workflow dependencies. It is optimized for LLM agents.
 | Autofocus parameters / streaming AF | W5, W6, W8, W20, W34 | DS3, DS19 (modality config), DS20 (parfocality YAML) |
 | White balance modes / per-channel exposures | W9, W10 | DS21 (WB calibration YAML), DS22, DS24 |
 | Background correction / flat-field | W4, W39, W40 | DS23 (background TIFFs + profiles), DS24 (activeBackgroundProfile, flatfieldMethod), DS3 |
-| Stage polarity / camera orientation | All workflows touching stage motion | DS3 (`stage.polarity`), DS25 (cameraOrientation), DS26 (StageImageTransform) |
+| Stage polarity / camera orientation | All workflows touching stage motion | DS3 (`stage.polarity`, `hardware.camera_orientation.<detector>`), DS26 (StageImageTransform) |
+| Two cameras on one config (per_detector, camera in use, alignment camera filter) | W1, W3, W19, W36, every config reader | DS3 (`per_detector` blocks), DS24 (LastDetector = camera in use), DS4 / DS5 (`detector`) |
 | Stitching pipeline (tiles -> OME-TIFF/ZARR) | W1, W2, W14, W15, W16, W37 | DS28..DS31, DS48 (reserved entries) |
 | Two runs overlapping (stitching outlives acquisition) / Stop acquisition | W1, W37, W38 | DS17, DS49 (WorkflowRegistry slot) |
 | Cross-scope acquisition (Ocus40 macro -> PPM tiles) | W1, W1c, W3 | DS5, DS6, DS9, DS39 (CrossScopeTransformBuilder) |
@@ -380,7 +391,7 @@ steps:
   - { num: 9,  name: routeSubWorkflow,                       file_line: "1896-1968", reads: ["DS9 (XY_OFFSET, BASE_IMAGE), state.useExistingSlideAlignment, state.alignmentChoice"], writes: [], gate: "selects W1a/W1c/W1d/W1e" }
   - { num: 10, name: reReadAnnotationsAfterRouting + pinSource, file_line: "834-916", reads: ["hierarchy on possibly-switched entry"], writes: ["state.annotations (refreshed)", "state.sourceEntry (pinned; the flipped sibling when routing switched to it)"], gate: "after routing may switch open entry" }
   - { num: 10a, name: assertSourceImageOpen,                 file_line: "918-953",   reads: ["state.sourceEntry", "viewer's open entry"], writes: [], gate: "re-opens the pinned entry before refinement and acquisition if the viewer moved" }
-  - { num: 11, name: handleRefinement (orchestrates SingleTileRefinement / MultiTileRefinement), file_line: "2639-2688", reads: ["DS17.currentTransform", "DS3"], writes: ["DS28 (refinement tile config)", "DS17 (refined transform on accept)", "DS5 (saveRefinedAlignment ONLY on accept)"], gate: "validateMMAgainstSelection (pixel size / camera ROI 5%) -> hard-cancel on mismatch; RefinementOutcomePolicy: only SKIPPED proceeds unrefined, the dialog's X cancels" }
+  - { num: 11, name: handleRefinement (orchestrates SingleTileRefinement / MultiTileRefinement / ClickPositionRefinement), file_line: "2639-2688", reads: ["DS17.currentTransform", "DS3"], writes: ["DS28 (refinement tile config)", "DS17 (refined transform on accept)", "DS5 (saveRefinedAlignment ONLY on accept)"], gate: "validateMMAgainstSelection (pixel size / camera ROI 5%) -> hard-cancel on mismatch; RefinementOutcomePolicy: only SKIPPED proceeds unrefined, the dialog's X cancels" }
   - { num: 12, name: performAcquisition,                     file_line: "3098-3130", reads: ["state.tilesByAnnotation", "DS17.currentTransform"], writes: ["DS17 (acquisitionActive=true)", "DS45 (socket: ACQUIRE)"], gate: "validateMMAgainstSelection final backstop; CancelGate consulted before each region, before awaitServerIdle and before startAcquisition" }
   - { num: 13, name: waitForCompletion / showSuccessNotification, file_line: "3131-3252", reads: ["AcquisitionMonitorService events"], writes: [], gate: "showSuccessNotification short-circuits on null state (Phase 3 H5)" }
   - { num: 14, name: stitch + autoRegisterBoundsTransformIfAvailable, file_line: "via AcquisitionManager.launchStitching -> StitchingHelper", reads: ["DS28"], writes: ["DS48 (reserve, then fill)", "DS30", "DS6 (sub-frame JSON)", "DS9 (full metadata stamp on new entries)"], gate: "job enqueued in StitchingQueueWindow (W37); stitching errors -> StitchingRecoveryWorkflow path" }
@@ -461,6 +472,7 @@ key_invariants:
   - "Reference tiles are chosen by TISSUE DENSITY first, not texture, and every measured point searches for tissue -- not only the first."
   - "The tissue search is best-effort: a failed search must not halt the batch, and an operator cancel during it is its own outcome, distinct from a failure."
   - "Unattended batches must never wait on advisory dialogs."
+  - "Exception, before the pass starts: with Disable All Autofocus on, Acquire All asks once (confirmFocusWithAutofocusOff) when a set-up slide's focus points (AffineTransformManager.loadSlideFocusPoints) spread more than half the smallest autofocus search_range_um (15 um default); MultiSlidePreflight.slidesWithFocusSpread is the pure rule (89138ea3)."
   - "Abort All must stop a running autofocus, not just the batch loop -- otherwise the stage keeps being driven after the abort."
   - "Slot-jump autofocus seeds from the slide's saved focus Z and hands the stage back afterwards; both runAfterSlotMove entry points lock on the pending-search holder."
   - "A rotated slot assigns ONE composed (rotated N)(Camera View) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. Orientation is metadata-driven: MultiSlideAssignmentDialog stamps the light-path snapshot (camera_view flag + baked parity + lp_rotation_deg) on the companion at creation, and code reads rotation from getRotationDeg / classifies via isCameraView -- the '(rotated N) (Camera View)' name is user-reference only. isCameraView makes validateAndFlipIfNeeded no-op, so both passes open the correct working entry. Base annotations are brought onto the empty companion (AnnotationHelper.bringSourceAnnotationsOntoOpenEntry, rotate+flip) before the acquisition dialogs. Do not reintroduce the intermediate or parse rotation from the name."
@@ -589,10 +601,9 @@ ui_entries:
   - "Wizard: AcquisitionWizardDialog alignment step (startWorkflow('microscopeAlignment'))"
   - "Disabled unless MacroImageUtility.isMacroImageAvailable(qupath) returns true"
 reads:
-  - DS3 (incl. stage.polarity)
+  - DS3 (incl. stage.polarity, hardware.camera_orientation)
   - DS4 (existing TransformPresets for current (source, target) pair)
   - DS9 (open entry: SOURCE_MICROSCOPE, macro pixel size, bakedParity, isCameraView)
-  - DS25 (cameraOrientation)
   - DS17
   - DS46 (data bounds classifier .json -- checked up front in run(), before the first dialog; required)
 writes:
@@ -925,6 +936,7 @@ key_invariants:
   - "beginExternalAutofocus/endExternalAutofocus: partial lock for scans started OUTSIDE this window (multi-slide slot-jump AF via SlotJumpAutofocus, W-multislide). Disables stage-movement controls but leaves the Autofocus button live as a Cancel toggle (ABORTAF). Distinct from lockControls, which disables the Autofocus button too."
   - "All control updates MUST go through Platform.runLater (UI conventions)."
   - "isShowTilesEnabled + showAcquiredTile path renders live tiles during acquisition."
+  - "Hardware banner: polls HWSTAT (DS45, primary socket, 3 s timeout) every 5 s while connected and shows HardwareStatusText.describe() in a red label above the status bar; an empty reply (server older than HWSTAT) stops the polling for that window (5dbe9f53)."
 ```
 
 ### W20: ProbeStageAfWorkflow
@@ -960,7 +972,7 @@ ui_entries:
 reads:
   - DS44 (StageInsertRegistry: carrier definitions)
   - DS9 (entry metadata: BASE_IMAGE chain ancestry walk to macro-owning ancestor; SOURCE_MICROSCOPE; light-path snapshot)
-  - DS3 (stage.polarity, light_path) + DS25 (cameraOrientation), composed through StageImageTransform (DS26)
+  - DS3 (stage.polarity, light_path, hardware.camera_orientation), composed through StageImageTransform (DS26)
   - DS4 (active source preset for source dropdown)
   - DS5 (per-slide alignment JSON; the macro is drawn where this slide's own alignment puts it, dea33682)
   - DS17 (current stage position)
@@ -973,6 +985,8 @@ key_invariants:
   - "Source dropdown is display-only -- walks base_image/original_image_id ancestor chain. NEVER overwrite an existing entry.source_microscope from the dropdown (commit d531d696)."
   - "Bounding-box preview debounced and cleared on close (commit d553535)."
   - "Resets warning flag on close."
+  - "Position polling never stops for good: after MAX_CONSECUTIVE_ERRORS (10) failed reads the status reads 'Stage not answering - retrying every few seconds' and it polls one tick in PAUSED_PROBE_EVERY (25 x 200 ms = 5 s) until a read succeeds; resetPollingErrors runs on every accepted CONFIG (MicroscopeSocketClient.addConfiguredListener) (5a403917)."
+  - "armPositionPick / disarmPositionPick: one-shot pick for ClickPositionRefinement -- the next single click on the canvas hands its stage point to the callback and does not move the stage. Armed only if the map is open when the refinement starts (a07a1440)."
 ```
 
 ### W22: SetupWizardDialog
@@ -1484,6 +1498,8 @@ fields:
   stage.polarity: "stage wiring polarity, read through StagePolarity.current() (was two preferences until f326a092, 2026-10-27)"
   stage.limits.z_um.low / high: "Z travel; MicroscopeConfigManager.getStageZTravelUm() = |high - low| is the Z range maximum in W1, W2 and W32 dialogs (3074f504)"
   light_path: "scope type, slide insertion, optical flip (LightPathModel) -- written by W45"
+  hardware.camera_orientation.<detector>: "camera orientation per camera (CameraOrientationSetting.current() for the camera in use) -- written by Calibrate Directions; the old cameraOrientationProperty preference is copied in once per config file (8acc5d54)"
+  "<any block>.per_detector.<detector>": "camera-specific overrides merged in for the camera in use by DetectorOverlay.apply at load and reload (scalars replaced, maps merged, device_properties by device+property); mirrored by microscope_control.config.apply_detector_overlay (ffd0e792)"
   rotation.angles[<modality>]: "rotation stage presets"
 written_by:
   - "W22 ConfigFileWriter"
@@ -1492,11 +1508,15 @@ written_by:
   - "W35 RegisterObjectiveWorkflow (objective stubs)"
   - "W45 LightPathSetupDialog (light_path)"
   - "W21 Stage Map insert calibration (insert reference points)"
+  - "Calibrate Directions (StageDirectionCalibrationDialog -> CameraOrientationSetting.save: hardware.camera_orientation.<camera in use>)"
+  - "W36 LCCalibrationWorkflow Apply, Live Viewer Camera tab / LCStateSignal exposure saves: into the camera's per_detector entry when it already holds the field (ConfigYamlEditor.blockPathFor / channelFieldScope)"
 read_by:
   - "ALL workflows via MicroscopeConfigManager.getInstance / MicroscopeConfigManager.current()"
 invariants:
   - "Loaded once per process; reload() must be explicitly called after edits. W43 MicroscopeSwitcher reloads and rebuilds everything derived from it at runtime."
   - "Workflows disable themselves on bad config (configValid check at SetupScope startup)."
+  - "The loaded map is the RESOLVED one: DetectorOverlay applied for overlayDetector(raw) -- the only declared detector, else LastDetector (DS24) when declared. ActiveDetectorSync sets LastDetector from GETCAM on every accepted CONFIG of a multi-detector config; a LastDetector change reloads the config."
+  - "Acquisition profiles are resolved among the camera in use's (profile 'detector' field; none = any camera), first by their modality + objective fields (resolveProfileKey / matchProfileKey); the server's resolve_profile_key must stay identical."
 gates_at_load:
   - "validateRequiredKeys at startup"
 related_surfaces:
@@ -1658,6 +1678,7 @@ fields:
   notes, createdDate
   greenBoxDisplayCenterX/Y, stageAnchorX/Y: "double -- overlay anchor"
   macroDisplayWidth/Height, macroPixelSizeUm: "int / double"
+  detector: "string -- camera in use when saved (savePreset stamps it when null); null = any camera (6f3444e4)"
 written_by:
   - "W3 MicroscopeAlignmentWorkflow.savePreset (on alignment success)"
 read_by:
@@ -1667,6 +1688,7 @@ read_by:
 invariants:
   - "Per (source-scanner, target-microscope) pair. Multiple presets allowed; getBestPresetForPair picks current."
   - "flipMacroX/Y is the optical flip on THE PRESET. Per-slide JSON stores its own snapshot of flip-at-alignment-time (see DS5)."
+  - "On a microscope with 2+ detectors and a known camera in use, presets with another camera's detector are skipped by getTransformsForMicroscope, the source-scanner list and getBestPresetForPair, and nameForPair never lets a new preset replace the other camera's same-name preset (otherCamera)."
 gates_at_load: []
 related_surfaces:
   - DS5 (per-slide JSON -- derived at alignment time from the preset)
@@ -1687,7 +1709,9 @@ fields:
   flipMacroY: "bool"
   pixel_frame: "string -- 'macro' here"
   objective: "string -- objective ID the alignment was built against (H8 advisory)"
-  detector: "string -- detector ID at alignment time"
+  detector: "string -- detector ID at alignment time; on a 2+ detector microscope a JSON from another camera is ignored by the loaders (otherCameraOf, 6f3444e4)"
+  focusZ: "double um -- focus seed; replaced by the multi-slide alignment check's refocused Z (updateSlideFocusZ)"
+  focusZCheckedAt: "ISO-8601 instant of that replacement; loadSlideFocusZCheckedSince(project, key, setupAt) returns focusZ only when newer than the set-up pass (89138ea3)"
   created: "ISO timestamp"
   flipFrameVerified: "bool -- true post-2026-05-19 fix"
 written_by:
@@ -1695,6 +1719,7 @@ written_by:
   - "W1e ManualAlignmentPath.createManualAlignment"
   - "W1d ExistingAlignmentPath.saveSlideAlignment"
   - "W1 ExistingImageWorkflowV2.saveRefinedAlignment (line 2943-3097, ONLY on refinement accepted; short-circuits on sub-acquisition)"
+  - "W1 ACQUIRE_ONLY alignment check: persistRefocusedSeed -> AffineTransformManager.updateSlideFocusZ (focusZ + focusZCheckedAt only; rest of the record untouched)"
 read_by:
   - "W1 via AlignmentHelper.checkForSlideAlignment (tier 1)"
   - "W21 StageMapWindow (source dropdown / Apply Flips)"
@@ -1924,6 +1949,8 @@ fields_examples:
   macroImagePixelSizeInMicrons, restitchPixelSize, restitchParallelAngles
   metadataPropagationPrefix, classList, modalityForAutomation
   activeBackgroundProfile (BackgroundProfiles.activeId), flatfieldMethod (NONE / BACKGROUND / BASIC), flatfieldProfileFolder
+  LastDetector (lastDetectorProperty) -- the camera in use on a multi-detector config; set by ActiveDetectorSync from GETCAM after each CONFIG, watched by MicroscopeConfigManager (a change reloads the config with that camera's per_detector values)
+  qpsc.cameraOrientationCopiedTo -- config paths the old camera-orientation preference was already copied into ('|'-separated)
   (about 300 public static accessors -- see PersistentPreferences.java; Java names use unit suffixes such as getMacroImagePixelSizeUm, the stored keys did not change)
 written_by:
   - "Various UI dialogs (SampleSetupController, AcquisitionWizardDialog, BackgroundCollectionController, etc.)"
@@ -1941,7 +1968,8 @@ category: preferences
 storage_kind: qupath_preferences
 fields_examples:
   # Stage polarity is NOT here: stage.polarity in the microscope config (DS3) since f326a092.
-  cameraOrientation
+  # Camera orientation is NOT here either: hardware.camera_orientation.<detector> in DS3 since 8acc5d54
+  # (the old cameraOrientationProperty pref is read only for the one-time copy into a config).
   microscopeServerHost, microscopeServerPort, autoConnectToServer
   microscopeConfigFile (path to YAML; applied at runtime by W43 Switch Microscope)
   projectsFolder
@@ -1971,9 +1999,8 @@ read_by:
   - "Every workflow"
 invariants:
   - "Stage polarity is read via StagePolarity.current() (DS3 stage.polarity) -- do NOT read polarity directly in new code for sign conventions (use StageImageTransform.current() -- see DS26)."
-  - "cameraOrientation composes with stage polarity through StageImageTransform; never read polarity booleans directly for live-view sign conventions."
 related_surfaces:
-  - DS26 (StageImageTransform composes DS3 stage.polarity + DS25 cameraOrientation)
+  - DS26 (StageImageTransform composes DS3 stage.polarity + DS3 hardware.camera_orientation)
 ```
 
 #### DS25a: Dialog position storage (JSON file)
@@ -2074,13 +2101,13 @@ read_by:
   - "Workflows that need active objective for pixel size / FOV lookups"
 ```
 
-#### DS26: StageImageTransform (composite, derived from DS25)
+#### DS26: StageImageTransform (composite, derived from DS3)
 
 ```yaml
 id: DS26
 category: in_memory
 storage_kind: derived
-location: "StageImageTransform.current() -- composes StagePolarity.current() (DS3 stage.polarity) + cameraOrientation (DS25)"
+location: "StageImageTransform.current() -- composes StagePolarity.current() (DS3 stage.polarity) + CameraOrientationSetting.current() (DS3 hardware.camera_orientation.<camera in use>)"
 fields:
   stagePolarity, cameraOrientation
   screenPanDeltaToMmDelta: function
@@ -2088,7 +2115,7 @@ fields:
   stitcherFlipFlags: bool[]
   cameraFlipFlags: bool[] (Stage Map Apply Flips; NOT stitcherFlipFlags)
 written_by:
-  - "Implicit via DS3 stage.polarity and the DS25 cameraOrientation setter"
+  - "Implicit via DS3 stage.polarity and hardware.camera_orientation (StagePolarity.save / CameraOrientationSetting.save)"
 read_by:
   - "Live Viewer joystick / WASD / click-to-center"
   - "Stitcher flip flag derivation"
@@ -2133,7 +2160,7 @@ fields:
   StageInsertRegistry.getAvailableInserts() -- carrier definitions
 written_by:
   - "show / hide / setBoundingBoxPreview / clearBoundingBoxPreview"
-  - "resetPollingErrors / resetWarningFlag"
+  - "resetPollingErrors (also on every accepted CONFIG, via MicroscopeSocketClient.addConfiguredListener) / resetWarningFlag"
 read_by:
   - "W1b MultiSlideExistingImageWorkflow (carrier dropdown)"
   - "W21 itself"
@@ -2173,7 +2200,7 @@ location: "qupath.ext.qpsc.service.microscope.MicroscopeSocketClient; Microscope
 fields:
   primary socket: acquisition / CONFIG / long-running ops
   aux socket: Live Viewer frames, stage polling
-  Command enum (8-byte verbs: CONFIG, GETXY, GETZ, MOVE, MOVEZ, ACQUIRE, BGACQUIRE, CANCEL, STATUS, PROGRESS, FLATFIT, FLATPOLL, LCCALIB, LCSWEEP, STRMAFZ, FINDTISS, ABORTAF, ...)
+  Command enum (8-byte verbs: CONFIG, GETXY, GETZ, MOVE, MOVEZ, ACQUIRE, BGACQUIRE, CANCEL, STATUS, PROGRESS, FLATFIT, FLATPOLL, LCCALIB, LCSWEEP, STRMAFZ, FINDTISS, ABORTAF, HWSTAT, ...)
   AcquisitionState, AcquisitionProgress
 written_by:
   - "MicroscopeController commands"
@@ -2446,8 +2473,8 @@ writes DS Y consumed by Consumer Z."
 | W1, W2, W14, W16 | DS30 (stitched OME-TIFF / ZARR) | QuPath project (new ProjectImageEntry) | Compression/format from DS25 |
 | W15 MakePortableWorkflow | DS30 (OME-TIFF replacements) | QuPath project | Surfaces tile folders when no ZARR remains |
 | Any dialog | DS24 (PersistentPreferences) | Workflow on next dialog open | Lightweight per-user prefs |
-| Any dialog | DS25 (QPPreferenceDialog) | EVERY workflow | Camera orientation, server settings, stitching format (stage polarity is DS3 stage.polarity) |
-| DS3 (stage.polarity) + DS25 (cameraOrientation) | DS26 (StageImageTransform) | W19 LiveViewer (joystick/WASD/click), stitcher flip flags, W21 Apply Flips (cameraFlipFlags) | Composes the two -- don't read polarity booleans directly |
+| Any dialog | DS25 (QPPreferenceDialog) | EVERY workflow | Server settings, stitching format (stage polarity and camera orientation are in DS3) |
+| DS3 (stage.polarity + hardware.camera_orientation) | DS26 (StageImageTransform) | W19 LiveViewer (joystick/WASD/click), stitcher flip flags, W21 Apply Flips (cameraFlipFlags) | Composes the two -- don't read polarity booleans directly |
 | Setup / startup (ModalityRegistry static block; ModalityUis.registerAll for the UI halves) | DS41 (ModalityRegistry) | EVERY acquisition workflow via getHandler; menu, dialogs, Live Viewer via getUi | Prefix match; NoOpModalityHandler / ModalityUi.NONE if unmatched |
 | User selection | DS42 (ModalityState) / DS42a (ObjectiveState) | EVERY workflow needing active modality / objective | Singleton |
 | W1c cross-scope | DS39 (CrossScopeTransformBuilder output) | W1 acquisition path | Uses source scope's stored offset |
@@ -2823,7 +2850,7 @@ two lines.
   in place when the OME-TIFF or OME-ZARR lands.
 
 - **StageImageTransform** -- Composite of stage polarity and camera
-  orientation (DS3 `stage.polarity` + DS25 cameraOrientation -> DS26). Single source of truth for all
+  orientation (DS3 `stage.polarity` + DS3 `hardware.camera_orientation` -> DS26). Single source of truth for all
   live-view sign conventions. Do not read polarity booleans directly.
 
 - **validateMMAgainstSelection** -- Wrapper around `QPScopeChecks.

@@ -334,6 +334,46 @@ hardware.set_active_camera('OWS3_PMT_BOTTOM_001')  # Switch active
 hardware.get_camera_for_detector('OWS3_DETECTOR_HAMAMATSU_001')  # Direct access
 ```
 
+### Two cameras, one config (`per_detector`)
+
+A microscope with two cameras on separate ports, each run by its own Micro-Manager configuration (the LC-PolScope: FLIR Oryx and Hamamatsu ORCA-Flash4.0), keeps **one** microscope config. Values that differ by camera sit in a `per_detector` block beside the shared value, keyed by detector ID, anywhere in the tree (a top-level block, a channel in a list, an objective):
+
+```yaml
+reconstruction:
+  black_level: 51
+  per_detector:
+    LCPS_DETECTOR_FLIR_ORYX_001: {black_level: 99}
+hardware:
+  objectives:
+  - id: LCPS_OBJECTIVE_20X_POL_001
+    mm_preset: {group: Objective, preset: 20x, motorized: false}
+    per_detector:
+      LCPS_DETECTOR_FLIR_ORYX_001:
+        mm_preset: {group: Objective Lens}
+```
+
+**Merge rules** (`config/DetectorOverlay.apply`, Java; `microscope_control.config.apply_detector_overlay`, Python; the two must stay identical): the active camera's block is merged into the map that holds it. Scalars are replaced, nested maps are merged by the same rules, and a `device_properties` list is merged by `(device, property)` (a matching entry replaced, new pairs appended). The `per_detector` block itself stays in the resolved map, so a writer can still find it. With no camera known, or one the block does not name, the shared values stand.
+
+**Which camera is in use** (Java):
+
+- `MicroscopeConfigManager` applies the overlay at load and on every `reload`, for `overlayDetector(raw)`: the only detector the config declares (`hardware.detectors`), or on a multi-camera config the `LastDetector` persistent preference when it names a declared detector; otherwise none.
+- `controller/ActiveDetectorSync` (registered in `SetupScope`) listens to `MicroscopeSocketClient.addConfiguredListener`. After every accepted CONFIG on a config with two or more detectors, it asks the server for the camera name (`getCameraName`) and records the detector whose `id_detector.<id>.device` equals it as `LastDetector`. No match logs a warning naming the camera and the declared detectors.
+- `MicroscopeConfigManager` watches `LastDetector` and reloads the config when it changes, so per-camera values follow the camera.
+- `MicroscopeConfigManager.activeDetectorForWriting()` returns the camera in use for writers and the other consumers below, or null when it is not known (never warns).
+- The server makes the same match (`_find_detector_id`) on CONFIG for its own copy of the config; see the command server README, "Two cameras, one config".
+
+**Acquisition profiles by camera.** `resolveProfileKey(modality, objective)` considers only the profiles whose `detector` field is the camera in use, plus those with no `detector` field (all profiles when the camera is not known). Among them it takes, in order: the first profile whose `modality` field equals the modality (case ignored) and whose `objective` field equals the objective; an exact modality-only key; the longest `<modality>_<suffix>` key whose suffix is in the objective ID; a case-insensitive prefix match. `findFirstProfileForModality` skips another camera's profiles the same way. Python's `resolve_profile_key` applies the same rule.
+
+**Writers.** LC calibration **Apply** (state `device_properties`, `mm_setup_presets`, the `reconstruction` calibration stamps), the exposure saves from the Live Viewer Camera tab and the LC state signal (`ConfigYamlEditor.setChannelExposureMs`, `setChannelDevicePropertyValue`) and the black level take the camera in use and write into the block's `per_detector.<camera>` entry **when that entry already holds the field** (`ConfigYamlEditor.blockPathFor`, `channelFieldScope`); otherwise they write the shared value. A config therefore decides, by what it puts under `per_detector`, which values are per camera.
+
+**Camera orientation** is per camera too, `hardware.camera_orientation.<detector>` (`geometry/CameraOrientationSetting`); see `COORDINATE_TRANSFORMS.md`, "Where the camera orientation lives".
+
+**Alignments by camera.** The two ports do not share an optical axis (about 4.8 mm apart in the LC-PolScope's stage frame), so one camera's alignment is millimeters off for the other. `AffineTransformManager.savePreset` stamps a `TransformPreset` with the camera in use (`detector`) when it has none; the per-slide alignment JSON already carried `detector`. On a microscope with two or more detectors, with the camera in use known, `otherCamera(recorded)` rejects a record made with a different camera: `getTransformsForMicroscope`, the source-scanner list and `getBestPresetForPair` skip such presets, the slide-alignment loaders skip such JSONs (logged as `Ignoring slide alignment ... made with camera ...`), and `nameForPair` does not let a new preset replace the other camera's preset of the same name. A record with no `detector`, a one-camera microscope, or an unknown camera in use is not filtered.
+
+### Hardware health (HWSTAT)
+
+`hardware/health.py` keeps one `HardwareHealth` tracker per server process for three parts: `camera`, `micromanager` and `stage`. It probes nothing. `PycromanagerCamera` records each snap's success or failure (`camera`), and a failure that looks like a Micro-Manager bridge timeout (`is_bridge_timeout`) also marks `micromanager`; the stage position cache does the same for bridge timeouts on its reads. A part is failing from its first failure after a success until its next success, with the time of the first failure, the failure count and the last message. The stage's state comes from the stage cache's own `down_status()` (failing after 3 consecutive failed reads). The command server reports a snapshot as `HWSTAT` (see `SOCKET_PROTOCOL.md`), and QPSC's Live Viewer shows it as a red line.
+
 ## Stage
 
 ```mermaid
@@ -706,4 +746,5 @@ The OWS3 config (`config_OWS3.yml`) is the reference example for dual-modality s
 | `hardware/rotation.py` | 270 | RotationStage ABC + PIZ/Thor/Dummy |
 | `hardware/illumination.py` | 243 | Illumination ABC + AnalogIllumination + LED/PockelsCell + DevicePropertyIllumination |
 | `hardware/detector.py` | 327 | Detector ABC + PMTDetector + DCUDetector |
+| `hardware/health.py` | 97 | Per-part failure tracker (camera, Micro-Manager bridge, stage) behind HWSTAT |
 | `hardware/pycromanager.py` | 1451 | PycromanagerHardware (composes all above, factory registries, mode setup, safety interlock) |

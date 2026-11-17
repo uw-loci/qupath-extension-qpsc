@@ -208,7 +208,7 @@ graph TB
 |----------|------|-----------|
 | What it is | Optical mirror in light path | Stage axis direction convention |
 | What it affects | Pixel-to-stage transform direction | Tile traversal order, transform sign |
-| Where configured | `TransformPreset.flipMacroX/Y` in `saved_transforms.json`; mirrored on each per-slide alignment JSON | QuPath preferences per microscope |
+| Where configured | `TransformPreset.flipMacroX/Y` in `saved_transforms.json`; mirrored on each per-slide alignment JSON | `stage.polarity` in the microscope config |
 | Applied when | Each save site writes the transform in the frame of the entry it operates on; `AlignmentHelper.checkForSlideAlignment` loads it as-is (no bake) | Computing tile grid positions |
 | Storage post Step B | Per-pair preset + per-slide JSON `flipMacroX/Y` documents the frame. **Not** per-image metadata; per-image `FLIP_X/FLIP_Y` is no longer load-bearing for new code (legacy projects may still carry it). | Auto-detected from `StageInsert` calibration when YAML has `slide_holder`/`inserts`; the synthesized-insert path (`StageInsertRegistry.synthesizeFromStageLimits`, used when YAML has only `stage.limits`) takes inversion from the stage polarity (`stage.polarity` in the microscope config) instead. |
 
@@ -263,7 +263,7 @@ Skipped with a written reason instead of guessed: rotated working entries (base 
 
 ## Camera-orientation calibration (Calibrate Directions tool)
 
-`StageDirectionCalibrationDialog` (`ui/alignment/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing `Camera orientation`. It runs in two places:
+`StageDirectionCalibrationDialog` (`ui/alignment/StageDirectionCalibrationDialog.java`) is the interactive replacement for hand-editing the camera orientation. It runs in two places:
 
 - **Setup Wizard**, as `StageCalibrationStep` (`ui/setupwizard/StageCalibrationStep.java`), inserted between `StageStep` and `ProbeStageAfStep`.
 - **Live Viewer**, as the **Calibrate Directions...** button below the arrow grid in the Navigate tab (`ui/liveviewer/StageControlPanel.java`).
@@ -287,7 +287,20 @@ For these paths, picking a polarity that is *mathematically equivalent through `
 2. Issues `MicroscopeController.moveStageXY(curX + step, curY)` (the same code path the arrow buttons use), then asks the user which of Left / Right / Up / Down the tissue in the image appeared to move in (the opposite of the view's pan).
 3. Repeats for `+Y`.
 4. Calls `backSolve(xObserved, yObserved, currentPolarity)` -- walks the 8 `CameraOrientation` values and returns the unique one whose composite with the user's current `StagePolarity` reproduces both observations.
-5. Writes the result: `StagePolarity.save(polarity)` only when the polarity differs (the manual override path; it writes `stage.polarity` to the active config), and `setCameraOrientationProperty(orientation)`.
+5. Writes the result: `StagePolarity.save(polarity)` only when the polarity differs (the manual override path; it writes `stage.polarity` to the active config), and `CameraOrientationSetting.save(orientation)`, which writes `hardware.camera_orientation.<detector>` for the camera in use to the active config, reloads it and notifies the change listeners (the Stage Map's Apply Flips). It refuses (an error dialog) when the camera in use is not known yet, which on a two-camera config means before the first connect.
+
+### Where the camera orientation lives
+
+The camera orientation is per camera, in the microscope config:
+
+```yaml
+hardware:
+  camera_orientation:
+    LCPS_DETECTOR_HAMAMATSU_FLASH_001: FLIP_V
+    LCPS_DETECTOR_FLIR_ORYX_001: NORMAL
+```
+
+`CameraOrientationSetting.current()` returns the value for the camera in use (`MicroscopeConfigManager.activeDetectorForWriting()`: the only declared detector, or on a multi-camera config the one `ActiveDetectorSync` recorded from Micro-Manager's camera on connect). `StageImageTransform.current()` composes it with `StagePolarity.current()`, and `LightPath.detectorGeometry(id)` uses `forDetector(id)` for another camera. No value for the camera in use reads as `NORMAL` with one warning per config and camera. It used to be one QuPath preference (`cameraOrientationProperty`) per install; the first time a config has no value for the camera in use, that preference's value is copied in once per config file (recorded in the `qpsc.cameraOrientationCopiedTo` preference), never into the bundled demo or offline config, which declare `NORMAL`. A microscope switch reads the new config's value; `addChangeListener` fires only on `save`.
 
 ### Predicting tissue motion
 
@@ -508,5 +521,7 @@ is axis-aligned with the QuPath image; the alignment transform's rotation dispro
 | `controller/workflow/StitchingHelper.java` | `autoRegisterBoundsTransformIfAvailable` — BoundingBox auto-registration; saves with `metadata.flipX/Y` |
 | `model/StitchingMetadata.java` | Carries optional stage bounds **and** `flipX/Y` through the stitch path |
 | `controller/BoundedAcquisitionWorkflow.java` | Passes `(x1, y1, x2, y2)` into the bounds-aware `performRegionStitching` overload |
-| `preferences/QPPreferenceDialog.java` | Stage inversion flags |
+| `geometry/StagePolarity.java` | Stage polarity, `stage.polarity` in the microscope config |
+| `geometry/CameraOrientationSetting.java` | Camera orientation of the camera in use, `hardware.camera_orientation.<detector>` in the microscope config |
+| `controller/workflow/ClickPositionRefinement.java` | One-click translation refinement: keeps the initial transform's linear part, solves the translation so the clicked pixel maps to the current stage position (`addTranslationToScaledAffine`, as single-tile refinement) |
 | `config/MicroscopeConfigManager.java` | Per-detector flip lookup (legacy fallback) |

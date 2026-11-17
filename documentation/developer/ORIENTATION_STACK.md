@@ -59,7 +59,7 @@ Four factors stack along the light path, plus the macro-image flip that orients 
 | 1a | **Scope type** | Upright (objective above, face up) vs inverted (objective below, face down). Mirrors the *naked-eye* view of the slide on the stage; leaves the camera view of a given feature unchanged (coverslip always faces the objective). | YAML `light_path.scope_type` -> `LightPathModel.scopeType()` | encoded |
 | 1b | **Slide insertion** | Which side the label is on -- the two ways a slide drops into the holder (an in-plane 180). With scope type, spans all four axis-aligned orientations; there is **no separate turn-over axis** (turning a slide over its long vs short axis == an in-plane 180 == insertion). | YAML `light_path.slide_insertion` -> `LightPathModel.slideInsertion()` | encoded |
 | 2 | **Optical flip** | Objective + tube-lens parity -- the camera-vs-stage flip. **This is why a scope needs a distinct Camera View at all** (e.g. PPM objective inversion = 180/XY). Display only. | YAML `light_path.optical_flip` -> `LightPathModel.opticalFlip()` (the per-detector `flip_x/flip_y` stays for macro resolution) | encoded |
-| 3 | **Camera orientation** | Camera mounting rotation on the port. | `CameraOrientation` pref -> `QPPreferenceDialog.getCameraOrientationProperty()` | pref (NORMAL both rigs) |
+| 3 | **Camera orientation** | Camera mounting rotation on the port. One value per camera. | `hardware.camera_orientation.<detector>` in the microscope config -> `CameraOrientationSetting.current()` (the camera in use) / `forDetector(id)`; written by Calibrate Directions (`CameraOrientationSetting.save`) | config, per camera |
 | 4 | **Stage polarity** | Physical stage direction for a `+X/+Y` command. **Net of MicroManager's own axis inversion** (e.g. OWS3 inverts X in MM) plus wiring -- detected from behavior, so never add a QPSC flip to compensate for the MM invert. Settled: unchanged across all working versions. | `stage.polarity` in the microscope config -> `StagePolarity.current()` (a preference until 2026-10-27) | config |
 | + | **Macro image flip** | Parity between a scanner's macro image and the target microscope. Per `(source-scanner, target)` pair, applied to overlay pixels only -- **not** a camera-vs-stage flip. | Active `TransformPreset.flipMacroX/Y` -> `FlipResolver` | per-preset |
 
@@ -92,16 +92,16 @@ Four factors stack along the light path, plus the macro-image flip that orients 
 
 ### Known values
 
-| Rig | Scope | Insertion | Optical flip | Camera | Polarity |
+| Rig | Scope | Insertion | Optical flip | Camera (`hardware.camera_orientation`) | Polarity |
 |-----|-------|-----------|--------------|--------|----------|
 | **PPM**  | upright | **B** | **180 / XY** (objective inversion) | NORMAL | NORMAL |
 | **OWS3** | inverted | A | `xy` in `config_OWS3.yml` since 2026-08-09; the Camera View check against the Live Viewer is still owed (see the 2026-10-27 report) | NORMAL | INVERT_XY (gives Stage View its 180, 2026-10-27) |
-| **LC-PolScope** (both cameras) | inverted | A | **`y`** (2026-10-27: with `none` the Camera View macro was mirrored top/bottom against the Live Viewer) | FLIP_V (Calibrate Directions, 2026-10-19) | INVERT_Y (also gives Stage View its Y mirror) |
+| **LC-PolScope** (both cameras) | inverted | A | **`y`** (2026-10-27: with `none` the Camera View macro was mirrored top/bottom against the Live Viewer) | FLIP_V (Calibrate Directions, 2026-10-19, when it was one shared preference; the one-time copy gives it to the camera in use at first start, and the other camera needs its own Calibrate Directions run) | INVERT_Y (also gives Stage View its Y mirror) |
 
 PPM was pinned by matching the simulator. The optical value on the other rigs is the *net* the
 operator observes by holding the Stage Map's Camera View next to the Live Viewer; the
 camera-vs-optical split is unknown and does not need splitting. It is display only: alignment
-and acquisition read the two preferences, so a wrong value here cannot move the stage. The
+and acquisition read the camera orientation and the stage polarity, so a wrong value here cannot move the stage. The
 LC-PolScope also carries `stage_view_flip: y`, so until 2026-10-27 its two views were the same
 picture (camera Y flip = Stage View mirror); with `optical_flip: y` Camera View is now the
 unmirrored stage frame and the two views differ, which is the expected state on an inverted
@@ -177,7 +177,7 @@ initial setup. Where each factor lives today:
 
 - Factors 1 and 2 (scope type, slide insertion, optical flip): **per-microscope YAML `light_path`
   block** (done).
-- Factor 3 (camera): **install-wide pref**, auto-detected. Factor 4 (polarity): **per-microscope config** (`stage.polarity`, since 2026-10-27); polarity is settled.
+- Factor 3 (camera): **per-microscope config, per camera** (`hardware.camera_orientation.<detector>`), written by Calibrate Directions for the camera in use. It was one install-wide preference; `CameraOrientationSetting` copies that preference's value into a config once, the first time the config has no value for the camera in use (never into the bundled demo/offline configs, which declare `NORMAL`). Factor 4 (polarity): **per-microscope config** (`stage.polarity`, since 2026-10-27); polarity is settled.
 
 Decisions locked (2026-08-07):
 

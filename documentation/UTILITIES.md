@@ -130,9 +130,8 @@ camera is `DCam` or `DMonoCam`; a server with any other camera is refused with a
 switches to the demo configuration through Switch Microscope, or just reconnects if the demo
 is already active; sets the Live Viewer's remembered exposure to the demo's 10 ms; applies
 the profile of the modality the Live Viewer remembers, so the simulated camera and lights
-match what it shows; sets the camera orientation preference to the demo's (NORMAL), keeping your
-microscope's value and putting it back when you switch to another microscope (the demo's
-config carries its own stage polarity, `NORMAL`); opens the Live Viewer. On success a notification reads *Started the demo server and connected.* or
+match what it shows (the demo's config carries its own camera orientation and stage polarity,
+both `NORMAL`); opens the Live Viewer. On success a notification reads *Started the demo server and connected.* or
 *Connected to the server already running on port 5000.*; the second means QPSC reused a
 demo server that was already running.
 
@@ -463,6 +462,7 @@ Re-run stitching on previously acquired tiles when the initial stitching failed 
 - **Output format selection:** OME_TIFF (single file) or OME_ZARR (directory format)
 - **Compression tuning:** Options filtered by format (TIFF: LZW, JPEG, J2K, zstd; ZARR: LZW, ZLIB, Uncompressed)
 - **Automatic project import:** Stitched images are added to the project using your configured naming conventions
+- **Fills an unfilled placeholder:** when the failed run left a pending or failed project entry for an output (same sample, region, angle and objective), the stitched image fills that entry under its name instead of being added as a second entry. When more than one entry could match, it is added as a new entry.
 
 **Access:** Extensions > QP Scope > Utilities > Project Tools > Re-stitch Tiles...
 
