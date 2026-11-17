@@ -208,8 +208,10 @@ public class LiveViewerWindow {
     private ScheduledExecutorService framePoller;
     private ScheduledExecutorService hardwareStatusPoller;
     private Label hardwareBanner;
-    /** False once the server has not answered HWSTAT (one older than the command): stop asking. */
+    /** False once the server has left HWSTAT unanswered three times running (one older than the command). */
     private volatile boolean hardwareStatusSupported = true;
+
+    private int hardwareStatusMisses = 0;
 
     private ExecutorService histogramExecutor;
 
@@ -3059,11 +3061,17 @@ public class LiveViewerWindow {
             if (c != null && c.isConnected()) {
                 java.util.Optional<com.google.gson.JsonObject> report = c.getHardwareStatus();
                 if (report.isEmpty()) {
-                    hardwareStatusSupported = false;
-                    logger.info("The server does not report hardware status (HWSTAT); no banner");
+                    if (++hardwareStatusMisses >= 3) {
+                        hardwareStatusSupported = false;
+                        logger.info("The server left hardware status (HWSTAT) unanswered three times; no banner");
+                    }
                     return;
                 }
-                text = HardwareStatusText.describe(report.get(), java.time.ZoneId.systemDefault());
+                hardwareStatusMisses = 0;
+                text = report.get().has("error")
+                        ? "Server connected; hardware status unavailable: "
+                                + report.get().get("error").getAsString()
+                        : HardwareStatusText.describe(report.get(), java.time.ZoneId.systemDefault());
             }
         } catch (Exception e) {
             logger.debug("Hardware status not read: {}", e.getMessage());

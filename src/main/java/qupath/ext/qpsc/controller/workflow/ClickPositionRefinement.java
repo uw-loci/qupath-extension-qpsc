@@ -101,6 +101,8 @@ public final class ClickPositionRefinement {
         java.util.concurrent.atomic.AtomicReference<AffineTransform> pending =
                 new java.util.concurrent.atomic.AtomicReference<>();
         QuPathViewer viewer = gui != null ? gui.getViewer() : null;
+        // The image the alignment belongs to: a click on any other image means nothing here.
+        Object slideImage = viewer != null ? viewer.getImageData() : null;
         java.util.concurrent.atomic.AtomicReference<EventHandler<MouseEvent>> viewerHandler =
                 new java.util.concurrent.atomic.AtomicReference<>();
 
@@ -126,6 +128,11 @@ public final class ClickPositionRefinement {
                 return;
             }
             e.consume();
+            if (viewer.getImageData() != slideImage) {
+                status.setText("That is not the slide being aligned. Open it again and Shift+click on it, or "
+                        + "Shift+click on the Stage Map.");
+                return;
+            }
             Point2D p = viewer.componentPointToImagePoint(e.getX(), e.getY(), null, true);
             onPixel(new double[] {p.getX(), p.getY()}, "slide image", initialTransform, status, use, pending);
         });

@@ -1169,10 +1169,53 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * {@code camera} and {@code micromanager}, each {@code {ok, since, message, failures}},
      * from failures the server has already seen (it probes nothing, so it answers at once).
      *
-     * @return the reply, or empty when the server did not answer (one older than the command)
+     * <p>Sent on the auxiliary socket, which the Live Viewer already polls, so a frequent status
+     * request never sits between a command and its reply on the primary. When no reply comes
+     * within 3 s (a server older than the command, or a stalled one) the auxiliary connection is
+     * closed and reopened, so a late reply cannot be read as the answer to the next command.
+     *
+     * @return the reply, or empty when the server did not answer in time
      */
     public Optional<com.google.gson.JsonObject> getHardwareStatus() throws IOException {
-        return requestJsonReport(Command.HWSTAT, null, 3_000);
+        synchronized (auxSocketLock) {
+            ensureAuxConnected();
+            int restoreTimeout = -1;
+            try {
+                if (auxSocket != null) {
+                    restoreTimeout = auxSocket.getSoTimeout();
+                    auxSocket.setSoTimeout(3_000);
+                }
+                auxOutput.write(Command.HWSTAT.getValue());
+                auxOutput.flush();
+                int length = auxInput.readInt();
+                if (length <= 0 || length > 1_000_000) {
+                    cleanupAuxiliary();
+                    return Optional.empty();
+                }
+                byte[] body = new byte[length];
+                auxInput.readFully(body);
+                return Optional.of(com.google.gson.JsonParser.parseString(new String(body, StandardCharsets.UTF_8))
+                        .getAsJsonObject());
+            } catch (SocketTimeoutException e) {
+                logger.debug("HWSTAT: no reply within 3 s; reopening the auxiliary connection");
+                cleanupAuxiliary();
+                return Optional.empty();
+            } catch (JsonSyntaxException | IllegalStateException e) {
+                cleanupAuxiliary();
+                throw new IOException("HWSTAT reply is not a JSON object: " + e.getMessage(), e);
+            } catch (IOException e) {
+                cleanupAuxiliary();
+                throw e;
+            } finally {
+                if (auxSocket != null && restoreTimeout >= 0) {
+                    try {
+                        auxSocket.setSoTimeout(restoreTimeout);
+                    } catch (IOException e) {
+                        logger.debug("Failed to restore aux socket timeout after HWSTAT", e);
+                    }
+                }
+            }
+        }
     }
 
     /**
