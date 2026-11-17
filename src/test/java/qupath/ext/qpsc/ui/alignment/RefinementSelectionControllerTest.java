@@ -33,7 +33,8 @@ class RefinementSelectionControllerTest {
     @DisplayName("RefinementChoice enum has all expected values")
     void testRefinementChoiceValues() {
         RefinementChoice[] values = RefinementChoice.values();
-        assertEquals(4, values.length);
+        assertEquals(5, values.length);
+        assertNotNull(RefinementChoice.valueOf("CLICK_POSITION"));
         assertNotNull(RefinementChoice.valueOf("NONE"));
         assertNotNull(RefinementChoice.valueOf("SINGLE_TILE"));
         assertNotNull(RefinementChoice.valueOf("MULTI_TILE"));

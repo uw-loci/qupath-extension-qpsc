@@ -41,7 +41,7 @@ class ExistingImageAcquisitionControllerTest {
     @Test
     @DisplayName("All RefinementChoice values are present")
     void testRefinementChoiceValuesCount() {
-        assertEquals(4, RefinementChoice.values().length);
+        assertEquals(5, RefinementChoice.values().length);
     }
 
     @Test

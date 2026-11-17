@@ -1660,6 +1660,7 @@ public class ExistingImageWorkflowV2 {
                 case NONE -> RefinementSelectionController.RefinementChoice.NONE;
                 case SINGLE_TILE -> RefinementSelectionController.RefinementChoice.SINGLE_TILE;
                 case MULTI_TILE -> RefinementSelectionController.RefinementChoice.MULTI_TILE;
+                case CLICK_POSITION -> RefinementSelectionController.RefinementChoice.CLICK_POSITION;
                 case FULL_MANUAL -> RefinementSelectionController.RefinementChoice.FULL_MANUAL;
             };
         }
@@ -2871,6 +2872,12 @@ public class ExistingImageWorkflowV2 {
                     logger.info("Performing multi-tile refinement");
                     return performSingleTileRefinement(state);
 
+                case CLICK_POSITION:
+                    // Same frame checks and save path; the correction comes from one click on the
+                    // slide image or the Stage Map at the current stage position.
+                    logger.info("Performing click-position refinement");
+                    return performSingleTileRefinement(state);
+
                 case FULL_MANUAL:
                     logger.info("Full manual alignment requested - switching to manual path");
                     return processManualAlignmentPath(state);
@@ -3061,9 +3068,12 @@ public class ExistingImageWorkflowV2 {
             // only shifts the offset. Multi-tile is required when a slide has play in its holder
             // slot -- single-tile is zero error at the picked tile but grows with distance.
             CompletableFuture<SingleTileRefinement.RefinementResult> refineFuture =
-                    state.refinementChoice == RefinementSelectionController.RefinementChoice.MULTI_TILE
-                            ? MultiTileRefinement.performRefinement(gui, state.annotations, state.transform)
-                            : SingleTileRefinement.performRefinement(gui, state.annotations, state.transform);
+                    switch (state.refinementChoice) {
+                        case MULTI_TILE ->
+                            MultiTileRefinement.performRefinement(gui, state.annotations, state.transform);
+                        case CLICK_POSITION -> ClickPositionRefinement.performRefinement(gui, state.transform);
+                        default -> SingleTileRefinement.performRefinement(gui, state.annotations, state.transform);
+                    };
             return refineFuture
                     .thenCompose(result -> {
                         if (result != null) {

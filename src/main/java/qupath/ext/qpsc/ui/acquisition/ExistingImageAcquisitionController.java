@@ -75,6 +75,7 @@ public class ExistingImageAcquisitionController {
         NONE("Proceed without refinement"),
         SINGLE_TILE("Single-tile refinement"),
         MULTI_TILE("Multi-tile refinement"),
+        CLICK_POSITION("Click the stage position"),
         FULL_MANUAL("Full manual alignment");
 
         private final String displayName;
@@ -265,6 +266,7 @@ public class ExistingImageAcquisitionController {
         switch (refinement == null ? RefinementChoice.NONE : refinement) {
             case SINGLE_TILE -> steps.add("refine on one tile");
             case MULTI_TILE -> steps.add("refine on two or more tiles");
+            case CLICK_POSITION -> steps.add("correct it from one click at the stage position");
             case FULL_MANUAL -> steps.add("realign it by hand");
             case NONE -> {}
         }
@@ -327,6 +329,7 @@ public class ExistingImageAcquisitionController {
         private RadioButton noRefineRadio;
         private RadioButton singleTileRadio;
         private RadioButton multiTileRadio;
+        private RadioButton clickPositionRadio;
         private RadioButton fullManualRadio;
         private Label refinementRecommendationLabel;
         private VBox refinementBox;
@@ -881,9 +884,13 @@ public class ExistingImageAcquisitionController {
             multiTileRadio = new RadioButton("Multi-tile refinement (+4-6 min)");
             multiTileRadio.setToggleGroup(refinementGroup);
 
+            clickPositionRadio = new RadioButton("Click the stage position (+1 min)");
+            clickPositionRadio.setToggleGroup(refinementGroup);
+
             fullManualRadio = new RadioButton("Full manual alignment (+10-15 min)");
             fullManualRadio.setToggleGroup(refinementGroup);
-            for (RadioButton rb : List.of(noRefineRadio, singleTileRadio, multiTileRadio, fullManualRadio)) {
+            for (RadioButton rb :
+                    List.of(noRefineRadio, singleTileRadio, multiTileRadio, clickPositionRadio, fullManualRadio)) {
                 // onAction fires on a click or a key press, not on setSelected from code.
                 rb.setOnAction(e -> {
                     refinementChosenByOperator = true;
@@ -904,6 +911,12 @@ public class ExistingImageAcquisitionController {
             Label multiTileDesc = new Label(
                     "    2+ tiles - corrects rotation + scale (slide play in a holder slot). Accuracy: +/- 3 um");
             multiTileDesc.setStyle(subtleTextStyle());
+
+            Label clickPositionDesc =
+                    new Label("    Drive the stage to a spot you recognize, then click it on the slide"
+                            + " image or the Stage Map (offset only).\n    Accuracy: as good as the click on the slide image;"
+                            + " tens of um on the Stage Map");
+            clickPositionDesc.setStyle(subtleTextStyle());
 
             Label fullManualDesc = new Label("    Complete re-alignment. Accuracy: +/- 2 um");
             fullManualDesc.setStyle(subtleTextStyle());
@@ -926,6 +939,8 @@ public class ExistingImageAcquisitionController {
                             singleTileDesc,
                             multiTileRadio,
                             multiTileDesc,
+                            clickPositionRadio,
+                            clickPositionDesc,
                             fullManualRadio,
                             fullManualDesc,
                             refinementRecommendationLabel);
@@ -1398,6 +1413,7 @@ public class ExistingImageAcquisitionController {
             switch (recommended) {
                 case SINGLE_TILE -> singleTileRadio.setSelected(true);
                 case MULTI_TILE -> multiTileRadio.setSelected(true);
+                case CLICK_POSITION -> clickPositionRadio.setSelected(true);
                 case FULL_MANUAL -> fullManualRadio.setSelected(true);
                 default -> noRefineRadio.setSelected(true);
             }
@@ -1411,6 +1427,9 @@ public class ExistingImageAcquisitionController {
             }
             if (multiTileRadio.isSelected()) {
                 return RefinementChoice.MULTI_TILE;
+            }
+            if (clickPositionRadio.isSelected()) {
+                return RefinementChoice.CLICK_POSITION;
             }
             if (fullManualRadio.isSelected()) {
                 return RefinementChoice.FULL_MANUAL;

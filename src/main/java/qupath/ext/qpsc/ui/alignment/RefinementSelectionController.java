@@ -51,6 +51,8 @@ public class RefinementSelectionController {
         SINGLE_TILE("Single-tile refinement"),
         /** Correct rotation + scale from 2+ measured tiles (for slide play in a holder slot) */
         MULTI_TILE("Multi-tile refinement"),
+        /** Drive the stage to a recognizable spot, then click it on the slide image or Stage Map (translation only) */
+        CLICK_POSITION("Click the stage position"),
         /** Start completely fresh with full manual alignment */
         FULL_MANUAL("Full manual alignment");
 

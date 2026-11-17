@@ -297,6 +297,8 @@ public class StageMapCanvas extends StackPane {
 
     // ========== Callback ==========
     private BiConsumer<Double, Double> clickHandler;
+    /** One-shot: the next single click delivers its stage point here instead of doing anything else. */
+    private java.util.function.Consumer<double[]> positionPick;
 
     // Initial size preferences
     private double initialWidth = 400;
@@ -454,6 +456,15 @@ public class StageMapCanvas extends StackPane {
             if (panning) {
                 return;
             }
+            if (positionPick != null && e.getClickCount() == 1 && currentInsert != null) {
+                double[] stageCoords = screenToStage(e.getX(), e.getY());
+                if (stageCoords != null) {
+                    java.util.function.Consumer<double[]> pick = positionPick;
+                    positionPick = null;
+                    pick.accept(stageCoords);
+                }
+                return;
+            }
             if (e.getClickCount() == 2 && clickHandler != null && currentInsert != null) {
                 double[] stageCoords = screenToStage(e.getX(), e.getY());
                 if (stageCoords != null) {
@@ -597,6 +608,14 @@ public class StageMapCanvas extends StackPane {
      */
     public void setClickHandler(BiConsumer<Double, Double> handler) {
         this.clickHandler = handler;
+    }
+
+    /**
+     * Arms (non-null) or clears (null) a one-shot pick: the next single click on the map hands its
+     * stage point to {@code pick} and does not move the stage.
+     */
+    public void setPositionPick(java.util.function.Consumer<double[]> pick) {
+        this.positionPick = pick;
     }
 
     /**

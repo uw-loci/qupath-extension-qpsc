@@ -2370,6 +2370,33 @@ public class StageMapWindow {
         }
     }
 
+    /**
+     * Makes the next single click on the Stage Map (if it is open) report the stage point under
+     * the cursor to {@code pick} rather than move there. Used by the one-click rough alignment.
+     */
+    public static void armPositionPick(java.util.function.Consumer<double[]> pick) {
+        Platform.runLater(() -> {
+            StageMapWindow w = instance;
+            if (w != null && w.canvas != null) {
+                w.canvas.setPositionPick(pick);
+                w.statusLabel.setText("Click the spot the stage is on, on the slide overview");
+                w.statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
+            }
+        });
+    }
+
+    /** Clears a pick {@link #armPositionPick} set and not yet used. */
+    public static void disarmPositionPick() {
+        Platform.runLater(() -> {
+            StageMapWindow w = instance;
+            if (w != null && w.canvas != null) {
+                w.canvas.setPositionPick(null);
+                w.statusLabel.setText("");
+                w.statusLabel.setStyle("");
+            }
+        });
+    }
+
     private void handleCanvasClick(double stageX, double stageY) {
         // Block navigation during active acquisition. The local flag can
         // desync from the server if a cancellation path skips the cleanup
