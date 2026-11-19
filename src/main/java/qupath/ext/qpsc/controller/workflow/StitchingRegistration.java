@@ -84,6 +84,25 @@ public final class StitchingRegistration {
     }
 
     /**
+     * An Apply mode for the solution beside the tiles, or null when there is none. Handing a
+     * target Apply with no file makes it log a missing-file warning and stitch at nominal anyway.
+     */
+    static Object existingSolutionMode(Path tileBaseDir) {
+        Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
+        return Files.exists(solutionFile) ? TileRegistrationSupport.applyMode(solutionFile) : null;
+    }
+
+    /**
+     * Whether the grid is a single tile, which has no neighbor to register against. An unreadable
+     * or missing tile configuration (count 0) is not treated as single, so registration runs as
+     * before.
+     */
+    static boolean singleTile(Path tileBaseDir) {
+        return qupath.ext.qpsc.utilities.MinorFunctions.countTifEntriesInTileConfig(List.of(tileBaseDir.toString()))
+                == 1;
+    }
+
+    /**
      * Attach a registration mode chosen by {@link #stitchTargets} (or null) to a config a caller is
      * about to stitch itself. Lets a path that builds its own config and calls the stitcher directly
      * still participate in the barrier without touching the version-isolation class. A no-op for a
@@ -197,9 +216,7 @@ public final class StitchingRegistration {
         // split/merge) would otherwise silently mis-associate them.
         List<String> results = new ArrayList<>(Collections.nCopies(total, null));
         if (total == 0) {
-            Object mode = enabled()
-                    ? TileRegistrationSupport.applyMode(tileBaseDir.resolve(TileRegistrationSupport.solutionFileName()))
-                    : null;
+            Object mode = enabled() ? existingSolutionMode(tileBaseDir) : null;
             return new Batch(
                     results,
                     stitchInParallel(targets, List.of(), mode, maxConcurrency, 0, stitcher, results, extras),
@@ -209,7 +226,12 @@ public final class StitchingRegistration {
         int reference = (referenceIndex >= 0 && referenceIndex < total) ? referenceIndex : 0;
         List<Integer> remaining = new ArrayList<>(total);
         Object applyMode = null;
-        if (enabled()) {
+        boolean register = enabled();
+        if (register && singleTile(tileBaseDir)) {
+            logger.info("Tile registration: one tile, nothing to register; stitching at its nominal position");
+            register = false;
+        }
+        if (register) {
             Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
             logger.info(
                     "Tile registration enabled: solving on target {} of {} ('{}'), then reusing that solve",
@@ -224,9 +246,9 @@ public final class StitchingRegistration {
                             TileRegistrationSupport.solveMode(solutionFile),
                             1,
                             total));
-            // If the solve failed the solution file will be absent; the remaining targets then warn
-            // and stitch at nominal, which still leaves every target mutually consistent (none moved).
-            applyMode = TileRegistrationSupport.applyMode(solutionFile);
+            // A failed solve leaves no file: the remaining targets then stitch at nominal, still
+            // mutually consistent (none moved), without each one warning that the file is missing.
+            applyMode = existingSolutionMode(tileBaseDir);
             for (int i = 0; i < total; i++) {
                 if (i != reference) {
                     remaining.add(i);
@@ -303,7 +325,7 @@ public final class StitchingRegistration {
             TargetStitcher<String> stitcher,
             Extras extras) {
         List<String> results = new ArrayList<>(Collections.nCopies(channels.size(), null));
-        if (channels.isEmpty() || !enabled() || alignOn.isEmpty()) {
+        if (channels.isEmpty() || !enabled() || alignOn.isEmpty() || singleTile(tileBaseDir)) {
             return stitchTargets(channels, tileBaseDir, maxConcurrency, 0, stitcher, extras);
         }
         if (!channelSolveSupported()) {
@@ -318,10 +340,11 @@ public final class StitchingRegistration {
         }
 
         Path solutionFile = tileBaseDir.resolve(TileRegistrationSupport.solutionFileName());
-        // If the solve fails no file exists (it is deleted first), so every channel's Apply warns and
-        // stitches at nominal -- still mutually consistent, since none of them moved.
-        ChannelRegistrationSupport.solve(tileBaseDir, channels, alignOn, pixelSizeUm, downsample, solutionFile);
-        Object applyMode = TileRegistrationSupport.applyMode(solutionFile);
+        // If the solve fails no file exists (it is deleted first), so every channel stitches at
+        // nominal -- still mutually consistent, since none of them moved.
+        boolean solved =
+                ChannelRegistrationSupport.solve(tileBaseDir, channels, alignOn, pixelSizeUm, downsample, solutionFile);
+        Object applyMode = solved ? TileRegistrationSupport.applyMode(solutionFile) : null;
         List<Integer> all = new ArrayList<>(channels.size());
         for (int i = 0; i < channels.size(); i++) {
             all.add(i);

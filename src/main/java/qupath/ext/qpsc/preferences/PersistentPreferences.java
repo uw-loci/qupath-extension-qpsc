@@ -1842,7 +1842,7 @@ public class PersistentPreferences {
     private static final BooleanProperty timeLapseEnabledProperty =
             PathPrefs.createPersistentPreference("qpscTimeLapseEnabled", false);
     private static final IntegerProperty timeLapseTimepointsProperty =
-            PathPrefs.createPersistentPreference("qpscTimeLapseTimepoints", 1);
+            PathPrefs.createPersistentPreference("qpscTimeLapseTimepoints", 2);
     private static final DoubleProperty timeLapseIntervalSecProperty =
             PathPrefs.createPersistentPreference("qpscTimeLapseIntervalSec", 60.0);
     private static final StringProperty timeLapseProjectionProperty =

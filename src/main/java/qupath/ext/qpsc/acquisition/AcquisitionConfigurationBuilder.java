@@ -495,6 +495,12 @@ public class AcquisitionConfigurationBuilder {
         if (PersistentPreferences.isTimeLapseEnabled()) {
             int timepoints = PersistentPreferences.getTimeLapseTimepoints();
             double intervalSec = PersistentPreferences.getTimeLapseIntervalSec();
+            if (timepoints < 2) {
+                logger.warn(
+                        "Time-lapse is on with {} timepoint(s): the run takes a single pass. Set 2 or more "
+                                + "timepoints in the acquisition dialog's Time-lapse section.",
+                        timepoints);
+            }
             acquisitionBuilder.timeLapse(timepoints, intervalSec);
             String timeProjection = timeProjectionCode(PersistentPreferences.getTimeLapseProjection());
             acquisitionBuilder.timeProjection(timeProjection);

@@ -223,8 +223,8 @@ public class TileProcessingUtilities {
                 + annotationName;
         String stitchedFolder = projectsFolderPath + File.separator + sampleLabel + File.separator + "SlideImages";
 
-        logger.info("Tile folder: {}", tileFolder);
-        logger.info("Output folder: {}", stitchedFolder);
+        logger.debug("Tile folder: {}", tileFolder);
+        logger.debug("Output folder: {}", stitchedFolder);
 
         // Ensure output directory exists
         File outputDir = new File(stitchedFolder);
@@ -257,7 +257,7 @@ public class TileProcessingUtilities {
         // Second, independent bound on the cleanup: anything it deletes must ALSO have been
         // written after this point.
         final long stitchStartMs = System.currentTimeMillis();
-        logger.info(
+        logger.debug(
                 "Found {} existing stitched file(s) in {} before stitching; only files created after now "
                         + "are eligible for failure cleanup",
                 existingFiles.size(),
@@ -267,7 +267,7 @@ public class TileProcessingUtilities {
         // Get output format from preferences
         StitchingConfig.OutputFormat outputFormat = StitchingFormatPreference.get();
 
-        logger.info(
+        logger.debug(
                 "Configuring stitching: compression={}, pixelSize={} um, downsample={}, format={}",
                 compression,
                 pixelSizeUm,
@@ -422,12 +422,12 @@ public class TileProcessingUtilities {
                         + angleSuffix + extension;
                 File renamed = new File(stitchedFile.getParent(), baseName);
 
-                logger.info("Renaming {} -> {}", originalName, baseName);
+                logger.debug("Renaming {} -> {}", originalName, baseName);
                 if (stitchedFile.renameTo(renamed)) {
                     lastPath = renamed.getAbsolutePath();
                     StitchInfoSupport.moveWith(stitchedFile, renamed);
                     StitchInfoSupport.appendAcquisition(lastPath, batchMetadata, new File(tileFolder), Map.of());
-                    logger.info("Successfully renamed to: {}", baseName);
+                    logger.debug("Successfully renamed to: {}", baseName);
                     // Note: metadata was already extracted earlier (batchMetadata) for filename generation
 
                     // Import this file to the project, UNLESS the caller passed
@@ -511,7 +511,7 @@ public class TileProcessingUtilities {
 
         } else {
             // Single file processing (original behavior)
-            logger.info("Processing single stitching result");
+            logger.debug("Processing single stitching result");
 
             // Defensive check for extension
             if (outPath.endsWith(".ome") && !outPath.endsWith(".ome.tif")) {
@@ -596,7 +596,7 @@ public class TileProcessingUtilities {
                         // Keep original string if not a valid number
                     }
                 }
-                logger.info("Angle-based stitching detected - angle: {}", angleSuffix);
+                logger.debug("Angle-based stitching detected - angle: {}", angleSuffix);
             }
 
             // Generate filename using preferences-based system
@@ -629,11 +629,11 @@ public class TileProcessingUtilities {
                     angleSuffix,
                     candidateIndex);
 
-            logger.info("Renaming {} -> {}", orig.getName(), baseName);
+            logger.debug("Renaming {} -> {}", orig.getName(), baseName);
 
             if (orig.renameTo(renamed)) {
                 outPath = renamed.getAbsolutePath();
-                logger.info("Successfully renamed. Full path: {}", outPath);
+                logger.debug("Successfully renamed. Full path: {}", outPath);
                 StitchInfoSupport.moveWith(orig, renamed);
             } else {
                 logger.error("Failed to rename {} to {}", orig.getName(), baseName);
@@ -667,7 +667,7 @@ public class TileProcessingUtilities {
                 logger.debug(
                         "Skipping project import for {} (skipProjectImport=true)",
                         new File(lastProcessedPath).getName());
-                logger.info("=== Stitching workflow completed ===");
+                logger.debug("=== Stitching workflow completed ===");
                 return lastProcessedPath;
             }
 
@@ -788,7 +788,7 @@ public class TileProcessingUtilities {
             });
         }
 
-        logger.info("=== Stitching workflow completed ===");
+        logger.debug("=== Stitching workflow completed ===");
         return lastProcessedPath;
     }
 

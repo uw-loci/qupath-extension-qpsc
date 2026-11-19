@@ -95,7 +95,7 @@ public final class TileRegistrationSupport {
             return;
         }
         config.setRegistrationMode(registrationMode);
-        logger.info(
+        logger.debug(
                 "Tile registration mode for {}: {}",
                 label,
                 registrationMode.getClass().getSimpleName());

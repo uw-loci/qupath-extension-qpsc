@@ -2571,8 +2571,8 @@ public class StitchingHelper {
             Map<String, Object> stitchParams)
             throws IOException {
 
-        logger.info("Processing angle {} with directory isolation for region {}", angleStr, regionName);
-        logger.info("Tile base directory: {}", tileBaseDir);
+        logger.debug("Processing angle {} with directory isolation for region {}", angleStr, regionName);
+        logger.debug("Tile base directory: {}", tileBaseDir);
         // The stitching method will look in projects/sample/mode/[regionName/tempDirName]/, which
         // holds only the one directory being processed.
         return runIsolated(
@@ -2626,22 +2626,22 @@ public class StitchingHelper {
         Path tempIsolationDir = tileBaseDir.resolve(tempDirName);
         Path tempAngleDir = tempIsolationDir.resolve(angleStr);
 
-        logger.info("Temporary isolation directory: {}", tempIsolationDir);
-        logger.info("Target angle directory: {}", angleDir);
+        logger.debug("Temporary isolation directory: {}", tempIsolationDir);
+        logger.debug("Target angle directory: {}", angleDir);
 
         try {
             // Create temporary structure and move angle directory
             Files.createDirectories(tempIsolationDir);
-            logger.info("Created temporary isolation directory: {}", tempIsolationDir);
+            logger.debug("Created temporary isolation directory: {}", tempIsolationDir);
 
             // Move the target angle directory to isolation
             Files.move(angleDir, tempAngleDir);
-            logger.info("Moved {} to isolation: {}", angleDir, tempAngleDir);
+            logger.debug("Moved {} to isolation: {}", angleDir, tempAngleDir);
 
             String outPath = body.stitch(tempDirName);
 
             logger.info("Isolation processing completed for angle {}, output: {}", angleStr, outPath);
-            logger.info("Final stitched file path: {}", outPath);
+            logger.debug("Final stitched file path: {}", outPath);
             return outPath;
 
         } finally {
@@ -2653,14 +2653,14 @@ public class StitchingHelper {
             // original angle directory is always restored -- without that
             // fallback, a stranded _temp_<angle>_<hash> directory leaves the
             // tiles unreachable for any future re-stitch.
-            logger.info("Starting cleanup - restoring directory structure for angle {}", angleStr);
+            logger.debug("Starting cleanup - restoring directory structure for angle {}", angleStr);
             try {
                 if (Files.exists(tempAngleDir)) {
-                    logger.info("Restoring directory from {} to {}", tempAngleDir, angleDir);
+                    logger.debug("Restoring directory from {} to {}", tempAngleDir, angleDir);
                     boolean fastMove =
                             MinorFunctions.moveDirectoryWithRetryAndCopyFallback(tempAngleDir, angleDir, 5, 200);
                     if (fastMove) {
-                        logger.info("Successfully restored {} from isolation", angleStr);
+                        logger.debug("Successfully restored {} from isolation", angleStr);
                     } else {
                         logger.warn(
                                 "Move-back exhausted retries for angle {}; restored via copy fallback. "
@@ -2672,13 +2672,13 @@ public class StitchingHelper {
                     logger.warn("Temporary angle directory no longer exists: {}", tempAngleDir);
                 }
                 if (Files.exists(tempIsolationDir)) {
-                    logger.info("Cleaning up temporary isolation directory: {}", tempIsolationDir);
+                    logger.debug("Cleaning up temporary isolation directory: {}", tempIsolationDir);
                     MinorFunctions.deleteWithRetry(tempIsolationDir, 5, 200);
-                    logger.info("Successfully cleaned up temporary isolation directory");
+                    logger.debug("Successfully cleaned up temporary isolation directory");
                 } else {
                     logger.warn("Temporary isolation directory no longer exists: {}", tempIsolationDir);
                 }
-                logger.info("Directory structure restoration completed for angle {}", angleStr);
+                logger.debug("Directory structure restoration completed for angle {}", angleStr);
             } catch (IOException e) {
                 logger.error(
                         "Failed to restore directory structure after isolation for angle {}: {}",

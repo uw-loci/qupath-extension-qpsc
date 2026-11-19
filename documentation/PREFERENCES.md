@@ -26,7 +26,7 @@ This document provides comprehensive documentation for all QPSC preferences avai
 | [High Bit Depth PPM Capture](#high-bit-depth-ppm-capture) | Boolean | OFF | Acquire PPM frames at higher camera bit depth |
 | [Birefringence Minimum Intensity](#birefringence-minimum-intensity) | Integer | 10 | Dark region noise suppression threshold for PPM |
 | [Enable time-lapse acquisition](#time-lapse-options) | Boolean | OFF | Repeat acquisition over multiple timepoints at fixed interval |
-| [Timepoints](#time-lapse-options) | Integer | 1 | Number of times full acquisition is repeated |
+| [Timepoints](#time-lapse-options) | Integer | 2 | Number of times full acquisition is repeated (at least 2) |
 | [Interval (s)](#time-lapse-options) | Double | 60.0 | Seconds between start of consecutive timepoints |
 | [Timepoint projection](#time-lapse-options) | Choice | None | How timepoints are combined: None keeps every timepoint, or Mean, Max/Min Intensity, Sum, Std Deviation |
 | [Order](#time-lapse-options) | Choice | Across the region | Where the timepoints go: across the region, per position, or per Z plane |
@@ -713,7 +713,7 @@ Tilt alone is not a reason to lower this. Like the window, the default has not b
 | Property | Type | Default |
 |----------|------|---------|
 | Enable time-lapse acquisition | Boolean | OFF |
-| Timepoints | Integer | 1 |
+| Timepoints | Integer | 2 |
 | Interval (s) | Double | 60.0 |
 | Timepoint projection | Choice | None |
 | Order | Choice | Across the region |
@@ -724,7 +724,7 @@ Time-lapse settings are configured per-acquisition in the acquisition dialog und
 | Setting | Range | Purpose |
 |---------|-------|---------|
 | **Enable** | ON / OFF | Turns time-lapse loop on/off. When OFF, acquisition runs once (backward-compatible). |
-| **Timepoints** | 1-10000 | Number of times the full acquisition is repeated. |
+| **Timepoints** | 2-10000 | Number of times the full acquisition is repeated. At least 2, since one timepoint repeats nothing; a saved 1 is raised to 2 when the dialog opens. Digits only. |
 | **Interval (s)** | 0.0+ | Seconds between the *start* of consecutive timepoints. |
 | **Timepoint projection** | None, Mean, Max Intensity, Min Intensity, Sum, Std Deviation | How the timepoints are combined. **None** keeps every timepoint as a time series; the others reduce each tile to one image after the last timepoint. Disabled while time-lapse is off. |
 | **Order** | Across the region, Per position, Per Z plane | Where the timepoint loop sits. **Across the region** repeats every position at each timepoint; **Per position** runs each position's timepoints back to back; **Per Z plane** runs each Z plane's timepoints back to back and needs the Z projection **None**. Saved as `qpscTimeLapseOrder` (`region`, `position`, `plane`). |

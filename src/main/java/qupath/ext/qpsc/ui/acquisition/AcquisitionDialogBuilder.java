@@ -939,6 +939,30 @@ abstract class AcquisitionDialogBuilder<R> {
         apply.run();
     }
 
+    /** Fewest timepoints a time-lapse can be set to; one would repeat nothing. */
+    static final int MIN_TIMEPOINTS = 2;
+
+    /**
+     * The time-lapse timepoint count: at least {@link #MIN_TIMEPOINTS}, digits only.
+     *
+     * <p>A time-lapse switched on at 1 timepoint sends only {@code --interval} and takes a single
+     * pass, so 1 cannot be chosen, and a stored 1 is raised here so every reader of the
+     * preference sees the value the dialog shows. Digits only because a Spinner reverts text it
+     * cannot parse ("10.", "5 tp") to its previous value, without a word, when it loses focus.
+     */
+    static Spinner<Integer> newTimepointsSpinner() {
+        Spinner<Integer> spinner = new Spinner<>(
+                MIN_TIMEPOINTS, 10000, Math.max(MIN_TIMEPOINTS, PersistentPreferences.getTimeLapseTimepoints()), 1);
+        if (PersistentPreferences.getTimeLapseTimepoints() < MIN_TIMEPOINTS) {
+            PersistentPreferences.setTimeLapseTimepoints(spinner.getValue());
+        }
+        spinner.setEditable(true);
+        spinner.getEditor()
+                .setTextFormatter(new javafx.scene.control.TextFormatter<Integer>(
+                        c -> c.getControlNewText().matches("\\d{0,5}") ? c : null));
+        return spinner;
+    }
+
     protected TitledPane createTimeLapseSection() {
         timeLapseEnableCheck = new CheckBox("Enable time-lapse acquisition");
         timeLapseEnableCheck.setTooltip(
@@ -946,8 +970,7 @@ abstract class AcquisitionDialogBuilder<R> {
                         + "The interval is the time between the start of consecutive timepoints."));
         timeLapseEnableCheck.setSelected(PersistentPreferences.isTimeLapseEnabled());
 
-        timeLapseTimepointsSpinner = new Spinner<>(1, 10000, PersistentPreferences.getTimeLapseTimepoints(), 1);
-        timeLapseTimepointsSpinner.setEditable(true);
+        timeLapseTimepointsSpinner = newTimepointsSpinner();
         timeLapseTimepointsSpinner.setPrefWidth(100);
         timeLapseTimepointsSpinner.setTooltip(new Tooltip("Number of times the full acquisition is repeated."));
 

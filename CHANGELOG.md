@@ -39,6 +39,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **A time-lapse has at least 2 timepoints.** The Timepoints box starts at 2, a saved 1 is raised to 2 when an acquisition dialog opens, and the box takes digits only. A time-lapse left at the default of 1 sent only the interval and took a single pass, with nothing in the dialog to show it; a run that still reaches the server with 1 timepoint logs a warning.
+
+- **Less stitching log for small regions.** A one-tile region no longer runs tile registration, and no target looks for a registration solution that was not written (each logged a missing `TileRegistration.txt`). QPSC's per-target folder handling and renaming lines moved to DEBUG, leaving one line per stitched target.
+
 - **LC-PolScope: the background is offered where the calibration ran.** The Apply summary ends
   by asking whether to collect the background here, now, since the stage is still on the clear
   glass the calibration used; **Collect background here** opens Background Collection directly.
