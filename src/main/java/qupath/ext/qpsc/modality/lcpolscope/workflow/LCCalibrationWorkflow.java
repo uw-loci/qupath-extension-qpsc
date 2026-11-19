@@ -873,36 +873,34 @@ public class LCCalibrationWorkflow {
         Alert done = new Alert(Alert.AlertType.INFORMATION);
         done.setTitle("LC palette applied");
         done.setHeaderText("Acquisition now uses this calibration");
-        done.getDialogPane().setContent(copyableBody(String.join("\n", summary), Math.min(summary.size() + 1, 24)));
+        // The calibration ran on clear glass and the stage has not moved, so the background is
+        // offered right here instead of sending the operator somewhere else first.
+        Label ask = new Label("Collect the background here, now?");
+        ask.setStyle("-fx-font-weight: bold;");
+        Label how = new Label("The stage is still on the clear glass you calibrated on. Defocus 10-20 um before you "
+                + "click Acquire Backgrounds, so dust does not print into every tile.");
+        how.setWrapText(true);
+        VBox content =
+                new VBox(10, copyableBody(String.join("\n", summary), Math.min(summary.size() + 1, 24)), ask, how);
+        done.getDialogPane().setContent(content);
         done.setResizable(true);
-        done.getButtonTypes().setAll(new ButtonType("Later", ButtonBar.ButtonData.CANCEL_CLOSE));
-        qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.offerCollection(
-                done, LCCalibrationWorkflow::startBackgroundCollection);
+        ButtonType collectHere = new ButtonType("Collect background here", ButtonBar.ButtonData.OK_DONE);
+        ButtonType later = new ButtonType("Later", ButtonBar.ButtonData.CANCEL_CLOSE);
+        done.getButtonTypes().setAll(collectHere, later);
         DialogOwner.own(done);
-        done.showAndWait();
+        if (done.showAndWait().orElse(later) == collectHere) {
+            startBackgroundCollection();
+        }
     }
 
     /**
-     * Straight from Apply into background collection, which a new palette makes necessary. The
-     * background must be specimen-free and slightly defocused, as OpenPolScope takes it, so the
-     * operator is told to move first.
+     * Opens Background Collection on the LC-PolScope profile. The background is the five states on
+     * clear glass, slightly defocused, as OpenPolScope takes it; the operator is already there
+     * after a calibration, and the Setup window's step 3 says where to be otherwise.
      */
     public static void startBackgroundCollection() {
-        Alert prepare = new Alert(Alert.AlertType.CONFIRMATION);
-        prepare.setTitle("LC-PolScope background");
-        prepare.setHeaderText("Move to a specimen-free area, then defocus as needed");
-        prepare.getDialogPane()
-                .setContent(copyableBody(
-                        "The background is the five states on an empty field, taken slightly out of focus so\n"
-                                + "dust does not imprint on every tile. Choose the LC-PolScope profile in the\n"
-                                + "Background Collection dialog that opens next. Each state is averaged over 10 frames\n"
-                                + "and recorded against this calibration.",
-                        5));
-        DialogOwner.own(prepare);
-        if (prepare.showAndWait().orElse(ButtonType.CANCEL) == ButtonType.OK) {
-            qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.run(
-                    qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.Preselection.of(MODALITY_KEY));
-        }
+        qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.run(
+                qupath.ext.qpsc.controller.BackgroundCollectionWorkflow.Preselection.of(MODALITY_KEY));
     }
 
     /** What Apply writes besides the palette: each null when it is left as it is. */

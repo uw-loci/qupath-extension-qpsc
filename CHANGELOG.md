@@ -39,6 +39,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Changed
 
+- **LC-PolScope: the background is offered where the calibration ran.** The Apply summary ends
+  by asking whether to collect the background here, now, since the stage is still on the clear
+  glass the calibration used; **Collect background here** opens Background Collection directly.
+  The separate "Move to a specimen-free area" prompt is gone, from there and from the Setup
+  window's **Collect background...**.
+
 - **An automatic multi-slide countdown no longer changes the button's text.** The button it will press gets an orange outline and the window title shows the seconds left (*Multi-Tile Alignment Refinement -- auto: Solve & Save in 5s*). The " (auto 5s)" suffix was cut off in rows of several buttons, for example "Solve & Save (au...".
 
 - **One microscope config can serve two cameras.** Values that differ by camera (exposures, black level, LC retardances, an objective's Micro-Manager preset group) go in `per_detector` blocks keyed by detector ID beside the shared value, and QPSC uses the block of the camera in use: scalars are replaced, maps merged, and `device_properties` merged by device and property. On every connect to a microscope whose config declares more than one camera, QPSC asks the server which camera Micro-Manager has loaded and records the matching detector (`id_detector.<id>.device`) as the camera in use; a change re-reads the config. Acquisition profiles are chosen among the camera's own (the profile's `detector` field; a profile without one fits any camera), first by their `modality` and `objective` fields. LC calibration **Apply**, saved exposures and the black level write into the camera's `per_detector` block when it already holds that value, and leave shared values shared. The microscope server and microscope_control apply the same rules (changes of the same date); the LC-PolScope's two configs are now one, `config_LCPolScope.yml` (pull `microscope_configurations`).

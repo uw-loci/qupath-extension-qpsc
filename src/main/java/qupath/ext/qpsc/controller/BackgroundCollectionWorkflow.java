@@ -131,15 +131,7 @@ public class BackgroundCollectionWorkflow {
      * opens on the next FX pulse.
      */
     public static void offerCollection(Alert done, Preselection preselection) {
-        offerCollection(done, () -> run(preselection));
-    }
-
-    /**
-     * As {@link #offerCollection(Alert, Preselection)}, with a caller-supplied opener for a
-     * modality that needs a step of its own before collecting (LC-PolScope asks for an empty,
-     * defocused field first).
-     */
-    public static void offerCollection(Alert done, Runnable open) {
+        Runnable open = () -> run(preselection);
         ButtonType collect = new ButtonType(COLLECT_NOW, ButtonBar.ButtonData.OK_DONE);
         done.getButtonTypes().add(collect);
         done.getDialogPane()

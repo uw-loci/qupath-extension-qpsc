@@ -18,7 +18,7 @@ Acquire flat-field correction images for improved image quality. Background imag
 
 ### Opening it after a calibration
 
-A background set is collected at the exposures, lamp level and (LC-PolScope) palette in force at the time, so every calibration that changes one of those ends with the same **Collect background now...** button. It opens this dialog with the modality just calibrated selected (and, for white balance, the objective, detector and WB mode), in the active background profile:
+A background set is collected at the exposures, lamp level and (LC-PolScope) palette in force at the time, so every calibration that changes one of those ends with the same **Collect background now...** button (for LC-PolScope, **Collect background here**, since the stage is still on the clear glass the calibration used). It opens this dialog with the modality just calibrated selected (and, for white balance, the objective, detector and WB mode), in the active background profile:
 
 | After | Where the button is |
 |---|---|
