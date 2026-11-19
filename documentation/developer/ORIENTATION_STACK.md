@@ -96,7 +96,9 @@ Four factors stack along the light path, plus the macro-image flip that orients 
 |-----|-------|-----------|--------------|--------|----------|
 | **PPM**  | upright | **B** | **180 / XY** (objective inversion) | NORMAL | NORMAL |
 | **OWS3** | inverted | A | `xy` in `config_OWS3.yml` since 2026-08-09; the Camera View check against the Live Viewer is still owed (see the 2026-10-27 report) | NORMAL | INVERT_XY (gives Stage View its 180, 2026-10-27) |
-| **LC-PolScope** (both cameras) | inverted | A | **`y`** (2026-10-27: with `none` the Camera View macro was mirrored top/bottom against the Live Viewer) | FLIP_V (Calibrate Directions, 2026-10-19, when it was one shared preference; the one-time copy gives it to the camera in use at first start, and the other camera needs its own Calibrate Directions run) | INVERT_Y (also gives Stage View its Y mirror) |
+| **LC-PolScope** (both cameras) | inverted | A | **`y`** (2026-10-27: with `none` the Camera View macro was mirrored top/bottom against the Live Viewer) | FLIP_V (Calibrate Directions, 2026-10-19, when it was one shared preference; the one-time copy gives it to the camera recorded as in use the first time QPSC reads the orientation, and the other camera needs its own Calibrate Directions run) | INVERT_Y (also gives Stage View its Y mirror) |
+
+The rig configs in `microscope_configurations` do not declare `hardware.camera_orientation` yet; each install's value arrives through the one-time copy from its old preference, or from Calibrate Directions, and is then written to that PC's copy of the config.
 
 PPM was pinned by matching the simulator. The optical value on the other rigs is the *net* the
 operator observes by holding the Stage Map's Camera View next to the Live Viewer; the

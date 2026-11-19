@@ -391,8 +391,8 @@ steps:
   - { num: 9,  name: routeSubWorkflow,                       file_line: "1896-1968", reads: ["DS9 (XY_OFFSET, BASE_IMAGE), state.useExistingSlideAlignment, state.alignmentChoice"], writes: [], gate: "selects W1a/W1c/W1d/W1e" }
   - { num: 10, name: reReadAnnotationsAfterRouting + pinSource, file_line: "834-916", reads: ["hierarchy on possibly-switched entry"], writes: ["state.annotations (refreshed)", "state.sourceEntry (pinned; the flipped sibling when routing switched to it)"], gate: "after routing may switch open entry" }
   - { num: 10a, name: assertSourceImageOpen,                 file_line: "918-953",   reads: ["state.sourceEntry", "viewer's open entry"], writes: [], gate: "re-opens the pinned entry before refinement and acquisition if the viewer moved" }
-  - { num: 11, name: handleRefinement (orchestrates SingleTileRefinement / MultiTileRefinement / ClickPositionRefinement), file_line: "2639-2688", reads: ["DS17.currentTransform", "DS3"], writes: ["DS28 (refinement tile config)", "DS17 (refined transform on accept)", "DS5 (saveRefinedAlignment ONLY on accept)"], gate: "validateMMAgainstSelection (pixel size / camera ROI 5%) -> hard-cancel on mismatch; RefinementOutcomePolicy: only SKIPPED proceeds unrefined, the dialog's X cancels" }
-  - { num: 12, name: performAcquisition,                     file_line: "3098-3130", reads: ["state.tilesByAnnotation", "DS17.currentTransform"], writes: ["DS17 (acquisitionActive=true)", "DS45 (socket: ACQUIRE)"], gate: "validateMMAgainstSelection final backstop; CancelGate consulted before each region, before awaitServerIdle and before startAcquisition" }
+  - { num: 11, name: handleRefinement (orchestrates SingleTileRefinement / MultiTileRefinement / ClickPositionRefinement), file_line: "2840-3152", reads: ["DS17.currentTransform", "DS3"], writes: ["DS28 (refinement tile config)", "DS17 (refined transform on accept)", "DS5 (saveRefinedAlignment ONLY on accept)"], gate: "validateMMAgainstSelection (pixel size / camera ROI 5%) -> hard-cancel on mismatch; RefinementOutcomePolicy: only SKIPPED proceeds unrefined, the dialog's X cancels" }
+  - { num: 12, name: performAcquisition,                     file_line: "3312-3344", reads: ["state.tilesByAnnotation", "DS17.currentTransform"], writes: ["DS17 (acquisitionActive=true)", "DS45 (socket: ACQUIRE)"], gate: "validateMMAgainstSelection final backstop; CancelGate consulted before each region, before awaitServerIdle and before startAcquisition" }
   - { num: 13, name: waitForCompletion / showSuccessNotification, file_line: "3131-3252", reads: ["AcquisitionMonitorService events"], writes: [], gate: "showSuccessNotification short-circuits on null state (Phase 3 H5)" }
   - { num: 14, name: stitch + autoRegisterBoundsTransformIfAvailable, file_line: "via AcquisitionManager.launchStitching -> StitchingHelper", reads: ["DS28"], writes: ["DS48 (reserve, then fill)", "DS30", "DS6 (sub-frame JSON)", "DS9 (full metadata stamp on new entries)"], gate: "job enqueued in StitchingQueueWindow (W37); stitching errors -> StitchingRecoveryWorkflow path" }
   - { num: 15, name: cleanup + cleanupTilesAfterStitching,   file_line: "3154-3202", reads: ["DS49"], writes: ["DS17.currentTransform = null (H6) and acquisitionActive=false (Phase 11), ONLY while this run holds the DS49 slot", "DS49 (release)", "DS28 (tile handling per preference, success path)"], gate: "on error, cleanupAfterFailedRun deletes unfinished regions without tile images and holds those with images (HeldTilesWindow); finished regions are kept" }
@@ -472,7 +472,7 @@ key_invariants:
   - "Reference tiles are chosen by TISSUE DENSITY first, not texture, and every measured point searches for tissue -- not only the first."
   - "The tissue search is best-effort: a failed search must not halt the batch, and an operator cancel during it is its own outcome, distinct from a failure."
   - "Unattended batches must never wait on advisory dialogs."
-  - "Exception, before the pass starts: with Disable All Autofocus on, Acquire All asks once (confirmFocusWithAutofocusOff) when a set-up slide's focus points (AffineTransformManager.loadSlideFocusPoints) spread more than half the smallest autofocus search_range_um (15 um default); MultiSlidePreflight.slidesWithFocusSpread is the pure rule (89138ea3)."
+  - "Exception, before the pass starts: with Disable All Autofocus on, Acquire All asks once (confirmFocusWithAutofocusOff) when a set-up slide's focus points (AffineTransformManager.loadSlideFocusPoints) spread more than half the smallest autofocus search_range_um among the slides' objectives (a 15 um limit when none declares one); MultiSlidePreflight.slidesWithFocusSpread is the pure rule (89138ea3)."
   - "Abort All must stop a running autofocus, not just the batch loop -- otherwise the stage keeps being driven after the abort."
   - "Slot-jump autofocus seeds from the slide's saved focus Z and hands the stage back afterwards; both runAfterSlotMove entry points lock on the pending-search holder."
   - "A rotated slot assigns ONE composed (rotated N)(Camera View) entry (createRotatedFlippedDuplicate), never a bare (rotated N) intermediate on a flip-needing scope. Orientation is metadata-driven: MultiSlideAssignmentDialog stamps the light-path snapshot (camera_view flag + baked parity + lp_rotation_deg) on the companion at creation, and code reads rotation from getRotationDeg / classifies via isCameraView -- the '(rotated N) (Camera View)' name is user-reference only. isCameraView makes validateAndFlipIfNeeded no-op, so both passes open the correct working entry. Base annotations are brought onto the empty companion (AnnotationHelper.bringSourceAnnotationsOntoOpenEntry, rotate+flip) before the acquisition dialogs. Do not reintroduce the intermediate or parse rotation from the name."
@@ -1515,7 +1515,7 @@ read_by:
 invariants:
   - "Loaded once per process; reload() must be explicitly called after edits. W43 MicroscopeSwitcher reloads and rebuilds everything derived from it at runtime."
   - "Workflows disable themselves on bad config (configValid check at SetupScope startup)."
-  - "The loaded map is the RESOLVED one: DetectorOverlay applied for overlayDetector(raw) -- the only declared detector, else LastDetector (DS24) when declared. ActiveDetectorSync sets LastDetector from GETCAM on every accepted CONFIG of a multi-detector config; a LastDetector change reloads the config."
+  - "The loaded map is the RESOLVED one: DetectorOverlay applied for overlayDetector(raw) -- the only declared detector, else LastDetector (DS24) when declared. ActiveDetectorSync sets LastDetector from GETCAM on every accepted CONFIG of a multi-detector config, and the detector choice in AcquisitionDialogBuilder, SampleSetupController, AcquisitionWizardDialog, MultiSlideAssignmentDialog, BackgroundCollectionController/Workflow and WhiteBalanceDialog also sets it; a LastDetector change reloads the config."
   - "Acquisition profiles are resolved among the camera in use's (profile 'detector' field; none = any camera), first by their modality + objective fields (resolveProfileKey / matchProfileKey); the server's resolve_profile_key must stay identical."
 gates_at_load:
   - "validateRequiredKeys at startup"
@@ -1718,7 +1718,7 @@ written_by:
   - "W3 MicroscopeAlignmentWorkflow.saveGeneralTransform (method at line 1300, saveSlideAlignment call ~1624, commit 5bf0f7bf)"
   - "W1e ManualAlignmentPath.createManualAlignment"
   - "W1d ExistingAlignmentPath.saveSlideAlignment"
-  - "W1 ExistingImageWorkflowV2.saveRefinedAlignment (line 2943-3097, ONLY on refinement accepted; short-circuits on sub-acquisition)"
+  - "W1 ExistingImageWorkflowV2.saveRefinedAlignment (line 3153-3311, ONLY on refinement accepted; short-circuits on sub-acquisition)"
   - "W1 ACQUIRE_ONLY alignment check: persistRefocusedSeed -> AffineTransformManager.updateSlideFocusZ (focusZ + focusZCheckedAt only; rest of the record untouched)"
 read_by:
   - "W1 via AlignmentHelper.checkForSlideAlignment (tier 1)"
@@ -1949,7 +1949,7 @@ fields_examples:
   macroImagePixelSizeInMicrons, restitchPixelSize, restitchParallelAngles
   metadataPropagationPrefix, classList, modalityForAutomation
   activeBackgroundProfile (BackgroundProfiles.activeId), flatfieldMethod (NONE / BACKGROUND / BASIC), flatfieldProfileFolder
-  LastDetector (lastDetectorProperty) -- the camera in use on a multi-detector config; set by ActiveDetectorSync from GETCAM after each CONFIG, watched by MicroscopeConfigManager (a change reloads the config with that camera's per_detector values)
+  LastDetector (lastDetectorProperty) -- the camera in use on a multi-detector config; set by ActiveDetectorSync from GETCAM after each CONFIG and by the detector choice in AcquisitionDialogBuilder, SampleSetupController, AcquisitionWizardDialog, MultiSlideAssignmentDialog, BackgroundCollectionController/Workflow and WhiteBalanceDialog; persists across sessions; watched by MicroscopeConfigManager (a change reloads the config with that camera's per_detector values)
   qpsc.cameraOrientationCopiedTo -- config paths the old camera-orientation preference was already copied into ('|'-separated)
   (about 300 public static accessors -- see PersistentPreferences.java; Java names use unit suffixes such as getMacroImagePixelSizeUm, the stored keys did not change)
 written_by:

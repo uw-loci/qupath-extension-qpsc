@@ -175,21 +175,36 @@ Front-load your decisions in the setup pass, then leave it running.
 > focus Z it establishes seeds that slot's first-tile autofocus in the acquire
 > pass, so acquisition starts near focus instead of hunting.
 
-**The alignment check's focus is kept.** When the alignment check before a
+#### The alignment check's focus is kept
+
+When the alignment check before a
 slide refocuses, the Z it found is written to the slide's alignment record and
 used as the seed for that slide's acquisition. If you run **Step 2: Acquire All
 Set-Up** again without setting the slides up again (for example after a stop),
 the check starts from that saved Z rather than from the one found at set-up.
 Setting a slide up again measures its focus afresh and replaces it.
 
-**With autofocus off.** When **Disable All Autofocus (Danger)** is on in
+#### With autofocus off
+
+When **Disable All Autofocus (Danger)** is on in
 Preferences, every tile is taken at the focus found during set-up. Before the
 unattended pass starts, **Acquire All Set-Up** compares each set-up slide's
-focus points; if any slide's points are further apart than half the
-objective's autofocus search range (`search_range_um`; 15 um when it is not
-configured), an **Autofocus is off** dialog lists those slides, for example
-`slot 4 (MetroHealth_189): 51.8 um apart`. Confirm to start anyway, or cancel
-and turn autofocus back on. With autofocus on, nothing is asked.
+focus points: how far apart they are in Z, highest minus lowest. If any
+slide's points are further apart than half the objective's autofocus search
+range (`search_range_um`; with several objectives, the smallest half-range; 15 um
+when none is configured), an **Autofocus is off** dialog lists those slides, for
+example `slot 4 (Slide_189): 51.8 um apart`. With the PPM 20x objective
+(`search_range_um: 40`) the limit is 20 um. A slide with fewer than two focus
+points cannot be checked and is never listed. The limit catches gross
+disagreement only: at 20x the depth of field is about 2 um, so a slide below it
+can still be out of focus on a tilted mount.
+
+- **OK** starts the pass anyway.
+- **Cancel** stops it. To turn autofocus back on, clear **Disable All Autofocus
+  (Danger)** in Edit > Preferences > QuPath SCope, then click **Step 2: Acquire
+  All Set-Up** again.
+
+With autofocus on, nothing is asked.
 
 ### Automating the setup pass (experimental)
 

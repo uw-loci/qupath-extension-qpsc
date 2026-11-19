@@ -271,18 +271,25 @@ Some settings (like exposure times for backgrounds) are saved separately and nee
 **A:** The LC-PolScope had one config per camera, `config_LCPolScope.yml` (FLIR Oryx) and `config_LCPolScope_Hamamatsu.yml`. They are now one file, `config_LCPolScope.yml`, which holds both cameras; the Hamamatsu file is gone from `microscope_configurations`.
 
 1. Pull `microscope_configurations`.
-2. Edit > Preferences > QuPath SCope > **Microscope Config File**: choose `config_LCPolScope.yml`, and accept the offer to switch.
-3. Start Micro-Manager with the camera you want and connect. QPSC takes the camera in use from the camera Micro-Manager has loaded; nothing else needs to be chosen. The QuPath log says `Camera in use: <detector> (Micro-Manager camera '<name>')`.
+2. Edit > Preferences > QuPath SCope > **Microscope Config File**: choose `config_LCPolScope.yml`. In the **Switch Microscope** dialog, click **OK**.
+3. Start Micro-Manager with the camera you want and connect. QPSC takes the camera in use from the camera Micro-Manager has loaded, by matching its label to the detectors' `device:` (`Flash4` for the Hamamatsu, `Oryx ORX-10G-51S5M` for the Oryx); nothing else needs to be chosen. When the camera in use changes, the QuPath log says `Camera in use: <detector> (Micro-Manager camera '<name>')`; connecting with the same camera as last time logs nothing. If the log says `Micro-Manager's camera '...' matches none of the config's detectors`, QPSC is still using the camera from before: see the table below.
 4. For each project with slides aligned or acquired under the old Hamamatsu config, run `scripts/migrate_lcpolscope_merge.groovy` once (below). Without it, QPSC does not find those slide alignments.
 
 **Running `migrate_lcpolscope_merge.groovy`:**
 
 1. Open the project in QuPath. Close the Stage Map and any QPSC workflow.
-2. **Automate > Script editor**, open or paste the script, and leave `DRY_RUN = true`.
-3. **Run.** The output lists what would change: each `<slide>_LCPolScope_Hamamatsu_alignment.json` to be renamed `<slide>_LCPolScope_alignment.json`, and each image whose `source_microscope` or `acquired_on_microscope` would change from `LCPolScope_Hamamatsu` to `LCPolScope`. Where an Oryx alignment of the same slide already has the new name, it is kept beside it as `.oryx-bak`.
-4. Set `DRY_RUN = false` and run again to apply the changes and save the project.
+2. **Automate > Script editor**, then open [`scripts/migrate_lcpolscope_merge.groovy`](../scripts/migrate_lcpolscope_merge.groovy) from the QPSC repository (it does not come with the extension jar), or paste its text. Leave `DRY_RUN = true`.
+3. **Run.** The output lists what would change: each `<slide>_LCPolScope_Hamamatsu_alignment.json` to be renamed `<slide>_LCPolScope_alignment.json`, and each image whose `source_microscope` or `acquired_on_microscope` would change from `LCPolScope_Hamamatsu` to `LCPolScope`. Where an Oryx alignment of the same slide already has the new name, it is kept beside it as `.oryx-bak`. The last line reads `<N> alignment file(s) and <M> metadata value(s) would change (dry run; set DRY_RUN = false to apply).`; `0 alignment file(s) and 0 metadata value(s)` means there is nothing to do.
+4. Set `DRY_RUN = false` and **Run** again. The last line reads `<N> alignment file(s) and <M> metadata value(s) changed.` and the project is saved.
 
-The scanner presets (`saved_transforms.json`) were migrated in `microscope_configurations` itself; the script does not touch them. On a two-camera microscope, a preset or slide alignment made with the other camera is not used: the two camera ports are millimeters apart, so align each slide with the camera you will acquire with.
+QPSC does not read `.oryx-bak` files. To acquire that slide with the Oryx, align it again with the Oryx in use; one slide keeps one alignment per microscope, so this replaces the Hamamatsu one.
+
+The scanner presets (`saved_transforms.json`) were migrated in `microscope_configurations` itself; the script does not touch them. On a two-camera microscope, a preset or slide alignment made with the other camera is not used: the two camera ports are millimeters apart, so align each slide with the camera you will acquire with. The camera orientation is kept per camera too: the one-time copy from the old preference goes to whichever camera was in use first, so run **Calibrate Directions** once with each camera.
+
+| Symptom | Cause | Fix |
+|---|---|---|
+| Log: `Micro-Manager's camera 'HamamatsuHam_DCAM' matches none of the config's detectors [...] (id_detector.<id>.device)`. Exposures, black level or the objective preset group are those of the other camera. | Micro-Manager was started with a config whose camera label is not a detector's `device:`. The older `MM2_rec04_HamMead_12132024.cfg` calls the Hamamatsu `HamamatsuHam_DCAM`, not `Flash4`. QPSC keeps the camera it used last. | Start Micro-Manager with `MM2-Flash4-20261021.cfg` (label `Flash4`) or the Oryx config (label `Oryx ORX-10G-51S5M`), then reconnect. |
+| Calibrate Directions > **Apply**: *Could not save the calibration: which camera is in use is not known yet; connect to the microscope first*. The camera orientation is not saved, and the dialog closes. | QPSC has no camera in use recorded for this two-camera config: it has never connected on this computer, or Micro-Manager's camera matched no detector (row above). | Connect, check the log for `Camera in use:` or the mismatch warning, then run Calibrate Directions again. |
 
 ### Python Server
 
@@ -393,13 +400,13 @@ If you still see the symptom:
 
 #### Q: The Live Viewer shows a red line such as "Server connected; Stage not responding since 12:40"
 
-**A:** The server is answering, but one part of the microscope behind it is not. The Live Viewer asks the server every 5 seconds and names the part that is failing, with the time it started:
+**A:** The server is answering, but one part of the microscope behind it is not. The Live Viewer asks the server every 5 seconds and names the part that is failing, with the time it started (local time of day, no date):
 
-- **Stage not responding** -- the server's stage position reads have failed repeatedly. The stage controller may be off, unplugged or hung. Check its power and cable, and whether Micro-Manager can move it.
-- **Camera snaps failing** -- the last snaps failed. Check the camera's power and cable, and whether Micro-Manager's Snap works.
 - **Micro-Manager not answering** -- calls to Micro-Manager timed out. Micro-Manager may be busy with a dialog, frozen, or closed. Bring it to the front, close any dialog, or restart it and reconnect.
+- **Stage not responding** -- the server's last three stage position reads failed (it reads the stage twice a second, so the line appears within a few seconds). The stage controller may be off, unplugged or hung. Check its power and cable, and whether Micro-Manager can move it.
+- **Camera snaps failing** -- the last snaps failed. Check the camera's power and cable, and whether Micro-Manager's Snap works.
 
-The line goes away by itself once the part answers again. The server reports only failures it has already met on snaps and stage reads, so a part nobody has used since it failed can stay listed until something tries it. A server older than this check gets asked once and never shows the line.
+The line goes away by itself once the part answers again. The server reports only failures it has already seen on snaps and stage reads, so a part nobody has used since it failed can stay listed until something tries it. The check runs on the auxiliary connection, so it does not wait behind an acquisition. When the server leaves the check unanswered three times in a row (a server older than the check, or one that is not responding), that Live Viewer window stops asking, and the log says `The server left hardware status (HWSTAT) unanswered three times; no banner`. Close and reopen the Live Viewer to start it again. When the server answers with an error, the line reads *Server connected; hardware status unavailable:* followed by the server's message.
 
 #### Q: Stage doesn't move even though everything else works
 
@@ -448,9 +455,9 @@ Observe which direction the physical stage actually moves. If it moves in the la
 **A:** This is the "stage-vs-image sign math" problem. Starting with commit `e3cb133` (2026-04-09), all three of these — plus the stitcher's tile placement — go through a single `StageImageTransform` that composes two independent settings:
 
 1. **Stage polarity** (`stage.polarity` in the microscope config) — hardware wiring
-2. **Camera orientation** (`hardware.camera_orientation.<camera>` in the microscope config, one value per camera) — how the camera mounts / optical path flips the image
+2. **Camera orientation** (`hardware.camera_orientation.<detector ID>` in the microscope config, one value per camera) — how the camera mounts / optical path flips the image
 
-**Quick fix (try first):** Open the Live Viewer → Navigate tab → click **Calibrate Directions...** (also available as an optional step in the Setup Wizard). The dialog jogs the stage in +X then +Y, asks which direction the tissue in the image moved across the screen (the opposite of the view's pan), and writes the correct `Camera orientation` for you under your current polarity, to `hardware.camera_orientation.<camera>` in the microscope config, for the camera in use. Polarity itself is treated as a hardware-wiring fact and is NOT changed by the tool — if the dialog reports "no camera orientation matches," that is a signal that your polarity may be wrong; verify polarity by direct stage observation (MicroManager-script procedure above) before retrying.
+**Quick fix (try first):** Open the Live Viewer → Navigate tab → click **Calibrate Directions...** (also available as an optional step in the Setup Wizard). The dialog jogs the stage in +X then +Y, asks which direction the tissue in the image moved across the screen (the opposite of the view's pan), and writes the correct `Camera orientation` for you under your current polarity, to `hardware.camera_orientation.<detector ID>` in the microscope config, for the camera in use. Polarity itself is treated as a hardware-wiring fact and is NOT changed by the tool — if the dialog reports "no camera orientation matches," that is a signal that your polarity may be wrong; verify polarity by direct stage observation (MicroManager-script procedure above) before retrying.
 
 **Manual diagnosis procedure (when the tool isn't applicable, e.g. server not connected):**
 
@@ -478,7 +485,7 @@ Observe which direction the physical stage actually moves. If it moves in the la
 
 4. Acquire a small 2×2 bounding box test. Place it on a recognizable feature, run the acquisition, and look at the stitched output. Compare corner-by-corner against what you see in the live view at each stage position. **Do this step even if the Live Viewer gestures all look correct** — it's possible for gestures to look right while stitching is wrong (OWS3 showed exactly this during the 2026-04-09 refactor test).
 
-5. If the stitched output is wrong, the fix is in `Camera orientation` (`hardware.camera_orientation.<camera>` in the microscope config; set it with Calibrate Directions > **Manual override**, or edit the file and restart QuPath):
+5. If the stitched output is wrong, the fix is in `Camera orientation` (`hardware.camera_orientation.<detector ID>` in the microscope config; set it with Calibrate Directions > **Manual override**, or edit the file and restart QuPath):
    - **Only stitched X mirrored** → set `Camera orientation` to `FLIP_H`
    - **Only stitched Y mirrored** → set `Camera orientation` to `FLIP_V`
    - **Both axes mirrored (180° rotation)** → set `Camera orientation` to `ROT_180`

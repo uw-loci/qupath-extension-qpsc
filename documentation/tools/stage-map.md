@@ -56,7 +56,7 @@ The Stage Map displays several visual indicators:
 | **Drag (left button)** | Pan the view. |
 | **Right-click** | Reset zoom and pan back to the fit-to-insert view. |
 | **Double-click (left button)** | Move the stage to that point (unchanged). |
-| **Single click while "Click the stage position" waits** | During that refinement step of Acquire from Existing Image, the next single click on the slide overview reports the point to the refinement instead of doing anything else; the stage does not move. Only one click is taken, and only if the Stage Map was open when the step began. See [Existing Image Acquisition](existing-image-acquisition.md#refinement-options). |
+| **Shift+click while "Click the stage position" waits** | During that refinement step of Acquire from Existing Image, a Shift+click on the slide overview reports the point to the refinement; the stage does not move. Ordinary clicks and double-clicks (moving the stage) work as usual. Each Shift+click replaces the previous one until you press **Use this** in the refinement window. Works only if the Stage Map was open when the step began. See [Existing Image Acquisition](existing-image-acquisition.md#refinement-options). |
 
 Zoom and pan are display-only -- they never move the stage. Switching inserts, reloading the config, or right-clicking returns to the fit view. Resizing the window also re-fits.
 

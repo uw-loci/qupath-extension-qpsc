@@ -148,10 +148,10 @@ hardware:
     LCPS_DETECTOR_FLIR_ORYX_001: NORMAL
 ```
 
-QPSC reads the value for the camera in use (on a two-camera microscope, the camera Micro-Manager has loaded when QPSC connects). **Calibrate Directions** writes it for the camera in use; you can also edit the file. There is no Camera orientation entry in the Preferences panel.
+The key is the detector ID listed under `hardware.detectors` (for example `LCPS_DETECTOR_FLIR_ORYX_001`), not the Micro-Manager camera name. The values above are only an example. QPSC reads the value for the camera in use (on a two-camera microscope, the camera Micro-Manager has loaded when QPSC connects). **Calibrate Directions** writes it for the camera in use; you can also edit the file. There is no Camera orientation entry in the Preferences panel.
 
-- **First start with a config that has no value:** QPSC copies the value of the old QuPath preference (`NORMAL` if it was never set) into the config for the camera in use, once per config file, and logs `Camera orientation ... copied from the QuPath preference`. On a microscope with two cameras, the other camera gets no copy: it reads `NORMAL`, with a warning in the log, until you run Calibrate Directions with that camera in use.
-- **No value for the camera in use** (after that first copy): `NORMAL`, with the warning `hardware.camera_orientation.<camera> is not set ... Run Live Viewer > Calibrate Directions to set it.`
+- **First start with a config that has no value:** QPSC copies the value of the old QuPath preference (`NORMAL` if it was never set) into the config for the camera in use, once per config file, and logs `Camera orientation ... copied from the QuPath preference`. On a microscope with two cameras, the other camera gets no copy: it reads `NORMAL`, with a warning in the log, until you run Calibrate Directions with that camera in use. To put the other camera in use, start Micro-Manager with that camera's configuration and reconnect QPSC; the QuPath log line `Camera in use: <detector>` confirms the change.
+- **No value for the camera in use** (after that first copy): `NORMAL`, with the warning `hardware.camera_orientation.<detector ID> is not set ... Run Live Viewer > Calibrate Directions to set it.`
 - **Demo and offline microscopes:** their bundled configs declare `NORMAL` for their cameras, and nothing is copied into them.
 
 **Description:**
@@ -186,7 +186,7 @@ Rotation / transpose cases (supported by Live Viewer controls but **not** by the
 
 **How to Configure:**
 
-**Easy path:** Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the tissue in the image moved across the screen (the opposite of the view's pan), and solves for the `Camera orientation` that matches under the stage polarity in the config (`stage.polarity`). **Apply** writes only the camera orientation, to `hardware.camera_orientation.<camera>` in the active microscope config for the camera in use (connect to the microscope first: before QPSC knows which camera is in use, Apply refuses with an error) -- polarity is treated as a hardware-wiring fact (see the [stage polarity](#stage-polarity-in-the-microscope-config-not-a-preference) sections above) and must be verified separately by direct stage observation. If the tool reports "no camera orientation matches," that is a signal your polarity may be wrong; verify via the MicroManager-script check before retrying. Manual override is available for users who need to edit both at once.
+**Recommended:** connect to the microscope first; until QPSC knows which camera is in use, **Apply** refuses with an error. Then open Live Viewer → Navigate tab → `Calibrate Directions...` (also a step in the Setup Wizard). The dialog jogs the stage in `+X` and `+Y`, asks which way the tissue in the image moved across the screen (the opposite of the view's pan), and solves for the `Camera orientation` that matches under the stage polarity in the config (`stage.polarity`). **Apply** writes only the camera orientation, to `hardware.camera_orientation.<detector ID>` in the active microscope config for the camera in use -- polarity is treated as a hardware-wiring fact (see the [stage polarity](#stage-polarity-in-the-microscope-config-not-a-preference) sections above) and must be verified separately by direct stage observation. If the tool reports "no camera orientation matches," that is a signal your polarity may be wrong; verify via the MicroManager-script check before retrying. Manual override is available for users who need to edit both at once.
 
 **Manual procedure (fallback):**
 
@@ -197,7 +197,7 @@ The goal is to pick whichever combination of `stage.polarity` (in the microscope
 3. Double-click-to-center — the clicked feature jumps to the center of the view
 4. A small stitched 2×2 acquisition — the corners are laid out as expected
 
-To try a value, use Calibrate Directions > **Manual override**, which writes it to the config at once for the camera in use, or edit `hardware.camera_orientation.<camera>` in the config and restart QuPath.
+To try a value, use Calibrate Directions > **Manual override**, which writes it to the config at once for the camera in use, or edit `hardware.camera_orientation.<detector ID>` in the config and restart QuPath.
 
 Procedure:
 1. Start with the `stage.polarity` your config already has, and `Camera orientation = NORMAL`.
