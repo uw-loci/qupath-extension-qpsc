@@ -1017,7 +1017,7 @@ preference governs the setup pass only — the acquire pass shows no dialogs in 
 |-------|----------|
 | `MANUAL` | Today's flow. Every setup dialog waits for you. |
 | `FULLY_AUTOMATIC` | Each setup dialog confirms its primary action after 1 second. Interacting with a dialog does **not** pause it. |
-| `AUTOMATIC_WITH_OVERRIDE` | Each setup dialog counts down (showing the remaining seconds in the button label), then confirms its primary action. Clicking or typing in a dialog cancels that countdown and hands the **rest of that slide** back to you; automation resumes at the next slide. |
+| `AUTOMATIC_WITH_OVERRIDE` | Each setup dialog counts down (the button it will press gets an orange outline, and the window title shows the seconds left), then confirms its primary action. Clicking or typing in a dialog cancels that countdown and hands the **rest of that slide** back to you; automation resumes at the next slide. |
 
 The countdown length comes from the microscope YAML, not from this dialog — see
 `acquisition > multislide > auto_advance_seconds` below. The mode is read once when a batch
