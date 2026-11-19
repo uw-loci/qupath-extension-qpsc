@@ -3,6 +3,7 @@ package qupath.ext.qpsc.ui.acquisition;
 import javafx.animation.KeyFrame;
 import javafx.animation.Timeline;
 import javafx.application.Platform;
+import javafx.beans.property.StringProperty;
 import javafx.event.EventHandler;
 import javafx.scene.Node;
 import javafx.scene.control.Button;
@@ -20,6 +21,7 @@ import qupath.ext.qpsc.preferences.MultiSlideAcquisitionMode;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
+import qupath.ext.qpsc.ui.ThemeColors;
 
 /**
  * Counts a multi-slide setup dialog down and then fires its primary button, so the
@@ -183,7 +185,7 @@ public final class AutoAdvanceController {
             logger.warn("Auto-advance: no button node for {}; dialog will wait for a human", primary.getText());
             return;
         }
-        Countdown countdown = new Countdown(button, dialog.getDialogPane());
+        Countdown countdown = new Countdown(button, dialog.getDialogPane(), dialog.titleProperty());
         dialog.addEventHandler(DialogEvent.DIALOG_HIDDEN, e -> countdown.stop());
         countdown.start();
     }
@@ -200,7 +202,7 @@ public final class AutoAdvanceController {
             return;
         }
         Node root = (stage.getScene() != null) ? stage.getScene().getRoot() : null;
-        Countdown countdown = new Countdown(primary, root);
+        Countdown countdown = new Countdown(primary, root, stage.titleProperty());
         stage.addEventHandler(WindowEvent.WINDOW_HIDDEN, e -> countdown.stop());
         countdown.start();
     }
@@ -302,14 +304,33 @@ public final class AutoAdvanceController {
     }
 
     /**
-     * One dialog's countdown: relabels the primary button each second, fires it on expiry,
-     * and (in AUTOMATIC_WITH_OVERRIDE) cancels itself on the first deliberate interaction.
+     * The primary button's style while a countdown runs: its own style plus an outline drawn
+     * outside it (negative insets equal to the width), so the outline takes no layout space and
+     * cannot cut off the label.
+     */
+    static String countdownStyle(String originalStyle) {
+        String base = originalStyle == null || originalStyle.isBlank() ? "" : originalStyle.strip() + "; ";
+        return base + "-fx-border-color: " + ThemeColors.WARNING
+                + "; -fx-border-width: 3; -fx-border-insets: -3; -fx-border-radius: 4;";
+    }
+
+    /**
+     * One dialog's countdown: marks the primary button with a border and shows the seconds
+     * left in the window title, fires the button on expiry, and (in AUTOMATIC_WITH_OVERRIDE)
+     * cancels itself on the first deliberate interaction.
+     *
+     * <p>The button's own text is never changed. Buttons are sized for their normal label,
+     * and a suffix such as " (auto 5s)" was cut off in rows of several buttons ("Solve &amp;
+     * Save (au...").
      */
     private static final class Countdown {
 
         private final Button button;
         private final Node interactionRoot;
         private final String originalText;
+        private final String originalStyle;
+        private final StringProperty title;
+        private final String originalTitle;
         private final int totalSec;
         private final Timeline timeline = new Timeline();
         private final EventHandler<MouseEvent> mouseFilter;
@@ -318,10 +339,13 @@ public final class AutoAdvanceController {
         private int remaining;
         private boolean stopped = false;
 
-        Countdown(Button button, Node interactionRoot) {
+        Countdown(Button button, Node interactionRoot, StringProperty title) {
             this.button = button;
             this.interactionRoot = interactionRoot;
             this.originalText = button.getText();
+            this.originalStyle = button.getStyle();
+            this.title = title;
+            this.originalTitle = title != null ? title.get() : null;
             this.totalSec = (mode == MultiSlideAcquisitionMode.FULLY_AUTOMATIC)
                     ? FULLY_AUTOMATIC_FLOOR_SECONDS
                     : Math.max(1, autoAdvanceSec);
@@ -335,6 +359,7 @@ public final class AutoAdvanceController {
         }
 
         void start() {
+            button.setStyle(countdownStyle(originalStyle));
             relabel();
             if (interactionRoot != null && mouseFilter != null) {
                 interactionRoot.addEventFilter(MouseEvent.MOUSE_PRESSED, mouseFilter);
@@ -352,7 +377,10 @@ public final class AutoAdvanceController {
         }
 
         private void relabel() {
-            button.setText(originalText + " (auto " + Math.max(remaining, 0) + "s)");
+            if (title != null) {
+                String what = "auto: " + originalText + " in " + Math.max(remaining, 0) + "s";
+                title.set(originalTitle == null || originalTitle.isBlank() ? what : originalTitle + " -- " + what);
+            }
         }
 
         private void fire() {
@@ -391,7 +419,10 @@ public final class AutoAdvanceController {
                 interactionRoot.removeEventFilter(MouseEvent.MOUSE_PRESSED, mouseFilter);
                 interactionRoot.removeEventFilter(KeyEvent.KEY_PRESSED, keyFilter);
             }
-            button.setText(originalText);
+            button.setStyle(originalStyle);
+            if (title != null) {
+                title.set(originalTitle);
+            }
         }
     }
 }
