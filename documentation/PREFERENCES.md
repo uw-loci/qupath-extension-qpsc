@@ -935,7 +935,7 @@ Stage coordinates are *nominal*. Real stages have backlash, finite encoder resol
 
 **Failure is safe.** Featureless or blown-out overlaps, dust specks, and repeating texture are all detected and refused rather than guessed at, and no tile may move further than the overlap band. The worst case is that a tile keeps its nominal position, never that it is thrown across the mosaic. `TileConfiguration.txt` is never modified.
 
-The solve is written to `TileRegistration.txt` beside the tile subdirectories, so it can be inspected if a mosaic looks wrong.
+The solve is written to `TileRegistration.txt` beside the tile subdirectories, so it can be inspected if a mosaic looks wrong. A region of one tile has no neighbor to register against, so it is not solved, no file is written, and the tile stitches at its nominal position.
 
 Off by default: it changes where every tile lands, and is worth confirming on your scope before relying on it. Translation only -- rotation and scale are not corrected.
 
