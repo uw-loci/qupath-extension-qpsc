@@ -28,6 +28,7 @@ import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.acquisition.AcquisitionSpaceCheck;
 import qupath.ext.qpsc.acquisition.StageFrameWatchdog;
 import qupath.ext.qpsc.acquisition.TilingUtilities;
+import qupath.ext.qpsc.background.BackgroundSettingsReader;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.controller.ExistingImageWorkflowV2.WorkflowState;
 import qupath.ext.qpsc.focus.ZFocusPredictionModel;
@@ -154,6 +155,13 @@ public class AcquisitionManager {
      * about a run nobody touched.
      */
     private volatile Throwable lastAnnotationFailure = null;
+
+    /**
+     * Why the stage frame watchdog canceled the current acquisition, or null. The cancel it sends
+     * comes back from the server as CANCELLED, the same as the operator's Cancel; this is what
+     * keeps it from being reported as one.
+     */
+    private volatile String stageFrameStopReason = null;
 
     /** Maximum plausible focal-plane step (um) between consecutive acquisitions.
      *  A finalZ that jumps more than this from {@link #lastAcquisitionZ} is treated
@@ -810,6 +818,7 @@ public class AcquisitionManager {
         lastAcquisitionZ = state.seedZ;
         lastRejectedZ = null;
         lastAnnotationFailure = null;
+        stageFrameStopReason = null;
         if (state.seedZ != null) {
             logger.info(
                     "Seeding first-annotation AF hint with setup-pass focus Z={} um",
@@ -1080,7 +1089,11 @@ public class AcquisitionManager {
                 } else if (error != null) {
                     Platform.runLater(() -> progressDialog.showError("Workflow failed: " + error.getMessage()));
                 } else if (!result) {
-                    Platform.runLater(() -> progressDialog.showError("Workflow stopped unexpectedly"));
+                    Throwable failure = lastAnnotationFailure;
+                    String why = failure != null && failure.getMessage() != null
+                            ? failure.getMessage()
+                            : "Workflow stopped unexpectedly";
+                    Platform.runLater(() -> progressDialog.showError(why));
                 }
                 // Dialog will auto-close after completion or error display
             }
@@ -1501,7 +1514,7 @@ public class AcquisitionManager {
                 // polling twice a second for the Live Viewer and discarding every reading;
                 // those readings are the only thing on this side that can notice the
                 // controller's 0,0 moving, which no commanded-vs-reported check can see.
-                armStageFrameWatchdog(annotation);
+                armStageFrameWatchdog(annotation, config.bgFolder());
                 try {
                     // A Cancel pressed while the command was being prepared must not be
                     // followed by the command. Checked here and again after the idle wait,
@@ -1568,9 +1581,13 @@ public class AcquisitionManager {
      * is left unarmed rather than guessed at, since a wrong envelope would either cancel good
      * runs or watch nothing.
      *
+     * <p>The spot where the run's background was collected is accepted too: the LC-PolScope drift
+     * correction goes back there during the run, and it is usually outside the region.
+     *
      * @param annotation the region about to be acquired
+     * @param bgFolder   the run's background folder, or null
      */
-    private void armStageFrameWatchdog(PathObject annotation) {
+    private void armStageFrameWatchdog(PathObject annotation, String bgFolder) {
         if (state.transform == null || annotation == null || annotation.getROI() == null) {
             logger.debug("Stage frame watchdog not armed: no transform or no region ROI");
             return;
@@ -1594,6 +1611,8 @@ public class AcquisitionManager {
                                                 // Off the FX thread: CANC waits on the server's per-client
                                                 // lock and can sit behind a tile capture for tens of seconds.
                                                 try {
+                                                    stageFrameStopReason = StageFrameWatchdog.getInstance()
+                                                            .suspectReason();
                                                     logger.error(
                                                             "Canceling the acquisition because the stage frame is no longer trustworthy");
                                                     MicroscopeController.getInstance()
@@ -1605,6 +1624,14 @@ public class AcquisitionManager {
                                             },
                                             "StageFrameCancelSender")
                                     .start());
+            double[] backgroundSpot = BackgroundSettingsReader.readStagePosition(bgFolder);
+            if (backgroundSpot != null) {
+                StageFrameWatchdog.getInstance()
+                        .allowSpot(
+                                backgroundSpot[0],
+                                backgroundSpot[1],
+                                "where the background in use was collected (drift correction visits)");
+            }
         } catch (Exception e) {
             logger.warn("Could not arm the stage frame watchdog for {}: {}", annotation.getName(), e.getMessage());
         }
@@ -2015,6 +2042,11 @@ public class AcquisitionManager {
                     return true;
 
                 case CANCELLED:
+                    String frameReason = stageFrameStopReason;
+                    if (frameReason != null) {
+                        // QPSC canceled it, not the operator: report it as the failure it is.
+                        throw new RuntimeException("Stopped by the stage position check: " + frameReason);
+                    }
                     logger.info("Acquisition was canceled for {}", annotation.getName());
                     // User clicked cancel - no error notification needed, dialog already shows state
                     if (progressDialog != null && progressDialog.isCancelled()) {

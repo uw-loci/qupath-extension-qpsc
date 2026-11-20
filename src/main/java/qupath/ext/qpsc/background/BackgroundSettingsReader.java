@@ -675,6 +675,41 @@ public class BackgroundSettingsReader {
     }
 
     /**
+     * The stage X, Y (um) where the background set in {@code backgroundFolder} was collected,
+     * from {@code context.stage_xy_um} of its {@code background_settings.yml}, or null when the
+     * folder, the file or the position is missing. The command server reads the same value to go
+     * back to that spot during an LC-PolScope drift-corrected run.
+     */
+    public static double[] readStagePosition(String backgroundFolder) {
+        if (backgroundFolder == null || backgroundFolder.isBlank()) {
+            return null;
+        }
+        File settingsFile = new File(backgroundFolder, "background_settings.yml");
+        if (!settingsFile.isFile()) {
+            return null;
+        }
+        try (FileReader reader = new FileReader(settingsFile, StandardCharsets.UTF_8)) {
+            Map<String, Object> data = new Yaml().load(reader);
+            Object xy = data == null ? null : getMapValue(getMap(data, "context"), "stage_xy_um");
+            if (xy instanceof List<?> list
+                    && list.size() == 2
+                    && list.get(0) instanceof Number x
+                    && list.get(1) instanceof Number y
+                    && Double.isFinite(x.doubleValue())
+                    && Double.isFinite(y.doubleValue())) {
+                return new double[] {x.doubleValue(), y.doubleValue()};
+            }
+        } catch (Exception e) {
+            logger.debug("No background stage position in {}: {}", settingsFile, e.toString());
+        }
+        return null;
+    }
+
+    private static Object getMapValue(Map<String, Object> data, String key) {
+        return data == null ? null : data.get(key);
+    }
+
+    /**
      * Safely extract a Map from YAML data
      */
     @SuppressWarnings("unchecked")

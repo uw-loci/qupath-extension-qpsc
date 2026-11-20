@@ -115,4 +115,23 @@ class TileCleanupAfterFailedRunTest {
         assertThat(held).containsExactly(only.toFile());
         assertThat(hasTiles(only)).isTrue();
     }
+
+    /**
+     * Deleting held tiles keeps the _protected folder (LC-PolScope drift reference images, the
+     * background the run used), so the count must not include it, or the Held tiles window would
+     * report images it was never going to delete as still kept.
+     */
+    @Test
+    void protectedFilesAreNotCountedAsTiles() throws IOException {
+        Path region = region("67008_51048");
+        Path kept = Files.createDirectories(region.resolve(TileProcessingUtilities.PROTECTED_FOLDER)
+                .resolve("drift_correction")
+                .resolve("r"));
+        Files.writeString(kept.resolve("State0.tif"), "reference");
+        assertThat(TileCleanupHelper.countTileImages(region)).isEqualTo(1);
+
+        TileProcessingUtilities.deleteTilesAndFolder(region.toString());
+        assertThat(TileCleanupHelper.countTileImages(region)).isZero();
+        assertThat(kept.resolve("State0.tif")).exists();
+    }
 }

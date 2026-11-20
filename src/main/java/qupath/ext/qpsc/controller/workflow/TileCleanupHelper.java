@@ -144,7 +144,9 @@ public class TileCleanupHelper {
 
     /**
      * Tile images (.tif / .tiff) under a region folder: the folder, its angle or channel
-     * folders, and z/t folders below those. Unreadable folders are skipped, not fatal.
+     * folders, and z/t folders below those. Unreadable folders are skipped, not fatal. Files in
+     * a {@link TileProcessingUtilities#PROTECTED_FOLDER} folder are not tiles and are not
+     * counted: tile cleanup and deletion keep them.
      */
     public static int countTileImages(Path regionDir) {
         int[] count = {0};
@@ -157,6 +159,13 @@ public class TileCleanupHelper {
                     java.util.EnumSet.noneOf(java.nio.file.FileVisitOption.class),
                     4,
                     new SimpleFileVisitor<>() {
+                        @Override
+                        public FileVisitResult preVisitDirectory(Path dir, BasicFileAttributes attrs) {
+                            return TileProcessingUtilities.isProtected(regionDir, dir)
+                                    ? FileVisitResult.SKIP_SUBTREE
+                                    : FileVisitResult.CONTINUE;
+                        }
+
                         @Override
                         public FileVisitResult visitFile(Path file, BasicFileAttributes attrs) {
                             String name = file.getFileName().toString().toLowerCase(Locale.ROOT);

@@ -532,7 +532,14 @@ slide box can straddle the stage origin -- slot 2 of the PPM quad holder does --
 which would make a re-zeroed controller reporting 0,0 look like it was sitting
 legally on the slide. It allows a 2 mm margin for the autofocus tissue search,
 and ignores the first 30 seconds after a region starts, which is when the stage
-is still traveling to it.
+is still traveling to it. It also accepts the stage within 2 mm of where the
+run's background was collected (`context.stage_xy_um` in its
+`background_settings.yml`), where the LC-PolScope background drift correction
+goes during the run.
+
+The same check runs in a single-slide Acquire from Existing Image. There the
+progress window, the error dialog and the **Held tiles** window give this
+reason, not "canceled by user".
 
 **Why the whole pass stops.** Every slide's alignment was measured against the
 old origin, so acquiring the remaining ones would image the wrong part of each.

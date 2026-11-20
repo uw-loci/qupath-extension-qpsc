@@ -113,6 +113,37 @@ class StageFrameWatchdogTest {
         assertThat(watchdog.suspectReason()).isNull();
     }
 
+    /**
+     * The LC-PolScope drift correction goes back to where the background was collected, which is
+     * usually off the tissue. On 2026-11-20 that spot (24711, 2534) sat 1.4 mm past region
+     * 67008_51048's margin, and the watchdog canceled the run as a stage re-zero.
+     */
+    @Test
+    void aNamedPlannedStopOutsideTheRegionIsTolerated() {
+        watchdog.arm(-5458, -7827, 21308, 13115, "67008_51048", null);
+        watchdog.allowSpot(24711, 2534, "background spot");
+        for (int i = 0; i < 10; i++) {
+            report(24711, 2534);
+        }
+        assertThat(watchdog.suspectReason()).isNull();
+        // Anywhere else outside the region is still reported.
+        report(40000, 2534);
+        report(40000, 2534);
+        report(40000, 2534);
+        assertThat(watchdog.suspectReason()).contains("67008_51048");
+    }
+
+    @Test
+    void aPlannedStopIsForgottenWhenTheNextRegionIsArmed() {
+        watchdog.arm(-5458, -7827, 21308, 13115, "67008_51048", null);
+        watchdog.allowSpot(24711, 2534, "background spot");
+        watchdog.arm(MIN_X, MIN_Y, MAX_X, MAX_Y, "33775_25384", null);
+        report(24711, 2534);
+        report(24711, 2534);
+        report(24711, 2534);
+        assertThat(watchdog.suspectReason()).contains("33775_25384");
+    }
+
     @Test
     void oneReadingOutsideIsNotEnough() {
         watchdog.arm(MIN_X, MIN_Y, MAX_X, MAX_Y, "33775_25384", null);

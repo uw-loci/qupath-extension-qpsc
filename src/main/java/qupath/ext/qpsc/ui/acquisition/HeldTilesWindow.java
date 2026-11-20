@@ -50,6 +50,14 @@ public final class HeldTilesWindow {
 
     private static Stage stage;
     private static VBox rows;
+    private static Label intro;
+    /** Rows still waiting for the operator's choice (FX thread only). */
+    private static int undecided = 0;
+
+    static final String INTRO_UNDECIDED = "These regions stopped part way. Their tiles are kept until you choose."
+            + " Closing this window keeps them on disk.";
+    static final String INTRO_ALL_DECIDED =
+            "Nothing is waiting for a choice any more. Closing this window changes nothing.";
 
     private HeldTilesWindow() {}
 
@@ -95,7 +103,8 @@ public final class HeldTilesWindow {
 
     private static void addRow(HeldRegion held) {
         ensureStage();
-        Label title = new Label(held.sample() + " / " + held.region() + ": " + held.tileImages() + " tile images kept");
+        String regionName = held.sample() + " / " + held.region() + ": ";
+        Label title = new Label(regionName + held.tileImages() + " tile images kept");
         title.setStyle("-fx-font-weight: bold;");
         Label detail = new Label("Stopped because: " + held.reason() + "\nFolder: " + held.folder());
         detail.setWrapText(true);
@@ -124,6 +133,8 @@ public final class HeldTilesWindow {
                             status.setText(
                                     "Stitched and imported. Tiles handled by your preference (" + handling + ").");
                             status.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
+                            title.setText(regionName + "stitched");
+                            decided();
                             Thread t = new Thread(
                                     () -> TileCleanupHelper.performCleanup(
                                             held.folder().getPath()),
@@ -157,7 +168,22 @@ public final class HeldTilesWindow {
                     () -> {
                         TileProcessingUtilities.deleteTilesAndFolder(
                                 held.folder().getPath());
-                        Platform.runLater(() -> status.setText("Deleted."));
+                        int left =
+                                TileCleanupHelper.countTileImages(held.folder().toPath());
+                        Platform.runLater(() -> {
+                            if (left == 0) {
+                                title.setText(regionName + held.tileImages() + " tile images deleted");
+                                status.setText("Deleted. No tile images of this region are left on disk.");
+                                status.setStyle("-fx-text-fill: " + ThemeColors.SUCCESS + ";");
+                                decided();
+                            } else {
+                                title.setText(regionName + left + " tile images kept");
+                                status.setText(left + " tile images could not be deleted (see the log). They are"
+                                        + " still at the folder above.");
+                                stitch.setDisable(false);
+                                delete.setDisable(false);
+                            }
+                        });
                     },
                     "HeldTiles-delete");
             t.setDaemon(true);
@@ -165,6 +191,8 @@ public final class HeldTilesWindow {
         });
 
         rows.getChildren().add(row);
+        undecided++;
+        intro.setText(INTRO_UNDECIDED);
         stage.show();
         stage.toFront();
     }
@@ -175,8 +203,8 @@ public final class HeldTilesWindow {
         }
         rows = new VBox(6);
         rows.setPadding(new Insets(10));
-        Label intro = new Label("These regions stopped part way. Their tiles are kept until you choose."
-                + " Closing this window keeps them on disk.");
+        undecided = 0;
+        intro = new Label(INTRO_UNDECIDED);
         intro.setWrapText(true);
         intro.setMaxWidth(560);
         VBox content = new VBox(8, intro, new Separator(), rows);
@@ -193,9 +221,23 @@ public final class HeldTilesWindow {
         }
         stage.setScene(new Scene(scroll, 620, 360));
         stage.setOnHidden(e -> {
-            logger.info("Held tiles window closed; any undecided tiles stay on disk");
+            if (undecided > 0) {
+                logger.info("Held tiles window closed; {} undecided region(s) stay on disk", undecided);
+            } else {
+                logger.info("Held tiles window closed");
+            }
             stage = null;
             rows = null;
+            intro = null;
+            undecided = 0;
         });
+    }
+
+    /** One row has been stitched or deleted; when none is left waiting, the intro says so. */
+    private static void decided() {
+        undecided = Math.max(0, undecided - 1);
+        if (intro != null && undecided == 0) {
+            intro.setText(INTRO_ALL_DECIDED);
+        }
     }
 }

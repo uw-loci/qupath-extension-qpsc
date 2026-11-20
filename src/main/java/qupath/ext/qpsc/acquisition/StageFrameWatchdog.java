@@ -27,8 +27,10 @@ import org.slf4j.LoggerFactory;
  * because the first thing an acquisition does is travel to the region -- possibly across the
  * whole holder -- and every reading on the way is legitimately outside. And a run of consecutive
  * violations, because a single reading taken mid-move is a point on a path, not a place. Once a
- * region is under way the stage only leaves its box by the autofocus tissue search, which moves a
- * field at a time and is covered by the margin.
+ * region is under way the stage leaves its box only by the autofocus tissue search, which moves a
+ * field at a time and is covered by the margin, and by planned stops elsewhere that the caller
+ * names with {@link #allowSpot} (the LC-PolScope drift correction goes back to the spot where
+ * the background was collected, which is usually off the tissue and outside the region).
  *
  * <p><b>It cannot correct anything.</b> Once the origin has moved, the holder calibration, every
  * per-slide alignment and the stage coordinates recorded beside data already on disk all describe
@@ -103,6 +105,9 @@ public final class StageFrameWatchdog {
     private volatile boolean armed = false;
     private volatile boolean pausedForOperator = false;
     private volatile double minX, maxX, minY, maxY;
+    /** Boxes {minX, maxX, minY, maxY} around planned stops outside the region; see allowSpot. */
+    private final java.util.List<double[]> allowedSpots = new java.util.concurrent.CopyOnWriteArrayList<>();
+
     private volatile String label = "";
     private volatile long armedAtMs = 0;
     private volatile int consecutiveViolations = 0;
@@ -158,6 +163,7 @@ public final class StageFrameWatchdog {
         this.minY = Math.min(stageMinY, stageMaxY) - ENVELOPE_MARGIN_UM;
         this.maxY = Math.max(stageMinY, stageMaxY) + ENVELOPE_MARGIN_UM;
         this.label = regionLabel == null ? "" : regionLabel;
+        this.allowedSpots.clear();
         this.onSuspect = onSuspect;
         this.consecutiveViolations = 0;
         this.pausedForOperator = false;
@@ -181,6 +187,40 @@ public final class StageFrameWatchdog {
                 Math.round(this.minY),
                 Math.round(this.maxY),
                 Math.round(ENVELOPE_MARGIN_UM));
+    }
+
+    /**
+     * Accepts positions within the envelope margin of one stage point while armed for the current
+     * region, for a stop the acquisition makes on purpose outside the region. Cleared by the next
+     * {@link #arm}.
+     *
+     * @param x   stage X of the planned stop (um)
+     * @param y   stage Y of the planned stop (um)
+     * @param why what the stop is, for the log
+     */
+    public void allowSpot(double x, double y, String why) {
+        if (!Double.isFinite(x) || !Double.isFinite(y)) {
+            return;
+        }
+        allowedSpots.add(new double[] {
+            x - ENVELOPE_MARGIN_UM, x + ENVELOPE_MARGIN_UM, y - ENVELOPE_MARGIN_UM, y + ENVELOPE_MARGIN_UM
+        });
+        logger.info(
+                "Stage frame watchdog for {} also accepts ({}, {}) um +/- {} um: {}",
+                label,
+                Math.round(x),
+                Math.round(y),
+                Math.round(ENVELOPE_MARGIN_UM),
+                why);
+    }
+
+    private boolean inAllowedSpot(double x, double y) {
+        for (double[] box : allowedSpots) {
+            if (x >= box[0] && x <= box[1] && y >= box[2] && y <= box[3]) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /** Disarms the watchdog and stops holding {@link StagePositionManager} polling open. */
@@ -279,7 +319,7 @@ public final class StageFrameWatchdog {
         if (System.currentTimeMillis() - armedAtMs < graceMs) {
             return;
         }
-        if (x >= minX && x <= maxX && y >= minY && y <= maxY) {
+        if ((x >= minX && x <= maxX && y >= minY && y <= maxY) || inAllowedSpot(x, y)) {
             consecutiveViolations = 0;
             return;
         }

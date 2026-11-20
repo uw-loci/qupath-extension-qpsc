@@ -1951,7 +1951,11 @@ region:
 - **Stitch as a normal acquisition...** opens **Re-stitch Tiles** on that folder. Missing tiles
   are left as gaps. When every angle is stitched and imported, the tiles are then handled by
   your tile-handling preference (Delete / Zip / Keep), as after any acquisition.
-- **Delete tiles...** deletes them after you confirm.
+- **Delete tiles...** deletes them after you confirm. Files in the region's `_protected` folder
+  (the background and drift-correction records) are kept.
+
+Once a region is stitched or deleted, its block says so ("15 tile images deleted"), and when no
+region is left waiting, the top line says that closing the window changes nothing.
 
 Closing the window without choosing keeps the tiles on disk; **Re-stitch Tiles** can still
 stitch the folder later. Regions that finished are never touched, and an unfinished region
