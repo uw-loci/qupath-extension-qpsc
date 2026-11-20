@@ -85,6 +85,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **No focus survey with the focus surface off.** With **Focus survey points** above 0 and **Focus surface** off, QPSC still chose survey tiles and sent `--focus-survey`, which the server then skipped with a warning. It now asks for a survey only when the focus surface is `observe` or `enforce` and autofocus is on, as PREFERENCES already said.
+
+- **No more `Channel id 'State0' not found in channel library` warnings on LC-PolScope runs.** The Micro-Manager MDA export looked the channels up under the bare modality (`lcpolscope`) instead of its acquisition profile (`lcpolscope_20x`), found none, and wrote each channel without its name and preset. It now uses the same profile as the acquisition.
+
 - **A run stopped by the stage position check no longer says "canceled by user".** When the check that watches for a stage re-zero stops an Acquire from Existing Image run, the progress window, an error dialog and the **Held tiles** window now give its reason. Before, they said *Acquisition canceled by user* and *Workflow stopped unexpectedly*, and the reason was only in the log.
 
 - **The stage position check accepts the spot where the background was collected.** LC-PolScope background drift correction goes back to that spot during the run. It is often outside the region, and the check took the visit for a stage re-zero and canceled the run about 2 minutes in. The spot comes from `context.stage_xy_um` in the background's `background_settings.yml`, the same position the server goes to.

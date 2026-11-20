@@ -1284,7 +1284,7 @@ public class AcquisitionManager {
                 try {
                     Path regionDir = Paths.get(state.projectInfo.getTempTileDirectory(), annotation.getName());
                     List<TileStagePos> tiles = readTilesFromConfig(regionDir);
-                    Map<String, Channel> channelLibrary = resolveChannelLibrary(baseModality);
+                    Map<String, Channel> channelLibrary = resolveChannelLibrary(profileKey);
                     MdaRequestBuilder.Built built = MdaRequestBuilder.build(
                             regionDir,
                             annotation.getName(),
@@ -1477,8 +1477,18 @@ public class AcquisitionManager {
                         }
 
                         // Focus survey: measure the focus surface before the tile loop
-                        // rather than discovering it tile by tile. Opt-in, 0 = off.
-                        int surveyPoints = QPPreferenceDialog.getFocusSurveyPoints();
+                        // rather than discovering it tile by tile. Opt-in, 0 = off. Only
+                        // with the focus surface on (it is what the points are fitted to;
+                        // the server skips a survey without one) and autofocus on.
+                        int surveyPoints = focusSurveyPointsToRequest(
+                                QPPreferenceDialog.getFocusSurveyPoints(),
+                                QPPreferenceDialog.getFocusSurfaceMode(),
+                                QPPreferenceDialog.getDisableAllAutofocus());
+                        if (surveyPoints == 0 && QPPreferenceDialog.getFocusSurveyPoints() > 0) {
+                            logger.debug(
+                                    "Focus survey not requested for {}: the focus surface or autofocus is off",
+                                    annotation.getName());
+                        }
                         if (surveyPoints > 0) {
                             List<Integer> surveyTiles = findSpreadAfTilesFromWSI(
                                     scan,
@@ -2713,19 +2723,34 @@ public class AcquisitionManager {
     }
 
     /**
+     * How many focus survey points to ask the server for: the preference, but 0 when the focus
+     * surface is off or autofocus is disabled. The survey's points are fitted to the focus
+     * surface, and the server skips a survey without one, so asking would only cost the tile
+     * selection and two log lines.
+     */
+    static int focusSurveyPointsToRequest(int preferencePoints, String focusSurfaceMode, boolean autofocusDisabled) {
+        if (preferencePoints <= 0 || autofocusDisabled || focusSurfaceMode == null) {
+            return 0;
+        }
+        return "off".equals(focusSurfaceMode.strip()) || focusSurfaceMode.isBlank() ? 0 : preferencePoints;
+    }
+
+    /**
      * Resolves the channel library (id -> Channel) for the active modality via the modality handler,
      * matching the resolution path used by {@code ChannelResolutionService}. Returns an empty map for
      * non-channel-based modalities (PPM and other angle-only paths) so {@link MdaRequestBuilder} can
      * fall back to its degenerate ResolvedChannel form.
+     *
+     * @param profileKey the acquisition profile key (e.g. {@code lcpolscope_20x}), the same key the
+     *     acquisition's own channel list is resolved with; the bare modality finds no profile
      */
-    private Map<String, Channel> resolveChannelLibrary(String baseModality) {
-        if (baseModality == null || state == null || state.sample == null) {
+    private Map<String, Channel> resolveChannelLibrary(String profileKey) {
+        if (profileKey == null || state == null || state.sample == null) {
             return Map.of();
         }
         try {
-            ModalityHandler handler = ModalityRegistry.getHandler(baseModality);
-            List<Channel> channels = handler.getChannels(
-                            baseModality, state.sample.objective(), state.sample.detector())
+            ModalityHandler handler = ModalityRegistry.getHandler(profileKey);
+            List<Channel> channels = handler.getChannels(profileKey, state.sample.objective(), state.sample.detector())
                     .join();
             if (channels == null || channels.isEmpty()) {
                 return Map.of();
@@ -2736,7 +2761,7 @@ public class AcquisitionManager {
             }
             return byId;
         } catch (Exception e) {
-            logger.debug("Could not resolve channel library for modality '{}': {}", baseModality, e.getMessage());
+            logger.debug("Could not resolve channel library for profile '{}': {}", profileKey, e.getMessage());
             return Map.of();
         }
     }

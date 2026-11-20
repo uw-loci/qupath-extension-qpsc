@@ -898,13 +898,6 @@ public class QPPreferenceDialog {
     }
 
     /**
-     * Focus-surface mode for acquisition: {@code off}, {@code observe} or {@code enforce}.
-     *
-     * <p>Sent to the server as {@code --focus-surface}. The server treats anything it does not
-     * recognize as {@code off}, so a stale preference degrades to today's behavior rather than
-     * to a guess.
-     */
-    /**
      * How to treat an alignment that cannot be confirmed against the sample: {@code off},
      * {@code warn} or {@code halt}. Defaults to {@code halt}; an unreadable value is
      * treated as {@code halt} rather than silently disabling the check.
@@ -918,6 +911,13 @@ public class QPPreferenceDialog {
         return alignmentCheckModeProperty;
     }
 
+    /**
+     * Focus-surface mode for acquisition: {@code off}, {@code observe} or {@code enforce}.
+     *
+     * <p>Sent to the server as {@code --focus-surface}. The server treats anything it does not
+     * recognize as {@code off}, so a stale preference degrades to today's behavior rather than
+     * to a guess.
+     */
     public static String getFocusSurfaceMode() {
         String mode = focusSurfaceModeProperty.get();
         return (mode == null || mode.isBlank()) ? "off" : mode;
