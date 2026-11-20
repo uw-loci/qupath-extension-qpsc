@@ -877,7 +877,7 @@ Before each annotation's stitches start, QPSC estimates their memory and warns w
 | Requires Restart | No (applies to the next annotation that starts stitching) |
 
 **Description:**
-Whether a modality's derived outputs -- LC-PolScope `retardance`, `orientation` and `orientation_color`; PPM `.biref` and `.sum` -- stitch **alongside** the angles or channels, or **after** them.
+Whether a modality's derived outputs -- LC-PolScope `retardance`, `orientation` and `orientation_color` (and their `driftcorr_` copies when the server's drift correction is on); PPM `.biref` and `.sum` -- stitch **alongside** the angles or channels, or **after** them.
 
 - **ON (default):** derived outputs go on the same pool as the angles/channels, queued behind them, and take a slot as one frees. They can still be stitching while the channel merge runs. Fastest.
 - **OFF:** derived outputs wait until the channel merge is done (for PPM angles: until the last angle is done) and only then use the stitching slots, up to **Stitching concurrency** at once. The merge runs alone, as it did before 2026-11-03. Use this when the computer's memory or processors are needed for other work while QPSC stitches.
