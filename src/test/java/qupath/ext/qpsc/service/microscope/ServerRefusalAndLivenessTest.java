@@ -105,7 +105,7 @@ class ServerRefusalAndLivenessTest {
 
     @Test
     void theAcquisitionManagerAsksBeforeEveryAcquire() throws Exception {
-        String body = method(MANAGER, "armStageFrameWatchdog(annotation);");
+        String body = method(MANAGER, "armStageFrameWatchdog(annotation, config.bgFolder());");
         int ask = body.indexOf("awaitServerIdle(SERVER_IDLE_WAIT_MS)");
         int send = body.indexOf("startAcquisition(config.commandBuilder())");
         assertThat(ask).isGreaterThan(0);

@@ -25,10 +25,10 @@ class StageFrameGuardWiringTest {
     void everyRegionArmsTheWatchdogAndReleasesItAfterwards() throws Exception {
         String src = Files.readString(ACQUISITION_MANAGER);
 
-        assertThat(src).contains("armStageFrameWatchdog(annotation);");
+        assertThat(src).contains("armStageFrameWatchdog(annotation, config.bgFolder());");
         // Released in a finally: a region that throws must not leave the watchdog holding
         // position polling open, nor leave the next region judged against this one's bounds.
-        int arm = src.indexOf("armStageFrameWatchdog(annotation);");
+        int arm = src.indexOf("armStageFrameWatchdog(annotation, config.bgFolder());");
         int tryAfterArm = src.indexOf("try {", arm);
         int disarm = src.indexOf("StageFrameWatchdog.getInstance().disarm();", arm);
         int finallyAfterArm = src.indexOf("} finally {", arm);
