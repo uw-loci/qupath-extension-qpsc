@@ -2701,10 +2701,12 @@ public class StitchingHelper {
      * <p>The Python acquisition side writes outputs it computed per tile into folders of their
      * own (PPM {@code 7.0.biref} / {@code 7.0.sum}, LC-PolScope {@code retardance},
      * {@code orientation}, {@code orientation_color}); the suffixes come from
-     * {@link ModalityHandler#getPostProcessingDirectorySuffixes()}. For each suffix, in order, the
-     * first folder by name ending with it. A target folder, an isolation folder ({@code _temp_*})
-     * or a folder already taken by an earlier suffix is never returned, so no folder is
-     * isolated by two stitches at once.
+     * {@link ModalityHandler#getPostProcessingDirectorySuffixes()}. For each suffix, in order, every
+     * folder whose name ends with it: the folder named exactly the suffix first, then the others by
+     * name. So an LC-PolScope run with drift correction stitches {@code retardance} and
+     * {@code driftcorr_retardance} side by side, each its own target with its own output name and
+     * project entry. A target folder, an isolation folder ({@code _temp_*}) or a folder already
+     * taken by an earlier suffix is never returned, so no folder is isolated by two stitches at once.
      *
      * @param handler the modality handler providing the suffixes
      * @param tileBaseDir folder holding the target and derived folders
@@ -2730,19 +2732,22 @@ public class StitchingHelper {
         List<String> found = new ArrayList<>();
         for (String suffix : suffixes) {
             String label = suffix.startsWith(".") ? suffix.substring(1) : suffix;
-            String match = names.stream()
+            List<String> matches = names.stream()
                     .filter(n -> n.endsWith(suffix) && !found.contains(n))
-                    .findFirst()
-                    .orElse(null);
-            if (match == null) {
+                    .sorted(java.util.Comparator.comparing((String n) -> !n.equals(suffix))
+                            .thenComparing(java.util.Comparator.naturalOrder()))
+                    .toList();
+            if (matches.isEmpty()) {
                 logger.info("No {} directory found in {}", label, tileBaseDir);
                 continue;
             }
-            found.add(match);
-            try (var files = Files.list(tileBaseDir.resolve(match))) {
-                logger.info("Found {} directory: {} ({} files)", label, match, files.count());
-            } catch (IOException e) {
-                logger.info("Found {} directory: {} (could not list it: {})", label, match, e.getMessage());
+            for (String match : matches) {
+                found.add(match);
+                try (var files = Files.list(tileBaseDir.resolve(match))) {
+                    logger.info("Found {} directory: {} ({} files)", label, match, files.count());
+                } catch (IOException e) {
+                    logger.info("Found {} directory: {} (could not list it: {})", label, match, e.getMessage());
+                }
             }
         }
         return found;

@@ -123,6 +123,27 @@ class DerivedStitchIsolationTest {
     }
 
     @Test
+    void driftCorrectedCopiesStitchBesideTheOriginals() throws Exception {
+        for (String n : STATES) {
+            folder(n);
+        }
+        for (String n : DERIVED) {
+            folder(n);
+            folder("driftcorr_" + n);
+        }
+        // Sorted, every driftcorr_ name comes first; the original must still be stitched.
+        assertEquals(
+                List.of(
+                        "retardance",
+                        "driftcorr_retardance",
+                        "orientation",
+                        "driftcorr_orientation",
+                        "orientation_color",
+                        "driftcorr_orientation_color"),
+                StitchingHelper.findDerivedDirectories(new LCPolScopeModalityHandler(), base, STATES));
+    }
+
+    @Test
     void aFolderIsNeverReturnedTwiceNorIsATarget() throws Exception {
         folder("7.0");
         folder("7.0.biref");

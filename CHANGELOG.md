@@ -83,6 +83,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed
 
+- **LC-PolScope drift-corrected copies no longer replace the originals in stitching.** Each
+  derived output kind took only the first folder whose name ended with it, and `driftcorr_*` sorts
+  first, so with the server's drift correction on the original retardance, orientation and
+  orientation color were never stitched. Every matching folder is now a target of its own, the
+  plain one first.
+
 - **The Stage Map's position comes back after the microscope does.** After ten failed position reads the map stopped polling until the window was reopened, so a microscope switched off during a long stitching run left it frozen. It now shows *Stage not answering - retrying every few seconds*, tries every 5 s, returns to full rate on the first good read, and starts again at full rate on every reconnect.
 
 - **Windows no longer keeps an image file locked after a duplicate or import.** Creating a flipped, rotated or rotated-and-flipped duplicate, and adding an image to the project, left the source image's reader open and opened a second one. The new entry is now built from the reader already open, which is then closed with every reader it wraps, so the file can be moved or deleted.
