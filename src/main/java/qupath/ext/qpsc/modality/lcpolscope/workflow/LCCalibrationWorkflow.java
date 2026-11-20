@@ -877,7 +877,7 @@ public class LCCalibrationWorkflow {
         // offered right here instead of sending the operator somewhere else first.
         Label ask = new Label("Collect the background here, now?");
         ask.setStyle("-fx-font-weight: bold;");
-        Label how = new Label("The stage is still on the clear glass you calibrated on. Defocus 10-20 um before you "
+        Label how = new Label("The stage is still on the clear glass you calibrated on. Defocus as needed before you "
                 + "click Acquire Backgrounds, so dust does not print into every tile.");
         how.setWrapText(true);
         VBox content =
