@@ -142,6 +142,11 @@ public class AcquisitionCommandBuilder {
     // widefield channels, angle-inner for PPM). Values: "z", "channel", "angle".
     private String innerAxis = null;
 
+    // LC-PolScope background drift correction for this run. Null = omit the flags and let the
+    // server's reconstruction.drift_correction YAML block decide.
+    private Boolean backgroundDrift;
+    private double backgroundDriftIntervalMin;
+
     // Optional parameters for time-lapse.
     // Defaults: timepoints=1, intervalSec=0 (single snap, no interval).
     // buildSocketMessage emits --timepoints when > 1 and --interval when > 0.
@@ -571,6 +576,24 @@ public class AcquisitionCommandBuilder {
      */
     public AcquisitionCommandBuilder innerAxis(String innerAxis) {
         this.innerAxis = innerAxis;
+        return this;
+    }
+
+    /**
+     * LC-PolScope only: switches the background drift correction on or off for this run,
+     * overriding the YAML's {@code reconstruction.drift_correction}. On measures the leftover
+     * retardance on the glass in every tile and, every {@code intervalMin} minutes (0 = never),
+     * at the spot where the background was collected; the server writes corrected copies
+     * ({@code driftcorr_*}) beside the original images. Emits {@code --bg-drift on|off} and,
+     * when on, {@code --bg-drift-interval-min}.
+     *
+     * @param on true to correct the drift in this run
+     * @param intervalMin minutes between visits to the background spot; 0 = tile glass only
+     * @return this builder instance for method chaining
+     */
+    public AcquisitionCommandBuilder backgroundDrift(boolean on, double intervalMin) {
+        this.backgroundDrift = on;
+        this.backgroundDriftIntervalMin = Math.max(0.0, intervalMin);
         return this;
     }
 
@@ -1024,6 +1047,15 @@ public class AcquisitionCommandBuilder {
             args.add("--af-strategy");
             args.add(afStrategy);
             logger.debug("Autofocus strategy override: {}", afStrategy);
+        }
+
+        if (backgroundDrift != null) {
+            args.add("--bg-drift");
+            args.add(backgroundDrift ? "on" : "off");
+            if (backgroundDrift) {
+                args.add("--bg-drift-interval-min");
+                args.add(String.format(Locale.ROOT, "%.2f", backgroundDriftIntervalMin));
+            }
         }
 
         // Autofocus method benchmark: every tile times sweep + streaming AF

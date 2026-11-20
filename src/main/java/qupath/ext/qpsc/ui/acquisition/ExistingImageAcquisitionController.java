@@ -962,6 +962,7 @@ public class ExistingImageAcquisitionController {
             // which shows its own dialog during the alignment process
 
             GridPane afGrid = createAutofocusGrid();
+            addBackgroundDriftRow(afGrid, 1);
 
             // Modality-specific options (will be populated by updateModalityUI)
             modalityContent = new VBox(5);

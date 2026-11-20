@@ -813,6 +813,7 @@ public class UnifiedAcquisitionController {
             GridPane afGrid = createAutofocusGrid();
             afGrid.add(alreadyInFocusCheck, 0, 1, 2, 1);
             afGrid.add(afBenchmarkCheck, 0, 2, 2, 1);
+            addBackgroundDriftRow(afGrid, 3);
 
             // === MODALITY-SPECIFIC SECTION ===
             modalityContent = new VBox(5);

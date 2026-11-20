@@ -491,6 +491,22 @@ public class AcquisitionConfigurationBuilder {
             }
         }
 
+        // LC-PolScope background drift correction: the AUTOFOCUS section's checkbox, sent on
+        // every LC-PolScope run so the dialog, not a forgotten YAML block, decides.
+        if (ModalityRegistry.getHandler(baseModality)
+                instanceof qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler) {
+            boolean driftOn = PersistentPreferences.isBackgroundDriftCorrection();
+            double driftIntervalMin = PersistentPreferences.getBackgroundDriftIntervalMin();
+            acquisitionBuilder.backgroundDrift(driftOn, driftIntervalMin);
+            logger.info(
+                    "Background drift correction: {}",
+                    driftOn
+                            ? (driftIntervalMin > 0
+                                    ? "on, background spot every " + driftIntervalMin + " min"
+                                    : "on, tile glass only")
+                            : "off");
+        }
+
         // Time-lapse configuration from persistent preferences
         if (PersistentPreferences.isTimeLapseEnabled()) {
             int timepoints = PersistentPreferences.getTimeLapseTimepoints();

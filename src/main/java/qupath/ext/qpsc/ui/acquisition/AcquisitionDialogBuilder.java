@@ -139,6 +139,13 @@ abstract class AcquisitionDialogBuilder<R> {
     protected TitledPane advancedPane;
     protected TitledPane autofocusPane;
 
+    // Background drift correction (AUTOFOCUS section); shown for LC-PolScope and fluorescence.
+    private VBox backgroundDriftBox;
+    private CheckBox backgroundDriftCheck;
+    private Label backgroundDriftNote;
+    // True while the dialog itself sets the checkbox, so a modality switch is not saved as a choice.
+    private boolean settingBackgroundDriftCheck;
+
     // Debounce timer for preview updates
     private final PauseTransition previewDebounce = new PauseTransition(Duration.millis(PREVIEW_DEBOUNCE_MS));
 
@@ -553,6 +560,7 @@ abstract class AcquisitionDialogBuilder<R> {
                 updateObjectivesForModality(newVal);
                 updateModalityUI(newVal);
                 updateAfStrategyDefaultForModality(newVal);
+                updateBackgroundDriftForModality(newVal);
             }
         });
 
@@ -853,6 +861,99 @@ abstract class AcquisitionDialogBuilder<R> {
         afGrid.add(new Label("Autofocus:"), 0, 0);
         afGrid.add(afStrategyCombo, 1, 0);
         return afGrid;
+    }
+
+    static final String BACKGROUND_DRIFT_LCPS_NOTE =
+            "Measures the retardance that builds up after the background was collected: on the glass"
+                    + " in every tile and, at the interval, at the spot where the background was taken."
+                    + " Corrected driftcorr_ images are stitched beside the originals, which are not"
+                    + " changed. Needs a background collected after the latest calibration.";
+
+    static final String BACKGROUND_DRIFT_FL_NOTE =
+            "LC-PolScope only for now: fluorescence acquisitions do not correct background drift yet.";
+
+    /**
+     * Adds the background drift correction controls to the autofocus grid at {@code row}. They
+     * show only for LC-PolScope, where the server corrects the drift, and for fluorescence,
+     * where they are shown disabled until the server can.
+     */
+    protected void addBackgroundDriftRow(GridPane afGrid, int row) {
+        backgroundDriftCheck = new CheckBox("Background drift correction");
+        backgroundDriftCheck.setSelected(PersistentPreferences.isBackgroundDriftCorrection());
+        backgroundDriftCheck.setTooltip(new Tooltip(BACKGROUND_DRIFT_LCPS_NOTE));
+        backgroundDriftCheck.selectedProperty().addListener((obs, was, now) -> {
+            if (!settingBackgroundDriftCheck) {
+                PersistentPreferences.setBackgroundDriftCorrection(now);
+            }
+        });
+
+        Spinner<Double> interval =
+                new Spinner<>(0.0, 240.0, PersistentPreferences.getBackgroundDriftIntervalMin(), 5.0);
+        interval.setEditable(true);
+        interval.setPrefWidth(80);
+        interval.setTooltip(new Tooltip("Minutes between visits to the background spot during the run."
+                + " 0 measures only the glass inside the tiles."));
+        interval.valueProperty().addListener((obs, was, now) -> {
+            if (now != null) {
+                PersistentPreferences.setBackgroundDriftIntervalMin(now);
+            }
+        });
+        HBox intervalRow = new HBox(6, new Label("Revisit the background spot every"), interval, new Label("min"));
+        intervalRow.setAlignment(Pos.CENTER_LEFT);
+        intervalRow.setPadding(new Insets(0, 0, 0, 22));
+        intervalRow
+                .disableProperty()
+                .bind(backgroundDriftCheck.selectedProperty().not());
+
+        backgroundDriftNote = new Label(BACKGROUND_DRIFT_LCPS_NOTE);
+        backgroundDriftNote.setWrapText(true);
+        backgroundDriftNote.setMaxWidth(440);
+        backgroundDriftNote.setStyle("-fx-font-size: 11px; -fx-font-weight: normal; -fx-opacity: 0.8;");
+        backgroundDriftNote.setPadding(new Insets(0, 0, 0, 22));
+
+        backgroundDriftBox = new VBox(4, backgroundDriftCheck, intervalRow, backgroundDriftNote);
+        backgroundDriftBox.setPadding(new Insets(6, 0, 0, 0));
+        afGrid.add(backgroundDriftBox, 0, row, 2, 1);
+        updateBackgroundDriftForModality(modalityBox != null ? modalityBox.getValue() : null);
+    }
+
+    /** Which modalities show the background drift correction: LC-PolScope, or fluorescence (disabled). */
+    enum BackgroundDriftDisplay {
+        HIDDEN,
+        ENABLED,
+        NOT_YET_AVAILABLE;
+
+        static BackgroundDriftDisplay forHandler(ModalityHandler handler) {
+            if (handler instanceof qupath.ext.qpsc.modality.lcpolscope.LCPolScopeModalityHandler) {
+                return ENABLED;
+            }
+            if (handler instanceof qupath.ext.qpsc.modality.widefield.WidefieldFluorescenceModalityHandler) {
+                return NOT_YET_AVAILABLE;
+            }
+            return HIDDEN;
+        }
+    }
+
+    private void updateBackgroundDriftForModality(String modality) {
+        if (backgroundDriftBox == null) {
+            return;
+        }
+        BackgroundDriftDisplay display = modality == null
+                ? BackgroundDriftDisplay.HIDDEN
+                : BackgroundDriftDisplay.forHandler(ModalityRegistry.getHandler(modality));
+        boolean shown = display != BackgroundDriftDisplay.HIDDEN;
+        backgroundDriftBox.setVisible(shown);
+        backgroundDriftBox.setManaged(shown);
+        boolean available = display == BackgroundDriftDisplay.ENABLED;
+        // Unticked where it does nothing; the saved LC-PolScope choice comes back with LC-PolScope.
+        settingBackgroundDriftCheck = true;
+        try {
+            backgroundDriftCheck.setSelected(available && PersistentPreferences.isBackgroundDriftCorrection());
+        } finally {
+            settingBackgroundDriftCheck = false;
+        }
+        backgroundDriftCheck.setDisable(!available);
+        backgroundDriftNote.setText(available ? BACKGROUND_DRIFT_LCPS_NOTE : BACKGROUND_DRIFT_FL_NOTE);
     }
 
     /** Wraps the autofocus controls in their own section, since autofocus applies to every modality. */

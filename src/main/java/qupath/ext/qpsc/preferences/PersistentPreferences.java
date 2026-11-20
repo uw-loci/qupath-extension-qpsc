@@ -1898,6 +1898,31 @@ public class PersistentPreferences {
         timeLapseIntervalSecProperty.set(v);
     }
 
+    // --- LC-PolScope background drift correction (acquisition dialog, AUTOFOCUS section) ---
+
+    private static final BooleanProperty backgroundDriftCorrectionProperty =
+            PathPrefs.createPersistentPreference("qpscBackgroundDriftCorrection", false);
+    private static final DoubleProperty backgroundDriftIntervalMinProperty =
+            PathPrefs.createPersistentPreference("qpscBackgroundDriftIntervalMin", 10.0);
+
+    /** True when LC-PolScope acquisitions measure and remove the drift after the background. */
+    public static boolean isBackgroundDriftCorrection() {
+        return backgroundDriftCorrectionProperty.get();
+    }
+
+    public static void setBackgroundDriftCorrection(boolean v) {
+        backgroundDriftCorrectionProperty.set(v);
+    }
+
+    /** Minutes between visits to the background spot during a run; 0 = tile glass only. */
+    public static double getBackgroundDriftIntervalMin() {
+        return Math.max(0.0, backgroundDriftIntervalMinProperty.get());
+    }
+
+    public static void setBackgroundDriftIntervalMin(double v) {
+        backgroundDriftIntervalMinProperty.set(Math.max(0.0, v));
+    }
+
     // --- Per-tile loop-order toggle (channel/z or angle/z nesting) ---
     // Stored per-modality-family so widefield and PPM remember their picks
     // independently. Values: widefield {"z", "channel"}; ppm {"angle", "z"}.
