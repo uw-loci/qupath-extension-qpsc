@@ -131,12 +131,15 @@ While an acquisition runs, the client polls these best-effort channels on the pr
 | REQMANF | `reqmanf_` | none | 8-byte status: `IDLE____`, or a manual-focus request |
 | REQHWER | `reqhwer_` | none | 8-byte status: `IDLE____` / `HWERR___` + 4-byte big-endian length + UTF-8 body |
 | REQTWARN | `reqtwarn` | none | 8-byte status: `IDLE____` / `TWARN___` + 4-byte big-endian length + UTF-8 body |
+| REQFINSH | `reqfinsh` | none | 8-byte status: `IDLE____` / `FINSH___` + 4-byte big-endian length + UTF-8 body |
 | REQSAT | `reqsat__` | none | 8-byte status: `IDLE____` / `SATWARN_` + 4-byte big-endian length + UTF-8 body |
 | ACKSAT | `acksat__` | 8-byte choice (`continue` / `cancel`, underscore-padded) | 3-byte `ACK` |
 
 **REQHWER** -- polled to detect a hardware error the server is waiting on. When the status starts with `HWERR`, the 4-byte length + UTF-8 message follow; the client shows a retry/skip/cancel dialog and replies with `ACKHWER`.
 
 **REQTWARN** -- polled to detect a time-lapse "falling behind" warning. When the status starts with `TWARN`, a 4-byte big-endian unsigned length and a UTF-8 message body follow. The server raises this once the first timepoint overruns the requested interval and **keeps returning the same warning on every poll until acquisition ends** -- the client de-dupes with a one-shot latch and surfaces it exactly once (a modal dialog plus a push notification). There is no acknowledgement command; the warning is informational and the acquisition continues.
+
+**REQFINSH** -- polled while an acquisition is RUNNING to learn when it no longer needs the microscope. After the last image the server reads what its disk-only steps need from the hardware (device properties for `MMproperties.txt`, the final Z, the pixel size for a timepoint projection), parks it (illumination off, Z retracted, XY returned) and only then runs the timepoint projection, the LC-PolScope drift-corrected copies and the record files, which can take many minutes. From the park on, the status is `FINSH___` with a message for the operator, repeated on every poll until the next acquisition starts. The client (`MicroscopeSocketClient.monitorAcquisition`, finishing callback) logs it once, disarms the stage frame watchdog, shows the message in the progress window and sends a notification, and holds off its no-new-image timeout while the server keeps answering. The state stays RUNNING until COMPLETED. An older server does not know the command; the check disables itself after the first unanswered poll.
 
 **Reading replies.** Text replies have no delimiter, and TCP does not keep the server's writes apart, so `STARTED:` and the result can arrive in one read and a long result can arrive in several. `MicroscopeSocketClient.readReply` reads until the server has been quiet for 50 ms, and `readStartedThenResult` finds the result after the acknowledgment. New commands should use these helpers with `exchange` or `withReadTimeout`.
 

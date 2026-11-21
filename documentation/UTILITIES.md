@@ -458,7 +458,7 @@ Re-run stitching on previously acquired tiles when the initial stitching failed 
 **Key Features:**
 
 - **Parallel stitching:** Angles (PPM) and channels (fluorescence) stitch simultaneously on SSDs for speed, or sequentially on spinning-disk drives to avoid I/O thrashing
-- **Matching string filter:** Use `"."` for all subdirectories, or filter to a specific angle/channel (e.g., `"0.0"` for PPM 0-degree angle, `"DAPI"` for DAPI channel)
+- **Matching string filter:** Leave it empty (the default) to stitch every tile folder, meaning every sub-folder that holds a `TileConfiguration.txt`. Or enter part of a folder name to stitch only the folders that contain it: `0.0` for the PPM 0-degree angle, `DAPI` for the DAPI channel, `retardance` for an LC-PolScope `retardance` folder and its `driftcorr_retardance` copy. `.` selects the folders with a dot in their name, which are the PPM angle folders. With an empty filter, an LC-PolScope region also stitches its five raw state folders, each as an image of its own (a normal acquisition merges them into one).
 - **Output format selection:** OME_TIFF (single file) or OME_ZARR (directory format)
 - **Compression tuning:** Options filtered by format (TIFF: LZW, JPEG, J2K, zstd; ZARR: LZW, ZLIB, Uncompressed)
 - **Automatic project import:** Stitched images are added to the project using your configured naming conventions
@@ -471,7 +471,7 @@ Re-run stitching on previously acquired tiles when the initial stitching failed 
 **Tile Recovery After Crashes:**
 
 When parallel stitching exits unexpectedly, angles/channels are temporarily isolated into `_temp_<angle>_<hash>` folders. If stitching crashes before cleanup, tiles remain stuck there. To recover:
-- Point the tool at the `_temp_*` folder and use matching string `"."` to re-stitch that angle/channel
+- Point the tool at the `_temp_*` folder and leave the matching string empty to re-stitch that angle/channel
 - Or manually move the subdirectory back to the annotation folder and delete the empty `_temp_*` folder
 
 ---

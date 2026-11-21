@@ -229,10 +229,11 @@ public class StitchingRecoveryWorkflow {
 
         // Matching string
         Label matchLabel = new Label("Matching string:");
-        TextField matchField = new TextField(".");
-        // Matching is by substring: "." selects names containing a dot (every PPM angle folder),
-        // not every sub-folder, so a channel folder such as DAPI needs its own name.
-        matchField.setPromptText(". = folders with a dot (angles), or a name like 0.0 or DAPI");
+        TextField matchField = new TextField("");
+        // Empty selects every tile folder (anything holding a TileConfiguration.txt), which is what
+        // a held region needs: LC-PolScope and fluorescence folders have no dot in their names, so
+        // the old default "." found none of them. Otherwise matching is by part of the name.
+        matchField.setPromptText("empty = every tile folder, or part of a name: 0.0, DAPI, retardance");
         matchField.setPrefWidth(200);
 
         // Parallel duplicate-image-type checkbox. The sibling subdirectories are polarization angles
@@ -311,9 +312,6 @@ public class StitchingRecoveryWorkflow {
                 // OMEPyramidWriter.CompressionType.valueOf.
                 String compression = compressionCombo.getValue().name();
                 String matchingString = matchField.getText().trim();
-                if (matchingString.isEmpty()) {
-                    matchingString = ".";
-                }
                 StitchingConfig.OutputFormat outputFormat = formatCombo.getValue();
                 boolean parallel = parallelCheck.isSelected();
 
@@ -486,22 +484,7 @@ public class StitchingRecoveryWorkflow {
 
         logger.info("Output directory: {}", outputFolder);
 
-        // Discover angle subdirectories that match and have TileConfiguration.txt
-        java.util.List<File> angleDirs = new java.util.ArrayList<>();
-        try (DirectoryStream<Path> stream = Files.newDirectoryStream(tileFolderFile.toPath())) {
-            for (Path path : stream) {
-                if (Files.isDirectory(path)
-                        && path.getFileName().toString().contains(matchingString)
-                        && Files.exists(path.resolve("TileConfiguration.txt"))) {
-                    angleDirs.add(path.toFile());
-                }
-            }
-        } catch (IOException e) {
-            logger.error("Error scanning for angle subdirectories: {}", e.getMessage());
-        }
-
-        // Sort for deterministic processing order
-        angleDirs.sort(java.util.Comparator.comparing(File::getName));
+        java.util.List<File> angleDirs = findTileFolders(tileFolderFile.toPath(), matchingString);
 
         if (angleDirs.isEmpty()) {
             // No matching subdirectories -- check if root folder itself has TileConfiguration.txt
@@ -941,6 +924,31 @@ public class StitchingRecoveryWorkflow {
             return java.util.List.of(focusChannel);
         }
         return java.util.List.copyOf(subdirs);
+    }
+
+    /**
+     * The sub-folders of {@code root} to stitch: those holding a {@code TileConfiguration.txt}
+     * whose name contains {@code match} (every one when {@code match} is empty), sorted by name.
+     * Isolation folders ({@code _temp_*}) are left out; point the tool at one to stitch it.
+     */
+    static java.util.List<File> findTileFolders(Path root, String match) {
+        String part = match == null ? "" : match.trim();
+        java.util.List<File> folders = new java.util.ArrayList<>();
+        try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
+            for (Path path : stream) {
+                String name = path.getFileName().toString();
+                if (Files.isDirectory(path)
+                        && !name.startsWith("_temp_")
+                        && name.contains(part)
+                        && Files.exists(path.resolve("TileConfiguration.txt"))) {
+                    folders.add(path.toFile());
+                }
+            }
+        } catch (IOException e) {
+            logger.error("Error scanning {} for tile folders: {}", root, e.getMessage());
+        }
+        folders.sort(java.util.Comparator.comparing(File::getName));
+        return folders;
     }
 
     /**

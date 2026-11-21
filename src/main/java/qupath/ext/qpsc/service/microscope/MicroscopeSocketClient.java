@@ -268,6 +268,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
         ACKHWER("ackhwer_"),
         /** Check if a time-lapse falling-behind warning is pending */
         REQTWARN("reqtwarn"),
+        /** Check if the running acquisition is done with the microscope (disk-only finishing) */
+        REQFINSH("reqfinsh"),
         /** Check if a saturation continue/cancel decision is pending */
         REQSAT("reqsat__"),
         /** Acknowledge saturation prompt - user chose continue/cancel */
@@ -4927,6 +4929,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             new PendingMessageCheck(Command.REQTWARN, "TWARN", "time-lapse warning");
     private final PendingMessageCheck saturationCheck =
             new PendingMessageCheck(Command.REQSAT, "SATWARN", "saturation");
+    private final PendingMessageCheck finishingCheck =
+            new PendingMessageCheck(Command.REQFINSH, "FINSH", "microscope-released notice");
 
     /**
      * Cleared the first time FINDTISS gets no usable reply, so a batch does not pay the
@@ -5005,6 +5009,18 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     public String checkTimeLapseWarning() {
         return pollPendingMessage(timeLapseWarningCheck);
+    }
+
+    /**
+     * Checks whether the running acquisition has finished with the microscope (REQFINSH): every
+     * image is taken, the device properties are saved, and the stage is parked, so only disk work
+     * (timepoint projection, LC-PolScope drift-corrected copies, records) remains. The server
+     * repeats the notice on every poll until the next acquisition starts.
+     *
+     * @return the notice for the operator, or null before that point or when unsupported
+     */
+    public String checkFinishingNotice() {
+        return pollPendingMessage(finishingCheck);
     }
 
     /**
@@ -5104,7 +5120,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             long pollIntervalMs,
             long timeoutMs)
             throws IOException, InterruptedException {
-        return monitorAcquisition(progressCallback, manualFocusCallback, null, null, null, pollIntervalMs, timeoutMs);
+        return monitorAcquisition(
+                progressCallback, manualFocusCallback, null, null, null, null, pollIntervalMs, timeoutMs);
     }
 
     /**
@@ -5116,6 +5133,9 @@ public class MicroscopeSocketClient implements AutoCloseable {
      * @param timeLapseWarningCallback Callback for time-lapse falling-behind warnings (can be null)
      * @param saturationCallback Callback for saturation continue/cancel prompts (can be null);
      *        must block until the user has decided
+     * @param finishingCallback Called once with the server's notice when the run no longer
+     *        needs the microscope (can be null). From then on the run only writes files, so
+     *        the no-new-image timeout no longer applies while the server answers.
      * @param pollIntervalMs Interval between progress checks in milliseconds
      * @param timeoutMs Maximum time to wait in milliseconds (0 for no timeout)
      * @return Final acquisition state
@@ -5128,11 +5148,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
             Consumer<String> hardwareErrorCallback,
             Consumer<String> timeLapseWarningCallback,
             Consumer<String> saturationCallback,
+            Consumer<String> finishingCallback,
             long pollIntervalMs,
             long timeoutMs)
             throws IOException, InterruptedException {
 
         long startTime = System.currentTimeMillis();
+        boolean finishingSeen = false;
         // Use instance field instead of local variable so it can be reset externally
         lastProgressUpdateTime.set(startTime);
         int lastProgressCount = -1; // Initialize to -1 to detect first progress
@@ -5220,6 +5242,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     }
                 }
 
+                // The run has finished with the microscope and is only writing files (the
+                // LC-PolScope drift-corrected copies took over 15 minutes for 1756 tiles). No
+                // new image arrives in that phase by design, so the no-new-image timeout below
+                // is held off for as long as the server keeps answering this poll.
+                if (currentState == AcquisitionState.RUNNING) {
+                    String finishing = checkFinishingNotice();
+                    if (finishing != null) {
+                        lastProgressUpdateTime.set(System.currentTimeMillis());
+                        if (!finishingSeen) {
+                            finishingSeen = true;
+                            logger.info("Server: {}", finishing);
+                            if (finishingCallback != null) {
+                                finishingCallback.accept(finishing);
+                            }
+                        }
+                    }
+                }
+
                 // Check for a pending saturation continue/cancel decision
                 // (non-critical, auto-disables if the server doesn't support
                 // REQSAT). The server blocks its acquisition thread until the
@@ -5291,7 +5331,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
                     long sinceReply = System.currentTimeMillis() - lastProgressUpdateTime.get();
                     if (sinceReply > timeoutMs) {
                         logger.warn(
-                                "Server has not answered STATUS for {} ms (last progress: {} files); "
+                                "No new image from the server for {} ms (last progress: {} files); "
                                         + "canceling the acquisition rather than abandoning it",
                                 sinceReply,
                                 lastProgressCount);

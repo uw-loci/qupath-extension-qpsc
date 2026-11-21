@@ -1202,7 +1202,7 @@ annotationName/
 ```
 
 To recover stuck angles:
-- **Option A (recommended):** Point the Re-stitch utility at the `_temp_90_0` folder and use matching string `90.0` (or `.`)
+- **Option A (recommended):** Point the Re-stitch utility at the `_temp_90_0` folder and use matching string `90.0` (or leave it empty)
 - **Option B:** Manually move the angle folder (e.g., `90.0/`) back up to the annotation directory, then delete the empty `_temp_*` folder. This restores the normal layout for any stitching approach.
 
 Only the angle that was being processed when stitching failed will be stuck -- angles that completed before the crash were already restored to their normal location.

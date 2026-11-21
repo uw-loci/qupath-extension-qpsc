@@ -1184,6 +1184,20 @@ public class DualProgressDialog {
     /**
      * Shows an error state and allows closing.
      */
+    /**
+     * Shows that every image is taken and the server has parked the microscope, which may now be
+     * switched off; the server is still writing files and stitching follows.
+     *
+     * @param message the server's notice
+     */
+    public void showFinishing(String message) {
+        Platform.runLater(() -> {
+            statusLabel.setText(message);
+            statusLabel.setWrapText(true);
+            statusLabel.setTextFill(Color.web(qupath.ext.qpsc.ui.ThemeColors.SUCCESS));
+        });
+    }
+
     public void showError(String message) {
         Platform.runLater(() -> {
             // Stop the update timer so time estimates don't keep ticking

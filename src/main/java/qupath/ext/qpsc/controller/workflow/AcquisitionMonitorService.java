@@ -54,6 +54,7 @@ public final class AcquisitionMonitorService {
                 buildHardwareErrorCallback(socketClient, config),
                 config.timeLapseWarningCallback,
                 config.saturationCallback,
+                config.finishingCallback,
                 config.pollIntervalMs,
                 config.timeoutMs);
 
@@ -186,6 +187,7 @@ public final class AcquisitionMonitorService {
         Consumer<String> hardwareErrorCallback;
         Consumer<String> timeLapseWarningCallback;
         Consumer<String> saturationCallback;
+        Consumer<String> finishingCallback;
         TimingCallback timingCallback;
         String tileDirPath;
         long pollIntervalMs = 500;
@@ -232,6 +234,15 @@ public final class AcquisitionMonitorService {
          */
         public MonitorConfig saturation(Consumer<String> cb) {
             this.saturationCallback = cb;
+            return this;
+        }
+
+        /**
+         * Called once with the server's notice when the run no longer needs the microscope
+         * (stage parked, only files left to write).
+         */
+        public MonitorConfig finishing(Consumer<String> cb) {
+            this.finishingCallback = cb;
             return this;
         }
 

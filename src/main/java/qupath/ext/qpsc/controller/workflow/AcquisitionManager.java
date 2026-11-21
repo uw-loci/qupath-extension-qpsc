@@ -1634,6 +1634,18 @@ public class AcquisitionManager {
                                             },
                                             "StageFrameCancelSender")
                                     .start());
+            // A single-slide run ends by returning the stage to where it started, and the server
+            // now does that before its disk-only finishing work, while this check is still armed.
+            try {
+                double[] start = MicroscopeController.getInstance().getStagePositionXY();
+                if (start != null && start.length == 2) {
+                    StageFrameWatchdog.getInstance()
+                            .allowSpot(
+                                    start[0], start[1], "where the stage was at the start (the server returns there)");
+                }
+            } catch (Exception e) {
+                logger.debug("Start position not added to the stage check: {}", e.toString());
+            }
             double[] backgroundSpot = BackgroundSettingsReader.readStagePosition(bgFolder);
             if (backgroundSpot != null) {
                 StageFrameWatchdog.getInstance()
@@ -1965,6 +1977,26 @@ public class AcquisitionManager {
                         if (progressDialog != null) {
                             progressDialog.resumeTimingAfterManualFocus();
                         }
+                    },
+                    finishingNotice -> {
+                        // The server has parked the stage and is only writing files. The stage
+                        // is the operator's now (taking the slide out, switching the microscope
+                        // off), so stop judging its position for this region: on 2026-11-21 a
+                        // slide removed during the drift-corrected copies was taken for a stage
+                        // re-zero and the finished run was canceled.
+                        StageFrameWatchdog.getInstance().disarm();
+                        logger.info(
+                                "{}: microscope no longer needed; stage check off while the server finishes",
+                                annotation.getName());
+                        if (progressDialog != null) {
+                            progressDialog.showFinishing(finishingNotice);
+                        }
+                        NotificationService.getInstance()
+                                .notify(
+                                        "Microscope no longer needed: " + annotation.getName(),
+                                        finishingNotice,
+                                        NotificationPriority.DEFAULT,
+                                        NotificationEvent.ACQUISITION_COMPLETE);
                     },
                     500, // Poll every 500ms for responsive UI
                     ACQUISITION_TIMEOUT_MS);
