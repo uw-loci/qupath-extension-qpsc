@@ -1138,7 +1138,7 @@ If you have *old* stitched files with black upper levels from before this fix, r
 4. Verify the pixel size (auto-populated from your microscope config)
 5. Select **Output format**: OME_TIFF (standard, single file) or OME_ZARR (faster, directory format)
 6. Select **Compression**: available options are filtered by format. TIFF allows all compression types (LZW, JPEG, J2K, zstd, etc.), while ZARR-based formats are restricted to LZW, ZLIB, Uncompressed, and Default
-7. For **Matching String**: sub-folders are selected when their name *contains* this text. Use `"."` to stitch every sub-folder whose name contains a dot (all PPM angle folders such as `0.0` or `90.0`); for channel folders, enter the channel name (e.g. `"DAPI"`), since `"."` skips names without a dot
+7. For **Matching String**: leave it empty (the default), or enter `"."`, to stitch every sub-folder that holds a `TileConfiguration.txt`, including PPM angle folders (`0.0`, `90.0`), channel folders and LC-PolScope folders. Otherwise, sub-folders are selected when their name *contains* this text; for a single channel, enter its name (e.g. `"DAPI"`)
 8. **Stitch duplicate image types in parallel** (checkbox): PPM angles and fluorescence channels are both "duplicate image types" — multiple captures of the same field at one stage position, captured with different settings. When checked, angles/channels stitch simultaneously (faster on SSDs); when unchecked, they stitch sequentially (safer for spinning-disk HDDs)
 9. Click **Stitch & Import**
 
