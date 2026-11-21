@@ -230,10 +230,11 @@ public class StitchingRecoveryWorkflow {
         // Matching string
         Label matchLabel = new Label("Matching string:");
         TextField matchField = new TextField("");
-        // Empty selects every tile folder (anything holding a TileConfiguration.txt), which is what
-        // a held region needs: LC-PolScope and fluorescence folders have no dot in their names, so
-        // the old default "." found none of them. Otherwise matching is by part of the name.
-        matchField.setPromptText("empty = every tile folder, or part of a name: 0.0, DAPI, retardance");
+        // Empty or "." selects every tile folder (anything holding a TileConfiguration.txt), which
+        // is what a held region needs. "." used to be a literal substring, so it found only the PPM
+        // angle folders and none of the LC-PolScope or fluorescence ones. Anything else matches by
+        // part of the name.
+        matchField.setPromptText("empty or . = every tile folder, or part of a name: 0.0, DAPI, retardance");
         matchField.setPrefWidth(200);
 
         // Parallel duplicate-image-type checkbox. The sibling subdirectories are polarization angles
@@ -928,11 +929,15 @@ public class StitchingRecoveryWorkflow {
 
     /**
      * The sub-folders of {@code root} to stitch: those holding a {@code TileConfiguration.txt}
-     * whose name contains {@code match} (every one when {@code match} is empty), sorted by name.
+     * whose name contains {@code match} (every one when {@code match} is empty or "."), sorted
+     * by name.
      * Isolation folders ({@code _temp_*}) are left out; point the tool at one to stitch it.
      */
     static java.util.List<File> findTileFolders(Path root, String match) {
         String part = match == null ? "" : match.trim();
+        if (".".equals(part)) {
+            part = "";
+        }
         java.util.List<File> folders = new java.util.ArrayList<>();
         try (DirectoryStream<Path> stream = Files.newDirectoryStream(root)) {
             for (Path path : stream) {

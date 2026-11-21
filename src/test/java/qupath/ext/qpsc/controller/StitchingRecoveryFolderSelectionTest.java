@@ -57,12 +57,12 @@ class StitchingRecoveryFolderSelectionTest {
     }
 
     @Test
-    void aDotStillSelectsPpmAngleFolders() throws IOException {
+    void aDotSelectsEveryTileFolderToo() throws IOException {
         tileFolder("0.0");
         tileFolder("90.0");
-        tileFolder("7.0.biref");
+        tileFolder("retardance");
         Files.createDirectories(region.resolve("notiles.0"));
         assertThat(names(StitchingRecoveryWorkflow.findTileFolders(region, ".")))
-                .containsExactly("0.0", "7.0.biref", "90.0");
+                .containsExactly("0.0", "90.0", "retardance");
     }
 }
