@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 import qupath.ext.qpsc.acquisition.AcquisitionConfigurationBuilder;
 import qupath.ext.qpsc.background.BackgroundProfiles;
-import qupath.ext.qpsc.background.FlatfieldMethod;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
+import qupath.ext.qpsc.model.FlatfieldMethod;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.ui.background.BackgroundIlluminationCheck;
 

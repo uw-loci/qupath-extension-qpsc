@@ -1,4 +1,4 @@
-package qupath.ext.qpsc.background;
+package qupath.ext.qpsc.model;
 
 /** How an acquisition evens out the brightness across the field. */
 public enum FlatfieldMethod {

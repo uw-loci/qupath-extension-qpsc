@@ -8,6 +8,7 @@ import qupath.ext.basicstitching.registration.RegistrationMode;
 import qupath.ext.basicstitching.registration.RegistrationSettings;
 import qupath.ext.basicstitching.registration.TileRegistrationSolution;
 import qupath.ext.basicstitching.utilities.RegistrationPreferences;
+import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 
 /**
  * The only place QPSC touches the tile-registration types from tiles-to-pyramid.
@@ -34,7 +35,7 @@ public final class TileRegistrationSupport {
     private static final Logger logger = LoggerFactory.getLogger(TileRegistrationSupport.class);
 
     /** Fully-qualified name of the type whose presence proves registration is supported. */
-    public static final String PROBE_CLASS = "qupath.ext.basicstitching.registration.RegistrationMode";
+    public static final String PROBE_CLASS = QPPreferenceDialog.TILE_REGISTRATION_PROBE_CLASS;
 
     private TileRegistrationSupport() {}
 

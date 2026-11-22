@@ -338,6 +338,11 @@ public final class ModalityRegistry {
         UIS.put(handlerClass, ui);
     }
 
+    /** Every registered modality UI, once each (a UI registered for several handlers appears once). */
+    public static java.util.Collection<ModalityUi> registeredUis() {
+        return new java.util.LinkedHashSet<>(UIS.values());
+    }
+
     /** The UI half for the handler of {@code modalityName}; {@link ModalityUi#NONE} when it has none. */
     public static ModalityUi getUi(String modalityName) {
         return getUi(getHandler(modalityName));

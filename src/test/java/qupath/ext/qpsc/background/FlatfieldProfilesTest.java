@@ -10,6 +10,7 @@ import java.nio.file.Path;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
+import qupath.ext.qpsc.model.FlatfieldMethod;
 
 /** What a profile folder covers, which the dialogs and the wizard report. */
 class FlatfieldProfilesTest {

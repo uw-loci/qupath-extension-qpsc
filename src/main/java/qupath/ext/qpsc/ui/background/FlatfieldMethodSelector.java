@@ -12,10 +12,10 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.Priority;
 import javafx.scene.layout.VBox;
 import javafx.stage.DirectoryChooser;
-import qupath.ext.qpsc.background.FlatfieldMethod;
 import qupath.ext.qpsc.background.FlatfieldProfiles;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.ModalityRegistry;
+import qupath.ext.qpsc.model.FlatfieldMethod;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 
 /**

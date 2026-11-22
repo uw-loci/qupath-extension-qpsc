@@ -4,14 +4,12 @@ import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
 import java.util.ResourceBundle;
+import java.util.function.Consumer;
 import javafx.beans.property.*;
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.geometry.StagePolarity;
-import qupath.ext.qpsc.modality.ppm.PPMPreferences;
-import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.gui.QuPathGUI;
 import qupath.lib.gui.prefs.PathPrefs;
@@ -31,7 +29,7 @@ import qupath.lib.images.writers.ome.OMEPyramidWriter;
  *       image relative to the physical slide.  Used to create flipped duplicate images in QuPath.</li>
  *   <li><b>Stage polarity</b> - Stage axis inversion: positive stage commands move opposite
  *       to the visual convention. Not a preference: {@code stage.polarity} in the microscope
- *       config, read through {@link StagePolarity#current()}.</li>
+ *       config, read through {@code StagePolarity.current()}.</li>
  * </ul>
  */
 public class QPPreferenceDialog {
@@ -44,6 +42,14 @@ public class QPPreferenceDialog {
     private static boolean stitchingAvailable = true;
 
     /** Whether the installed tiles-to-pyramid exposes the tile-registration API. */
+    /**
+     * A tiles-to-pyramid class that exists only in versions with the tile registration API. Held
+     * here, the lowest package that needs it; {@code TileRegistrationSupport.PROBE_CLASS} is the
+     * same constant.
+     */
+    public static final String TILE_REGISTRATION_PROBE_CLASS =
+            "qupath.ext.basicstitching.registration.RegistrationMode";
+
     private static final boolean tileRegistrationSupported = isTileRegistrationSupported();
 
     // --- Preference definitions ---
@@ -250,7 +256,6 @@ public class QPPreferenceDialog {
     // --- Notification / Alert preferences ---
     private static final String MULTISLIDE_CATEGORY = "QuPath SCope Multi-Slide";
     private static final String ALERTS_CATEGORY = "QuPath SCope Alerts";
-    private static final String PPM_CATEGORY = "PPM (Polarized Light Microscopy)";
 
     private static final BooleanProperty notificationsEnabledProperty =
             PathPrefs.createPersistentPreference("notifications.enabled", false);
@@ -288,8 +293,12 @@ public class QPPreferenceDialog {
 
     /**
      * Register all preferences in QuPath's PreferencePane. Call once during extension installation.
+     *
+     * @param modalitySections adds each modality's own preference items after the shared ones.
+     *     Passed in because this package sits below the modalities and must not import them.
      */
-    public static void installPreferences(QuPathGUI qupath) {
+    public static void installPreferences(
+            QuPathGUI qupath, Consumer<ObservableList<org.controlsfx.control.PropertySheet.Item>> modalitySections) {
         if (qupath == null) return;
         ObservableList<org.controlsfx.control.PropertySheet.Item> items =
                 qupath.getPreferencePane().getPropertySheet().getItems();
@@ -739,67 +748,8 @@ public class QPPreferenceDialog {
                 .description("Send a notification when an acquisition or stitching workflow fails.")
                 .build());
 
-        // --- PPM category ---
-        // README link (read-only, for reference)
-        StringProperty ppmReadmeProperty = new SimpleStringProperty(DocumentationHelper.PPM_README_URL);
-        items.add(new PropertyItemBuilder<>(ppmReadmeProperty, String.class)
-                .name("PPM Extension Documentation")
-                .category(PPM_CATEGORY)
-                .description("URL to the PPM extension documentation on GitHub.\n"
-                        + "Copy this URL to your browser, or open it from the\n"
-                        + "PPM menu's help buttons.\n\n"
-                        + "Contains workflow guides, calibration instructions,\n"
-                        + "and troubleshooting information.")
-                .build());
-        items.add(new PropertyItemBuilder<>(PPMPreferences.activeCalibrationPathProperty(), String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.FILE)
-                .name("Active Calibration File (.npz)")
-                .category(PPM_CATEGORY)
-                .description("Path to the active PPM sunburst calibration file (.npz).\n"
-                        + "This is set automatically after a successful sunburst calibration,\n"
-                        + "but can also be selected manually here if the setting was lost.\n\n"
-                        + "All PPM analysis tools (Polarity Plot, Hue Range, Batch Analysis,\n"
-                        + "Surface Perpendicularity) require this calibration to convert\n"
-                        + "hue values to orientation angles.\n\n"
-                        + "The hue-to-angle mapping is OBJECTIVE-INDEPENDENT: a calibration\n"
-                        + "captured at one objective (e.g. 40x) is valid for acquisitions at\n"
-                        + "any other (e.g. 20x). A higher-magnification objective gives a\n"
-                        + "better-quality calibration, but the mapping itself is the same. If\n"
-                        + "the filename or stamped metadata shows a different magnification\n"
-                        + "than your acquisition, that only records where the calibration was\n"
-                        + "captured -- it is not a mismatch.")
-                .build());
-        items.add(new PropertyItemBuilder<>(lastCalibrationFolderProperty, String.class)
-                .propertyType(PropertyItemBuilder.PropertyType.DIRECTORY)
-                .name("Calibration Output Folder")
-                .category(PPM_CATEGORY)
-                .description("Default folder for sunburst calibration output files.\n"
-                        + "Calibration images, .npz files, and plots are saved here.\n"
-                        + "Defaults to ppm_reference_slide/ next to the microscope config.")
-                .build());
-
-        items.add(new PropertyItemBuilder<>(PPMPreferences.birefringenceMinIntensityProperty(), String.class)
-                .name("Birefringence Min Intensity")
-                .category(PPM_CATEGORY)
-                .description("Dark-pixel noise suppression threshold for birefringence computation.\n"
-                        + "Pixels with combined intensity (I+ + I-) below this value\n"
-                        + "are zeroed during birefringence computation on the server.\n"
-                        + "Default: 10")
-                .build());
-
-        items.add(new PropertyItemBuilder<>(PPMPreferences.highBitDepthProperty(), Boolean.class)
-                .name("High Bit Depth PPM Capture")
-                .category(PPM_CATEGORY)
-                .description("Acquire PPM angle frames at the camera's higher-bit PixelFormat so\n"
-                        + "the birefringence image is computed from genuine high-precision inputs\n"
-                        + "instead of 8-bit. Reduces quantization noise in the dark crossed-polarizer\n"
-                        + "regions; the birefringence file stays 16-bit. Requires the camera's\n"
-                        + "high_bit_depth block to be configured in the detector YAML -- a no-op on\n"
-                        + "the server otherwise. OFF keeps acquisition identical to the 8-bit path.\n"
-                        + "Default: OFF")
-                .build());
-        // Analysis preferences (birefringence threshold, histogram bins, saturation,
-        // value, dilation, TACS) are registered by the PPM Analysis extension.
+        // Modality sections (PPM's calibration and capture preferences) come last.
+        modalitySections.accept(items);
     }
 
     // --- Typed getters for use throughout your code ---
@@ -1146,10 +1096,7 @@ public class QPPreferenceDialog {
      */
     private static boolean isTileRegistrationSupported() {
         try {
-            Class.forName(
-                    qupath.ext.qpsc.stitching.TileRegistrationSupport.PROBE_CLASS,
-                    false,
-                    QPPreferenceDialog.class.getClassLoader());
+            Class.forName(TILE_REGISTRATION_PROBE_CLASS, false, QPPreferenceDialog.class.getClassLoader());
             return true;
         } catch (Throwable t) {
             return false;
@@ -1162,6 +1109,11 @@ public class QPPreferenceDialog {
     public static boolean isStitchingAvailable() {
         return stitchingAvailable;
     }
+    /** Default folder for PPM sunburst calibration output. */
+    public static StringProperty lastCalibrationFolderProperty() {
+        return lastCalibrationFolderProperty;
+    }
+
     // Filename configuration getters
     public static boolean getFilenameIncludeObjective() {
         return includeObjectiveInFilenameProperty.get();

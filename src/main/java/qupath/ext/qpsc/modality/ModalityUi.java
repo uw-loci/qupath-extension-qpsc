@@ -2,6 +2,8 @@ package qupath.ext.qpsc.modality;
 
 import java.util.List;
 import java.util.Optional;
+import javafx.collections.ObservableList;
+import org.controlsfx.control.PropertySheet;
 
 /**
  * The user-interface half of a modality: the panels, confirmations and menu items a modality
@@ -61,6 +63,12 @@ public interface ModalityUi {
     default boolean confirmBatch(int slides) {
         return true;
     }
+
+    /**
+     * Adds this modality's items to QuPath's preference pane (Edit &gt; Preferences). Called once
+     * at startup for every registered UI, after QPSC's shared items.
+     */
+    default void addPreferenceItems(ObservableList<PropertySheet.Item> items) {}
 
     /**
      * Modality-specific items for the QPSC menu, added to a modality submenu during extension

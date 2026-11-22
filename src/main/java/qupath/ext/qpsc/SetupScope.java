@@ -135,7 +135,8 @@ public class SetupScope implements QuPathExtension, GitHubProject {
         ModalityUis.registerAll();
 
         // 1) Register all our persistent preferences
-        QPPreferenceDialog.installPreferences(qupath);
+        QPPreferenceDialog.installPreferences(
+                qupath, items -> ModalityRegistry.registeredUis().forEach(ui -> ui.addPreferenceItems(items)));
 
         // Keep Micro-Manager's objective preset in step with the objective chosen in QPSC
         // (only objectives that declare mm_preset in the microscope YAML).
