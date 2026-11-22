@@ -364,17 +364,18 @@ public class SetupScope implements QuPathExtension, GitHubProject {
             return;
         }
         logger.warn("Stop acquisition chosen from the QP Scope menu");
-        new Thread(
-                        () -> {
-                            boolean stopped = AcquisitionManager.stopActiveAcquisition();
-                            Platform.runLater(() -> Dialogs.showInfoNotification(
-                                    "Stop acquisition",
-                                    stopped
-                                            ? "Stop requested. The microscope stops after the current tile."
-                                            : "No acquisition is running."));
-                        },
-                        "StopAcquisitionMenu")
-                .start();
+        Thread stopper = new Thread(
+                () -> {
+                    boolean stopped = AcquisitionManager.stopActiveAcquisition();
+                    Platform.runLater(() -> Dialogs.showInfoNotification(
+                            "Stop acquisition",
+                            stopped
+                                    ? "Stop requested. The microscope stops after the current tile."
+                                    : "No acquisition is running."));
+                },
+                "StopAcquisitionMenu");
+        stopper.setDaemon(true);
+        stopper.start();
     }
 
     private void addMenuItem(QuPathGUI qupath) {

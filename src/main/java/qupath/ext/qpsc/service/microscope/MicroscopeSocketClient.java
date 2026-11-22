@@ -82,20 +82,25 @@ public class MicroscopeSocketClient implements AutoCloseable {
     private final int connectTimeout;
     private final int readTimeout;
 
-    // Primary socket and streams (used for workflows/acquisitions)
-    private Socket socket;
+    // Primary socket and streams (used for workflows/acquisitions).
+    // volatile: abortPrimaryCommand() and close() close it without taking socketLock.
+    private volatile Socket socket;
     private DataInputStream input;
     private DataOutputStream output;
     private final Object socketLock = new Object();
 
     // Auxiliary socket and streams (used for Live Viewer and stage control)
     // This allows live preview and stage movements to work even when primary socket
-    // is busy with long-running operations (e.g., birefringence optimization)
-    private Socket auxSocket;
+    // is busy with long-running operations (e.g., birefringence optimization).
+    // volatile for the same reason as socket.
+    private volatile Socket auxSocket;
     private DataInputStream auxInput;
     private DataOutputStream auxOutput;
     private final Object auxSocketLock = new Object();
     private final AtomicBoolean auxConnected = new AtomicBoolean(false);
+
+    /** Read timeout for the CONFIG reply when the auxiliary socket connects. */
+    private static final int AUX_CONFIG_TIMEOUT_MS = 10_000;
 
     /** Cooldown after failed aux connection to prevent reconnection floods */
     private volatile long auxReconnectCooldownUntil = 0;
@@ -644,6 +649,31 @@ public class MicroscopeSocketClient implements AutoCloseable {
     }
 
     /**
+     * Ends the command now waiting on the primary socket, without waiting for {@code socketLock}.
+     *
+     * <p>The thread running a command holds the lock until the server answers, which for an
+     * autofocus benchmark or an acquisition can take minutes, so {@link #disconnect()} would wait
+     * that long. Closing the socket from here makes that thread's read fail at once; it then
+     * releases the lock and handles the IOException as a lost connection. Safe from any thread.
+     */
+    public void abortPrimaryCommand() {
+        logger.info("Closing the primary socket to end the command waiting on it");
+        closeWithoutLock(socket, "primary");
+    }
+
+    private static void closeWithoutLock(Socket s, String which) {
+        if (s == null) {
+            return;
+        }
+        try {
+            s.close();
+            logger.debug("Closed the {} socket without waiting for its lock", which);
+        } catch (IOException e) {
+            logger.debug("Error closing the {} socket: {}", which, e.getMessage());
+        }
+    }
+
+    /**
      * Disconnects only the primary socket, leaving the auxiliary socket intact.
      * Use this when reconnecting the primary without disrupting Live Viewer
      * or stage control operations.
@@ -736,8 +766,16 @@ public class MicroscopeSocketClient implements AutoCloseable {
 
                 logger.info("Auxiliary connection established, sending config...");
 
-                // Send config on auxiliary connection
+                // Send config on auxiliary connection. The handshake gets its own shorter
+                // read timeout: the 30 s above is for hardware-lock contention on stage
+                // reads, and this runs inside auxSocketLock, so every aux caller (the
+                // pollers, and Live Viewer and Stage Map clicks on the FX thread) waited
+                // the full 30 s behind a server that accepted the connection but never
+                // answered CONFIG.
+                int stageReadTimeout = auxSocket.getSoTimeout();
+                auxSocket.setSoTimeout(AUX_CONFIG_TIMEOUT_MS);
                 sendConfigOnAuxiliary();
+                auxSocket.setSoTimeout(stageReadTimeout);
 
                 // Reset the backoff only once the server has ACCEPTED the config. Reset on the
                 // TCP connect, a refused CONFIG retried every second forever, because each
@@ -4532,6 +4570,13 @@ public class MicroscopeSocketClient implements AutoCloseable {
     @Override
     public void close() {
         shuttingDown.set(true);
+
+        // Close both sockets first, without their locks: a command still waiting for the
+        // server (an acquisition can wait up to 90 minutes) holds its lock, so disconnect()
+        // below would otherwise wait for it, and from the shutdown hook that keeps QuPath
+        // from exiting after Quit.
+        closeWithoutLock(socket, "primary");
+        closeWithoutLock(auxSocket, "auxiliary");
 
         // Stop executors
         reconnectExecutor.shutdown();

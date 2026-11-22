@@ -2578,22 +2578,30 @@ public class StageMapWindow {
     }
 
     private void executeMove(double targetX, double targetY) {
-        try {
-            logger.info("Moving stage to ({}, {})", targetX, targetY);
-            statusLabel.setText("Moving...");
-            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
+        logger.info("Moving stage to ({}, {})", targetX, targetY);
+        statusLabel.setText("Moving...");
+        statusLabel.setStyle("-fx-text-fill: " + ThemeColors.WARNING + ";");
 
-            MicroscopeController controller = MicroscopeController.getInstance();
-            controller.moveStageXY(targetX, targetY);
-
-            // Position will update on next poll cycle
-
-        } catch (Exception e) {
-            logger.error("Failed to move stage: {}", e.getMessage(), e);
-            showError("Movement Failed", "Failed to move stage: " + e.getMessage());
-            statusLabel.setText("Move failed");
-            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
-        }
+        // The move is sent from a background thread: on the FX thread it waited for
+        // the auxiliary socket, which a slow or absent server holds for its whole
+        // read timeout, and every window froze meanwhile. The position updates on
+        // the next poll cycle.
+        Thread mover = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController.getInstance().moveStageXY(targetX, targetY);
+                    } catch (Exception e) {
+                        logger.error("Failed to move stage: {}", e.getMessage(), e);
+                        showError("Movement Failed", "Failed to move stage: " + e.getMessage());
+                        Platform.runLater(() -> {
+                            statusLabel.setText("Move failed");
+                            statusLabel.setStyle("-fx-text-fill: " + ThemeColors.ERROR + ";");
+                        });
+                    }
+                },
+                "StageMap-Move");
+        mover.setDaemon(true);
+        mover.start();
     }
 
     private void showWarning(String title, String message) {

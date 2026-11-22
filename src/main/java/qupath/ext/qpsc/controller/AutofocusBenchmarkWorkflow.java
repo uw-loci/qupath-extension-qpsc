@@ -273,13 +273,10 @@ public class AutofocusBenchmarkWorkflow {
                         cancelButton.setText("Cancelling...");
                         statusLabel.setText("Cancellation requested - closing connection...");
 
-                        // Close the client connection to abort the benchmark
-                        // This will cause an IOException in the background thread
-                        try {
-                            client.disconnect();
-                        } catch (Exception ex) {
-                            logger.debug("Error during cancellation disconnect: {}", ex.getMessage());
-                        }
+                        // Close the primary socket to end the benchmark: its read in the
+                        // background thread fails at once. disconnect() would wait for the
+                        // socket lock, which the benchmark holds for up to 10 minutes.
+                        client.abortPrimaryCommand();
                     }
                 });
             });

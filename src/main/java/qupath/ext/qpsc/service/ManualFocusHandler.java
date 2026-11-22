@@ -4,6 +4,7 @@ import java.io.IOException;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicBoolean;
+import java.util.concurrent.atomic.AtomicReference;
 import javafx.application.Platform;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -118,36 +119,14 @@ public final class ManualFocusHandler {
                 // would otherwise read as the stage frame moving.
                 StageFrameWatchdog.getInstance().pauseForOperator();
 
+                // Only the dialog runs on the FX thread. The answer is sent from this thread
+                // once the dialog closes: a socket command waits for the server while holding
+                // the socket lock (behind this thread's own keepalive), and on the FX thread
+                // that froze every window when the server was slow or gone.
+                AtomicReference<ManualFocusResult> choice = new AtomicReference<>();
                 Platform.runLater(() -> {
                     try {
-                        ManualFocusResult result = dialogProvider.showFocusDialog(retriesRemaining);
-                        try {
-                            switch (result) {
-                                case RETRY_AUTOFOCUS:
-                                    socketClient.acknowledgeManualFocus();
-                                    logger.info("User chose to retry autofocus");
-                                    break;
-                                case USE_CURRENT_FOCUS:
-                                    socketClient.skipAutofocusRetry();
-                                    logger.info("User chose to use current focus");
-                                    break;
-                                case CANCEL_ACQUISITION:
-                                    // Send ONLY cancelAcquisition. The server's
-                                    // manual-focus wait now polls both the
-                                    // focus-complete event and the cancel
-                                    // event, so CANC alone transitions the
-                                    // autofocus wait directly to user_choice
-                                    // ="cancel" (which raises the canceled
-                                    // sentinel and sets state=CANCELLED).
-                                    // Sending SKPAF first would win the race and make the
-                                    // server treat the cancel as "use current focus".
-                                    socketClient.cancelAcquisition();
-                                    logger.info("User chose to cancel acquisition");
-                                    break;
-                            }
-                        } catch (IOException e) {
-                            logger.error("Failed to send manual focus response", e);
-                        }
+                        choice.set(dialogProvider.showFocusDialog(retriesRemaining));
                     } finally {
                         StageFrameWatchdog.getInstance().resumeAfterOperator();
                         if (timingCallback != null) {
@@ -170,7 +149,9 @@ public final class ManualFocusHandler {
                 } catch (InterruptedException e) {
                     logger.error("Interrupted waiting for manual focus dialog", e);
                     Thread.currentThread().interrupt();
+                    return;
                 }
+                sendChoice(socketClient, choice.get());
             }
         } finally {
             try {
@@ -182,6 +163,38 @@ public final class ManualFocusHandler {
             if (guard != null) {
                 guard.set(false);
             }
+        }
+    }
+
+    /** Sends the operator's manual-focus answer to the server. Not for the FX thread. */
+    private static void sendChoice(MicroscopeSocketClient socketClient, ManualFocusResult result) {
+        if (result == null) {
+            logger.warn("Manual focus dialog closed without an answer; nothing sent");
+            return;
+        }
+        try {
+            switch (result) {
+                case RETRY_AUTOFOCUS:
+                    socketClient.acknowledgeManualFocus();
+                    logger.info("User chose to retry autofocus");
+                    break;
+                case USE_CURRENT_FOCUS:
+                    socketClient.skipAutofocusRetry();
+                    logger.info("User chose to use current focus");
+                    break;
+                case CANCEL_ACQUISITION:
+                    // Send ONLY cancelAcquisition. The server's manual-focus wait polls
+                    // both the focus-complete event and the cancel event, so CANC alone
+                    // moves the autofocus wait to user_choice="cancel" (which raises the
+                    // canceled sentinel and sets state=CANCELLED). Sending SKPAF first
+                    // would win the race and make the server treat the cancel as
+                    // "use current focus".
+                    socketClient.cancelAcquisition();
+                    logger.info("User chose to cancel acquisition");
+                    break;
+            }
+        } catch (IOException e) {
+            logger.error("Failed to send manual focus response", e);
         }
     }
 }

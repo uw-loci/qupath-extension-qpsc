@@ -334,19 +334,23 @@ public class AcquisitionManager {
         return false;
     }
 
-    private static void sendCancelOnWorker() {
-        new Thread(
-                        () -> {
-                            try {
-                                MicroscopeController.getInstance()
-                                        .getSocketClient()
-                                        .cancelAcquisition();
-                            } catch (IOException e) {
-                                logger.error("Failed to send cancel command", e);
-                            }
-                        },
-                        "AcquisitionCancelSender")
-                .start();
+    /**
+     * Sends CANC from a background thread. CANC waits for the server's per-client lock and can
+     * sit behind a tile capture for tens of seconds, so it never runs on the FX thread. The thread
+     * is a daemon, so a cancel still waiting when the user quits does not keep QuPath running.
+     */
+    public static void sendCancelOnWorker() {
+        Thread t = new Thread(
+                () -> {
+                    try {
+                        MicroscopeController.getInstance().getSocketClient().cancelAcquisition();
+                    } catch (IOException e) {
+                        logger.error("Failed to send cancel command", e);
+                    }
+                },
+                "AcquisitionCancelSender");
+        t.setDaemon(true);
+        t.start();
     }
 
     /** Reads every cancel signal this run can receive; see {@link CancelGate}. */
@@ -851,21 +855,7 @@ public class AcquisitionManager {
                 DualProgressDialog dialog = new DualProgressDialog(state.annotations.size(), true);
                 dialog.setCancelCallback(v -> {
                     logger.info("User requested workflow cancellation via dual progress dialog");
-                    // Off-EDT: CANC waits for the server's per-client lock and can sit
-                    // behind a tile capture for tens of seconds. Doing this on the FX
-                    // thread freezes the dialog and any other UI for the duration.
-                    new Thread(
-                                    () -> {
-                                        try {
-                                            MicroscopeController.getInstance()
-                                                    .getSocketClient()
-                                                    .cancelAcquisition();
-                                        } catch (IOException e) {
-                                            logger.error("Failed to send cancel command", e);
-                                        }
-                                    },
-                                    "AcquisitionCancelSender")
-                            .start();
+                    sendCancelOnWorker();
                 });
                 dialog.show();
                 dualProgressDialog = dialog; // Set field for other method access
@@ -1610,30 +1600,27 @@ public class AcquisitionManager {
                     new double[] {roi.getBoundsX() + roi.getBoundsWidth(), roi.getBoundsY() + roi.getBoundsHeight()},
                     state.transform);
             StageFrameWatchdog.getInstance()
-                    .arm(
-                            topLeft[0],
-                            topLeft[1],
-                            botRight[0],
-                            botRight[1],
-                            annotation.getName(),
-                            () -> new Thread(
-                                            () -> {
-                                                // Off the FX thread: CANC waits on the server's per-client
-                                                // lock and can sit behind a tile capture for tens of seconds.
-                                                try {
-                                                    stageFrameStopReason = StageFrameWatchdog.getInstance()
-                                                            .suspectReason();
-                                                    logger.error(
-                                                            "Canceling the acquisition because the stage frame is no longer trustworthy");
-                                                    MicroscopeController.getInstance()
-                                                            .getSocketClient()
-                                                            .cancelAcquisition();
-                                                } catch (Exception e) {
-                                                    logger.error("Could not cancel after a stage frame fault", e);
-                                                }
-                                            },
-                                            "StageFrameCancelSender")
-                                    .start());
+                    .arm(topLeft[0], topLeft[1], botRight[0], botRight[1], annotation.getName(), () -> {
+                        Thread t = new Thread(
+                                () -> {
+                                    // Off the FX thread: CANC waits on the server's per-client
+                                    // lock and can sit behind a tile capture for tens of seconds.
+                                    try {
+                                        stageFrameStopReason =
+                                                StageFrameWatchdog.getInstance().suspectReason();
+                                        logger.error(
+                                                "Canceling the acquisition because the stage frame is no longer trustworthy");
+                                        MicroscopeController.getInstance()
+                                                .getSocketClient()
+                                                .cancelAcquisition();
+                                    } catch (Exception e) {
+                                        logger.error("Could not cancel after a stage frame fault", e);
+                                    }
+                                },
+                                "StageFrameCancelSender");
+                        t.setDaemon(true);
+                        t.start();
+                    });
             // A single-slide run ends by returning the stage to where it started, and the server
             // now does that before its disk-only finishing work, while this check is still armed.
             try {

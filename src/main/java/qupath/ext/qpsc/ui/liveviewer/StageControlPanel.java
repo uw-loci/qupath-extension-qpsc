@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.ResourceBundle;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
 import java.util.concurrent.atomic.AtomicBoolean;
 import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.UnaryOperator;
@@ -101,6 +103,17 @@ import qupath.lib.projects.ProjectImageEntry;
 public class StageControlPanel extends VBox {
 
     private static final Logger logger = LoggerFactory.getLogger(StageControlPanel.class);
+
+    /**
+     * One background thread for the Camera tab's exposure writes. A socket command waits for the
+     * server while holding the socket lock, so on the FX thread a slow or busy server froze every
+     * window. One thread keeps the writes in the order they were made.
+     */
+    private static final ExecutorService CAMERA_IO = Executors.newSingleThreadExecutor(r -> {
+        Thread t = new Thread(r, "StageControl-CameraIO");
+        t.setDaemon(true);
+        return t;
+    });
 
     private final ResourceBundle res = ResourceBundle.getBundle("qupath.ext.qpsc.ui.strings");
     private final MicroscopeConfigManager mgr;
@@ -1768,14 +1781,16 @@ public class StageControlPanel extends VBox {
                     if (pending == null || Double.isNaN(pending)) return;
                     double v = pending;
                     qupath.ext.qpsc.preferences.PersistentPreferences.setLastChannelExposureMs(modality, chIdLocal, v);
-                    try {
-                        MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {(float) v});
-                        cameraStatusLabel.setText("Channel " + chIdLocal + " exposure -> " + v + " ms");
-                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
-                    } catch (Exception ex) {
-                        cameraStatusLabel.setText("Exposure update failed: " + ex.getMessage());
-                        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
-                    }
+                    CAMERA_IO.execute(() -> {
+                        try {
+                            MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {(float) v});
+                            Platform.runLater(() -> showCameraStatus(
+                                    "Channel " + chIdLocal + " exposure -> " + v + " ms", ThemeColors.SUCCESS));
+                        } catch (Exception ex) {
+                            Platform.runLater(() ->
+                                    showCameraStatus("Exposure update failed: " + ex.getMessage(), ThemeColors.ERROR));
+                        }
+                    });
                 });
                 expSpinner.valueProperty().addListener((obs, oldV, newV) -> {
                     if (newV == null) return;
@@ -2404,6 +2419,12 @@ public class StageControlPanel extends VBox {
 
     // --- Shared Camera Tab builders ---
 
+    /** Shows a line in the Camera tab's status label in the given theme color. FX thread only. */
+    private void showCameraStatus(String text, String color) {
+        cameraStatusLabel.setText(text);
+        cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + color + ";");
+    }
+
     /** Build an exposure control row (label + text field; applies on Enter/focus-loss). */
     private Node buildExposureControl() {
         Label expLabel = new Label("Exposure (ms):");
@@ -2438,13 +2459,22 @@ public class StageControlPanel extends VBox {
             t.start();
         }
         if (!usedSaved) {
-            try {
-                var expResult =
-                        MicroscopeController.getInstance().getSocketClient().getExposures();
-                expField.setText(String.format(Locale.ROOT, "%.1f", expResult.unified()));
-            } catch (Exception ex) {
-                expField.setText("");
-            }
+            // Read the live value in the background; fill the field only if the user
+            // has not typed into it meanwhile.
+            CAMERA_IO.execute(() -> {
+                try {
+                    var expResult =
+                            MicroscopeController.getInstance().getSocketClient().getExposures();
+                    String text = String.format(Locale.ROOT, "%.1f", expResult.unified());
+                    Platform.runLater(() -> {
+                        if (expField.getText() == null || expField.getText().isEmpty()) {
+                            expField.setText(text);
+                        }
+                    });
+                } catch (Exception ex) {
+                    logger.debug("Reading the live exposure for the Camera tab failed: {}", ex.getMessage());
+                }
+            });
         }
         // Apply on Enter or focus-loss -- no separate Set button. The field
         // behaves like every other editable field in the panel: it commits when
@@ -2452,33 +2482,41 @@ public class StageControlPanel extends VBox {
         Runnable apply = () -> {
             String text = expField.getText() == null ? "" : expField.getText().trim();
             if (text.isEmpty()) return;
+            float exp;
             try {
-                float exp = Float.parseFloat(text);
-                MicroscopeController.getInstance().getSocketClient().setExposures(new float[] {exp});
-                // Persist so the Bounded Acquisition workflow inherits this
-                // value when building the command for non-rotation modalities.
-                qupath.ext.qpsc.preferences.PersistentPreferences.setLastUnifiedExposureMs(exp);
-                cameraStatusLabel.setText("Exposure: " + exp + " ms");
-                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.SUCCESS + ";");
-                logger.info("Set exposure to {} ms", exp);
-                try {
-                    var verify =
-                            MicroscopeController.getInstance().getSocketClient().getExposures();
-                    logger.info(
-                            "Set exposure verify: GETEXP unified={} red={} green={} blue={} (perChannel={})",
-                            verify.unified(),
-                            verify.red(),
-                            verify.green(),
-                            verify.blue(),
-                            verify.isPerChannel());
-                } catch (Exception verifyEx) {
-                    logger.warn("Set exposure verify GETEXP failed: {}", verifyEx.toString());
-                }
-            } catch (Exception ex) {
-                cameraStatusLabel.setText("Failed: " + ex.getMessage());
-                cameraStatusLabel.setStyle("-fx-font-size: 10px; -fx-text-fill: " + ThemeColors.ERROR + ";");
-                logger.warn("Failed to set exposure: {}", ex.getMessage());
+                exp = Float.parseFloat(text);
+            } catch (NumberFormatException ex) {
+                showCameraStatus("Not a number: " + text, ThemeColors.ERROR);
+                return;
             }
+            CAMERA_IO.execute(() -> {
+                try {
+                    var client = MicroscopeController.getInstance().getSocketClient();
+                    client.setExposures(new float[] {exp});
+                    logger.info("Set exposure to {} ms", exp);
+                    Platform.runLater(() -> {
+                        // Persist so the Bounded Acquisition workflow inherits this
+                        // value when building the command for non-rotation modalities.
+                        qupath.ext.qpsc.preferences.PersistentPreferences.setLastUnifiedExposureMs(exp);
+                        showCameraStatus("Exposure: " + exp + " ms", ThemeColors.SUCCESS);
+                    });
+                    try {
+                        var verify = client.getExposures();
+                        logger.info(
+                                "Set exposure verify: GETEXP unified={} red={} green={} blue={} (perChannel={})",
+                                verify.unified(),
+                                verify.red(),
+                                verify.green(),
+                                verify.blue(),
+                                verify.isPerChannel());
+                    } catch (Exception verifyEx) {
+                        logger.warn("Set exposure verify GETEXP failed: {}", verifyEx.toString());
+                    }
+                } catch (Exception ex) {
+                    logger.warn("Failed to set exposure: {}", ex.getMessage());
+                    Platform.runLater(() -> showCameraStatus("Failed: " + ex.getMessage(), ThemeColors.ERROR));
+                }
+            });
         };
         expField.setOnAction(e -> apply.run());
         expField.focusedProperty().addListener((obs, was, isNow) -> {

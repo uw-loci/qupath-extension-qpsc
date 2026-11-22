@@ -77,20 +77,45 @@ public class UIFunctions {
      *     would give headings like "Error during Save Error".
      */
     public static void notifyUserOfError(String message, String heading) {
-        Platform.runLater(() -> {
-            Alert alert = new Alert(Alert.AlertType.ERROR);
-            alert.setTitle("Error");
-            alert.setHeaderText(heading);
-            alert.initModality(Modality.APPLICATION_MODAL);
-            alert.getDialogPane().setMinWidth(500);
-            alert.getDialogPane().setPrefWidth(600);
-            setWrappedContent(alert, message, 550);
+        notifyUserOfError(message, heading, heading + "\n" + message);
+    }
 
-            UserErrors.logAlert(logger, alert);
-            DialogOwner.own(alert);
-            alert.showAndWait();
+    /**
+     * Same as {@link #notifyUserOfError(String, String)}, but at most one dialog per
+     * {@code repeatKey} is open at a time: an error arriving while a dialog with the same key is
+     * still open is logged and not shown. These dialogs are application-modal, and a repeating
+     * failure (a stage move per joystick tick while the server is down) stacked one per repeat;
+     * with that many modal dialogs open, no window answered input, not even Quit. The
+     * two-argument form keys on the heading and message, so only exact repeats are held back.
+     *
+     * @param repeatKey errors with the same key share one dialog
+     */
+    public static void notifyUserOfError(String message, String heading, String repeatKey) {
+        Platform.runLater(() -> {
+            if (!openErrorDialogs.add(repeatKey)) {
+                logger.error("{} (dialog already open, not shown again): {}", heading, message);
+                return;
+            }
+            try {
+                Alert alert = new Alert(Alert.AlertType.ERROR);
+                alert.setTitle("Error");
+                alert.setHeaderText(heading);
+                alert.initModality(Modality.APPLICATION_MODAL);
+                alert.getDialogPane().setMinWidth(500);
+                alert.getDialogPane().setPrefWidth(600);
+                setWrappedContent(alert, message, 550);
+
+                UserErrors.logAlert(logger, alert);
+                DialogOwner.own(alert);
+                alert.showAndWait();
+            } finally {
+                openErrorDialogs.remove(repeatKey);
+            }
         });
     }
+
+    /** The repeat key of each error dialog now open from {@code notifyUserOfError}. FX thread only. */
+    private static final Set<String> openErrorDialogs = new HashSet<>();
 
     /**
      * Prompts the user to validate annotated regions; calls back with true/false.

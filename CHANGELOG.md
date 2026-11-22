@@ -11,6 +11,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 - **Bounded Acquisition no longer freezes QuPath when the stitching settings are incompatible.** With OME-ZARR output and J2K compression, the warning that asks you to fix them was posted to QuPath's display thread while that same thread waited for the answer, so the warning never appeared and every window stopped responding. The warning now shows, and **Retry** and **Cancel Acquisition** work.
 - **The Live Viewer changes its controls only on QuPath's display thread.** When frames stopped (for example because the microscope server died) and reconnecting failed, the Live Viewer switched Live off from its frame-reading thread, and the Navigate tab's buttons, joystick and banner, which follow that switch, were changed off the display thread. JavaFX does not allow that, and it can leave windows blank or unresponsive. The same happened when a workflow stopped or restarted Live. This is the leading candidate for the frozen windows seen after the server died on 2026-11-21, not a proven cause.
+- **More microscope commands are sent from a background thread instead of QuPath's display thread**, so a slow or stopped server no longer freezes every window while they wait for its answer. They are:
+  - the answer to the manual focus dialog (**Retry autofocus**, **Use current focus**, **Cancel acquisition**);
+  - **Cancel** in the autofocus benchmark, which now closes the connection at once instead of waiting up to 10 minutes for the benchmark to finish;
+  - the Live Viewer Camera tab's exposure field and per-channel exposure spinners, and reading the current exposure when the tab is built;
+  - stopping Live when the Live Viewer is closed;
+  - moving the stage from the Stage Map.
+- **QuPath exits after Quit while a long command is still running.** Shutdown waited for the command (an acquisition can wait up to 90 minutes) before disconnecting, and the threads that send Cancel or Stop could keep the program alive. Shutdown now closes the connections first, and those threads no longer hold QuPath open.
+- **A reconnect to a server that accepts the connection but never answers holds the stage and Live Viewer socket for 10 s, not 30 s.**
+- **A failed stage move shows one error at a time.** While the server was down, every joystick tick, arrow click or click-to-center opened its own error dialog. These dialogs block every other window until answered, so a few seconds of joystick use stacked dozens of them and no window, not even Quit, would respond. Move failures now show at most one dialog every 5 s, and only while none is open; an error dialog that is already open is not opened a second time for the same error. Every failure is still logged.
 
 ### Changed
 

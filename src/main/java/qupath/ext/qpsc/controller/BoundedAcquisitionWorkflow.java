@@ -18,6 +18,7 @@ import qupath.ext.qpsc.acquisition.TilingRequest;
 import qupath.ext.qpsc.acquisition.TilingUtilities;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.config.ObjectiveUtils;
+import qupath.ext.qpsc.controller.workflow.AcquisitionManager;
 import qupath.ext.qpsc.controller.workflow.AcquisitionMonitorService;
 import qupath.ext.qpsc.controller.workflow.StitchingHelper;
 import qupath.ext.qpsc.controller.workflow.TileCleanupHelper;
@@ -576,18 +577,7 @@ public class BoundedAcquisitionWorkflow {
                                     final WorkflowDialogs.ProgressHandle finalHandle = progressHandle;
                                     progressHandle.setCancelCallback(v -> {
                                         logger.info("User requested acquisition cancellation");
-                                        // Off-EDT: CANC can block for tens of seconds waiting on
-                                        // the server's per-client lock during a tile capture.
-                                        new Thread(
-                                                        () -> {
-                                                            try {
-                                                                socketClient.cancelAcquisition();
-                                                            } catch (IOException e) {
-                                                                logger.error("Failed to send cancel command", e);
-                                                            }
-                                                        },
-                                                        "AcquisitionCancelSender")
-                                                .start();
+                                        AcquisitionManager.sendCancelOnWorker();
                                     });
                                 }
 

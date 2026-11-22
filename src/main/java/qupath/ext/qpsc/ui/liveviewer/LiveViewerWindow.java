@@ -3153,16 +3153,26 @@ public class LiveViewerWindow {
             stageControlPanel.stop();
         }
 
-        // Stop continuous acquisition if it was active
+        // Stop continuous acquisition if it was active. The stop is sent from a
+        // background thread so the window closes at once: on the FX thread it
+        // waited for the auxiliary socket, up to its read timeout per command
+        // queued ahead when the server was slow or gone. A Live ON from a
+        // reopened viewer queues behind it on the same socket lock.
         if (liveActive) {
-            try {
-                MicroscopeController controller = MicroscopeController.getInstance();
-                if (controller != null) {
-                    controller.stopContinuousAcquisition();
-                    logger.info("Continuous acquisition stopped on window close");
-                }
-            } catch (IOException e) {
-                logger.warn("Failed to stop continuous acquisition: {}", e.getMessage());
+            MicroscopeController controller = MicroscopeController.getInstance();
+            if (controller != null) {
+                Thread stopper = new Thread(
+                        () -> {
+                            try {
+                                controller.stopContinuousAcquisition();
+                                logger.info("Continuous acquisition stopped on window close");
+                            } catch (IOException e) {
+                                logger.warn("Failed to stop continuous acquisition: {}", e.getMessage());
+                            }
+                        },
+                        "LiveViewer-StopOnClose");
+                stopper.setDaemon(true);
+                stopper.start();
             }
             setLiveActive(false);
         }

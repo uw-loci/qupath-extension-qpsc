@@ -116,6 +116,8 @@ public class MicroscopeController implements StagePositionProvider {
     /** Timestamp of last blocked-movement notification (for cooldown) */
     private volatile long lastBlockedNotificationTime = 0;
 
+    private volatile long lastMoveFailureNotificationTime = 0;
+
     /** Minimum interval between "movement blocked" notifications to avoid spam */
     private static final long BLOCKED_NOTIFICATION_COOLDOWN_MS = 5000;
 
@@ -387,6 +389,20 @@ public class MicroscopeController implements StagePositionProvider {
     }
 
     /**
+     * Shows a failed stage move to the user, at most once per {@link #BLOCKED_NOTIFICATION_COOLDOWN_MS}.
+     * The joystick sends a move every 150 ms, and while the server is down each one fails at once;
+     * the failure is already logged by the caller.
+     */
+    private void notifyMoveFailure(String message) {
+        long now = System.currentTimeMillis();
+        if (now - lastMoveFailureNotificationTime > BLOCKED_NOTIFICATION_COOLDOWN_MS) {
+            lastMoveFailureNotificationTime = now;
+            // One key for every move failure: their messages differ, and they must not stack.
+            UIFunctions.notifyUserOfError(message, "Stage Move Error", "stage-move-failure");
+        }
+    }
+
+    /**
      * Checks whether user-initiated stage movement should be blocked.
      * If blocked, logs a warning and shows a throttled user notification.
      *
@@ -505,7 +521,7 @@ public class MicroscopeController implements StagePositionProvider {
             logger.info("Successfully moved stage to XY: ({}, {})", x, y);
         } catch (IOException e) {
             logger.error("Failed to move stage XY: {}", e.getMessage());
-            UIFunctions.notifyUserOfError("Failed to move stage XY: " + e.getMessage(), "Stage Move Error");
+            notifyMoveFailure("Failed to move stage XY: " + e.getMessage());
         }
     }
 
@@ -539,7 +555,7 @@ public class MicroscopeController implements StagePositionProvider {
             logger.info("Successfully moved stage to Z: {}", z);
         } catch (IOException e) {
             logger.error("Failed to move stage Z: {}", e.getMessage());
-            UIFunctions.notifyUserOfError("Failed to move stage Z: " + e.getMessage(), "Stage Move Error");
+            notifyMoveFailure("Failed to move stage Z: " + e.getMessage());
         }
     }
 
@@ -606,7 +622,7 @@ public class MicroscopeController implements StagePositionProvider {
             logger.info("Successfully rotated stage to {} ticks", angle);
         } catch (IOException e) {
             logger.error("Failed to rotate stage: {}", e.getMessage());
-            UIFunctions.notifyUserOfError("Failed to rotate stage: " + e.getMessage(), "Stage Move Error");
+            notifyMoveFailure("Failed to rotate stage: " + e.getMessage());
         }
     }
 

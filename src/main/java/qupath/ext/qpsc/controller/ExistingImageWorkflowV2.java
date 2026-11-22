@@ -1521,7 +1521,10 @@ public class ExistingImageWorkflowV2 {
                     UserErrors.logAlert(logger, ask);
                     if (ask.showAndWait().orElse(javafx.scene.control.ButtonType.NO)
                             == javafx.scene.control.ButtonType.YES) {
-                        new Thread(AcquisitionManager::stopActiveAcquisition, "StopAcquisitionFromStart").start();
+                        Thread stopper =
+                                new Thread(AcquisitionManager::stopActiveAcquisition, "StopAcquisitionFromStart");
+                        stopper.setDaemon(true);
+                        stopper.start();
                     }
                 });
                 return false;
