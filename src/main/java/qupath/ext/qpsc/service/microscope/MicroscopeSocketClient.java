@@ -7643,25 +7643,24 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String timeOrder)
             throws IOException {
         StringBuilder msg = new StringBuilder();
-        msg.append("--output ").append(outputFolder);
+        appendQuotedPath(msg, "--output", outputFolder);
         msg.append(" --z-start ").append(zStart);
         msg.append(" --z-end ").append(zEnd);
         msg.append(" --z-step ").append(zStep);
         if (modality != null) msg.append(" --modality ").append(modality);
         if (anglesStr != null) msg.append(" --angles ").append(anglesStr);
         if (wbMode != null) msg.append(" --wb-mode ").append(wbMode);
-        if (yamlPath != null) msg.append(" --yaml ").append(yamlPath);
+        if (yamlPath != null) appendQuotedPath(msg, "--yaml", yamlPath);
         if (objective != null) msg.append(" --objective ").append(objective);
         if (detector != null) msg.append(" --detector ").append(detector);
         if (projection != null && !"none".equals(projection))
             msg.append(" --projection ").append(projection);
         if (bgCorrectionEnabled) {
             msg.append(" --bg-correction true");
-            if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
+            if (bgFolder != null) appendQuotedPath(msg, "--bg-folder", bgFolder);
             if (bgMethod != null) msg.append(" --bg-method ").append(bgMethod);
         }
-        if (flatfieldFolder != null)
-            msg.append(" --flatfield-folder \"").append(flatfieldFolder).append('"');
+        if (flatfieldFolder != null) appendQuotedPath(msg, "--flatfield-folder", flatfieldFolder);
         appendWbFolder(msg, wbMode, wbFolder);
         if (timepoints > 1) {
             msg.append(" --timepoints ").append(timepoints);
@@ -7742,26 +7741,39 @@ public class MicroscopeSocketClient implements AutoCloseable {
             String wbFolder)
             throws IOException {
         StringBuilder msg = new StringBuilder();
-        msg.append("--output ").append(outputFolder);
+        appendQuotedPath(msg, "--output", outputFolder);
         msg.append(" --timepoints ").append(timepoints);
         msg.append(" --interval ").append(intervalSeconds);
         if (modality != null) msg.append(" --modality ").append(modality);
         if (anglesStr != null) msg.append(" --angles ").append(anglesStr);
         if (wbMode != null) msg.append(" --wb-mode ").append(wbMode);
-        if (yamlPath != null) msg.append(" --yaml ").append(yamlPath);
+        if (yamlPath != null) appendQuotedPath(msg, "--yaml", yamlPath);
         if (objective != null) msg.append(" --objective ").append(objective);
         if (detector != null) msg.append(" --detector ").append(detector);
         if (bgCorrectionEnabled) {
             msg.append(" --bg-correction true");
-            if (bgFolder != null) msg.append(" --bg-folder ").append(bgFolder);
+            if (bgFolder != null) appendQuotedPath(msg, "--bg-folder", bgFolder);
             if (bgMethod != null) msg.append(" --bg-method ").append(bgMethod);
         }
-        if (flatfieldFolder != null)
-            msg.append(" --flatfield-folder \"").append(flatfieldFolder).append('"');
+        if (flatfieldFolder != null) appendQuotedPath(msg, "--flatfield-folder", flatfieldFolder);
         appendWbFolder(msg, wbMode, wbFolder);
         msg.append(" ENDOFSTR");
 
         return executeChunkedCommand(Command.TLAPSE, msg.toString(), "TLAPSE");
+    }
+
+    /**
+     * Appends {@code flag "path"} to a ZSTACK or TLAPSE message. The server splits those
+     * messages on spaces and keeps only double-quoted runs whole ({@code split_flag_message}),
+     * so an unquoted path with a space in it was split into pieces. Other commands are parsed
+     * differently (ACQUIRE with shlex, several others by running each value to the next flag,
+     * which keeps quote characters), so this is only for these two.
+     */
+    static void appendQuotedPath(StringBuilder msg, String flag, String path) {
+        if (msg.length() > 0) {
+            msg.append(' ');
+        }
+        msg.append(flag).append(" \"").append(path).append('"');
     }
 
     /**
@@ -7770,7 +7782,7 @@ public class MicroscopeSocketClient implements AutoCloseable {
      */
     static void appendWbFolder(StringBuilder msg, String wbMode, String wbFolder) {
         if (wbFolder != null && wbMode != null && !"off".equals(wbMode)) {
-            msg.append(" --wb-folder \"").append(wbFolder).append('"');
+            appendQuotedPath(msg, "--wb-folder", wbFolder);
         }
     }
 

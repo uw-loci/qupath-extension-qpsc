@@ -432,19 +432,6 @@ public class AffineTransformManager {
     }
 
     /**
-     * Saves all transforms to the JSON file.
-     */
-    private void saveTransforms() {
-        try {
-            String json = gson.toJson(transforms);
-            Files.writeString(transformsPath, json);
-            logger.info("Saved {} transforms to {}", transforms.size(), transformsPath);
-        } catch (IOException e) {
-            logger.error("Failed to save transforms to {}", transformsPath, e);
-        }
-    }
-
-    /**
      * Saves a transform preset to persistent storage.
      * The preset will be immediately written to the JSON file.
      *
@@ -455,14 +442,14 @@ public class AffineTransformManager {
             preset.detector = MicroscopeConfigManager.activeDetectorForWriting();
         }
         transforms.put(preset.getName(), preset);
-        persistTransforms(); // renamed from saveTransforms
+        persistTransforms();
         logger.info("Saved transform preset: {}", preset.getName());
     }
     /**
      * Writes all transforms to the JSON file.
      * This is called automatically when presets are added or removed.
      */
-    private void persistTransforms() { // renamed from saveTransforms
+    private void persistTransforms() {
         try {
             String json = gson.toJson(transforms);
             Files.writeString(transformsPath, json);
@@ -619,7 +606,7 @@ public class AffineTransformManager {
      */
     public boolean deleteTransform(String name) {
         if (transforms.remove(name) != null) {
-            saveTransforms();
+            persistTransforms();
             logger.info("Deleted transform preset: {}", name);
             return true;
         }

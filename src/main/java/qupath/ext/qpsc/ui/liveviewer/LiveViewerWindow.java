@@ -172,7 +172,7 @@ public class LiveViewerWindow {
     // Autofocus button into a Cancel toggle wired to externalAutofocusCancel (ABORTAF).
     private volatile boolean externalAutofocusRunning = false;
     /** The operator clicked Cancel on an external autofocus that has not yet stopped. */
-    private volatile boolean externalAutofocusCancelling = false;
+    private volatile boolean externalAutofocusCanceling = false;
 
     private Runnable externalAutofocusCancel;
 
@@ -444,7 +444,7 @@ public class LiveViewerWindow {
     /** Applies the external-autofocus lock (FX thread). */
     private void applyExternalAutofocus(Runnable cancelAction) {
         externalAutofocusRunning = true;
-        externalAutofocusCancelling = false;
+        externalAutofocusCanceling = false;
         externalAutofocusCancel = cancelAction;
         // Lock stage movement, but keep the Autofocus button live as a Cancel toggle.
         if (stageControlPanel != null) stageControlPanel.setDisable(true);
@@ -458,8 +458,8 @@ public class LiveViewerWindow {
     /** The Autofocus button as a Cancel toggle for an autofocus another workflow started. */
     private void showExternalAutofocusButton() {
         if (autofocusButton == null) return;
-        if (externalAutofocusCancelling) {
-            autofocusButton.setText("Cancelling...");
+        if (externalAutofocusCanceling) {
+            autofocusButton.setText("Canceling...");
             autofocusButton.setDisable(true);
             return;
         }
@@ -478,7 +478,7 @@ public class LiveViewerWindow {
     /** Releases the external-autofocus lock (FX thread). */
     private void clearExternalAutofocus() {
         externalAutofocusRunning = false;
-        externalAutofocusCancelling = false;
+        externalAutofocusCanceling = false;
         externalAutofocusCancel = null;
         if (autofocusButton != null) {
             autofocusButton.setText("Autofocus");
@@ -1730,8 +1730,8 @@ public class LiveViewerWindow {
             // its cancellation. The scan owner (SlotJumpAutofocus) restores the button
             // when the aborted scan settles.
             Runnable cancel = externalAutofocusCancel;
-            externalAutofocusCancelling = true;
-            autofocusButton.setText("Cancelling...");
+            externalAutofocusCanceling = true;
+            autofocusButton.setText("Canceling...");
             autofocusButton.setDisable(true);
             updateStatus("Autofocus: canceling...");
             if (cancel != null) {
@@ -1871,7 +1871,7 @@ public class LiveViewerWindow {
      * returns a CANCELLED result handled in {@link #handleSweepFocus}.
      */
     private void cancelSweepFocus() {
-        autofocusButton.setText("Cancelling...");
+        autofocusButton.setText("Canceling...");
         autofocusButton.setDisable(true);
         updateStatus("Sweep Autofocus: canceling...");
         MicroscopeController controller = MicroscopeController.getInstance();
@@ -1983,7 +1983,7 @@ public class LiveViewerWindow {
             // stops the scan, restores Z to the pre-scan position, and the
             // STRMAFZ call returns CANCELLED (handled in the callback below).
             streamingFocusController.cancel();
-            autofocusButton.setText("Cancelling...");
+            autofocusButton.setText("Canceling...");
             autofocusButton.setDisable(true);
             updateStatus("Autofocus: canceling...");
             return;

@@ -860,7 +860,6 @@ qupath-extension-qpsc/
 │   │           └── ext/
 │   │               └── qpsc/
 │   │                   └── ui/
-│   │                       ├── interface.fxml
 │   │                       └── strings.properties
 │   └── test/
 │       └── java/

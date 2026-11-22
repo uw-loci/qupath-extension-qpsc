@@ -313,7 +313,7 @@ public class DualProgressDialog {
             cancelButton.setOnAction(e -> {
                 logger.info("Workflow cancel button clicked");
                 cancelButton.setDisable(true);
-                cancelButton.setText("Cancelling...");
+                cancelButton.setText("Canceling...");
                 triggerCancel();
             });
             vbox.getChildren().addAll(new Separator(), cancelButton);
@@ -381,7 +381,7 @@ public class DualProgressDialog {
             if (ask.showAndWait().orElse(ButtonType.NO) == ButtonType.YES) {
                 logger.info("Workflow cancel requested by closing the progress dialog");
                 cancelButton.setDisable(true);
-                cancelButton.setText("Cancelling...");
+                cancelButton.setText("Canceling...");
                 triggerCancel();
             }
         });

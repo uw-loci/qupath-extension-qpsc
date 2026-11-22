@@ -1,6 +1,5 @@
 package qupath.ext.qpsc.preferences;
 
-import java.io.File;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -10,10 +9,8 @@ import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.geometry.StagePolarity;
 import qupath.ext.qpsc.modality.ppm.PPMPreferences;
-import qupath.ext.qpsc.utilities.AffineTransformManager;
 import qupath.ext.qpsc.utilities.DocumentationHelper;
 import qupath.fx.prefs.controlsfx.PropertyItemBuilder;
 import qupath.lib.gui.QuPathGUI;
@@ -1165,46 +1162,6 @@ public class QPPreferenceDialog {
     public static boolean isStitchingAvailable() {
         return stitchingAvailable;
     }
-    // TODO should this be here?
-
-    private static ObservableList<String> getScannerChoices() {
-        List<String> choices = new ArrayList<>();
-
-        try {
-            MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(microscopeConfigFileProperty.get());
-            List<String> availableScanners = mgr.getAvailableScanners();
-
-            if (!availableScanners.isEmpty()) {
-                choices.addAll(availableScanners);
-            } else {
-                logger.warn("No scanners found in configuration, using Generic only");
-                choices.add("Generic");
-            }
-        } catch (Exception e) {
-            logger.error("Error loading scanner choices", e);
-            choices.add("Generic");
-        }
-
-        return FXCollections.observableArrayList(choices);
-    }
-
-    private static List<String> getAvailableTransforms() {
-        List<String> transforms = new ArrayList<>();
-        transforms.add(""); // Empty option for no transform
-
-        try {
-            String configPath = getMicroscopeConfigFileProperty();
-            if (configPath != null && !configPath.isEmpty()) {
-                AffineTransformManager manager = new AffineTransformManager(new File(configPath).getParent());
-                manager.getAllTransforms().forEach(t -> transforms.add(t.getName()));
-            }
-        } catch (Exception e) {
-            logger.debug("Could not load transforms: {}", e.getMessage());
-        }
-
-        return transforms;
-    }
-
     // Filename configuration getters
     public static boolean getFilenameIncludeObjective() {
         return includeObjectiveInFilenameProperty.get();

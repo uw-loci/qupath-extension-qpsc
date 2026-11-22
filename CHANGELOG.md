@@ -25,11 +25,14 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **A garbled frame from the server resets the Live Viewer connection instead of breaking every later frame.** A frame size that does not match the frame's width, height, channels and bit depth, or is larger than 512 MB, is now treated as a lost connection.
 - **Tile folders are released after stitching starts and after a corrupt OME-ZARR is cleaned up.** Two folder listings and one folder walk were never closed, and on Windows an open listing stops that folder from being deleted or renamed.
 - **The tissue detection script prompt can no longer freeze QuPath.** It used the same post-and-wait pattern as the Bounded Acquisition freeze above.
+- **Z-stack and time-lapse acquisitions accept folders with spaces in their paths.** The output folder, the microscope config and the background folder were sent without quotes, and the server splits these commands on spaces, so a path such as `D:\QPSC data\run 1` arrived in pieces. They are now quoted, as the flat-field and white balance folders already were.
 - **A finished acquisition with no recorded focus no longer costs 30 s at the end.** The client kept reading after the server's plain COMPLETED reply, waiting for detail that never came, and held the connection meanwhile. It now reads on only when the reply carries detail. Status checks and Cancel also keep their 30 s timeout for the whole exchange; another command could reset it to 5 s partway through, and a busy server then looked like a lost connection.
 
 ### Changed
 
 - **The log names microscope commands sent from QuPath's display thread.** A command waits for the server's answer while holding its socket, so on the display thread every QuPath window waits too. The first command from each place in the code that does this now logs a WARN naming that place (`Socket command on the FX thread ...`), once per session.
+- **"Cancelling..." reads "Canceling..."** on buttons and status lines, in the American spelling the rest of QPSC uses.
+- **Removed code nothing called:** `UIFunctions.checkValidAnnotationsGUI` and `stageToQuPathAlignmentGUI2`, `MicroscopeErrorHandler`, `InterfaceController` with `interface.fxml`, two private preference helpers, `ExistingAlignmentPath.verifyCorrectImageIsOpen`, and a second copy of the transform-preset save in `AffineTransformManager`.
 
 ## [0.14.0] - 2026-11-22
 

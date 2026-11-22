@@ -406,7 +406,7 @@ public final class WorkflowDialogs {
                 cancelButton.setOnAction(e -> {
                     logger.info("Cancel button clicked");
                     cancelButton.setDisable(true);
-                    cancelButton.setText("Cancelling...");
+                    cancelButton.setText("Canceling...");
                     handle.triggerCancel();
                 });
             }

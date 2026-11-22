@@ -1140,7 +1140,7 @@ public class AcquisitionWizardDialog {
      */
     private void cancelAutofocusValidation(Button cancelButton) {
         cancelButton.setDisable(true);
-        cancelButton.setText("Cancelling...");
+        cancelButton.setText("Canceling...");
         java.util.concurrent.CompletableFuture.runAsync(() -> {
             try {
                 MicroscopeController.getInstance().getSocketClient().abortStreamingFocus();

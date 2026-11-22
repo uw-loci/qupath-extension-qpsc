@@ -270,7 +270,7 @@ public class AutofocusBenchmarkWorkflow {
                         logger.info("User requested benchmark cancellation");
                         cancelled.set(true);
                         cancelButton.setDisable(true);
-                        cancelButton.setText("Cancelling...");
+                        cancelButton.setText("Canceling...");
                         statusLabel.setText("Cancellation requested - closing connection...");
 
                         // Close the primary socket to end the benchmark: its read in the

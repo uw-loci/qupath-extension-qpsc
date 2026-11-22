@@ -57,6 +57,14 @@ Client: [4-byte big-endian length] [payload bytes]
 Server: [4-byte big-endian length] [response bytes]
 ```
 
+**How the server splits a `--flag value` string.** Handlers use different parsers, and a path containing a space has to be sent the way that handler's parser expects:
+
+| Parser (server) | Used by | A path with spaces |
+|---|---|---|
+| `shlex.split` in `parse_acquisition_message` (`acquisition/workflow.py`) | ACQUIRE | Quoted, with backslashes turned into forward slashes. `AcquisitionCommandBuilder` does both. |
+| `split_flag_message` (`server/handlers/utils.py`): splits on spaces, keeps double-quoted runs whole | ZSTACK, TLAPSE | Quoted. `MicroscopeSocketClient.appendQuotedPath` does it. |
+| `parse_flags` (`server/handlers/utils.py`), CORRECTFRAME's `_read_flag_message` and BGACQUIRE's own loop (`server/handlers/acquisition.py`): each value runs to the next known flag | STRMAFZ, FINDTISS, PRBSAFZ, CORRECTFRAME, BGACQUIRE | Unquoted. A quote would become part of the value. BGACQUIRE ends a value only at a flag later in its list, so QPSC sends `--wb-folder` last. |
+
 ### CONFIG Handshake
 
 The first command after connection must be CONFIG:

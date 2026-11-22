@@ -94,7 +94,7 @@ public final class AutofocusCancelWindow {
             }
             logger.info("Autofocus canceled from the autofocus window: {}", purpose);
             cancel.setDisable(true);
-            cancel.setText("Cancelling...");
+            cancel.setText("Canceling...");
             hint.setText("Stopping the search; the stage returns to where it started.");
             cancelAction.run();
         };

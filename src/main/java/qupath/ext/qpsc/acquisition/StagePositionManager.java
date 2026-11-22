@@ -219,15 +219,10 @@ public class StagePositionManager {
         posR = Double.NaN;
 
         if (poller != null) {
+            // No wait for termination: this runs on the FX thread when the last window closes,
+            // an interrupt does not end a socket read already in progress, so the wait ran its
+            // full second, and a poll that finishes late has no listener left to tell.
             poller.shutdownNow();
-            try {
-                if (!poller.awaitTermination(1, TimeUnit.SECONDS)) {
-                    logger.warn("Poller did not terminate in time");
-                }
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-                logger.warn("Interrupted while stopping poller");
-            }
             poller = null;
         }
     }

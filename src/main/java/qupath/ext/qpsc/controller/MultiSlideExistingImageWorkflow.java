@@ -735,7 +735,7 @@ public final class MultiSlideExistingImageWorkflow {
         };
 
         // Abort All state machine (design 02_design_uiux.md section 1.4):
-        //   Idle "ABORT ALL" -> (confirm iff acquiring) -> "Cancelling..." (disabled) -> "Aborted".
+        //   Idle "ABORT ALL" -> (confirm iff acquiring) -> "Canceling..." (disabled) -> "Aborted".
         // When no acquisition is in flight, Abort All is the immediate driver halt it always was
         // (set the aborted flag + close). When an acquisition IS running, it trips the shared
         // cancel token -- which flips the active DualProgressDialog's canceled flag AND sends
@@ -766,10 +766,10 @@ public final class MultiSlideExistingImageWorkflow {
             if (!confirmed) {
                 return;
             }
-            // Drive the button to the "Cancelling..." terminal-in-progress state and lock the
+            // Drive the button to the "Canceling..." terminal-in-progress state and lock the
             // panel so nothing else can start while the cancel unwinds.
             aborted.set(true);
-            abortBtn.setText("Cancelling...");
+            abortBtn.setText("Canceling...");
             abortBtn.setDisable(true);
             abortBtn.setTooltip(new Tooltip("Canceling the running acquisition and landing the stage safely..."));
             setPanelBusy(states, driverButtons, finishBtn, true);
