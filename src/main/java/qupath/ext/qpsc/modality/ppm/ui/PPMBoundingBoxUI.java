@@ -229,12 +229,14 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
      * so the readout reflects the per-angle exposures the acquisition will use, and refreshes now.
      * The host dialog should also call {@link #refreshReadout()} when objective/detector/wbMode change.
      */
+    @Override
     public void installReadoutContext(Supplier<qupath.ext.qpsc.modality.AcquisitionReadout.Context> supplier) {
         this.readoutContextSupplier = supplier;
         refreshReadout();
     }
 
     /** Recomputes the per-angle exposure readout for the selected angles. PPM has no illumination intensity. */
+    @Override
     public void refreshReadout() {
         if (readoutLabel == null) {
             return;
@@ -290,6 +292,7 @@ public class PPMBoundingBoxUI implements ModalityHandler.BoundingBoxUI {
      * thread when the button is clicked, so it can read the parent dialog's
      * live state. Pass {@code null} to hide the button again.
      */
+    @Override
     public void installMdaExportContext(Supplier<MdaExportContext> supplier) {
         this.mdaContextSupplier = supplier;
         boolean show = supplier != null;

@@ -982,6 +982,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      * live state (sample/objective/detector spinners, selected annotations).
      * Pass {@code null} to hide the button again.
      */
+    @Override
     public void installMdaExportContext(Supplier<MdaExportContext> supplier) {
         this.mdaContextSupplier = supplier;
         if (saveMdaButton != null) {
@@ -1545,6 +1546,7 @@ public class WidefieldChannelBoundingBoxUI implements ModalityHandler.BoundingBo
      * Used by the loop-order toggle in the parent dialog to disable itself
      * when the channel count makes the choice meaningless.
      */
+    @Override
     public ObservableBooleanValue hasMultipleChannelsSelectedProperty() {
         return multipleChannelsSelectedBinding;
     }

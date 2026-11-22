@@ -25,9 +25,6 @@ import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.AcquisitionReadout;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
-import qupath.ext.qpsc.modality.ppm.ui.PPMBoundingBoxUI;
-import qupath.ext.qpsc.modality.ui.BrightfieldExposureBoundingBoxUI;
-import qupath.ext.qpsc.modality.widefield.ui.WidefieldChannelBoundingBoxUI;
 import qupath.ext.qpsc.model.AngleExposure;
 import qupath.ext.qpsc.model.Channel;
 import qupath.ext.qpsc.model.ChannelExposure;
@@ -740,10 +737,8 @@ abstract class AcquisitionDialogBuilder<R> {
 
     /** Refresh the current modality panel's resolved-values readout, if it has one. */
     private void refreshModalityReadout() {
-        if (modalityUI instanceof BrightfieldExposureBoundingBoxUI bfUi) {
-            bfUi.refreshReadout();
-        } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
-            ppmUi.refreshReadout();
+        if (modalityUI != null) {
+            modalityUI.refreshReadout();
         }
     }
 
@@ -767,16 +762,9 @@ abstract class AcquisitionDialogBuilder<R> {
             // Wire the "Save as MicroManager MDA..." button on the panel
             // so it can build an export context from this dialog's live state.
             java.util.function.Supplier<MdaExportContext> supplier = this::buildMdaExportContext;
-            if (modalityUI instanceof WidefieldChannelBoundingBoxUI wfUi) {
-                wfUi.installMdaExportContext(supplier);
-            } else if (modalityUI instanceof PPMBoundingBoxUI ppmUi) {
-                ppmUi.installMdaExportContext(supplier);
-                // Live "what will be used" readout: resolved per-angle exposures.
-                ppmUi.installReadoutContext(this::currentReadoutContext);
-            } else if (modalityUI instanceof BrightfieldExposureBoundingBoxUI bfUi) {
-                // Live "what will be used" readout: resolved profile / exposure / illumination.
-                bfUi.installReadoutContext(this::currentReadoutContext);
-            }
+            modalityUI.installMdaExportContext(supplier);
+            // Live "what will be used" readout, for the panels that have one.
+            modalityUI.installReadoutContext(this::currentReadoutContext);
         } else {
             modalityUI = null;
             Label noOptions = new Label("No additional options for " + modality + " modality.");
@@ -1461,9 +1449,8 @@ abstract class AcquisitionDialogBuilder<R> {
         } else if (PersistentPreferences.LOOP_ORDER_FAMILY_WIDEFIELD.equals(family)) {
             loopOrderInnerZRadio.setText("Z per channel (fast, fixed slides)");
             loopOrderInnerAltRadio.setText("Channels per Z (drift-tolerant)");
-            ObservableBooleanValue multipleChannels = modalityUI instanceof WidefieldChannelBoundingBoxUI wfUi
-                    ? wfUi.hasMultipleChannelsSelectedProperty()
-                    : null;
+            ObservableBooleanValue multipleChannels =
+                    modalityUI != null ? modalityUI.hasMultipleChannelsSelectedProperty() : null;
             if (multipleChannels != null) {
                 loopOrderInnerZRadio
                         .disableProperty()

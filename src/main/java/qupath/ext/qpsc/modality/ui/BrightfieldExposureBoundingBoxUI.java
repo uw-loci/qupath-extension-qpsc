@@ -119,12 +119,14 @@ public class BrightfieldExposureBoundingBoxUI implements ModalityHandler.Boundin
      * The host dialog should also call {@link #refreshReadout()} when the objective or
      * detector changes.
      */
+    @Override
     public void installReadoutContext(Supplier<AcquisitionReadout.Context> supplier) {
         this.readoutContextSupplier = supplier;
         refreshReadout();
     }
 
     /** Recomputes the profile / exposure / illumination readout from the current selection. */
+    @Override
     public void refreshReadout() {
         if (readoutContextSupplier == null) {
             readoutLabel.setText("");

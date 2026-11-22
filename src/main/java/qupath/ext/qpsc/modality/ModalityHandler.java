@@ -728,6 +728,31 @@ public interface ModalityHandler {
         Node getNode();
 
         /**
+         * Gives the panel what it needs to show its "what will be used" readout (resolved
+         * exposures, profile, illumination) for the dialog's current selections. The default
+         * does nothing: a panel without a readout ignores it.
+         */
+        default void installReadoutContext(java.util.function.Supplier<AcquisitionReadout.Context> supplier) {}
+
+        /** Recomputes the readout installed by {@link #installReadoutContext}, if the panel has one. */
+        default void refreshReadout() {}
+
+        /**
+         * Gives the panel's "Save as MicroManager MDA..." button the dialog's live state. The
+         * default does nothing: a panel without that button ignores it.
+         */
+        default void installMdaExportContext(
+                java.util.function.Supplier<qupath.ext.qpsc.service.mda.MdaExportContext> supplier) {}
+
+        /**
+         * True while more than one channel is selected, for a panel that lets the user pick
+         * channels; null for a panel with no channel choice.
+         */
+        default javafx.beans.value.ObservableBooleanValue hasMultipleChannelsSelectedProperty() {
+            return null;
+        }
+
+        /**
          * Extracts current parameter override values from the UI controls.
          *
          * <p>This method is called when the user initiates an acquisition to collect any
