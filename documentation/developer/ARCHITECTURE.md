@@ -243,14 +243,14 @@ See [PPM_MODALITY.md](PPM_MODALITY.md) for the full PPM implementation.
 
 | Package | Holds |
 |---|---|
-| `config/` | `MicroscopeConfigManager`, YAML editing and writing, bundled configs, objective and hardware keys, `MmStageDevices` (Micro-Manager XY and Z stage device names) |
+| `config/` | `MicroscopeConfigManager`, YAML editing and writing, bundled configs, objective and hardware keys, `MmStageDevices` (Micro-Manager XY and Z stage device names), `YamlMaps` (loads a YAML file into nested maps and reads values by key path) |
 | `geometry/` | Transforms between image, macro and stage, flips and polarity, the light path model, macro image analysis |
 | `acquisition/` | Acquisition settings built from config, tiling, time and disk estimates, stage position tracking, cancellation (`CancellationToken`, `CancelGate`, `CancelAckState`), stage travel checks (`StageLimitCheck`), tile configuration files |
 | `stitching/` | Stitch output naming, the stitch queue model, tile registration, post-stitch processing |
 | `background/` | Background profiles and settings, flat-field profiles and method, illumination checks; `ProfileWhiteBalance` (the PPM white balance each profile keeps as `white_balance.yml` beside its backgrounds, read in place of the scope-wide calibration) |
 | `focus/` | Focus metrics and profiles, focus approach records, Z prediction, safe-Z monitoring |
 | `project/` | Image naming, project entries and their reservation, the project log, NGFF scene export |
-| `model/` | Plain data and estimates shared by controllers and dialogs, e.g. `TimeLapseEstimate` (time left in a time-lapse, counting the waits between timepoints, for the progress windows); the modality value types `Channel`, `ChannelExposure`, `AngleExposure`, `PresetRef`, `PropertyRef`, `PropertyWrite` and `BackgroundValidationResult` |
+| `model/` | Plain data and estimates shared by controllers and dialogs, e.g. `TimeLapseEstimate` (time left in a time-lapse, counting the waits between timepoints, for the progress windows); the modality value types `Channel`, `ChannelExposure`, `AngleExposure`, `PresetRef`, `PropertyRef`, `PropertyWrite`, `BackgroundValidationResult`, `WbMode` (white-balance mode) and `FlatfieldMethod` |
 | `utilities/` | `AffineTransformManager`, `ImageMetadataManager`, `DocumentationHelper`, `MinorFunctions`, `ImageProcessing` |
 
 `utilities/` keeps the classes that `qupath-extension-ppm` imports, so that extension builds
