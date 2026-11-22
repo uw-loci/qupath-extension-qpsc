@@ -704,7 +704,7 @@ entry: runStandard() / runSweep()
 category: test
 ui_entries:
   - "Autofocus Configuration Editor (W6) test buttons: runStandard / runSweep (AutofocusEditorWorkflow.java ~1778, ~1828)"
-  - "Helpers getCurrentObjective / getDefaultOutputPath are also used by the Live Viewer autofocus, SlotJumpAutofocus, SiftCapturePane, AlignmentLivePrep and W34"
+  - "Helper getDefaultOutputPath is also used by the Live Viewer autofocus, SlotJumpAutofocus, SiftCapturePane, AlignmentLivePrep and W34; the objective they use comes from service/microscope/MountedHardware.currentObjective"
 reads:
   - DS3
 writes:

@@ -14,6 +14,7 @@ import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.ui.focus.AutofocusCancelWindow;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
 import qupath.ext.qpsc.utilities.AffineTransformManager;
@@ -863,7 +864,7 @@ public final class SlotJumpAutofocus {
             return CompletableFuture.completedFuture(false);
         }
         MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-        String objective = TestAutofocusWorkflow.getCurrentObjective(configManager);
+        String objective = MountedHardware.currentObjective(configManager);
         if (objective == null) {
             publishSkip("could not determine the current objective");
             return CompletableFuture.completedFuture(false);

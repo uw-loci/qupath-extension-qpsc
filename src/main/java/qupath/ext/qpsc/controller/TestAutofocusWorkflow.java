@@ -13,6 +13,7 @@ import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
@@ -185,7 +186,7 @@ public class TestAutofocusWorkflow {
                 } else {
                     // Read from config file
                     MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-                    objective = getCurrentObjective(configManager);
+                    objective = MountedHardware.currentObjective(configManager);
 
                     if (objective == null) {
                         UserErrors.show(
@@ -311,143 +312,6 @@ public class TestAutofocusWorkflow {
      * @return Objective identifier or null if not found
      */
     @SuppressWarnings("unchecked")
-    /** How long a pixel-size-derived objective is reused before asking the hardware again. */
-    private static final long OBJECTIVE_CACHE_MS = 2000;
-
-    /**
-     * Longest this will block waiting for the microscope to answer. The auxiliary socket's own
-     * read timeout is at least 30 SECONDS, and {@link #getCurrentObjective} is called on the FX
-     * thread (the Live Viewer, the alignment prep dialog) -- so without a bound of its own, a
-     * server that accepts the connection but never replies would freeze the UI for half a
-     * minute. A second and a half is far longer than the round trip actually takes and short
-     * enough not to read as a hang; exceeding it just falls through to the next source.
-     */
-    private static final long OBJECTIVE_PROBE_TIMEOUT_MS = 1500;
-
-    private static volatile String cachedObjective;
-    private static volatile long cachedObjectiveAt;
-
-    /**
-     * The objective whose configured pixel size matches what MicroManager reports, or null.
-     *
-     * <p>Cached briefly because several call sites ask in quick succession (the Live Viewer
-     * alone asks in four places) and each miss is a socket round trip. Two seconds is short
-     * enough that changing objective is reflected almost immediately.
-     */
-    private static String objectiveFromPixelSize(MicroscopeConfigManager configManager) {
-        String cached = cachedObjective;
-        if (cached != null && System.currentTimeMillis() - cachedObjectiveAt < OBJECTIVE_CACHE_MS) {
-            return cached;
-        }
-        MicroscopeController controller = MicroscopeController.getInstance();
-        if (controller == null || !controller.isConnected()) {
-            return null;
-        }
-        try {
-            double pixelSize = java.util.concurrent.CompletableFuture.supplyAsync(() -> {
-                        try {
-                            return controller.getSocketClient().getMicroscopePixelSize();
-                        } catch (Exception e) {
-                            throw new java.util.concurrent.CompletionException(e);
-                        }
-                    })
-                    .get(OBJECTIVE_PROBE_TIMEOUT_MS, java.util.concurrent.TimeUnit.MILLISECONDS);
-            var match = configManager.findHardwareByPixelSize(
-                    pixelSize, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
-            if (match.isPresent()) {
-                cachedObjective = match.get().objectiveId();
-                cachedObjectiveAt = System.currentTimeMillis();
-                logger.debug(
-                        "Objective resolved as {} via MicroManager pixel size {} um/px", cachedObjective, pixelSize);
-                return cachedObjective;
-            }
-            logger.warn(
-                    "MicroManager pixel size {} um/px matches no configured objective; "
-                            + "falling back to the session's selection",
-                    pixelSize);
-        } catch (java.util.concurrent.TimeoutException e) {
-            logger.warn(
-                    "Objective probe did not answer within {}ms; falling back to the session's selection",
-                    OBJECTIVE_PROBE_TIMEOUT_MS);
-        } catch (Exception e) {
-            logger.warn("Objective probe failed ({}); falling back to the session's selection", e.getMessage());
-        }
-        return null;
-    }
-
-    public static String getCurrentObjective(MicroscopeConfigManager configManager) {
-        // 1. Ask the hardware. The pixel size MicroManager reports identifies the objective,
-        //    and the SERVER resolves it the same way ("resolved objective ... via pixel-match"),
-        //    so the two ends agree by construction. This has to come first: the config field
-        //    below is never populated at runtime on these rigs, so everything that trusted it
-        //    was really running on the first-in-list fallback.
-        String fromHardware = objectiveFromPixelSize(configManager);
-        String selected = qupath.ext.qpsc.state.ObjectiveState.getInstance().getObjective();
-        if (fromHardware != null) {
-            // Say so when the operator's selection and the mounted objective disagree. Nothing
-            // downstream can tell: exposures, autofocus ranges and pixel sizes are all looked up
-            // per objective, so a wrong selection produces a plausible-looking run with the
-            // wrong numbers throughout. The hardware wins here, but the operator needs to know
-            // their selection is being overruled -- the acquisition that follows uses THEIR
-            // choice, not this one.
-            if (selected != null && !selected.isEmpty() && !selected.equals(fromHardware)) {
-                logger.warn(
-                        "OBJECTIVE MISMATCH: the microscope reports {} but this session is set to {}. "
-                                + "Using {} for hardware settings; check the objective selected for the run, "
-                                + "because acquisition uses the selected one.",
-                        fromHardware,
-                        selected,
-                        fromHardware);
-            }
-            return fromHardware;
-        }
-
-        // 2. What the operator chose for this session. Wrong only if they picked wrongly, which
-        //    is a different and much more visible kind of wrong.
-        if (selected != null && !selected.isEmpty()) {
-            logger.info("Objective resolved as {} from the session's selection (hardware did not answer)", selected);
-            return selected;
-        }
-
-        try {
-            // getString rather than walking getAllConfig() by hand: the raw-map read needed an
-            // unchecked cast to Map<String, Object>, which is a cast the compiler cannot verify
-            // and one that would have thrown at runtime if the key ever held a scalar. The
-            // typed accessor does the same lookup and returns null for anything that is not a
-            // string, which is what every branch here wanted anyway.
-            String objectiveInUse = configManager.getString("microscope", "objective_in_use");
-            if (objectiveInUse != null && !objectiveInUse.isEmpty()) {
-                logger.info("Objective resolved as {} from microscope.objective_in_use", objectiveInUse);
-                return objectiveInUse;
-            }
-
-            // 3. Last resort, and a genuinely dangerous answer -- hence WARN, not INFO. It is
-            //    a GUESS with no evidence behind it, and the callers feed it straight into
-            //    per-objective exposure tables. On PPM the first entry is the 10x, whose
-            //    uncrossed exposure is ~4x the 20x one: applying it at 20x saturates the
-            //    sensor and autofocus then reports "99.4% of pixels saturated" three steps
-            //    later, with nothing pointing back here.
-            java.util.List<Map<String, Object>> hardwareObjectives = configManager.getHardwareObjectives();
-            if (!hardwareObjectives.isEmpty()) {
-                Object objectiveId = hardwareObjectives.get(0).get("id");
-                if (objectiveId != null) {
-                    logger.warn(
-                            "GUESSING objective '{}' -- it is simply the first in the hardware list. "
-                                    + "MicroManager could not be asked, no objective is selected for this session, "
-                                    + "and microscope.objective_in_use is not set. Per-objective exposures and "
-                                    + "autofocus settings will be wrong if this is not what is mounted.",
-                            objectiveId);
-                    return objectiveId.toString();
-                }
-            }
-
-        } catch (Exception e) {
-            logger.error("Error reading current objective from config", e);
-        }
-
-        return null;
-    }
-
     /**
      * Show autofocus result dialog with improved formatting and readability.
      * Uses larger, bold text with system colors for better dark mode support.

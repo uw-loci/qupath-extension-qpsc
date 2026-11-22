@@ -1279,7 +1279,14 @@ public class MicroscopeSocketClient implements AutoCloseable {
         ByteBuffer payload = ByteBuffer.allocate(4 + body.length).order(ByteOrder.BIG_ENDIAN);
         payload.putInt(body.length);
         payload.put(body);
-        return requestJsonReport(Command.MMPRESET, payload.array(), 30_000);
+        try {
+            return requestJsonReport(Command.MMPRESET, payload.array(), 30_000);
+        } finally {
+            if (apply) {
+                // The preset may have turned the objective turret.
+                MountedHardware.forget();
+            }
+        }
     }
 
     /**
@@ -6918,6 +6925,8 @@ public class MicroscopeSocketClient implements AutoCloseable {
             throw new IOException("Failed to apply profile '" + profileName + "': " + responseStr);
         }
 
+        // A profile can switch the camera or the objective preset.
+        MountedHardware.forget();
         logger.info("Applied acquisition profile: {}", profileName);
     }
 

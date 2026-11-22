@@ -70,6 +70,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.project.QPProjectFunctions;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -1341,10 +1342,7 @@ public class StageControlPanel extends VBox {
             var detectors = mgr.getHardwareDetectors();
 
             boolean detected = false;
-            MicroscopeController mc = MicroscopeController.getInstance();
-            var match = mc != null
-                    ? mc.detectMountedHardware()
-                    : java.util.Optional.<MicroscopeConfigManager.HardwareSelection>empty();
+            var match = MountedHardware.detect();
             if (match.isPresent()) {
                 currentCameraObjectiveId = match.get().objectiveId();
                 currentCameraDetectorId = match.get().detectorId();
@@ -2809,7 +2807,7 @@ public class StageControlPanel extends VBox {
         mc.withLiveModeHandling(() -> mc.getSocketClient().applyProfile(profile));
         qupath.ext.qpsc.service.ModalityActuator.getInstance().noteApplied(profile);
         // Read the hardware after the apply: a profile can switch the camera.
-        String mismatch = mc.detectMountedHardware()
+        String mismatch = MountedHardware.detect()
                 .map(hw -> mgr.profileHardwareMismatch(profile, hw.objectiveId(), hw.detectorId()))
                 .orElse(null);
         if (mismatch != null) {

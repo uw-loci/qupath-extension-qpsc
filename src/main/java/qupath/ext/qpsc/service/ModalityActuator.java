@@ -200,7 +200,7 @@ public final class ModalityActuator {
      */
     private static String profileForMountedHardware(
             MicroscopeController mc, MicroscopeConfigManager mgr, String modality) {
-        var hardware = mc.detectMountedHardware();
+        var hardware = qupath.ext.qpsc.service.microscope.MountedHardware.detect();
         String objective = hardware.map(MicroscopeConfigManager.HardwareSelection::objectiveId)
                 .orElse(ObjectiveState.getInstance().getObjective());
         String source = hardware.isPresent() ? "MM pixel size" : "last selected objective";

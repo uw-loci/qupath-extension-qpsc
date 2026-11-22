@@ -28,7 +28,6 @@ import qupath.ext.qpsc.acquisition.AcquisitionTimingEstimator;
 import qupath.ext.qpsc.background.FlatfieldProfiles;
 import qupath.ext.qpsc.background.ProfileWhiteBalance;
 import qupath.ext.qpsc.config.MicroscopeConfigManager;
-import qupath.ext.qpsc.controller.TestAutofocusWorkflow;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.model.SampleSetupResult;
@@ -37,6 +36,7 @@ import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.OutputFormat;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.service.notification.NotificationEvent;
 import qupath.ext.qpsc.service.notification.NotificationPriority;
 import qupath.ext.qpsc.service.notification.NotificationService;
@@ -520,7 +520,7 @@ public class SinglePointAcquisitionController {
                         // per-objective white balance. Resolved here, off the FX thread, because
                         // the objective comes from asking MicroManager for its pixel size.
                         MicroscopeConfigManager mgr = MicroscopeConfigManager.getInstance(configPath);
-                        String objective = TestAutofocusWorkflow.getCurrentObjective(mgr);
+                        String objective = MountedHardware.currentObjective(mgr);
                         String detector = mgr.getActiveDetector();
                         // Same white balance the other acquisitions use: on a JAI camera with a
                         // modality that has one, the last mode chosen in an acquisition dialog

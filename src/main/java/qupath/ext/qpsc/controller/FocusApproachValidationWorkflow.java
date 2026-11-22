@@ -28,6 +28,7 @@ import qupath.ext.qpsc.focus.FocusProfileAnalysis;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
 import qupath.ext.qpsc.service.microscope.MicroscopeSocketClient;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.QpscWindows;
 import qupath.ext.qpsc.ui.ThemeColors;
@@ -258,13 +259,13 @@ public final class FocusApproachValidationWorkflow {
      *
      * <p>This resolution order -- MicroManager's reported pixel size, then the session's
      * objective state, then the config -- is implemented in
-     * {@code TestAutofocusWorkflow.getCurrentObjective}, so every caller resolves the objective
+     * {@code MountedHardware.currentObjective}, so every caller resolves the objective
      * the same way. Kept as a named method because the call reads better here.
      *
      * @return the best available objective ID, or null when nothing resolves
      */
     private static String resolveMountedObjective(MicroscopeConfigManager mgr, MicroscopeController controller) {
-        return TestAutofocusWorkflow.getCurrentObjective(mgr);
+        return MountedHardware.currentObjective(mgr);
     }
 
     /**

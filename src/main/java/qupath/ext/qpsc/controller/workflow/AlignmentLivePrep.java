@@ -7,6 +7,7 @@ import org.slf4j.LoggerFactory;
 import qupath.ext.qpsc.modality.ModalityHandler;
 import qupath.ext.qpsc.modality.ModalityRegistry;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UserErrors;
 import qupath.ext.qpsc.ui.liveviewer.LiveViewerWindow;
@@ -185,7 +186,7 @@ public final class AlignmentLivePrep {
         String configPath = qupath.ext.qpsc.preferences.QPPreferenceDialog.getMicroscopeConfigFileProperty();
         if (configPath != null && !configPath.isBlank()) {
             var mgr = qupath.ext.qpsc.config.MicroscopeConfigManager.getInstance(configPath);
-            objective = qupath.ext.qpsc.controller.TestAutofocusWorkflow.getCurrentObjective(mgr);
+            objective = MountedHardware.currentObjective(mgr);
             detector = mgr.getActiveDetector();
         }
 

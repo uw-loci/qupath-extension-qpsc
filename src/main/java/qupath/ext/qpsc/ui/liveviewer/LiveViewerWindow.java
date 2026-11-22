@@ -60,6 +60,7 @@ import qupath.ext.qpsc.service.autofocus.AutofocusEvent;
 import qupath.ext.qpsc.service.autofocus.AutofocusFeed;
 import qupath.ext.qpsc.service.microscope.FrameData;
 import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.state.ModalityState;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -1914,7 +1915,7 @@ public class LiveViewerWindow {
             return;
         }
         MicroscopeConfigManager configManager = MicroscopeConfigManager.getInstance(configPath);
-        String objective = TestAutofocusWorkflow.getCurrentObjective(configManager);
+        String objective = MountedHardware.currentObjective(configManager);
         if (objective == null) {
             updateStatus("Cannot autofocus: could not determine current objective");
             return;

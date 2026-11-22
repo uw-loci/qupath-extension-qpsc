@@ -26,7 +26,7 @@ import qupath.ext.qpsc.config.MicroscopeConfigManager;
 import qupath.ext.qpsc.modality.WbMode;
 import qupath.ext.qpsc.preferences.PersistentPreferences;
 import qupath.ext.qpsc.preferences.QPPreferenceDialog;
-import qupath.ext.qpsc.service.microscope.MicroscopeController;
+import qupath.ext.qpsc.service.microscope.MountedHardware;
 import qupath.ext.qpsc.ui.DialogOwner;
 import qupath.ext.qpsc.ui.ThemeColors;
 import qupath.ext.qpsc.ui.UIFunctions;
@@ -776,8 +776,7 @@ public class WhiteBalanceDialog {
                     // goes stale whenever the user swaps objectives without going through the
                     // Acquisition Wizard, and a stale pref saves WB calibration into the wrong
                     // objective's YAML slot.
-                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
-                            detectMountedHardware(configManager);
+                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch = MountedHardware.detect();
                     String defaultObjective = liveMatch
                             .map(MicroscopeConfigManager.HardwareSelection::objectiveId)
                             .filter(objectives::contains)
@@ -839,8 +838,7 @@ public class WhiteBalanceDialog {
                 if (!detectors.isEmpty()) {
                     detectorCombo.getItems().addAll(detectors.stream().sorted().toList());
                     // Same live-detection-first policy as the objective combo above.
-                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch =
-                            detectMountedHardware(configManager);
+                    Optional<MicroscopeConfigManager.HardwareSelection> liveMatch = MountedHardware.detect();
                     String defaultDetector = liveMatch
                             .map(MicroscopeConfigManager.HardwareSelection::detectorId)
                             .filter(detectors::contains)
@@ -1025,40 +1023,6 @@ public class WhiteBalanceDialog {
         TitledPane pane = new TitledPane("Simple White Balance", vbox);
         pane.setCollapsible(true);
         return pane;
-    }
-
-    /**
-     * Returns the (objective, detector) pair currently mounted, by matching the live
-     * MicroManager pixel size against the configured hardware table. Returns empty if
-     * the microscope is not connected, the pixel size lookup fails, or nothing matches.
-     *
-     * <p>Used to seed the objective and detector combo boxes so the dialog defaults
-     * reflect the physically mounted hardware rather than a possibly-stale persistent
-     * preference. The user can still override via the dropdowns.
-     */
-    private static Optional<MicroscopeConfigManager.HardwareSelection> detectMountedHardware(
-            MicroscopeConfigManager configManager) {
-        try {
-            MicroscopeController mc = MicroscopeController.getInstance();
-            if (mc == null || !mc.isConnected()) {
-                logger.info(
-                        "WB dialog: live hardware detection skipped (controller={}, connected={})",
-                        mc,
-                        mc != null && mc.isConnected());
-                return Optional.empty();
-            }
-            double mmPx = mc.getSocketClient().getMicroscopePixelSize();
-            Optional<MicroscopeConfigManager.HardwareSelection> match = configManager.findHardwareByPixelSize(
-                    mmPx, MicroscopeConfigManager.DEFAULT_PIXEL_SIZE_TOLERANCE_UM);
-            logger.info(
-                    "WB dialog: live MM pixel size {} um/px -> {}",
-                    mmPx,
-                    match.map(h -> h.objectiveId() + " / " + h.detectorId()).orElse("NO MATCH"));
-            return match;
-        } catch (Exception e) {
-            logger.warn("WB dialog: live hardware detection failed: {}", e.getMessage());
-            return Optional.empty();
-        }
     }
 
     /**

@@ -410,7 +410,7 @@ change. This means changing modality in any of the 8 linked combos updates
 all the others, persists to `PersistentPreferences`, and applies the
 hardware change -- the user's "selected modality" always equals the
 hardware state. The profile it applies is the modality's profile for the
-mounted objective: `MicroscopeController.detectMountedHardware()` identifies
+mounted objective: `MountedHardware.detect()` (`service/microscope`, the one resolver, with a 1.5 s limit and a 2 s cache) identifies
 the objective and camera from Micro-Manager's pixel size (falling back to
 `ObjectiveState`), and `MicroscopeConfigManager.resolveProfileKey` picks the
 profile, as acquisition does; only when none fits is the first profile of the
